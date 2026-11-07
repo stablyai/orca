@@ -1,3 +1,4 @@
+import type { ChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
 /** Pin every removal step to confirmed host; same repoId::path on another machine may hold different uncommitted work (STA-4343). */
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -166,6 +167,7 @@ export async function completeSameIdHostScopedRemoval(args: {
   target: RuntimeClientTarget
   worktreeBeforeRemoval: PreservedBranchWorktree
   suppressPreservedBranchToast: boolean
+  chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
   rowAlreadyDropped?: boolean
 }): Promise<Awaited<RemoveWorktreeSliceResult>> {
   const {
@@ -194,7 +196,11 @@ export async function completeSameIdHostScopedRemoval(args: {
   const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted({
     hostScopedWorkspaces: [{ workspaceId: worktreeId, executionHostId: requiredExecutionHostId }]
   })
-  await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
+  await purgeOrphanedRuntimeSshProjects(
+    get,
+    runtimeCleanup.destroyedSshTargetIds,
+    args.chatDraftRemovalReceipt
+  )
   if (!args.rowAlreadyDropped) {
     dropConfirmedHostRow(set, worktreeId, requiredExecutionHostId)
   }

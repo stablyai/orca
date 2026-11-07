@@ -35,7 +35,11 @@ import type {
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
-import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
+import {
+  focusMountedNativeChatEditor,
+  mountedEditorView,
+  isNativeChatEditorCaretOnVisualEdge
+} from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 
 import { useNativeChatComposerMount } from './native-chat-composer-mount'
@@ -164,7 +168,8 @@ function NativePromptEditor({
             scopeKey,
             promptText(current.state.doc),
             current.getJSON(),
-            pastedTextFiles
+            pastedTextFiles,
+            transaction.getMeta('nativeChatDraftReturnSources')
           )
         }
       },
@@ -244,10 +249,12 @@ function NativePromptEditor({
       editor
         ? {
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
-            insertText: (text) => {
+            insertText: (text, sources) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text))
               editor.view.dispatch(
-                editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
+                editor.state.tr
+                  .replaceSelection(new Slice(content.content, 1, 1))
+                  .setMeta('nativeChatDraftReturnSources', sources)
               )
             },
             get value() {
@@ -317,24 +324,7 @@ function NativePromptEditor({
             },
             focus: () => focusMountedNativeChatEditor(editor),
             contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
-            isCaretOnVisualEdge: (edge) => {
-              const { selection, doc } = editor.state
-              if (!selection.empty) {
-                return false
-              }
-              const before = promptText(doc, 0, selection.from)
-              const after = promptText(doc, selection.from)
-              // An empty composer has one line: no layout read on the path every recall starts from.
-              if (before === '' && after === '') {
-                return true
-              }
-              const beyond = edge === 'start' ? before : after
-              // Why both: the text check covers other paragraphs, the view covers soft wraps.
-              return (
-                !beyond.includes('\n') &&
-                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
-              )
-            },
+            isCaretOnVisualEdge: (edge) => isNativeChatEditorCaretOnVisualEdge(editor, edge),
             select: () => {
               editor.commands.selectAll()
             },
@@ -384,11 +374,15 @@ function NativePromptEditor({
               )
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
-            insertFileReferences: (paths) => {
-              editor.commands.insertContentAt(
-                editor.state.selection.from,
-                paths.flatMap((path) => [fileReferenceContent(path), { type: 'text', text: ' ' }])
-              )
+            insertFileReferences: (paths, sources) => {
+              editor
+                .chain()
+                .setMeta('nativeChatDraftReturnSources', sources)
+                .insertContentAt(
+                  editor.state.selection.from,
+                  paths.flatMap((path) => [fileReferenceContent(path), { type: 'text', text: ' ' }])
+                )
+                .run()
             }
           }
         : null,

@@ -41,26 +41,6 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
       requireStructuredCapability(ctx)
       await ensureStructuredHostInstalled(ctx)
       let publication: StructuredSessionSurface | null = null
-      let revealed: StructuredAgentSessionReveal
-      try {
-        const host = requireStructuredHost(ctx)
-        requireStructuredAgentAudience(ctx, host.sessionAgent(params.sessionId) ?? '')
-        revealed = await host.revealSession(params.sessionId)
-      } catch (error) {
-        // Translate only typed host refusal codes; genuine faults must not masquerade as missing chats.
-        const code = error instanceof Error ? error.message : ''
-        if (!isAgentSessionWireRefusalCode(code)) {
-          throw error
-        }
-        return refuseAgentSessionMutation(
-          agentSessionRefusalFromReference(
-            isAgentSessionRefusalError(error) ? error.refusal : { code },
-            code === 'structured_agent_session_unsupported'
-              ? 'This host cannot open that chat.'
-              : 'This chat is no longer on this host.'
-          )
-        )
-      }
       let workspace:
         | Awaited<ReturnType<typeof ctx.runtime.prepareStructuredAgentSessionRevealWorkspace>>
         | undefined
@@ -68,6 +48,49 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
       let saving = Promise.resolve()
       try {
         const host = requireStructuredHost(ctx)
+        requireStructuredAgentAudience(ctx, host.sessionAgent(params.sessionId) ?? '')
+        const original = host.deps.store.getConversation(params.sessionId)
+        let stale: StructuredWorkspaceUnavailable | undefined
+        for (let attempt = 0; original; attempt++) {
+          // A retry that cannot prepare reports the original stale refusal, not its own failure.
+          workspace = await ctx.runtime
+            .prepareStructuredAgentSessionRevealWorkspace(original.location)
+            .catch((error: unknown) => {
+              throw stale ?? error
+            })
+          if (workspace.location.workspaceId === original.location.workspaceId) {
+            break
+          }
+          const prepared = workspace
+          try {
+            await host.rebindWorkspace(
+              params.sessionId,
+              original.location,
+              prepared.location,
+              () => {
+                prepared.check()
+                prepared.admit()
+                if (getStructuredAgentSessionHost() !== host) {
+                  throw new StructuredWorkspaceUnavailable('obsolete')
+                }
+              }
+            )
+            break
+          } catch (error) {
+            // Evidence that changed or expired before commit is re-prepared, a bounded number of times.
+            if (
+              !(error instanceof StructuredWorkspaceUnavailable) ||
+              error.reason !== 'obsolete' ||
+              attempt >= 1
+            ) {
+              throw error
+            }
+            stale = error
+            workspace = undefined
+            prepared.release()
+          }
+        }
+        const revealed: StructuredAgentSessionReveal = await host.revealSession(params.sessionId)
         const record = host.deps.store.getConversation(revealed.sessionId)
         if (
           !record ||
@@ -76,7 +99,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         ) {
           throw new StructuredWorkspaceUnavailable('obsolete')
         }
-        workspace = await ctx.runtime.prepareStructuredAgentSessionRevealWorkspace(record.location)
+        workspace ??= await ctx.runtime.prepareStructuredAgentSessionRevealWorkspace(
+          record.location
+        )
         const location = JSON.stringify(record.location)
         const current = () => {
           const now = host.deps.store.getConversation(revealed.sessionId)
@@ -140,7 +165,18 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
         return { ok: true as const, sessionId, workspaceId, agent, readable }
       } catch (error) {
         if (!(error instanceof StructuredWorkspaceUnavailable)) {
-          throw error
+          const code = error instanceof Error ? error.message : ''
+          if (!isAgentSessionWireRefusalCode(code)) {
+            throw error
+          }
+          return refuseAgentSessionMutation(
+            agentSessionRefusalFromReference(
+              isAgentSessionRefusalError(error) ? error.refusal : { code },
+              code === 'structured_agent_session_unsupported'
+                ? 'This host cannot open that chat.'
+                : 'This chat is no longer on this host.'
+            )
+          )
         }
         return {
           ok: false as const,

@@ -1,3 +1,15 @@
+import {
+  getFolderWorkspaceUpdateCoordinator,
+  type FolderWorkspaceUpdateField
+} from './folder-workspace-mutation-coordinator'
+export {
+  getFolderWorkspaceUpdateCoordinator,
+  folderWorkspaceUpdateCoordinators,
+  type FolderWorkspaceUpdateField,
+  type FolderWorkspaceUpdateCoordinatorInstance,
+  type RepoSliceGet
+} from './folder-workspace-mutation-coordinator'
+import { createChatDraftRemovalReceipt } from '../slices/worktrees/teardown/chat-draft-removal-receipt'
 import { launchDraftSource } from '@/components/native-chat/native-chat-launch-draft-source'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -17,8 +29,7 @@ import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
-import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
+import type { RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
@@ -33,30 +44,6 @@ import {
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import * as chatDrafts from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
-
-export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
-
-export type FolderWorkspaceUpdateCoordinatorInstance =
-  FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>
-
-export type RepoSliceGet = Parameters<StateCreator<AppState>>[1]
-
-export const folderWorkspaceUpdateCoordinators = new WeakMap<
-  RepoSliceGet,
-  FolderWorkspaceUpdateCoordinatorInstance
->()
-
-export function getFolderWorkspaceUpdateCoordinator(
-  get: RepoSliceGet
-): FolderWorkspaceUpdateCoordinatorInstance {
-  const existing = folderWorkspaceUpdateCoordinators.get(get)
-  if (existing) {
-    return existing
-  }
-  const created = new FolderWorkspaceUpdateCoordinator<FolderWorkspaceUpdateField>()
-  folderWorkspaceUpdateCoordinators.set(get, created)
-  return created
-}
 
 export function createFolderWorkspaceMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -260,6 +247,11 @@ export function createFolderWorkspaceMutationActions(
         return false
       }
       const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+      const draftReceipt = createChatDraftRemovalReceipt(get)
+      const commitDraftRemoval = draftReceipt.capture({
+        executionHostId: ownerHostId,
+        runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
+      })
       // Why before the host call: its announcement can start a refresh that drops these tabs.
       const chatDraftKeys = chatDrafts.captureWorkspaceChatDraftKeys(state, [
         { workspaceId: workspaceKey, executionHostId: ownerHostId }
@@ -279,6 +271,7 @@ export function createFolderWorkspaceMutationActions(
         if (!deleted) {
           return false
         }
+        commitDraftRemoval({ workspaceId: workspaceKey })
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.filter(
             (workspace) =>
@@ -305,6 +298,8 @@ export function createFolderWorkspaceMutationActions(
       } catch (err) {
         console.error('Failed to delete folder workspace:', err)
         return false
+      } finally {
+        await draftReceipt.finish()
       }
     }
   }

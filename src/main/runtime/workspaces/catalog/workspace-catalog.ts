@@ -1,12 +1,16 @@
 import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
-import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  listKnownResolvedWorktreesForExplicitTarget,
+  type ResolvedWorktree
+} from './runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
 
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
-import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
+import {
+  resolveLocalProjectRuntimeForRepo,
+  resolveLocalProjectRuntimesForRepos
+} from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import {
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
@@ -20,15 +24,15 @@ import {
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import * as RuntimeFolders from './runtime-worktree-filesystem'
 import {
-  listRuntimeFolderWorkspaces,
-  projectRuntimeFolderWorkspaces
-} from './runtime-worktree-filesystem'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
@@ -45,39 +49,16 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     targetWorktreeId: string,
     targetWorktree: ResolvedWorktree | null
   ): ResolvedWorktree[] {
-    if (!this.store || !targetWorktree) {
+    const store = this.store
+    if (!store || !targetWorktree) {
       return []
     }
-    const target = splitWorktreeIdForFilesystem(targetWorktreeId)
-    if (!target?.repoId || !target.worktreePath) {
-      // Folder workspace keys have no repo/path tuple, but the converted row
-      // is already authoritative for this explicit target.
-      return [targetWorktree]
-    }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
+    return listKnownResolvedWorktreesForExplicitTarget(
+      targetWorktreeId,
+      targetWorktree,
+      () => Object.keys(store.getAllWorktreeMeta()),
+      (worktreeId) => this.buildResolvedWorktreeFromId(worktreeId)
     )
-    worktreeIds.add(targetWorktreeId)
-
-    const resolved: ResolvedWorktree[] = []
-    for (const worktreeId of worktreeIds) {
-      const worktree =
-        worktreeId === targetWorktreeId
-          ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId)
-      if (worktree) {
-        resolved.push(worktree)
-      }
-    }
-    return resolved
   }
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
@@ -126,30 +107,20 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected pruneUnregisteredWorktreeScans(): void {
-    const registered = new Set(
-      (this.store?.getRepos() ?? []).map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    )
-    for (const cache of [
+    ScanCache.pruneUnregisteredWorktreeScans(this.store?.getRepos() ?? [], [
       this.worktreeScanCache,
       this.worktreeScanGenerations,
       this.worktreeScanInFlight
-    ]) {
-      for (const key of cache.keys()) {
-        if (!registered.has(key)) {
-          cache.delete(key)
-        }
-      }
-    }
+    ])
   }
 
-  /** The fleet listing from cached scans and the store as it is now, synchronously. */
   protected joinResolvedWorktreeScans(scans: ResolvedWorktreeRepoScans): ResolvedWorktreeScanJoin {
     return joinResolvedWorktreeScans(
       this.store,
       () => ({
         ...this.repoWorktreeRowDeps(),
         listFolderWorkspaces: (repo, count) =>
-          projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
+          RuntimeFolders.projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
       }),
       scans
     )
@@ -174,7 +145,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         return undefined
       },
       listFolderWorkspaces: (repo, repoOwnerCount) =>
-        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
+        RuntimeFolders.listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
   }
 
@@ -213,17 +184,35 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return listing
   }
 
+  private worktreeScanScope(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ) {
+    return ScanCache.worktreeScanScope(
+      repo,
+      this.worktreeScanGenerations,
+      () => resolveLocalProjectRuntimeForRepo(this.requireStore(), repo),
+      projectRuntimeByRepoId
+    )
+  }
+
+  /** The listing this catalog would answer for `repo` right now without scanning; null once replaced, expired or invalidated. */
+  protected currentRepoWorktreeListing(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ): RuntimeWorktreeScanResult | null {
+    const { scanScopeKey, fresh } = this.worktreeScanScope(repo, projectRuntimeByRepoId)
+    const cached = this.worktreeScanCache.get(scanScopeKey)
+    return cached && fresh(cached, Date.now()) ? cached.result : null
+  }
+
   protected async listRepoWorktreesForResolution(
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    const { projectRuntime, runtimeKey, sshConnectionId } = ScanCache.resolveWorktreeScanRuntime(
-      this.requireStore(),
-      repo,
-      projectRuntimeByRepoId
-    )
+    const { sshConnectionId, projectRuntime, runtimeKey, scanScopeKey, generation, fresh } =
+      this.worktreeScanScope(repo, projectRuntimeByRepoId)
     const now = Date.now()
-    const scanScopeKey = `${repo.id}\0${getRepoExecutionHostId(repo)}`
     const retryCurrent = (): Promise<RuntimeWorktreeScanResult> => {
       const current = this.store
         ?.getRepos()
@@ -236,13 +225,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         ? this.listRepoWorktreesForResolution(current)
         : Promise.resolve({ ok: false, worktrees: [] })
     }
-    const generation = this.worktreeScanGenerations.get(scanScopeKey) ?? 0
     const cached = this.worktreeScanCache.get(scanScopeKey)
-    if (
-      cached?.generation === generation &&
-      cached.runtimeKey === runtimeKey &&
-      cached.expiresAt > now
-    ) {
+    if (cached && fresh(cached, now)) {
       return cached.result
     }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)

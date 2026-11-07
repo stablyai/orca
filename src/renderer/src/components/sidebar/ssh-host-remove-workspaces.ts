@@ -1,3 +1,7 @@
+import {
+  createChatDraftRemovalReceipt,
+  type ChatDraftRemovalReceipt
+} from '@/store/slices/worktrees/teardown/chat-draft-removal-receipt'
 import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -12,7 +16,8 @@ export type ClearSshHostWorkspacesResult = {
 /** Forget children before root repos, collecting failures for the caller. */
 async function clearSshHostWorkspacesImpl(
   resolution: SshHostRemoveResolution,
-  confirmedDiscards: ConfirmedUnsavedDiscards | undefined
+  confirmedDiscards: ConfirmedUnsavedDiscards | undefined,
+  draftReceipt: ChatDraftRemovalReceipt
 ): Promise<ClearSshHostWorkspacesResult> {
   const store = useAppStore.getState()
   const failedIds: string[] = []
@@ -21,6 +26,7 @@ async function clearSshHostWorkspacesImpl(
   for (const worktreeId of resolution.workspaceWorktreeIds) {
     const result = await store.removeWorktree({ id: worktreeId, executionHostId: hostId }, false, {
       mode: 'forget-local',
+      chatDraftRemovalReceipt: draftReceipt,
       confirmedDiscards
     })
     if (!result.ok) {
@@ -31,7 +37,11 @@ async function clearSshHostWorkspacesImpl(
   // Use the explicit SSH owner so a shared repo ID cannot resolve to a local or focused-host project.
   for (const repoId of resolution.hostRepoIds) {
     try {
-      await store.removeProject(repoId, { hostId, confirmedDiscards })
+      await store.removeProject(repoId, {
+        hostId,
+        confirmedDiscards,
+        chatDraftRemovalReceipt: draftReceipt
+      })
     } catch {
       failedIds.push(repoId)
     }
@@ -51,7 +61,13 @@ export async function clearSshHostWorkspaces(
   resolution: SshHostRemoveResolution,
   confirmedDiscards?: ConfirmedUnsavedDiscards
 ): Promise<ClearSshHostWorkspacesResult> {
-  return runEnclosingWorktreeRemoval({ hostId: toSshExecutionHostId(resolution.targetId) }, () =>
-    clearSshHostWorkspacesImpl(resolution, confirmedDiscards)
-  )
+  const draftReceipt = createChatDraftRemovalReceipt(useAppStore.getState)
+  try {
+    return await runEnclosingWorktreeRemoval(
+      { hostId: toSshExecutionHostId(resolution.targetId) },
+      () => clearSshHostWorkspacesImpl(resolution, confirmedDiscards, draftReceipt)
+    )
+  } finally {
+    await draftReceipt.finish()
+  }
 }

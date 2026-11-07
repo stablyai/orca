@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import {
   insertNativeChatPastedText,
   writeNativeChatComposerText,
@@ -15,7 +16,10 @@ export function useNativeChatTypedInsertion(args: {
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
 }): {
-  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
+  insertTypedText: (
+    text: string,
+    options?: { dictated?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
+  ) => boolean
   appendText: (text: string) => void
   acceptsText: () => boolean
   insertPastedText: (text: string) => boolean
@@ -44,10 +48,22 @@ export function useNativeChatTypedInsertion(args: {
   )
 
   const insertTypedText = useCallback(
-    (text: string, options?: { dictated?: boolean }): boolean => {
+    (
+      text: string,
+      options?: { dictated?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
+    ): boolean => {
+      const sources = options?.sources
       const textarea = usableInput()
       if (!textarea) {
         return false
+      }
+      if (sources) {
+        if (!textarea.insertText || isComposing()) {
+          return false
+        }
+        textarea.insertText(text, sources)
+        textarea.focus()
+        return true
       }
       const { value } = textarea
       const selectionStart = textarea.selectionStart ?? value.length
@@ -64,7 +80,7 @@ export function useNativeChatTypedInsertion(args: {
       )
       return true
     },
-    [showDraft, usableInput]
+    [isComposing, showDraft, usableInput]
   )
 
   const appendText = useCallback(

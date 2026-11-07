@@ -6,6 +6,7 @@ import * as sources from '@/components/native-chat/native-chat-launch-draft-sour
 import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
 import {
   createMemoryNativeChatComposerDraftStorage,
+  KEEP_NATIVE_CHAT_DRAFT,
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
 
@@ -110,6 +111,7 @@ it.each([10, 100])(
       }
       return undefined
     })
+    const appliedUpdates: { scope: string; output: 'null' | 'keep' | 'content' }[] = []
     const write = vi.fn(storage.write),
       update = vi.fn(storage.update),
       remove = vi.fn(storage.remove)
@@ -123,7 +125,17 @@ it.each([10, 100])(
       },
       update: (key, apply) => {
         counts.updates++
-        return update(key, apply)
+        return update(key, (stored) => {
+          const next = apply(stored)
+          appliedUpdates.push({
+            scope: key,
+            output: next === null ? 'null' : next === KEEP_NATIVE_CHAT_DRAFT ? 'keep' : 'content'
+          })
+          if (next !== null && next !== KEEP_NATIVE_CHAT_DRAFT) {
+            counts.serializedCharacters += JSON.stringify(next).length
+          }
+          return next
+        })
       },
       remove: (keys) => {
         counts.removes += keys.length
@@ -290,6 +302,7 @@ it.each([10, 100])(
     const chained = counts.compositions
     store.getState().recordSshRepoReadoptions([{ ...event }])
     expect(counts.compositions).toBe(chained)
+    expect(counts.writes + counts.updates + counts.removes).toBe(0)
     drafts.deleteNativeChatComposerDraft(rows[0].from)
     drafts.updateNativeChatComposerDraft(rows[0].from, { text: 'new explicit input' }, 'immediate')
     for (let i = 0; i < rows.length; i++) {
@@ -309,8 +322,10 @@ it.each([10, 100])(
     expect(counts.loadedEntries).toBe(3 * count)
     expect(counts.loadedBytes).toBeGreaterThan(0)
     expect(counts.compositions).toBe(beforeHydration.compositions)
-    expect(counts.writes + counts.updates).toBe(0)
-    expect(counts.removes).toBe(1)
+    expect(counts.writes).toBe(0)
+    expect(counts.updates).toBe(1)
+    expect(appliedUpdates).toEqual([{ scope: scope('last', 0), output: 'null' }])
+    expect(counts.removes).toBe(0)
     expect(counts.serializedCharacters).toBe(0)
     expect(counts.fullJournalEntries + counts.additionJournalEntries).toBe(0)
     expect(counts.predicates).toBe(count)

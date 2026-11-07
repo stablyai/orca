@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     mode: 'edit'
   }[] = []
   const state = {
+    unifiedTabsByWorktree: {},
     settings: { skipDeleteWorktreeConfirm: false },
     worktreeMap: new Map<
       string,
@@ -180,7 +181,11 @@ describe('delete worktree flow', () => {
         { id: 'wt-1', executionHostId: 'ssh:builder' },
         false,
         {
-          suppressPreservedBranchToast: true
+          suppressPreservedBranchToast: true,
+          chatDraftRemovalReceipt: expect.objectContaining({
+            capture: expect.any(Function),
+            finish: expect.any(Function)
+          })
         }
       )
     )
@@ -205,7 +210,11 @@ describe('delete worktree flow', () => {
       { id: 'wt-2', executionHostId: 'ssh:builder' },
       false,
       {
-        suppressPreservedBranchToast: true
+        suppressPreservedBranchToast: true,
+        chatDraftRemovalReceipt: expect.objectContaining({
+          capture: expect.any(Function),
+          finish: expect.any(Function)
+        })
       }
     )
     expect(toast.info).toHaveBeenCalledWith(

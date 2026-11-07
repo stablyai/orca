@@ -14,7 +14,8 @@ export function restoredChatTabChanges(
   savedTabsByWorktree: Parameters<typeof chatTabChangesMatchingIndex>[0],
   host: ReturnType<typeof getStructuredAgentSessionHost>,
   restored: readonly { workspaceId: string; sessionId: string; agent: ChatTabOpen['agent'] }[],
-  live: (id: string) => boolean = () => false
+  live: (id: string) => boolean = () => false,
+  placed: (sessionId: string, worktreeId: string) => boolean = () => true
 ): Map<string, ChatTabChange[]> {
   return chatTabChangesMatchingIndex(
     savedTabsByWorktree,
@@ -27,11 +28,13 @@ export function restoredChatTabChanges(
       }
     })),
     // A chat a newer Orca wrote is only unreadable here, so it keeps its tab.
-    (sessionId) =>
-      !!host &&
-      structuredSessionTabRetired(host, sessionId) &&
-      !live(sessionId) &&
-      !host.deps?.store?.isSessionUnreadable?.(sessionId)
+    (sessionId, worktreeId, tab) =>
+      ((!tab.executionHostId || tab.executionHostId === LOCAL_EXECUTION_HOST_ID) &&
+        !placed(sessionId, worktreeId)) ||
+      (!!host &&
+        structuredSessionTabRetired(host, sessionId) &&
+        !live(sessionId) &&
+        !host.deps?.store?.isSessionUnreadable?.(sessionId))
   )
 }
 

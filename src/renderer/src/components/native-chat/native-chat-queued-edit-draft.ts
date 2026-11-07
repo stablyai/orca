@@ -1,3 +1,9 @@
+import type { NativeChatPastedTextOperation } from './native-chat-pasted-text-reference'
+import {
+  moveNativeChatStagedFiles,
+  reconcileNativeChatStagedDraft
+} from './native-chat-draft-attachment-staging'
+import { transferNativeChatDraftReturn } from './native-chat-draft-return-products'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { withoutImageReference } from '../../../../shared/native-chat/native-chat-image-reference'
 import {
@@ -43,6 +49,7 @@ import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
 } from './native-chat-composer-draft-storage'
+import { records, type DraftRecord } from './native-chat-composer-draft-memory'
 
 export type NativeChatQueuedEditDraft = {
   scopeKey: string
@@ -50,6 +57,7 @@ export type NativeChatQueuedEditDraft = {
   body: AgentJournalMessageItem
   baseKey: string
   initial: NativeChatComposerDraft
+  returning: { destination: string; revoked?: DraftRecord }
   kept: (ReturnType<typeof queuedEditKeptImages>[number] & {
     image: NativeChatComposerDraftImage
   })[]
@@ -70,15 +78,18 @@ export function createNativeChatQueuedEditDraft(
     document: seedPromptSkillReferences(promptTextContent(text), body.skills),
     images: kept.map(({ id, block }) => ({ id, path: block.path ?? block.url ?? '' }))
   }
-  openNativeChatEditDraft(scopeKey, initial)
-  return {
+  const edit: NativeChatQueuedEditDraft = {
     scopeKey,
     destination,
     body,
-    baseKey: nativeChatQueuedEditValueKey(scopeKey),
+    baseKey: '',
     initial,
+    returning: { destination },
     kept: kept.map((entry, index) => ({ ...entry, image: initial.images[index] }))
   }
+  openNativeChatEditDraft(scopeKey, initial, edit.returning)
+  edit.baseKey = nativeChatQueuedEditValueKey(scopeKey)
+  return edit
 }
 
 export function nativeChatQueuedEditInput(
@@ -129,6 +140,9 @@ export function handBackNativeChatQueuedEdit(
   edit: NativeChatQueuedEditDraft,
   force = false
 ): boolean {
+  if (edit.returning.revoked && records.get(edit.scopeKey) === edit.returning.revoked) {
+    return false
+  }
   const draft = readNativeChatComposerDraft(edit.scopeKey)
   let text = draft.text
   let document = draft.document
@@ -150,21 +164,46 @@ export function handBackNativeChatQueuedEdit(
     (image) => !kept.some((entry) => sameQueuedEditImage(entry.image, image))
   )
   const pending = nativeChatPendingAttachmentSnapshot(edit.scopeKey)
-  appendToNativeChatComposerDraft(edit.destination, {
-    text,
-    document,
-    images,
-    pastedTextFiles: draft.pastedTextFiles
-  })
+  appendToNativeChatComposerDraft(
+    edit.destination,
+    {
+      text,
+      document,
+      images,
+      pastedTextFiles: draft.pastedTextFiles
+    },
+    undefined,
+    undefined,
+    false,
+    edit.returning,
+    records.get(edit.scopeKey),
+    edit.scopeKey
+  )
   redirectNativeChatEditDraft(edit.scopeKey, edit.destination)
   moveNativeChatPendingAttachments(edit.scopeKey, edit.destination)
+  const incoming = moveNativeChatStagedFiles(edit.scopeKey, edit.destination)
+  reconcileNativeChatStagedDraft(
+    edit.destination,
+    records.get(edit.destination),
+    undefined,
+    incoming
+  )
+  const pastes: NativeChatPastedTextOperation[] = []
   for (const token of draft.text.split(NATIVE_CHAT_PASTED_TEXT_TOKEN)) {
     const id = nativeChatPastedTextId(token)
     const operation = id ? nativeChatPastedTextOperations.get(id) : undefined
     if (operation?.scopeKey === edit.scopeKey) {
       operation.scopeKey = edit.destination
+      pastes.push(operation)
     }
   }
+  transferNativeChatDraftReturn({
+    permission: edit.returning,
+    from: edit.scopeKey,
+    to: edit.destination,
+    chips: pending,
+    pastes
+  })
   return text !== '' || images.length > 0 || pending.length > 0
 }
 

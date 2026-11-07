@@ -1,9 +1,10 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { formatNativeChatFileReference } from './native-chat-composer-target'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { partitionNativeChatAttachmentPaths } from './native-chat-image-paste'
 import { nativeChatAttachmentOwnerChangedNotice } from './native-chat-attachment-upload'
 import {
   nativeChatWorkspaceAttachmentMismatchNotice,
@@ -32,7 +33,10 @@ type Args = {
   mountedRef: RefObject<boolean>
   noteAttachmentTargetBlocked: () => void
   setCaret: (caret: number) => void
-  setDraft: (updater: (previous: string) => string) => void
+  setDraft: (
+    updater: (previous: string) => string,
+    options?: { sources?: readonly NativeChatDraftReturnSource[] }
+  ) => void
   setNotice: (notice: string | null) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
 }
@@ -74,23 +78,26 @@ export function useNativeChatResolvedPathAttachments({
   }, [disabled])
 
   const insertFileReferences = useCallback(
-    (paths: string[]) => {
+    (paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => {
       if (paths.length === 0) {
         return
       }
       const input = textareaRef.current
       if (input?.insertFileReferences) {
-        input.insertFileReferences(paths)
+        input.insertFileReferences(paths, sources)
         return
       }
       const insertion = `${paths.map(formatNativeChatFileReference).join(' ')} `
       const caretAtInsert = input?.selectionStart ?? caret
-      setDraft((prev) => {
-        const before = prev.slice(0, caretAtInsert)
-        const after = prev.slice(caretAtInsert)
-        setCaret(before.length + insertion.length)
-        return before + insertion + after
-      })
+      setDraft(
+        (prev) => {
+          const before = prev.slice(0, caretAtInsert)
+          const after = prev.slice(caretAtInsert)
+          setCaret(before.length + insertion.length)
+          return before + insertion + after
+        },
+        { sources }
+      )
     },
     [caret, setCaret, setDraft, textareaRef]
   )
@@ -137,6 +144,7 @@ export function useNativeChatResolvedPathAttachments({
           paths.some(({ targetOwnerIsCurrent }) => !targetOwnerIsCurrent) &&
           attachmentTargetBlocked(false)
         const filePaths: string[] = []
+        const fileSources: NativeChatDraftReturnSource[] = []
         let attached = false
         for (const batch of current) {
           const attachable = batch.paths.filter(({ targetOwnerIsCurrent }) =>
@@ -147,20 +155,28 @@ export function useNativeChatResolvedPathAttachments({
           }
           if (batch.operation) {
             attached =
-              batch.operation.apply(intoScope ? null : (paths) => filePaths.push(...paths)) ||
-              attached
+              batch.operation.apply(
+                intoScope
+                  ? null
+                  : (paths, sources) => {
+                      filePaths.push(...paths)
+                      fileSources.push(...(sources ?? [{}]))
+                    }
+              ) || attached
           } else {
-            const images = attachable.filter(
-              ({ path }) => acceptsImages && isNativeChatImageAttachmentPath(path)
+            const { images, references } = partitionNativeChatAttachmentPaths(
+              attachable,
+              acceptsImages
             )
             appendImageAttachments(images.map(({ path, connectionId }) => ({ path, connectionId })))
-            filePaths.push(
-              ...attachable.filter((path) => !images.includes(path)).map(({ path }) => path)
-            )
+            for (const sources of new Set(references.map((path) => path.returnSources))) {
+              fileSources.push(...(sources ?? [{}]))
+            }
+            filePaths.push(...references.map(({ path }) => path))
             attached = true
           }
         }
-        insertFileReferences(filePaths)
+        insertFileReferences(filePaths, fileSources)
         if (!intoScope) {
           if (ownedBlocked || clientLocalBlocked) {
             noteAttachmentTargetBlocked()

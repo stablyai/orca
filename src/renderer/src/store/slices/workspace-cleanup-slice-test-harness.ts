@@ -63,23 +63,15 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
   } as AppState
 }
 
-export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
-  return create<AppState>()(
-    (...a) =>
-      ({
-        tabsByWorktree: {},
-        ptyIdsByTabId: {},
-        openFiles: [],
-        editorDrafts: {},
-        browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
-        activeWorktreeId: null,
-        agentStatusByPaneKey: {},
-        runtimePaneTitlesByTabId: {},
-        lastVisitedAtByWorktreeId: {},
-        removeWorktree,
-        ...createWorkspaceCleanupSlice(...a)
-      }) as unknown as AppState
+export function createCleanupTestStore(
+  removeWorktree: AppState['removeWorktree'] = vi.fn<AppState['removeWorktree']>()
+) {
+  return create<AppState>()((...args) =>
+    makeState({
+      unifiedTabsByWorktree: {},
+      removeWorktree,
+      ...createWorkspaceCleanupSlice(...args)
+    })
   )
 }
 

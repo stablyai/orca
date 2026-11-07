@@ -4,6 +4,7 @@ import type {
   NativeChatComposerDraftStorage,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+export const KEEP_NATIVE_CHAT_DRAFT = Symbol('keep-native-chat-draft')
 
 const DATABASE_NAME = 'orca-native-chat-composer-drafts'
 const DATABASE_VERSION = 1
@@ -99,7 +100,10 @@ export function createIndexedDbNativeChatComposerDraftStorage(
       // Why inside the read's callback: the write must land in the same transaction as the read.
       read.onsuccess = () => {
         const next = apply(read.result)
-        if (next) {
+        if (next === KEEP_NATIVE_CHAT_DRAFT) {
+          transaction.commit?.()
+          return
+        } else if (next) {
           drafts.put(next, scopeKey)
         } else {
           drafts.delete(scopeKey)

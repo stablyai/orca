@@ -1,3 +1,10 @@
+import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import {
+  classifyWorktreeForceDeleteReason,
+  getLockedWorktreeRemovalReason,
+  isLockedWorktreeRemovalError
+} from '../../../../../../shared/worktree/removal'
 import type {
   WorktreeDeleteState,
   WorktreeDeleteStateTarget,
@@ -149,4 +156,57 @@ export function createClearWorktreeDeleteState(
       return { deleteStateByWorktreeId: next }
     })
   }
+}
+
+export function markWorktreeRemovalStarted(
+  set: WorktreeSliceSet,
+  deleteStateKey: string,
+  requiredExecutionHostId?: ExecutionHostId | null
+): void {
+  set((s) => ({
+    deleteStateByWorktreeId: {
+      ...s.deleteStateByWorktreeId,
+      [deleteStateKey]: {
+        isDeleting: true,
+        phase: 'deleting',
+        ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
+        error: null,
+        canForceDelete: false,
+        forceDeleteReason: null
+      }
+    }
+  }))
+}
+
+export function failWorktreeRemoval(
+  set: WorktreeSliceSet,
+  deleteStateKey: string,
+  requiredExecutionHostId: ExecutionHostId | null | undefined,
+  err: unknown,
+  force: boolean | undefined,
+  allowUnverifiedPtyStop: boolean
+) {
+  // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
+  console.warn('Failed to remove worktree:', err)
+  // Strip IPC/channel wrappers so the user-facing refusal leads the toast.
+  const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
+  const forceDeleteReason = classifyWorktreeForceDeleteReason(error, force, allowUnverifiedPtyStop)
+  const locked = isLockedWorktreeRemovalError(error)
+  // Only archive-hook refusal can be retried via waiver rather than state repair; expose that toast choice (#19334).
+  const canWaiveArchiveHook = isArchiveHookRemovalError(error)
+  set((s) => ({
+    deleteStateByWorktreeId: {
+      ...s.deleteStateByWorktreeId,
+      [deleteStateKey]: {
+        isDeleting: false,
+        ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
+        error,
+        canForceDelete: forceDeleteReason !== null,
+        forceDeleteReason,
+        ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
+        ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
+      }
+    }
+  }))
+  return { ok: false as const, error }
 }

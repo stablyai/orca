@@ -1,8 +1,25 @@
+import type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
+import type { NativeChatPastedTextOperation } from './native-chat-pasted-text-reference'
 import {
-  hasNativeChatPendingAttachment,
-  nativeChatPendingAttachmentScope
+  staged,
+  currentFiles,
+  pendingResources,
+  releaseFiles,
+  type StagedFiles
+} from './native-chat-staged-file-owner'
+export { currentFiles, pendingResources, type StagedFiles } from './native-chat-staged-file-owner'
+import {
+  transferNativeChatStagedFiles,
+  reconcileIncomingNativeChatStagedFiles,
+  type NativeChatStagedTransfer
+} from './native-chat-staged-file-transfer'
+export type { NativeChatStagedTransfer } from './native-chat-staged-file-transfer'
+import {
+  nativeChatPendingAttachmentScope,
+  nativeChatPendingAttachmentSource,
+  nativeChatPendingAttachmentSnapshot
 } from './native-chat-pending-attachment-cache'
-import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
+import { prepareNativeChatStagedUpload } from './native-chat-staged-upload'
 import { nativeChatTextAttachmentParts } from '../../../../shared/native-chat-text-attachment-references'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
@@ -12,22 +29,20 @@ export type NativeChatStagedInput = {
   attachments?: readonly { path: string }[]
 }
 
-type StagedFiles = {
-  paths: Set<string>
-  draftPaths: Set<string>
-  heldInputs: Set<Set<string>>
-  leases: Set<Set<string>>
-  draft?: NativeChatComposerDraft
-  referenceText?: string
-  textReferences: Set<string>
-  movedTo?: StagedFiles
-  uploads: Map<string, Map<string, Promise<string>>>
+export function captureNativeChatStagedRemoval(
+  scope: string,
+  chips: readonly NativeChatComposerImageAttachment[] = []
+) {
+  const files = staged.get(scope)
+  return {
+    files,
+    resources: new Map(files?.resources),
+    heldInputs: new Set(files?.heldInputs),
+    chips,
+    deferPrune: false
+  }
 }
-const staged = new Map<string, StagedFiles>()
-
-function currentFiles(files: StagedFiles): StagedFiles {
-  return files.movedTo ? currentFiles(files.movedTo) : files
-}
+export type NativeChatStagedRemoval = ReturnType<typeof captureNativeChatStagedRemoval>
 
 function inputPaths(files: StagedFiles, input: NativeChatStagedInput): string[] {
   const referenced = new Set(
@@ -44,79 +59,114 @@ export function hasNativeChatStagedFiles(scope: string): boolean {
   return (staged.get(scope)?.paths.size ?? 0) > 0
 }
 
-export function stageNativeChatDraftFile(scope: string, path: string): void {
+export function stageNativeChatDraftFile(
+  scope: string,
+  path: string,
+  source?: NativeChatComposerImageAttachment | NativeChatPastedTextOperation
+): void {
   let files = staged.get(scope)
   if (!files) {
     files = {
+      scope,
       paths: new Set(),
+      resources: new Map(),
+      pending: new Map(),
       draftPaths: new Set(),
       heldInputs: new Set(),
       leases: new Set(),
       textReferences: new Set(),
+      draftReferences: new Set(),
       uploads: new Map()
     }
     staged.set(scope, files)
   }
   files.paths.add(path)
+  const resource = {}
+  files.resources.set(path, resource)
+  if (source) {
+    const resources = pendingResources.get(source) ?? new Map()
+    resources.set(path, { resource, files })
+    pendingResources.set(source, resources)
+  }
   files.draftPaths.add(path)
 }
 
-export function moveNativeChatStagedFiles(from: string, to: string): void {
+export function moveNativeChatStagedFiles(
+  from: string,
+  to: string
+): NativeChatStagedTransfer | undefined {
   if (from === to) {
     return
   }
-  const files = staged.get(from)
-  if (!files) {
+  const source = staged.get(from)
+  if (!source) {
     return
   }
+  const files = currentFiles(source)
   const existing = staged.get(to)
-  if (existing) {
-    existing.paths.forEach((path) => files.paths.add(path))
-    existing.draftPaths.forEach((path) => files.draftPaths.add(path))
-    existing.leases.forEach((lease) => files.leases.add(lease))
-    existing.heldInputs.forEach((held) => files.heldInputs.add(held))
-    for (const [target, uploads] of existing.uploads) {
-      const held = files.uploads.get(target) ?? new Map<string, Promise<string>>()
-      uploads.forEach((upload, path) => held.set(path, held.get(path) ?? upload))
-      files.uploads.set(target, held)
-    }
-    existing.movedTo = files
+  const destination = existing ? currentFiles(existing) : undefined
+  if (files === destination) {
+    staged.delete(from)
+    return
   }
-  staged.set(to, files)
+  const { owner, incoming } = transferNativeChatStagedFiles(files, destination)
+  staged.set(to, owner)
+  owner.scope = to
   staged.delete(from)
-  files.draft = undefined
+  return incoming
 }
 
-function pruneFiles(files: StagedFiles): void {
+export function pruneFiles(files: StagedFiles, selected?: ReadonlyMap<string, object>): void {
+  const liveChips = new Set<NativeChatComposerImageAttachment>(
+    nativeChatPendingAttachmentSnapshot(files.scope)
+  )
+  const pendingPaths: string[] = []
+  for (const [chip, path] of files.pending) {
+    if (liveChips.has(chip)) {
+      pendingPaths.push(path)
+    } else {
+      files.pending.delete(chip)
+    }
+  }
   const retained = new Set([
     ...files.draftPaths,
+    ...pendingPaths,
     ...[...files.heldInputs].flatMap((held) => [...held]),
     ...[...files.leases].flatMap((lease) => [...lease])
   ])
   releaseFiles(
     files,
-    [...files.paths].filter((path) => !retained.has(path))
+    [...files.paths].filter(
+      (path) =>
+        !retained.has(path) && (!selected || selected.get(path) === files.resources.get(path))
+    )
   )
 }
 
 /** Draft edits release removed files; accepted sends keep their own leases until settlement. */
 export function reconcileNativeChatStagedDraft(
   scope: string,
-  draft?: NativeChatComposerDraft
+  draft?: NativeChatComposerDraft,
+  removal?: NativeChatStagedRemoval,
+  incoming?: NativeChatStagedTransfer
 ): void {
   const files = staged.get(scope)
-  if (!files || files.draft === draft) {
+  if (!files) {
     return
   }
   const previous = files.draft
   files.draft = draft
-  if (
-    previous &&
-    draft &&
-    previous.text === draft.text &&
-    previous.images === draft.images &&
-    previous.pastedTextFiles === draft.pastedTextFiles
-  ) {
+  const unchanged =
+    previous === draft ||
+    (previous &&
+      draft &&
+      previous.text === draft.text &&
+      previous.images === draft.images &&
+      previous.pastedTextFiles === draft.pastedTextFiles)
+  if (!removal && unchanged) {
+    if (incoming) {
+      reconcileIncomingNativeChatStagedFiles(files, incoming)
+    }
     return
   }
   if (files.referenceText !== draft?.text) {
@@ -127,17 +177,17 @@ export function reconcileNativeChatStagedDraft(
       )
     )
   }
-  const images = new Set(draft?.images.map(({ path }) => path))
-  const pasted = new Set(Object.values(draft?.pastedTextFiles ?? {}))
-  files.draftPaths = new Set(
-    [...files.paths].filter((path) => {
-      if (images.has(path) || pasted.has(path)) {
-        return true
-      }
-      return files.textReferences.has(path)
-    })
-  )
-  pruneFiles(files)
+  if (!unchanged) {
+    files.draftReferences = new Set([
+      ...files.textReferences,
+      ...(draft?.images.map(({ path }) => path) ?? []),
+      ...Object.values(draft?.pastedTextFiles ?? {})
+    ])
+  }
+  files.draftPaths = new Set([...files.paths].filter((path) => files.draftReferences.has(path)))
+  if (!removal?.deferPrune) {
+    pruneFiles(files, removal?.resources)
+  }
 }
 
 export function holdNativeChatStagedInput(scope: string, input: NativeChatStagedInput): void {
@@ -146,23 +196,6 @@ export function holdNativeChatStagedInput(scope: string, input: NativeChatStaged
     files.heldInputs.clear()
     files.heldInputs.add(new Set(inputPaths(files, input)))
     pruneFiles(files)
-  }
-}
-
-function releaseFiles(files: StagedFiles, paths: string[]): void {
-  releaseBrowserAttachmentFiles(paths)
-  for (const path of paths) {
-    files.paths.delete(path)
-    files.draftPaths.delete(path)
-    files.textReferences.delete(path)
-    files.uploads.forEach((uploads) => uploads.delete(path))
-  }
-  if (!files.paths.size) {
-    for (const [scope, held] of staged) {
-      if (held === files) {
-        staged.delete(scope)
-      }
-    }
   }
 }
 
@@ -206,65 +239,12 @@ export function captureNativeChatStagedInput(scope: string, input?: NativeChatSt
       if (!paths.length) {
         return input
       }
-      const {
-        prepareNativeChatSessionAttachmentUpload,
-        resolveNativeChatRuntimeSessionAttachmentOwner,
-        uploadNativeChatSessionAttachmentPaths
-      } = await import('./native-chat-attachment-upload')
-      const owner = resolveNativeChatRuntimeSessionAttachmentOwner({
-        sessionId: session.sessionId,
-        runtimeEnvironmentId: session.runtimeEnvironmentId
-      })
-      if (owner.kind !== 'runtime-session') {
-        throw new Error('The chat attachment host is unavailable.')
-      }
-      const prepared = await prepareNativeChatSessionAttachmentUpload(owner)
-      if (!prepared.ok) {
-        throw new Error(prepared.notice)
-      }
-      const ownerFiles = currentFiles(files)
-      const key = JSON.stringify(prepared.target)
-      const uploads = ownerFiles.uploads.get(key) ?? new Map<string, Promise<string>>()
-      ownerFiles.uploads.set(key, uploads)
-      const missing = paths.filter((path) => !uploads.has(path))
-      if (missing.length) {
-        const upload = uploadNativeChatSessionAttachmentPaths(missing, prepared.target)
-        for (const source of missing) {
-          const saved = upload.then((result) => {
-            const uploaded = result.uploaded.find((file) => file.sourcePath === source)
-            if (uploaded) {
-              return uploaded.path
-            }
-            throw new Error(
-              result.failed.find((file) => file.sourcePath === source)?.reason ||
-                'Some attachments could not be uploaded.'
-            )
-          })
-          uploads.set(source, saved)
-          void saved.catch(() => {
-            const currentUploads = currentFiles(files).uploads.get(key)
-            if (currentUploads?.get(source) === saved) {
-              currentUploads.delete(source)
-            }
-          })
-        }
-      }
-      const uploaded = new Map(
-        await Promise.all(paths.map(async (path) => [path, await uploads.get(path)!] as const))
+      return prepareNativeChatStagedUpload(
+        input,
+        { sessionId: session.sessionId, runtimeEnvironmentId: session.runtimeEnvironmentId },
+        paths,
+        () => currentFiles(files)
       )
-      const text = nativeChatTextAttachmentParts(input.text, true, (path) => uploaded.has(path))
-        .map((part) =>
-          part.path ? formatNativeChatFileReference(uploaded.get(part.path)!) : part.text
-        )
-        .join('')
-      return {
-        ...input,
-        text,
-        attachments: input.attachments?.map((image) => ({
-          ...image,
-          path: uploaded.get(image.path) ?? image.path
-        }))
-      }
     }
   }
 }
@@ -274,10 +254,20 @@ export function stageNativeChatPendingImage(
   id: string | null,
   path: string
 ): boolean {
-  if (!id || !hasNativeChatPendingAttachment(id)) {
+  const chip = id ? nativeChatPendingAttachmentSource(scope, id) : undefined
+  if (!id || !chip) {
     releaseBrowserAttachmentFiles([path])
     return false
   }
-  stageNativeChatDraftFile(nativeChatPendingAttachmentScope(scope, id), path)
+  const destination = nativeChatPendingAttachmentScope(scope, id)
+  stageNativeChatDraftFile(destination, path)
+  const files = staged.get(destination)!
+  if (chip) {
+    files.pending.set(chip, path)
+    const resources =
+      pendingResources.get(chip) ?? new Map<string, { resource: object; files: StagedFiles }>()
+    resources.set(path, { resource: files.resources.get(path)!, files })
+    pendingResources.set(chip, resources)
+  }
   return true
 }

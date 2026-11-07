@@ -13,6 +13,15 @@ import {
   sshRepo
 } from './repos-runtime-routing-fixture'
 import { createTestStore } from './store-test-helpers'
+import {
+  clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  readNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '@/components/native-chat/native-chat-composer-draft-storage'
 
 vi.mock('sonner', () => ({
   toast: {
@@ -81,6 +90,18 @@ const vmServer: PublicKnownRuntimeEnvironment = {
 }
 
 it('destroys a recipe VM whose managed server holds the project, without asking the gone server', async () => {
+  clearNativeChatComposerDraftsForTests()
+  const storage = createMemoryNativeChatComposerDraftStorage()
+  const scope = 'agent-session:vm-draft-37190'
+  storage.drafts.set(scope, {
+    text: 'unsent before VM destruction',
+    images: [],
+    savedAt: 1,
+    owner: { workspaceId: 'vm-repo::/home/orca/project', executionHostId: 'runtime:env-vm' }
+  })
+  setNativeChatComposerDraftStorageForTests(storage)
+  await hydrateNativeChatComposerDrafts()
+  runtimeEnvironmentCall.mockRejectedValue(new Error('VM record authority was destroyed'))
   ephemeralVmListRuntimes.mockResolvedValue([
     { id: 'runtime-1', cleanupStatus: 'not_started', sshTargetId: 'runtime-ssh-runtime-1' }
   ])
@@ -101,6 +122,9 @@ it('destroys a recipe VM whose managed server holds the project, without asking 
     expect.objectContaining({ method: 'repo.rm' })
   )
   expect(store.getState().repos).toEqual([])
+  expect(readNativeChatComposerDraft(scope).text).toBe('unsent before VM destruction')
+  expect(storage.drafts.get(scope)?.text).toBe('unsent before VM destruction')
+  clearNativeChatComposerDraftsForTests()
 })
 
 it("retains a recipe VM's managed-server project when VM cleanup fails", async () => {

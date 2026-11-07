@@ -204,6 +204,7 @@ export function createStructuredAgentSessionConversationLifetime(
 
   const stopStartingChild = createStructuredAgentSessionStopStartingChild(host)
   return {
+    closeConversation,
     closeForWorkspaceSleep,
     idleSweep,
     stopAgent,

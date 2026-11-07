@@ -1,3 +1,12 @@
+import { currentDraftScope } from './native-chat-launch-draft-source'
+import {
+  structuredAgentSessionIdOfDraftScope,
+  nativeChatDraftScopeTabId
+} from './native-chat-composer-draft-scope'
+import type {
+  NativeChatComposerDraftOwner,
+  StoredNativeChatComposerDraft
+} from './native-chat-composer-draft-storage'
 import {
   installNativeChatDraftRecord,
   notifyScope,
@@ -11,7 +20,6 @@ import {
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
-import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 
 export function deleteNativeChatComposerDraftsWhere(
   matches: (scope: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
@@ -30,4 +38,28 @@ export function deleteNativeChatComposerDraftsWhere(
       }
     }
   }
+}
+
+export function deleteNativeChatComposerDraft(scopeKey: string): void {
+  scopeKey = currentDraftScope(scopeKey)
+  deleteNativeChatComposerDraftsWhere((key) => key === scopeKey)
+}
+
+/** Delete closed-tab pane drafts; conversation-scoped drafts outlive their tabs. */
+export function deleteNativeChatComposerDraftsForTab(tabId: string): void {
+  deleteNativeChatComposerDraftsWhere(
+    (scopeKey) =>
+      structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
+      nativeChatDraftScopeTabId(scopeKey) === tabId
+  )
+}
+
+/** Setup/pane context is local; materialized conversations require current membership. */
+export function deleteNativeChatComposerDraftsOwnedBy(owner: NativeChatComposerDraftOwner): void {
+  deleteNativeChatComposerDraftsWhere(
+    (scopeKey, draft) =>
+      structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
+      draft?.owner?.workspaceId === owner.workspaceId &&
+      draft.owner.executionHostId === owner.executionHostId
+  )
 }

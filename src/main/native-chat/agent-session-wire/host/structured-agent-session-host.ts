@@ -28,7 +28,8 @@ import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structu
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
-import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
+import { createStructuredSessionWorkspaceActions } from '../structured-session-workspace-actions'
+export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
   private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
@@ -189,15 +190,16 @@ export class StructuredAgentSessionHost {
     this.lifetime.close(sessionId, cause, admit)
 
   /** Stop hidden children too, using one bounded host snapshot. */
-  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({
-    deps: this.deps,
+  private workspaceActions = createStructuredSessionWorkspaceActions(() => ({
+    ...this.lifetimeContext(),
     tasks: this.tasks,
     lifetime: this.lifetime,
-    sessions: this.sessions,
-    conversationDelivery: this.conversationDelivery,
-    runtimeState: this.runtimeState,
-    clientDelivery: this.clientDelivery
+    commands: this.conversationCommands,
+    clientDelivery: this.clientDelivery,
+    conversationDelivery: this.conversationDelivery
   }))
+  sleepWorkspace = this.workspaceActions.sleepWorkspace
+  rebindWorkspace = this.workspaceActions.rebindWorkspace
 
   serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
 
@@ -338,8 +340,7 @@ export class StructuredAgentSessionHost {
   /** Retains no per-session subscription. */
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
-  regenerateConversationName = (sessionId: string): boolean =>
-    this.deps.conversationNaming?.regenerate(sessionId) ?? false
+  regenerateConversationName = (id: string) => this.deps.conversationNaming?.regenerate(id) ?? false
   setUserConversationName: HostTypes.SetUserConversationName = (...args) =>
     this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 

@@ -8,6 +8,7 @@ import {
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   splitWorktreeId,
+  splitWorktreeIdForFilesystem,
   worktreeIdentityKey,
   worktreeIdsEqual
 } from '../../../../shared/worktree/id'
@@ -120,4 +121,39 @@ export function findResolvedWorktreeIdForPath(
     matches[0]?.id ??
     null
   )
+}
+
+export function listKnownResolvedWorktreesForExplicitTarget(
+  targetWorktreeId: string,
+  targetWorktree: ResolvedWorktree,
+  readWorktreeIds: () => string[],
+  resolveWorktree: (worktreeId: string) => ResolvedWorktree | null
+): ResolvedWorktree[] {
+  const target = splitWorktreeIdForFilesystem(targetWorktreeId)
+  if (!target?.repoId || !target.worktreePath) {
+    // Folder workspace keys have no repo/path tuple, but the converted row
+    // is already authoritative for this explicit target.
+    return [targetWorktree]
+  }
+  const worktreeIds = new Set(
+    readWorktreeIds().filter((worktreeId) => {
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      return (
+        parsed?.repoId === target.repoId &&
+        Boolean(parsed.worktreePath) &&
+        (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
+          isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
+      )
+    })
+  )
+  worktreeIds.add(targetWorktreeId)
+
+  const resolved: ResolvedWorktree[] = []
+  for (const worktreeId of worktreeIds) {
+    const worktree = worktreeId === targetWorktreeId ? targetWorktree : resolveWorktree(worktreeId)
+    if (worktree) {
+      resolved.push(worktree)
+    }
+  }
+  return resolved
 }

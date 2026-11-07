@@ -1,6 +1,15 @@
 import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
-import { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
-export { deleteNativeChatComposerDraftsWhere } from './native-chat-composer-draft-removal'
+export {
+  deleteNativeChatComposerDraftsWhere,
+  deleteNativeChatComposerDraft,
+  deleteNativeChatComposerDraftsForTab,
+  deleteNativeChatComposerDraftsOwnedBy
+} from './native-chat-composer-draft-removal'
+export {
+  structuredAgentSessionDraftScopeKey,
+  structuredAgentSessionIdOfDraftScope,
+  nativeChatDraftScopeTabId
+} from './native-chat-composer-draft-scope'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 // Own complete unsent drafts in memory so each write repairs storage from one authoritative record.
 
@@ -15,6 +24,12 @@ import {
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal'
+import {
+  beginNativeChatDraftReturn,
+  commitNativeChatDraftReturn,
+  type NativeChatDraftReturnSource,
+  type NativeChatDraftReturnProduct
+} from './native-chat-draft-return-products'
 import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,
@@ -71,8 +86,12 @@ export {
 
 export type { NativeChatComposerDraftChange } from './native-chat-composer-draft-storage'
 /** Edit scopes share input machinery but never enter draft persistence. */
-export function openNativeChatEditDraft(scopeKey: string, draft: NativeChatComposerDraft): void {
-  ephemeralDrafts.set(scopeKey, { scopeKey, active: true })
+export function openNativeChatEditDraft(
+  scopeKey: string,
+  draft: NativeChatComposerDraft,
+  returning?: { destination: string; revoked?: DraftRecord }
+): void {
+  ephemeralDrafts.set(scopeKey, { scopeKey, active: true, returning })
   updateNativeChatComposerDraft(scopeKey, draft, 'immediate')
 }
 
@@ -122,7 +141,8 @@ export function finishNativeChatComposerSubmission(
       draft,
       resolveNativeChatComposerDraftOwner(scopeKey) ?? draft.owner,
       undefined,
-      true
+      true,
+      submission
     )
   }
 }
@@ -133,12 +153,15 @@ export function updateNativeChatComposerDraft(
   change: NativeChatComposerDraftChange,
   persist: 'immediate' | 'deferred',
   append?: DraftAppend,
-  position?: NativeChatDraftPosition
+  position?: NativeChatDraftPosition,
+  product?: NativeChatDraftReturnProduct,
+  sources?: readonly NativeChatDraftReturnSource[]
 ): void {
   const scopeKey = currentDraftScope(reference)
   if (isNativeChatEditDraft(scopeKey) && !ephemeralDrafts.has(scopeKey)) {
     return
   }
+  product ??= beginNativeChatDraftReturn(sources, scopeKey, records.get(scopeKey))
   const current = records.get(scopeKey) ?? EMPTY_DRAFT
   const text = change.text ?? current.text
   const document = 'document' in change ? change.document : current.document
@@ -157,23 +180,25 @@ export function updateNativeChatComposerDraft(
     unsavedText === current.unsavedText &&
     sameNativeChatComposerDraftImages(images, current.images)
   ) {
+    commitNativeChatDraftReturn(product, records.get(scopeKey))
     if (persist === 'immediate' && dirtyScopes.has(scopeKey)) {
-      persistNativeChatComposerDraft(scopeKey, 'immediate')
+      persistNativeChatComposerDraft(scopeKey, 'immediate', undefined, product)
     }
     return
   }
   if (text === '' && images.length === 0) {
     installNativeChatDraftRecord(scopeKey)
+    commitNativeChatDraftReturn(product, undefined)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
     if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
-      persistNativeChatComposerDraft(scopeKey, 'immediate', append)
+      persistNativeChatComposerDraft(scopeKey, 'immediate', append, product)
     }
     return
   }
   // A setup's first non-empty input creates its session source; other scopes have none.
   retainLaunchDraftSource(reference)
-  // Why stamped once: a conversation never moves to another workspace, so its owner stays true.
+  // Retain original host provenance; removal derives materialized placement from the conversation.
   const owner = current.owner ?? change.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   const record: DraftRecord = {
     text,
@@ -188,12 +213,13 @@ export function updateNativeChatComposerDraft(
     ...(unsavedText === undefined ? {} : { unsavedText })
   }
   installNativeChatDraftRecord(scopeKey, record, position)
+  commitNativeChatDraftReturn(product, record)
   reconcileRestoredImageChecks(scopeKey, record.images)
   notifyScope(scopeKey)
   if (isNativeChatMemoryOnlyDraft(scopeKey)) {
     return
   }
-  persistNativeChatComposerDraft(scopeKey, persist, append)
+  persistNativeChatComposerDraft(scopeKey, persist, append, product)
   if (!load.hydrated) {
     // Why: a window whose startup never started the load still gets its saved drafts.
     void hydrateNativeChatComposerDrafts()
@@ -206,10 +232,14 @@ export function appendToNativeChatComposerDraft(
   addition: NativeChatComposerDraftAddition,
   owner?: NativeChatComposerDraftOwner,
   position?: (draft: NativeChatComposerDraft) => NativeChatDraftPosition,
-  independent = false
+  independent = false,
+  source?: NativeChatDraftReturnSource,
+  sourceRecord?: DraftRecord,
+  sourceScope?: string
 ): boolean {
   scopeKey = currentDraftScope(scopeKey)
   const before = records.get(scopeKey)
+  const product = beginNativeChatDraftReturn(source, scopeKey, before, sourceRecord, sourceScope)
   const current = readNativeChatComposerDraft(scopeKey)
   const placed = placeNativeChatComposerDraftAddition(current, addition)
   const add = independent
@@ -234,12 +264,13 @@ export function appendToNativeChatComposerDraft(
       }
       return merged
     },
-    position?.({ text, images, document, pastedTextFiles })
+    position?.({ text, images, document, pastedTextFiles }),
+    product
   )
   if (text !== current.text) {
     notifyDraftAppend(scopeKey, placed, current)
   }
-  const after = records.get(scopeKey)
+  const after = product ? product.after : records.get(scopeKey)
   if (!after) {
     return true
   }
@@ -249,7 +280,7 @@ export function appendToNativeChatComposerDraft(
   }
   return (
     isNativeChatMemoryOnlyDraft(scopeKey) ||
-    journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt)
+    journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt, product)
   )
 }
 
@@ -267,48 +298,6 @@ export function clearNativeChatComposerDraftIfUnchanged(
   }
   updateNativeChatComposerDraft(scopeKey, { text: '', images: [] }, 'immediate')
   return true
-}
-
-const STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX = 'agent-session:'
-
-/** A structured chat's draft belongs to its conversation, so it outlives the tab showing it. */
-export function structuredAgentSessionDraftScopeKey(sessionId: string): string {
-  return `${STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX}${sessionId}`
-}
-
-export function deleteNativeChatComposerDraft(scopeKey: string): void {
-  scopeKey = currentDraftScope(scopeKey)
-  deleteNativeChatComposerDraftsWhere((key) => key === scopeKey)
-}
-
-/** The conversation a structured chat's draft belongs to, or null for a pane's draft. */
-export function structuredAgentSessionIdOfDraftScope(scopeKey: string): string | null {
-  return scopeKey.startsWith(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX)
-    ? scopeKey.slice(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX.length)
-    : null
-}
-
-/** A pane key is `<tabId>:<leaf>`; the leaf is a UUID, while a tab id may hold ':' itself. */
-export function nativeChatDraftScopeTabId(scopeKey: string): string {
-  return scopeKey.slice(0, scopeKey.lastIndexOf(':'))
-}
-
-/** Delete closed-tab pane drafts; conversation-scoped drafts outlive their tabs. */
-export function deleteNativeChatComposerDraftsForTab(tabId: string): void {
-  deleteNativeChatComposerDraftsWhere(
-    (scopeKey) =>
-      !scopeKey.startsWith(STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX) &&
-      nativeChatDraftScopeTabId(scopeKey) === tabId
-  )
-}
-
-/** Drops every draft written in a workspace the user removed, open and closed chats alike. */
-export function deleteNativeChatComposerDraftsOwnedBy(owner: NativeChatComposerDraftOwner): void {
-  deleteNativeChatComposerDraftsWhere(
-    (_scopeKey, draft) =>
-      draft?.owner?.workspaceId === owner.workspaceId &&
-      draft.owner.executionHostId === owner.executionHostId
-  )
 }
 
 export function clearNativeChatComposerDraftsForTests(): void {
