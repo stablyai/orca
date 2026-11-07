@@ -41,7 +41,9 @@ it.each(['claude', 'codex'] as const)(
             id: 'selected',
             label: 'Selected',
             efforts: [{ value: 'high', label: 'High' }],
-            isDefault: true
+            isDefault: true,
+            supportsFastMode: true,
+            serviceTiers: [{ value: 'fast', label: 'Fast' }]
           }
         ]
       }
@@ -68,6 +70,12 @@ it.each(['claude', 'codex'] as const)(
       )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
+    // A speed edit copies the current Arguments into the draft; later settings must still win.
+    fireEvent.click(
+      agent === 'claude'
+        ? panel().querySelector('[role="switch"]')!
+        : getByRole(document.body, 'radio', { name: 'Fast' })
+    )
     changePrompt(
       panel().querySelector<HTMLElement>('[contenteditable]')!,
       'keep @/repo/exact-file.ts'
@@ -108,7 +116,16 @@ it.each(['claude', 'codex'] as const)(
       ok: true,
       tokens:
         agent === 'claude'
-          ? ['claude', '--dangerously-skip-permissions', '--model', 'selected', '--effort', 'high']
+          ? [
+              'claude',
+              '--dangerously-skip-permissions',
+              '--model',
+              'selected',
+              '--effort',
+              'high',
+              '--settings',
+              '{"fastMode":true}'
+            ]
           : [
               'codex',
               '-c',
@@ -117,7 +134,9 @@ it.each(['claude', 'codex'] as const)(
               '-m',
               'selected',
               '-c',
-              'model_reasoning_effort=high'
+              'model_reasoning_effort=high',
+              '-c',
+              'service_tier=fast'
             ]
     })
     await waitFor(() =>

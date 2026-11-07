@@ -23275,6 +23275,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vous pouvez conserver vos choix ou utiliser les arguments.",
+    "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogFailed": "Impossible de charger les modèles de {{agent}}. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
     "catalogSignIn": "Connectez-vous à {{agent}} pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
     "catalogInstall": "Installez {{agent}} sur cet hôte pour charger ses modèles, puis rouvrez le sélecteur d’agents.",

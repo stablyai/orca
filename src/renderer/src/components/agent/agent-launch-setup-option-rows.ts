@@ -169,7 +169,8 @@ export function agentLaunchSetupRowGroups(rows: SessionOptionDescriptor[], launc
 export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
   models: readonly { id: string; hidden?: true }[],
-  currentModel: string | undefined
+  currentModel: string | undefined,
+  mode: 'launch' | 'select'
 ) {
   const hasModels = models.some((model) => !model.hidden)
   const hasUsableModels =
@@ -180,11 +181,17 @@ export function agentLaunchSetupCatalogState(
       ? null
       : entry.catalogRead === 'unsupported' ||
           (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
-        ? translate(
-            'agentPicker.catalogUnsupported',
-            '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
-            { agent: entry.label }
-          )
+        ? mode === 'launch'
+          ? translate(
+              'agentPicker.catalogUnsupportedLaunch',
+              '{{agent}} models are unavailable on this host. Your current choices still apply.',
+              { agent: entry.label }
+            )
+          : translate(
+              'agentPicker.catalogUnsupported',
+              '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
+              { agent: entry.label }
+            )
         : entry.catalogRead === 'failed'
           ? translate(
               'agentPicker.catalogFailed',
