@@ -28,7 +28,7 @@ export function isNativeBrowserPopupRequest(input: {
   )
 }
 
-// OpenURL creates synchronously; scripted window.open creates its child in a later task.
+/** Preserves pre-navigation admission across synchronous links and deferred script windows. */
 export function allowNativeBrowserPopup(input: {
   opener: WebContents
   options: Electron.BrowserWindowConstructorOptions
