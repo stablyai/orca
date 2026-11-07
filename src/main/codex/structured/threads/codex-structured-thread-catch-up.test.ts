@@ -180,7 +180,7 @@ describe('Codex chat catch-up', () => {
     await c.reopen()
     expect(c.journal.submission('old-gap')?.dispatchState).toBe('accepted')
     expect(c.journal.submission('fetched-known')?.dispatchState).toBe('accepted')
-    expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+    expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
 
     for (const n of [100, 1_000]) {
       for (const id of [`tail-${n}`, `second-${n}`]) {
@@ -268,10 +268,11 @@ describe('Codex chat catch-up', () => {
       })
       expect(settled).toContain(first)
       expect(settled).not.toContain(next)
+      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
       await c.reopen()
       expect(c.journal.submission(first)?.dispatchState).toBe('accepted')
-      expect(c.journal.submission(next)?.dispatchState).toBe('pending')
-      expect(c.journal.submission('V')?.dispatchState).toBe('pending')
+      expect(c.journal.submission(next)?.dispatchState).toBe('rejected')
+      expect(c.journal.submission('V')?.dispatchState).toBe('rejected')
       // Losing ownership or cancellation during a read forbids a new proof callback.
       const blocked = new AbortController()
       current = true

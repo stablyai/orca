@@ -9,7 +9,10 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 
 type AppStoreSnapshot = ReturnType<typeof useAppStore.getState>
 
-type SeedRequest = Pick<WorktreeCreationRequest, 'agent' | 'startupPlan' | 'launchDraftPrompt'>
+type SeedRequest = Pick<
+  WorktreeCreationRequest,
+  'agent' | 'startupPlan' | 'launchDraftPrompt' | 'creationStartup'
+>
 
 /** Find the actual agent tab, never tabs[0] or activation’s primary: default dev/log/shell tabs run no agent. */
 function resolveLaunchAgentTabId(
@@ -42,8 +45,17 @@ function applyAgentTabSeeds(args: {
   worktreeId: string
   backendSpawned: boolean
 }): void {
-  const { request, agent, tabId } = args
-  seedNativeChatAppliedSessionOptions(tabId, agent, request.startupPlan?.sessionOptions)
+  const { request, tabId } = args
+  const agent =
+    args.state.tabsByWorktree[args.worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent ??
+    args.agent
+  seedNativeChatAppliedSessionOptions(
+    tabId,
+    agent,
+    agent === request.agent
+      ? (request.creationStartup?.sessionOptions ?? request.startupPlan?.sessionOptions)
+      : undefined
+  )
   // Mirror draft launch context into chat composer; otherwise TUI-only input is invisible there.
   if (request.launchDraftPrompt) {
     seedNativeChatLaunchDraftForAgentTab({ tabId, agent, text: request.launchDraftPrompt })
@@ -56,14 +68,15 @@ function applyAgentTabSeeds(args: {
  */
 export function seedAgentTabStateAfterWorktreeCreate(args: {
   request: SeedRequest
+  startupAgent?: TuiAgent
   worktreeId: string
   primaryTabId: string | null
   startupTerminalTabId: string | null | undefined
   backendSpawned: boolean
 }): void {
   const { request, worktreeId, backendSpawned } = args
-  const agent = request.agent
-  if (!request.startupPlan || !agent) {
+  const agent = args.startupAgent ?? request.agent
+  if (!agent) {
     return
   }
   const state = useAppStore.getState()

@@ -27,6 +27,7 @@ import {
 } from './developer-permission-status'
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type DeveloperPermissionsPaneProps = {
   highlightedSettingId?: string | null
@@ -311,31 +312,29 @@ export function DeveloperPermissionsPane({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <TerminalTccAttributionNotice />
-      <div className="flex items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/25 px-4 py-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm font-medium">
+      <SettingsGroup
+        title={
+          <span className="flex items-center gap-2">
             <ShieldCheck className="size-4" />
             {translate(
               'auto.components.settings.DeveloperPermissionsPane.6f011b9bf6',
               "Terminal tools inherit Orca's macOS privacy envelope."
             )}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.DeveloperPermissionsPane.6326a4c5cc',
-              'Use these controls when a CLI, local app, or automation tool needs macOS privacy access. Orca does not ask at startup.'
-            )}
-          </p>
-        </div>
-        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refresh()}>
-          <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-          {translate('auto.components.settings.DeveloperPermissionsPane.4c17304beb', 'Refresh')}
-        </Button>
-      </div>
-
-      <div className="divide-y divide-border/60 rounded-lg border border-border/60">
+          </span>
+        }
+        description={translate(
+          'auto.components.settings.DeveloperPermissionsPane.6326a4c5cc',
+          'Use these controls when a CLI, local app, or automation tool needs macOS privacy access. Orca does not ask at startup.'
+        )}
+        action={
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refresh()}>
+            <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+            {translate('auto.components.settings.DeveloperPermissionsPane.4c17304beb', 'Refresh')}
+          </Button>
+        }
+      >
         {PERMISSIONS.map((permission) => {
           const state = stateById.get(permission.id)
           const status = state?.status
@@ -343,11 +342,11 @@ export function DeveloperPermissionsPane({
           const settingId = `developer-permissions-${permission.id}`
 
           return (
-            <div key={permission.id}>
+            <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
                 data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
-                className="flex items-center justify-between gap-4 px-4 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
@@ -400,7 +399,7 @@ export function DeveloperPermissionsPane({
             </div>
           )
         })}
-      </div>
+      </SettingsGroup>
     </div>
   )
 }

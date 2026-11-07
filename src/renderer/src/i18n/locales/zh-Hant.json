@@ -483,10 +483,7 @@
         "searchAgents": "代理程式",
         "searchCli": "CLI",
         "searchTerminal": "終端機",
-        "antigravityDescription": "Antigravity 聊天會執行由 Orca 下載至此主機的伺服器，與 agy CLI 各自獨立。",
-        "antigravityNotSignedIn": "尚未登入。聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。",
-        "antigravityAccount": "帳戶",
-        "antigravitySignInNeeded": "聊天需另外登入 Antigravity，與終端機中的 agy 帳戶分開使用。"
+        "antigravityAccount": "帳戶"
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
@@ -19650,7 +19647,6 @@
       "visualLoading": "正在載入視覺化",
       "visualOpenInNewTab": "在新分頁中開啟",
       "queuedMessages": {
-        "behindReturnedHold": "等待中 — 前面有一則訊息需要處理",
         "steer": "引導",
         "send": "傳送",
         "steerHint": "提交且不中斷模型",
@@ -21332,7 +21328,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "聊天功能需另行登入 Antigravity，與上方的 agy 帳戶分開。只需在此裝置上登入一次。",
       "chatSignIn": "登入",
       "chatChangeAccount": "變更帳戶",
       "chatRetry": "重試登入",
@@ -21345,14 +21340,11 @@
       "chatVerifying": "正在完成登入…",
       "chatPasteHelp": "若登入後的最後一個頁面無法載入，請從瀏覽器複製其完整網址，並在此貼上。",
       "chatContinue": "繼續",
-      "chatSignedInOn": "已在 {{host}} 上登入。",
       "chatCancelled": "已取消登入。",
       "chatExpired": "登入逾時。請再試一次。",
       "chatFailed": "登入失敗。請再試一次。",
-      "chatNotSignedIn": "尚未在 {{host}} 上登入。",
       "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
-      "scope": "管理 {{host}} 上的 agy 原生帳戶。",
       "signIn": "在此主機上啟動 agy 並完成其瀏覽器登入，然後儲存目前的帳戶。要新增其他帳戶，請在 agy 中使用 /logout 並再次登入。",
       "docs": "登入說明",
       "retry": "重試",
@@ -21383,11 +21375,9 @@
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "請重新登入以使用 {{method}}。",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登入。",
       "lastReading": "{{reading}} · 讀取於 {{time}}",
       "noReading": "用量未知：尚未讀取"
     },

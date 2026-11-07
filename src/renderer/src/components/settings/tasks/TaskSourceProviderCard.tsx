@@ -94,8 +94,8 @@ export function TaskSourceProviderCard({
   const setupId = useId()
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/30">
-      <div className="flex flex-wrap items-start gap-3 p-3.5">
+    <div>
+      <div className="flex flex-wrap items-start gap-3 py-3.5">
         <span
           className={cn(
             'flex size-9 shrink-0 items-center justify-center rounded-md border',
@@ -167,7 +167,7 @@ export function TaskSourceProviderCard({
       </div>
 
       {expanded ? (
-        <div id={setupId} className="border-t border-border/50 px-3.5 py-1">
+        <div id={setupId} className="border-t border-border/50 py-1 pl-12">
           {children}
         </div>
       ) : null}

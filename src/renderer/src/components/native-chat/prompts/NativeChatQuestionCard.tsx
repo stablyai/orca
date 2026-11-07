@@ -4,6 +4,7 @@ import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
 import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
@@ -64,6 +65,7 @@ export function NativeChatQuestionCard({
   shouldFocus = false,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
+  const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const autoAdvance = useNativeChatQuestionAutoAdvance(isSubmitting || isCancelling)
   const [index, setIndex] = useState(0)
@@ -82,7 +84,7 @@ export function NativeChatQuestionCard({
   const fieldTakesFocus = q.options.length === 0 || undefined
   const answerPlaceholder =
     freeTextInput?.placeholder ??
-    translate('components.native-chat.question.otherPlaceholder', 'Type your answer')
+    t('components.native-chat.question.otherPlaceholder', 'Type your answer')
   const acceptsEmpty = (qi: number): boolean =>
     askAcceptsEmptyAnswer(prompt.questions[qi], freeTextInputs?.[qi])
   const typedText = (qi: number, oth = otherText): string =>
@@ -251,7 +253,7 @@ export function NativeChatQuestionCard({
               >
                 <span className="max-w-[10rem] truncate">
                   {qq.header ||
-                    translate('components.native-chat.question.step', 'Step {{value0}}', {
+                    t('components.native-chat.question.step', 'Step {{value0}}', {
                       value0: i + 1
                     })}
                 </span>
@@ -281,7 +283,7 @@ export function NativeChatQuestionCard({
               type="button"
               onClick={cancel}
               disabled={isCancelling}
-              aria-label={translate('components.native-chat.question.cancel', 'Cancel')}
+              aria-label={t('components.native-chat.question.cancel', 'Cancel')}
               className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="size-4" />
@@ -386,7 +388,7 @@ export function NativeChatQuestionCard({
                 )}
               >
                 {isSubmitting
-                  ? translate('components.native-chat.question.sending', 'Sending…')
+                  ? t('components.native-chat.question.sending', 'Sending…')
                   : CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]()}
               </button>
             </div>

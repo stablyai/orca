@@ -385,7 +385,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      <SettingsSectionStack sections={visibleSections} spacing="group" />
+      <SettingsSectionStack sections={visibleSections} />
     </div>
   )
 }

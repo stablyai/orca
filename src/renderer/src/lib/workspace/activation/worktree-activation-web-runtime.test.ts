@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/setup-agent-sequencing'
-import './worktree-activation'
-import { ensureWorktreeHasInitialTerminal } from './initial-surface/worktree-initial-terminal-seeding'
+import { activateAndRevealWorktreeWithOutcome } from './worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 
 import {
   type AppStoreState,
@@ -247,4 +247,35 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       command: 'gh issue view 42'
     })
   })
+})
+
+it('accepts live paired startup through after-wake when initial seeding returns no primary tab', async () => {
+  const worktree = makeCreatedAgentWorktree()
+  seedEmptyActivatableWorktree(worktree)
+  useAppStore.setState((state) => ({
+    repos: state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:paired' as const })),
+    worktreesByRepo: { [worktree.repoId]: [{ ...worktree, runtimeOwnerEnvironmentId: 'paired' }] }
+  }))
+  const runtimeCall = vi.fn(async (args: { method: string }) => ({
+    id: 'reply',
+    ok: true,
+    result:
+      args.method === 'status.get'
+        ? { runtimeProtocolVersion: 3, minCompatibleRuntimeClientVersion: 2, capabilities: [] }
+        : args.method === 'session.tabs.createTerminal'
+          ? { tab: { id: 'host-tab', leafId: '11111111-1111-4111-8111-111111111111' } }
+          : { worktree: worktree.id, tabs: [] },
+    _meta: { runtimeId: 'paired-runtime' }
+  }))
+  vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+  const result = activateAndRevealWorktreeWithOutcome(worktree.id, {
+    runtimeEnvironmentId: 'paired',
+    startup: { command: 'codex', launchAgent: 'codex', launchToken: 'launch-1' }
+  })
+  expect(result).toEqual({ opened: { primaryTabId: null, startupAccepted: true } })
+  await vi.waitFor(() =>
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'session.tabs.createTerminal' })
+    )
+  )
 })

@@ -514,10 +514,7 @@
         "searchAgents": "Agenten",
         "searchCli": "CLI",
         "searchTerminal": "Terminal",
-        "antigravityDescription": "Antigravity-Chats nutzen einen Server, den Orca auf diesen Host herunterlädt, unabhängig von der agy-CLI.",
-        "antigravityNotSignedIn": "Nicht angemeldet. Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto.",
-        "antigravityAccount": "Konto",
-        "antigravitySignInNeeded": "Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto."
+        "antigravityAccount": "Konto"
       },
       "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
       "launch": {
@@ -19956,7 +19953,6 @@
       "visualLoading": "Visualisierung wird geladen",
       "visualOpenInNewTab": "In neuem Tab öffnen",
       "queuedMessages": {
-        "behindReturnedHold": "Warten — eine vorherige Nachricht erfordert Aufmerksamkeit",
         "steer": "Steuern",
         "send": "Senden",
         "steerHint": "Ohne Unterbrechung des Modells übermitteln",
@@ -21655,7 +21651,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity-Chats",
-      "chatDescription": "Chats verwenden eine eigene Antigravity-Anmeldung, unabhängig vom obigen agy-Konto. Einmalig auf diesem Gerät anmelden.",
       "chatSignIn": "Anmelden",
       "chatChangeAccount": "Konto wechseln",
       "chatRetry": "Anmeldung erneut versuchen",
@@ -21668,14 +21663,11 @@
       "chatVerifying": "Anmeldung wird abgeschlossen…",
       "chatPasteHelp": "Falls die letzte Seite nach der Anmeldung nicht geladen wird, ihre vollständige Adresse aus dem Browser kopieren und hier einfügen.",
       "chatContinue": "Fortfahren",
-      "chatSignedInOn": "Auf {{host}} angemeldet.",
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
-      "chatNotSignedIn": "Auf {{host}} nicht angemeldet.",
       "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
-      "scope": "Das native agy-Konto auf {{host}} verwalten.",
       "signIn": "agy auf diesem Host starten und die Anmeldung im Browser abschließen, dann das aktuelle Konto speichern. Um ein anderes Konto hinzuzufügen, /logout in agy ausführen und erneut anmelden.",
       "docs": "Anmeldeanleitung",
       "retry": "Erneut versuchen",
@@ -21706,11 +21698,9 @@
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
       "gcpLocation": "Google-Cloud-Standort",
-      "signInAgainWith": "Melde dich erneut an, um {{method}} zu verwenden.",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
-      "signInWith": "Meldet sich mit {{method}} auf {{host}} an.",
       "lastReading": "{{reading}} · Ausgelesen {{time}}",
       "noReading": "Nutzung unbekannt: noch nicht ausgelesen"
     },

@@ -15,6 +15,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SessionSearchAdvancedSection } from './SessionSearchAdvancedSection'
 import { SessionHistoryComputerRow } from './SessionHistoryComputerRow'
 import { SessionHistoryServerRow } from './SessionHistoryServerRow'
@@ -173,8 +174,8 @@ export function SessionHistorySettingsPane({
   }
 
   return (
-    <div>
-      <div className="space-y-1 py-3">
+    <SettingsGroup>
+      <div data-settings-row="" className="space-y-1 py-3">
         <Label className="select-text">
           {translate('sessionHistory.settings.indexComputers', 'Search inside sessions')}
         </Label>
@@ -231,7 +232,6 @@ export function SessionHistorySettingsPane({
       />
       {isWebClient ? null : (
         <SettingsRow
-          className="border-t border-border"
           label={translate('sessionHistory.settings.openInSidebar', 'Open in the sidebar')}
           description={translate(
             'sessionHistory.settings.openInSidebarCopy',
@@ -260,11 +260,11 @@ export function SessionHistorySettingsPane({
         onCleared={() => setRefresh((value) => value + 1)}
       />
       {error ? (
-        <p role="alert" className="pt-3 text-xs text-destructive">
+        <p role="alert" className="pb-3 text-xs text-destructive">
           {error}
         </p>
       ) : null}
-    </div>
+    </SettingsGroup>
   )
 }
 

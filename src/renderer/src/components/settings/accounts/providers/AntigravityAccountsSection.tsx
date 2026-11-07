@@ -25,6 +25,7 @@ import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-lin
 import { formatTimeAgo } from '../../../status-bar/tooltip'
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 function formatUsageReading(usage: ProviderRateLimits): string {
   return translate(
@@ -182,200 +183,214 @@ export function AntigravityAccountsSection({
   }
 
   return (
-    <section id="accounts-antigravity" className="space-y-4 scroll-mt-6">
-      <div className="space-y-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <AgentIcon agent="antigravity" size={16} />
-          {translate('accounts.antigravity.title', 'Antigravity')}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {translate('accounts.antigravity.scope', 'Manage the native agy account on {{host}}.', {
-            host: label
-          })}
-        </p>
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'accounts.antigravity.signIn',
-          'Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.'
-        )}{' '}
-        <a
-          className="underline"
-          href="https://antigravity.google/docs/cli/install/"
-          target="_blank"
-          onClick={openAppHttpLinkFromAnchor}
-          rel="noopener noreferrer"
-        >
-          {translate('accounts.antigravity.docs', 'Sign-in instructions')}
-        </a>
-      </p>
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
-      {!state && error && (
-        <Button variant="outline" size="sm" disabled={busy} onClick={() => void run('List')}>
-          {translate('accounts.antigravity.retry', 'Retry')}
-        </Button>
-      )}
-      {state && (
-        <div className="space-y-3">
-          <p className="text-xs">
-            {state.currentAccount
-              ? (state.currentAccount.email ??
-                translate('accounts.antigravity.identityUnknown', 'Signed-in identity unavailable'))
-              : translate('accounts.antigravity.signedOut', 'No native agy account is signed in.')}
+    <div id="accounts-antigravity" className="scroll-mt-6">
+      <SettingsGroup
+        title={
+          <span className="flex items-center gap-2">
+            <AgentIcon agent="antigravity" size={16} />
+            {translate('accounts.antigravity.title', 'Antigravity')}
+          </span>
+        }
+      >
+        <div className="space-y-4 py-4">
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'accounts.antigravity.signIn',
+              'Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.'
+            )}{' '}
+            <a
+              className="underline"
+              href="https://antigravity.google/docs/cli/install/"
+              target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
+              rel="noopener noreferrer"
+            >
+              {translate('accounts.antigravity.docs', 'Sign-in instructions')}
+            </a>
           </p>
-          {state.selectedAccountId && state.activeAccountId !== state.selectedAccountId && (
-            <p className="text-xs text-destructive">
-              {windowsHost
-                ? translate(
-                    'accounts.antigravity.windowsChanged',
-                    'The host default account changed. Select a saved account to apply it again.'
-                  )
-                : translate(
-                    'accounts.antigravity.changed',
-                    'The native account changed. Select a saved account again before launching agy.'
-                  )}
+          {error && (
+            <p role="alert" className="text-xs text-destructive">
+              {error}
             </p>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              disabled={busy || !state.currentAccount}
-              onClick={() => void run('AddCurrent')}
-            >
-              {translate('accounts.antigravity.save', 'Save current account')}
-            </Button>
+          {!state && error && (
             <Button variant="outline" size="sm" disabled={busy} onClick={() => void run('List')}>
-              {translate('accounts.antigravity.refresh', 'Refresh accounts')}
+              {translate('accounts.antigravity.retry', 'Retry')}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy || !state.currentAccount}
-              onClick={() => void run('Usage')}
-            >
-              {translate('accounts.antigravity.usage', 'Refresh usage')}
-            </Button>
-            {busy && (
-              <Loader2
-                className="size-4 animate-spin"
-                aria-label={translate('accounts.antigravity.working', 'Updating account')}
-              />
-            )}
-          </div>
-          {usage && (
-            <p className="text-xs text-muted-foreground">
-              {usage.error ?? formatUsageReading(usage)}
-            </p>
           )}
-          {state.accounts.map((account) => (
-            <div
-              key={account.id}
-              className="flex items-center justify-between gap-3 rounded-md border p-3"
-            >
-              <div className="space-y-1">
-                <p className="text-xs font-medium">
-                  {account.email ?? translate('accounts.antigravity.saved', 'Saved Google account')}
-                </p>
-                {account.usage !== undefined && (
-                  <p className="text-xs text-muted-foreground">
-                    {account.usage
-                      ? translate(
-                          'accounts.antigravity.lastReading',
-                          '{{reading}} · Read {{time}}',
-                          {
-                            reading: formatUsageReading(account.usage),
-                            time: formatTimeAgo(account.usage.updatedAt)
-                          }
-                        )
-                      : translate('accounts.antigravity.noReading', 'Usage unknown: not read yet')}
-                  </p>
-                )}
-                {state.activeAccountId === account.id && (
-                  <Badge variant="secondary">
-                    {translate('accounts.antigravity.nativeActive', 'Native account')}
-                  </Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => void run('Select', account.id)}
-                >
-                  {state.selectedAccountId === account.id && state.activeAccountId === account.id
-                    ? translate('accounts.antigravity.selected', 'Selected')
-                    : translate('accounts.antigravity.select', 'Select')}
-                </Button>
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  disabled={
-                    busy ||
-                    state.activeAccountId === account.id ||
-                    state.selectedAccountId === account.id
-                  }
-                  onClick={() => void run('Remove', account.id)}
-                >
-                  {translate('accounts.antigravity.remove', 'Remove')}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">
-        {windowsHost
-          ? translate(
-              'accounts.antigravity.windowsSessions',
-              'Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.'
-            )
-          : translate(
-              'accounts.antigravity.sessions',
-              'Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.'
-            )}
-      </p>
-      {chats && chatRuntime.kind === 'active' ? (
-        <div className="space-y-4">
-          <ManagedRuntimeInstallRow
-            observation={chatRuntime}
-            agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-            signInRunning={antigravityChatSignInRunning(signIn.flow)}
-          >
-            {(line, actions) => (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {translate(
-                      'settings.chat.providers.antigravityDescription',
-                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
+          {state && (
+            <div className="space-y-3">
+              <p className="text-xs">
+                {state.currentAccount
+                  ? (state.currentAccount.email ??
+                    translate(
+                      'accounts.antigravity.identityUnknown',
+                      'Signed-in identity unavailable'
+                    ))
+                  : translate(
+                      'accounts.antigravity.signedOut',
+                      'No native agy account is signed in.'
                     )}
-                  </p>
-                  {line}
-                </div>
-                {actions}
+              </p>
+              {state.selectedAccountId && state.activeAccountId !== state.selectedAccountId && (
+                <p className="text-xs text-destructive">
+                  {windowsHost
+                    ? translate(
+                        'accounts.antigravity.windowsChanged',
+                        'The host default account changed. Select a saved account to apply it again.'
+                      )
+                    : translate(
+                        'accounts.antigravity.changed',
+                        'The native account changed. Select a saved account again before launching agy.'
+                      )}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  size="sm"
+                  disabled={busy || !state.currentAccount}
+                  onClick={() => void run('AddCurrent')}
+                >
+                  {translate('accounts.antigravity.save', 'Save current account')}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void run('List')}
+                >
+                  {translate('accounts.antigravity.refresh', 'Refresh accounts')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={busy || !state.currentAccount}
+                  onClick={() => void run('Usage')}
+                >
+                  {translate('accounts.antigravity.usage', 'Refresh usage')}
+                </Button>
+                {busy && (
+                  <Loader2
+                    className="size-4 animate-spin"
+                    aria-label={translate('accounts.antigravity.working', 'Updating account')}
+                  />
+                )}
               </div>
-            )}
-          </ManagedRuntimeInstallRow>
-          <AntigravityChatSignInRow
-            owner={owner}
-            label={label}
-            description={translate(
-              'accounts.antigravity.chatDescription',
-              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
-            )}
-            disabled={antigravityChatSignInBlocked(chatRuntime)}
-          />
+              {usage && (
+                <p className="text-xs text-muted-foreground">
+                  {usage.error ?? formatUsageReading(usage)}
+                </p>
+              )}
+              {state.accounts.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex items-center justify-between gap-3 rounded-md border p-3"
+                >
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium">
+                      {account.email ??
+                        translate('accounts.antigravity.saved', 'Saved Google account')}
+                    </p>
+                    {account.usage !== undefined && (
+                      <p className="text-xs text-muted-foreground">
+                        {account.usage
+                          ? translate(
+                              'accounts.antigravity.lastReading',
+                              '{{reading}} · Read {{time}}',
+                              {
+                                reading: formatUsageReading(account.usage),
+                                time: formatTimeAgo(account.usage.updatedAt)
+                              }
+                            )
+                          : translate(
+                              'accounts.antigravity.noReading',
+                              'Usage unknown: not read yet'
+                            )}
+                      </p>
+                    )}
+                    {state.activeAccountId === account.id && (
+                      <Badge variant="secondary">
+                        {translate('accounts.antigravity.nativeActive', 'Native account')}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void run('Select', account.id)}
+                    >
+                      {state.selectedAccountId === account.id &&
+                      state.activeAccountId === account.id
+                        ? translate('accounts.antigravity.selected', 'Selected')
+                        : translate('accounts.antigravity.select', 'Select')}
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      disabled={
+                        busy ||
+                        state.activeAccountId === account.id ||
+                        state.selectedAccountId === account.id
+                      }
+                      onClick={() => void run('Remove', account.id)}
+                    >
+                      {translate('accounts.antigravity.remove', 'Remove')}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            {windowsHost
+              ? translate(
+                  'accounts.antigravity.windowsSessions',
+                  'Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.'
+                )
+              : translate(
+                  'accounts.antigravity.sessions',
+                  'Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.'
+                )}
+          </p>
+          {chats && chatRuntime.kind === 'active' ? (
+            <AntigravityChatSignInRow
+              owner={owner}
+              label={label}
+              description={translate(
+                'accounts.antigravity.chatSeparate',
+                'Separate from your agy terminal account.'
+              )}
+              disabled={antigravityChatSignInBlocked(chatRuntime)}
+              runtime={
+                <ManagedRuntimeInstallRow
+                  observation={chatRuntime}
+                  agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+                  signInRunning={antigravityChatSignInRunning(signIn.flow)}
+                  buttonSize="default"
+                >
+                  {(line, actions) => (
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">
+                          {translate('settings.agents.chatRuntime', 'Chat runtime')}
+                        </p>
+                        <div className="mt-0.5">{line}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">{actions}</div>
+                    </div>
+                  )}
+                </ManagedRuntimeInstallRow>
+              }
+            />
+          ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+            <ChatUnavailableOnWindowsNote
+              label={translate('accounts.antigravity.title', 'Antigravity')}
+            />
+          ) : null}
         </div>
-      ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
-        <ChatUnavailableOnWindowsNote
-          label={translate('accounts.antigravity.title', 'Antigravity')}
-        />
-      ) : null}
-    </section>
+      </SettingsGroup>
+    </div>
   )
 }

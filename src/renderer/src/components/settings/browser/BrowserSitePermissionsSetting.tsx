@@ -118,7 +118,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
   }
 
   return (
-    <SearchableSetting id="browser-site-permissions" {...searchEntry} className="space-y-3 py-2">
+    <SearchableSetting id="browser-site-permissions" {...searchEntry} className="space-y-3 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <Label>{searchEntry.title}</Label>

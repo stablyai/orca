@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../../../preload/api/pty-management-api'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getManageSessionsSearchEntries } from '../terminal-window-setup-search'
 import { useAppStore } from '../../../../store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -214,27 +215,21 @@ export function ManageSessionsSection(): React.JSX.Element {
   const isBusy = busyKind !== null || daemonActions.isBusy
 
   return (
-    <section className="space-y-4">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold">
-          {translate(
-            'auto.components.settings.ManageSessionsSection.d1b80fd5cd',
-            'Manage Sessions'
-          )}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.ManageSessionsSection.7c4889a724',
-            'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'
-          )}
-        </p>
-      </div>
-
+    <SettingsGroup
+      title={translate(
+        'auto.components.settings.ManageSessionsSection.d1b80fd5cd',
+        'Manage Sessions'
+      )}
+      description={translate(
+        'auto.components.settings.ManageSessionsSection.7c4889a724',
+        'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'
+      )}
+    >
       <SearchableSetting
         title={getManageSessionsSearchEntries()[0].title}
         description={getManageSessionsSearchEntries()[0].description}
         keywords={getManageSessionsSearchEntries()[0].keywords}
-        className="space-y-3"
+        className="space-y-3 py-3"
         id={MANAGE_SESSIONS_SECTION_ID}
       >
         <TerminalTccAttributionNotice
@@ -264,6 +259,6 @@ export function ManageSessionsSection(): React.JSX.Element {
         onConfirm={runConfirmed}
       />
       <DaemonActionDialog api={daemonActions} />
-    </section>
+    </SettingsGroup>
   )
 }

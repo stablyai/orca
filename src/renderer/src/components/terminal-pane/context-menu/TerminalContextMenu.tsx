@@ -39,7 +39,7 @@ import { AgentSessionContextCopyMenuItem } from '../clipboard/AgentSessionContex
 import { ClearPaneTitleMenuItem } from '../titles/ClearPaneTitleMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCommandsSubmenu'
-import { AddToChatSubmenu } from '../../native-chat/AddToChatMenu'
+import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
 
 type TerminalContextMenuProps = {
   open: boolean

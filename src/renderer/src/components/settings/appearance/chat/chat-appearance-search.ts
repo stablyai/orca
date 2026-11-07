@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
@@ -124,13 +125,13 @@ export function getChatAppearanceSearchEntries(): SettingsSearchEntry[] {
   ]
 }
 
-export function getChatWidthOptions() {
+export function getChatWidthOptions(t: Translate = translate) {
   return [
     {
       value: 'comfortable',
-      label: translate('settings.appearance.chat.comfortable', 'Comfortable')
+      label: t('settings.appearance.chat.comfortable', 'Comfortable')
     },
-    { value: 'wide', label: translate('settings.appearance.chat.wide', 'Wide') },
-    { value: 'full', label: translate('settings.appearance.chat.full', 'Full') }
+    { value: 'wide', label: t('settings.appearance.chat.wide', 'Wide') },
+    { value: 'full', label: t('settings.appearance.chat.full', 'Full') }
   ] as const
 }

@@ -65,7 +65,7 @@ export function RepositoryWorktreeDefaultsSection({
           'Override whether worktrees created outside Orca appear for this project.'
         )}
         keywords={[repo.displayName, 'external', 'non-Orca', 'visibility', 'sidebar']}
-        className="space-y-2"
+        className="space-y-2 py-3"
         forceVisible={forceVisible}
       >
         <div className="flex items-center justify-between gap-3">
@@ -132,7 +132,7 @@ export function RepositoryWorktreeDefaultsSection({
           'Default base branch or ref when creating worktrees.'
         )}
         keywords={[repo.displayName, 'base ref', 'branch']}
-        className="space-y-3"
+        className="space-y-3 py-3"
         forceVisible={forceVisible}
       >
         <Label className="text-sm font-semibold">
@@ -161,7 +161,7 @@ export function RepositoryWorktreeDefaultsSection({
           'relative',
           '../worktrees'
         ]}
-        className="space-y-2"
+        className="space-y-2 py-3"
         forceVisible={forceVisible}
       >
         <div className="flex items-center justify-between gap-3">

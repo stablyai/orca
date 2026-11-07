@@ -18,6 +18,7 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
   return (
     <SettingsSection
       id="agents"
+      grouped
       title={translate('auto.components.settings.Settings.8afa676615', 'Agents')}
       description={translate(
         'auto.components.settings.Settings.ec1ba547f7',
@@ -54,6 +55,7 @@ export function renderAccountsSettingsSection(context: SettingsRenderContext): R
   return (
     <SettingsSection
       id="accounts"
+      grouped
       title={translate('auto.components.settings.Settings.ad6c529693', 'AI Provider Accounts')}
       description={translate(
         'auto.components.settings.Settings.21f09426ea',
@@ -107,6 +109,7 @@ export function renderOrchestrationSettingsSection(
   return (
     <SettingsSection
       id="orchestration"
+      grouped
       title={translate('auto.components.settings.Settings.00c3a7950d', 'Orchestration')}
       description={translate(
         'auto.components.settings.Settings.475980f53d',
@@ -128,6 +131,7 @@ export function renderLinearSettingsSection(
   return model.linearConnected ? (
     <SettingsSection
       id="linear"
+      grouped
       title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
       description={translate(
         'auto.components.settings.Settings.linearDescription',
@@ -148,6 +152,7 @@ export function renderDesktopCapabilitySettingsSections(
     <>
       <SettingsSection
         id="computer-use"
+        grouped
         title={translate('auto.components.settings.Settings.c9841721cb', 'Computer Use')}
         description={translate(
           'auto.components.settings.Settings.7118953f14',

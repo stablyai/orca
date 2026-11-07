@@ -52,7 +52,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-property-sche
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
-import { addQuoteToAgent } from '@/components/native-chat/native-chat-workspace-selection'
+import { addQuoteToAgent } from '@/components/native-chat/selection-quotes/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {
