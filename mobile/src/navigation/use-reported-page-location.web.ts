@@ -23,11 +23,7 @@ export function useReportedPageLocation(): void {
           normalizeExecutionHostId(firstParam(params.executionHost)) ?? undefined
         )
       : host
-  // A shell holds a host-area owner's location to reopen it natively on a fold, which this report is not for.
-  const ownsHostArea = client.getShellSession()?.ownsHostArea === true
   useEffect(() => {
-    if (!ownsHostArea) {
-      client.notifyPageLocation(href)
-    }
-  }, [client, href, ownsHostArea])
+    client.notifyPageLocation(href)
+  }, [client, href])
 }
