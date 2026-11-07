@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
@@ -63,7 +63,9 @@ export function useMobileNativeChatOfflineQueue(args: {
   const ready = inputLockReason === null && lockReason === null && !held
   const sends = useMobileNativeChatOfflineSends(scope)
   const sendRef = useRef(send)
-  sendRef.current = send
+  useLayoutEffect(() => {
+    sendRef.current = send
+  }, [send])
   const [draining, setDraining] = useState(false)
   const drainingRef = useRef(false)
 

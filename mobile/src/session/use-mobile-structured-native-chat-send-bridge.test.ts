@@ -107,7 +107,13 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
 
     await expect(
       sendWithOutcome('$review the PR', undefined, undefined, undefined, undefined, {
-        queued: { images: [], files: [], skills: [queuedSkill], skillOrigin: '$review' }
+        queued: {
+          id: 'queued-1',
+          images: [],
+          files: [],
+          skills: [queuedSkill],
+          skillOrigin: '$review'
+        }
       })
     ).resolves.toBe('rejected')
 
