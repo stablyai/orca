@@ -71,34 +71,33 @@ export function useNativeChatFork(input: {
   const inFlight = useRef(false)
   const [pendingItemId, setPendingItemId] = useState<string | null>(null)
   const request = useCallback(
-    async (
+    (
       throughItemId: string,
       side?: NativeChatSideChatRequest
     ): Promise<NativeChatForkOutcome | undefined> => {
       const { agent, sessionId, tabId, target, worktreeId } = latest.current
       if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
-        return undefined
+        return Promise.resolve(undefined)
       }
       inFlight.current = true
       setPendingItemId(throughItemId)
       const placement = side ? beginNativeChatSideChatPlacement(worktreeId, tabId) : undefined
       let outcome: NativeChatForkOutcome = {}
-      try {
-        outcome = await launchNativeChatFork({
-          agent,
-          worktreeId,
-          target,
-          forkFrom: { sessionId, throughItemId },
-          surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId),
-          ...(side ? { side } : {})
+      return launchNativeChatFork({
+        agent,
+        worktreeId,
+        target,
+        forkFrom: { sessionId, throughItemId },
+        surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId),
+        ...(side ? { side } : {})
+      })
+        .then((launched) => (outcome = launched))
+        .finally(() => {
+          // A question that never went out leaves its fork in the background.
+          placement?.settle(outcome.question === 'failed' ? undefined : outcome.chat)
+          inFlight.current = false
+          setPendingItemId(null)
         })
-        return outcome
-      } finally {
-        // A question that never went out leaves its fork in the background.
-        placement?.settle(outcome.question === 'failed' ? undefined : outcome.chat)
-        inFlight.current = false
-        setPendingItemId(null)
-      }
     },
     []
   )

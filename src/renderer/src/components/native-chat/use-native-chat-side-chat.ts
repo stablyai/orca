@@ -1,4 +1,4 @@
-import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import {
   NativeChatForkContext,
@@ -26,12 +26,7 @@ export function useNativeChatSideChat(
   fork: NativeChatForkSurface | undefined
 ): NativeChatSideChat | undefined {
   // Nothing drawn yet means no response to fork through.
-  const point = useRef<NativeChatSideChatForkPoint>({ kind: 'no-reply' })
-  const [pointKind, setPointKind] = useState(point.current.kind)
-  const reportForkPoint = useCallback((next: NativeChatSideChatForkPoint) => {
-    point.current = next
-    setPointKind(next.kind)
-  }, [])
+  const [point, reportForkPoint] = useState<NativeChatSideChatForkPoint>({ kind: 'no-reply' })
   return useMemo(() => {
     if (!fork) {
       return undefined
@@ -45,11 +40,10 @@ export function useNativeChatSideChat(
           )
         }
       }
-      const current = point.current
       // A rewind may have dropped the reported response before the list said so.
-      return current.kind === 'ready' && fork.forkableItemIds.has(current.throughItemId)
-        ? { throughItemId: current.throughItemId }
-        : { refused: sideChatRefusal(current.kind === 'ready' ? { kind: 'no-reply' } : current) }
+      return point.kind === 'ready' && fork.forkableItemIds.has(point.throughItemId)
+        ? { throughItemId: point.throughItemId }
+        : { refused: sideChatRefusal(point.kind === 'ready' ? { kind: 'no-reply' } : point) }
     }
     const now = start()
     return {
@@ -64,8 +58,7 @@ export function useNativeChatSideChat(
         return { started: question ? outcome?.question === 'sent' : outcome?.chat !== undefined }
       }
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the reason follows the point's kind; Send reads the point itself.
-  }, [fork, pointKind, reportForkPoint])
+  }, [fork, point])
 }
 
 /** What the transcript needs to find the response `/btw` forks through; undefined where nothing
