@@ -132,6 +132,42 @@ describe('a plugin command replacing a built-in action', () => {
     crash()
   })
 
+  it('falls back when the handler throws or its worker dies before running the action', async () => {
+    const outcome = invokeReplacement(async () => {
+      throw new Error('worker exited before responding')
+    })
+    await expect(outcome).resolves.toBe('fell back')
+  })
+
+  it('counts one handler’s commands.run for one press only when two are in flight', async () => {
+    let bothStarted = (): void => undefined
+    const started = new Promise<void>((resolve) => {
+      bothStarted = resolve
+    })
+    const first = invokeReplacement(async () => {
+      await started
+      claimPluginReplacedActionRun(pluginKey, 'sidebar.left.toggle')
+    })
+    const second = invokeReplacement(async () => {
+      bothStarted()
+      await Promise.resolve()
+      throw new Error('failed before running the action')
+    })
+    await expect(first).resolves.toBe('ok')
+    await expect(second).resolves.toBe('fell back')
+  })
+
+  it('lets the next press run the action once the late handler has returned', async () => {
+    const late = slowReplacement()
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(late.outcome).resolves.toBe('fell back')
+    await late.finish()
+    const next = slowReplacement()
+    await next.finish()
+    await expect(next.outcome).resolves.toBe('ok')
+    expect(next.ranBuiltIn).toHaveBeenCalledTimes(1)
+  })
+
   it('leaves commands.run alone outside a replacement run', () => {
     expect(() => claimPluginReplacedActionRun(pluginKey, 'sidebar.left.toggle')).not.toThrow()
   })

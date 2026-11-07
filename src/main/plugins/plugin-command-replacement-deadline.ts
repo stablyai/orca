@@ -66,7 +66,10 @@ export function claimPluginReplacedActionRun(pluginKey: string, action: string):
       `Orca already ran ${action} itself: the replacing command did not finish in time`
     )
   }
-  for (const entry of runs) {
-    entry.ranAction = true
+  // Why only the oldest: with two presses in flight, one handler's run must not also count as
+  // the other's, or a second handler that then fails would get no fallback.
+  const owner = runs.find((entry) => !entry.ranAction)
+  if (owner) {
+    owner.ranAction = true
   }
 }
