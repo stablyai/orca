@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import {
   addExpoTwoWayAudioEventListener,
   hasNativeSpeech,
@@ -37,11 +38,24 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
         progress: Math.round(phone.progress * 100).toLocaleString(getUiIntlLocale())
       })
     case 'unsupported':
-      return t(
-        'settings.voiceTranscribeOn.phoneUnsupported',
-        'Not available for this phone’s language'
-      )
+      // Covers an unsupported language and a phone or OS that can't run the recognizer.
+      return t('settings.voiceTranscribeOn.phoneUnsupported', 'Not available on this phone')
   }
+}
+
+// Assets are only ever downloaded on this tap, so say the size first. The OS reports none up front; these are measured for en-US (iOS 456 MB, Android's system pack 63 MB).
+const PHONE_SPEECH_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
+  ios: 450,
+  android: 65
+}
+
+function downloadSizeText(t: Translate): string | undefined {
+  const size = PHONE_SPEECH_DOWNLOAD_MB[Platform.OS]
+  return size === undefined
+    ? undefined
+    : t('settings.voiceTranscribeOn.downloadSize', 'About {{size}} MB', {
+        size: size.toLocaleString(getUiIntlLocale())
+      })
 }
 
 // A shell built before on-device speech has nothing to choose between.
@@ -90,6 +104,9 @@ export function VoiceTranscribeOnSection() {
     void saveDictationEnginePreference(next).catch(() => {})
   }
 
+  const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
+  const downloadSize = downloadSizeText(t)
+
   const download = () => {
     if (downloadingRef.current) {
       return
@@ -137,7 +154,10 @@ export function VoiceTranscribeOnSection() {
       {phone?.status === 'needs-download' || phone?.status === 'downloading' ? (
         <ListRow
           key="download"
-          title={t('settings.voiceTranscribeOn.download', 'Download for this phone')}
+          title={downloadTitle}
+          subtitle={downloadSize}
+          // The row's default label is its title alone; screen readers need the size before the tap too.
+          accessibilityLabel={downloadSize ? `${downloadTitle}, ${downloadSize}` : downloadTitle}
           busy={phone.status === 'downloading'}
           onPress={download}
         />

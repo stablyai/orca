@@ -2838,8 +2838,9 @@
       "phoneReady": "Bu telefonda hazır",
       "phoneNeedsDownload": "Dil indirmesi gerekiyor",
       "phoneDownloading": "İndiriliyor… %{{progress}}",
-      "phoneUnsupported": "Bu telefonun dilinde kullanılamıyor",
-      "download": "Bu telefona indir"
+      "phoneUnsupported": "Bu telefonda kullanılamıyor",
+      "download": "Bu telefona indir",
+      "downloadSize": "Yaklaşık {{size}} MB"
     }
   },
   "sourceControl": {

@@ -2982,8 +2982,9 @@
       "phoneReady": "Готово на этом телефоне",
       "phoneNeedsDownload": "Нужно скачать язык",
       "phoneDownloading": "Загрузка… {{progress}}%",
-      "phoneUnsupported": "Недоступно для языка этого телефона",
-      "download": "Скачать на этот телефон"
+      "phoneUnsupported": "Недоступно на этом телефоне",
+      "download": "Скачать на этот телефон",
+      "downloadSize": "Около {{size}} МБ"
     }
   },
   "sourceControl": {

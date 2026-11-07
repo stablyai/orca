@@ -2838,8 +2838,9 @@
       "phoneReady": "Auf diesem Telefon bereit",
       "phoneNeedsDownload": "Sprachdownload erforderlich",
       "phoneDownloading": "Wird geladen… {{progress}} %",
-      "phoneUnsupported": "Für die Sprache dieses Telefons nicht verfügbar",
-      "download": "Für dieses Telefon herunterladen"
+      "phoneUnsupported": "Auf diesem Telefon nicht verfügbar",
+      "download": "Für dieses Telefon herunterladen",
+      "downloadSize": "Etwa {{size}} MB"
     }
   },
   "sourceControl": {

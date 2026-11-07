@@ -158,8 +158,9 @@
       "phoneReady": "Ready on this phone",
       "phoneNeedsDownload": "Needs a language download",
       "phoneDownloading": "Downloading… {{progress}}%",
-      "phoneUnsupported": "Not available for this phone’s language",
-      "download": "Download for this phone"
+      "phoneUnsupported": "Not available on this phone",
+      "download": "Download for this phone",
+      "downloadSize": "About {{size}} MB"
     }
   },
   "common": {

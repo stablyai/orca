@@ -35,7 +35,7 @@ export type SpeechStartResult =
   | { started: false; reason: SpeechFailureCode }
 
 // committed is the whole final text so far, never a delta; tentative is the current unstable tail after it.
-// revision rises by one per event, so a reader can drop a stale one.
+// revision only rises over the module's lifetime, across sessions too, so a reader can drop a stale or previous-session event.
 export type SpeechTextEvent = { revision: number; committed: string; tentative: string }
 
 export type SpeechErrorEvent = { code: SpeechFailureCode }

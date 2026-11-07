@@ -2910,8 +2910,9 @@
       "phoneReady": "Listo en este teléfono",
       "phoneNeedsDownload": "Necesita descargar el idioma",
       "phoneDownloading": "Descargando… {{progress}} %",
-      "phoneUnsupported": "No disponible para el idioma de este teléfono",
-      "download": "Descargar para este teléfono"
+      "phoneUnsupported": "No disponible en este teléfono",
+      "download": "Descargar para este teléfono",
+      "downloadSize": "Unos {{size}} MB"
     }
   },
   "sourceControl": {
