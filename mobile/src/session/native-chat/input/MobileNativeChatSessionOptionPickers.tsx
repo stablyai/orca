@@ -189,6 +189,7 @@ export function MobileNativeChatSessionOptionPickers({
     // A permission report can match a new explicit pick while the saved intent is Own.
     if (
       descriptor !== permission &&
+      !descriptor.defaultChoice?.selected &&
       descriptor.valueSource !== 'unknown' &&
       descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
@@ -312,6 +313,11 @@ export function MobileNativeChatSessionOptionPickers({
                     shown: moreModelsShown,
                     onToggle: () => setMoreModelsShown((shown) => !shown)
                   },
+                  onReset: controller.optionSurface?.resetOption
+                    ? () => {
+                        void controller.optionSurface?.resetOption?.(activeDescriptor.id)
+                      }
+                    : undefined,
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t

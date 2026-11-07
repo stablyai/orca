@@ -38,6 +38,7 @@ export function createAgentModelCatalogLookup(
         inSessionWorkspace: params.inSessionWorkspace,
         legacy: params.legacy,
         passive,
+        requireConfiguredDefault: params.requireConfiguredDefault,
         bindingKey,
         identity
       }

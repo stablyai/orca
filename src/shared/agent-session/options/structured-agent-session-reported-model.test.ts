@@ -1,3 +1,4 @@
+import { structuredAgentSessionDefaultModelChoice } from '../../structured-agent-session-default-model-choice'
 import { expect, it } from 'vitest'
 import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
 import {
@@ -40,4 +41,26 @@ it('shows the actual fallback in the shared composer pill while capturing the or
     current: { model: 'claude-opus-5-5' }
   })
   expect(oldHost.reportedModel).toBeUndefined()
+})
+
+it('shows the reported execution model while retaining the saved Default choice', () => {
+  const state = applyStructuredAgentSessionOptions(
+    createStructuredAgentSessionOptionState('claude'),
+    CLAUDE_SESSION_OPTION_CATALOG,
+    {
+      models: [{ id: 'claude-opus-5-5', label: 'Opus 5.5', isDefault: true, efforts: [] }],
+      current: {
+        modelDefault: true,
+        reportedModel: 'claude-opus-4-8',
+        acceptedInputSources: {}
+      }
+    }
+  )
+  const model = {
+    ...structuredAgentSessionOptionSnapshot(state).find((option) => option.id === 'model')!,
+    defaultChoice: structuredAgentSessionDefaultModelChoice(state)
+  }
+  expect(model.defaultChoice?.selected).toBe(true)
+  expect(nativeChatModelPillLabel(model, sayNativeChatSessionOptionEnglish)).toBe('Opus 4.8')
+  expect(structuredAgentSessionMessageSelection(state)).toEqual({})
 })

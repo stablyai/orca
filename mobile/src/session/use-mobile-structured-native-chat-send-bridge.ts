@@ -1,3 +1,5 @@
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
+import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useCallback } from 'react'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
@@ -16,6 +18,8 @@ import {
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
+const EMPTY_OPTIONS: readonly SessionOptionDescriptor[] = []
+
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
   sessionCommands?: readonly AgentSessionSlashCommand[]
@@ -27,6 +31,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     skills?: readonly AgentJournalSkillRef[],
     intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
+  isModelWritePending?: () => boolean
+  optionSnapshot?: readonly SessionOptionDescriptor[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
@@ -48,6 +54,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     captureSendOrigin,
     clearDraftForSend,
     holdUnconfirmed,
+    isModelWritePending,
+    optionSnapshot = EMPTY_OPTIONS,
     onSendError,
     restoreRejectedDraft,
     sendStructured,
@@ -62,6 +70,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       _sentAt?: number,
       intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, optionSnapshot)
+      if (!isHostCommand && isModelWritePending?.()) {
+        onSendError('Message not sent (model selection is still updating)')
+        return 'rejected'
+      }
       const origin = captureSendOrigin(text.trimEnd())
       if (!origin) {
         onSendError('Message not sent (disconnected)')
@@ -98,6 +111,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       captureSendOrigin,
       clearDraftForSend,
       holdUnconfirmed,
+      isModelWritePending,
+      optionSnapshot,
       onSendError,
       restoreRejectedDraft,
       sendStructured,

@@ -1,10 +1,10 @@
 import {
   agentModelCatalogReadRecords,
+  agentModelCatalogReleasedOwner,
   agentModelCatalogScopedRecord
 } from './agent-model-catalog-read-scope'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
 import { agentSessionPinnedLaunchDirectory } from '../../runtime/agent-session/records/agent-session-record-launch-directory'
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { agentModelCatalogResultFromEntry } from './agent-model-catalog-entry'
 import { agentModelCatalogDefaultFollowsAccount } from './agent-model-catalog-workspace'
@@ -64,14 +64,6 @@ export function bindAgentModelCatalogScope(
   }
 }
 
-export function agentModelCatalogReleasedOwner(
-  record: AgentSessionConversationView | undefined
-): boolean {
-  return (
-    record?.ownerObservation.claimStatus === 'released' && !!record.ownerObservation.deathEvidence
-  )
-}
-
 export function agentModelCatalogRequestKey(
   deps: AgentModelCatalogServiceDeps,
   params: AgentModelCatalogReadParams
@@ -98,7 +90,8 @@ export function agentModelCatalogRequestKey(
     workspacePath: params.workspacePath,
     inSessionWorkspace:
       inWorkspace && record ? [record.location.workspaceId, record.launchDirectory] : undefined,
-    legacy: params.legacy
+    legacy: params.legacy,
+    requireConfiguredDefault: params.requireConfiguredDefault
   })
 }
 
@@ -206,8 +199,11 @@ export function projectAgentModelCatalogSnapshot(
   const listed = deps.store.observation(bound.fingerprint)
   const independent = independentAgentModelCatalog(params.agent)
   if (
-    params.verifiedOnly &&
-    (!listed || (independent && (!bound.exact || !deps.store.verified(listed))))
+    (params.verifiedOnly || params.requireConfiguredDefault) &&
+    (!listed ||
+      (independent && !bound.exact) ||
+      ((independent || params.requireConfiguredDefault) &&
+        !deps.store.verified(listed, params.requireConfiguredDefault)))
   ) {
     return { origin: 'unknown' }
   }

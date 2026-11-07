@@ -4,6 +4,7 @@ import { useStructuredAgentSessionOptionStamp } from './structured-agent-session
 import { renderHook } from '@testing-library/react'
 import { vi, type Mock } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type * as RuntimeCapabilityProof from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type * as HostCapability from '@/runtime/structured-agent-session-host-capability'
 import type { SelectionOutcome } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
@@ -24,6 +25,7 @@ type OptionsFixtureMocks = {
     ) => Promise<SelectionOutcome> | null
   >
   toastError: Mock<(message: string) => void>
+  supportsRemote: Mock
   effortDiscovery: boolean
   coherentCatalog: boolean
   sendSelection: boolean
@@ -52,6 +54,7 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
       ) => Promise<SelectionOutcome> | null
     >(),
     toastError: vi.fn<(message: string) => void>(),
+    supportsRemote: vi.fn(),
     effortDiscovery: false,
     coherentCatalog: false,
     sendSelection: false
@@ -59,6 +62,10 @@ const mocks: OptionsFixtureMocks = vi.hoisted(() => {
 })
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (original) => ({
+  ...(await original<typeof RuntimeCapabilityProof>()),
+  runtimeEnvironmentSupportsCapability: mocks.supportsRemote
+}))
 
 vi.mock('@/runtime/structured-agent-session-host-capability', async () => {
   const actual = await vi.importActual<typeof HostCapability>(
@@ -180,6 +187,7 @@ function mutateWith(reply: MutateCall): {
 }
 
 type RenderProps = {
+  isWorking?: boolean
   sessionId?: string
   transportEnabled: boolean
   fence: number | null
@@ -225,6 +233,7 @@ function renderOptions(initial: RenderProps, mutate: StructuredAgentSessionMutat
         sessionId: props.sessionId ?? 'session-1',
         target: props.paired ? PAIRED_TARGET : LOCAL_TARGET,
         transportEnabled: props.transportEnabled,
+        isWorking: props.isWorking,
         isVisible: !props.hidden,
         providerVisible: props.transportEnabled && !props.hidden,
         ...(props.providerStarting ? { providerStarting: true } : {}),

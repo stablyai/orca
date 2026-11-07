@@ -1,12 +1,12 @@
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { createElement, useLayoutEffect } from 'react'
 import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionResult
-} from '../../../src/shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type {
@@ -143,6 +143,7 @@ type ProbeProps = {
   fence: number | null
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
+  supportsDefault?: boolean
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
@@ -164,6 +165,7 @@ function Probe(props: ProbeProps): null {
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {
       permissionModes: true,
+      defaultModel: props.supportsDefault,
       permissionOwn: props.permissionOwn,
       sendOptions: false,
       statusFeed: false,
@@ -245,4 +247,13 @@ export {
   descriptorFor,
   currentValueOf,
   BASE
+}
+
+export const SEND_MODEL_OPTIONS: AgentSessionOptionsResult = {
+  conversationCommands: ['compact'],
+  models: [
+    { id: 'opus', label: 'Opus', isDefault: true, efforts: [] },
+    { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
+  ],
+  current: { model: 'opus' }
 }
