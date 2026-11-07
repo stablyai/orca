@@ -109,6 +109,30 @@ export async function ensureAgentLaunchPreferences(
   }
 }
 
+// Takes the whole subscription so contact/open stay inputs; React Compiler keys a callback on the fields it reads.
+function subscribeHostPreferences(
+  subscription: {
+    environmentId: string | undefined
+    pairingRevision: number | undefined
+    runtimeId: string | null | undefined
+    active: boolean
+  },
+  listener: () => void
+): () => void {
+  if (!subscription.environmentId || !subscription.active) {
+    return () => {}
+  }
+  return acquire(
+    resource({
+      environmentId: subscription.environmentId,
+      pairingRevision: subscription.pairingRevision,
+      runtimeId: subscription.runtimeId ?? undefined
+    }),
+    listener,
+    true
+  )
+}
+
 export function useHostAgentMenuSettings(
   owner: {
     executionHostId: string
@@ -160,20 +184,7 @@ export function useHostAgentMenuSettings(
     pending
   ] = useAppViewExternalStore(
     useCallback(
-      (listener: () => void) => {
-        if (!subscription.environmentId || !subscription.active) {
-          return () => {}
-        }
-        return acquire(
-          resource({
-            environmentId: subscription.environmentId,
-            pairingRevision: subscription.pairingRevision,
-            runtimeId: subscription.runtimeId ?? undefined
-          }),
-          listener,
-          true
-        )
-      },
+      (listener: () => void) => subscribeHostPreferences(subscription, listener),
       [subscription]
     ),
     () => effectiveSnapshot(undefined),

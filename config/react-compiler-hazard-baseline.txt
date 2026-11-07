@@ -1,23 +1,4 @@
 # Grandfathered code React Compiler would run differently (<file>#<function>:<hazard>).
 # Generated; never hand-edit. Lower after a fix: pnpm check:react-compiler-compat-ratchet --prune
-2 src/renderer/src/components/LinearIssueMarkdownDescriptionEditor.tsx#LinearIssueMarkdownDescriptionEditor:void-read
-1 src/renderer/src/components/browser-pane/annotate/use-browser-page-annotation-send.ts#useBrowserPageAnnotationSend:void-read
 1 src/renderer/src/components/browser-pane/host-guest/browser-page-mount-admission.ts#useAnyBrowserPageMountAdmission:void-read
-1 src/renderer/src/components/editor/review-note-delivery/NotesSendMenu.tsx#NotesSendMenu:void-read
-1 src/renderer/src/components/feature-wall/ReviewNotesAnimatedVisual.tsx#ReviewNotesAnimatedVisual:void-read
-1 src/renderer/src/components/feature-wall/ReviewShipAnimatedVisual.tsx#ReviewShipAnimatedVisual:void-read
-1 src/renderer/src/components/feature-wall/agents-orchestration/OrchestrationPage.tsx#OrchestrationPage:void-read
-1 src/renderer/src/components/feature-wall/review-pr-view-animation.ts#useReviewPrViewAnimation:void-read
-1 src/renderer/src/components/feature-wall/use-editor-animated-visual-animation.ts#useEditorAnimatedVisualAnimation:void-read
-1 src/renderer/src/components/mobile/PhoneCarousel.tsx#PhoneCarousel:void-read
-1 src/renderer/src/components/native-chat/use-native-chat-can-send.ts#useNativeChatCanSend:void-read
-2 src/renderer/src/components/sidebar/workspace-card/activity/WorktreeCardAgents.tsx#WorktreeCardAgentsBody:void-read
-2 src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status.ts#useFolderWorkspaceComposerPathStatus:void-read
-1 src/renderer/src/components/sidebar/worktree-list/listing/use-agent-send-target.ts#useAgentSendTargetWorktreeId:void-read
-2 src/renderer/src/components/sidebar/worktree-list/listing/use-folder-path-statuses.ts#useFolderWorkspacePathStatusRows:void-read
 1 src/renderer/src/components/sidebar/worktree-list/listing/use-sleeping-sweep-retention.ts#useSleepingSweepRetention:void-read
-1 src/renderer/src/components/status-bar/use-resource-pty-actions.ts#useResourcePtyActions:member-postfix-value
-6 src/renderer/src/components/task-page/github/use-task-page-pr-check-hydration.ts#useTaskPagePRCheckHydration:void-read
-11 src/renderer/src/components/worktree-jump/use-worktree-jump-palette-quick-actions.ts#useWorktreeJumpPaletteQuickActions:void-read
-1 src/renderer/src/hooks/use-palette-search-evaluation-context.ts#usePaletteSearchEvaluationContext:void-read
-1 src/renderer/src/hooks/useGitHubTaskItems.ts#useGitHubTaskProjectTable:void-read
