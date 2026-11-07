@@ -42,7 +42,6 @@ import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
-import { useTabRenameWidth } from './use-tab-rename-width'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -135,7 +134,6 @@ export default function EditorFileTab({
   )
   const [menuOpen, setMenuOpen] = useState(false)
   const [isRenaming, setIsRenaming] = useState(false)
-  const { captureWidth, ...renameSlotProps } = useTabRenameWidth(isRenaming)
   const renameInputRef = useRef<HTMLInputElement>(null)
   const renameFocusFrameRef = useRef<number | null>(null)
   const skipMenuFocusRestoreRef = useRef(false)
@@ -149,7 +147,6 @@ export default function EditorFileTab({
       return
     }
     renameCancelledRef.current = false
-    captureWidth()
     setIsRenaming(true)
   }
 
@@ -380,7 +377,6 @@ export default function EditorFileTab({
       <ContextMenuTrigger asChild>
         <div
           {...slotProps}
-          {...renameSlotProps}
           onContextMenu={() => {
             window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
             handleMenuOpenChange(true)

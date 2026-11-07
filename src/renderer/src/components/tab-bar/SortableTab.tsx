@@ -144,7 +144,6 @@ export default function SortableTab({
     onComplete
   } = useSortableTabContextMenu()
   const {
-    renameSlotProps,
     isEditing,
     renameValue,
     setRenameValue,
@@ -158,8 +157,7 @@ export default function SortableTab({
     customTitle: tab.customTitle,
     onSetCustomTitle
   })
-  const { onRenameKeyDown } = useTabRenameReturnFocus({
-    renameOwnerRef: renameSlotProps.ref,
+  const { renameOwnerRef, onRenameKeyDown } = useTabRenameReturnFocus({
     commitRename,
     cancelRename,
     tabId: tab.id,
@@ -199,7 +197,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive, true)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -355,8 +353,8 @@ export default function SortableTab({
     <ContextMenu open={menuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
       <ContextMenuTrigger asChild>
         <div
+          ref={renameOwnerRef}
           {...slotProps}
-          {...renameSlotProps}
           onContextMenu={(event) => {
             // The hover card is portalled: React still routes its events through this slot.
             if (event.target instanceof Node && event.currentTarget.contains(event.target)) {
