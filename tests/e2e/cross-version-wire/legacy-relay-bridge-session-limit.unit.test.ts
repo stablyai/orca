@@ -103,6 +103,7 @@ describe.skipIf(process.platform === 'win32' || process.env.ORCA_REAL_OPENSSH_TE
       await fixture?.close()
     })
 
+    // Bridging every relay opens a real SSH session per relay, plus sign-ins for side connections.
     it(
       'still runs commands on the host while the bridge serves every old relay',
       async () => {
