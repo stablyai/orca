@@ -359,6 +359,8 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
               ) : null}
               {triageGroups.conversation.map(renderCommentGroup)}
               <ResolvedCommentGroupsSection
+                imageUploadAddress={props.imageUploadAddress}
+                editImageUploadAddress={props.editImageUploadAddress}
                 groups={triageGroups.resolved}
                 botAuthorOverrides={botAuthorOverrides}
                 replyingCommentId={replyingCommentId}

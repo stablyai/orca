@@ -1,3 +1,4 @@
+import { githubCreationImageUploadAddress } from '@/components/github/github-creation-image-upload-address'
 import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import { CommitArea } from '../commit/commit-area'
 import { writeCommitDraftForWorktree } from '../commit/commit-drafts'
@@ -85,6 +86,13 @@ export function SourceControlCommitSurface({
     return (
       <CreateHostedReviewComposer
         key={`${activeRepo.id}:${activeWorktreeId ?? worktreePath}:${branchName}`}
+        imageUploadPending={model.prImageUploadPending}
+        imageUpload={githubCreationImageUploadAddress(
+          activeRepo,
+          worktreePath,
+          hostedReviewCreateProvider,
+          model.onPrImageUploadPending
+        )}
         provider={hostedReviewCreateProvider}
         branch={branchName}
         base={prBase}

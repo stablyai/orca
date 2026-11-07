@@ -114,6 +114,7 @@ export function ConversationCommentsList({
               repoPath={repoPath}
               repoId={repoId}
               sourceContext={sourceContext}
+              itemType={itemType}
               prNumber={prNumber}
               prRepo={prRepo}
               files={files}
