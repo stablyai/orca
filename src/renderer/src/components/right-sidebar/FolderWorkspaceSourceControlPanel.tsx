@@ -30,6 +30,7 @@ import { useWorktreeGitStatusObservation } from './source-control/sync/use-workt
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
 import { useSectionOnScreen } from './source-control/panel/section-viewport-presence'
 import { sourceControlFileWatchRuntimeEnvironmentId } from './source-control/sync/worktree-git-owner-target'
+import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
 const EMPTY_ENTRIES: readonly unknown[] = []
 
 type SectionProps = {
@@ -292,20 +293,17 @@ export default function FolderWorkspaceSourceControlPanel() {
         </Tooltip>
       </div>
       {owners.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-64 text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
-              'Worktrees created from this workspace will show up here.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={resolution.folderWorkspace ?? null}
+          title={translate(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={translate(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
+            'Worktrees created from this workspace will show up here.'
+          )}
+        />
       ) : (
         <div ref={setScrollRoot} className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto">
           {owners.map((owner) => (

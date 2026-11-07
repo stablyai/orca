@@ -22,6 +22,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { FolderWorkspaceEmptyState } from '../../folder-workspace-empty-state'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean
@@ -255,20 +256,17 @@ export default function FolderWorkspacePrChecksPanel({
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-[16rem] text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyCopy',
-              'PR checks will appear here after worktrees are attached to this folder workspace.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={folderWorkspace}
+          title={translate(
+            'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={translate(
+            'auto.components.rightSidebar.FolderWorkspacePrChecksPanel.emptyCopy',
+            'PR checks will appear here after worktrees are attached to this folder workspace.'
+          )}
+        />
       ) : (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-2 py-2">
           <div className="space-y-1">

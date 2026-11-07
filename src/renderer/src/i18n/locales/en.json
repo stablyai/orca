@@ -18709,6 +18709,11 @@
         "FolderWorkspaceSourceControl": {
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
+        },
+        "FolderWorkspaceEmptyState": {
+          "createWorktree": "Create worktree",
+          "created": "Created worktree {{name}} in {{repo}}",
+          "createFailed": "Could not create a worktree in {{repo}}."
         }
       },
       "link": {

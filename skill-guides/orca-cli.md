@@ -91,7 +91,7 @@ A native folder parent with an explicit Git destination:
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ```
 
-A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and listed in its Attached worktrees panel. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
+A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and shown in its Source Control and Attached worktrees panels. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
 
 Other common commands:
 

@@ -19,6 +19,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { FolderWorkspaceEmptyState } from './folder-workspace-empty-state'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const executionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
@@ -143,20 +144,17 @@ export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
       </div>
 
       {childWorktrees.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <div className="text-sm font-medium text-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
-              'No attached worktrees yet'
-            )}
-          </div>
-          <div className="mt-2 max-w-[16rem] text-xs leading-5 text-muted-foreground">
-            {translate(
-              'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
-              'Worktrees created from this workspace will show up here.'
-            )}
-          </div>
-        </div>
+        <FolderWorkspaceEmptyState
+          folderWorkspace={folderWorkspace}
+          title={translate(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
+            'No attached worktrees yet'
+          )}
+          copy={translate(
+            'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyCopy',
+            'Worktrees created from this workspace will show up here.'
+          )}
+        />
       ) : (
         <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto py-2 pl-1 pr-2">
           <div className="space-y-1">
