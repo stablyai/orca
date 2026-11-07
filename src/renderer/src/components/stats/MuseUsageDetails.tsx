@@ -7,6 +7,7 @@ import type {
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection, type UsageBreakdownRow } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
+import { serverRecentSessionsDescription, useStatsReadsServer } from './server-usage-copy'
 import { translate } from '@/i18n/i18n'
 
 type MuseUsageDetailsProps = {
@@ -34,6 +35,7 @@ export function MuseUsageDetails({
   recentSessions,
   summary
 }: MuseUsageDetailsProps): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
   return (
     <>
       <CodexUsageDailyChart daily={daily} />
@@ -57,10 +59,14 @@ export function MuseUsageDetails({
 
       <UsageRecentSessionsTable
         title={translate('auto.components.stats.OpenCodeUsagePane.4799177b1c', 'Recent sessions')}
-        description={translate(
-          'auto.components.stats.MuseUsagePane.recentSessionsDescription',
-          'Most recent local Muse sessions in this scope.'
-        )}
+        description={
+          readsServer
+            ? serverRecentSessionsDescription('Muse')
+            : translate(
+                'auto.components.stats.MuseUsagePane.recentSessionsDescription',
+                'Most recent local Muse sessions in this scope.'
+              )
+        }
         headings={[
           translate('auto.components.stats.OpenCodeUsagePane.d97bdf6e27', 'Last active'),
           translate('auto.components.stats.OpenCodeUsagePane.a4738de041', 'Project'),

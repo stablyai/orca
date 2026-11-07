@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   MuseUsageBreakdownKind,
@@ -26,12 +26,12 @@ import type { MuseUsageDailyAggregate, MuseUsagePersistedState, MuseUsageSession
 
 let museUsageFile: string | null = null
 
-export function initMuseUsagePath(): void {
-  museUsageFile = join(app.getPath('userData'), 'orca-muse-usage.json')
+export function initMuseUsagePath(userDataPath = getAppEnvironment().getPath('userData')): void {
+  museUsageFile = join(userDataPath, 'orca-muse-usage.json')
 }
 
 function getMuseUsageFile(): string {
-  museUsageFile ??= join(app.getPath('userData'), 'orca-muse-usage.json')
+  museUsageFile ??= join(getAppEnvironment().getPath('userData'), 'orca-muse-usage.json')
   return museUsageFile
 }
 

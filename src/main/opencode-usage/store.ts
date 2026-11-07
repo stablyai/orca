@@ -1,5 +1,5 @@
 import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import type {
   OpenCodeUsageBreakdownKind,
@@ -34,13 +34,15 @@ import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
 
 let _openCodeUsageFile: string | null = null
 
-export function initOpenCodeUsagePath(): void {
-  _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
+export function initOpenCodeUsagePath(
+  userDataPath = getAppEnvironment().getPath('userData')
+): void {
+  _openCodeUsageFile = join(userDataPath, 'orca-opencode-usage.json')
 }
 
 function getOpenCodeUsageFile(): string {
   if (!_openCodeUsageFile) {
-    _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
+    _openCodeUsageFile = join(getAppEnvironment().getPath('userData'), 'orca-opencode-usage.json')
   }
   return _openCodeUsageFile
 }

@@ -8,6 +8,12 @@ import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { OpenCodeUsageDetails } from './OpenCodeUsageDetails'
 import { StatCard } from './StatCard'
+import {
+  serverNoUsageForScope,
+  serverScopeOptions,
+  serverUsageLogsDescription,
+  useStatsReadsServer
+} from './server-usage-copy'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { getIntlLocale, translate } from '@/i18n/i18n'
@@ -46,6 +52,8 @@ const RANGE_LABELS: Record<OpenCodeUsageRange, string> = {
 }
 
 export function OpenCodeUsagePane(): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
+  const scopeOptions = readsServer ? serverScopeOptions(SCOPE_OPTIONS, 'OpenCode') : SCOPE_OPTIONS
   const scanState = useAppStore((state) => state.openCodeUsageScanState)
   const summary = useAppStore((state) => state.openCodeUsageSummary)
   const daily = useAppStore((state) => state.openCodeUsageDaily)
@@ -84,10 +92,14 @@ export function OpenCodeUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
-          'auto.components.stats.OpenCodeUsagePane.b8b3522436',
-          'Reads local OpenCode usage logs to show token, model, and session stats.'
-        )}
+        disabledDescription={
+          readsServer
+            ? serverUsageLogsDescription('OpenCode')
+            : translate(
+                'auto.components.stats.OpenCodeUsagePane.b8b3522436',
+                'Reads local OpenCode usage logs to show token, model, and session stats.'
+              )
+        }
         enableLabel={enableLabel}
         onEnabledChange={handleSetEnabled}
       />
@@ -140,7 +152,7 @@ export function OpenCodeUsagePane(): React.JSX.Element {
           key="scope"
           label={translate('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
           value={scope}
-          options={SCOPE_OPTIONS}
+          options={scopeOptions}
           onValueChange={(value) => void setOpenCodeUsageScope(value)}
         />,
         <UsageFilterRadioGroup
@@ -153,13 +165,17 @@ export function OpenCodeUsagePane(): React.JSX.Element {
       ]}
       selectionSummary={
         <>
-          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+          {scopeOptions.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
-        'auto.components.stats.OpenCodeUsagePane.bb6363e08c',
-        'No local OpenCode usage found yet for this scope.'
-      )}
+      emptyMessage={
+        readsServer
+          ? serverNoUsageForScope('OpenCode')
+          : translate(
+              'auto.components.stats.OpenCodeUsagePane.bb6363e08c',
+              'No local OpenCode usage found yet for this scope.'
+            )
+      }
       onEnabledChange={handleSetEnabled}
       onRefresh={() => void refreshOpenCodeUsage()}
     >
@@ -203,10 +219,15 @@ export function OpenCodeUsagePane(): React.JSX.Element {
           />
         </div>
         <p className="px-1 text-xs text-muted-foreground">
-          {translate(
-            'auto.components.stats.OpenCodeUsagePane.e5bb23d85e',
-            'Cost comes from the local OpenCode database when the assistant message recorded one.'
-          )}
+          {readsServer
+            ? translate(
+                'auto.components.stats.OpenCodeUsagePane.serverCostNote',
+                'Cost comes from the OpenCode database on this server when the assistant message recorded one.'
+              )
+            : translate(
+                'auto.components.stats.OpenCodeUsagePane.e5bb23d85e',
+                'Cost comes from the local OpenCode database when the assistant message recorded one.'
+              )}
         </p>
 
         <OpenCodeUsageDetails

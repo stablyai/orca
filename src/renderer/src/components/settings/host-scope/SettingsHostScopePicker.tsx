@@ -84,7 +84,7 @@ export function SettingsHostScopePicker({
       <span className="text-muted-foreground">
         {translate(
           'auto.components.settings.SettingsHostScopePicker.description',
-          'Accounts, detected agents and terminal options below are for this host.'
+          'Accounts, detected agents, terminal options and Stats & Usage below are for this host.'
         )}
       </span>
     </div>

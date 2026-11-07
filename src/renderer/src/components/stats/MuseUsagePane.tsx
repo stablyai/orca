@@ -5,6 +5,12 @@ import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { MuseUsageDetails } from './MuseUsageDetails'
 import { StatCard } from './StatCard'
+import {
+  serverNoUsageForScope,
+  serverScopeOptions,
+  serverUsageLogsDescription,
+  useStatsReadsServer
+} from './server-usage-copy'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatTokens, formatUpdatedAt } from './usage-formatters'
 import { getIntlLocale, translate } from '@/i18n/i18n'
@@ -41,6 +47,8 @@ const RANGE_LABELS: Record<MuseUsageRange, string> = {
 }
 
 export function MuseUsagePane(): React.JSX.Element {
+  const readsServer = useStatsReadsServer()
+  const scopeOptions = readsServer ? serverScopeOptions(SCOPE_OPTIONS, 'Muse') : SCOPE_OPTIONS
   const scanState = useAppStore((state) => state.museUsageScanState)
   const summary = useAppStore((state) => state.museUsageSummary)
   const daily = useAppStore((state) => state.museUsageDaily)
@@ -76,10 +84,14 @@ export function MuseUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
-          'auto.components.stats.MuseUsagePane.disabledDescription',
-          'Reads local Muse session logs to show token, model, and session stats.'
-        )}
+        disabledDescription={
+          readsServer
+            ? serverUsageLogsDescription('Muse')
+            : translate(
+                'auto.components.stats.MuseUsagePane.disabledDescription',
+                'Reads local Muse session logs to show token, model, and session stats.'
+              )
+        }
         enableLabel={enableLabel}
         onEnabledChange={handleSetEnabled}
       />
@@ -132,7 +144,7 @@ export function MuseUsagePane(): React.JSX.Element {
           key="scope"
           label={translate('auto.components.stats.OpenCodeUsagePane.40d283c837', 'Scope')}
           value={scope}
-          options={SCOPE_OPTIONS}
+          options={scopeOptions}
           onValueChange={(value) => void setMuseUsageScope(value)}
         />,
         <UsageFilterRadioGroup
@@ -145,13 +157,17 @@ export function MuseUsagePane(): React.JSX.Element {
       ]}
       selectionSummary={
         <>
-          {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
+          {scopeOptions.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
-        'auto.components.stats.MuseUsagePane.emptyMessage',
-        'No local Muse usage found yet for this scope.'
-      )}
+      emptyMessage={
+        readsServer
+          ? serverNoUsageForScope('Muse')
+          : translate(
+              'auto.components.stats.MuseUsagePane.emptyMessage',
+              'No local Muse usage found yet for this scope.'
+            )
+      }
       onEnabledChange={handleSetEnabled}
       onRefresh={() => void refreshMuseUsage()}
     >
