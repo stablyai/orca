@@ -8,8 +8,6 @@ import type { AgentDotState } from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { AGENT_ROW_INDENT_PER_DEPTH } from './WorktreeAgentRow'
 
-// Grow the 14 pt controls toward 44 pt downward only: later siblings win hit tests, so top slop would steal taps from the row above.
-const CHILD_TOGGLE_HIT_SLOP = { top: 0, bottom: 15, left: 8, right: 8 } as const
 const IDLE_GROUP_HIT_SLOP = { top: 0, bottom: 15 } as const
 
 type ChildToggleProps = {
@@ -18,13 +16,16 @@ type ChildToggleProps = {
   // Shown beside the collapsed count so hidden sub-agent work stays visible.
   signalState?: AgentDotState
   onToggle: () => void
+  // Claim the workspace card press so expanding does not open the workspace.
+  onPressIn?: () => void
 }
 
 export function WorktreeAgentChildToggle({
   count,
   expanded,
   signalState,
-  onToggle
+  onToggle,
+  onPressIn
 }: ChildToggleProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -46,26 +47,32 @@ export function WorktreeAgentChildToggle({
   return (
     <Pressable
       style={({ pressed }) => [styles.toggle, pressed && pressedStyle]}
-      hitSlop={CHILD_TOGGLE_HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ expanded }}
+      onPressIn={(event) => {
+        event.stopPropagation()
+        onPressIn?.()
+      }}
       onPress={(event) => {
         event.stopPropagation()
         onToggle()
       }}
     >
-      {expanded ? null : (
-        <>
-          {signalState ? <AgentStateDot state={signalState} /> : null}
-          <Text style={styles.count}>+{count}</Text>
-        </>
-      )}
-      {expanded ? (
-        <ChevronDown size={12} color={colors.textMuted} />
-      ) : (
-        <ChevronRight size={12} color={colors.textMuted} />
-      )}
+      {/* Glyphs must not eat the tap: a page SVG path never reaches Pressable onPress. */}
+      <View pointerEvents="none" style={styles.glyph}>
+        {expanded ? null : (
+          <>
+            {signalState ? <AgentStateDot state={signalState} /> : null}
+            <Text style={styles.count}>+{count}</Text>
+          </>
+        )}
+        {expanded ? (
+          <ChevronDown size={12} color={colors.textMuted} />
+        ) : (
+          <ChevronRight size={12} color={colors.textMuted} />
+        )}
+      </View>
     </Pressable>
   )
 }
@@ -122,7 +129,12 @@ export function WorktreeAgentIdleGroupRow({ count, depth, expanded, onToggle }: 
 
 const styles = themedStyleSheet(() => ({
   toggle: {
-    height: 14,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  glyph: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2
