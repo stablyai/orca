@@ -135,12 +135,50 @@ export function shouldUseImeProcessChordPhysicalFallback(
   return control || alt || hasModifier(input, 'meta')
 }
 
+export function shouldUseDigitRowPhysicalFallback(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // AZERTY and neighbours print Latin-1 legends on the digit row (& é " ' ( - è _ ç à), so
+  // the physical Digit code is the layout-independent truth for 1–9 chords (#35985). Legends
+  // that also name a punctuation key (AZERTY '-' is Minus on Digit6) follow the same rule.
+  // Composition artifacts beyond Latin-1 (macOS Option output like ™ U+2122) stay text.
+  if (!/^Digit[0-9]$/.test(input.code ?? '')) {
+    return false
+  }
+  const key = input.key ?? ''
+  if (key.length !== 1 || key < '!' || key > 'ÿ') {
+    return false
+  }
+  const isMac = getKeybindingPlatform(platform) === 'darwin'
+  const logical = logicalKeyTokenFromInput(input)
+  if (logical !== null && (isMac || !isPunctuationKeyToken(logical))) {
+    // Why macOS excludes punctuation: Option composes `[` into BracketLeft and the like, and
+    // logical keys stay ahead of physical digit codes there (see the digit-index tests).
+    return false
+  }
+  // AltGr surfaces as Ctrl+Alt on Windows/Linux; treat it as text, not a chord.
+  return !(isMac === false && hasModifier(input, 'control') && hasModifier(input, 'alt'))
+}
+
+/** Digit-index actions store one representative chord; a digit-row legend keys by its physical digit. */
+function digitRowLegendInputForDigitIndex(
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): KeybindingInput {
+  if (!shouldUseDigitRowPhysicalFallback(input, platform)) {
+    return input
+  }
+  return { ...input, key: (input.code ?? '').slice(5) }
+}
+
 export function canFallBackToPhysicalCode(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): boolean {
   return (
     canUsePhysicalCodeFallback(input) ||
+    shouldUseDigitRowPhysicalFallback(input, platform) ||
     shouldUseNonLatinShortcutPhysicalFallback(input, platform) ||
     shouldUseImeProcessChordPhysicalFallback(input, platform)
   )
@@ -273,8 +311,10 @@ export function keybindingFromInputForAction(
   input: KeybindingInput,
   platform: NodeJS.Platform
 ): KeybindingValidationResult {
+  // Why: only the 1-9 ranged actions key by the physical digit; ordinary actions keep
+  // their logical key (AZERTY Alt+- records as Alt+Minus, not Alt+6).
   const result = keybindingFromInputWithOptions(
-    input,
+    isDigitIndexActionId(actionId) ? digitRowLegendInputForDigitIndex(input, platform) : input,
     platform,
     normalizeOptionsForAction(actionId)
   )
