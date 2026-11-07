@@ -31,6 +31,29 @@ describe('exchangeRemotePairingTicket', () => {
       { deviceToken: savedOffer.deviceToken },
       expect.any(Number)
     )
+    // Signs in with the new token right away, so the host retires the link before any downgrade.
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        credential: { kind: 'token', deviceToken: savedOffer.deviceToken }
+      }),
+      'status.get',
+      undefined,
+      expect.any(Number)
+    )
+  })
+
+  it('keeps the new token when the follow-up sign-in fails', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: { deviceId: 'd' } })
+      .mockRejectedValueOnce(new Error('timed out'))
+    const saved = await exchangeRemotePairingTicket({
+      pairingCode,
+      offer,
+      hostCapabilities: capable,
+      send
+    })
+    expect(parsePairingCode(saved)?.deviceToken).toMatch(/^[0-9a-f]{48}$/)
   })
 
   it('keeps the original code for older hosts, refusals and transport errors', async () => {

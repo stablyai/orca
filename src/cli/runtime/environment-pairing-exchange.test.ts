@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer, parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/ticket-exchange-capability'
 import { exchangeCliPairingCode } from './environment-pairing-exchange'
 
@@ -27,5 +28,20 @@ describe('exchangeCliPairingCode', () => {
     await expect(exchangeCliPairingCode(pairingCode, send)).resolves.toBe(pairingCode)
     await expect(exchangeCliPairingCode('not a code', send)).resolves.toBe('not a code')
     expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('refuses to save a code the host rejects, such as one another device already used', async () => {
+    for (const send of [
+      vi
+        .fn()
+        .mockRejectedValue(
+          new RemoteRuntimeClientError('unauthorized', 'rejected', { pairingStage: 'access-grant' })
+        ),
+      vi.fn().mockResolvedValue({ ok: false, error: { code: 'unauthorized', message: 'no' } })
+    ]) {
+      await expect(exchangeCliPairingCode(pairingCode, send)).rejects.toMatchObject({
+        code: 'unauthorized'
+      })
+    }
   })
 })

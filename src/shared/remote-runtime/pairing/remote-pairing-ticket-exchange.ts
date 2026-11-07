@@ -31,14 +31,28 @@ export async function exchangeRemotePairingTicket(args: {
     return args.pairingCode
   }
   const deviceToken = randomHexToken()
+  const send = args.send ?? sendRemoteRuntimeRequest
   try {
-    const response = await (args.send ?? sendRemoteRuntimeRequest)(
+    const response = await send(
       pairedRuntimeConnectionFromOffer(args.offer),
       EXCHANGE_PAIRING_TICKET_METHOD,
       { deviceToken },
       args.timeoutMs ?? EXCHANGE_TIMEOUT_MS
     )
-    return response.ok ? encodePairingOffer({ ...args.offer, deviceToken }) : args.pairingCode
+    if (!response.ok) {
+      return args.pairingCode
+    }
+    const exchanged = { ...args.offer, deviceToken }
+    // Sign in once now so the host retires the link immediately; a host downgraded before this
+    // client's first later use would not know the new token. The host already stored it, so a
+    // failure here still leaves the new token working.
+    await send(
+      pairedRuntimeConnectionFromOffer(exchanged),
+      'status.get',
+      undefined,
+      args.timeoutMs ?? EXCHANGE_TIMEOUT_MS
+    ).catch(() => undefined)
+    return encodePairingOffer(exchanged)
   } catch {
     return args.pairingCode
   }
