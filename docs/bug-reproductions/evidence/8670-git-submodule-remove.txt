@@ -1,0 +1,9 @@
+git version 2.44.0
+fixture: /var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T//orca-repro-8670.4S3ZkI
+parent status:
+submodule status:
+--- without --force (exit 128) ---
+fatal: working trees containing submodules cannot be moved or removed
+--- with --force (exit 0) ---
+worktree path removed: yes
+RESULT: REPRODUCED (clean submodule worktree requires --force)

@@ -1,0 +1,13 @@
+{
+  "id": "6f65d67e-c31d-4d4e-b3a4-95bebe1a9b8a",
+  "ok": true,
+  "result": {
+    "worktree": "8cf8301a-6725-4f9f-a5f4-93ba5c7c1e99::/Users/nwparker/orca/workspaces/orca/cooked-PRs",
+    "relativePath": "spec/does-not-exist-repro-8844.md",
+    "kind": "markdown",
+    "opened": true
+  },
+  "_meta": {
+    "runtimeId": "feee85bb-b526-4f92-8c2b-959c1b3a2c03"
+  }
+}
