@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { buildWorktreePurgeState } from './slices/worktrees/teardown/worktree-purge-state'
 import {
   createTestStore,
@@ -60,7 +61,9 @@ describe('host twin purge attribution', () => {
         })
       )
     }
-    const patch = buildWorktreePurgeState(state, [{ id: workspace, hostId: 'ssh:removed' }])
+    const patch = buildWorktreePurgeState(state, [
+      hostWorktreeTarget({ id: workspace, hostId: 'ssh:removed' })
+    ])
     expect(patch.unifiedTabsByWorktree?.[workspace]?.map((tab) => tab.id)).toEqual([
       'duplicate',
       'detected'
@@ -115,8 +118,8 @@ describe('host twin purge attribution', () => {
       ]
     }
     const patch = buildWorktreePurgeState(state, [
-      { id: workspace, hostId: 'runtime:first' },
-      { id: second, hostId: 'runtime:second' }
+      hostWorktreeTarget({ id: workspace, hostId: 'runtime:first' }),
+      hostWorktreeTarget({ id: second, hostId: 'runtime:second' })
     ])
     expect(patch.openFiles).toEqual([])
     expect(patch.unifiedTabsByWorktree?.[second]?.map((tab) => tab.id)).toEqual([
@@ -153,7 +156,7 @@ describe('host twin purge attribution', () => {
       ]
     }
     const patch = buildWorktreePurgeState(state, [
-      { id: workspace, hostId: 'runtime:prod%2fserver' }
+      hostWorktreeTarget({ id: workspace, hostId: 'runtime:prod%2fserver' })
     ])
     expect(patch.unifiedTabsByWorktree?.[workspace]?.map((tab) => tab.id)).toEqual([
       'surviving-terminal'
