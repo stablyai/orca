@@ -25,6 +25,7 @@ export type BrowserExtensionListing = {
   name: string
   version: string
   source: BrowserExtensionSource
+  path: string
   enabled: boolean
   /** Why data URL: the renderer CSP does not load chrome-extension: images. */
   iconDataUrl: string | null
@@ -46,3 +47,13 @@ export type BrowserExtensionActionResult = { ok: true } | { ok: false; error: st
 
 /** Main → trusted renderer: the installed list, a load error or a held update changed; Settings refetches. */
 export const BROWSER_EXTENSIONS_CHANGED_CHANNEL = 'browserExtensions:changed'
+
+export type BrowserExtensionListParams = { profileId?: string }
+export type BrowserExtensionReloadParams = BrowserExtensionListParams & {
+  extensionId?: string
+  path?: string
+}
+export type BrowserExtensionReloadResult = {
+  extensionId: string
+  scope: 'enabled-profiles'
+}

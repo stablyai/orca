@@ -72,6 +72,7 @@ export async function listBrowserExtensionsForProfile(
       name: extension.name,
       version: extension.version,
       source: extension.source,
+      path: extension.path,
       enabled: enabled.has(extension.id),
       iconDataUrl: await readBrowserExtensionIconDataUrl(extension.path, extension.iconPath),
       hasOptionsPage: extension.optionsPage !== null,

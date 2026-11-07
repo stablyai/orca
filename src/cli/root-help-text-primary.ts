@@ -207,6 +207,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  tab list                  List open browser tabs',
   '  tab show                  Show one browser tab by page id',
   '  tab current               Show the current browser tab',
+  '  extension list            List installed browser extensions',
+  '  extension reload          Reload an unpacked extension across enabled profiles',
   '  tab profile list          List browser session profiles',
   '  tab profile create        Create a browser session profile',
   '  tab profile delete        Delete a browser session profile',

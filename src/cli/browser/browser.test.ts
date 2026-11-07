@@ -32,6 +32,9 @@ vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     userDataPath = '/tmp/orca-dev-profile'
+    get isRemote(): boolean {
+      return false
+    }
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
@@ -47,6 +50,7 @@ vi.mock('../runtime-client', async () => {
 })
 
 import { main } from '../index'
+import { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime/types'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
 
@@ -657,5 +661,102 @@ describe('orca cli browser waits and viewport flags', () => {
     await main(['wait', '--selector', '#ready', '--worktree', 'all'], '/tmp/not-an-orca-worktree')
 
     expect(errorSpy).toHaveBeenCalledWith('Timed out waiting for the Orca runtime to respond.')
+  })
+})
+
+describe('orca cli extensions', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    process.exitCode = undefined
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+    process.exitCode = undefined
+  })
+
+  it('lists installed extensions for a named profile without resolving a page', async () => {
+    queueFixtures(callMock, okFixture('extensions', { active: true, extensions: [] }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['extension', 'list', '--profile', 'profile-1', '--json'], '/tmp')
+    expect(callMock).toHaveBeenCalledWith('browser.extensionList', { profileId: 'profile-1' })
+  })
+
+  it('routes an extension id to reload', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('reload', {
+        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        scope: 'enabled-profiles'
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['extension', 'reload', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'], '/tmp')
+    expect(callMock).toHaveBeenCalledWith('browser.extensionReload', {
+      extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    })
+  })
+
+  it('resolves a source folder relative to the caller cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('reload', {
+        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        scope: 'enabled-profiles'
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['extension', 'reload', '--path', './extension', '--profile', 'default'], '/tmp')
+    expect(callMock).toHaveBeenCalledWith('browser.extensionReload', {
+      path: '/tmp/extension',
+      profileId: 'default'
+    })
+  })
+
+  it('refuses to resolve a remote source against the local cwd', async () => {
+    vi.spyOn(RuntimeClient.prototype, 'isRemote', 'get').mockReturnValue(true)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await main(['extension', 'reload', '--path', './extension'], '/tmp')
+    expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves an absolute remote Windows source path', async () => {
+    vi.spyOn(RuntimeClient.prototype, 'isRemote', 'get').mockReturnValue(true)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    queueFixtures(
+      callMock,
+      okFixture('reload', {
+        extensionId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        scope: 'enabled-profiles'
+      })
+    )
+    await main(['extension', 'reload', '--path', 'C:\\extensions\\dev'], '/tmp')
+    expect(callMock).toHaveBeenCalledWith('browser.extensionReload', {
+      path: 'C:\\extensions\\dev'
+    })
+  })
+
+  it.each([
+    ['extension', 'reload'],
+    ['extension', 'reload', 'invalid'],
+    ['extension', 'reload', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', '--path', '/tmp/ext'],
+    ['extension', 'reload', '--path'],
+    ['extension', 'list', '--profile'],
+    ['extension', 'list', '--profile='],
+    ['extension', 'reload', '--path='],
+    ['extension', 'list', '--page', 'page-1'],
+    ['extension', 'reload', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    [
+      'extension',
+      'reload',
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      '--extension-id',
+      'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    ]
+  ])('rejects invalid input before contacting the runtime: %j', async (...args) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await main(args, '/tmp')
+    expect(process.exitCode).toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
   })
 })
