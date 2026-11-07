@@ -145,6 +145,28 @@ const MODEL_DOWNLOAD_FILES = {
       ['tokens.txt', 48_697, '8b294db9045d6e5f94647f4c1eec1af4da143a75053c399611444b378ff966ac']
     ]
   ),
+  'zipformer-korean-2024-06-24': huggingFaceFiles(
+    'k2-fsa/sherpa-onnx-zipformer-korean-2024-06-24',
+    '0fb4b2b5c8d3e5766121481ba911961e3649c664',
+    [
+      [
+        'encoder-epoch-99-avg-1.int8.onnx',
+        70_784_728,
+        '8b196d723421a0513c98ec25da2c43420c029e817f5e4a90b29ff80291c0af2b'
+      ],
+      [
+        'decoder-epoch-99-avg-1.int8.onnx',
+        2_844_692,
+        '2cc8c04ea080a657c18ebc59702e6b049cef08163eba5d68ac5bf707925cb0fb'
+      ],
+      [
+        'joiner-epoch-99-avg-1.int8.onnx',
+        2_581_421,
+        'eb654db1ea2cc9d63474855f65958b6059084692a9f2eb4f3812aceb1e416a20'
+      ],
+      ['tokens.txt', 60_246, '016bdf0965029263b7ad01b742366ee542ef0bef38261510e8176ff6f2e9e668']
+    ]
+  ),
   'zipformer-streaming-korean': huggingFaceFiles(
     'k2-fsa/sherpa-onnx-streaming-zipformer-korean-2024-06-16',
     'ba6078bca4daf3f0dd37f79d0ab505af71df14a6',
