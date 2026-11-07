@@ -2,7 +2,7 @@ import { findKeybindingConflicts } from './formatting'
 import {
   getKeybindingDefinition,
   isKeybindingActionId,
-  LEGACY_MAC_SEARCH_BINDINGS,
+  getLegacySearchBindings,
   LEGACY_TAB_SWITCH_BINDINGS
 } from './definitions'
 import { getDefaultBindings } from './effective'
@@ -61,7 +61,7 @@ export function getKeybindingResetBindings(
   // Persist rollout resets so another profile's inherited defaults cannot reappear.
   const migratedAction =
     Object.hasOwn(LEGACY_TAB_SWITCH_BINDINGS, actionId) ||
-    (platform === 'darwin' && Object.hasOwn(LEGACY_MAC_SEARCH_BINDINGS, actionId))
+    Object.hasOwn(getLegacySearchBindings(platform), actionId)
   const definition = getKeybindingDefinition(actionId)
   return migratedAction && definition ? getDefaultBindings(definition, platform) : null
 }
