@@ -60,6 +60,7 @@ function launchAgentMatchesStatus(
   )
 }
 
+/** Whether a recorded launch still describes this status entry; every identity field the record set must agree. */
 export function registryEntryMatchesStatus(args: {
   entry: AgentLaunchConfigRegistryEntry | undefined
   paneKey: string

@@ -244,6 +244,7 @@ function isWslLane(laneKey: string): boolean {
   return isLocalCodexSelectionLaneKey(laneKey) && laneKey !== getCodexSelectionLaneKey(null)
 }
 
+/** Whether a Claude still runs in the pane; 'unchecked' when the fresh foreground read failed behind a wrapper. */
 async function isClaudeRunning(
   state: AppState,
   pane: LocalClaudePane

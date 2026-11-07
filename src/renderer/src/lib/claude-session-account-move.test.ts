@@ -72,6 +72,7 @@ const tabId = (n: number): string => `tab-${n}`
 const leafId = (n: number): string => `0195f2ce-1111-4000-8000-00000000000${n}`
 const ptyId = (n: number): string => `pty-${n}`
 
+/** Tab row for pane n; records the launch agent only when the pane seeds one. */
 function makeTab(pane: SeededPane): TerminalTab {
   const { n } = pane
   return {
@@ -96,6 +97,7 @@ function providerSession(pane: SeededPane): AgentStatusEntry['providerSession'] 
     : { key: 'session_id', id }
 }
 
+/** Seeds one tab per pane, with a Claude/Codex status for the panes that name an agent. */
 function seedPanes(panes: SeededPane[]): void {
   const statuses: Record<string, AgentStatusEntry> = {}
   for (const pane of panes) {
