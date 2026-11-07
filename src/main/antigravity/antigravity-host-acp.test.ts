@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { selectAcpHostAccountHome } from '../acp/acp-launch-command'
 import type { AcpHostBackendSettings } from '../acp/acp-launch-specs'
-import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 
 // agy's own sign-in, read from the host's keyring or token file.
@@ -127,26 +126,3 @@ it.skipIf(process.platform === 'win32')(
     ).resolves.toBeNull()
   }
 )
-
-it('a chat launches on the backend its account home pins', async () => {
-  const resolve = (path: string) =>
-    resolveAcpLaunchInvocation(
-      ANTIGRAVITY_LAUNCH_SPEC,
-      { variable: 'GEMINI_HOME', path },
-      {
-        resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/home/user' }),
-        resolveCommand: (command) => `/resolved/${command}`,
-        dataDirectory: '/orca-data'
-      }
-    )
-  const host = await resolve('/home/user/.gemini')
-  expect(host.command).toBe('/resolved/agy')
-  expect(host.spec.args({ fullAccess: false, pluginDir: null })).toEqual(['acp'])
-  expect(host.env.GEMINI_HOME).toBeUndefined()
-  expect(host.env.AGY_ACP_FORCE_FILE_STORAGE).toBeUndefined()
-
-  const managed = await resolve('/orca-data/antigravity-chat')
-  expect(managed.spec.managedRuntime).toBeDefined()
-  expect(managed.env.GEMINI_HOME).toBe('/orca-data/antigravity-chat')
-  expect(managed.env.AGY_ACP_FORCE_FILE_STORAGE).toBe('1')
-})

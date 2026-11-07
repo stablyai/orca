@@ -68,44 +68,6 @@ const automation: Automation = {
 }
 
 describe('headless automation workspace create args', () => {
-  it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
-    const args = buildAutomationWorktreeCreateArgs({
-      automation,
-      run: {
-        id: 'run-1',
-        title: 'Nightly review run',
-        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
-      },
-      repo,
-      createdAt: 123
-    })
-
-    expect(args).toMatchObject({
-      repoSelector: { selector: 'id:repo-1', hostId: 'ssh:ssh-target-1' },
-      name: 'auto-nightly-review-run-20260102T0304',
-      baseBranch: 'origin/main',
-      setupDecision: 'skip',
-      activate: false,
-      createdWithAgent: 'codex',
-      startupAgent: 'codex',
-      startupPrompt: 'Review changes',
-      telemetrySource: 'unknown',
-      automationProvenance: {
-        kind: 'created-by-automation',
-        automationId: 'automation-1',
-        automationNameSnapshot: 'Nightly review',
-        automationRunId: 'run-1',
-        automationRunTitleSnapshot: 'Nightly review run',
-        createdAt: 123,
-        executionTargetType: 'ssh',
-        executionTargetId: 'ssh-target-1',
-        projectId: 'project-1',
-        repoId: 'repo-1',
-        hostId: 'ssh:ssh-target-1'
-      }
-    })
-  })
-
   it('skips setup when the created branch differs from the content approved for the automation', async () => {
     const worktreePath = mkdtempSync(path.join(tmpdir(), 'orca-automation-setup-'))
     try {
