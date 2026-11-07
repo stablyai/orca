@@ -33,7 +33,8 @@ export function useMobileNativeChatSavedInFlightVersion(): number {
 export function beginMobileNativeChatInFlightSend(
   origin: MobileNativeChatSendOrigin,
   kind: MobileNativeChatInFlightSend['kind'],
-  text: string
+  text: string,
+  clientMessageId?: string
 ): string | null {
   const destination = origin.draftDestination
   if (!destination.active) {
@@ -54,6 +55,7 @@ export function beginMobileNativeChatInFlightSend(
       // A terminal chat sends no file chips; they stay in the box.
       files: kind === 'structured' ? savedMobileNativeChatFiles(inputs.files) : [],
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
+      ...(clientMessageId === undefined ? {} : { clientMessageId }),
       normalizedText: origin.normalizedText,
       baselineTailMessageId: origin.boundary.afterMessageId ?? null,
       ...(origin.queuedDuringWorkingEpoch !== undefined ? { queuedDuringWork: true } : {})
@@ -61,17 +63,6 @@ export function beginMobileNativeChatInFlightSend(
   })
   saveMobileNativeChatDraft(scope, 'immediate')
   return id
-}
-
-export function noteMobileNativeChatInFlightMessageId(
-  id: string | null,
-  clientMessageId: string
-): void {
-  const entry = id ? inFlightSends.get(id) : undefined
-  if (entry) {
-    entry.send = { ...entry.send, clientMessageId }
-    saveMobileNativeChatDraft(entry.scope, 'immediate')
-  }
 }
 
 /** The outcome is known (sent, refused, or handed back): the saved copy goes. */

@@ -15,10 +15,10 @@ import {
 } from './native-chat/composer/mobile-native-chat-draft-store'
 import {
   beginMobileNativeChatInFlightSend,
-  noteMobileNativeChatInFlightMessageId,
   settleMobileNativeChatInFlightSend
 } from './native-chat/composer/mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
@@ -74,14 +74,20 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      // Saved in the same write as the clear; the journal id joins it once the send is minted.
-      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text)
+      // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
+      const clientMessageId = structuredSessionOperationId()
+      const inFlightId = beginMobileNativeChatInFlightSend(
+        origin,
+        'structured',
+        text,
+        clientMessageId
+      )
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
         ...intent,
+        clientMessageId,
         onCreated: (id) => {
           created.clientMessageId = id
-          noteMobileNativeChatInFlightMessageId(inFlightId, id)
           intent?.onCreated?.(id)
         }
       })

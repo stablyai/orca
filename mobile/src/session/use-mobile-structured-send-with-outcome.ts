@@ -245,7 +245,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         return 'rejected'
       }
       const send = {
-        clientMessageId: structuredSessionOperationId(),
+        clientMessageId: intent?.clientMessageId ?? structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
         ...captured,

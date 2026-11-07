@@ -39,6 +39,8 @@ export type MobileNativeChatSendIntent = {
   goal?: true
   /** Continues this usage-limit cut; the host refuses it once the chat has moved on. */
   usageLimitContinuationOfTurnItemId?: string
+  /** A structured send's journal id, minted by the caller so it can be saved before the send leaves. */
+  clientMessageId?: string
   onCreated?: (clientMessageId: string) => void
   /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
   onHandBack?: () => void

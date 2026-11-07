@@ -162,6 +162,10 @@ export function useMobileStructuredSends(args: {
   const holdUnconfirmed = useCallback(
     (clientMessageId: string, onUnconfirmed: () => void) => {
       if (!mountedRef.current) {
+        // The saved copy waits for the chat's next open instead.
+        releaseMobileNativeChatInFlightSends(
+          mobileNativeChatInFlightSendIds(new Set([clientMessageId]))
+        )
         return
       }
       hold(clientMessageId, () => {
@@ -207,22 +211,16 @@ export function useMobileStructuredSends(args: {
     for (const send of claimMobileNativeChatInFlightSends(
       (_scope, saved) => saved.kind === 'structured' && saved.sessionId === sessionId
     )) {
-      const clientMessageId = send.clientMessageId
-      if (clientMessageId === undefined || !recorded([clientMessageId]).has(clientMessageId)) {
-        const handBack = () => {
-          holdsRef.current.delete(clientMessageId ?? send.id)
-          returnMobileNativeChatInFlightSend(send.id)
-          onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
-        }
-        // Never minted means never sent.
-        if (clientMessageId === undefined) {
-          handBack()
-        } else {
-          hold(clientMessageId, handBack)
-        }
-      } else {
+      const clientMessageId = send.clientMessageId ?? send.id
+      if (recorded([clientMessageId]).has(clientMessageId)) {
         settleMobileNativeChatInFlightSend(send.id)
+        continue
       }
+      hold(clientMessageId, () => {
+        holdsRef.current.delete(clientMessageId)
+        returnMobileNativeChatInFlightSend(send.id)
+        onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+      })
     }
   }, [hold, onSendError, recorded, savedInFlightVersion, sessionId])
 
