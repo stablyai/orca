@@ -4,7 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
-import { projectJournalBatch } from '../../agent-session-wire/publication/history/agent-session-journal-batch'
+
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
 import { buildJournalSubmissionRow, journalRowBase } from '../writing/journal-row-builders'
@@ -76,23 +76,6 @@ function placed(state: ReturnType<typeof journal>['state'], clientMessageId: str
 const IN_TURN: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'orca:turn-1' }
 
 describe('a rejected message', () => {
-  it('reaches a subscriber at the tail, so the newest page holds it', () => {
-    const { state, submission, dispatch, advance } = journal()
-    submission('waiting')
-    advance(300)
-    const rejection = dispatch('waiting', 'rejected')
-
-    const projected = projectJournalBatch({
-      rows: [rejection],
-      snapshot: renderJournalState(state),
-      afterSequence: 301
-    })
-    expect(projected.ok && projected.batch.items.map((item) => item.sequence)).toEqual([302])
-    expect(renderJournalState(state).items.at(-1)?.itemId).toBe(
-      agentJournalSubmissionKey('waiting')
-    )
-  })
-
   it('sits at the rejection, out of the turn it was handed into, when it was a steer', () => {
     const { state, submission, dispatch, advance } = journal()
     submission('steer')

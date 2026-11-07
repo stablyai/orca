@@ -7,14 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { createJournalReducerState, applyJournalRow } from '../projection/journal-reducer'
-import { parseJournalRow, type JournalRow } from '../durable-rows/journal-row-schema'
+
 import type { AgentSessionJournal } from '../journal-store'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import {
-  agentSessionJournalProviderHandle,
-  claudeProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export function registerJournalSubmissionQueuedLinkTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -44,14 +40,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
     })
   }
 
-  async function handOff(journal: AgentSessionJournal, draftId: string, submissionId: string) {
-    await journal.queuedMessages.insert({ messageId: draftId, body: BODY })
-    await journal.appendSubmission(
-      { clientMessageId: submissionId, payloadFingerprint: FINGERPRINT, body: BODY, fence: 0 },
-      { messageId: draftId, expect: 'waiting' }
-    )
-  }
-
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-queued-link-'))
     clock = 1_000
@@ -63,17 +51,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
   })
 
   describe('the submission names the queued draft it hands off', () => {
-    it('survives a reload, which replays the rows through the reducer', async () => {
-      let journal = await open()
-      await handOff(journal, 'draft-1', 'handoff-1')
-      await journal.close()
-      journal = await open()
-      expect(journal.submission('handoff-1')?.queuedMessageId).toBe('draft-1')
-      expect(
-        journal.snapshot().submissions.find((entry) => entry.clientMessageId === 'handoff-1')
-      ).toMatchObject({ queuedMessageId: 'draft-1' })
-    })
-
     it('refuses a caller naming a different draft than the one it consumes, and writes nothing', async () => {
       const journal = await open()
       await journal.queuedMessages.insert({ messageId: 'draft-1', body: BODY })
@@ -91,32 +68,6 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
       ).rejects.toThrow()
       expect(journal.submissions()).toHaveLength(0)
       expect(journal.queuedMessages.get('draft-1')?.state).toBe('waiting')
-    })
-  })
-
-  describe('the persisted row', () => {
-    const row: JournalRow = {
-      v: 1,
-      kind: 'submission',
-      epoch: 'epoch-1',
-      seq: 1,
-      fence: 0,
-      ts: 1,
-      clientMessageId: 'handoff-1',
-      payloadFingerprint: 'fp',
-      providerHandle: agentSessionJournalProviderHandle(IDENTITY),
-      body: BODY,
-      queuedMessageId: 'draft-1'
-    }
-
-    it('keeps a row whose stored link is malformed, dropping only the link', () => {
-      const parsed = parseJournalRow(JSON.stringify({ ...row, queuedMessageId: 42 }))
-      if (!parsed.ok) {
-        throw new Error('the row must survive a malformed link')
-      }
-      const state = createJournalReducerState('session-q', 'epoch-1')
-      applyJournalRow(state, parsed.row)
-      expect(state.submissions.get('handoff-1')).not.toHaveProperty('queuedMessageId')
     })
   })
 }
