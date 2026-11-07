@@ -170,7 +170,7 @@ export function RepositoryHostSetupsSection({
         'Hosts where this project is set up.'
       )}
       keywords={[repo.displayName, 'host', 'ssh', 'remote', 'vm', 'path']}
-      className="space-y-3"
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="space-y-1">

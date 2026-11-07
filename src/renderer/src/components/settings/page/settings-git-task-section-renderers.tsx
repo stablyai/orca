@@ -11,6 +11,7 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
   return (
     <SettingsSection
       id="git"
+      grouped
       title={translate('auto.components.settings.Settings.70100f94c7', 'Git & Source Control')}
       description={translate(
         'auto.components.settings.Settings.cfa34f4465',
@@ -54,6 +55,7 @@ export function renderTasksSettingsSection(context: SettingsRenderContext): Reac
   return (
     <SettingsSection
       id="tasks"
+      grouped
       title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
       description={translate(
         'auto.components.settings.Settings.tasksDescription',

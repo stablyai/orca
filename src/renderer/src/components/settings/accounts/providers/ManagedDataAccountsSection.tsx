@@ -16,6 +16,7 @@ import {
   DialogDescription,
   DialogFooter
 } from '../../../ui/dialog'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type Snapshot = { opencode?: ManagedDataAccountsState; devin?: ManagedDataAccountsState }
 
@@ -86,61 +87,62 @@ export function ManagedDataAccountsSection({
 
   const command = `orca account add --agent ${provider}`
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold">
-        {provider === 'opencode'
+    <SettingsGroup
+      title={
+        provider === 'opencode'
           ? translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode')
-          : translate('auto.lib.agent.catalog.fc80296033', 'Devin')}
-      </h3>
-      <p className="text-xs text-muted-foreground">
-        {translate(
-          'accounts.managedData.description',
-          'Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.'
+          : translate('auto.lib.agent.catalog.fc80296033', 'Devin')
+      }
+      description={translate(
+        'accounts.managedData.description',
+        'Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.'
+      )}
+    >
+      <div className="space-y-3 py-3">
+        <code className="text-xs">{command}</code>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void window.api.ui
+                .writeClipboardText(command)
+                .then(() => setCopied(true))
+                .catch((cause: unknown) => setError(String(cause)))
+            }}
+          >
+            {copied
+              ? translate('accounts.managedData.copied', 'Copied')
+              : translate('accounts.managedData.add', 'Copy add account command')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              void refresh()
+            }}
+          >
+            {translate('accounts.managedData.refresh', 'Refresh accounts')}
+          </Button>
+        </div>
+        {!state && !error && (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'accounts.managedData.upgrade',
+              'If accounts do not appear, update or restart the Orca host.'
+            )}
+          </p>
         )}
-      </p>
-      <code className="text-xs">{command}</code>
-      <div className="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            void window.api.ui
-              .writeClipboardText(command)
-              .then(() => setCopied(true))
-              .catch((cause: unknown) => setError(String(cause)))
-          }}
-        >
-          {copied
-            ? translate('accounts.managedData.copied', 'Copied')
-            : translate('accounts.managedData.add', 'Copy add account command')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => {
-            void refresh()
-          }}
-        >
-          {translate('accounts.managedData.refresh', 'Refresh accounts')}
-        </Button>
+        {error && (
+          <p role="alert" className="text-xs text-destructive">
+            {error}
+          </p>
+        )}
       </div>
-      {!state && !error && (
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'accounts.managedData.upgrade',
-            'If accounts do not appear, update or restart the Orca host.'
-          )}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
       {state && (
         <>
-          <div className="flex items-center justify-between gap-3">
+          <div data-settings-row="" className="flex items-center justify-between gap-3 py-2">
             <span className="text-xs">
               {translate('accounts.managedData.system', 'System default')}
             </span>
@@ -158,7 +160,11 @@ export function ManagedDataAccountsSection({
             </Button>
           </div>
           {state.accounts.map((account) => (
-            <div key={account.id} className="flex items-center justify-between gap-3">
+            <div
+              key={account.id}
+              data-settings-row=""
+              className="flex items-center justify-between gap-3 py-2"
+            >
               <div className="space-y-1">
                 <span className="text-xs">{account.label}</span>
                 <p className="text-xs text-muted-foreground">{account.integrations.join(', ')}</p>
@@ -232,6 +238,6 @@ export function ManagedDataAccountsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+    </SettingsGroup>
   )
 }
