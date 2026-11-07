@@ -18,6 +18,7 @@ describe('FederationAcknowledgmentRecovery', () => {
     const attempts: { dispatchId: string; at: number }[] = []
     const recovery = new FederationAcknowledgmentRecovery({
       findNextAfter: (afterRowId) => pending.find((row) => row.rowId > afterRowId),
+      acknowledgedThrough: () => 0,
       sync: async (dispatchId) => {
         attempts.push({ dispatchId, at: Date.now() })
         if (dispatchId === 'unreachable') {
@@ -46,6 +47,7 @@ describe('FederationAcknowledgmentRecovery', () => {
     const attempts: number[] = []
     const recovery = new FederationAcknowledgmentRecovery({
       findNextAfter: (afterRowId) => pending.find((row) => row.rowId > afterRowId),
+      acknowledgedThrough: () => 0,
       sync: async () => {
         attempts.push(Date.now())
         if (hostCanSettle) {
@@ -61,6 +63,30 @@ describe('FederationAcknowledgmentRecovery', () => {
     hostCanSettle = true
     await vi.advanceTimersByTimeAsync(10_000)
     expect(attempts).toEqual([0, 2_000, 6_000, 14_000])
+    expect(pending).toHaveLength(0)
+    recovery.reset()
+  })
+
+  it('keeps the base cadence while a large backlog acknowledges a few pages per sync', async () => {
+    const pending = [{ dispatchId: 'backlog', rowId: 1 }]
+    let acknowledged = 0
+    const attempts: number[] = []
+    const recovery = new FederationAcknowledgmentRecovery({
+      findNextAfter: (afterRowId) => pending.find((row) => row.rowId > afterRowId),
+      acknowledgedThrough: () => acknowledged,
+      sync: async () => {
+        attempts.push(Date.now())
+        acknowledged = Math.min(acknowledged + 300, 700)
+        if (acknowledged === 700) {
+          pending.length = 0
+        }
+      }
+    })
+
+    recovery.ensure()
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(attempts).toEqual([0, 1_000, 2_000])
     expect(pending).toHaveLength(0)
     recovery.reset()
   })

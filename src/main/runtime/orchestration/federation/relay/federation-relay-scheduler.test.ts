@@ -134,4 +134,18 @@ describe('FederationRelayScheduler', () => {
     expect(calls).toEqual([0, 2_000, 6_000, 7_000])
     relays.clear()
   })
+
+  it('keeps an immediate sync requested before another caller reports success', async () => {
+    const { tick, calls } = scripted(['failed', 'failed'])
+    const relays = new FederationRelayScheduler(tick)
+    relays.arm('dispatch-1', 'env-1')
+    await advance(2_000)
+    expect(calls).toEqual([0, 2_000])
+
+    relays.arm('dispatch-1', 'env-1')
+    relays.noteSynced('dispatch-1')
+    await advance(0)
+    expect(calls).toEqual([0, 2_000, 2_000])
+    relays.clear()
+  })
 })

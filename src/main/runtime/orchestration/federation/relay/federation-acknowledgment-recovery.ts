@@ -56,6 +56,7 @@ export class FederationAcknowledgmentRecovery {
     private readonly deps: {
       findNextAfter: (afterRowId: number) => PendingAcknowledgmentRow | undefined
       sync: (dispatchId: string) => Promise<unknown>
+      acknowledgedThrough: (dispatchId: string) => number | null
     }
   ) {}
 
@@ -100,6 +101,7 @@ export class FederationAcknowledgmentRecovery {
       return
     }
     this.cursorRowId = next.rowId
+    const acknowledgedBefore = this.deps.acknowledgedThrough(next.dispatchId)
     const synced = await this.deps.sync(next.dispatchId).then(
       () => true,
       () => false
@@ -107,10 +109,12 @@ export class FederationAcknowledgmentRecovery {
     if (generation !== this.generation) {
       return
     }
-    // A sync that leaves the row pending (e.g. a host without settlement support) made no progress.
-    const settled =
-      synced && this.deps.findNextAfter(next.rowId - 1)?.dispatchId !== next.dispatchId
-    if (settled) {
+    // Large backlogs settle a few pages per sync; only a sync that left the acknowledgment where it was made no progress.
+    const progressed =
+      synced &&
+      (this.deps.findNextAfter(next.rowId - 1)?.dispatchId !== next.dispatchId ||
+        this.deps.acknowledgedThrough(next.dispatchId) !== acknowledgedBefore)
+    if (progressed) {
       this.deadlines.delete(next.dispatchId)
     } else {
       const failures = (this.deadlines.get(next.dispatchId)?.failures ?? 0) + 1

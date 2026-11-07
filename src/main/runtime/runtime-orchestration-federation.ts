@@ -37,7 +37,10 @@ export class RuntimeOrchestrationFederation {
       this.runtime
         .getOrchestrationDb()
         .findNextTerminalFederatedDispatchPendingAcknowledgment(afterRowId),
-    sync: (dispatchId) => this.runtime.syncOrchestrationFederatedDispatch(dispatchId)
+    sync: (dispatchId) => this.runtime.syncOrchestrationFederatedDispatch(dispatchId),
+    acknowledgedThrough: (dispatchId) =>
+      this.runtime.getOrchestrationDb().getFederatedDispatch(dispatchId)
+        ?.to_home_acknowledged_sequence ?? null
   })
   private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
   private readonly warnings = new Set<string>()

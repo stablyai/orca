@@ -14,6 +14,7 @@ type RelayChain = {
   environmentId: string
   failures: number
   timer: ReturnType<typeof setTimeout> | null
+  dueAt: number
   running: boolean
   runAgain: boolean
 }
@@ -36,6 +37,7 @@ export class FederationRelayScheduler {
       environmentId,
       failures: 0,
       timer: null,
+      dueAt: 0,
       running: false,
       runAgain: false
     }
@@ -64,7 +66,11 @@ export class FederationRelayScheduler {
       return
     }
     chain.failures = 0
-    this.schedule(dispatchId, chain, federationRelayRetryDelayMs(0))
+    const baseDelayMs = federationRelayRetryDelayMs(0)
+    // Only pull the next sync earlier; an already-requested immediate sync must not be postponed.
+    if (!chain.timer || chain.dueAt > Date.now() + baseDelayMs) {
+      this.schedule(dispatchId, chain, baseDelayMs)
+    }
   }
 
   clear(): void {
@@ -89,6 +95,7 @@ export class FederationRelayScheduler {
     if (chain.timer) {
       clearTimeout(chain.timer)
     }
+    chain.dueAt = Date.now() + delayMs
     chain.timer = setTimeout(() => void this.run(dispatchId, chain), delayMs)
     chain.timer.unref?.()
   }
