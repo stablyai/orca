@@ -112,7 +112,7 @@ describe('maintenance writer admission cancellation', () => {
         blockers.push(
           ...(await Promise.all(
             Array.from({ length: GENERAL_CAP }, () =>
-              acquireGitAdmission({ args: ['status'], cwd: '/blocker', tier: 'background' })
+              acquireGitAdmission({ args: ['diff'], cwd: '/blocker', tier: 'background' })
             )
           ))
         )
@@ -194,7 +194,7 @@ describe('maintenance writer admission cancellation', () => {
         blockers.push(
           ...(await Promise.all(
             Array.from({ length: GENERAL_CAP }, () =>
-              acquireGitAdmission({ args: ['status'], cwd: '/blocker', tier: 'background' })
+              acquireGitAdmission({ args: ['diff'], cwd: '/blocker', tier: 'background' })
             )
           ))
         )
@@ -283,7 +283,7 @@ describe('maintenance writer admission cancellation', () => {
         blockers.push(
           ...(await Promise.all(
             Array.from({ length: GENERAL_CAP }, () =>
-              acquireGitAdmission({ args: ['status'], cwd: '/blocker', tier: 'background' })
+              acquireGitAdmission({ args: ['diff'], cwd: '/blocker', tier: 'background' })
             )
           ))
         )
