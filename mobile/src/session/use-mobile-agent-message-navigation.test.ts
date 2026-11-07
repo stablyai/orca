@@ -23,6 +23,7 @@ vi.mock('expo-router', async () => {
     useFocusEffect: (effect: () => () => void) =>
       React.useEffect(() => (focus.active ? effect() : undefined), [effect, focus.active]),
     useLocalSearchParams: () => ({}),
+    useNavigation: () => ({ setParams: () => {} }),
     useRouter: () => ({ setParams: () => {} })
   }
 })

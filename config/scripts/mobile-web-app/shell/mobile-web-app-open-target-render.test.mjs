@@ -202,3 +202,15 @@ describeRender('a host document asked to open a target', () => {
     await page.close()
   }, 60_000)
 })
+
+describeRender('a session document opened on a pane', () => {
+  it('paints without faulting while its first commit erases the pane from the URL', async () => {
+    // A notification tap names the pane; the preloaded session mounts before Expo's container reports ready.
+    const { page, errors } = await openHostDocument({
+      route: { pathname: SESSION_ROUTE, params: { paneKey: 'tab-1:leaf-1' } }
+    })
+    expect(await notifies(page, 'fault')).toEqual([])
+    expect(errors).toEqual([])
+    await page.close()
+  }, 60_000)
+})
