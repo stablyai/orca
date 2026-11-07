@@ -115,6 +115,29 @@ describe('activating a workspace whose last terminal was closed', () => {
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
   })
 
+  it('keeps a waiting split landing instead of re-seeding when the workspace is reopened', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      groupsByWorktree: {
+        [worktree.id]: [{ id: 'landing', worktreeId: worktree.id, activeTabId: null, tabOrder: [] }]
+      },
+      activeGroupIdByWorktree: { [worktree.id]: 'landing' },
+      splitLandingGroupIds: { landing: worktree.id }
+    })
+
+    activateAndRevealWorktree(worktree.id, {
+      executionHostId: 'local',
+      notifyHostRuntime: false
+    })
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+    expect(useAppStore.getState().groupsByWorktree[worktree.id]).toEqual([
+      expect.objectContaining({ id: 'landing', tabOrder: [] })
+    ])
+  })
+
   it('leaves the row empty for startup hydration, which never opts into re-seeding', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)

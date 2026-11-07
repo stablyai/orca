@@ -44,6 +44,10 @@ export function SplitPaneLanding({
       getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
       'enabled'
   )
+  // A sole landing has no split to close; Close there leaves the workspace.
+  const splitsWorkspace = useAppStore(
+    (state) => (state.groupsByWorktree[worktreeId]?.length ?? 0) > 1
+  )
   const newAgentShortcut = useShortcutKeyDetails('tab.newAgent')
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
   const newBrowserShortcut = useShortcutKeyDetails('tab.newBrowser')
@@ -58,7 +62,7 @@ export function SplitPaneLanding({
           ? { id: 'browser', shortcut: newBrowserShortcut, action: newBrowserLabel }
           : null,
         { id: 'markdown', shortcut: newMarkdownShortcut, action: newMarkdownLabel },
-        { id: 'close', shortcut: closeShortcut, action: closeLabel }
+        splitsWorkspace ? { id: 'close', shortcut: closeShortcut, action: closeLabel } : null
       ].filter(
         (item): item is LandingShortcutItem => item !== null && item.shortcut.keys.length > 0
       ),
@@ -73,7 +77,8 @@ export function SplitPaneLanding({
       newMarkdownLabel,
       newMarkdownShortcut,
       newTerminalLabel,
-      newTerminalShortcut
+      newTerminalShortcut,
+      splitsWorkspace
     ]
   )
 

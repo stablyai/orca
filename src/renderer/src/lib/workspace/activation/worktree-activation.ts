@@ -40,6 +40,7 @@ import {
   readPreviousActive
 } from './worktree-activation-visit'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 import {
   workspaceActivationResult,
@@ -100,9 +101,12 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
+  // A waiting split chooser is the surface the user left; reseeding would replace it.
+  const keepsSplitLanding = !opts?.startup && hasSplitLandingGroup(state, workspaceKey)
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
+    !keepsSplitLanding &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -118,11 +122,17 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
-  const primaryTabId = shouldGateAgentActivation
-    ? null
-    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
-        seedUserDefaultSurface
-      })
+  const primaryTabId =
+    shouldGateAgentActivation || keepsSplitLanding
+      ? null
+      : ensureFolderWorkspaceInitialTerminal(
+          folderWorkspace,
+          opts?.startup,
+          providesInitialSurface,
+          {
+            seedUserDefaultSurface
+          }
+        )
 
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
@@ -210,8 +220,11 @@ export function activateAndRevealWorktreeWithOutcome(
   }
 
   // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).
+  const keepsSplitLanding =
+    !hasActivationWork && hasSplitLandingGroup(postActivationState, worktreeId)
   const shouldGateAgentActivation =
     !hasActivationWork &&
+    !keepsSplitLanding &&
     (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -231,7 +244,7 @@ export function activateAndRevealWorktreeWithOutcome(
   }
 
   const primaryTabId =
-    shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)
+    shouldGateAgentActivation || keepsSplitLanding || (providesInitialSurface && !hasActivationWork)
       ? null
       : ensureWorktreeHasInitialTerminal(
           useAppStore.getState(),
