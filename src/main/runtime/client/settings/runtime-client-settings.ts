@@ -12,6 +12,7 @@ import {
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
+import { normalizeWorkspaceTitleLanguage } from '../../../../shared/workspace-title-language'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
@@ -67,6 +68,7 @@ export class RuntimeClientSettingsController {
     // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
+      workspaceTitleLanguage: normalizeWorkspaceTitleLanguage(settings.workspaceTitleLanguage),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],

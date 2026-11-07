@@ -826,6 +826,13 @@
       "claudeRemoveFolder": "Orca 會從這部電腦刪除此帳戶的 Claude 資料夾及其登入資訊。與系統預設共用的聊天記錄會保留。如果已選取此帳戶，您下次啟動的 Claude 將使用系統預設。"
     },
     "sourceControl": {
+      "workspaceTitleLanguage": {
+        "keywords": "工作區 標題 語言 中文",
+        "title": "工作區標題語言",
+        "description": "選擇新工作區自動產生標題時使用的語言。Git 分支名稱維持英文，既有標題與手動修改的標題會保留。",
+        "branch": "與分支名稱一致",
+        "ui": "跟隨介面語言"
+      },
       "gitOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作",
       "remoteOperationInAnotherWorkspace": "其他工作區正在執行 Git 操作（例如推送、拉取或強制推送）。請等待其完成後再使用此動作，以免操作重疊。",
       "actionModel": {

@@ -36,6 +36,9 @@ export function firstWorkRenameDeps(
     | 'notifyWorktreeFolderRenamed'
   >
 ): FirstWorkBranchRenameDeps {
+  const localWorktreeMeta = (worktreeId: string) =>
+    store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
+    store.getWorktreeMeta(worktreeId)
   return {
     getSettings: () => store.getSettings(),
     getRepo: (repoId) => store.getRepo(repoId),
@@ -44,7 +47,7 @@ export function firstWorkRenameDeps(
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
         ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.name
-        : store.getWorktreeMeta(worktreeId)?.displayName
+        : localWorktreeMeta(worktreeId)?.displayName
     },
     getFolderWorkspacePath: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
@@ -63,13 +66,11 @@ export function firstWorkRenameDeps(
       return scope?.type === 'folder'
         ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename ===
             true
-        : store.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
+        : localWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
     },
     canRenameOrcaCreatedBranch: (worktreeId) => {
       // Renames run on this host only, so read this host's row, not a same-id twin's.
-      const meta =
-        store.getWorktreeMetaForHost?.(worktreeId, LOCAL_EXECUTION_HOST_ID) ??
-        store.getWorktreeMeta(worktreeId)
+      const meta = localWorktreeMeta(worktreeId)
       // A creature-like name alone cannot prove Orca owns the branch.
       return (
         !!meta?.orcaCreationSource &&
