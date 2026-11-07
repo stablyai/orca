@@ -63,7 +63,9 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
   } as AppState
 }
 
-export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
+export function createCleanupTestStore(
+  removeWorktree: AppState['removeWorktree'] = vi.fn<AppState['removeWorktree']>()
+) {
   return create<AppState>()((...args) =>
     makeState({
       unifiedTabsByWorktree: {},

@@ -25,6 +25,7 @@ import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profil
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import { TerminalSurfaceIndex } from './terminal/surface/terminal-surface-index'
 
 function treePopulation(tree: TabGroupLayoutNode | undefined): number {
   if (!tree) {
@@ -262,6 +263,30 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
   // command (the close's, its admission's and the retained chat's open).
   let closingOld = false
   let derivingOld = false
+  let readingSavedOrder = false
+  const savedOrderKeys: string[] = []
+  const allSavedOrderInputs: { load: LayoutPopulation[]; save: LayoutPopulation[] } = {
+    load: [],
+    save: []
+  }
+  const savedOrderInputs: { load: LayoutPopulation[]; save: LayoutPopulation[] } = {
+    load: [],
+    save: []
+  }
+  const savedOrder = TerminalSurfaceIndex.prototype.sessionTabsOf
+  vi.spyOn(TerminalSurfaceIndex.prototype, 'sessionTabsOf').mockImplementation(function (
+    this: TerminalSurfaceIndex,
+    worktreeId
+  ) {
+    savedOrderKeys.push(worktreeId)
+    const previous = readingSavedOrder
+    readingSavedOrder = true
+    try {
+      return savedOrder.call(this, worktreeId)
+    } finally {
+      readingSavedOrder = previous
+    }
+  })
   const derive = tabLayout.loadChatTabLayout
   vi.spyOn(tabLayout, 'loadChatTabLayout').mockImplementation((hostId, session, worktreeId) => {
     derivingOld = worktreeId === OLD
@@ -302,7 +327,12 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     loads.calls++
     loads.rows += Object.values(args[1].unifiedTabs ?? {}).flat().length
     loads.oldRows += args[1].unifiedTabs?.[OLD]?.length ?? 0
-    if (closingOld || derivingOld) {
+    if (readingSavedOrder) {
+      allSavedOrderInputs.load.push(input)
+    }
+    if (readingSavedOrder && derivingOld) {
+      savedOrderInputs.load.push(input)
+    } else if (closingOld || derivingOld) {
       closePhase.loads++
       closePhase.loadedRows += Object.values(args[1].unifiedTabs ?? {}).flat().length
       closePhase.loadInputs.push(input)
@@ -318,7 +348,12 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     serializations.calls++
     serializations.tabs += Object.values(workspaces).reduce((sum, w) => sum + w.tabs.length, 0)
     serializations.oldTabs += workspaces[OLD]?.tabs.length ?? 0
-    if (closingOld || derivingOld) {
+    if (readingSavedOrder) {
+      allSavedOrderInputs.save.push(input)
+    }
+    if (readingSavedOrder && derivingOld) {
+      savedOrderInputs.save.push(input)
+    } else if (closingOld || derivingOld) {
       closePhase.serializations++
       closePhase.serializedTabs += Object.values(workspaces).reduce(
         (sum, w) => sum + w.tabs.length,
@@ -496,6 +531,8 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     closeLoadedRows: closePhase.loadedRows,
     closeSerializations: closePhase.serializations,
     closeSerializedTabs: closePhase.serializedTabs,
+    savedOrderLoads: savedOrderInputs.load.length,
+    savedOrderSerializations: savedOrderInputs.save.length,
     oldKeyCloseCommands: closes.length,
     oldKeyTabsClosedPerCommand: closes[0] ?? 0,
     savedMovedTabs: savedOld.filter((tab) => moved.includes(tab.entityId)).length,
@@ -516,6 +553,11 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     'K18_CLOSE_INPUTS',
     JSON.stringify({ n, hints, load: closePhase.loadInputs, save: closePhase.saveInputs })
   )
+  console.log('K18_SAVED_ORDER_INPUTS', JSON.stringify({ n, hints, ...savedOrderInputs }))
+  console.log(
+    'K18_SAVED_ORDER_KEYS',
+    JSON.stringify({ n, hints, savedOrderKeys, ...allSavedOrderInputs })
+  )
   const partition = {
     workspaces: n + 2,
     tabs: hints ? 4 * n + n / 10 + 1 : 3 * n + 1,
@@ -524,6 +566,19 @@ async function measuredStartup(n: number, hints: boolean, window: boolean, closi
     tree: (hints ? 5 : 3) * n
   }
   expect(legacyRowInputs.every((rows) => rows === 0)).toBe(true)
+  const expectedOrderKeys =
+    layoutOwner.main || !window
+      ? [
+          OLD,
+          'shared::/current/shared',
+          ...Array.from({ length: n }, (_, i) => `current-${i}::/current/${i}`)
+        ]
+      : []
+  expect(savedOrderKeys.toSorted()).toEqual(expectedOrderKeys.toSorted())
+  expect(savedOrderInputs.load.length).toBe(expectedOrderKeys.length ? 1 : 0)
+  expect(savedOrderInputs.save.length).toBe(savedOrderInputs.load.length)
+  expect(allSavedOrderInputs.load.length).toBeLessThanOrEqual(expectedOrderKeys.length)
+  expect(allSavedOrderInputs.save.length).toBe(allSavedOrderInputs.load.length)
   for (const input of [...loadInputs, ...saveInputs]) {
     for (const dimension of ['workspaces', 'tabs', 'groups', 'order', 'tree'] as const) {
       expect(input[dimension], dimension).toBeLessThanOrEqual(partition[dimension])

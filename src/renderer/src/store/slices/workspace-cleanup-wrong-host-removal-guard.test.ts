@@ -301,7 +301,8 @@ it.each([
 
 import {
   createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
+  setNativeChatComposerDraftStorageForTests,
+  type NativeChatComposerDraftStorage
 } from '@/components/native-chat/native-chat-composer-draft-storage'
 it('actual normal removal clears current setup while held residue stays inert and later manual input retains authority', async () => {
   launchDrafts.clearNativeChatComposerDraftsForTests()
@@ -316,7 +317,12 @@ it('actual normal removal clears current setup while held residue stays inert an
   })
   const snapshot = new Map(storage.drafts)
   const gate = Promise.withResolvers<ReadonlyMap<string, unknown>>()
-  setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => gate.promise })
+  setNativeChatComposerDraftStorageForTests({
+    ...storage,
+    loadAll: vi
+      .fn<NativeChatComposerDraftStorage['loadAll']>(storage.loadAll)
+      .mockImplementationOnce(() => gate.promise)
+  })
   const loading = launchDrafts.hydrateNativeChatComposerDrafts()
   const source = launchDrafts.nativeChatLaunchPromptDraftScopeKey(WORKTREE_ID, 'codex', 'ssh:old')
   const current = launchDrafts.nativeChatLaunchPromptDraftScopeKey(

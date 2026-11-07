@@ -396,6 +396,8 @@ function catalogOwner(store: {
 
 import * as composerDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 import { records } from '@/components/native-chat/native-chat-composer-draft-memory'
+import * as workspaceDrafts from './worktrees/teardown/removed-worktree-chat-drafts'
+import * as removalScopes from '@/components/native-chat/native-chat-composer-draft-removal-selection'
 import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot,
@@ -446,7 +448,38 @@ it.each([10, 100])(
     expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
     folderWorkspacesDelete.mockResolvedValue(true)
     const reads = vi.spyOn(records, 'get')
+    let ordinaryReads = 0
+    let censusReads = 0
+    const ordinaryDelete = workspaceDrafts.deleteWorkspaceChatDrafts
+    const ordinarySpy = vi
+      .spyOn(workspaceDrafts, 'deleteWorkspaceChatDrafts')
+      .mockImplementation((keys) => {
+        const before = reads.mock.calls.length
+        try {
+          return ordinaryDelete(keys)
+        } finally {
+          ordinaryReads += reads.mock.calls.length - before
+        }
+      })
+    const capture = removalScopes.captureNativeChatDraftRemovalScopes
+    const captureSpy = vi
+      .spyOn(removalScopes, 'captureNativeChatDraftRemovalScopes')
+      .mockImplementation((...args) => {
+        expect(args[0].size).toBe(0)
+        expect(args[1]).toEqual([])
+        const before = reads.mock.calls.length
+        try {
+          return capture(...args)
+        } finally {
+          censusReads += reads.mock.calls.length - before
+        }
+      })
+    const removalReads: { ordinary: number; census: number; actual: number }[] = []
     for (const [i, folder] of folders.entries()) {
+      const before = reads.mock.calls.length
+      ordinaryReads = censusReads = 0
+      ordinarySpy.mockClear()
+      captureSpy.mockClear()
       expect(
         await store.getState().deleteFolderWorkspace(folder.id, { executionHostId: 'local' })
       ).toBe(true)
@@ -454,11 +487,26 @@ it.each([10, 100])(
       if (i === 0) {
         expect(shutdown).not.toHaveBeenCalled()
       }
+      // One ordinary record pass plus a read when deleting a nonempty draft; the twin skips it.
+      const ordinary = i === 0 ? 0 : count / 2 + 2 - Math.floor(i / 2) + (i % 2)
+      // One receipt pass over the remaining submissions, retained first chip and two controls.
+      const census = count + 2 - i
+      const actual = reads.mock.calls.length - before
+      expect(ordinarySpy).toHaveBeenCalledTimes(i === 0 ? 0 : 1)
+      expect(captureSpy).toHaveBeenCalledTimes(1)
+      expect(ordinaryReads).toBeLessThanOrEqual(ordinary)
+      expect(censusReads).toBeLessThanOrEqual(census)
+      expect(actual).toBe(ordinaryReads + censusReads)
+      expect(actual).toBeLessThanOrEqual(ordinary + census)
+      removalReads.push({ ordinary: ordinaryReads, census: censusReads, actual })
     }
     const cleanupReads = reads.mock.calls.length
     reads.mockRestore()
+    ordinarySpy.mockRestore()
+    captureSpy.mockRestore()
     expect(cleanupReads).toBeGreaterThanOrEqual(count)
-    expect(cleanupReads).toBeLessThanOrEqual(count * (count + 2))
+    expect(cleanupReads).toBeLessThanOrEqual((3 * count * count) / 4 + 5 * count - 2)
+    console.log('FOLDER_REMOVAL_READS', JSON.stringify({ count, cleanupReads, removalReads }))
     expect(records.size).toBe(2)
     expect(shutdown).toHaveBeenCalledTimes(count - 1)
     for (const key of liveScopes) {

@@ -184,12 +184,12 @@ describe('launch draft moves', () => {
         throw new DOMException('refused', 'QuotaExceededError')
       })
       const committed = Promise.withResolvers<void>()
-      const write = storage.write
-      storage.write = async (scope, draft) => {
+      const update = storage.update
+      storage.update = async (scope, apply) => {
         if (scope === target) {
           await committed.promise
         }
-        await write(scope, draft)
+        await update(scope, apply)
       }
 
       moveStructuredAgentLaunchDraft(destination, source)
@@ -221,13 +221,16 @@ describe('launch draft moves', () => {
     })
     const earlier = Promise.withResolvers<void>()
     const moved = Promise.withResolvers<void>()
-    const write = storage.write
+    const update = storage.update
+    let targetUpdates = 0
     let earlierWrite: Promise<void> | undefined
-    storage.write = (scope, draft) => {
-      const writing = (draft.text === 'Earlier destination' ? earlier.promise : moved.promise).then(
-        () => write(scope, draft)
-      )
-      if (draft.text === 'Earlier destination') {
+    storage.update = (scope, apply) => {
+      if (scope !== target) {
+        return update(scope, apply)
+      }
+      const first = targetUpdates++ === 0
+      const writing = (first ? earlier.promise : moved.promise).then(() => update(scope, apply))
+      if (first) {
         earlierWrite = writing
       }
       return writing
