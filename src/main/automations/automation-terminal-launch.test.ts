@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
-import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
+import { launchAutomationTerminalAgent } from './automation-terminal-launch'
+import { AutomationDispatchRefusedError } from './automation-launch-runner'
 
-function launch(deliverStartupFollowup: () => Promise<boolean>) {
-  const runtime = {
+function fakeRuntime(deliverStartupFollowup: () => Promise<boolean>) {
+  return {
     requireStore: () => ({ getSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }) }),
     resolveManagedTerminalWorkspaceTarget: vi.fn(async () => ({
       managedWorktree: { displayName: 'repo' },
@@ -20,7 +21,10 @@ function launch(deliverStartupFollowup: () => Promise<boolean>) {
     getPtyExecutionHostMetadata: vi.fn(() => ({ executionHostId: 'local' })),
     deliverStartupFollowup: vi.fn(deliverStartupFollowup)
   }
-  return launchHeadlessAutomationAgent(
+}
+
+function launch(runtime: ReturnType<typeof fakeRuntime>, reuseSession = false) {
+  return launchAutomationTerminalAgent(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing-workspace launch reads only these runtime members.
     runtime as never,
     {
@@ -30,7 +34,8 @@ function launch(deliverStartupFollowup: () => Promise<boolean>) {
         agentId: 'aider',
         prompt: 'fix the flaky test',
         workspaceMode: 'existing',
-        workspaceId: 'wt-1'
+        workspaceId: 'wt-1',
+        reuseSession
       } as never,
       run: { id: 'run-1', title: 'Nightly', scheduledFor: 1, trigger: 'scheduled' },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the repo is read.
@@ -53,7 +58,7 @@ describe('headless automation agent launch', () => {
   ])(
     'opens the terminal and reports the prompt undelivered when delivery %s',
     async (_, deliver, error) => {
-      const opened = await launch(deliver)
+      const opened = await launch(fakeRuntime(deliver))
 
       expect(opened).toMatchObject({
         terminalHandle: 'term-1',
@@ -62,6 +67,32 @@ describe('headless automation agent launch', () => {
         terminalPtyId: 'pty-1'
       })
       await expect(opened.delivery).resolves.toEqual({ error })
+    }
+  )
+
+  it.each([
+    ['resolves on a paired server', { hostId: 'runtime:env-1' }, null],
+    ['is gone', null, new Error('selector_not_found')]
+  ])(
+    'refuses, without launching, a reused-session run whose workspace %s',
+    async (_, workspace, resolveError) => {
+      const runtime = fakeRuntime(async () => true)
+      runtime.resolveManagedTerminalWorkspaceTarget.mockImplementation(async () => {
+        if (resolveError) {
+          throw resolveError
+        }
+        return {
+          managedWorktree: { displayName: 'repo', ...workspace },
+          scope: { folderWorkspace: null }
+        }
+      })
+
+      const failure = await launch(runtime, true).catch((error: unknown) => error)
+
+      expect(failure).toBeInstanceOf(AutomationDispatchRefusedError)
+      expect(failure).toMatchObject({ failure: { errorCode: 'targetUnavailable' } })
+      expect(runtime.launchAgentTerminal).not.toHaveBeenCalled()
+      expect(runtime.deliverStartupFollowup).not.toHaveBeenCalled()
     }
   )
 })

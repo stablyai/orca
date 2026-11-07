@@ -42,7 +42,9 @@ const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, () => Automati
   [AUTOMATION_ORPHAN_ISSUES.targetMissing]: () => automationRunFailure('targetMissing'),
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: () => automationRunFailure('targetReplaced'),
   [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: () =>
-    automationRunFailure('workspaceHostAmbiguous')
+    automationRunFailure('workspaceHostAmbiguous'),
+  [AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer]: () =>
+    automationRunFailure('targetUnavailable')
 }
 
 type AutomationRunTargetOptions = {

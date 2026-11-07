@@ -1,6 +1,7 @@
 import { automationTerminalLaunchInputs } from '../../shared/automation-launch-setup'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import { automationRunFailure } from '../../shared/automation-run-failure-copy'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type { AgentLaunchSurfaceExecution } from '../agent-launch/agent-launch-execution'
@@ -11,11 +12,9 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
-import {
-  AutomationRunLaunchError,
-  type HeadlessAutomationDispatchLaunch
-} from './headless-dispatch'
-import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
+import { AutomationDispatchRefusedError } from './automation-launch-runner'
+import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
 const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
@@ -27,11 +26,11 @@ type LaunchedTerminal = {
   ptyId?: string | null
 }
 
-export type HeadlessAutomationAgentLaunch = Omit<HeadlessAutomationDispatchLaunch, 'completion'> & {
+export type AutomationTerminalAgentLaunch = Omit<AutomationLaunch, 'completion'> & {
   terminalHandle: string
 }
 
-export async function launchHeadlessAutomationAgent(
+export async function launchAutomationTerminalAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
@@ -39,23 +38,14 @@ export async function launchHeadlessAutomationAgent(
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
   }
-): Promise<HeadlessAutomationAgentLaunch> {
+): Promise<AutomationTerminalAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
   const selectedTarget =
     automation.workspaceMode === 'existing'
-      ? await runtime.resolveManagedTerminalWorkspaceTarget(
-          `id:${requireWorkspaceId(automation)}`,
-          parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
-            ? undefined
-            : getRepoExecutionHostId(target.repo),
-          false
-        )
+      ? await resolveLocalExistingWorkspace(runtime, automation, target)
       : undefined
   const selectedWorkspace = selectedTarget?.managedWorktree
-  if (automation.workspaceMode === 'existing' && !selectedWorkspace) {
-    throw new Error('The target workspace is no longer available.')
-  }
   // The startup plan trims the prompt for every agent; a blank one launches the agent bare.
   const text = automation.prompt?.trim()
   if (automation.reuseSession && automation.workspaceMode === 'existing' && text) {
@@ -86,7 +76,7 @@ export async function launchHeadlessAutomationAgent(
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
-        const { startupPrompt: _prompt, ...create } = buildHeadlessAutomationWorktreeCreateArgs({
+        const { startupPrompt: _prompt, ...create } = buildAutomationWorktreeCreateArgs({
           automation,
           run,
           repo: target.repo
@@ -193,7 +183,7 @@ function runTargetOf(
   terminal: LaunchedTerminal,
   workspaceId: string,
   workspaceDisplayName: string | null
-): HeadlessAutomationAgentLaunch {
+): AutomationTerminalAgentLaunch {
   return {
     workspaceId,
     workspaceDisplayName,
@@ -215,7 +205,7 @@ async function sendToReusableSession(
   },
   workspaceDisplayName: string | null,
   physicalHostId: string
-): Promise<HeadlessAutomationAgentLaunch | null> {
+): Promise<AutomationTerminalAgentLaunch | null> {
   const { automation, text } = request
   const worktreeId = requireWorkspaceId(automation)
   const session = findReusableAutomationRun({
@@ -268,6 +258,31 @@ async function sendToReusableSession(
     terminalPaneKey: session.previous.terminalPaneKey,
     terminalPtyId: session.previous.terminalPtyId
   }
+}
+
+/** A missing workspace or one owned by a paired server is a typed skip, never a fresh local launch. */
+async function resolveLocalExistingWorkspace(
+  runtime: OrcaRuntimeService,
+  automation: Automation,
+  target: Extract<AutomationRunTargetResult, { ok: true }>
+) {
+  const unavailable = new AutomationDispatchRefusedError(automationRunFailure('targetUnavailable'))
+  const selected = await runtime
+    .resolveManagedTerminalWorkspaceTarget(
+      `id:${requireWorkspaceId(automation)}`,
+      parseWorkspaceKey(automation.workspaceId ?? '')?.type === 'folder'
+        ? undefined
+        : getRepoExecutionHostId(target.repo),
+      false
+    )
+    .catch((error: unknown) => {
+      throw error instanceof Error && error.message === 'selector_not_found' ? unavailable : error
+    })
+  const hostId = selected.scope.folderWorkspace?.executionHostId ?? selected.managedWorktree?.hostId
+  if (!selected.managedWorktree || parseExecutionHostId(hostId)?.kind === 'runtime') {
+    throw unavailable
+  }
+  return selected
 }
 
 /** Reject reused pane handles whose PTY no longer belongs to this run. */

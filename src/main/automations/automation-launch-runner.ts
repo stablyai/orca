@@ -8,11 +8,8 @@ import {
   didAutomationPrecheckPass,
   formatAutomationPrecheckFailure
 } from '../../shared/automation-precheck'
-import type {
-  HeadlessAutomationDispatcher,
-  HeadlessAutomationDispatchLaunch
-} from './headless-dispatch'
-import { AutomationRunLaunchError } from './headless-dispatch'
+import type { AutomationLauncher, AutomationLaunch } from './automation-launch'
+import { AutomationRunLaunchError } from './automation-launch'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import {
   automationRunFailure,
@@ -20,11 +17,11 @@ import {
 } from '../../shared/automation-run-failure-copy'
 import { parseWslDistroHold } from '../../shared/wsl-distro-stopped-hold'
 
-export type HeadlessAutomationDispatchContext = {
+export type AutomationLaunchContext = {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
-  dispatcher: HeadlessAutomationDispatcher
+  dispatcher: AutomationLauncher
   /** Write only while this dispatch still owns a dispatching run; throws AutomationDispatchCancelledError once the service or automation is gone. */
   transition: (result: Omit<AutomationDispatchResult, 'runId'>) => {
     applied: boolean
@@ -52,9 +49,7 @@ function heldForStoppedWslDistro(error: unknown): AutomationRunFailure | null {
   return hold ? automationRunFailure('wslDistroStopped', { distro: hold.distro }) : null
 }
 
-export async function runHeadlessAutomationDispatch(
-  ctx: HeadlessAutomationDispatchContext
-): Promise<AutomationRun> {
+export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise<AutomationRun> {
   const { automation, run, target } = ctx
   const precheckResult =
     run.trigger === 'scheduled' && automation.precheck ? await ctx.runPrecheck() : null
@@ -66,7 +61,7 @@ export async function runHeadlessAutomationDispatch(
       error: formatAutomationPrecheckFailure(precheckResult)
     }).run
   }
-  let launch: HeadlessAutomationDispatchLaunch
+  let launch: AutomationLaunch
   // The agent can finish before launch returns.
   const dispatchedAt = Date.now()
   try {
@@ -147,7 +142,7 @@ export async function runHeadlessAutomationDispatch(
   return updated.run
 }
 
-function launchRunTargetOf(launch: HeadlessAutomationDispatchLaunch) {
+function launchRunTargetOf(launch: AutomationLaunch) {
   return {
     sessionKind: launch.sessionKind ?? 'terminal',
     chatSessionId: launch.chatSessionId ?? null,
