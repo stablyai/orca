@@ -10,7 +10,10 @@ import {
 } from './native-chat-attachment-upload'
 import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
-import { nativeChatPendingAttachmentScope } from './native-chat-pending-attachment-cache'
+import {
+  nativeChatPendingAttachmentScope,
+  nativeChatPendingAttachmentSource
+} from './native-chat-pending-attachment-cache'
 import type {
   NativeChatAttachmentFocusOptions,
   NativeChatResolvedPathOptions
@@ -99,12 +102,13 @@ export async function attachNativeChatLocalAttachmentPaths(args: {
                 owner.kind === 'local' && owner.stagingScope
                   ? nativeChatPendingAttachmentScope(owner.stagingScope, chipId)
                   : null
+              const source = scope ? nativeChatPendingAttachmentSource(scope, chipId) : undefined
               const retained = isNativeChatImageAttachmentPath(path)
                 ? chips.resolve(chipId, path, undefined, completion)
                 : chips.attachReferences([{ id: chipId, path }], completion)
               if (retained && scope) {
                 retainedPaths.add(path)
-                stageNativeChatDraftFile(scope, path)
+                stageNativeChatDraftFile(scope, path, source)
               }
               attached = retained || attached
             }

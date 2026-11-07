@@ -1,3 +1,4 @@
+import { trimSettled } from './native-chat-image-row'
 import {
   currentDraftScope,
   captureLaunchDraftDestination,
@@ -26,8 +27,38 @@ const chipScopes = new Map<string, string>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
 
+export function captureNativeChatPendingAttachments() {
+  return new Map(
+    [...pendingCache].map(([scope, chips]) => [
+      scope,
+      {
+        chips,
+        owner: pendingOwners.get(scope)
+      }
+    ])
+  )
+}
+
+export function dropCapturedNativeChatPendingAttachments(
+  scope: string,
+  captured: readonly object[]
+): void {
+  const held = new Set(captured)
+  const current = pendingCache.get(scope) ?? EMPTY
+  const next = current.filter((chip) => !held.has(chip))
+  if (next.length !== current.length) {
+    writePending(scope, next)
+  }
+}
+
 export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
   return currentDraftScope(chipScopes.get(id) ?? scope)
+}
+
+export function nativeChatPendingAttachmentSource(scope: string, id: string) {
+  return nativeChatPendingAttachmentSnapshot(pendingDestination(scope, id)).find(
+    (chip) => chip.id === id && chip.pending
+  )
 }
 
 export function hasNativeChatPendingAttachment(id: string): boolean {
@@ -126,14 +157,6 @@ export function takeNativeChatPendingAttachment(
   return taken
 }
 
-/** A finished image stays in the queue only to keep its place behind a chip attached before it. */
-function trimSettled(
-  queue: readonly NativeChatComposerImageAttachment[]
-): readonly NativeChatComposerImageAttachment[] {
-  const waiting = queue.findIndex((chip) => chip.pending)
-  return waiting === -1 ? [] : queue.slice(waiting)
-}
-
 function heldAfter(
   scopeKey: string,
   queue: readonly NativeChatComposerImageAttachment[],
@@ -143,24 +166,7 @@ function heldAfter(
   return queue.slice(index + 1).find(({ id }) => held.has(id))?.id
 }
 
-/** Interleave pending chips by attachment order so completion cannot reorder thumbnails or numbers. */
-export function nativeChatImageRow<T extends { id: string }>(
-  images: readonly T[],
-  queue: readonly NativeChatComposerImageAttachment[]
-): (T | NativeChatComposerImageAttachment)[] {
-  const held = new Set(images.map(({ id }) => id))
-  const ahead = new Map<string, NativeChatComposerImageAttachment[]>()
-  let waiting: NativeChatComposerImageAttachment[] = []
-  for (const chip of queue) {
-    if (held.has(chip.id)) {
-      ahead.set(chip.id, waiting)
-      waiting = []
-    } else if (chip.pending) {
-      waiting.push(chip)
-    }
-  }
-  return [...images.flatMap((image) => [...(ahead.get(image.id) ?? []), image]), ...waiting]
-}
+export { nativeChatImageRow } from './native-chat-image-row'
 
 /** Move outstanding operations with their draft; completion resolves by chip identity after the source closes. */
 export function moveNativeChatPendingAttachments(from: string, to: string): void {
@@ -210,7 +216,10 @@ export function settleNativeChatPendingAttachment(
   appendToNativeChatComposerDraft(
     scopeKey,
     { images: [image], fromUser: true, ...(before ? { before } : {}) },
-    pendingOwners.get(scopeKey)
+    pendingOwners.get(scopeKey),
+    undefined,
+    false,
+    current[index]
   )
   writePending(scopeKey, trimSettled(current.map((chip) => (chip.id === id ? image : chip))))
   return true
@@ -236,24 +245,30 @@ export function appendNativeChatAttachmentsAfterPending(
 export function settleNativeChatPendingAttachmentReferences(
   scopeKey: string,
   references: { id: string; path: string }[],
-  insertAtCaret?: (paths: string[]) => void
+  insertAtCaret?: (paths: string[], sources?: readonly object[]) => void
 ): boolean {
   const originalScope = currentDraftScope(scopeKey)
   scopeKey = references.length ? pendingDestination(scopeKey, references[0].id) : scopeKey
   const owner = pendingOwners.get(scopeKey)
-  const paths = references.flatMap(({ id, path }) =>
-    takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []
-  )
+  const sources: object[] = []
+  const paths = references.flatMap(({ id, path }) => {
+    const source = takeNativeChatPendingAttachment(scopeKey, id)
+    if (!source) {
+      return []
+    }
+    sources.push(source)
+    return [path]
+  })
   if (paths.length === 0) {
     return false
   }
   if (insertAtCaret && scopeKey === originalScope) {
-    insertAtCaret(paths)
+    insertAtCaret(paths, sources)
   } else {
     insertNativeChatComposerDraftText(
       scopeKey,
       paths.map(formatNativeChatFileReference).join(' '),
-      { owner }
+      { owner, sources }
     )
   }
   return true
@@ -287,7 +302,8 @@ export function dropNativeChatPendingAttachmentsForTab(tabId: string): void {
 
 export function dropNativeChatPendingAttachmentsOwnedBy(owner: NativeChatComposerDraftOwner): void {
   dropNativeChatPendingAttachmentsWhere(
-    (_scopeKey, pendingOwner) =>
+    (scopeKey, pendingOwner) =>
+      structuredAgentSessionIdOfDraftScope(scopeKey) === null &&
       pendingOwner?.workspaceId === owner.workspaceId &&
       pendingOwner.executionHostId === owner.executionHostId
   )

@@ -213,12 +213,14 @@ export function useNativeChatComposerAttachments({
             options?.insertReferences !== undefined
               ? (options.insertReferences ?? undefined)
               : mountedRef.current && !disabledRef.current && !isComposing()
-                ? (paths) =>
+                ? (paths, returnSources) =>
                     // The paste re-checked the owner just before settling a server-owned image.
                     attachResolvedPaths(
                       paths,
                       null,
-                      serverOwned ? { ...options, targetOwnerIsCurrent: () => true } : options
+                      serverOwned
+                        ? { ...options, returnSources, targetOwnerIsCurrent: () => true }
+                        : { ...options, returnSources }
                     )
                 : undefined
           )

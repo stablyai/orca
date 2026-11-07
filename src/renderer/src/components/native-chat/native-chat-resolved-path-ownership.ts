@@ -8,11 +8,14 @@ import type {
 export type NativeChatAttachmentFocusOptions = { focus?: boolean }
 
 export type NativeChatResolvedPathOperation = {
-  apply: (insertReferences: ((paths: string[]) => void) | null) => boolean
+  apply: (
+    insertReferences: ((paths: string[], sources?: readonly object[]) => void) | null
+  ) => boolean
   cancel: () => void
 }
 
 export type NativeChatResolvedPathOptions = NativeChatAttachmentFocusOptions & {
+  returnSources?: readonly object[]
   operation?: NativeChatResolvedPathOperation
   /** Revalidates the destination without granting workspace-file provenance. */
   destinationIsCurrent?: () => boolean

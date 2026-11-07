@@ -21,7 +21,7 @@ export type NativeChatComposerDraft = {
   readonly images: readonly NativeChatComposerDraftImage[]
 }
 
-/** The workspace whose chat the draft was written in; its removal deletes the draft. */
+/** Original provenance; materialized conversation placement is resolved at removal. */
 export type NativeChatComposerDraftOwner = {
   readonly workspaceId: string
   readonly executionHostId: ExecutionHostId
@@ -41,9 +41,11 @@ export type NativeChatComposerDraftStorage = {
   /** Reads the stored record and writes what `apply` makes of it, as one change. */
   update(
     scopeKey: string,
-    apply: (stored: unknown) => StoredNativeChatComposerDraft | null
+    apply: (stored: unknown) => StoredNativeChatComposerDraft | null | typeof KEEP_NATIVE_CHAT_DRAFT
   ): Promise<void>
 }
+
+export const KEEP_NATIVE_CHAT_DRAFT = Symbol('keep-native-chat-draft')
 
 /** Use run-local storage without IndexedDB and as the controllable test backend. */
 export function createMemoryNativeChatComposerDraftStorage(): NativeChatComposerDraftStorage & {
@@ -71,12 +73,17 @@ export function createMemoryNativeChatComposerDraftStorage(): NativeChatComposer
     },
     update: (
       scopeKey: string,
-      apply: (stored: unknown) => StoredNativeChatComposerDraft | null
+      apply: (
+        stored: unknown
+      ) => StoredNativeChatComposerDraft | null | typeof KEEP_NATIVE_CHAT_DRAFT
     ) => {
       if (storage.refuseWrites) {
         return Promise.reject(new DOMException('refused', 'QuotaExceededError'))
       }
       const next = apply(drafts.get(scopeKey))
+      if (next === KEEP_NATIVE_CHAT_DRAFT) {
+        return Promise.resolve()
+      }
       if (next) {
         drafts.set(scopeKey, next)
       } else {
@@ -130,7 +137,9 @@ function parseImage(value: unknown): NativeChatComposerDraftImage | null {
   return { id, path, ...(typeof connectionId === 'string' ? { connectionId } : {}) }
 }
 
-function parseOwner(value: unknown): NativeChatComposerDraftOwner | undefined {
+export function parseNativeChatComposerDraftOwner(
+  value: unknown
+): NativeChatComposerDraftOwner | undefined {
   if (!isRecord(value)) {
     return undefined
   }
@@ -152,19 +161,22 @@ export function parseStoredNativeChatComposerDraft(
   if (typeof text !== 'string' || typeof savedAt !== 'number' || !Array.isArray(images)) {
     return null
   }
+  const referenced = new Set(
+    [...text.matchAll(/\[Pasted text\]\(orca-paste:([0-9a-f-]{36})\)/g)].map((match) => match[1])
+  )
   const pastedTextFiles = isRecord(value.pastedTextFiles)
     ? Object.fromEntries(
         Object.entries(value.pastedTextFiles).flatMap(([id, path]): [string, string][] =>
           /^[0-9a-f-]{36}$/.test(id) &&
           typeof path === 'string' &&
           path !== '' &&
-          text.includes(`[Pasted text](orca-paste:${id})`)
+          referenced.has(id)
             ? [[id, path]]
             : []
         )
       )
     : undefined
-  const owner = parseOwner(value.owner)
+  const owner = parseNativeChatComposerDraftOwner(value.owner)
   return {
     text,
     ...(pastedTextFiles ? { pastedTextFiles } : {}),

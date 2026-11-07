@@ -14,7 +14,7 @@ export function useNativeChatTypedInsertion(args: {
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
 }): {
-  insertTypedText: (text: string) => boolean
+  insertTypedText: (text: string, sources?: readonly object[]) => boolean
   appendText: (text: string) => void
   acceptsText: () => boolean
   insertPastedText: (text: string) => boolean
@@ -43,10 +43,18 @@ export function useNativeChatTypedInsertion(args: {
   )
 
   const insertTypedText = useCallback(
-    (text: string): boolean => {
+    (text: string, sources?: readonly object[]): boolean => {
       const textarea = usableInput()
       if (!textarea) {
         return false
+      }
+      if (sources) {
+        if (!textarea.insertText || isComposing()) {
+          return false
+        }
+        textarea.insertText(text, sources)
+        textarea.focus()
+        return true
       }
       const { value } = textarea
       const selectionStart = textarea.selectionStart ?? value.length
@@ -58,7 +66,7 @@ export function useNativeChatTypedInsertion(args: {
       )
       return true
     },
-    [showDraft, usableInput]
+    [isComposing, showDraft, usableInput]
   )
 
   const appendText = useCallback(

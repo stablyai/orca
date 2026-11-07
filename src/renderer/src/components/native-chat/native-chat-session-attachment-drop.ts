@@ -12,7 +12,7 @@ import {
 } from './native-chat-attachment-upload'
 
 export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOptions & {
-  insertReferences?: ((paths: string[]) => void) | null
+  insertReferences?: ((paths: string[], sources?: readonly object[]) => void) | null
 }
 
 export type NativeChatPendingAttachmentChips = {

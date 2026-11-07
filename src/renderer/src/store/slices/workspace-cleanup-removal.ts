@@ -1,3 +1,4 @@
+import { createChatDraftRemovalReceipt } from './worktrees/teardown/chat-draft-removal-receipt'
 import type { AppState } from '../types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -118,51 +119,60 @@ export async function removeWorkspaceCleanupCandidates(
     }
   }
 
-  // Why: nested workspaces can belong to different repos; parent removal must
-  // not race child cleanup hooks, PTY teardown, or metadata deletion.
-  for (const { target, candidate, sameIdSurvivingHostId, ignoreWorkspaceCleanupScanSurvivors } of [
-    ...targetsToRemove
-  ].sort((a, b) => b.candidate.path.length - a.candidate.path.length)) {
-    const result = await get().removeWorktree(
-      { id: candidate.worktreeId, executionHostId: target.executionHostId },
-      shouldForceWorkspaceCleanupRemoval(candidate),
-      // Why: cleanup reports outcomes in its own summary toasts; per-row
-      // preserved-branch warnings would stack one toast per removed row.
-      {
-        suppressPreservedBranchToast: true,
-        assertBeforeDispatch: () =>
-          assertWorkspaceCleanupAgentStopApproved(get(), candidate, target.approvedCandidate),
-        ...(sameIdSurvivingHostId ? { sameIdSurvivingHostId } : {}),
-        ...(ignoreWorkspaceCleanupScanSurvivors
-          ? { ignoreWorkspaceCleanupScanSurvivors: true }
-          : {}),
-        ...(options?.snapshotPruneBatchId
-          ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
-          : {})
-      }
-    )
-    if (result.ok) {
-      removedIds.push(candidate.worktreeId)
-      removedIdentities.add(getWorkspaceCleanupCandidateIdentity(candidate))
-      if (result.preservedBranch) {
-        preservedBranches.push({
-          worktreeId: candidate.worktreeId,
-          branchName: result.preservedBranch.branchName,
-          expectedHead: result.preservedBranch.head,
-          ...(result.preservedBranch.hostId ? { hostId: result.preservedBranch.hostId } : {}),
-          ...(result.preservedBranch.runtimeEnvironmentId
-            ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
+  const draftReceipt = createChatDraftRemovalReceipt(get)
+  try {
+    // Why: nested workspaces can belong to different repos; parent removal must
+    // not race child cleanup hooks, PTY teardown, or metadata deletion.
+    for (const {
+      target,
+      candidate,
+      sameIdSurvivingHostId,
+      ignoreWorkspaceCleanupScanSurvivors
+    } of [...targetsToRemove].sort((a, b) => b.candidate.path.length - a.candidate.path.length)) {
+      const result = await get().removeWorktree(
+        { id: candidate.worktreeId, executionHostId: target.executionHostId },
+        shouldForceWorkspaceCleanupRemoval(candidate),
+        // Why: cleanup reports outcomes in its own summary toasts; per-row
+        // preserved-branch warnings would stack one toast per removed row.
+        {
+          suppressPreservedBranchToast: true,
+          chatDraftRemovalReceipt: draftReceipt,
+          assertBeforeDispatch: () =>
+            assertWorkspaceCleanupAgentStopApproved(get(), candidate, target.approvedCandidate),
+          ...(sameIdSurvivingHostId ? { sameIdSurvivingHostId } : {}),
+          ...(ignoreWorkspaceCleanupScanSurvivors
+            ? { ignoreWorkspaceCleanupScanSurvivors: true }
+            : {}),
+          ...(options?.snapshotPruneBatchId
+            ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
             : {})
+        }
+      )
+      if (result.ok) {
+        removedIds.push(candidate.worktreeId)
+        removedIdentities.add(getWorkspaceCleanupCandidateIdentity(candidate))
+        if (result.preservedBranch) {
+          preservedBranches.push({
+            worktreeId: candidate.worktreeId,
+            branchName: result.preservedBranch.branchName,
+            expectedHead: result.preservedBranch.head,
+            ...(result.preservedBranch.hostId ? { hostId: result.preservedBranch.hostId } : {}),
+            ...(result.preservedBranch.runtimeEnvironmentId
+              ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
+              : {})
+          })
+        }
+      } else {
+        failures.push({
+          worktreeId: candidate.worktreeId,
+          ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),
+          displayName: candidate.displayName,
+          message: result.error
         })
       }
-    } else {
-      failures.push({
-        worktreeId: candidate.worktreeId,
-        ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),
-        displayName: candidate.displayName,
-        message: result.error
-      })
     }
+  } finally {
+    await draftReceipt.finish()
   }
 
   if (removedIds.length > 0) {

@@ -1,3 +1,4 @@
+import type { ChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
@@ -27,6 +28,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   hostId: ExecutionHostId | undefined
   requiredExecutionHostId: ExecutionHostId | null
   beforeRemoval: WorktreeStateBeforeRemoval
+  chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
   /** The catalog the host's removal produced, when the host stamps it. */
   catalogVersion?: WorktreeCatalogVersion
   confirmedDiscards?: ConfirmedUnsavedDiscards
@@ -100,7 +102,11 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     args.confirmedDiscards
   )
   // Purge destroyed-target projects after row removal so selection clears with the row, not earlier.
-  await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
+  await purgeOrphanedRuntimeSshProjects(
+    get,
+    runtimeCleanup.destroyedSshTargetIds,
+    args.chatDraftRemovalReceipt
+  )
   get().removeWorkspaceSpaceWorktrees?.(
     hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]
   )

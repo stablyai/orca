@@ -14,13 +14,18 @@ import type {
 export function insertNativeChatComposerDraftText(
   scope: string,
   text: string,
-  options?: { paste?: boolean; owner?: NativeChatComposerDraftOwner; draftOnly?: boolean }
+  options?: {
+    paste?: boolean
+    owner?: NativeChatComposerDraftOwner
+    draftOnly?: boolean
+    sources?: readonly object[]
+  }
 ): void {
   const mounted = options?.draftOnly ? null : nativeChatComposerScopeDestination(scope)
   const insertMounted = options?.paste
     ? (mounted?.insertPastedText ?? mounted?.insertTypedText)
     : mounted?.insertTypedText
-  if (!mounted?.isComposing?.() && insertMounted?.(text)) {
+  if (!mounted?.isComposing?.() && insertMounted?.(text, options?.sources)) {
     return
   }
   const insert = <T extends NativeChatComposerDraft>(draft: T): T => {
@@ -33,6 +38,14 @@ export function insertNativeChatComposerDraftText(
     }
   }
   const before = readNativeChatComposerDraft(scope)
-  updateNativeChatComposerDraft(scope, insert(before), 'immediate', insert)
+  updateNativeChatComposerDraft(
+    scope,
+    insert(before),
+    'immediate',
+    insert,
+    undefined,
+    undefined,
+    options?.sources
+  )
   notifyDraftAppend(scope, insert, before)
 }

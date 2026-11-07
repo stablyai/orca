@@ -171,7 +171,7 @@ export type NativeChatComposerHandle = {
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
-  insertTypedText: (text: string) => boolean
+  insertTypedText: (text: string, sources?: readonly object[]) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean

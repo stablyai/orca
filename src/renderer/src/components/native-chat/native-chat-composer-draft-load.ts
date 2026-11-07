@@ -18,6 +18,7 @@ import {
 } from './native-chat-composer-draft-persistence'
 import {
   replayNativeChatComposerDraftJournal,
+  nativeChatComposerDraftJournalReplayKey,
   snapshotNativeChatComposerDraftJournal,
   type NativeChatComposerDraftJournalSnapshot
 } from './native-chat-composer-draft-journal'
@@ -27,6 +28,11 @@ import {
   removeLegacyLocalStorageNativeChatComposerDrafts,
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
+import {
+  beginNativeChatDraftLoadAttempt,
+  finishNativeChatDraftLoadAttempt,
+  type NativeChatDraftLoadAttempt
+} from './native-chat-composer-draft-load-attempt'
 
 /** Pre-hydration appends replay over loaded drafts; ordinary edits replace them. */
 export type DraftAppend = (draft: StoredNativeChatComposerDraft) => StoredNativeChatComposerDraft
@@ -37,6 +43,8 @@ export type AppendBeforeLoad = {
   readonly sequence: number
   readonly append: DraftAppend
   committed: boolean
+  retired?: boolean
+  applied?: { input: unknown; output: StoredNativeChatComposerDraft | null }
 }
 
 export type LoadBookkeeping = {
@@ -49,6 +57,7 @@ export type LoadBookkeeping = {
     scopeKey: string,
     draft: StoredNativeChatComposerDraft
   ) => boolean)[]
+  attempt: NativeChatDraftLoadAttempt | null
 }
 
 // Bound database-open retries; after exhaustion retain memory changes and expose refused saves.
@@ -65,7 +74,7 @@ function withAppends(
   readAtSequence: number
 ): DraftLoadResult {
   const missing = (load.appendsBeforeLoad.get(scopeKey) ?? []).filter(
-    (entry) => !entry.committed || entry.sequence > readAtSequence
+    (entry) => !entry.retired && (!entry.committed || entry.sequence > readAtSequence)
   )
   if (missing.length === 0) {
     return { draft: loaded, changed: false }
@@ -74,6 +83,7 @@ function withAppends(
   return {
     draft: { ...merged, savedAt: nextSavedAt() },
     changed: true,
+    appends: missing,
     position: nativeChatDraftPositions.get(merged)
   }
 }
@@ -82,25 +92,47 @@ type DraftLoadResult = {
   draft: StoredNativeChatComposerDraft
   changed: boolean
   position?: NativeChatDraftPosition
+  appends?: readonly AppendBeforeLoad[]
 }
 
 function applyLoaded(
   loaded: ReadonlyMap<string, unknown>,
   readAtSequence: number,
-  journal: NativeChatComposerDraftJournalSnapshot
+  journal: NativeChatComposerDraftJournalSnapshot,
+  attempt: NativeChatDraftLoadAttempt
 ): void {
   const drafts = new Map<string, StoredNativeChatComposerDraft | null>()
   for (const [scopeKey, value] of loaded) {
     if (!isNativeChatSetupDraft(scopeKey)) {
-      drafts.set(scopeKey, parseStoredNativeChatComposerDraft(value))
+      const draft = parseStoredNativeChatComposerDraft(value)
+      if (
+        !draft ||
+        ![...attempt.exclusions].some((selection) =>
+          selection.values.get(scopeKey)?.has(JSON.stringify(draft))
+        )
+      ) {
+        drafts.set(scopeKey, draft)
+      }
     }
   }
-  for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, journal)) {
+  const included = journal.filter(
+    (entry) =>
+      ![...attempt.exclusions].some((selection) =>
+        selection.journal.has(nativeChatComposerDraftJournalReplayKey(entry))
+      )
+  )
+  const journalInputs = new Map<string, Set<string>>()
+  for (const entry of included) {
+    const inputs = journalInputs.get(entry.scopeKey) ?? new Set<string>()
+    inputs.add(nativeChatComposerDraftJournalReplayKey(entry))
+    journalInputs.set(entry.scopeKey, inputs)
+  }
+  for (const scopeKey of replayNativeChatComposerDraftJournal(drafts, included)) {
     dirtyScopes.add(scopeKey)
   }
   for (const [scopeKey, appends] of load.appendsBeforeLoad) {
     // Appended with nothing saved before: an empty draft is what the load would have read.
-    if (!drafts.has(scopeKey) && appends.some((entry) => !entry.committed)) {
+    if (!drafts.has(scopeKey) && appends.some((entry) => !entry.retired && !entry.committed)) {
       drafts.set(scopeKey, { text: '', images: [], savedAt: 0 })
     }
   }
@@ -108,12 +140,26 @@ function applyLoaded(
     if (load.editedBeforeLoad.has(scopeKey)) {
       continue
     }
+    if (
+      stored &&
+      [...attempt.exclusions].some((selection) =>
+        selection.values.get(scopeKey)?.has(JSON.stringify(stored))
+      )
+    ) {
+      dirtyScopes.delete(scopeKey)
+      continue
+    }
     if (!stored || load.deletionsBeforeLoad.some((matches) => matches(scopeKey, stored))) {
       // An unreadable record, a journaled removal, or one deleted here while loading.
       dirtyScopes.add(scopeKey)
       continue
     }
-    const { draft, changed, position } = withAppends(scopeKey, stored, readAtSequence)
+    const { draft, changed, position, appends } = withAppends(scopeKey, stored, readAtSequence)
+    attempt.installed.set(draft, {
+      input: loaded.get(scopeKey),
+      journal: journalInputs.get(scopeKey) ?? new Set(),
+      appends: appends ?? []
+    })
     reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
     installNativeChatDraftRecord(
       scopeKey,
@@ -129,6 +175,7 @@ function applyLoaded(
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+  attempt.exclusions.clear()
   flushNativeChatComposerDrafts()
 }
 
@@ -163,7 +210,21 @@ export function hydrateNativeChatComposerDrafts(): Promise<void> {
     const journal = snapshotNativeChatComposerDraftJournal().filter(
       (entry) => !isNativeChatSetupDraft(entry.scopeKey)
     )
-    applyLoaded(await nativeChatComposerDraftStorage().loadAll(), readAtSequence, journal)
+    const attempt = beginNativeChatDraftLoadAttempt()
+    load.attempt = attempt
+    try {
+      applyLoaded(
+        await nativeChatComposerDraftStorage().loadAll(),
+        readAtSequence,
+        journal,
+        attempt
+      )
+    } finally {
+      if (load.attempt === attempt) {
+        load.attempt = null
+      }
+      finishNativeChatDraftLoadAttempt(attempt)
+    }
   })().catch(retryLater)
   return hydration
 }

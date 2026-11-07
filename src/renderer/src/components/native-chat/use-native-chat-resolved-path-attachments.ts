@@ -32,7 +32,10 @@ type Args = {
   mountedRef: RefObject<boolean>
   noteAttachmentTargetBlocked: () => void
   setCaret: (caret: number) => void
-  setDraft: (updater: (previous: string) => string) => void
+  setDraft: (
+    updater: (previous: string) => string,
+    options?: { sources?: readonly object[] }
+  ) => void
   setNotice: (notice: string | null) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
 }
@@ -74,23 +77,26 @@ export function useNativeChatResolvedPathAttachments({
   }, [disabled])
 
   const insertFileReferences = useCallback(
-    (paths: string[]) => {
+    (paths: string[], sources?: readonly object[]) => {
       if (paths.length === 0) {
         return
       }
       const input = textareaRef.current
       if (input?.insertFileReferences) {
-        input.insertFileReferences(paths)
+        input.insertFileReferences(paths, sources)
         return
       }
       const insertion = `${paths.map(formatNativeChatFileReference).join(' ')} `
       const caretAtInsert = input?.selectionStart ?? caret
-      setDraft((prev) => {
-        const before = prev.slice(0, caretAtInsert)
-        const after = prev.slice(caretAtInsert)
-        setCaret(before.length + insertion.length)
-        return before + insertion + after
-      })
+      setDraft(
+        (prev) => {
+          const before = prev.slice(0, caretAtInsert)
+          const after = prev.slice(caretAtInsert)
+          setCaret(before.length + insertion.length)
+          return before + insertion + after
+        },
+        { sources }
+      )
     },
     [caret, setCaret, setDraft, textareaRef]
   )
@@ -137,6 +143,7 @@ export function useNativeChatResolvedPathAttachments({
           paths.some(({ targetOwnerIsCurrent }) => !targetOwnerIsCurrent) &&
           attachmentTargetBlocked(false)
         const filePaths: string[] = []
+        const fileSources: object[] = []
         let attached = false
         for (const batch of current) {
           const attachable = batch.paths.filter(({ targetOwnerIsCurrent }) =>
@@ -147,20 +154,30 @@ export function useNativeChatResolvedPathAttachments({
           }
           if (batch.operation) {
             attached =
-              batch.operation.apply(intoScope ? null : (paths) => filePaths.push(...paths)) ||
-              attached
+              batch.operation.apply(
+                intoScope
+                  ? null
+                  : (paths, sources) => {
+                      filePaths.push(...paths)
+                      fileSources.push(...(sources ?? [{}]))
+                    }
+              ) || attached
           } else {
             const images = attachable.filter(
               ({ path }) => acceptsImages && isNativeChatImageAttachmentPath(path)
             )
             appendImageAttachments(images.map(({ path, connectionId }) => ({ path, connectionId })))
+            const references = attachable.filter((path) => !images.includes(path))
+            for (const sources of new Set(references.map((path) => path.returnSources))) {
+              fileSources.push(...(sources ?? [{}]))
+            }
             filePaths.push(
               ...attachable.filter((path) => !images.includes(path)).map(({ path }) => path)
             )
             attached = true
           }
         }
-        insertFileReferences(filePaths)
+        insertFileReferences(filePaths, fileSources)
         if (!intoScope) {
           if (ownedBlocked || clientLocalBlocked) {
             noteAttachmentTargetBlocked()

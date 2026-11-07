@@ -17,7 +17,10 @@ export type UseNativeChatComposerAttachmentsArgs = {
   resolveTarget: () => NativeChatResolvedTarget | null
   textareaRef: RefObject<NativeChatComposerInput | null>
   setCaret: (caret: number) => void
-  setDraft: (updater: (previous: string) => string) => void
+  setDraft: (
+    updater: (previous: string) => string,
+    options?: { sources?: readonly object[] }
+  ) => void
   setNotice: (notice: string | null) => void
 }
 

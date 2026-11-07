@@ -1,3 +1,4 @@
+import type { ChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
 import {
   getRepoExecutionHostId,
   toSshExecutionHostId,
@@ -8,7 +9,8 @@ import type { AppState } from '../../../types'
 // Why: an SSH per-workspace-env project's host is the runtime-owned SSH target; once that runtime is destroyed, remove the project or it lingers as a dead, never-connectable one.
 export async function purgeOrphanedRuntimeSshProjects(
   get: () => AppState,
-  destroyedSshTargetIds: string[]
+  destroyedSshTargetIds: string[],
+  chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
 ): Promise<void> {
   if (destroyedSshTargetIds.length === 0) {
     return
@@ -25,7 +27,7 @@ export async function purgeOrphanedRuntimeSshProjects(
   const purgedRepoIds = new Set<string>()
   for (const target of orphanedSetups) {
     try {
-      const result = await get().deleteProjectHostSetup(target)
+      const result = await get().deleteProjectHostSetup(target, chatDraftRemovalReceipt)
       if (result?.repo) {
         purgedRepoIds.add(result.repo.id)
       }
@@ -41,7 +43,8 @@ export async function purgeOrphanedRuntimeSshProjects(
     try {
       await get().removeProject(repo.id, {
         hostId: getRepoExecutionHostId(repo),
-        automaticCleanup: true
+        automaticCleanup: true,
+        chatDraftRemovalReceipt
       })
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env repo:', error)

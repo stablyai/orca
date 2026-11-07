@@ -35,6 +35,9 @@ export function runWorktreeDeleteWithToast(
   const removeWorktree = useAppStore.getState().removeWorktree
 
   const removeOptions = {
+    ...(options.chatDraftRemovalReceipt
+      ? { chatDraftRemovalReceipt: options.chatDraftRemovalReceipt }
+      : {}),
     ...(options.suppressPreservedBranchToast ? { suppressPreservedBranchToast: true } : {}),
     ...(options.snapshotPruneBatchId ? { snapshotPruneBatchId: options.snapshotPruneBatchId } : {}),
     ...(options.confirmedDiscards ? { confirmedDiscards: options.confirmedDiscards } : {}),
