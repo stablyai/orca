@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bell,
   Globe,
   Info,
@@ -42,6 +43,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       label: translate('settings.menuItems.voice', 'Voice'),
       icon: Mic,
       onPress: () => push('/voice-settings')
+    },
+    {
+      id: 'statsUsage',
+      label: translate('settings.menuItems.statsUsage', 'Stats & Usage'),
+      icon: BarChart3,
+      onPress: () => push('/stats-usage')
     },
     {
       id: 'notifications',

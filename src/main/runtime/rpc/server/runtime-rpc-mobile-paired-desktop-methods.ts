@@ -36,6 +36,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'runtime.clientEvents.unsubscribe',
   'diagnostics.memory',
   'stats.summary',
+  // Stats & Usage aggregates are built from this Mac's transcripts, so only it can answer.
+  'usage.snapshot',
   'ui.get',
   'ui.recordFeatureInteraction',
   'ui.set',

@@ -59,6 +59,7 @@
       "chatUi": "Chat UI",
       "browser": "Browser",
       "voice": "Voice",
+      "statsUsage": "Stats & Usage",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
       "about": "About"
@@ -4712,6 +4713,48 @@
           }
         }
       }
+    }
+  },
+  "statsUsage": {
+    "title": "Stats & Usage",
+    "usageHeading": "Usage",
+    "refresh": "Refresh usage",
+    "connectDesktop": "Connect to a desktop to see usage.",
+    "updateDesktop": "Update Orca on your computer to see usage",
+    "loadFailed": "Could not load usage. Tap refresh to retry.",
+    "trackingOff": "Usage tracking is off. Turn it on in the desktop's Settings → Stats & Usage.",
+    "providerTrackingOff": "{{provider}} tracking is off. Turn it on in the desktop's Settings → Stats & Usage.",
+    "scanning": "Scanning {{provider}} sessions…",
+    "noUsageYet": "No {{provider}} usage found yet.",
+    "noActivityInRange": "No activity in this range.",
+    "dailyTokens": "Daily tokens",
+    "tokenMix": "Token mix",
+    "mixInput": "Input {{tokens}}",
+    "mixOutput": "Output {{tokens}}",
+    "mixCache": "Cache {{tokens}}",
+    "byAgent": "By agent",
+    "byModel": "By model",
+    "byProject": "By project",
+    "recentSessions": "Recent sessions",
+    "unknownProject": "Unknown project",
+    "off": "Off",
+    "tabs": {
+      "overview": "All agents"
+    },
+    "ranges": {
+      "all": "All"
+    },
+    "scopes": {
+      "orca": "Orca only",
+      "all": "All sessions"
+    },
+    "metrics": {
+      "tokens": "Tokens",
+      "cost": "Est. cost",
+      "sessions": "Sessions",
+      "activeDays": "Active days",
+      "turns": "Turns",
+      "events": "Events"
     }
   }
 }
