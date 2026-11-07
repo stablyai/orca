@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+  # The relay edge is a Wrangler project with its own npm lockfile; it is not a workspace member.
+  - '!apps/relay-edge'
 
 minimumReleaseAge: 4320
 engineStrict: false
