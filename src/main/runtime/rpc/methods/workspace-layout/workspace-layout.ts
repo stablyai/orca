@@ -1,5 +1,5 @@
-import { withoutGitGraph } from '../../../../shared/workspace-layout/workspace-layout-client-visibility'
-import { readsGitGraph, createGitGraphFrameProjection } from '../git-graph-layout-projection'
+import { withoutGitGraph } from '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { readsGitGraph, createGitGraphFrameProjection } from '../../git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
