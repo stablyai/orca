@@ -12,6 +12,12 @@ import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
+import { MAILBOX_POINTER_WRITE_ATTEMPTED } from '../../db/messages/mailbox-pointer-enter-state'
+import {
+  REFUSED_PROMPT_RETRY_MS,
+  submitPointerThroughChannel,
+  type AgentPromptChannel
+} from './mailbox-pointer-channel-submit'
 import {
   submitOrchestrationMailboxPointer,
   type OrchestrationMailboxPointerSubmitTarget
@@ -94,16 +100,55 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
   }
+  // Nothing has reached the agent yet: release the reservation and retry after a pause.
+  const releaseBeforeHandoff = (): void => {
+    try {
+      args.deps
+        .getDb()
+        ?.releaseMailboxPointerEnter(flight.stagedMessageIds, reservationTarget, [
+          MAILBOX_POINTER_WRITE_ATTEMPTED
+        ])
+    } catch {
+      // Runtime teardown can close the DB; recovery revalidates the reservation.
+    }
+    if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
+      setTimeout(() => args.redrive(args.mailboxHandle, true), REFUSED_PROMPT_RETRY_MS).unref?.()
+    }
+    args.settle(ptyId, flight)
+  }
+  let pointer: string
+  let channel: AgentPromptChannel | null
   try {
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminal.handle),
-        args.heldDeliveryId
-      )
+    pointer = formatMessagePointer(
+      args.messages.length,
+      args.mailboxHandle,
+      args.deps.getCliCommand(expectedTarget.terminal.handle),
+      args.heldDeliveryId
     )
+    channel = args.deps.resolvePromptChannel?.(args.terminal) ?? null
+  } catch {
+    releaseBeforeHandoff()
+    return
+  }
+  try {
+    if (channel) {
+      submitPointerThroughChannel({
+        channel,
+        text: pointer,
+        ptyId,
+        processIncarnation: expectedTarget.processIncarnation,
+        mailboxHandle: args.mailboxHandle,
+        newestSequence: args.newestSequence,
+        flight,
+        state: args.state,
+        getDb: args.deps.getDb,
+        settle: args.settle,
+        redrive: args.redrive
+      })
+      return
+    }
+    flight.pointerWriteStartedAt = Date.now()
+    const writeResult = args.deps.writePty(ptyId, pointer)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
@@ -144,6 +189,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
+          readLastDrivingInputAt: args.deps.readLastDrivingInputAt,
           writePty: args.deps.writePty,
           settle: args.settle,
           redrive: args.redrive
