@@ -11,8 +11,8 @@ import {
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../../../../shared/worktree/id'
 import type { OrchestrationPartyLocationResult } from '../../../../../../shared/orchestration-caller-status'
 import type { AppState } from '../../../types'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
-import { callHostRoute } from '@/runtime/host-route-call'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
+import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { captureHostIdentityFence, isHostIdentityContinued } from '@/store/host-catalog-fencing'
 import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import {

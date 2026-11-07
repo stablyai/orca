@@ -30,7 +30,7 @@ import {
   NOW,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import type { Tab } from '../../src/shared/tab-types'
 import { useAppStore } from '../../src/renderer/src/store'
 import { retireMovedSessionPlacement } from '../../src/renderer/src/lib/retire-moved-structured-session-placement'

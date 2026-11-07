@@ -48,7 +48,7 @@ import { settleNativeChatPastedText } from './native-chat-composer-pasted-text-r
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 
 const { locate } = vi.hoisted(() => ({ locate: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: locate
 }))

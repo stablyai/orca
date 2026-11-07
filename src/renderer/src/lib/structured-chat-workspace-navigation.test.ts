@@ -17,9 +17,12 @@ import {
 import { registerWorktreeActivationReset } from './workspace/activation/worktree-activation.test-fixture'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  callRuntimeRpc: mocks.call,
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({

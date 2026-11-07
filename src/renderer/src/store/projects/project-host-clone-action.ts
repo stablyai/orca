@@ -7,7 +7,7 @@ import {
   assertProjectHostSetupMutationRuntimeCapabilities,
   getProjectSetupRuntimeTarget
 } from './project-host-routing'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { toastProjectAddFailure } from './project-add-failure-toast'
 
 export function createProjectHostCloneAction(

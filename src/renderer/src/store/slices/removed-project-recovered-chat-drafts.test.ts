@@ -31,7 +31,7 @@ const OTHER = 'agent-session:neighbour-37190'
 const FOREIGN = 'agent-session:other-host-37190'
 const removeForHost = vi.fn().mockResolvedValue(undefined)
 const { locate } = vi.hoisted(() => ({ locate: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: locate
 }))
