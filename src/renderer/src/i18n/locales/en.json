@@ -76,6 +76,14 @@
       "confirm": "Adjust filters and reveal",
       "cancel": "Keep filters"
     },
+    "relayedHosts": {
+      "label": "Servers your paired servers manage",
+      "title": "On {{owner}}'s servers",
+      "unavailable": "Couldn't read {{owner}}'s servers",
+      "workspacesUnknown": "Workspaces not loaded yet",
+      "noWorkspaces": "No workspaces",
+      "readOnly": "Opening these from this computer is coming in a later update; use the server or your phone."
+    },
     "wslMoved": {
       "movedToHost": "Moved to {{distro}} host",
       "useHere": "Use on this computer again",

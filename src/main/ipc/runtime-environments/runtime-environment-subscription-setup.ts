@@ -12,6 +12,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RuntimeEnvironmentStoreError } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import { isRelayedRuntimeEnvironmentId } from '../../../shared/relayed-runtime-environment'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getAcceptedRuntimeEnvironmentCapabilityOutcome } from './runtime-environment-capability-evidence'
@@ -63,6 +64,10 @@ export function resolveSubscriptionEnvironment(
   userDataPath: string,
   args: RuntimeEnvironmentSubscribeArgs
 ) {
+  // Streams and abortable calls are not carried through a relay yet; never resolve this to the relaying server.
+  if (isRelayedRuntimeEnvironmentId(args.selector)) {
+    throw new Error('Subscriptions are not available on a server reached through another server')
+  }
   const environment = resolveEnvironment(userDataPath, args.selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
     throw new RuntimeEnvironmentSetupGuardError('runtime_manually_disconnected', {

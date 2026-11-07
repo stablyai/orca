@@ -31,6 +31,12 @@ import {
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
 import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
+import {
+  sendSharedControlRequestWhenAdmitted,
+  type SharedControlAdmission,
+  type SharedControlAdmittedCall,
+  type SharedControlAdmittedSend
+} from './runtime-environment-shared-control-admission'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -166,41 +172,34 @@ export async function sendRemoteRuntimeSharedControlRequestOnRuntime<TResult>(
   call: RuntimeEnvironmentCall,
   expectedRuntimeId: string
 ): Promise<RuntimeRpcResponse<TResult> | null> {
-  const shared = getSharedControlConnection(environmentId, pairedConnection)
-  let statusSocket: number | undefined
-  const status = await shared.request<RuntimeStatus>(
-    'status.get',
-    undefined,
-    call.timeoutMs,
-    undefined,
-    call.signal,
-    { beforeSend: () => void (statusSocket = shared.socketGeneration.peek()) }
+  const sent = await sendRemoteRuntimeSharedControlRequestWhenAdmitted<TResult>(
+    environmentId,
+    pairedConnection,
+    {
+      method: call.method,
+      params: call.params,
+      remainingMs: () => call.timeoutMs,
+      envelope: call.envelope,
+      signal: call.signal,
+      prepareRequest: call.prepareRequest
+    },
+    { admits: (status) => status.runtimeId === expectedRuntimeId }
   )
-  if (!status.ok || status.result.runtimeId !== expectedRuntimeId) {
-    return null
-  }
-  let socketChanged = false
-  const beforeSend = (): void => {
-    socketChanged = shared.socketGeneration.peek() !== statusSocket
-    if (socketChanged) {
-      throw new Error('Runtime connection changed before sending')
-    }
-  }
-  try {
-    return await shared.request<TResult>(
-      call.method,
-      call.params,
-      call.timeoutMs,
-      call.envelope,
-      call.signal,
-      { beforeSend, prepareRequest: call.prepareRequest }
-    )
-  } catch (error) {
-    if (socketChanged) {
-      return null
-    }
-    throw error
-  }
+  return sent.kind === 'sent' ? sent.response : null
+}
+
+/** Sends on this environment's shared socket only once that socket's own status passed `admission`. */
+export function sendRemoteRuntimeSharedControlRequestWhenAdmitted<TResult>(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection,
+  call: SharedControlAdmittedCall,
+  admission: SharedControlAdmission
+): Promise<SharedControlAdmittedSend<TResult>> {
+  return sendSharedControlRequestWhenAdmitted<TResult>(
+    getSharedControlConnection(environmentId, pairedConnection),
+    call,
+    admission
+  )
 }
 
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(

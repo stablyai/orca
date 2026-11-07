@@ -9,6 +9,7 @@ import { SidebarSeamScrollbarStrip } from './SidebarSeamScrollbarStrip'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
 import WslMovedProjectsSection from './WslMovedProjectsSection'
+import RelayedRuntimeHostsSection from './RelayedRuntimeHostsSection'
 import SidebarToolbar from './SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
@@ -218,6 +219,7 @@ function Sidebar({
                     projectsCollapseTarget={projectsCollapseTarget}
                   />
                   <WslMovedProjectsSection />
+                  <RelayedRuntimeHostsSection />
                 </>
               )}
 
