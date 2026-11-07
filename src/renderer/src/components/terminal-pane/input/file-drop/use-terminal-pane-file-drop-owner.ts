@@ -12,6 +12,7 @@ import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-reject
 import { makePaneKey, type PaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { captureNativeTerminalFileDrop } from './terminal-native-file-drop-destination'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 
 export type TerminalPaneFileDropOwnerArgs = {
   pane: ManagedPane
@@ -64,6 +65,7 @@ export function useTerminalPaneFileDropOwner(
         !rootRef.current.closest('[inert]') &&
         !isElementDisplayNone(rootRef.current) &&
         paneIsCurrent(managerRef.current, pane) &&
+        !paneHasTerminalCopyMode(pane) &&
         paneTransportsRef.current.get(pane.id)?.isConnected()
       ),
     captureDestination: () => {

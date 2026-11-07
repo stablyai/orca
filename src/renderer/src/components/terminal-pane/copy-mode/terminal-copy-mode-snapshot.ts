@@ -3,8 +3,10 @@ import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { StableCellFitAddon } from '@/lib/pane-manager/terminal-stable-cell-fit-addon'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
-import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
+import { activateOrcaTerminalUnicodeProvider } from '../../../../../shared/terminal/appearance/terminal-unicode-provider'
+import { splitAtAlternateScreenEntry } from '../../../../../shared/terminal/protocol/escape/terminal-alternate-screen-split'
 import { attachCopyModeRenderer } from './terminal-copy-mode-renderer'
+import { TERMINAL_COPY_MODE_ROOT_CLASS } from './terminal-copy-mode-pane'
 
 export function createTerminalCopyModeSnapshot(
   pane: ManagedPane,
@@ -20,13 +22,10 @@ export function createTerminalCopyModeSnapshot(
       ? { row: cursorRow, column: buffer.cursorX }
       : { row: Math.min(buffer.length - 1, viewportY + source.rows - 1), column: 0 }
   const serializedBuffers = pane.serializeAddon.serialize({ excludeModes: true })
-  const alternateStart = '\x1b[?1049h\x1b[H'
-  const alternateOffset = serializedBuffers.indexOf(alternateStart)
   // Replay the visible alternate screen in a normal buffer so fitting cannot discard its rows.
-  const serialized =
-    buffer.type === 'alternate' && alternateOffset !== -1
-      ? serializedBuffers.slice(alternateOffset + alternateStart.length)
-      : serializedBuffers
+  const alternate =
+    buffer.type === 'alternate' ? splitAtAlternateScreenEntry(serializedBuffers) : null
+  const serialized = alternate ? alternate.alternateAnsi : serializedBuffers
   const options = source.options
   const terminal = new Terminal({
     cols: source.cols,
@@ -61,9 +60,8 @@ export function createTerminalCopyModeSnapshot(
   }
 
   const root = document.createElement('div')
-  root.className = 'terminal-copy-mode'
+  root.className = TERMINAL_COPY_MODE_ROOT_CLASS
   root.tabIndex = 0
-  root.dataset.terminalCopyMode = 'true'
   root.style.backgroundColor = options.theme?.background ?? 'var(--background)'
   root.style.setProperty(
     '--copy-mode-cursor-color',
@@ -111,7 +109,8 @@ export function createTerminalCopyModeSnapshot(
     root,
     terminal,
     fitAddon,
-    repairRenderer: () => useWebgl && repairPaneWebglCanvasDprMismatch({ id: pane.id, terminal }),
+    repairRenderer: () =>
+      useWebgl && repairPaneWebglCanvasDprMismatch({ id: `${pane.id}:copy-mode`, terminal }),
     cursor,
     status,
     viewport,

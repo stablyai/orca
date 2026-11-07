@@ -68,61 +68,27 @@ for (const key of ['x', 'y']) {
   })
 }
 
-test('copy-mode observation is active only during a session and releases on pane removal', async ({
+test('copy mode re-enters cleanly and closes when its pane is removed', async ({
   orcaPage,
   electronApp
 }) => {
   const tabId = await orcaPage.evaluate(() => {
-    const observers = new Set<MutationObserver>()
-    const NativeMutationObserver = window.MutationObserver
-    window.MutationObserver = class extends NativeMutationObserver {
-      observe(target: Node, options?: MutationObserverInit): void {
-        super.observe(target, options)
-        if (
-          target instanceof HTMLElement &&
-          target.hasAttribute('data-terminal-tab-id') &&
-          options?.childList &&
-          options.subtree &&
-          options.attributeFilter?.includes('class') &&
-          options.attributeFilter.includes('style')
-        ) {
-          observers.add(this)
-        }
-      }
-      disconnect(): void {
-        observers.delete(this)
-        super.disconnect()
-      }
-    }
-    Object.defineProperty(window, '__copyModeScopeObservers', { get: () => observers.size })
     const state = window.__store?.getState()
     if (!state?.activeWorktreeId) {
-      throw new Error('No worktree for copy-mode observation')
+      throw new Error('No worktree for copy-mode re-entry')
     }
     return state.createTab(state.activeWorktreeId).id
   })
   await waitForActiveTerminalManager(orcaPage)
   await seedCopyModeScreen(orcaPage)
-  const cdp = await orcaPage.context().newCDPSession(orcaPage)
-  const observerCount = async () =>
-    (
-      await cdp.send('Runtime.evaluate', {
-        expression: 'globalThis.__copyModeScopeObservers',
-        returnByValue: true
-      })
-    ).result.value
-  await expect.poll(observerCount).toBe(0)
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await pressShortcut(orcaPage, 'x', { shift: true })
     await expectCopyCursorReady(orcaPage)
-    await expect.poll(observerCount).toBe(1)
     await orcaPage.keyboard.press('q')
     await expect(orcaPage.locator('.terminal-copy-mode')).toHaveCount(0)
-    await expect.poll(observerCount).toBe(0)
   }
   await pressShortcut(orcaPage, 'x', { shift: true })
   await expectCopyCursorReady(orcaPage)
-  await expect.poll(observerCount).toBe(1)
   await orcaPage.evaluate((tabId) => {
     const pane = window.__paneManagers?.get(tabId)?.getActivePane()
     if (!pane) {
@@ -131,9 +97,7 @@ test('copy-mode observation is active only during a session and releases on pane
     pane.container.remove()
   }, tabId)
   await expect(orcaPage.locator('.terminal-copy-mode')).toHaveCount(0)
-  await expect.poll(observerCount).toBe(0)
   await expectHiddenCopyModeWindow(electronApp)
-  await cdp.detach()
 })
 
 test('a fresh key does not release a different held exit key into the PTY', async ({

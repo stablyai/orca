@@ -1,9 +1,11 @@
-import { copyModeStrokeMatches } from '../../../../shared/terminal-copy-mode-bindings'
+import { copyModeStrokeMatches } from '../../../../../shared/terminal/input/terminal-copy-mode-bindings'
 import {
   TERMINAL_COPY_MODE_ACTIONS,
   type TerminalCopyModeAction,
   type TerminalCopyModeConfig
-} from '../../../../shared/terminal-copy-mode-config'
+} from '../../../../../shared/terminal/input/terminal-copy-mode-config'
+import { getTerminalShortcutKeyIdentity } from '../input/keyboard/terminal-native-only-shortcut'
+import { TERMINAL_MODIFIER_KEYS } from '../input/keyboard/xterm-bypass-policy'
 
 type Sequence = { action: TerminalCopyModeAction; steps: string[] }
 
@@ -35,10 +37,10 @@ export function createCopyModeKeybindings(
         reset()
         return exit.action
       }
-      if (['Shift', 'Control', 'Alt', 'AltGraph', 'Meta'].includes(event.key)) {
+      if (TERMINAL_MODIFIER_KEYS.has(event.key)) {
         return pending ? 'pending' : null
       }
-      const code = event.code || event.key
+      const code = getTerminalShortcutKeyIdentity(event)
       if (event.repeat && repeated?.code === code) {
         return repeated.action
       }

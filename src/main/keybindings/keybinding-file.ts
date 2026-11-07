@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { normalizeTerminalCopyModeConfig } from '../../shared/terminal-copy-mode-config'
+import { normalizeTerminalCopyModeConfig } from '../../shared/terminal/input/terminal-copy-mode-config'
 import {
   findKeybindingConflicts,
   formatKeybindingList,

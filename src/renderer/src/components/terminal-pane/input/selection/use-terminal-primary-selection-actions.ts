@@ -8,6 +8,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { resolveTerminalPasteRuntime } from '../paste/terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from '../paste/terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from '../paste/terminal-pane-paste-dispatch'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 import { formatTerminalPasteExecutionError } from '../paste/terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import type { TerminalPaneContextController } from '../../controller/use-terminal-pane-context-actions'
@@ -72,8 +73,9 @@ export function useTerminalPrimarySelectionActions({
       event.preventDefault()
       armPrimarySelectionNativePasteSuppression()
       if (
-        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
-        !terminalForcesSelectionForClick(event)
+        paneHasTerminalCopyMode(targetPane) ||
+        (targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
+          !terminalForcesSelectionForClick(event))
       ) {
         return
       }

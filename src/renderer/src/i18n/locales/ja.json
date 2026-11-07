@@ -484,7 +484,15 @@
         "platformsNotObject": "platforms は darwin、linux、または win32 セクションを持つオブジェクトである必要があります。",
         "unknownPlatform": "不明なプラットフォーム「{{platform}}」は無視されました。",
         "conflictingOverrides": "競合するカスタムショートカットは無視されました: {{actions}}。",
-        "readFailed": "キーバインドファイルを読み取れませんでした: {{reason}}"
+        "readFailed": "キーバインドファイルを読み取れませんでした: {{reason}}",
+        "copyModeNotObject": "copyMode はオブジェクトである必要があります。既定値が使用されます。",
+        "copyModeUnknownField": "不明なコピーモードのフィールド「{{field}}」は無視されました。",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy はブール値である必要があります。",
+        "copyModeBindingsNotObject": "copyMode.bindings はオブジェクトである必要があります。既定のキーバインドが使用されます。",
+        "copyModeUnknownAction": "不明なコピーモードの操作「{{action}}」は無視されました。",
+        "copyModeInvalidBindings": "「{{action}}」のキーバインドが無効です。ショートカットまたは 2 段階のキーシーケンスの配列を指定してください。exit には少なくとも 1 つのキーバインドが必要です。",
+        "copyModeDefaultYields": "「{{action}}」の既定のキーバインド「{{binding}}」はカスタムキーバインドに譲られました。",
+        "copyModeConflict": "コピーモードのキーバインド「{{binding}}」が「{{previous}}」と「{{action}}」で競合しています。既定のキーバインドが使用されます。"
       }
     },
     "network": {

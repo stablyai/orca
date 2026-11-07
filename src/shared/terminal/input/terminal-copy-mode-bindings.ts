@@ -5,7 +5,7 @@ import {
   keybindingMatchesInput,
   parseKeybinding,
   type KeybindingInput
-} from './keybindings'
+} from '../../keybindings'
 
 const LITERAL_KEYS = new Set(['$', '^', '_'])
 const SHIFTED_LITERALS: Record<string, string> = { '4': '$', '6': '^', Minus: '_', Underscore: '_' }

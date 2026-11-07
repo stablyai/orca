@@ -906,7 +906,15 @@
         "platformsNotObject": "platforms, darwin, linux veya win32 bölümlerine sahip bir nesne olmalıdır.",
         "unknownPlatform": "Bilinmeyen platform \"{{platform}}\" yok sayıldı.",
         "conflictingOverrides": "Çakışan özel kısayollar yok sayıldı: {{actions}}.",
-        "readFailed": "Tuş atamaları dosyası okunamadı: {{reason}}"
+        "readFailed": "Tuş atamaları dosyası okunamadı: {{reason}}",
+        "copyModeNotObject": "copyMode bir nesne olmalıdır. Varsayılanlar etkin.",
+        "copyModeUnknownField": "Bilinmeyen kopyalama modu alanı \"{{field}}\" yok sayıldı.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy bir boole değeri olmalıdır.",
+        "copyModeBindingsNotObject": "copyMode.bindings bir nesne olmalıdır. Varsayılan tuş atamaları etkin.",
+        "copyModeUnknownAction": "Bilinmeyen kopyalama modu eylemi \"{{action}}\" yok sayıldı.",
+        "copyModeInvalidBindings": "\"{{action}}\" için geçersiz tuş atamaları. Kısayollardan veya iki adımlı tuş dizilerinden oluşan bir dizi kullanın; exit en az bir tuş ataması gerektirir.",
+        "copyModeDefaultYields": "\"{{action}}\" için varsayılan \"{{binding}}\" ataması özel bir atamaya bırakıldı.",
+        "copyModeConflict": "\"{{binding}}\" kopyalama modu ataması \"{{previous}}\" ile \"{{action}}\" arasında çakışıyor. Varsayılan tuş atamaları etkin."
       }
     },
     "ssh": {

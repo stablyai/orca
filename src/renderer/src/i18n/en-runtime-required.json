@@ -2212,7 +2212,15 @@
         "sectionNotObject": "{{section}} must be an object.",
         "shortcutIgnored": "Shortcut for \"{{actionId}}\" was ignored: {{reason}}",
         "unknownAction": "Unknown keybinding action \"{{actionId}}\" was ignored.",
-        "unknownPlatform": "Unknown platform \"{{platform}}\" was ignored."
+        "unknownPlatform": "Unknown platform \"{{platform}}\" was ignored.",
+        "copyModeBindingsNotObject": "copyMode.bindings must be an object. Default bindings are active.",
+        "copyModeConflict": "Copy-mode binding \"{{binding}}\" conflicts between \"{{previous}}\" and \"{{action}}\". Default bindings are active.",
+        "copyModeDefaultYields": "Default binding \"{{binding}}\" for \"{{action}}\" yields to a custom binding.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy must be a boolean.",
+        "copyModeInvalidBindings": "Invalid bindings for \"{{action}}\". Use an array of shortcuts or two-stroke sequences; exit needs at least one binding.",
+        "copyModeNotObject": "copyMode must be an object. Defaults are active.",
+        "copyModeUnknownAction": "Unknown copy-mode action \"{{action}}\" was ignored.",
+        "copyModeUnknownField": "Unknown copy-mode field \"{{field}}\" was ignored."
       },
       "validation": {
         "digitKeyRequired": "Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.",

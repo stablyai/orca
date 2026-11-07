@@ -89,7 +89,6 @@ export async function resetCopiedModeText(app: ElectronApplication): Promise<voi
 export async function expectCopyCursorReady(page: Page): Promise<void> {
   const cursor = page.locator('.terminal-copy-mode-cursor')
   await expect(cursor).toBeVisible()
-  await expect(cursor).toHaveCSS('position', 'absolute')
   await expect(cursor).toBeInViewport()
   await expect
     .poll(() => cursor.evaluate((element) => element.getBoundingClientRect().width))

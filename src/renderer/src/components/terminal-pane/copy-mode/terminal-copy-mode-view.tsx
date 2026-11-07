@@ -3,9 +3,9 @@ import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { translate } from '@/i18n/i18n'
 import type { AppMenuSelectionAction } from '@/lib/app-menu-selection-actions'
-import type { TerminalCopyModeConfig } from '../../../../shared/terminal-copy-mode-config'
+import type { TerminalCopyModeConfig } from '../../../../../shared/terminal/input/terminal-copy-mode-config'
 import { createCopyModeKeybindings } from './terminal-copy-mode-keybindings'
-import { copyTerminalSelection } from './clipboard/terminal-selection-copy'
+import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { createTerminalCopyModeSnapshot } from './terminal-copy-mode-snapshot'
 import {
   createCopyModeSelection,
@@ -209,7 +209,8 @@ export function createTerminalCopyModeView(
       scroll.dispose()
       root.removeEventListener('focusout', keybindings.reset)
       keybindings.reset()
-      status.unmount()
+      // Dispose can run inside React effect cleanup; unmounting a root there is unsupported.
+      queueMicrotask(() => status.unmount())
       snapshot.dispose()
       state = null
     }

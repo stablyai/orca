@@ -54,6 +54,18 @@ function text(params: Params, name: string): string | null {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : null
 }
 
+function requiredTexts(params: Params, names: readonly string[]): Record<string, string> | null {
+  const values: Record<string, string> = {}
+  for (const name of names) {
+    const value = text(params, name)
+    if (value === null) {
+      return null
+    }
+    values[name] = value
+  }
+  return values
+}
+
 function localizedActionTitles(actionIds: unknown): string | null {
   if (!Array.isArray(actionIds) || actionIds.length === 0) {
     return null
@@ -134,6 +146,68 @@ const DIAGNOSTIC_COPY: Record<
       : translate('settings.shortcuts.diagnostics.readFailed', DIAGNOSTIC_EN.readFailed, {
           reason: keybindingReasonText(reasonCode, reason)
         })
+  },
+  copyModeNotObject: () =>
+    translate('settings.shortcuts.diagnostics.copyModeNotObject', DIAGNOSTIC_EN.copyModeNotObject),
+  copyModeUnknownField: (params) => {
+    const values = requiredTexts(params, ['field'])
+    return values === null
+      ? null
+      : translate(
+          'settings.shortcuts.diagnostics.copyModeUnknownField',
+          DIAGNOSTIC_EN.copyModeUnknownField,
+          values
+        )
+  },
+  copyModeExitOnCopyNotBoolean: () =>
+    translate(
+      'settings.shortcuts.diagnostics.copyModeExitOnCopyNotBoolean',
+      DIAGNOSTIC_EN.copyModeExitOnCopyNotBoolean
+    ),
+  copyModeBindingsNotObject: () =>
+    translate(
+      'settings.shortcuts.diagnostics.copyModeBindingsNotObject',
+      DIAGNOSTIC_EN.copyModeBindingsNotObject
+    ),
+  copyModeUnknownAction: (params) => {
+    const values = requiredTexts(params, ['action'])
+    return values === null
+      ? null
+      : translate(
+          'settings.shortcuts.diagnostics.copyModeUnknownAction',
+          DIAGNOSTIC_EN.copyModeUnknownAction,
+          values
+        )
+  },
+  copyModeInvalidBindings: (params) => {
+    const values = requiredTexts(params, ['action'])
+    return values === null
+      ? null
+      : translate(
+          'settings.shortcuts.diagnostics.copyModeInvalidBindings',
+          DIAGNOSTIC_EN.copyModeInvalidBindings,
+          values
+        )
+  },
+  copyModeDefaultYields: (params) => {
+    const values = requiredTexts(params, ['binding', 'action'])
+    return values === null
+      ? null
+      : translate(
+          'settings.shortcuts.diagnostics.copyModeDefaultYields',
+          DIAGNOSTIC_EN.copyModeDefaultYields,
+          values
+        )
+  },
+  copyModeConflict: (params) => {
+    const values = requiredTexts(params, ['binding', 'previous', 'action'])
+    return values === null
+      ? null
+      : translate(
+          'settings.shortcuts.diagnostics.copyModeConflict',
+          DIAGNOSTIC_EN.copyModeConflict,
+          values
+        )
   }
 }
 

@@ -42,7 +42,12 @@ describe('local terminals without catalog workspaces', () => {
     async (lane) => {
       const sendInput = vi.fn(() => true)
       const focus = vi.fn()
-      const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+      const pane = {
+        id: 1,
+        leafId: 'leaf-1',
+        terminal: { focus },
+        container: { querySelector: () => null }
+      }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handler only enumerates panes and captures their identity.
       const manager = { getPanes: () => [pane], getActivePane: () => pane } as never
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every transport method used by local drops.

@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { resolveTerminalCopyModeTarget } from '@/components/terminal-pane/terminal-copy-mode-targets'
+import { resolveTerminalCopyModeTarget } from '@/components/terminal-pane/copy-mode/terminal-copy-mode-targets'
 import { translate } from '@/i18n/i18n'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { Worktree } from '../../../../shared/worktree/types'

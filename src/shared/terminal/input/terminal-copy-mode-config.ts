@@ -1,4 +1,8 @@
-import type { KeybindingFileDiagnostic } from './keybindings'
+import {
+  keybindingFileDiagnostic,
+  type KeybindingDiagnosticCode,
+  type KeybindingFileDiagnostic
+} from '../../keybindings'
 import { copyModeBindingsOverlap, normalizeCopyModeBinding } from './terminal-copy-mode-bindings'
 
 export const TERMINAL_COPY_MODE_VIM_MOTIONS = [
@@ -97,43 +101,44 @@ export function normalizeTerminalCopyModeConfig(
 ): TerminalCopyModeConfig {
   const defaults = DEFAULT_TERMINAL_COPY_MODE_CONFIG
   const config = { exitOnCopy: defaults.exitOnCopy, bindings: { ...defaults.bindings } }
-  const report = (section: string, message: string, severity: 'error' | 'warning' = 'error') => {
-    diagnostics.push({ section, message, severity })
+  const report = (
+    section: string,
+    code: KeybindingDiagnosticCode,
+    params: Record<string, string> = {},
+    severity: 'error' | 'warning' = 'error'
+  ) => {
+    diagnostics.push(keybindingFileDiagnostic({ section, severity }, code, params))
   }
   if (value === undefined) {
     return config
   }
   if (!isObject(value)) {
-    report('copyMode', 'copyMode must be an object. Defaults are active.')
+    report('copyMode', 'copyModeNotObject')
     return config
   }
   for (const field of Object.keys(value)) {
     if (field !== 'exitOnCopy' && field !== 'bindings') {
-      report(`copyMode.${field}`, `Unknown copy-mode field "${field}" was ignored.`, 'warning')
+      report(`copyMode.${field}`, 'copyModeUnknownField', { field }, 'warning')
     }
   }
   if (value.exitOnCopy !== undefined) {
     if (typeof value.exitOnCopy === 'boolean') {
       config.exitOnCopy = value.exitOnCopy
     } else {
-      report('copyMode.exitOnCopy', 'copyMode.exitOnCopy must be a boolean.')
+      report('copyMode.exitOnCopy', 'copyModeExitOnCopyNotBoolean')
     }
   }
   if (value.bindings === undefined) {
     return config
   }
   if (!isObject(value.bindings)) {
-    report('copyMode.bindings', 'copyMode.bindings must be an object. Default bindings are active.')
+    report('copyMode.bindings', 'copyModeBindingsNotObject')
     return config
   }
   const actions = new Set<string>(TERMINAL_COPY_MODE_ACTIONS)
   for (const field of Object.keys(value.bindings)) {
     if (!actions.has(field)) {
-      report(
-        `copyMode.bindings.${field}`,
-        `Unknown copy-mode action "${field}" was ignored.`,
-        'warning'
-      )
+      report(`copyMode.bindings.${field}`, 'copyModeUnknownAction', { action: field }, 'warning')
     }
   }
   const explicit = new Set<TerminalCopyModeAction>()
@@ -144,16 +149,13 @@ export function normalizeTerminalCopyModeConfig(
     }
     const normalized = normalizeBindings(raw)
     if (!normalized || (action === 'exit' && normalized.length === 0)) {
-      report(
-        `copyMode.bindings.${action}`,
-        `Invalid bindings for "${action}". Use an array of shortcuts or two-stroke sequences; exit needs at least one binding.`
-      )
+      report(`copyMode.bindings.${action}`, 'copyModeInvalidBindings', { action })
       continue
     }
     config.bindings[action] = normalized
     explicit.add(action)
   }
-  // New defaults must not steal a pre-existing user control (for example WASD).
+  // Unset Vim-motion defaults yield to keys the user assigned elsewhere (for example WASD).
   for (const action of TERMINAL_COPY_MODE_VIM_MOTIONS) {
     if (explicit.has(action)) {
       continue
@@ -165,7 +167,8 @@ export function normalizeTerminalCopyModeConfig(
       if (conflict) {
         report(
           `copyMode.bindings.${action}`,
-          `Default binding "${binding}" for "${action}" yields to a custom binding.`,
+          'copyModeDefaultYields',
+          { binding, action },
           'warning'
         )
       }
@@ -180,10 +183,11 @@ export function normalizeTerminalCopyModeConfig(
           owner.action !== action && copyModeBindingsOverlap(binding, owner.binding, platform)
       )
       if (previous) {
-        report(
-          'copyMode.bindings',
-          `Copy-mode binding "${binding}" conflicts between "${previous.action}" and "${action}". Default bindings are active.`
-        )
+        report('copyMode.bindings', 'copyModeConflict', {
+          binding,
+          previous: previous.action,
+          action
+        })
         config.bindings = { ...defaults.bindings }
         return config
       }

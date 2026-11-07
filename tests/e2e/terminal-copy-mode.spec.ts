@@ -22,8 +22,6 @@ import {
   copiedModeText,
   copyCursorPosition,
   expectCopyCursorReady,
-  expectCopyCursorCell,
-  pressCopyMotion,
   expectHiddenCopyModeWindow,
   isolateCopyModeClipboard,
   seedCopyModeScreen,
@@ -225,43 +223,4 @@ test('alternate-screen snapshots exclude hidden history and clean up when switch
   await expect(mode).toHaveCount(0)
   await expect(orcaPage.locator(`[data-terminal-tab-id="${tabId}"] .pane .xterm`)).toHaveCount(2)
   await expectHiddenCopyModeWindow(electronApp)
-})
-
-test('older keybinding snapshots retain custom controls and receive missing Vim motion defaults', async ({
-  orcaPage,
-  electronApp
-}) => {
-  const snapshot = await orcaPage.evaluate(() => window.api.keybindings.get())
-  const olderSnapshot = {
-    ...snapshot,
-    copyMode: {
-      exitOnCopy: false,
-      bindings: {
-        left: ['H'],
-        right: ['L'],
-        up: ['W'],
-        down: ['J'],
-        toggleSelection: ['V'],
-        copy: ['Y'],
-        exit: ['Escape', 'Q']
-      }
-    }
-  }
-  await electronApp.evaluate(({ ipcMain }, value) => {
-    ipcMain.removeHandler('keybindings:get')
-    ipcMain.handle('keybindings:get', () => value)
-  }, olderSnapshot)
-  await orcaPage.evaluate(() => window.__store?.getState().fetchKeybindings())
-  await seedCopyModeScreen(orcaPage, 'first second\r\nnext')
-  await pressShortcut(orcaPage, 'x', { shift: true })
-  await expectCopyCursorReady(orcaPage)
-  await pressCopyMotion(orcaPage, 'j w')
-  await expectCopyCursorCell(orcaPage, 0, 0)
-  await pressCopyMotion(orcaPage, '$')
-  await expectCopyCursorCell(orcaPage, 0, 11)
-  await pressCopyMotion(orcaPage, '0 e e g e')
-  await expectCopyCursorCell(orcaPage, 0, 4)
-  await pressCopyMotion(orcaPage, '0 v $ y')
-  await expect.poll(() => copiedModeText(electronApp)).toBe('first second')
-  await expect(orcaPage.locator('.terminal-copy-mode')).toBeVisible()
 })

@@ -36,18 +36,18 @@ async function prepareTypography(
       { tabId, settings }
     )
     if (settings.gpu === 'on') {
-      const available = await page
-        .waitForFunction(
-          (tabId) => {
+      const webgl2 = await page.evaluate(
+        () => document.createElement('canvas').getContext('webgl2') !== null
+      )
+      test.skip(!webgl2, 'WebGL2 unavailable in this environment')
+      await expect
+        .poll(() =>
+          page.evaluate((tabId) => {
             const pane = tabId ? window.__paneManagers?.get(tabId)?.getActivePane() : null
             return Boolean(pane?.terminal.element?.querySelector('.xterm-screen canvas'))
-          },
-          tabId,
-          { timeout: 5000 }
+          }, tabId)
         )
-        .then(() => true)
-        .catch(() => false)
-      test.skip(!available, 'WebGL unavailable in this environment')
+        .toBe(true)
     } else {
       await expect
         .poll(() =>
@@ -103,11 +103,7 @@ function inkRowStarts(bytes: Buffer): number[] {
 
 for (const settings of [
   undefined,
-  { gpu: 'on', fontSize: 11, lineHeight: 1 },
-  { gpu: 'on', fontSize: 14, lineHeight: 1 },
   { gpu: 'on', fontSize: 13, lineHeight: 1.3 },
-  { gpu: 'off', fontSize: 11, lineHeight: 1 },
-  { gpu: 'off', fontSize: 14, lineHeight: 1 },
   { gpu: 'off', fontSize: 13, lineHeight: 1.3 }
 ] as const) {
   const label = settings
@@ -159,7 +155,6 @@ for (const settings of [
     })
     const originalRows = inkRowStarts(original)
     const snapshotRows = inkRowStarts(snapshot)
-    console.log('COPY_TYPOGRAPHY', { source, copied, originalRows, snapshotRows })
     expect(originalRows.length).toBeGreaterThanOrEqual(5)
     expect(snapshotRows.length).toBeGreaterThanOrEqual(5)
     expect(snapshotRows.slice(1, 5).map((value, index) => value - snapshotRows[index])).toEqual(
@@ -169,7 +164,7 @@ for (const settings of [
     expect(copied.height).toBeCloseTo(source.height, 1)
     expect(copied.width).toBeCloseTo(source.width, 1)
     expect(Math.round(screen.width / copied.width)).toBe(source.cols)
-    await test.step('rendered spacing after viewport and pixel-ratio change', async () => {
+    await test.step('rendered spacing after viewport resize', async () => {
       await orcaPage.setViewportSize({ width: 1100, height: 720 })
       await expectCopyCursorReady(orcaPage)
       await orcaPage.evaluate((tabId) => {

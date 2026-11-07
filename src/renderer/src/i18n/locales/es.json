@@ -490,7 +490,15 @@
         "platformsNotObject": "platforms debe ser un objeto con secciones darwin, linux o win32.",
         "unknownPlatform": "Se ignoró la plataforma desconocida \"{{platform}}\".",
         "conflictingOverrides": "Se ignoraron los atajos personalizados en conflicto: {{actions}}.",
-        "readFailed": "No se pudo leer el archivo de combinaciones de teclas: {{reason}}"
+        "readFailed": "No se pudo leer el archivo de combinaciones de teclas: {{reason}}",
+        "copyModeNotObject": "copyMode debe ser un objeto. Se usan los valores predeterminados.",
+        "copyModeUnknownField": "Se ignoró el campo desconocido del modo de copia \"{{field}}\".",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy debe ser un valor booleano.",
+        "copyModeBindingsNotObject": "copyMode.bindings debe ser un objeto. Se usan los atajos predeterminados.",
+        "copyModeUnknownAction": "Se ignoró la acción desconocida del modo de copia \"{{action}}\".",
+        "copyModeInvalidBindings": "Atajos no válidos para \"{{action}}\". Usa un array de atajos o secuencias de dos pulsaciones; exit necesita al menos un atajo.",
+        "copyModeDefaultYields": "El atajo predeterminado \"{{binding}}\" para \"{{action}}\" cede ante un atajo personalizado.",
+        "copyModeConflict": "El atajo del modo de copia \"{{binding}}\" entra en conflicto entre \"{{previous}}\" y \"{{action}}\". Se usan los atajos predeterminados."
       }
     },
     "network": {

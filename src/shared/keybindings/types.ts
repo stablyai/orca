@@ -1,6 +1,6 @@
 import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { TerminalCopyModeConfig } from '../terminal-copy-mode-config'
+import type { TerminalCopyModeConfig } from '../terminal/input/terminal-copy-mode-config'
 
 export type KeybindingScope =
   | 'global'

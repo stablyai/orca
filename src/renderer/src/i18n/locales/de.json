@@ -930,7 +930,15 @@
         "platformsNotObject": "platforms muss ein Objekt mit Abschnitten für darwin, linux oder win32 sein.",
         "unknownPlatform": "Unbekannte Plattform „{{platform}}“ wurde ignoriert.",
         "conflictingOverrides": "Benutzerdefinierte Tastenkürzel mit Konflikten wurden ignoriert: {{actions}}.",
-        "readFailed": "Tastenbelegungsdatei konnte nicht gelesen werden: {{reason}}"
+        "readFailed": "Tastenbelegungsdatei konnte nicht gelesen werden: {{reason}}",
+        "copyModeNotObject": "copyMode muss ein Objekt sein. Die Standardwerte sind aktiv.",
+        "copyModeUnknownField": "Unbekanntes Kopiermodus-Feld „{{field}}“ wurde ignoriert.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy muss ein boolescher Wert sein.",
+        "copyModeBindingsNotObject": "copyMode.bindings muss ein Objekt sein. Die Standardbelegungen sind aktiv.",
+        "copyModeUnknownAction": "Unbekannte Kopiermodus-Aktion „{{action}}“ wurde ignoriert.",
+        "copyModeInvalidBindings": "Ungültige Belegungen für „{{action}}“. Verwende ein Array aus Tastenkürzeln oder zweistufigen Tastenfolgen; exit braucht mindestens eine Belegung.",
+        "copyModeDefaultYields": "Die Standardbelegung „{{binding}}“ für „{{action}}“ weicht einer benutzerdefinierten Belegung.",
+        "copyModeConflict": "Die Kopiermodus-Belegung „{{binding}}“ steht in Konflikt zwischen „{{previous}}“ und „{{action}}“. Die Standardbelegungen sind aktiv."
       }
     },
     "ssh": {

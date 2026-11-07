@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { normalizeTerminalCopyModeConfig } from '../../../../shared/terminal-copy-mode-config'
+import { normalizeTerminalCopyModeConfig } from '../../../../shared/terminal/input/terminal-copy-mode-config'
 import {
   findKeybindingConflicts,
   formatKeybindingList,

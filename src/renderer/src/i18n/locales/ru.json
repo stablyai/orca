@@ -972,7 +972,15 @@
         "platformsNotObject": "platforms должен быть объектом с разделами darwin, linux или win32.",
         "unknownPlatform": "Неизвестная платформа «{{platform}}» пропущена.",
         "conflictingOverrides": "Конфликтующие пользовательские сочетания клавиш пропущены: {{actions}}.",
-        "readFailed": "Не удалось прочитать файл сочетаний клавиш: {{reason}}"
+        "readFailed": "Не удалось прочитать файл сочетаний клавиш: {{reason}}",
+        "copyModeNotObject": "copyMode должен быть объектом. Используются значения по умолчанию.",
+        "copyModeUnknownField": "Неизвестное поле режима копирования «{{field}}» проигнорировано.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy должен быть логическим значением.",
+        "copyModeBindingsNotObject": "copyMode.bindings должен быть объектом. Используются привязки по умолчанию.",
+        "copyModeUnknownAction": "Неизвестное действие режима копирования «{{action}}» проигнорировано.",
+        "copyModeInvalidBindings": "Недопустимые привязки для «{{action}}». Укажите массив сочетаний клавиш или двухшаговых последовательностей; для exit нужна хотя бы одна привязка.",
+        "copyModeDefaultYields": "Привязка по умолчанию «{{binding}}» для «{{action}}» уступает пользовательской привязке.",
+        "copyModeConflict": "Привязка режима копирования «{{binding}}» конфликтует между «{{previous}}» и «{{action}}». Используются привязки по умолчанию."
       }
     },
     "ssh": {

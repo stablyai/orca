@@ -1,3 +1,5 @@
+import { getTerminalShortcutKeyIdentity } from '../input/keyboard/terminal-native-only-shortcut'
+
 const claimed = new Map<string, () => boolean>()
 let listening = false
 let users = 0
@@ -5,10 +7,6 @@ let users = 0
 export function consumeCopyModeEvent(event: Event): void {
   event.preventDefault()
   event.stopImmediatePropagation()
-}
-
-function keyIdentity(event: KeyboardEvent): string {
-  return event.code || event.key
 }
 
 function clear(): void {
@@ -24,7 +22,7 @@ function clear(): void {
 }
 
 function onKeyDown(event: KeyboardEvent): void {
-  const identity = keyIdentity(event)
+  const identity = getTerminalShortcutKeyIdentity(event)
   // macOS may omit a Command chord's keyup; a fresh press supersedes only that key.
   if (!event.repeat) {
     if (claimed.delete(identity) && claimed.size === 0) {
@@ -39,13 +37,13 @@ function onKeyDown(event: KeyboardEvent): void {
 }
 
 function onKeyPress(event: KeyboardEvent): void {
-  if (claimed.has(keyIdentity(event))) {
+  if (claimed.has(getTerminalShortcutKeyIdentity(event))) {
     consumeCopyModeEvent(event)
   }
 }
 
 function onKeyUp(event: KeyboardEvent): void {
-  if (!claimed.delete(keyIdentity(event))) {
+  if (!claimed.delete(getTerminalShortcutKeyIdentity(event))) {
     return
   }
   consumeCopyModeEvent(event)
@@ -73,5 +71,5 @@ export function installCopyModeKeyGuard(): () => void {
 }
 
 export function claimCopyModeKey(event: KeyboardEvent, mayRepeat: () => boolean): void {
-  claimed.set(keyIdentity(event), mayRepeat)
+  claimed.set(getTerminalShortcutKeyIdentity(event), mayRepeat)
 }

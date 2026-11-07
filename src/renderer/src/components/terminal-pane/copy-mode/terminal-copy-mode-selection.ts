@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import type { TerminalCopyModeMotion } from '../../../../shared/terminal-copy-mode-config'
+import type { TerminalCopyModeMotion } from '../../../../../shared/terminal/input/terminal-copy-mode-config'
 import {
   createCopyModeBuffer,
   type CopyModeBuffer,
@@ -8,7 +8,6 @@ import {
 } from './terminal-copy-mode-buffer'
 import { moveCopyModeWord } from './terminal-copy-mode-word-motion'
 
-export type { CopyModePosition } from './terminal-copy-mode-buffer'
 export type CopyModeSelection = {
   cursor: CopyModePosition
   anchor: CopyModePosition | null

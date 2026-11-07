@@ -2,6 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 import { getConnectionId } from '@/lib/connection-context'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
@@ -91,7 +92,7 @@ export const pasteTerminalPaneMenuClipboard = async (
   pane: ManagedPane | null,
   source: Extract<TerminalPasteSource, 'context-menu' | 'right-click'>
 ): Promise<void> => {
-  if (!pane) {
+  if (!pane || paneHasTerminalCopyMode(pane)) {
     return
   }
   if (requestNativeChatCoverPaste(pane)) {

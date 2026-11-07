@@ -212,7 +212,7 @@ For finer control, open the keybindings file from **Shortcuts** and add a root `
 }
 ```
 
-`Mod` means Command on macOS and Control elsewhere. `exitOnCopy` defaults to `true`; set it to `false` to keep selecting after copying. Missing actions keep their default keys. An empty array disables an action, but at least one exit key is required. New default motions yield to overlapping custom controls from older configurations, including custom `w` or `g` bindings. Other invalid values or conflicting keys/prefixes appear in the existing shortcut diagnostics and fall back to defaults.
+`Mod` means Command on macOS and Control elsewhere. `exitOnCopy` defaults to `true`; set it to `false` to keep selecting after copying. Missing actions keep their default keys. An empty array disables an action, but at least one exit key is required. Default Vim-motion keys you have not set yourself yield to overlapping keys you assign to another action (for example, binding `up` to `w` drops the default `w` word motion) and the shortcut diagnostics show a warning. Other invalid values or conflicting keys/prefixes appear in the existing shortcut diagnostics and fall back to defaults.
 
 Write uppercase motions as `Shift+W`, `Shift+B`, and `Shift+E` in configuration. Separate two strokes with a space, as in `g e`, `g Shift+E`, or `g _`; both strokes are configurable, and these sequences work only inside copy mode. `$`, `^`, and `_` may be written directly. Reload the keybindings file after editing; changes apply the next time copy mode opens. No global tmux-style prefix is introduced.
 

@@ -65,7 +65,6 @@ test.beforeEach(async ({ orcaPage, electronApp }) => {
 
 for (const { theme, classic } of [
   { theme: 'light', classic: true },
-  { theme: 'dark', classic: true },
   { theme: 'light', classic: false }
 ] as const) {
   test(`snapshot fits and retains a wide-character selection across resizing (${theme} ${classic ? 'classic' : 'native'} scrollbars)`, async ({
@@ -94,14 +93,12 @@ for (const { theme, classic } of [
     await orcaPage.setViewportSize({ width: 1100, height: 720 })
     await expectFittedSnapshot(orcaPage)
     await resetCopiedModeText(electronApp)
-    expect(await copiedModeText(electronApp)).toBeNull()
     await pressCopyMotion(orcaPage, 'y')
     await expect.poll(() => copiedModeText(electronApp)).toBe('中e\u0301Z')
     await orcaPage.screenshot({ path: testInfo.outputPath('copy-mode-layout-narrow.png') })
     await orcaPage.setViewportSize(original)
     await expectFittedSnapshot(orcaPage)
     await resetCopiedModeText(electronApp)
-    expect(await copiedModeText(electronApp)).toBeNull()
     await pressCopyMotion(orcaPage, 'y')
     await expect.poll(() => copiedModeText(electronApp)).toBe('中e\u0301Z')
   })

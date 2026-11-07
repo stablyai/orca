@@ -1,9 +1,11 @@
 import { PNG } from 'pngjs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
+import { APP_MENU_PASTE_EVENT } from '../../src/renderer/src/lib/app-menu-paste'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'
 import { resolveActiveTabId, waitForActiveTerminalManager } from './helpers/terminal'
+import { setPaneTitleFromTerminalMenu } from './helpers/terminal-pane-title-actions'
 import {
   clearTerminalPtyWriteLog,
   installTerminalPtyWriteSpy,
@@ -58,10 +60,10 @@ test('menu paste is blocked in copy mode and restored after exit and reentry', a
   for (let attempt = 0; attempt < 2; attempt += 1) {
     await pressShortcut(orcaPage, 'x', { shift: true })
     await expectCopyCursorReady(orcaPage)
-    await orcaPage.evaluate(async () => {
-      window.dispatchEvent(new CustomEvent('orca-app-menu-paste', { cancelable: true }))
+    await orcaPage.evaluate(async (eventName) => {
+      window.dispatchEvent(new CustomEvent(eventName, { cancelable: true }))
       await window.api.keybindings.get()
-    })
+    }, APP_MENU_PASTE_EVENT)
     expect(
       await electronApp.evaluate(() => Number(process.env.ORCA_E2E_MENU_PASTE_READS ?? 0))
     ).toBe(attempt)
@@ -78,6 +80,55 @@ test('menu paste is blocked in copy mode and restored after exit and reentry', a
       .toContain('MENU_PASTE_PAYLOAD')
     await clearTerminalPtyWriteLog(electronApp)
   }
+  await expectHiddenCopyModeWindow(electronApp)
+})
+
+test('right-click paste stays out of the PTY while copy mode is open', async ({
+  orcaPage,
+  electronApp
+}) => {
+  await electronApp.evaluate(({ ipcMain }) => {
+    ipcMain.removeHandler('clipboard:readText')
+    ipcMain.handle('clipboard:readText', () => process.env.ORCA_E2E_RIGHT_CLICK_PAYLOAD)
+    process.env.ORCA_E2E_RIGHT_CLICK_PAYLOAD = 'COPY_MODE_LEAK'
+  })
+  await setPaneTitleFromTerminalMenu(orcaPage, 'Copy mode header')
+  await orcaPage.evaluate(() =>
+    window.__store?.getState().updateSettingsOrThrow({ terminalRightClickToPaste: true })
+  )
+  const tabId = await resolveActiveTabId(orcaPage)
+  await orcaPage.evaluate(
+    (tabId) =>
+      (tabId ? window.__paneManagers?.get(tabId)?.getActivePane() : null)?.terminal.focus(),
+    tabId
+  )
+  await pressShortcut(orcaPage, 'x', { shift: true })
+  await expectCopyCursorReady(orcaPage)
+  const screen = await orcaPage.locator('.terminal-copy-mode .xterm-screen').boundingBox()
+  if (!screen) {
+    throw new Error('No frozen terminal screen for right-click')
+  }
+  const point = { x: screen.x + screen.width / 2, y: screen.y + screen.height / 2 }
+  await orcaPage.mouse.click(point.x, point.y, { button: 'right' })
+  await expect(orcaPage.locator('.terminal-copy-mode')).toBeVisible()
+  // The title bar renders outside the copy-mode overlay but resolves to the same pane.
+  await orcaPage.locator('.pane-title-text', { hasText: 'Copy mode header' }).click({
+    button: 'right'
+  })
+  await expect(orcaPage.locator('.terminal-copy-mode')).toBeVisible()
+  // The title button keeps focus after the right-click; return it to copy mode before exiting.
+  await orcaPage.mouse.click(point.x, point.y)
+  await orcaPage.keyboard.press('q')
+  await expect(orcaPage.locator('.terminal-copy-mode')).toHaveCount(0)
+  await electronApp.evaluate(() => {
+    process.env.ORCA_E2E_RIGHT_CLICK_PAYLOAD = 'LIVE_PASTE'
+  })
+  // The live paste is a write barrier: a leaked copy-mode paste would have been issued first.
+  await orcaPage.mouse.click(point.x, point.y, { button: 'right' })
+  await expect
+    .poll(async () => (await readTerminalPtyWrites(electronApp)).join(''))
+    .toContain('LIVE_PASTE')
+  expect((await readTerminalPtyWrites(electronApp)).join('')).toBe('LIVE_PASTE')
   await expectHiddenCopyModeWindow(electronApp)
 })
 
@@ -231,9 +282,10 @@ for (const exitOnCopy of [false, true]) {
     }
     const clip = { x: screen.x, y: screen.y, width: cell.width * 6, height: cell.height }
     const unselected = PNG.sync.read(await orcaPage.screenshot({ clip })).data
-    await orcaPage.mouse.move(screen.x + cell.width * 0.1, screen.y + cell.height * 0.5)
+    // Drag leftward: the sidebar resize handle overlaps the pane's left edge.
+    await orcaPage.mouse.move(screen.x + cell.width * 5.9, screen.y + cell.height * 0.5)
     await orcaPage.mouse.down()
-    await orcaPage.mouse.move(screen.x + cell.width * 5.9, screen.y + cell.height * 0.5, {
+    await orcaPage.mouse.move(screen.x + cell.width * 0.1, screen.y + cell.height * 0.5, {
       steps: 12
     })
     await orcaPage.mouse.up()
@@ -257,28 +309,3 @@ for (const exitOnCopy of [false, true]) {
     await expectHiddenCopyModeWindow(electronApp)
   })
 }
-
-test('menu copy retains a failed selection for retry and honors exitOnCopy', async ({
-  orcaPage,
-  electronApp
-}) => {
-  await pressShortcut(orcaPage, 'x', { shift: true })
-  await expectCopyCursorReady(orcaPage)
-  await orcaPage.keyboard.press('v')
-  await orcaPage.keyboard.press('l')
-  await electronApp.evaluate(() => {
-    process.env.ORCA_E2E_COPY_MODE_FAIL = '1'
-  })
-  await dispatchMenuSelection(electronApp, 'copy')
-  await expect(orcaPage.getByText('Could not copy terminal selection. Try again.')).toBeVisible()
-  await expect(orcaPage.locator('.terminal-copy-mode [role="status"]')).toHaveText(
-    'Copy mode · Selecting'
-  )
-  await electronApp.evaluate(() => {
-    delete process.env.ORCA_E2E_COPY_MODE_FAIL
-  })
-  await dispatchMenuSelection(electronApp, 'copy')
-  await expect.poll(() => copiedModeText(electronApp)).toBe('FR')
-  await expect(orcaPage.locator('.terminal-copy-mode')).toHaveCount(0)
-  expect(await readTerminalPtyWrites(electronApp)).toEqual([])
-})

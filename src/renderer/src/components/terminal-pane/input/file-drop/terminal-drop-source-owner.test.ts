@@ -34,7 +34,12 @@ async function drop(
   environmentId: string | null
 ) {
   const focus = vi.fn()
-  const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+  const pane = {
+    id: 1,
+    leafId: 'leaf-1',
+    terminal: { focus },
+    container: { querySelector: () => null }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handler only enumerates the fixture pane and captures its identity; path writes are recorded separately.
   const manager = { getPanes: () => [pane] } as never
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are all transport methods used by the handler before the recorded path writer.

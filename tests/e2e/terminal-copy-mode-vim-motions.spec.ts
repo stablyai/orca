@@ -201,10 +201,23 @@ test('half-page motions work in both directions and clamp at retained history bo
   await expect.poll(() => copiedModeText(electronApp)).toBe('ROW_199')
 })
 
-test('all new motions can be rebound while old single-key configurations keep their controls', async ({
+test('unset Vim motion defaults yield to keys bound to other actions', async ({
   orcaPage,
   electronApp
 }) => {
+  await configureCopyMode(orcaPage, { copyMode: { exitOnCopy: false, bindings: { up: ['W'] } } })
+  await seedCopyModeScreen(orcaPage, 'first second\r\nnext')
+  await pressShortcut(orcaPage, 'x', { shift: true })
+  await expectCopyCursorReady(orcaPage)
+  await pressCopyMotion(orcaPage, 'j w')
+  await expectCopyCursorCell(orcaPage, 0, 0)
+  await pressCopyMotion(orcaPage, '0 e e')
+  await expectCopyCursorCell(orcaPage, 0, 11)
+  await pressCopyMotion(orcaPage, '0 v $ y')
+  await expect.poll(() => copiedModeText(electronApp)).toBe('first second')
+})
+
+test('all motions can be rebound', async ({ orcaPage, electronApp }) => {
   await configureCopyMode(orcaPage, {
     copyMode: {
       exitOnCopy: false,
