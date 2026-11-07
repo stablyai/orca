@@ -35,6 +35,24 @@ export function showDictationDisabledToast(): void {
   )
 }
 
+export function showMicrophoneFallbackToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.micFallback',
+      'Selected microphone unavailable. Using system default.'
+    )
+  )
+}
+
+export function showMicrophoneDisconnectedToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.micDisconnected',
+      'Microphone disconnected. Dictation stopped.'
+    )
+  )
+}
+
 export function showDictationStartErrorToast(message: string): void {
   // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
   const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
