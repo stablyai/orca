@@ -14,8 +14,9 @@ export function canUseRepoWideTrust(
   return Boolean(trust[repoId]?.all) && repos.filter((repo) => repo.id === repoId).length < 2
 }
 
-// Small, so a long-lived repo can't accumulate every script it ever had.
-export const MAX_APPROVED_ORCA_HOOK_HASHES = 5
+// Bounded, so a long-lived repo can't accumulate every script it ever had; large enough that
+// switching between branches with different setup scripts rarely re-prompts.
+export const MAX_APPROVED_ORCA_HOOK_HASHES = 20
 
 /** Every content hash approved for this script, newest first. */
 export function approvedOrcaHookContentHashes(
