@@ -10,14 +10,14 @@ import { translate } from '@/i18n/i18n'
 import {
   showDictationDisabledToast,
   showDictationNoModelToast,
+  showCloudLimitToast,
   showDictationStartErrorToast,
   showMicrophoneDisconnectedToast,
   showMicrophoneFallbackToast
-} from './dictation-start-error-toast'
+} from './dictation-toasts'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
-import { stopDictationAtAudioLimit } from './dictation-audio-limit-stop'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import {
@@ -118,7 +118,7 @@ export function DictationController() {
       return
     }
     if (previous.phase === 'starting') {
-      // Startup sees stopRequested and finishes once the engine is up, so the buffered words land.
+      // Startup finishes once the engine is up, so the buffered words land.
       void finishCapture({ preserveBufferedAudio: true })
       return
     }
@@ -151,9 +151,13 @@ export function DictationController() {
     deliverRef.current = (text) => deliver(text, insertionTarget)
     setCaptureLive(false)
 
-    const dropStaleStart = async (engineStarted: boolean): Promise<void> => {
+    // A stop that arrived while starting is still this run's stop.
+    const stopQueued = (): boolean => isCurrent() && sessionRef.current.phase === 'stopping'
+    const releaseStart = async (engineStarted: boolean, captureStarted = true): Promise<void> => {
       discardBufferedAudio()
-      stopCapture()
+      if (captureStarted) {
+        stopCapture()
+      }
       if (engineStarted) {
         await window.api.speech.stopDictation(sessionId).catch(() => undefined)
         drainStoppedSession(sessionId)
@@ -178,60 +182,51 @@ export function DictationController() {
         },
         onAudioLimitReached: () => {
           if (isCurrent()) {
-            stopDictationAtAudioLimit(() => void stopDictation())
+            showCloudLimitToast()
+            void stopDictation()
           }
         }
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {
         // Suppress fallback notices when a queued stop will tear down this startup capture.
-        if (
-          !sessionRef.current.stopRequested &&
-          micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId
-        ) {
+        if (!stopQueued() && micFallbackNotifiedForRef.current !== preferredMicrophoneDeviceId) {
           micFallbackNotifiedForRef.current = preferredMicrophoneDeviceId
           showMicrophoneFallbackToast()
         }
       } else {
         micFallbackNotifiedForRef.current = null
       }
-      if (sessionRef.current.stopRequested) {
+      if (stopQueued()) {
         stopCapture({ preserveBufferedAudio: true })
       }
       if (!isCurrent()) {
-        await dropStaleStart(false)
+        await releaseStart(false)
         return
       }
       setCaptureLive(true)
 
       await window.api.speech.startDictation(modelId, undefined, sessionId)
       if (!isCurrent()) {
-        await dropStaleStart(true)
+        await releaseStart(true)
         return
       }
 
       await flushBufferedAudio()
       if (!isCurrent()) {
-        await dropStaleStart(true)
+        await releaseStart(true)
         return
       }
-      if (sessionRef.current.stopRequested) {
+      if (dispatch({ type: 'engine-ready' }).phase === 'stopping') {
         await finishDictationSession(sessionRef.current)
         return
       }
-
-      dispatch({ type: 'engine-ready' })
       recordFeatureInteraction('voice-dictation')
     } catch (err) {
       if (!isCurrent()) {
         return
       }
-      await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-      drainStoppedSession(sessionId)
-      if (captureStarted) {
-        stopCapture()
-      }
-      discardBufferedAudio()
+      await releaseStart(true, captureStarted)
       if (!isCurrent()) {
         return
       }

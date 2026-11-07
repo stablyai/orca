@@ -17,11 +17,7 @@ describe('transitionDictationSession', () => {
   it('keeps the session when stop arrives while starting, and finishes instead of listening', () => {
     const started = run('start')
     const stopped = run('start', 'stop', 'engine-ready')
-    expect(stopped).toMatchObject({
-      phase: 'stopping',
-      sessionId: started.sessionId,
-      stopRequested: true
-    })
+    expect(stopped).toMatchObject({ phase: 'stopping', sessionId: started.sessionId })
   })
 
   it('drops the session on an engine error and refuses a new start until teardown ends', () => {

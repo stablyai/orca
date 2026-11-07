@@ -7,21 +7,20 @@ export type DictationSession = {
   run: number
   /** Speech events are accepted only for this id. */
   sessionId: string | null
-  /** Stop arrived while the engine was starting: finish (and keep the words) once it is up. */
-  stopRequested: boolean
   heardFinalText: boolean
 }
 
 export type DictationSessionEvent =
   | { type: 'start' }
+  /** Keeps the session: a stop while starting finishes (and inserts the words) once the engine is up. */
   | { type: 'stop' }
   | { type: 'engine-ready' }
   | { type: 'final-text' }
   /** The engine failed mid-session: drop the session while capture and the engine tear down. */
   | { type: 'abandon' }
-  /** Starting failed: drop the session and show the error; a new start is allowed from there. */
+  /** Starting failed: drop the session and show the error. */
   | { type: 'fail' }
-  /** Drop the session and its words. */
+  /** Drop the session without finishing it. */
   | { type: 'cancel' }
   /** Teardown finished; back to idle. */
   | { type: 'ended' }
@@ -30,12 +29,11 @@ export const initialDictationSession: DictationSession = {
   phase: 'idle',
   run: 0,
   sessionId: null,
-  stopRequested: false,
   heardFinalText: false
 }
 
 export function canStartDictation(phase: DictationState): boolean {
-  return phase === 'idle' || phase === 'error'
+  return phase === 'idle'
 }
 
 export function isDictationUnderway(phase: DictationState): boolean {
@@ -53,23 +51,10 @@ export function transitionDictationSession(
         return session
       }
       const run = session.run + 1
-      return {
-        phase: 'starting',
-        run,
-        sessionId: String(run),
-        stopRequested: false,
-        heardFinalText: false
-      }
+      return { phase: 'starting', run, sessionId: String(run), heardFinalText: false }
     }
     case 'stop':
-      if (!isDictationUnderway(session.phase)) {
-        return session
-      }
-      return {
-        ...session,
-        phase: 'stopping',
-        stopRequested: session.stopRequested || session.phase === 'starting'
-      }
+      return isDictationUnderway(session.phase) ? { ...session, phase: 'stopping' } : session
     case 'engine-ready':
       return session.phase === 'starting' ? { ...session, phase: 'listening' } : session
     case 'final-text':
@@ -85,11 +70,5 @@ export function transitionDictationSession(
 }
 
 function dropSession(session: DictationSession, phase: DictationState): DictationSession {
-  return {
-    phase,
-    run: session.run + 1,
-    sessionId: null,
-    stopRequested: false,
-    heardFinalText: false
-  }
+  return { phase, run: session.run + 1, sessionId: null, heardFinalText: false }
 }
