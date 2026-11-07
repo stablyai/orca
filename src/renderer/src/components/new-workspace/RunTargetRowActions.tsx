@@ -3,7 +3,7 @@ import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { HostRowIcon } from '../host-row-icon'
 
 /** Glyph for a host that can't run yet: connecting, broken, or merely dormant. */
@@ -32,6 +32,7 @@ export function ConnectHostButton({
   connecting: boolean
   onConnect: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
@@ -53,10 +54,10 @@ export function ConnectHostButton({
       {connecting ? (
         <>
           <LoaderCircle className="size-3 animate-spin" />
-          {translate('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')}
+          {t('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')}
         </>
       ) : (
-        translate('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
+        t('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
       )}
     </Button>
   )
@@ -69,10 +70,8 @@ export function SetLocationButton({
   hostLabel: string
   onSetLocation: () => void
 }): React.JSX.Element {
-  const label = translate(
-    'auto.components.NewWorkspaceComposerCard.setLocation',
-    'Set project location'
-  )
+  const t = useTranslate()
+  const label = t('auto.components.NewWorkspaceComposerCard.setLocation', 'Set project location')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -81,7 +80,7 @@ export function SetLocationButton({
           variant="outline"
           size="xs"
           className="ml-auto shrink-0 self-center"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.NewWorkspaceComposerCard.setLocationOnHost',
             'Set project location on {{host}}',
             { host: hostLabel }
@@ -100,7 +99,7 @@ export function SetLocationButton({
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
-        {translate(
+        {t(
           'auto.components.NewWorkspaceComposerCard.setLocationTooltip',
           'Choose a folder or clone this project onto {{host}}.',
           { host: hostLabel }

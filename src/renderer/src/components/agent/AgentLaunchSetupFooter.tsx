@@ -3,6 +3,7 @@ import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { NativeChatComposerHandle } from '../native-chat/NativeChatComposer'
 import { AgentLaunchPromptComposer } from './AgentLaunchPromptComposer'
@@ -17,20 +18,21 @@ import { formatKeybinding } from '../../../../shared/keybindings'
 export function agentLaunchSetupArgumentsNote(
   label: string,
   options: ReturnType<typeof agentPickerEntryOptions>,
-  noModelFlag: boolean
+  noModelFlag: boolean,
+  t: Translate = translate
 ) {
   const composed = options.some((option) => option.apply.composedIntoModel)
   const noOptionFlag = options.some(
     (option) => !option.apply.cli?.length && !option.apply.composedIntoModel
   )
   return noModelFlag || noOptionFlag
-    ? translate(
+    ? t(
         'agentPicker.chatChoicesNote',
         '{{agent}} model or effort choices without a CLI flag apply to chats.',
         { agent: label }
       )
     : composed
-      ? translate(
+      ? t(
           'agentPicker.composedChoicesNote',
           '{{agent}} effort and speed choices are included in the model argument.',
           { agent: label }
@@ -52,6 +54,7 @@ export function AgentLaunchSurfaceButtons({
   primary: AgentPickerSurface
   onSelect: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const platform = getShortcutPlatform()
   return (
     <div className="grid max-w-full auto-cols-fr grid-flow-col gap-2">
@@ -59,8 +62,8 @@ export function AgentLaunchSurfaceButtons({
         const isPrimary = next === primary
         const label =
           next === 'chat'
-            ? translate('agentPicker.launchChat', 'Launch chat')
-            : translate('agentPicker.launchTerminal', 'Launch terminal')
+            ? t('agentPicker.launchChat', 'Launch chat')
+            : t('agentPicker.launchTerminal', 'Launch terminal')
         return (
           <Button
             key={next}
