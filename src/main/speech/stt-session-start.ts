@@ -20,7 +20,6 @@ import {
   teardownIdleSttEngine,
   teardownSttEngine
 } from './stt-session-stop'
-import { speechEngineForModelFiles } from '../../shared/speech-model-engine'
 import { getSpeechEngineModulesDir, LOCAL_SPEECH_UNAVAILABLE_ERROR } from './stt-worker-paths'
 import {
   attachSttWorkerLifecycle,
@@ -172,8 +171,7 @@ export function spawnSttEngine(
   config: SttRecognizerConfig,
   manifest: SpeechModelManifest
 ): SttEngine {
-  const files = manifest.files ?? []
-  const speechModulesDir = getSpeechEngineModulesDir(speechEngineForModelFiles(files))
+  const speechModulesDir = getSpeechEngineModulesDir()
   if (!speechModulesDir) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
@@ -209,12 +207,9 @@ export function spawnSttEngine(
   initializeSttWorker(worker, {
     speechModulesDir,
     modelDir: state.modelManager.getModelDir(config.modelId),
-    modelType: manifest.type,
-    streaming: manifest.streaming,
     sampleRate: manifest.sampleRate,
-    files,
+    files: manifest.files ?? [],
     hotwordsFilePath: config.hotwordsFilePath,
-    modelingUnit: manifest.modelingUnit,
     language: config.language
   })
   return engine

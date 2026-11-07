@@ -40,8 +40,6 @@ function setup(): {
     type: 'init',
     speechModulesDir: '/app/node_modules',
     modelDir: '/models/parakeet',
-    modelType: 'transducer',
-    streaming: false,
     sampleRate: 16000,
     files: ['model-Q8_0.gguf']
   })
