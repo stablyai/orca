@@ -6,86 +6,74 @@ import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 
-/** The queue's one rule for what can be handed over next. The head goes unless it is mail whose owner
- *  cannot be confirmed now: that mail keeps its place, and the first of the person's cards behind it
- *  goes instead. Later mail stays behind it, so mail still goes oldest first. A returned, paused or
- *  edit-held card behind it is a barrier, as it is at the head; held cards are never candidates. It
- *  walks the live candidates only, never the epoch's dispatched or withdrawn cards. */
+type QueueWalk = { key: string; first: QueuedMessageRow | null; pastMail: QueuedMessageRow | null }
+const walks = new WeakMap<object, QueueWalk[]>()
+
+/** Automatic claim skips held rows; only an edit lease is a barrier. Mail keeps its owner's order. */
 export function nextEligibleQueuedCard(input: {
   state: JournalReducerState
   floor: AgentJournalCursor | null
-  /** Current values: selection reads identity summaries. */
   get: (messageId: string) => QueuedMessageRow | null
   editHeld: (messageId: string) => boolean
-  /** What else the cards past the head depend on: the queue's revision (any card's edit included)
-   *  and its edit holds' version. */
   revisions: readonly unknown[]
   unavailable: ((card: QueuedMessageRow) => boolean) | undefined
   steer?: boolean
 }): QueuedMessageRow | null {
-  const { state, floor, get } = input
-  const order = journalInputOrder(state)
-  const identity = order.head(state, floor)
-  const head = identity ? get(identity.messageId) : null
-  const ready = (card: QueuedMessageRow) =>
-    card.state !== 'returned' &&
-    !order.paused(state, card, floor) &&
-    !input.editHeld(card.messageId)
-  if (!head || !ready(head)) {
-    return null
-  }
-  if (input.steer) {
-    if (!order.cards.candidates.hasMail()) {
-      return null
-    }
-    const candidate = (card: QueuedMessageRow): 'mail' | 'pass' | 'stop' => {
-      if (!ready(card)) {
-        return 'stop'
+  const order = journalInputOrder(input.state)
+  order.cards.ensure(input.state, input.floor)
+  const state = input.state
+  const marks = state.queuePauseMarks
+  const key = [
+    ...input.revisions,
+    order.version(),
+    order.cards.version(),
+    input.steer,
+    order.cards.failureHolds(),
+    state.latestAcceptedTurnSequence,
+    journalInputOrder(state).latestPersonAcceptedSequence(),
+    marks.latestStop?.sequence,
+    marks.resumedSequence,
+    marks.reopenedSequence,
+    marks.cleared?.sequence,
+    marks.cleared?.lifted,
+    input.floor?.epoch,
+    input.floor?.sequence
+  ].join(':')
+  const prior = walks.get(order.cards) ?? []
+  let walk = prior.find((entry) => entry.key === key)
+  if (!walk) {
+    let first: QueuedMessageRow | null = null
+    let pastMail: QueuedMessageRow | null = null
+    for (const row of order.cards.list()) {
+      const card = input.get(row.messageId) ?? row
+      if (input.editHeld(card.messageId)) {
+        break
       }
-      return orchestrationMailNotice(card.body.from)
-        ? 'mail'
-        : card.body.command || card.body.from
-          ? 'stop'
-          : 'pass'
-    }
-    const first = candidate(head)
-    const next =
-      first === 'mail'
-        ? head
-        : first === 'stop'
-          ? null
-          : order.cards.candidates.pastHead(
-              head,
-              [...input.revisions, order.cards.failureHolds(), 'steer'],
-              () => {
-                for (const row of order.cards.candidates.after(head)) {
-                  const card = get(row.messageId) ?? row
-                  const kind = candidate(card)
-                  if (kind !== 'pass') {
-                    return kind === 'mail' ? card : null
-                  }
-                }
-                return null
-              }
-            )
-    return next && !input.unavailable?.(next) ? next : null
-  }
-  if (!orchestrationMailNotice(head.body.from) || !input.unavailable?.(head)) {
-    return head
-  }
-  // What lies past it changes only with a card, a pause or an edit hold: walked once per change.
-  return order.cards.candidates.pastHead(head, input.revisions, () => {
-    for (const candidate of order.cards.candidates.after(head)) {
-      const card = get(candidate.messageId) ?? candidate
-      if (!ready(card)) {
-        return null
+      if (card.state !== 'waiting' || card.holdReason !== null || order.cards.paused(card)) {
+        continue
       }
-      if (!orchestrationMailNotice(card.body.from)) {
-        return card
+      const mail = orchestrationMailNotice(card.body.from)
+      if (input.steer && (card.body.command || (!mail && card.deliveryMode !== 'steer'))) {
+        continue
+      }
+      if (!first) {
+        first = card
+        if (!mail) {
+          break
+        }
+      } else if (!mail) {
+        pastMail = card
+        break
       }
     }
-    return null
-  })
+    walk = { key, first, pastMail }
+    walks.set(order.cards, [walk, ...prior.slice(0, 1)])
+  }
+  const first = walk.first
+  // Mail owedness is external to the journal: ask it afresh even when the row walk is memoized.
+  return first && orchestrationMailNotice(first.body.from) && input.unavailable?.(first)
+    ? walk.pastMail
+    : first
 }
 
 /** Automatic consumption validates the same current selection on the journal write lane. */

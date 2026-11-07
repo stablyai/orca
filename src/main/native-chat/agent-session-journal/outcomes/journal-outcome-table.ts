@@ -68,10 +68,14 @@ export function persistJournalOutcomeRows(
   rows: readonly JournalRow[],
   savedAt?: number,
   upgradeNative = false,
-  finish?: (state: JournalReducerState) => void
+  finish?: (state: JournalReducerState) => void,
+  format: 2 | 3 = 3
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
+  if (format === 3) {
+    journalInputOrder(transition.state).completeQueueConversion(transition.state)
+  }
   journalInputOrder(transition.state).introduceOverlays(transition.state)
   const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
@@ -107,7 +111,13 @@ export function persistJournalOutcomeRows(
       upgradeNative = false
     }
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
-    const encoded = encodeJournalOutcomes(transition.state, changes, scalar, transition.untracked)
+    const encoded = encodeJournalOutcomes(
+      transition.state,
+      changes,
+      scalar,
+      transition.untracked,
+      format
+    )
     scalar = encoded.scalars
     for (const [index, value] of encoded.values.entries()) {
       // Each change's record is at its own index; the scalar records after them match no change.

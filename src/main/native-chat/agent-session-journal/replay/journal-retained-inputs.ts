@@ -2,7 +2,8 @@ import { journalInputOrder } from '../input-order/journal-input-order'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { readHistoricalAdmissionSources } from './journal-historical-inputs'
 import { decodeJournalOutcome } from '../outcomes/journal-outcome-codec'
-import { outcomeFormat1EntryParsers } from '../outcomes/journal-outcome-format-1'
+import { outcomeFormat3Card } from '../outcomes/journal-outcome-format-3'
+import { z } from 'zod'
 import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { refreshJournalInputCandidate } from '../input-order/journal-input-obligations'
@@ -68,7 +69,7 @@ export function restoreRetainedJournalInputs(
       continue
     }
     const value = decodeJournalOutcome(record)
-    const [id, card] = outcomeFormat1EntryParsers['queue.cards'].parse(JSON.parse(value.json))
+    const [id, card] = z.tuple([z.string(), outcomeFormat3Card]).parse(JSON.parse(value.json))
     // A raw-prefix card already has its actual selection; a tail's first update is not its birth.
     if (value.ordinal === 'b') {
       continue

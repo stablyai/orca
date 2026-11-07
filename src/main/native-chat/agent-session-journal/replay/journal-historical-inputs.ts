@@ -1,3 +1,7 @@
+import { journalInputOrder } from '../input-order/journal-input-order'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
+import { outcomeFormat3Card } from '../outcomes/journal-outcome-format-3'
+import { z } from 'zod'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { JournalOutcomeSource } from '../outcomes/journal-outcome-format'
@@ -46,7 +50,11 @@ export function readHistoricalAdmissionSources(
       continue
     }
     const record = first.get(source.generation, 'submissions', key.entry_key, source.through)
-    if (!record || (record.format !== 1 && record.format !== 2) || record.deleted !== 0) {
+    if (
+      !record ||
+      (record.format !== 1 && record.format !== 2 && record.format !== 3) ||
+      record.deleted !== 0
+    ) {
       continue
     }
     const value = decodeJournalOutcome(record)
@@ -66,8 +74,8 @@ export function readHistoricalAdmissionSources(
     if (
       !itemRecord ||
       !fenceRecord ||
-      (itemRecord.format !== 1 && itemRecord.format !== 2) ||
-      (fenceRecord.format !== 1 && fenceRecord.format !== 2) ||
+      (itemRecord.format !== 1 && itemRecord.format !== 2 && itemRecord.format !== 3) ||
+      (fenceRecord.format !== 1 && fenceRecord.format !== 2 && fenceRecord.format !== 3) ||
       itemRecord.deleted !== 0 ||
       fenceRecord.deleted !== 0 ||
       itemRecord.seq !== value.seq ||
@@ -118,4 +126,45 @@ export function readHistoricalAdmissionSources(
         (b.kind === 'outcome-admission' ? b.sequence : b.seq)
     )
   )
+}
+
+/** Older retirement outcomes may remove an accepted input's newest key, not its acceptance. */
+export function restoreHistoricalPersonAcceptance(
+  db: Database.Database,
+  state: JournalReducerState,
+  source: JournalOutcomeSource
+): void {
+  const cards = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
+    FROM journal_outcomes WHERE generation=? AND field='queue.cards' AND entry_key=?
+    AND seq<=? AND deleted=0 ORDER BY seq DESC LIMIT 1`)
+  const accepted = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
+    FROM journal_outcomes WHERE generation=? AND field='submissions' AND seq<=? AND deleted=0
+    AND json_extract(value_json, '$[1].dispatchState')='accepted' ORDER BY seq`)
+  const owner = journalInputOrder(state)
+  for (const record of accepted.iterate(source.generation, source.through)) {
+    const value = decodeJournalOutcome(record)
+    const [, submission] = outcomeFormat1EntryParsers.submissions.parse(JSON.parse(value.json))
+    if ((submission.acceptedSequence ?? 0) <= owner.latestPersonAcceptedSequence()) {
+      continue
+    }
+    let card = submission.queuedMessageId
+      ? state.queue.cards.get(submission.queuedMessageId)
+      : undefined
+    if (!card && submission.queuedMessageId) {
+      const stored = cards.get(
+        source.generation,
+        JSON.stringify(submission.queuedMessageId),
+        source.through
+      )
+      if (stored) {
+        card = z
+          .tuple([z.string(), outcomeFormat3Card])
+          .parse(JSON.parse(decodeJournalOutcome(stored).json))[1]
+      }
+    }
+    const queue = { cards: new Map(card ? [[card.messageId, card]] : []) }
+    if (journalSubmissionIsPersonal({ queue }, submission)) {
+      owner.seedPersonAcceptance(submission.acceptedSequence ?? 0)
+    }
+  }
 }

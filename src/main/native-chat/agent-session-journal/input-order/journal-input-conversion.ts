@@ -11,14 +11,16 @@ export type JournalNativePrefix = {
   entries: Map<string, JournalInputEntry>
   cards: Map<string, JournalInputCard>
   base: number
+  personAcceptedSequence: number
 }
 
 /** Marker-5 ordinary keys remain frozen; native evidence is lifted only after tail overrides. */
 export function detachJournalNativePrefix(state?: JournalReducerState): JournalNativePrefix {
   const prefix = {
+    personAcceptedSequence: state ? journalInputOrder(state).latestPersonAcceptedSequence() : 0,
     entries: new Map(state?.inputEntries),
     cards: new Map(state?.inputCards),
-    base: state ? journalInputOrder(state).lineage.at(0) : 0
+    base: state ? (journalInputOrder(state).legacy?.lineage.at(0) ?? 0) : 0
   }
   state?.inputEntries.clear()
   state?.inputCards.clear()
@@ -81,7 +83,10 @@ export function restoreJournalNativeState(
   const owner = initializeJournalInputOrder(state, (id) =>
     journalInputAcceptance(db, state.sessionId, id)
   )
-  owner.beginReconstruction()
+  if (format < 3) {
+    owner.beginReconstruction()
+  }
+  owner.seedPersonAcceptance(prefix.personAcceptedSequence)
   owner.restore(state)
   owner.overlay(state, readJournalLegacyCards(db, state))
   owner.finishReconstruction(state)

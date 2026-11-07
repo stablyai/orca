@@ -1,3 +1,4 @@
+import { compareQueuedRows } from '../input-order/journal-input-card-index'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import {
   journalInputAttemptEnded,
@@ -86,7 +87,10 @@ export class JournalQueuedMessages {
     if (this.viewed?.key !== key) {
       const state = this.inputState()
       const cards = [...journalInputOrder(state).liveCards(state)]
-      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
+      this.viewed = {
+        key,
+        cards: cards.sort(compareQueuedRows)
+      }
     }
     return this.viewed.cards
   }
@@ -123,6 +127,8 @@ export class JournalQueuedMessages {
     input: {
       messageId: string
       body: AgentJournalMessageItem
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
@@ -146,6 +152,8 @@ export class JournalQueuedMessages {
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },
+          ...(input.deliveryMode !== undefined ? { deliveryMode: input.deliveryMode } : {}),
+          ...(input.unattended !== undefined ? { unattended: input.unattended } : {}),
           ...(input.holdReason ? { holdReason: input.holdReason } : {}),
           ...(input.options ? { options: input.options } : {})
         }
@@ -254,7 +262,16 @@ export class JournalQueuedMessages {
   }
 
   pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+      failedAt: journalInputOrder(state).newestTurn.failure(),
+      cards: this.list(),
+      reopenFloor: this.deps.reopenFloor()
+    })
   }
 
   awaitReopenMark(): boolean {
@@ -277,19 +294,10 @@ export class JournalQueuedMessages {
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
-    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
-  }
-
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
-    const state = this.deps.state()
-    return deriveQueuePauses({
-      epoch: state.epoch,
-      marks: state.queuePauseMarks,
-      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-      failedAt: journalInputOrder(state).newestTurn.failure(),
-      cards,
-      reopenFloor: this.deps.reopenFloor()
-    })
+    return journalUserStopInForce(
+      state.queuePauseMarks,
+      journalInputOrder(state).latestPersonAcceptedSequence()
+    )
   }
 
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */

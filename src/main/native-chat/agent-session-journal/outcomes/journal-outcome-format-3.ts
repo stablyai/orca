@@ -1,15 +1,17 @@
 import { z } from 'zod'
 import { outcomeFormat1Stored, type AdmittedOutcome } from './journal-outcome-format-1'
 import { admitOutcomeFormat2 } from './journal-outcome-format-2'
+import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { storageVerdict, strictStorage } from '../durable-rows/journal-storage-strict'
 
 export const JOURNAL_OUTCOME_FORMAT_3 = 3
 
-export const outcomeFormat3Card = outcomeFormat1Stored['queue.cards'].items[1].extend({
+const storedCard = outcomeFormat1Stored['queue.cards']._def.items[1].extend({
   deliveryMode: z.enum(['queue', 'steer']).optional(),
   unattended: z.boolean().optional()
 })
-const card = strictStorage(z.tuple([z.string(), outcomeFormat3Card]))
+export const outcomeFormat3Card = storedCard.pipe(z.custom<QueuedMessageRow>())
+const card = strictStorage(z.tuple([z.string(), storedCard]))
 
 /** Format 3 gives waiting input one row and preserves the delivery intent accepted with it. */
 export function admitOutcomeFormat3(value: {

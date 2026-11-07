@@ -69,13 +69,6 @@ export async function maybeQueueStructuredAgentSessionSend(
   | null
 > {
   const clientMessageId = params.envelope.clientOperationId
-  if (
-    params.delivery !== 'queue-if-active' ||
-    (params.queuedImageCards === false &&
-      params.body.blocks.some((block) => block.type === 'image-ref'))
-  ) {
-    return null
-  }
   // Reconstruct queued replay by card linkage; its fresh handoff ID cannot guard this original ID.
   const queuedBefore = queuedSendAnswer(ctx.journal, clientMessageId)
   if (queuedBefore) {
@@ -89,7 +82,7 @@ export async function maybeQueueStructuredAgentSessionSend(
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
       work: contextStructuredAgentSessionCurrentWork(ctx),
-      fromAgent: !params.userSend && !params.personsMessage && params.body.from !== undefined
+      fromAgent: !params.userSend && !params.personsMessage
     })
   ) {
     return null
@@ -113,6 +106,8 @@ export async function maybeQueueStructuredAgentSessionSend(
       {
         messageId: clientMessageId,
         body: params.body,
+        deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
+        unattended: !params.userSend && !params.personsMessage,
         options: captured.options,
         ...(params.userSend ? { requireAttachments: true } : {})
       },

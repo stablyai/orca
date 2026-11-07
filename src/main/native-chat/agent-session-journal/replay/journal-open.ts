@@ -1,3 +1,4 @@
+import { restoreHistoricalPersonAcceptance } from './journal-historical-inputs'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { restoreRetainedJournalInputs } from './journal-retained-inputs'
 import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
@@ -107,6 +108,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
       state.inputs.candidates.clear()
     }
     restoreRetainedJournalInputs(db, state, source, prefixRevisions)
+    restoreHistoricalPersonAcceptance(db, state, source)
     return { state, newer: null, damage: null }
   } catch (error) {
     if (error instanceof AgentSessionJournalError && error.code === 'journal_read_only') {
@@ -210,7 +212,7 @@ export function startJournalRowFold(
   const finish = (): JournalLoad => {
     if (!input.deferNativeCleanup) {
       journalInputOrder(state).finishReconstruction(state)
-      journalInputOrder(state).lineage.restoreFrontier(
+      journalInputOrder(state).legacy?.lineage.restoreFrontier(
         state.lastSequence,
         state.inputEntries.values()
       )
