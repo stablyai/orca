@@ -9,7 +9,7 @@ import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { useAppStore } from '@/store'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { completeNativeChatStructuredUserAction } from '../native-chat-structured-user-action'
+import { completeNativeChatStructuredUserAction } from '../composer/submit/native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,
@@ -34,12 +34,12 @@ import {
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted
 } from '../../../../../shared/native-chat/native-chat-interrupted-continue'
-import type { NativeChatOrcaStopView } from '../native-chat-orca-stop-context'
-import { useStructuredAgentSessionHostLabel } from '../use-structured-agent-session-host-label'
+import type { NativeChatOrcaStopView } from '../messages/notices/native-chat-orca-stop-context'
+import { useStructuredAgentSessionHostLabel } from '../pane/ownership/use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '../../native-chat-restart-runtimes'
 import { useNativeChatLaunchResumePending } from '../../native-chat-launch-resume-decision'
-import type { NativeChatComposerNoticeContent } from '../native-chat-composer-notice'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatComposerNoticeContent } from '../composer/controls/native-chat-composer-notice'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 
 export type NativeChatInterruptedContinuation = {
   /** Host identity and continuation availability for the cut’s transcript row. */

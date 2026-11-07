@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import {
   summarizeContextUsage,
   type NativeChatContextUsageSummary

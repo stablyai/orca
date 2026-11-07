@@ -26,7 +26,7 @@ import type {
 } from '../../../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */

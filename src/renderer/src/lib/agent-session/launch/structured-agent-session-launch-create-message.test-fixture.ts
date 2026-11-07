@@ -20,11 +20,9 @@ import { resetStructuredAgentSessionReadOwnersForTests } from '../../../componen
 import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '../../../components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../../components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatDraftCache } from '../../../components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/drafts/native-chat-draft-scope'
 
 type CreateMessageFixtureMocks = {
   rpc: Mock

@@ -3,16 +3,14 @@ import { useRef } from 'react'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { captureInsertionTarget, insertText } from '../../../dictation/dictation-insertion-target'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft
-} from '../../native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '../../native-chat-composer-draft-load'
+import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '../../native-chat-composer-draft-storage'
-import type { NativeChatComposerHandle } from '../../native-chat-composer-types'
+} from '../../drafts/native-chat-composer-draft-storage'
+import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
 
 const scope = 'agent-session:dictation'

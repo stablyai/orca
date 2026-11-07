@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { useAppStore } from '@/store'
-import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../native-chat-pagination'
+import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'
 
 const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
   type Subscription = {

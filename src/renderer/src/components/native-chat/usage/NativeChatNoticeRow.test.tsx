@@ -6,8 +6,8 @@ import { projectStructuredItemsToNativeChat } from '../../../../../shared/agent-
 import type { AgentJournalStatusItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { MessageRow } from '../NativeChatMessageRow'
-import { NativeChatNoticeRow } from '../NativeChatNoticeRow'
+import { MessageRow } from '../messages/rows/NativeChatMessageRow'
+import { NativeChatNoticeRow } from '../messages/notices/NativeChatNoticeRow'
 import { NativeChatSignInContext, type NativeChatSignIn } from '../host-access/native-chat-sign-in'
 
 import { i18n } from '@/i18n/i18n'
@@ -16,7 +16,7 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
-} from '../native-chat-orca-stop-context'
+} from '../messages/notices/native-chat-orca-stop-context'
 
 afterEach(async () => {
   cleanup()

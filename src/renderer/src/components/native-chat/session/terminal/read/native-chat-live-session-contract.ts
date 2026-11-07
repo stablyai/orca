@@ -4,7 +4,7 @@ import type {
   NativeChatSession,
   NativeChatTurnLifecycle
 } from '../../../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatOlderPageResult } from '../../../native-chat-pagination'
+import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 
 export type ReadState =
   | { phase: 'loading' }

@@ -4,7 +4,7 @@ import type { AppState } from '../../types'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { forgetWorktreeSleepIntent, hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   clearHugeRepoWarningDismissalsForTests,

@@ -13,13 +13,13 @@ import { inSendOrder } from '../../../../../../shared/native-chat/native-chat-se
 import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
-import { sayAgentSessionFailureTranslated } from '../../agent-session-failure-words-text'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
   cliMissingSentence,
   notSignedInSentence
 } from '../../../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
-import type { NativeChatComposerNotice } from '../../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
 function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined): string | null {

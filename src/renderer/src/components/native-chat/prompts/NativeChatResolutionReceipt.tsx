@@ -1,6 +1,6 @@
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { translate } from '@/i18n/i18n'
-import { NativeChatMessageTimestamp } from '../NativeChatMessageTimestamp'
+import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import {
   NATIVE_CHAT_RECEIPT_COPY,

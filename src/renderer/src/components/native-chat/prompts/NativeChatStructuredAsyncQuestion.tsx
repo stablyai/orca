@@ -14,7 +14,7 @@ import {
   formatAskAnswer
 } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
 import { nativeChatAnswerSendIntent } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
