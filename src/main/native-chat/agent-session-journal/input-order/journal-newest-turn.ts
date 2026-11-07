@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
@@ -10,32 +11,24 @@ import {
 import { isStructuredAgentSessionCommandTurnId } from '../../agent-session-wire/operations/structured-agent-session-command-turn'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
-import {
-  compareTurnSources,
-  putTurnSource,
-  type TurnSource,
-  type TurnSourceNode
-} from './journal-newest-turn-tree'
+import { compareTurnSources, type TurnSource } from './journal-newest-turn-tree'
+import type { JournalNewestTurnStorage } from '../journal-index-storage'
+import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
 
-/** Owned by the transaction-isolated input order; never saved beside the journal. Every turn and
- * clear sits in a creation-ordered tree, so each row updates only the sources it touches. */
+/** The input owner updates only touched turn sources; storage supplies creation-order queries. */
 export class JournalNewestTurn {
-  private root: TurnSourceNode | undefined
-  private readonly sources = new Map<string, TurnSource>()
-  /** Agent failure rows (usage limit, sign-in, terminal error) and the turn each reports on,
-   * indexed whether or not that turn has arrived yet. */
-  private readonly evidence = new Map<string, string>()
-  private readonly reports = new Map<string, number>()
-  /** Settlement order at or before this row is unknown (restore, or removal of a source that could
-   * decide), so a failure seen earlier holds until a Resume written after it. */
-  private boundary: number
-
   /** Only on restore; streamed rows never rescan conversation history. */
-  constructor(state: JournalReducerState) {
-    this.boundary = state.lastSequence
+  constructor(
+    state: JournalReducerState,
+    private readonly storage: JournalNewestTurnStorage = memoryJournalIndexStorage.newestTurn()
+  ) {
+    if (!storage.initializeFromItems) {
+      return
+    }
+    this.storage.boundary = state.lastSequence
     const turns: AgentJournalRenderItem[] = []
     const reported = new Set<string>()
-    for (const item of state.items.values()) {
+    for (const item of memoryJournalMap(state.items).values()) {
       this.index(state, item.itemId, item, reported)
       if (isTurnOrClear(item)) {
         turns.push(item)
@@ -46,17 +39,25 @@ export class JournalNewestTurn {
     }
   }
 
+  /** As a restore does, a reopen places earlier failures' resume boundary at the opened tip. */
+  reopen(lastSequence: number): void {
+    this.storage.boundary = lastSequence
+  }
+
   read(): AgentJournalRenderItem | null {
-    return this.root?.latest.item ?? null
+    return this.storage.sources.latest()?.item ?? null
   }
 
   /** Releasing Resume marks must be written after this position. */
   failure(): number {
-    const winner = this.root?.winner
+    const winner = this.storage.sources.winner()
     const failedAt = winner?.failedAt ?? 0
     return (
       failedAt &&
-      Math.max(failedAt, this.boundary > (winner?.witnessedThrough ?? 0) ? this.boundary : 0)
+      Math.max(
+        failedAt,
+        this.storage.boundary > (winner?.witnessedThrough ?? 0) ? this.storage.boundary : 0
+      )
     )
   }
 
@@ -66,22 +67,22 @@ export class JournalNewestTurn {
     itemIds: readonly string[]
   ): (next: JournalNewestTurn, state: JournalReducerState) => void {
     const failures = itemIds.flatMap((id) => {
-      const source = this.sources.get(id)
+      const source = this.storage.sources.get(id)
       return source?.failedAt
         ? [
             {
               source,
               at: Math.max(
                 source.failedAt,
-                this.boundary > (source.witnessedThrough ?? 0) ? this.boundary : 0
+                this.storage.boundary > (source.witnessedThrough ?? 0) ? this.storage.boundary : 0
               ),
-              reports: this.reports.get(id) ?? 0
+              reports: this.storage.reports.get(id) ?? 0
             }
           ]
         : []
     })
     const evidence = itemIds.flatMap((id) => {
-      const target = this.evidence.get(id)
+      const target = this.storage.evidence.get(id)
       const item = state.items.get(id)
       return target && item ? [{ id, target, item }] : []
     })
@@ -90,7 +91,7 @@ export class JournalNewestTurn {
       for (const { id, target, item } of evidence) {
         const kept = current.items.get(id)
         if (
-          next.evidence.get(id) === target &&
+          next.storage.evidence.get(id) === target &&
           kept &&
           isDeepStrictEqual(item.body, kept.body) &&
           isDeepStrictEqual(item.turnScope, kept.turnScope) &&
@@ -100,7 +101,7 @@ export class JournalNewestTurn {
         }
       }
       for (const { source, at, reports } of failures) {
-        const kept = next.sources.get(source.item.itemId)
+        const kept = next.storage.sources.get(source.item.itemId)
         if (
           !kept?.failedAt ||
           !isDeepStrictEqual(source.item.body, kept.item.body) ||
@@ -111,14 +112,13 @@ export class JournalNewestTurn {
           ) ||
           source.ordinary !== kept.ordinary ||
           source.relevant !== kept.relevant ||
-          (next.reports.get(source.item.itemId) ?? 0) !== reports ||
+          (next.storage.reports.get(source.item.itemId) ?? 0) !== reports ||
           (unchanged.get(source.item.itemId) ?? 0) !== reports
         ) {
           continue
         }
-        const retained = { ...kept, failedAt: at, witnessedThrough: next.boundary }
-        next.sources.set(kept.item.itemId, retained)
-        next.root = putTurnSource(next.root, retained, false)
+        const retained = { ...kept, failedAt: at, witnessedThrough: next.storage.boundary }
+        next.storage.sources.set(kept.item.itemId, retained)
       }
     }
   }
@@ -134,15 +134,14 @@ export class JournalNewestTurn {
     for (const raw of itemIds) {
       const itemId = state.aliases.get(raw) ?? raw
       const item = state.items.get(itemId)
-      const prior = this.sources.get(itemId)
+      const prior = this.storage.sources.get(itemId)
       if (prior && !isTurnOrClear(item)) {
         // Removing one at or after the newest ordinary turn or clear exposes what lies beneath.
-        const anchor = this.root?.anchor
+        const anchor = this.storage.sources.anchor()
         if (!anchor || compareTurnSources(prior, anchor) >= 0) {
-          this.boundary = row.seq
+          this.storage.boundary = row.seq
         }
-        this.sources.delete(itemId)
-        this.root = putTurnSource(this.root, prior, true)
+        this.storage.sources.delete(itemId)
       }
       this.index(state, itemId, item, touched)
       if (isTurnOrClear(item)) {
@@ -159,10 +158,10 @@ export class JournalNewestTurn {
     if (!item || !isTurnOrClear(item)) {
       return
     }
-    const prior = this.sources.get(item.itemId)
+    const prior = this.storage.sources.get(item.itemId)
     const command = isCommand(item)
     const failed = settledFailure(item)
-    const reported = (this.reports.get(item.itemId) ?? 0) > 0
+    const reported = (this.storage.reports.get(item.itemId) ?? 0) > 0
     const source: TurnSource = {
       item,
       failedAt: failed && (!command || reported) ? prior?.failedAt || at : 0,
@@ -180,11 +179,7 @@ export class JournalNewestTurn {
     ) {
       return
     }
-    if (prior && compareTurnSources(prior, source) !== 0) {
-      this.root = putTurnSource(this.root, prior, true)
-    }
-    this.sources.set(item.itemId, source)
-    this.root = putTurnSource(this.root, source, false)
+    this.storage.sources.set(item.itemId, source)
   }
 
   private index(
@@ -194,7 +189,7 @@ export class JournalNewestTurn {
     touched: Set<string>
   ): void {
     const turn = item ? reportedTurn(state, item) : null
-    const prior = this.evidence.get(itemId) ?? null
+    const prior = this.storage.evidence.get(itemId) ?? null
     if (turn === prior) {
       return
     }
@@ -203,19 +198,19 @@ export class JournalNewestTurn {
       [turn, 1]
     ] as const) {
       if (target !== null) {
-        const count = (this.reports.get(target) ?? 0) + step
+        const count = (this.storage.reports.get(target) ?? 0) + step
         if (count > 0) {
-          this.reports.set(target, count)
+          this.storage.reports.set(target, count)
         } else {
-          this.reports.delete(target)
+          this.storage.reports.delete(target)
         }
         touched.add(target)
       }
     }
     if (turn === null) {
-      this.evidence.delete(itemId)
+      this.storage.evidence.delete(itemId)
     } else {
-      this.evidence.set(itemId, turn)
+      this.storage.evidence.set(itemId, turn)
     }
   }
 }

@@ -4,7 +4,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import type { JournalHostDatabase } from '../database/journal-host-database'
+import type { JournalTransactionalDatabase } from '../database/journal-host-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import { publishNewEpoch } from './journal-epoch-rollover'
 import type { JournalLoad } from '../replay/journal-open'
@@ -20,7 +20,7 @@ export class JournalEpochController {
       identity: AgentSessionJournalIdentity
       now: () => number
       mintEpoch: () => string
-      database: () => JournalHostDatabase
+      database: () => JournalTransactionalDatabase
       state: () => JournalReducerState
       writer: JournalRowWriter
       adopt: (loaded: JournalLoad) => void

@@ -1,7 +1,6 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderContextBoundary } from '../../../../shared/agent-session/agent-session-provider-context'
 import { journalContextCursor } from './journal-context-cursor'
-import { latestAgentSessionContextClearSequence } from '../../../../shared/agent-session/agent-session-context-clear'
 import { appendJournalContextClear } from './journal-context-clear'
 import { rewindJournalContext } from './journal-context-rewind'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
@@ -21,7 +20,7 @@ export class JournalContextController {
 
   floor(): AgentJournalCursor | null {
     const state = this.deps.state()
-    const sequence = latestAgentSessionContextClearSequence(state.items.values())
+    const sequence = state.queries.latestContextClearSequence(state)
     return sequence > 0 ? journalContextCursor(state, sequence) : null
   }
 

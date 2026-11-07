@@ -43,39 +43,40 @@ export class JournalLifecycleBatchAppender {
   ) {}
 
   append(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
-    return this.deps
-      .enqueueRows(() => {
-        if (input.rejectsQueued) {
-          const rejection = input.rejectsQueued
-          const rejections = this.planDispatches(
-            input,
-            journalInputOrder(this.deps.state())
-              .unsettledSubmissions()
-              .filter(isQueuedAgentJournalSubmission)
-              .map((send) => ({
-                clientMessageId: send.clientMessageId,
-                fence: input.fence,
-                state: 'rejected' as const,
-                ...rejection,
-                recovered: true as const
-              }))
-          )
-          if (rejections.length > 0 && input.mutations.length === 0) {
-            throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
-          }
-          return rejections.length === 0
-            ? []
-            : [...rejections, ...this.planMutations(input, input.mutations)]
-        }
-        if (this.wasApplied(input.settlementId)) {
-          return []
-        }
-        return [
-          ...this.planDispatches(input, input.dispatches ?? []),
-          ...this.planMutations(input, input.mutations)
-        ]
-      })
-      .then((rows) => this.cursorAfter(rows))
+    return this.deps.enqueueRows(() => this.plan(input)).then((rows) => this.cursorAfter(rows))
+  }
+
+  /** Both writers plan against the state at the command's own transaction position. */
+  plan(input: JournalLifecycleBatchInput): ((seq: number, ts: number) => JournalRow)[] {
+    if (input.rejectsQueued) {
+      const rejection = input.rejectsQueued
+      const rejections = this.planDispatches(
+        input,
+        journalInputOrder(this.deps.state())
+          .unsettledSubmissions()
+          .filter(isQueuedAgentJournalSubmission)
+          .map((send) => ({
+            clientMessageId: send.clientMessageId,
+            fence: input.fence,
+            state: 'rejected' as const,
+            ...rejection,
+            recovered: true as const
+          }))
+      )
+      if (rejections.length > 0 && input.mutations.length === 0) {
+        throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
+      }
+      return rejections.length === 0
+        ? []
+        : [...rejections, ...this.planMutations(input, input.mutations)]
+    }
+    if (this.wasApplied(input.settlementId)) {
+      return []
+    }
+    return [
+      ...this.planDispatches(input, input.dispatches ?? []),
+      ...this.planMutations(input, input.mutations)
+    ]
   }
 
   /** Resolve rows at the batch's own position in the write queue. */

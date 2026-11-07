@@ -1,3 +1,4 @@
+import { memoryJournalMap as memoryMap } from './journal-memory-collections'
 import { journalInputSourceBody } from './input-order/journal-input-source'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { JournalWriteProjection } from './writing/journal-write-projection'
@@ -5,7 +6,13 @@ import type { AgentJournalDispatchRejection } from '../../../shared/agent-sessio
 import { randomUUID } from 'node:crypto'
 import { retireCoveredJournalFloor } from './context-epochs/journal-commit'
 import { createJournalPublicReader, renderJournalStatus } from './projection/journal-public-read'
-import type * as journal from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalAcceptanceReceipt,
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalItemIdentity,
   AgentJournalCursor,
@@ -198,22 +205,21 @@ export class AgentSessionJournal {
 
   /** Visit without allocating/sorting a snapshot. */
   visitItems = (
-    visit: (itemId: string, sequence: number, body: journal.AgentJournalItemBody) => void
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
   ): void => this.visitItemsWithLinkage(visit)
 
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
-  itemBody = (itemId: string): journal.AgentJournalItemBody | null =>
-    this.item(itemId)?.body ?? null
+  itemBody = (itemId: string): AgentJournalItemBody | null => this.item(itemId)?.body ?? null
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
-    this.state.stoppedHistoryCarried
+    memoryMap(this.state.stoppedHistoryCarried)
 
-  submissionBody = (clientMessageId: string): journal.AgentJournalMessageItem | null =>
+  submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
     journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
 
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
-  item = (itemId: string): journal.AgentJournalRenderItem | null =>
+  item = (itemId: string): AgentJournalRenderItem | null =>
     journalInput.readJournalInputItem(this.state, itemId)
 
   /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
@@ -226,21 +232,20 @@ export class AgentSessionJournal {
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: journal.AgentJournalRenderItem; turnId: string } | null =>
-    runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
+  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
+    runningStructuredAgentSessionTurnItemBySequence(memoryMap(this.state.items).values())
 
-  newestTurn = (): journal.AgentJournalTurnLifecycle | null =>
-    readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
+  newestTurn = () => readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
   threadGoalSource = (): JournalThreadGoalSource =>
-    journalThreadGoalSource(this.state.items.values())
+    journalThreadGoalSource(memoryMap(this.state.items).values())
 
   /** Read across the journal, beyond any client's loaded page. */
   threadGoal = () => this.threadGoalSource().goal
 
   /** Read across the journal, beyond any client's loaded page. */
   contextUsage = (): AgentSessionContextUsage =>
-    latestStructuredAgentContextFacts(this.state.items.values())
+    latestStructuredAgentContextFacts(memoryMap(this.state.items).values())
 
   /** Includes activity from revisions/tombstones absent from rendered items. */
   lastActivityAt = (): number => this.state.lastActivityAt
@@ -254,7 +259,7 @@ export class AgentSessionJournal {
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
-  submissions = (): journal.AgentJournalSubmission[] => [...this.state.submissions.values()]
+  submissions = (): AgentJournalSubmission[] => [...memoryMap(this.state.submissions).values()]
 
   historyOrigin = () => this.state.historyOrigin
 
@@ -264,7 +269,7 @@ export class AgentSessionJournal {
     this.inputOrder.unsettledSubmissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** Reconnecting clients read durable acceptance instead of resending. */
-  receiptFor = (clientMessageId: string): journal.AgentJournalAcceptanceReceipt | null =>
+  receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
     journalContext.journalContextReceipt(this.state, clientMessageId)
 
   physicalCursor = (): AgentJournalCursor => journalContext.physicalJournalCursor(this.state)
@@ -377,7 +382,7 @@ export class AgentSessionJournal {
   rejectQueuedSubmissions = (
     fence: number,
     rejection: AgentJournalDispatchRejection,
-    which?: (submission: journal.AgentJournalSubmission) => boolean
+    which?: (submission: AgentJournalSubmission) => boolean
   ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** Reset provider presentation and invalidate public cursors, retaining canonical input. */

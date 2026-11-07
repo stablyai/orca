@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
 import { isProviderTimelineTurnInNamespace } from '../native-chat/agent-session-timeline/provider-timeline-identity'
@@ -20,7 +21,7 @@ export function nothingExchangedOn(
   if (load.damage || load.newer) {
     return false
   }
-  for (const item of load.state.items.values()) {
+  for (const item of memoryJournalMap(load.state.items).values()) {
     const turn = readAgentJournalTurn(item.body)
     if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
       return false

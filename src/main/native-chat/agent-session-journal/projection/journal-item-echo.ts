@@ -1,3 +1,5 @@
+import { memoryJournalMap } from '../journal-memory-collections'
+import type { JournalKeyedRead } from '../journal-keyed-storage'
 import { getJournalInputOrder } from '../input-order/journal-input-order-registry'
 import type { JournalReducerState } from './journal-reducer'
 import {
@@ -6,7 +8,6 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { isWriteFailureSubmission } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import { latestAgentSessionContextClearSequence } from '../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 /** Absent permits legacy inference; preserve unknown declarations without authorizing delivery recovery. */
 export type JournalItemEcho = { echoOf?: unknown }
@@ -16,7 +17,7 @@ export function journalItemEchoFields(item: JournalItemEcho): JournalItemEcho {
 }
 
 export function journalItemDeclaresEcho(
-  declarations: ReadonlyMap<string, unknown>,
+  declarations: JournalKeyedRead<string, unknown>,
   itemId: string,
   incoming: JournalItemEcho = {}
 ): boolean {
@@ -24,7 +25,7 @@ export function journalItemDeclaresEcho(
 }
 
 export function journalItemEchoRestatement(
-  declarations: ReadonlyMap<string, unknown>,
+  declarations: JournalKeyedRead<string, unknown>,
   itemId: string
 ): JournalItemEcho {
   return declarations.has(itemId) ? { echoOf: declarations.get(itemId) } : {}
@@ -76,11 +77,20 @@ export function journalEchoClaimant(
     return null
   }
   const fingerprint = agentSessionSendBodyFingerprint(state.sessionId, body)
-  const contextSequence = latestAgentSessionContextClearSequence(state.items.values())
+  return state.queries.echoClaimant(state, fingerprint, marker5)
+}
+
+/** The frozen restore fold uses the same claimant order, including marker-5 inference. */
+export function memoryJournalEchoClaimant(
+  state: JournalReducerState,
+  fingerprint: string,
+  marker5: boolean
+): string | null {
+  const contextSequence = state.queries.latestContextClearSequence(state)
   // Match equal payloads in send order; proven-undelivered legacy rows cannot claim later resend echoes.
   const owner = getJournalInputOrder(state)
   const eligible = owner
-    ? [...state.items.keys()]
+    ? [...memoryJournalMap(state.items).keys()]
         .flatMap((id) => {
           const input = owner.inputForItem(id)
           return input ? [input] : []
@@ -88,7 +98,7 @@ export function journalEchoClaimant(
         .sort(
           (a, b) => owner.inputOrdinal(a.clientMessageId) - owner.inputOrdinal(b.clientMessageId)
         )
-    : [...state.submissions.values()]
+    : [...memoryJournalMap(state.submissions).values()]
   const submission = eligible
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find(

@@ -7,6 +7,12 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { journalDispatchRowBuilder } from '../writing/journal-row-builders'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../journal-store'
+
+/** What recovery reads and writes; the SQL writer supplies its own command-local journal. */
+export type JournalRecoveryJournal = Pick<
+  AgentSessionJournal,
+  'inputOrder' | 'resolveDispatch' | 'queuedMessages' | 'physicalCursor' | 'itemBody'
+>
 import type { ResolveDispatchInput } from '../journal-store-contracts'
 
 export type JournalPendingSubmission = Pick<
@@ -50,7 +56,7 @@ export function journalPendingSubmissionResolutions(
 
 /** Process exit makes handed-over sends unknown, never safely retryable; leave unhanded queues alone. */
 export async function markJournalPendingSubmissionsUnknown(
-  journal: AgentSessionJournal,
+  journal: JournalRecoveryJournal,
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
@@ -67,7 +73,7 @@ export async function markJournalPendingSubmissionsUnknown(
 
 /** Failed initialization proves no message ran; delivery loops settle unhanded queued messages separately. */
 export async function rejectJournalPendingSubmissions(
-  journal: AgentSessionJournal,
+  journal: JournalRecoveryJournal,
   fence: number,
   rejection: AgentJournalDispatchRejection
 ): Promise<string[]> {
@@ -83,7 +89,7 @@ export async function rejectJournalPendingSubmissions(
 }
 
 export async function rejectJournalQueuedSubmissions(
-  journal: AgentSessionJournal,
+  journal: JournalRecoveryJournal,
   fence: number,
   rejection: AgentJournalDispatchRejection,
   which: (submission: AgentJournalSubmission) => boolean = () => true

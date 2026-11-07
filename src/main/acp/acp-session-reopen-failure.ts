@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-memory-collections'
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
 import type {
@@ -97,7 +98,7 @@ export function acpUnannouncedLosses(
     return []
   }
   const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
+  for (const itemId of memoryJournalMap(load.state.items).keys()) {
     const identity = parseAgentJournalItemKey(itemId)
     const spelled =
       identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null

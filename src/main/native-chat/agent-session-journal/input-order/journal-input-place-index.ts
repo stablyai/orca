@@ -7,16 +7,15 @@ export type InputPlaceQuery = {
   waiting?: QueuedMessageRow
   handoff?: QueuedMessageRow
   position: number
-  maximum?: { id: string; value: number; tie: number }
 }
-type Entry = InputPlaceQuery & {
+export type JournalInputPlaceEntry = InputPlaceQuery & {
   id: string
   sequence: number
   domain: string | undefined
   tie?: number
 }
 type Node = {
-  entry: Entry
+  entry: JournalInputPlaceEntry
   height: number
   result: InputPlaceQuery
   left?: Node
@@ -31,18 +30,11 @@ export function mergeInputPlaces(a: InputPlaceQuery, b: InputPlaceQuery): InputP
     command: first(a.command, b.command),
     waiting: first(a.waiting, b.waiting),
     handoff: first(a.handoff, b.handoff),
-    position: Math.max(a.position, b.position),
-    maximum:
-      !a.maximum ||
-      (b.maximum &&
-        (b.maximum.value > a.maximum.value ||
-          (b.maximum.value === a.maximum.value && b.maximum.tie > a.maximum.tie)))
-        ? b.maximum
-        : a.maximum
+    position: Math.max(a.position, b.position)
   }
 }
 const height = (node?: Node) => node?.height ?? 0
-const compare = (a: Entry, b: Entry) =>
+const compare = (a: JournalInputPlaceEntry, b: JournalInputPlaceEntry) =>
   a.sequence - b.sequence || (a.tie ?? 0) - (b.tie ?? 0) || a.id.localeCompare(b.id)
 function update(node: Node): Node {
   node.height = 1 + Math.max(height(node.left), height(node.right))
@@ -82,7 +74,11 @@ function balance(node: Node): Node {
   }
   return node
 }
-function put(node: Node | undefined, entry: Entry, remove: boolean): Node | undefined {
+function put(
+  node: Node | undefined,
+  entry: JournalInputPlaceEntry,
+  remove: boolean
+): Node | undefined {
   if (!node) {
     return remove ? undefined : { entry, height: 1, result: entry }
   }
@@ -113,12 +109,24 @@ function put(node: Node | undefined, entry: Entry, remove: boolean): Node | unde
 
 /** Current card coordinates only; subtree summaries answer admission/selection/recovery cuts. */
 export class JournalInputPlaceIndex {
-  private readonly epochs = new Map<string, Node>()
+  private epochs = new Map<string, Node>()
   private all: Node | undefined
   private undomained = 0
-  private readonly entries = new Map<string, Entry>()
+  private entries = new Map<string, JournalInputPlaceEntry>()
 
   constructor(_epoch: string) {}
+
+  /** An actual open's export reads the entries as restore left them. */
+  exportEntries(): IterableIterator<JournalInputPlaceEntry> {
+    return this.entries.values()
+  }
+
+  clear(): void {
+    this.epochs = new Map()
+    this.entries = new Map()
+    this.all = undefined
+    this.undomained = 0
+  }
 
   set(
     card: QueuedMessageRow,
@@ -130,7 +138,7 @@ export class JournalInputPlaceIndex {
     if (card.state === 'withdrawn') {
       return
     }
-    const entry: Entry = {
+    const entry: JournalInputPlaceEntry = {
       id: card.messageId,
       sequence: coordinate?.sequence ?? 0,
       domain: coordinate?.epoch ?? '',
@@ -159,43 +167,9 @@ export class JournalInputPlaceIndex {
       return
     }
     this.delete(id)
-    const entry: Entry = { id, sequence, domain, position, tie }
+    const entry: JournalInputPlaceEntry = { id, sequence, domain, position, tie }
     this.entries.set(id, entry)
     this.change(entry, false)
-  }
-
-  setSummary(id: string, sequence: number, value: number, tie: number): void {
-    const prior = this.entries.get(id)
-    if (prior?.sequence === sequence && prior.maximum?.value === value && prior.tie === tie) {
-      return
-    }
-    this.delete(id)
-    const entry: Entry = {
-      id,
-      sequence,
-      domain: undefined,
-      position: value,
-      tie,
-      maximum: { id, value, tie }
-    }
-    this.entries.set(id, entry)
-    this.change(entry, false)
-  }
-
-  maximumAfter(sequence: number): string | undefined {
-    const after = (node?: Node): InputPlaceQuery => {
-      if (!node) {
-        return empty()
-      }
-      if (node.entry.sequence <= sequence) {
-        return after(node.right)
-      }
-      return mergeInputPlaces(
-        mergeInputPlaces(after(node.left), node.entry),
-        node.right?.result ?? empty()
-      )
-    }
-    return after(this.all).maximum?.id
   }
 
   delete(id: string): void {
@@ -206,7 +180,7 @@ export class JournalInputPlaceIndex {
     }
   }
 
-  private change(entry: Entry, remove: boolean): void {
+  private change(entry: JournalInputPlaceEntry, remove: boolean): void {
     const epoch = entry.domain
     if (epoch !== undefined) {
       const root = put(this.epochs.get(epoch), entry, remove)

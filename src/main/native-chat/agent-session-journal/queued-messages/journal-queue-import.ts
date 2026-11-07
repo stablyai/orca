@@ -1,3 +1,4 @@
+import { memoryJournalMap, memoryJournalSet } from '../journal-memory-collections'
 import { JournalDraftMap, JournalDraftSet } from '../projection/journal-transition-collections'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -108,10 +109,13 @@ export class LegacyQueuedCards {
     }
     const display: JournalReducerState = {
       ...state,
-      items: new JournalDraftMap(state.items),
-      submissions: new JournalDraftMap(state.submissions),
-      normalizedHandOffs: new JournalDraftSet(state.normalizedHandOffs),
-      inputs: { ...state.inputs, presentations: new JournalDraftMap(state.inputs.presentations) }
+      items: new JournalDraftMap(memoryJournalMap(state.items)),
+      submissions: new JournalDraftMap(memoryJournalMap(state.submissions)),
+      normalizedHandOffs: new JournalDraftSet(memoryJournalSet(state.normalizedHandOffs)),
+      inputs: {
+        ...state.inputs,
+        presentations: new JournalDraftMap(memoryJournalMap(state.inputs.presentations))
+      }
     }
     for (const { card, submission: entry } of handedOff) {
       const send = { ...entry }
@@ -211,17 +215,7 @@ export class LegacyQueuedCards {
         const rows = this.read()
         const deletion = this.deletion(rows.map((row) => row.messageId))
         const plan = rows.flatMap((row) => {
-          const change = this.deps.state().queue.cards.has(row.messageId)
-            ? null
-            : legacyQueuedChange(this.deps.state(), row)
-          if (change) {
-            const state = this.deps.state()
-            for (const send of journalInputOrder(state).linkedTo(row.messageId)) {
-              if (journalDispatchRowApplies(send)) {
-                this.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
-              }
-            }
-          }
+          const change = this.witnessed(row)
           return change ? [journalQueueRowBuilder(this.deps.state, row.messageId, change)] : []
         })
         if (plan.length > 0) {
@@ -252,6 +246,27 @@ export class LegacyQueuedCards {
           error: error instanceof Error ? error.message : String(error)
         })
       })
+  }
+
+  /** A writer command starts without this handle's open-time pass; legacy rows remain only after a
+   *  failed import, and the pass over them is the same one the open ran. */
+  rederiveWitnesses(): void {
+    for (const row of this.rows()) {
+      this.witnessed(row)
+    }
+  }
+
+  private witnessed(row: QueuedMessageRow): JournalQueuedChange | null {
+    const state = this.deps.state()
+    const change = state.queue.cards.has(row.messageId) ? null : legacyQueuedChange(state, row)
+    if (change) {
+      for (const send of journalInputOrder(state).linkedTo(row.messageId)) {
+        if (journalDispatchRowApplies(send)) {
+          this.witnesses.set(send.clientMessageId, { messageId: row.messageId, change })
+        }
+      }
+    }
+    return change
   }
 
   private rows(): readonly QueuedMessageRow[] {

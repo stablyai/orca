@@ -7,8 +7,10 @@ import {
 import { z } from 'zod'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import type { JournalReducerState } from '../projection/journal-reducer'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEntryChange } from '../projection/journal-transition-collections'
 import { journalEntryJson, journalStateScalars } from './journal-state-layout'
+import { journalOutcomeScalarJson, readJournalOutcomeScalars } from '../journal-outcome-scalars'
 import {
   admitOutcomeFormat1,
   JOURNAL_OUTCOME_FORMAT_1,
@@ -19,6 +21,8 @@ import {
   AgentSessionJournalError,
   JournalOutcomeDecodeError
 } from '../writing/journal-write-guards'
+import type { JournalOutcomeItemAdmission } from '../journal-outcome-item-provenance'
+export { JournalOutcomeDecodeError } from '../writing/journal-write-guards'
 
 export type JournalOutcome = {
   seq: number
@@ -34,6 +38,7 @@ export type JournalOutcome = {
 export const JOURNAL_PREFIX_ORDINAL = 'b'
 
 const scalars = (state: JournalReducerState): Record<string, unknown> =>
+  readJournalOutcomeScalars(state) ??
   z.record(z.string(), z.unknown()).parse(JSON.parse(journalStateScalars(state)))
 
 /** Encoding freezes a sequence's contributions before the next input can mutate the draft;
@@ -68,13 +73,17 @@ export function encodeJournalOutcomes(
   }))
   for (const [key, value] of Object.entries(next)) {
     // The sequence is the record's own, and the epoch's coverage on read; it is never stored.
-    if (key !== 'lastSequence' && JSON.stringify(value) !== JSON.stringify(before[key])) {
+    if (
+      key !== 'lastSequence' &&
+      value !== before[key] &&
+      journalOutcomeScalarJson(value) !== journalOutcomeScalarJson(before[key])
+    ) {
       values.push({
         seq: state.lastSequence,
         field: '$',
         key: JSON.stringify(key),
         format: JOURNAL_OUTCOME_FORMAT_2,
-        json: JSON.stringify(value),
+        json: journalOutcomeScalarJson(value)!,
         deleted: false
       })
     }
@@ -96,6 +105,16 @@ export function journalOutcomeScalars(state: JournalReducerState): Record<string
  * damage. */
 export function decodeJournalOutcome(row: SqliteRow): JournalOutcome {
   return admitJournalOutcome(row).value
+}
+
+/** A projection pointer uses the same admission as the restore fold, including future formats. */
+export function decodeJournalOutcomeItem(row: SqliteRow): AgentJournalRenderItem {
+  const { value, admitted } = admitJournalOutcome(row)
+  if (value.field !== 'items' || value.deleted) {
+    throw new JournalOutcomeDecodeError('invalid journal item pointer')
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: items admission checked the stored item schema and its key without transforming it.
+  return admitted.kept as AgentJournalRenderItem
 }
 
 function admitJournalOutcome(row: SqliteRow): { value: JournalOutcome; admitted: AdmittedOutcome } {
@@ -156,9 +175,21 @@ type Newest = AdmittedOutcome & Pick<JournalOutcome, 'ordinal' | 'deleted' | 'fo
  * order comes from the canonical log. */
 export class JournalOutcomeFold {
   private readonly values = new Map<string, Map<string, Newest>>()
+  constructor(
+    private readonly itemAdmission?: { generation: number; admit: JournalOutcomeItemAdmission }
+  ) {}
   /** Admits one stored record and keeps its value as admission parsed it, not its text. */
   add(row: SqliteRow): Pick<JournalOutcome, 'field' | 'key'> {
     const { value, admitted } = admitJournalOutcome(row)
+    let kept = admitted.kept
+    if (this.itemAdmission && value.field === 'items' && !value.deleted) {
+      kept = this.itemAdmission.admit(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: item admission checked this JSON graph without transforming it.
+        admitted.kept as AgentJournalRenderItem,
+        value,
+        this.itemAdmission.generation
+      )
+    }
     let field = this.values.get(value.field)
     if (!field) {
       field = new Map()
@@ -168,7 +199,8 @@ export class JournalOutcomeFold {
       ordinal: value.ordinal,
       deleted: value.deleted,
       format: value.format,
-      ...admitted
+      ...admitted,
+      kept
     })
     return value
   }

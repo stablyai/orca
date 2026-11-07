@@ -93,6 +93,10 @@ export class JournalInputCandidates {
     this.revision += 1
   }
 
+  exportCards(): IterableIterator<QueuedMessageRow> {
+    return this.byId.values()
+  }
+
   clear(): void {
     this.byId.clear()
     this.root = undefined

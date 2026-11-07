@@ -1,4 +1,7 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalKeyedMap } from '../journal-keyed-storage'
+import type { JournalInputLineageFacts } from '../journal-input-facts-storage'
+import { memoryJournalInputLineageFacts } from '../journal-memory-input-facts'
 
 export type JournalInputContext = {
   source: AgentJournalCursor
@@ -59,28 +62,21 @@ export function isInputLineage(value: unknown): value is JournalInputLineage {
   })
 }
 
-export function queryInputContext<T>(
-  context: JournalInputContext,
-  original: AgentJournalCursor | undefined,
-  before: (coordinate: AgentJournalCursor) => T,
-  all: () => T,
-  merge: (left: T, right: T) => T
-): T {
-  if (context.basis === 'observed' || original?.epoch === context.source.epoch) {
-    return all()
-  }
-  const source = before(context.source)
-  return original ? merge(source, before(original)) : source
-}
-
 /** Initial source coordinates and introduction cuts never follow physical restatement rows. */
 export class JournalInputLineageOwner {
-  constructor(readonly cards: Map<string, JournalInputCard>) {}
-  private base = 0
-  clock = 0
+  constructor(
+    readonly cards: JournalKeyedMap<string, JournalInputCard>,
+    private readonly facts: JournalInputLineageFacts = memoryJournalInputLineageFacts(cards)
+  ) {}
+  get clock(): number {
+    return this.facts.clock
+  }
+  set clock(value: number) {
+    this.facts.clock = value
+  }
 
   load(lineage: JournalInputLineage): void {
-    this.base = lineage.clock
+    this.facts.base = lineage.clock
     this.clock = lineage.clock
     for (const card of lineage.cards) {
       this.cards.set(card.messageId, {
@@ -89,19 +85,17 @@ export class JournalInputLineageOwner {
       })
     }
   }
-  restoreFrontier(sequence: number, entries: Iterable<JournalInputEntry>): void {
-    let frontier = 0
-    for (const entry of entries) {
-      frontier = Math.max(frontier, entry.context.cut)
-    }
-    for (const card of this.cards.values()) {
-      frontier = Math.max(frontier, card.introduced)
-    }
+  /** A restore stamps cards before its frontier exists, so a reopen starts from no offset too. */
+  reopen(): void {
+    this.facts.base = 0
+  }
+  restoreFrontier(sequence: number, entries: JournalKeyedMap<string, JournalInputEntry>): void {
+    const frontier = this.facts.frontier(entries)
     this.clock = frontier
-    this.base = frontier - sequence
+    this.facts.base = frontier - sequence
   }
   at(sequence: number): number {
-    return this.base + sequence
+    return this.facts.base + sequence
   }
   observe(sequence: number): void {
     this.clock = Math.max(this.clock, this.at(sequence))
@@ -116,7 +110,7 @@ export class JournalInputLineageOwner {
     }
   }
   releaseHistory(keep: (id: string) => boolean): void {
-    for (const [id, card] of this.cards) {
+    for (const [id, card] of this.facts.cardsForRelease()) {
       if (!keep(id)) {
         this.cards.delete(id)
       } else {

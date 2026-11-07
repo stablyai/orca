@@ -19,6 +19,7 @@ import {
   type JournalStoredRow
 } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/writing/journal-write-projection'
+import { memoryJournalMap } from '../../../src/main/native-chat/agent-session-journal/journal-memory-collections'
 import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
@@ -59,12 +60,17 @@ afterEach(() => {
   JournalWriteProjection.verifyEachCommit = false
 })
 
-const view = (journal: ContinuedJournal) => ({
-  snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.displayState().queue.cards.values()].sort(
-    (a, b) => a.position - b.position
-  )
-})
+const view = (journal: ContinuedJournal) => {
+  const state = journal.queuedMessages.displayState()
+  const cards =
+    state.queue.cards instanceof Map
+      ? memoryJournalMap(state.queue.cards).values()
+      : state.queries.queueCardsForInitialization(state)
+  return {
+    snapshot: journal.snapshot(),
+    cards: [...cards].sort((a, b) => a.position - b.position)
+  }
+}
 
 /** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
  * are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */

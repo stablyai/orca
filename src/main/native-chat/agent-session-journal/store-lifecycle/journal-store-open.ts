@@ -1,3 +1,4 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLoad } from '../replay/journal-open'
@@ -38,7 +39,9 @@ async function settleStaleSubagentRosters(
   },
   loaded: JournalLoad
 ): Promise<void> {
-  for (const revision of staleSubagentRosterRevisions(loaded.state.items.values())) {
+  for (const revision of staleSubagentRosterRevisions(
+    memoryJournalMap(loaded.state.items).values()
+  )) {
     await input.appendItem(revision.identity, revision.body, input.highestFence())
   }
 }

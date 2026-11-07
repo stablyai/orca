@@ -1,12 +1,36 @@
 import type Database from '../../../sqlite/sync-database'
 import type { JournalOperationReceipt } from './journal-row-writer'
 
+export type JournalGoalAttachmentSnapshot = {
+  uploads: [string, string[]][]
+  goals: [string, string[]][]
+}
+
 /** Losing this live proof revokes permission to retract a durable claim. */
 export class JournalGoalAttachmentInverse {
   private readonly uploads = new Map<string, Set<string>>()
   private readonly goals = new Map<string, ReadonlySet<string>>()
 
   constructor(private readonly sessionId: string) {}
+
+  /** The SQL writer works on a copy; the host adopts the copy's state after the command commits. */
+  snapshot(): JournalGoalAttachmentSnapshot {
+    return {
+      uploads: [...this.uploads].map(([id, goals]) => [id, [...goals]]),
+      goals: [...this.goals].map(([goal, ids]) => [goal, [...ids]])
+    }
+  }
+
+  adopt(snapshot: JournalGoalAttachmentSnapshot): void {
+    this.uploads.clear()
+    this.goals.clear()
+    for (const [id, goals] of snapshot.uploads) {
+      this.uploads.set(id, new Set(goals))
+    }
+    for (const [goal, ids] of snapshot.goals) {
+      this.goals.set(goal, new Set(ids))
+    }
+  }
 
   isLive(goalId: string): boolean {
     return this.goals.has(goalId)
