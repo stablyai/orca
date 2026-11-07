@@ -219,7 +219,9 @@
       "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다."
     },
     "message": {
-      "copyMessage": "메시지 복사"
+      "copyMessage": "메시지 복사",
+      "forkFromResponse": "이 응답에서 분기",
+      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
     },
     "messageActionsSheet": {
       "clipboardRejected": "클립보드에서 텍스트를 거부했습니다.",
@@ -301,7 +303,8 @@
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
-      "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다"
+      "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
+      "forkedFrom": "분기 원본"
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -621,6 +624,12 @@
       "outcomeUnknownReturned": "Orca가 대화가 이 메시지로 돌아갔는지 확인하지 못했습니다. 메시지가 입력창으로 돌아왔으며, Orca는 다음 메시지가 전송되기 전에 대화를 확인합니다.",
       "timeout": "이 메시지로 돌아간 후 채팅이 업데이트되지 않았습니다. 최신 내용을 보려면 다시 열세요.",
       "pending": "대화가 이전 메시지로 돌아갈 때까지 기다리세요."
+    },
+    "fork": {
+      "busy": "다른 채팅이나 터미널을 여는 중입니다. 기다린 다음 {{agent}} 채팅을 다시 분기하세요.",
+      "unconfirmed": "{{agent}}이(가) 분기를 확인하지 못했습니다. 채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
+      "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다. {{detail}}",
+      "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요."
     }
   },
   "common": {
@@ -1068,6 +1077,12 @@
     "mermaidDiagram": {
       "expand": "다이어그램 확대",
       "label": "Mermaid 다이어그램"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "계획",
+        "exitPlanMode": "계획 모드 종료"
+      }
     }
   },
   "connection": {
@@ -1497,7 +1512,8 @@
       "removeHost": "호스트 제거",
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
-      "unpin": "고정 해제"
+      "unpin": "고정 해제",
+      "rename": "이름 변경"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -1579,6 +1595,12 @@
       "thisComputer": "이 컴퓨터",
       "waitingForDesktop": "아직 데스크톱 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
+    },
+    "workspaceRenameSheet": {
+      "title": "워크스페이스 이름 변경",
+      "emptyUsesBranch": "비워 두면 브랜치 이름을 사용합니다.",
+      "emptyUsesFolder": "비워 두면 폴더 이름을 사용합니다.",
+      "failed": "워크스페이스 이름을 변경하지 못했습니다. {{reason}}"
     }
   },
   "navigation": {
@@ -2094,7 +2116,8 @@
       "usageLimitWindowWeeklyModel": "모델별 주간",
       "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
       "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
-      "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다."
+      "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다.",
+      "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요."
     },
     "fileReader": {
       "copyReviewNotes": "리뷰 메모 복사",
@@ -2325,7 +2348,8 @@
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
-      "allowAutoClose": "자동 닫기 허용"
+      "allowAutoClose": "자동 닫기 허용",
+      "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",
@@ -4024,7 +4048,11 @@
       "notReported": "보고되지 않음",
       "searchOptions": "옵션 검색",
       "task": "작업",
-      "review": "확인"
+      "review": "확인",
+      "discardChangesTitle": "변경 사항을 버릴까요?",
+      "discardChangesMessage": "이 자동화에서 저장하지 않은 변경 사항이 사라집니다.",
+      "discard": "버리기",
+      "keepEditing": "계속 편집"
     },
     "orphanIssues": {
       "hostReselection": "실행하기 전에 이 자동화를 편집하고 호스트를 다시 선택하세요.",
