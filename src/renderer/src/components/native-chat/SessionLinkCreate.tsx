@@ -1,0 +1,197 @@
+import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { Check } from 'lucide-react'
+import { useState } from 'react'
+import { SessionLinkPolicy, type SessionLinkParticipant } from '../../../../shared/session-link'
+import { translate as t } from '@/i18n/i18n'
+import { SessionLinkPolicyField } from './SessionLinkPolicyField'
+import { SessionLinkParticipantCard } from './SessionLinkParticipantCard'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Command,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandEmpty
+} from '@/components/ui/command'
+
+export function SessionLinkCreate({
+  source,
+  candidates,
+  initialPartnerSessionId,
+  busy,
+  policySupported = false,
+  onCreate
+}: {
+  source: SessionLinkParticipant
+  candidates: SessionLinkParticipant[]
+  initialPartnerSessionId?: string
+  busy: boolean
+  policySupported?: boolean
+  onCreate: (
+    partner: string,
+    story: string,
+    role: 'reviewer' | 'implementer',
+    policy?: SessionLinkPolicy
+  ) => void
+}): React.JSX.Element {
+  const [partner, setPartner] = useState(initialPartnerSessionId ?? '')
+  const [choosingPartner, setChoosingPartner] = useState(!initialPartnerSessionId)
+  const [story, setStory] = useState('')
+  const [policy, setPolicy] = useState<SessionLinkPolicy>({ turnLimit: null })
+  const [role, setRole] = useState<'reviewer' | 'implementer'>(
+    source.agent === 'claude' ? 'reviewer' : 'implementer'
+  )
+  const selected = candidates.find((p) => p.sessionId === partner)
+  return (
+    <div className="space-y-4">
+      {choosingPartner ? (
+        <div className="space-y-1">
+          <Label>{t('components.sessionLink.partner', 'Partner session')}</Label>
+          <Command>
+            <CommandInput
+              placeholder={t(
+                'components.sessionLink.search',
+                'Search agent, chat, workspace or branch…'
+              )}
+            />
+            <CommandList className="max-h-48">
+              <CommandEmpty>
+                {t('components.sessionLink.empty', 'No available local Claude or Codex chats.')}
+              </CommandEmpty>
+              {candidates.map((p) => (
+                <CommandItem
+                  disabled={busy}
+                  key={p.sessionId}
+                  value={`${p.sessionId} ${p.agent} ${p.name} ${p.directory} ${p.branch}`}
+                  onSelect={() => {
+                    setPartner(p.sessionId)
+                    setChoosingPartner(false)
+                  }}
+                  data-current={partner === p.sessionId ? 'true' : undefined}
+                >
+                  <Check
+                    className={`size-3 shrink-0 ${partner === p.sessionId ? 'opacity-100' : 'opacity-0'}`}
+                    aria-hidden
+                  />
+                  <div className="min-w-0 space-y-1">
+                    <div className="text-sm">
+                      {p.name}
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {AI_VAULT_AGENT_LABELS[p.agent]}
+                      </span>
+                    </div>
+                    <div className="break-all font-mono text-xs text-muted-foreground">
+                      {p.directory} · {p.branch}
+                    </div>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandList>
+          </Command>
+        </div>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SessionLinkParticipantCard participant={source} role={role} />
+        {selected ? (
+          <SessionLinkParticipantCard
+            participant={selected}
+            role={role === 'implementer' ? 'reviewer' : 'implementer'}
+          />
+        ) : (
+          <p
+            role={partner ? 'alert' : undefined}
+            className="rounded-md border p-3 text-sm text-muted-foreground"
+          >
+            {partner
+              ? t(
+                  'components.sessionLink.partnerUnavailable',
+                  'The selected chat is no longer available. Choose another partner.'
+                )
+              : t('components.sessionLink.choosePartner', 'Choose the other chat to connect.')}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={busy || !selected}
+          onClick={() => setRole(role === 'reviewer' ? 'implementer' : 'reviewer')}
+        >
+          {t('components.sessionLink.swap', 'Swap roles')}
+        </Button>
+        {!choosingPartner ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => setChoosingPartner(true)}
+          >
+            {t('components.sessionLink.changePartner', 'Change partner')}
+          </Button>
+        ) : null}
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="session-link-story">
+          {t('components.sessionLink.story', 'Shared story')}
+        </Label>
+        <Textarea
+          disabled={busy}
+          id="session-link-story"
+          value={story}
+          onChange={(e) => setStory(e.target.value)}
+          maxLength={2048}
+          placeholder={t(
+            'components.sessionLink.storyPlaceholder',
+            'Goal, issue link or local plan path; existing spending and privacy boundaries…'
+          )}
+        />
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'components.sessionLink.noAutomaticRead',
+            'Links and plan files are references. Their contents are not read or shared automatically.'
+          )}
+        </p>
+      </div>
+      {policySupported ? (
+        <SessionLinkPolicyField value={policy} onChange={setPolicy} disabled={busy} />
+      ) : null}
+      <p className="text-xs text-muted-foreground">
+        {policySupported
+          ? t(
+              'components.sessionLink.localTransport',
+              'Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
+            )
+          : t(
+              'components.sessionLink.limits',
+              'Up to 6 automatic turns, including introductions, or 12 agent messages before the owner continues. Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
+            )}
+      </p>
+      {selected?.workspaceId === source.workspaceId ? (
+        <p className="text-xs text-chat-warning">
+          {t(
+            'components.sessionLink.sameWorkspace',
+            'Both sessions use the same workspace. Coordinate file writes before editing.'
+          )}
+        </p>
+      ) : null}
+      <Button
+        disabled={
+          busy ||
+          !selected ||
+          !story.trim() ||
+          (policySupported && !SessionLinkPolicy.safeParse(policy).success)
+        }
+        onClick={() =>
+          policySupported ? onCreate(partner, story, role, policy) : onCreate(partner, story, role)
+        }
+      >
+        {busy
+          ? t('components.sessionLink.creating', 'Creating link…')
+          : t('components.sessionLink.create', 'Create link and introduce agents')}
+      </Button>
+    </div>
+  )
+}
