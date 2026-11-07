@@ -398,6 +398,7 @@ import * as composerDrafts from '@/components/native-chat/native-chat-composer-d
 import { records } from '@/components/native-chat/native-chat-composer-draft-memory'
 import * as workspaceDrafts from './worktrees/teardown/removed-worktree-chat-drafts'
 import * as removalScopes from '@/components/native-chat/native-chat-composer-draft-removal-selection'
+import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot,
@@ -447,6 +448,7 @@ it.each([10, 100])(
     expect(attempts[0].draft?.text).toBe('task 0')
     expect(nativeChatPendingAttachmentSnapshot(scope(folders[0].id))).toHaveLength(1)
     folderWorkspacesDelete.mockResolvedValue(true)
+    const inventory = vi.spyOn(nativeChatComposerDraftStorage(), 'loadAll')
     const reads = vi.spyOn(records, 'get')
     let ordinaryReads = 0
     let censusReads = 0
@@ -494,6 +496,7 @@ it.each([10, 100])(
       const actual = reads.mock.calls.length - before
       expect(ordinarySpy).toHaveBeenCalledTimes(i === 0 ? 0 : 1)
       expect(captureSpy).toHaveBeenCalledTimes(1)
+      expect(inventory).toHaveBeenCalledTimes(i + 1)
       expect(ordinaryReads).toBeLessThanOrEqual(ordinary)
       expect(censusReads).toBeLessThanOrEqual(census)
       expect(actual).toBe(ordinaryReads + censusReads)
@@ -501,12 +504,17 @@ it.each([10, 100])(
       removalReads.push({ ordinary: ordinaryReads, census: censusReads, actual })
     }
     const cleanupReads = reads.mock.calls.length
+    const inventoryCalls = inventory.mock.calls.length
     reads.mockRestore()
     ordinarySpy.mockRestore()
     captureSpy.mockRestore()
+    inventory.mockRestore()
     expect(cleanupReads).toBeGreaterThanOrEqual(count)
     expect(cleanupReads).toBeLessThanOrEqual((3 * count * count) / 4 + 5 * count - 2)
-    console.log('FOLDER_REMOVAL_READS', JSON.stringify({ count, cleanupReads, removalReads }))
+    console.log(
+      'FOLDER_REMOVAL_READS',
+      JSON.stringify({ count, cleanupReads, inventoryCalls, removalReads })
+    )
     expect(records.size).toBe(2)
     expect(shutdown).toHaveBeenCalledTimes(count - 1)
     for (const key of liveScopes) {
