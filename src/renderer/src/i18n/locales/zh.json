@@ -54,10 +54,7 @@
       },
       "providers": {
         "title": "提供方",
-        "antigravityDescription": "Antigravity 聊天运行在 Orca 下载到此主机的服务器上，与 agy CLI 相互独立。",
-        "antigravityNotSignedIn": "未登录。聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。",
         "antigravityAccount": "账户",
-        "antigravitySignInNeeded": "聊天需要单独的 Antigravity 登录，与终端中的 agy 帐户分开。",
         "searchAgents": "智能体",
         "searchTerminal": "终端",
         "searchCli": "CLI"
@@ -19161,7 +19158,6 @@
       "queuedMessages": {
         "alreadySent": "此消息已发送。",
         "listLabel": "排队的消息",
-        "behindReturnedHold": "等待中 — 前面有一条消息需要处理",
         "steer": "立即发送",
         "send": "发送",
         "steerHint": "提交且不中断模型",
@@ -21231,7 +21227,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "聊天使用自己的 Antigravity 登录，与上方的 agy 帐户分开。在此设备上登录一次即可。",
       "chatSignIn": "登录",
       "chatChangeAccount": "更换帐户",
       "chatRetry": "重试登录",
@@ -21244,14 +21239,11 @@
       "chatVerifying": "正在完成登录…",
       "chatPasteHelp": "如果登录后的最后一个页面无法加载，请从浏览器复制它的完整地址并粘贴到这里。",
       "chatContinue": "继续",
-      "chatSignedInOn": "已在 {{host}} 上登录。",
       "chatCancelled": "已取消登录。",
       "chatExpired": "登录超时。请重试。",
       "chatFailed": "登录失败。请重试。",
-      "chatNotSignedIn": "未在 {{host}} 上登录。",
       "chatOtherClient": "另一个客户端正在登录。",
       "chatReadFailed": "无法检查 {{host}} 上的登录。",
-      "scope": "管理 {{host}} 上的本机 agy 帐户。",
       "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户。要添加其他帐户，请在 agy 中使用 /logout 并再次登录。",
       "docs": "登录说明",
       "retry": "重试",
@@ -21282,11 +21274,9 @@
       "personal": "Google 账户",
       "gcpProject": "Google Cloud 项目",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "请重新登录以使用 {{method}}。",
       "settingsIncomplete": "请选择 Antigravity 账户类型并输入其 Google Cloud 项目和位置。",
       "settingsLoadFailed": "Orca 无法加载 Antigravity 登录设置。请重试。",
       "settingsSaveFailed": "Orca 无法保存 Antigravity 登录设置。请重试。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登录。",
       "lastReading": "{{reading}} · 读取于 {{time}}",
       "noReading": "用量未知：尚未读取"
     },

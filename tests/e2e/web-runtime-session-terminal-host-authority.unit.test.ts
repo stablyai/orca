@@ -251,6 +251,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: sessionKind,
           launchAgent: 'codex',
           ...(sessionKind === 'resume'
@@ -338,6 +339,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: 'resume',
           launchAgent: 'kimi',
           command: "kimi '--session' 'session_431324d7'",
@@ -415,6 +417,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     await expect(
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
         cwd: '/repo/packages/app',
@@ -527,6 +530,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           targetGroupId: failedMethod === 'session.tabs.move' ? 'group-left' : undefined,
           launchAgent: 'codex',
           activate: true
@@ -591,6 +595,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
       const result = await createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
         launchAgent: 'codex',
         targetGroupId: 'group-left'
       })

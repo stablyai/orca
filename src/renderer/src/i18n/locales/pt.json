@@ -1441,10 +1441,7 @@
         "searchAgents": "agentes",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Os chats do Antigravity executam um servidor que o Orca baixa neste host, separado da CLI agy.",
-        "antigravityNotSignedIn": "Sessão não iniciada. Os chats exigem login no Antigravity, separado da sua conta agy do terminal.",
-        "antigravityAccount": "Conta",
-        "antigravitySignInNeeded": "Os chats exigem login no Antigravity, separado da sua conta agy do terminal."
+        "antigravityAccount": "Conta"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -20913,7 +20910,6 @@
       "visualLoading": "Carregando visualização",
       "visualOpenInNewTab": "Abrir em nova aba",
       "queuedMessages": {
-        "behindReturnedHold": "Aguardando — uma mensagem anterior precisa de atenção",
         "steer": "Orientar",
         "send": "Enviar",
         "steerHint": "Enviar sem interromper o modelo",
@@ -22014,7 +22010,6 @@
     },
     "antigravity": {
       "chatTitle": "Chats do Antigravity",
-      "chatDescription": "Os chats usam seu próprio login do Antigravity, separado da sua conta agy acima. Entre uma vez neste dispositivo.",
       "chatSignIn": "Entrar",
       "chatChangeAccount": "Trocar conta",
       "chatRetry": "Tentar entrar novamente",
@@ -22027,14 +22022,11 @@
       "chatVerifying": "Concluindo login…",
       "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
-      "chatSignedInOn": "Conectado em {{host}}.",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatNotSignedIn": "Não conectado em {{host}}.",
       "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
-      "scope": "Gerencie a conta nativa do agy em {{host}}.",
       "signIn": "Inicie o agy neste host e conclua o login no navegador. Depois, salve a conta atual. Para adicionar outra conta, use /logout no agy e entre novamente.",
       "docs": "Instruções de login",
       "retry": "Tentar novamente",
@@ -22065,11 +22057,9 @@
       "personal": "Conta Google",
       "gcpProject": "Projeto do Google Cloud",
       "gcpLocation": "Local do Google Cloud",
-      "signInAgainWith": "Entre novamente para usar {{method}}.",
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
-      "signInWith": "Entra com {{method}} em {{host}}.",
       "lastReading": "{{reading}} · Lido {{time}}",
       "noReading": "Uso desconhecido: ainda não consultado"
     },

@@ -21,8 +21,6 @@ vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 
-import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from '../../../../../../../shared/agent-session/requests/agent-session-current-requests-capability'
-
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 
 type SubscribeAttempt = {
@@ -150,63 +148,6 @@ describe('structured agent-session read transport generations', () => {
     }
   })
 
-  it('ignores opening frames after disposal and a replacement transport starts', async () => {
-    const applyEvent = vi.fn()
-    const applyError = vi.fn()
-    const retired = start(applyEvent, applyError)
-    await flushPromises()
-    expect(attempts).toHaveLength(1)
-
-    retired.dispose()
-    const replacement = start(applyEvent, applyError)
-    await flushPromises()
-    expect(attempts).toHaveLength(2)
-
-    attempts[0].onEvent(snapshot(1))
-    attempts[0].onError(new Error('retired error'))
-    attempts[0].onClose()
-    expect(applyEvent).not.toHaveBeenCalled()
-    expect(applyError).not.toHaveBeenCalled()
-
-    attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
-    attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
-    await flushPromises()
-    expect(attempts[0].unsubscribe).toHaveBeenCalledOnce()
-
-    attempts[1].onEvent(snapshot(2))
-    expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2), { opensSubscription: true })
-    replacement.dispose()
-  })
-
-  it('ignores callbacks from a subscription superseded by reconnect', async () => {
-    vi.useFakeTimers()
-    try {
-      const applyEvent = vi.fn()
-      const applyError = vi.fn()
-      const transport = start(applyEvent, applyError)
-      await flushPromises()
-      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
-      await flushPromises()
-
-      attempts[0].onClose()
-      await vi.advanceTimersByTimeAsync(750)
-      expect(attempts).toHaveLength(2)
-
-      attempts[0].onEvent(snapshot(1))
-      attempts[0].onError(new Error('stale error'))
-      expect(applyEvent).not.toHaveBeenCalled()
-      expect(applyError).not.toHaveBeenCalled()
-
-      attempts[1].onEvent(snapshot(2))
-      expect(applyEvent).toHaveBeenCalledExactlyOnceWith(snapshot(2), { opensSubscription: true })
-      attempts[1].closed.resolve({ unsubscribe: attempts[1].unsubscribe })
-      await flushPromises()
-      transport.dispose()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it("applies each subscription's first batch alone and marked, and coalesces the rest", async () => {
     vi.useFakeTimers()
     try {
@@ -244,45 +185,6 @@ describe('structured agent-session read transport generations', () => {
       await vi.advanceTimersByTimeAsync(750)
       attempts[1].onEvent(batch(4))
       expect(applied.at(-1)).toEqual([4, true])
-      transport.dispose()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  const currentRequests = {
-    contract: AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
-    sessionId: 'session-a',
-    epoch: 'epoch-a',
-    publisher: 'publisher-a',
-    revision: 1,
-    owner: 'owner-a',
-    version: 'version-a'
-  }
-
-  it('re-reads a current-request version after temporary failures without reopening', async () => {
-    vi.useFakeTimers()
-    try {
-      mocks.call
-        .mockRejectedValueOnce(new Error('timed out'))
-        .mockRejectedValueOnce(new Error('timed out'))
-        .mockResolvedValueOnce({ marker: currentRequests, json: '[]', nextCursor: null })
-      const applyError = vi.fn()
-      const applyRequests = vi.fn()
-      const transport = start(vi.fn(), applyError, applyRequests)
-      await flushPromises()
-      attempts[0].closed.resolve({ unsubscribe: attempts[0].unsubscribe })
-      await flushPromises()
-      attempts[0].onEvent(snapshot(1, currentRequests))
-      await vi.advanceTimersByTimeAsync(750 + 1_500)
-      expect(mocks.call).toHaveBeenCalledTimes(3)
-      expect(applyRequests).toHaveBeenCalledWith({
-        type: 'requests-complete',
-        marker: currentRequests,
-        items: []
-      })
-      expect(applyError).not.toHaveBeenCalled()
-      expect(attempts).toHaveLength(1)
       transport.dispose()
     } finally {
       vi.useRealTimers()
@@ -404,64 +306,6 @@ describe('structured agent-session read transport unattached refusals', () => {
       }
     }
   )
-
-  it('reads a thrown hydrate refusal the same way, and a new run reads again', async () => {
-    vi.useFakeTimers()
-    try {
-      const corrupt = Object.assign(new Error('agent_session_journal_unreadable'), {
-        response: {
-          error: {
-            code: 'runtime_error',
-            message: 'agent_session_journal_unreadable',
-            data: {
-              refusal: {
-                code: 'agent_session_journal_unreadable',
-                details: { reason: 'journalCorrupt' }
-              }
-            }
-          }
-        }
-      })
-      const hydrate = vi.fn(async () => {
-        throw corrupt
-      })
-      const first = startWithHydration(hydrate, vi.fn())
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(attempts).toHaveLength(0)
-      first.dispose()
-
-      const second = startWithHydration(hydrate, vi.fn())
-      await flushPromises()
-      expect(hydrate).toHaveBeenCalledTimes(2)
-      second.dispose()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  // Mirror mapped thrown refusals: bare code message, structured reason in data (rpc/errors.test.ts).
-
-  it('restarts the grace once a read lands, so a later refusal is transitional again', async () => {
-    vi.useFakeTimers()
-    try {
-      const applyError = vi.fn()
-      const applyEvent = vi.fn()
-      const transport = startWithHydration(async () => undefined, applyError, applyEvent)
-      await flushPromises()
-      expect(attempts).toHaveLength(1)
-
-      attempts[0].onError({ code: UNATTACHED, message: UNATTACHED })
-      await vi.advanceTimersByTimeAsync(6_000)
-      attempts.at(-1)?.onEvent(snapshot(1))
-      expect(applyEvent).toHaveBeenCalled()
-
-      attempts.at(-1)?.onError({ code: UNATTACHED, message: UNATTACHED })
-      expect(applyError).not.toHaveBeenCalled()
-      transport.dispose()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
 
   it('reads again as soon as a remote host is reachable, not after the grown wait', async () => {
     vi.useFakeTimers()

@@ -50,6 +50,24 @@ export function nativeChatForkableItemIds(
   )
 }
 
+/** The response `/fork` copies through: the chat's newest forkable one still in its current context. */
+export function nativeChatLatestForkItemId(
+  items: readonly Pick<AgentJournalRenderItem, 'itemId' | 'sequence'>[],
+  chat: { contextFloorSequence: number; forkableItemIds: ReadonlySet<string> }
+): string | undefined {
+  let latest: Pick<AgentJournalRenderItem, 'itemId' | 'sequence'> | undefined
+  for (const item of items) {
+    if (
+      chat.forkableItemIds.has(item.itemId) &&
+      item.sequence > chat.contextFloorSequence &&
+      (!latest || item.sequence >= latest.sequence)
+    ) {
+      latest = item
+    }
+  }
+  return latest?.itemId
+}
+
 /** A finished response of the chat's own agent, still in its current context. A fork copies through
  *  the end of that response's turn, so any of its responses can fork it: the phone offers each one,
  *  the desktop the turn's last words, where its response actions sit. */

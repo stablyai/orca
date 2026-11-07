@@ -19,7 +19,6 @@ import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
 import type { NativeChatSendFollowUp } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatForkSurface } from './use-native-chat-fork'
 import type { NativeChatSideChat } from './use-native-chat-side-chat'
 
 export type NativeChatComposerImageAttachment = {
@@ -85,12 +84,12 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
-  /** The chat's fork surface, shared by its response rows; absent where it can't fork. */
-  fork?: NativeChatForkSurface
   /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */
   sideChat?: NativeChatSideChat
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
+  /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */
+  fork?: { run: () => string | null }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void
   /** A local send: brings the latest into view at the press, not when the host answers. */
   onSubmitted?: () => void

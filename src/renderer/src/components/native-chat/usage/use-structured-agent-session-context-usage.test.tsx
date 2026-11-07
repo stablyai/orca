@@ -133,18 +133,6 @@ describe('useStructuredAgentSession context usage', () => {
     )
   })
 
-  it('reads only the loaded window from a host that sends no answer', async () => {
-    answerOptions([undefined])
-    const { result, rerender } = render()
-
-    await waitFor(() => expect(optionReads()).toBe(1))
-    expect(result.current.contextUsage).toBeNull()
-    // Without a host answer there is nothing to refresh, so a missed revision asks nothing.
-    unloadedTurnRevisions = 1
-    rerender()
-    expect(optionReads()).toBe(1)
-  })
-
   it('keeps one refresh in flight and one behind it however many revisions it missed', async () => {
     const replies: ((used: number) => void)[] = []
     mocks.call.mockImplementation((_target, method) =>

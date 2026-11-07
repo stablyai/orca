@@ -1,3 +1,4 @@
+import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
@@ -33,8 +34,7 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
-/** Serializable creation intent, including any script checks deferred until
- * after the composer closes. Retained by the pending panel for Retry. */
+/** Session-only creation intent, including script checks and compatibility planning retained for Retry. */
 export type WorktreeCreationRequest = {
   repoId: string
   /** Execution owner retained after script preparation, including retries. */
@@ -93,6 +93,20 @@ export type WorktreeCreationRequest = {
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
   launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  legacyLaunchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  creationStartup?: {
+    onLegacyPreparationFailure?: (error: unknown) => void
+    sessionOptions?: AgentStartupPlan['sessionOptions']
+    launchToken?: string
+    legacy: (
+      prompt?: string,
+      delivery?: 'draft' | 'auto-submit'
+    ) => {
+      startupPlan: AgentStartupPlan | null
+      backendStartup: WorktreeStartupLaunch | undefined
+      promptPlan?: LaunchAgentStartupPromptPlan
+    }
+  }
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null

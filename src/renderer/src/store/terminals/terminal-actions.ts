@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
@@ -217,6 +218,7 @@ export type TerminalActions = {
       resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -244,6 +246,7 @@ export type TerminalActions = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
     agentArgsOverride?: string | null
     draftPrompt?: string
     sessionOptions?: Record<string, SessionOptionValue>

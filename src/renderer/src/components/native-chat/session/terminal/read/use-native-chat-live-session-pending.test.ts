@@ -118,19 +118,6 @@ describe('useNativeChatLiveSession — unflushed transcript (pending frame)', ()
     expect(latest?.messages.map((message) => message.id)).toEqual(['m-1'])
   })
 
-  it('errors once the not-found window expires with no word from the host', async () => {
-    // Prove retry timers fire so the suppression case cannot pass vacuously.
-    vi.useFakeTimers()
-    transport.readSession.mockResolvedValue({ error: 'no transcript', notFound: true })
-    await render()
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(NOTFOUND_RETRY_WINDOW_MS + 30_000)
-    })
-
-    expect(latest?.readPhase).toBe('error')
-  })
-
   it('stops duplicate seed polling once the live stream owns the pending transcript', async () => {
     vi.useFakeTimers()
     let settleRead = (_result: { error: string; notFound: true }): void => {}

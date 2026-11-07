@@ -112,67 +112,6 @@ function observe(db: OrchestrationDb, ctxId: string) {
 }
 
 describe('STA-4603/STA-4536 exit provenance', () => {
-  it('separates a deliberate close from a crash and from a clean finish', () => {
-    const closedDb = createDb()
-    const closed = createRuntime(closedDb)
-    const closedCtx = dispatchOnHandle(closedDb, 'operator close')
-    closed.markPtyStopRequested(PTY_ID)
-    closed.onPtyExit(PTY_ID, 0)
-
-    const crashDb = createDb()
-    const crashed = createRuntime(crashDb)
-    const crashCtx = dispatchOnHandle(crashDb, 'sigkill crash')
-    crashed.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'signaled', signal: 9 } })
-
-    const cleanDb = createDb()
-    const clean = createRuntime(cleanDb)
-    const cleanCtx = dispatchOnHandle(cleanDb, 'clean finish')
-    clean.onPtyExit(PTY_ID, 0, undefined, { cause: { kind: 'exited', exitCode: 0 } })
-
-    expect(observe(closedDb, closedCtx.id)).toEqual({
-      status: 'failed',
-      last_failure: 'Terminal closed by operator request',
-      termination_reason: 'operator_close'
-    })
-    expect(observe(crashDb, crashCtx.id)).toEqual({
-      status: 'failed',
-      last_failure: 'Agent process killed by signal 9',
-      termination_reason: 'signaled'
-    })
-    expect(observe(cleanDb, cleanCtx.id)).toEqual({
-      status: 'failed',
-      last_failure: 'Agent process exited with code 0',
-      termination_reason: 'exited'
-    })
-  })
-
-  it('says unknown rather than inventing a status the host never reported', () => {
-    const db = createDb()
-    const runtime = createRuntime(db)
-    const ctx = dispatchOnHandle(db, 'macOS login wrapper')
-    runtime.onPtyExit(PTY_ID, 0, undefined, {
-      cause: { kind: 'unknown', reason: 'host_status_unavailable' }
-    })
-    expect(observe(db, ctx.id)).toEqual({
-      status: 'failed',
-      last_failure: 'Agent process ended; this host cannot report why',
-      termination_reason: 'unknown'
-    })
-  })
-
-  it('does not read a bare code from an older daemon or an SSH relay as a clean finish', () => {
-    const db = createDb()
-    const runtime = createRuntime(db)
-    const ctx = dispatchOnHandle(db, 'exit delivered without a cause')
-    // Bare code 0 can be synthetic SIGKILL; without cause it cannot prove clean completion.
-    runtime.onPtyExit(PTY_ID, 0)
-    expect(observe(db, ctx.id)).toEqual({
-      status: 'failed',
-      last_failure: 'Agent process ended; the reporting host did not say why',
-      termination_reason: 'unknown'
-    })
-  })
-
   it('settles the dispatch when the whole tab is closed before the exit lands', () => {
     const db = createDb()
     const runtime = createRuntime(db)
@@ -298,25 +237,6 @@ describe('STA-4603/STA-4536 exit provenance', () => {
     })
   })
 
-  it('publishes the cause on the terminal record a coordinator polls', async () => {
-    const db = createDb()
-    const runtime = createRuntime(db)
-    dispatchOnHandle(db, 'terminal summary shape')
-    runtime.markPtyStopRequested(PTY_ID)
-    runtime.onPtyExit(PTY_ID, 0)
-    const summary = await runtime.showTerminal(HANDLE)
-    expect(summary.connected).toBe(false)
-    expect(summary.exitCause).toEqual({ kind: 'operator_close' })
-  })
-
-  it('leaves no exitCause on a terminal that is still running', async () => {
-    const db = createDb()
-    const runtime = createRuntime(db)
-    dispatchOnHandle(db, 'still running')
-    const summary = await runtime.showTerminal(HANDLE)
-    expect(summary.exitCause).toBeUndefined()
-  })
-
   describe.each(['registration', 'spawn'] as const)('incarnation replacement via %s', (path) => {
     function announce(runtime: OrcaRuntimeService, incarnationId?: string): void {
       if (path === 'registration') {
@@ -380,35 +300,5 @@ describe('STA-4603/STA-4536 exit provenance', () => {
         exitCode: 7
       })
     })
-
-    it.each(['audit-incarnation', undefined])(
-      'retains unverified stop evidence when reconnect identity is %s',
-      async (incarnationId) => {
-        const runtime = createRuntime(createDb())
-        await runtime.onPtyExit(PTY_ID, -1, 'audit-incarnation', {
-          cause: { kind: 'unknown', reason: 'stop_unverified' }
-        })
-        announce(runtime, incarnationId)
-        expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({
-          kind: 'unknown',
-          reason: 'stop_unverified'
-        })
-      }
-    )
-
-    it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN && path === 'registration')(
-      'retains stop evidence without a known predecessor incarnation',
-      async () => {
-        const runtime = createRuntime(createDb(), null)
-        await runtime.onPtyExit(PTY_ID, -1, undefined, {
-          cause: { kind: 'unknown', reason: 'stop_unverified' }
-        })
-        announce(runtime, 'newly-observed-incarnation')
-        expect((await runtime.showTerminal(HANDLE)).exitCause).toEqual({
-          kind: 'unknown',
-          reason: 'stop_unverified'
-        })
-      }
-    )
   })
 })

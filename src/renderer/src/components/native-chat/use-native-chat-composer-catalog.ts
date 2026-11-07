@@ -28,6 +28,7 @@ export function useNativeChatComposerCatalog(
   const interactionModeSupported =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const accountUsage = structuredTransport?.accountUsage !== undefined
+  const fork = structuredTransport?.fork !== undefined
   const sideChat = structuredTransport?.sideChat !== undefined
   const sideChatNotReady = structuredTransport?.sideChat?.notReadyReason ?? null
   const agentCommands = useMemo(() => {
@@ -42,14 +43,16 @@ export function useNativeChatComposerCatalog(
         compactInstructions,
         interactionModeSupported
       ),
-      accountUsage
+      accountUsage,
+      fork
     )
     return sideChat ? withNativeChatSideChatRows(commands, sideChatNotReady) : commands
   }, [
     accountUsage,
+    agent,
+    fork,
     sideChat,
     sideChatNotReady,
-    agent,
     compactInstructions,
     conversationCommands,
     reported,

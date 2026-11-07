@@ -9,7 +9,8 @@ import {
 } from './native-chat-fork-context'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type { NativeChatForkSurface } from './use-native-chat-fork'
+import type { NativeChatSideChat } from './use-native-chat-side-chat'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
@@ -17,13 +18,15 @@ import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 export function NativeChatRowActionsProvider({
   pane,
   chat,
-  actions,
+  fork,
+  sideChat,
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
   chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
-  /** The composer's fork and `/btw`, which share it. */
-  actions: Pick<NativeChatStructuredComposerTransport, 'fork' | 'sideChat'>
+  /** The session's fork, shared with its `/fork` and `/btw` commands. */
+  fork: NativeChatForkSurface | undefined
+  sideChat: NativeChatSideChat | undefined
   children: React.ReactNode
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
@@ -46,8 +49,8 @@ export function NativeChatRowActionsProvider({
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
-      <NativeChatForkContext.Provider value={actions.fork}>
-        <NativeChatSideChatForkPointContext.Provider value={actions.sideChat?.reportForkPoint}>
+      <NativeChatForkContext.Provider value={fork}>
+        <NativeChatSideChatForkPointContext.Provider value={sideChat?.reportForkPoint}>
           <NativeChatForkedFromContext.Provider value={openSource}>
             <NativeChatForkSlotContext.Provider value>
               {children}

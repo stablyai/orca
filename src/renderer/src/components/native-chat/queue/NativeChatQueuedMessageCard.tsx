@@ -82,11 +82,6 @@ export function queuedMessageCardCaption(
             )
       }
       return translate('components.native-chat.queuedMessages.paused', 'Paused')
-    case 'behind-returned':
-      return translate(
-        'components.native-chat.queuedMessages.behindReturnedHold',
-        'Waiting — a message ahead needs attention'
-      )
     case 'sending':
       return translate('components.native-chat.messageSending', 'Sending…')
     case 'turn':

@@ -1,4 +1,19 @@
-import { createAgentSessionTrustWorktreeOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
+import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
+import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
+import {
+  agentSessionCreateCapabilities,
+  agentSessionCreateRequest,
+  createAgentSessionTrustWorktreeOptions
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import {
+  planHostedAgentPrompt,
+  hostedAgentPromptHostFacts,
+  hostedAgentPromptDelivery,
+  hostedAgentPromptRequest
+} from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -108,7 +123,8 @@ import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobi
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
   isWebTerminalSurfaceTabId,
-  toHostSessionTabId
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
@@ -3660,8 +3676,37 @@ export function createRemoteRuntimePtyTransport(
         presentation: 'background' as const,
         ...(activate === true ? { activate: true } : {})
       }
-      const legacyCreate = (epoch = connectLifecycleEpoch) =>
-        createWithUnknownOutcomeRecovery(
+      const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
+      const promptStatus = freshLaunch
+        ? lastVerifiedRuntimeStatus(
+            useAppStore.getState().runtimeStatusByEnvironmentId.get(createEnvironmentId)
+          )
+        : null
+      const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
+      let promptPlan =
+        freshLaunch && launchAgentToSend
+          ? planHostedAgentPrompt(
+              launchAgentToSend,
+              freshLaunch.prompt,
+              freshLaunch.promptDelivery,
+              {
+                ...hostedAgentPromptHostFacts(promptPlatform, promptStatus?.terminalWindowsShell),
+                submitFollowup: true
+              }
+            )
+          : undefined
+      const legacyCreate = async (epoch = connectLifecycleEpoch) => {
+        const fallback = freshLaunch?.legacy?.()
+        const plan = fallback?.startupPlan
+        if (plan && freshLaunch?.recovery) {
+          Object.assign(legacyCreateParams, {
+            command: plan.launchCommand,
+            env: plan.env,
+            launchConfig: plan.launchConfig,
+            startupCommandDelivery: plan.startupCommandDelivery
+          })
+        }
+        const result = await createWithUnknownOutcomeRecovery(
           'terminal',
           (timeoutMs, reconcileExisting) =>
             callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
@@ -3676,15 +3721,43 @@ export function createRemoteRuntimePtyTransport(
           createEnvironmentId,
           epoch
         )
+        if (fallback) {
+          promptPlan = fallback
+        }
+        return result
+      }
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
         const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const freshInputs =
+          freshLaunch && launchAgentToSend
+            ? await pairedAgentLaunchInputs({
+                ...freshLaunch,
+                ...(await agentSessionCreateCapabilities(createEnvironmentId)),
+                environmentId: createEnvironmentId,
+                agent: launchAgentToSend
+              })
+            : undefined
+        const prepared = freshInputs && 'preparedAgentCommand' in freshInputs
+        if (prepared && freshLaunch?.recovery) {
+          return legacyCreate(epoch)
+        }
+        // Older hosts keep their existing pane request when these inputs require preparation.
+        const composed = freshInputs && !prepared ? freshInputs : undefined
+        const promptRequest =
+          composed && promptPlan && freshLaunch
+            ? hostedAgentPromptRequest(promptPlan, freshLaunch.prompt, freshLaunch.promptDelivery)
+            : {
+                ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {})
+              }
+
         const ensureProviderSession = resumeProviderSessionToSend
           ? await agentProviderSessionForHostEnsure(
               createEnvironmentId,
               resumeProviderSessionToSend
             )
           : undefined
-        return createWithUnknownOutcomeRecovery(
+        const result = await createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
             ensureProviderSession
@@ -3721,10 +3794,20 @@ export function createRemoteRuntimePtyTransport(
                       ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
-                      ...(agentPrompt ? { prompt: agentPrompt } : {}),
-                      ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
-                      ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
-                      ...(agentLaunchPreferences
+                      ...(composed
+                        ? {
+                            ...agentSessionCreateRequest({
+                              worktreeId,
+                              agent: launchAgentToSend!,
+                              ...composed,
+                              ...promptRequest
+                            })
+                          }
+                        : promptRequest),
+                      ...(!composed && agentArgsOverride !== undefined
+                        ? { agentArgs: agentArgsOverride }
+                        : {}),
+                      ...(!composed && agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
                       placement: { tabId, leafId },
@@ -3737,6 +3820,14 @@ export function createRemoteRuntimePtyTransport(
           createEnvironmentId,
           epoch
         )
+        if (prepared && freshLaunch && !promptRequest.prompt) {
+          promptPlan = {
+            startupPlan: null,
+            pasteDraftAfterLaunch: freshLaunch.prompt || null,
+            submitPastedPrompt: freshLaunch.promptDelivery !== 'draft'
+          }
+        }
+        return result
       }
       const resumeHostAuthorityCapability = resumeProviderSessionToSend
         ? agentResumeHostAuthorityCapability(launchAgentToSend)
@@ -3788,6 +3879,59 @@ export function createRemoteRuntimePtyTransport(
             hostTerminalHandle: createdTerminal.handle
           }
         })
+      }
+      if (freshLaunch && promptPlan && launchAgentToSend) {
+        const deliveryTabId =
+          created.disposition !== undefined && createdTerminal.tabId
+            ? toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(createdTerminal.tabId))
+            : tabId
+        const deliveryAccepted =
+          !launchTokenToSend ||
+          !deliveryTabId ||
+          beginAgentStartupDeliveryAttempt({
+            worktreeId,
+            tabId: deliveryTabId,
+            launchToken: launchTokenToSend
+          })
+        if (deliveryAccepted) {
+          void deliverCreatedWebRuntimeAgentSessionPrompt(
+            { outcome: { status: 'created' }, hostTabId: createdTerminal.tabId },
+            {
+              agent: launchAgentToSend,
+              rendererTabId: deliveryTabId,
+              ...hostedAgentPromptDelivery(
+                promptPlan,
+                freshLaunch.prompt,
+                freshLaunch.promptDelivery
+              ),
+              launchPty: Promise.resolve(
+                toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId)
+              ),
+              beforePaste: () =>
+                !destroyed &&
+                connected &&
+                lifecycleEpoch === connectLifecycleEpoch &&
+                handle === createdTerminal.handle
+            }
+          )
+            .catch(() => false)
+            .then(async (promptDelivered) => {
+              const { completeWebHostAgentLaunch } =
+                await import('@/lib/web-host-agent-launch-completion')
+              completeWebHostAgentLaunch({
+                agent: launchAgentToSend,
+                worktreeId,
+                activate: false,
+                prompt: freshLaunch.prompt,
+                submitFollowup: true,
+                hostTabId: createdTerminal.tabId,
+                outcome: { status: 'created' },
+                promptDelivered,
+                legacyPreparationCancelled: false,
+                failureMessage: ''
+              })
+            })
+        }
       }
       if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
         if (
