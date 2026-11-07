@@ -124,13 +124,23 @@ export function useOwnerUsageRateLimits(
   const [streamGeneration, setStreamGeneration] = useState(0)
 
   useEffect(() => {
+    if (!ownerId) {
+      return
+    }
+    // Older hosts do not poll usage for a paired stream.
+    const timer = setTimeout(
+      () => setStreamGeneration((value) => value + 1),
+      REMOTE_USAGE_STALE_REOPEN_MS
+    )
+    return () => clearTimeout(timer)
+  }, [ownerId, streamGeneration])
+
+  useEffect(() => {
     if (!ownerId && !includeAccounts) {
       return
     }
     let active = true
     const reopen = (): void => setStreamGeneration((value) => value + 1)
-    // Why: older hosts never poll for a paired stream, so a long-lived one would freeze the meters.
-    const staleTimer = ownerId ? setTimeout(reopen, REMOTE_USAGE_STALE_REOPEN_MS) : undefined
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined
     const lost = (): void => {
       if (active) {
@@ -155,7 +165,6 @@ export function useOwnerUsageRateLimits(
     )
     return () => {
       active = false
-      clearTimeout(staleTimer)
       clearTimeout(reconnectTimer)
       watcher.close()
     }
@@ -196,11 +205,12 @@ export function useOwnerUsageRateLimits(
     [ownerId, ownerName, languageRevision]
   )
 
+  const localOwnerLabel = translate('stats.usage.localHost', 'This device')
   const ownerState = useMemo<OwnerUsageState>(() => {
     if (!remoteOwner && !includeAccounts) {
       return { kind: 'local' }
     }
-    const ownerLabel = remoteOwner?.label ?? translate('stats.usage.localHost', 'This device')
+    const ownerLabel = remoteOwner?.label ?? localOwnerLabel
     if (!owned || owned.ownerId !== ownerId) {
       return { kind: 'remote-pending' }
     }
@@ -215,8 +225,7 @@ export function useOwnerUsageRateLimits(
     return owned.rateLimits
       ? { kind: 'remote', ownerLabel, rateLimits: owned.rateLimits }
       : { kind: 'remote-pending' }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [remoteOwner, includeAccounts, ownerId, owned, languageRevision])
+  }, [remoteOwner, includeAccounts, ownerId, owned, localOwnerLabel])
 
   const rateLimits = useMemo(
     () => resolveOwnerUsageRateLimits(local, ownerState),

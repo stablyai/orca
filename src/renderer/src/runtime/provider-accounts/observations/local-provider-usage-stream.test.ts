@@ -26,6 +26,10 @@ function snapshot(accountId: string, usedPercent: number): ProviderAccountsSnaps
   }
 }
 
+function streamEvent(result: unknown): RuntimeRpcResponse<unknown> {
+  return { id: 'usage', ok: true, result, _meta: { runtimeId: 'host' } }
+}
+
 describe('local provider usage stream', () => {
   it('delivers account switches with their matching quotas and reports a closed stream', async () => {
     let receive: (response: RuntimeRpcResponse<unknown>) => void = () => {}
@@ -59,8 +63,8 @@ describe('local provider usage stream', () => {
       },
       { liveLocalUsage: true }
     )
-    receive({ ok: true, result: { type: 'ready', snapshot: snapshot('work', 62) } })
-    receive({ ok: true, result: { type: 'snapshot', snapshot: snapshot('personal', 17) } })
+    receive(streamEvent({ type: 'ready', snapshot: snapshot('work', 62) }))
+    receive(streamEvent({ type: 'snapshot', snapshot: snapshot('personal', 17) }))
     expect(
       received.map((value) => [
         value.codex.activeAccountId,
@@ -70,12 +74,12 @@ describe('local provider usage stream', () => {
       ['work', 62],
       ['personal', 17]
     ])
-    receive({ ok: true, result: { type: 'end' } })
+    receive(streamEvent({ type: 'end' }))
     expect(lost).toHaveBeenCalledOnce()
     watcher.close()
     await handle
     expect(unsubscribe).toHaveBeenCalledOnce()
-    receive({ ok: true, result: { type: 'snapshot', snapshot: snapshot('stale', 99) } })
+    receive(streamEvent({ type: 'snapshot', snapshot: snapshot('stale', 99) }))
     expect(received.at(-1)?.codex.activeAccountId).toBe('personal')
   })
 
@@ -104,7 +108,7 @@ describe('local provider usage stream', () => {
     const unsubscribe = vi.fn()
     handle.resolve({ unsubscribe })
     await handle.promise
-    receive({ ok: true, result: { type: 'ready', snapshot: snapshot('late', 99) } })
+    receive(streamEvent({ type: 'ready', snapshot: snapshot('late', 99) }))
     expect(onSnapshot).not.toHaveBeenCalled()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
