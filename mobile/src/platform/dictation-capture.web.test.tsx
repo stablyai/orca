@@ -42,6 +42,7 @@ function createAudioShell(
     open: async (sampleRate) => ({ opened: options.opens !== false, sampleRate }),
     begin: () => true,
     end: () => {},
+    feedSpeech: () => {},
     onMicrophoneData: (handler) => {
       microphone = handler
       return {

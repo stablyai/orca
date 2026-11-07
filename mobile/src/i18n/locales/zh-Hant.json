@@ -1467,7 +1467,9 @@
       "microphoneInitFailed": "無法初始化麥克風",
       "microphoneInterrupted": "麥克風遭中斷，語音聽寫已停止。請再試一次。",
       "microphonePermissionDenied": "麥克風權限遭拒",
-      "noSpeech": "未偵測到語音。"
+      "noSpeech": "未偵測到語音。",
+      "phoneUnavailable": "此手機上的聽寫尚未就緒。請在語音設定中下載，或選擇「自動」。",
+      "phoneFailed": "此手機上的聽寫已停止運作。請再試一次。"
     }
   },
   "host": {
@@ -2822,6 +2824,18 @@
     },
     "agents": {
       "permissionOwnAll": "各代理程式自身的設定"
+    },
+    "voiceTranscribeOn": {
+      "heading": "轉寫位置",
+      "description": "此手機聽到的語音只會留在手機上。選擇「自動」時，若此手機無法轉寫，會改用你的電腦。",
+      "automatic": "自動",
+      "phone": "此手機",
+      "computer": "電腦",
+      "phoneReady": "已可在此手機上使用",
+      "phoneNeedsDownload": "需要下載語言",
+      "phoneDownloading": "正在下載… {{progress}}%",
+      "phoneUnsupported": "不支援此手機的語言",
+      "download": "下載到此手機"
     }
   },
   "sourceControl": {

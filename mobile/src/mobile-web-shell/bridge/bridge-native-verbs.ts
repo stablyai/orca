@@ -18,6 +18,7 @@ import {
   mediaNameResultSchema
 } from './bridge-media-verbs'
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
+import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
@@ -39,6 +40,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.storage.read',
   'native.pdf.view',
   'native.image.act',
+  BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB
 ] as const
 
@@ -137,6 +139,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.image.act': {
     params: imageParamsSchema,
     result: imageResultSchema
+  },
+  [BRIDGE_SPEECH_VERB]: {
+    params: speechParamsSchema,
+    result: speechResultSchema
   },
   [BRIDGE_STORE_VERB]: {
     params: storeParamsSchema,
