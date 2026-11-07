@@ -33,6 +33,7 @@ const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'compact', description: 'Summarize and compact the conversation' },
   { name: 'init', description: 'Initialize a CLAUDE.md' },
   { name: 'review', description: 'Review the current changes' },
+  { name: 'mcp', description: 'List configured MCP tools' },
   { name: 'help', description: 'Show available commands' }
 ]
 
