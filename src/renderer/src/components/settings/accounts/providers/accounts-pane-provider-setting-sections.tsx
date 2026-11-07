@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Switch } from '../../../ui/switch'
@@ -9,7 +10,10 @@ import { OpenCodeGoCredentials } from '../usage/accounts-pane-opencode-credentia
 import { DebouncedSettingsTextInput } from '../../form-controls/DebouncedSettingsTextInput'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
-export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
+export function renderGeminiAccountsSection(
+  model: AccountsPaneSectionModel,
+  t: Translate = translate
+): React.JSX.Element {
   const { localAccountRuntimeSentenceLabel, recordFeatureInteraction, settings, updateSettings } =
     model
   return (
@@ -18,20 +22,20 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
         title={
           <span className="flex items-center gap-2">
             <GeminiIcon size={16} />
-            {translate('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini CLI (legacy)')}
+            {t('auto.components.settings.AccountsPane.0c64dc2a64', 'Gemini CLI (legacy)')}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.AccountsPane.973741a871',
           'Keep existing Gemini CLI sessions available. Gemini credentials do not sign you into Antigravity.'
         )}
       >
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.AccountsPane.0c7f915b01',
             'Use Gemini CLI credentials'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.AccountsPane.d676c41fc6',
             'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.'
           )}
@@ -48,13 +52,13 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
         >
           <div className="space-y-0.5">
             <Label>
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.96f3649526',
                 'Use Gemini CLI credentials (experimental)'
               )}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.c2aee76420',
                 'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
                 { value0: localAccountRuntimeSentenceLabel }
@@ -62,7 +66,7 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
             </p>
           </div>
           <Switch
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.AccountsPane.96f3649526',
               'Use Gemini CLI credentials (experimental)'
             )}
@@ -80,7 +84,10 @@ export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): Re
   )
 }
 
-export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
+export function renderOpenCodeAccountsSection(
+  model: AccountsPaneSectionModel,
+  t: Translate = translate
+): React.JSX.Element {
   const { recordFeatureInteraction, recordOpenCodeSettingEdit, settings, updateSettings } = model
   return (
     <div key="opencode-go" id="accounts-opencode-go" className="scroll-mt-6">
@@ -88,10 +95,10 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
         title={
           <span className="flex items-center gap-2">
             <OpenCodeGoIcon size={16} />
-            {translate('auto.components.settings.AccountsPane.4ac10b4d08', 'OpenCode Go')}
+            {t('auto.components.settings.AccountsPane.4ac10b4d08', 'OpenCode Go')}
           </span>
         }
-        description={translate(
+        description={t(
           'auto.components.settings.AccountsPane.ea631977b5',
           'Configure OpenCode Go provider settings.'
         )}
@@ -99,11 +106,11 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
         <OpenCodeGoCredentials onSaved={() => recordOpenCodeSettingEdit('apiKey')} />
 
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.AccountsPane.36223200ac',
             'OpenCode Go Session Cookie'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.AccountsPane.0335bd31d5',
             'Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.'
           )}
@@ -111,10 +118,7 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           className="space-y-2 py-3"
         >
           <Label>
-            {translate(
-              'auto.components.settings.AccountsPane.67e3c33670',
-              'OpenCode Go session cookie'
-            )}
+            {t('auto.components.settings.AccountsPane.67e3c33670', 'OpenCode Go session cookie')}
           </Label>
           <div className="flex gap-2">
             <DebouncedSettingsTextInput
@@ -122,7 +126,7 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
               value={settings.opencodeSessionCookie}
               onEdit={() => recordOpenCodeSettingEdit('cookie')}
               commit={(opencodeSessionCookie) => updateSettings({ opencodeSessionCookie })}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.AccountsPane.37b4b4a3f7',
                 'auth=…; __Host-console_session=…'
               )}
@@ -139,22 +143,22 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
                 }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >
-                {translate('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
+                {t('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
               </Button>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AccountsPane.62ab430f94',
               "Paste the full Cookie header from your browser's DevTools → Network → any opencode.ai request, including __Host-console_session (e.g."
             )}{' '}
             <code className="text-xs">
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.37b4b4a3f7',
                 'auth=…; __Host-console_session=…'
               )}
             </code>
-            {translate(
+            {t(
               'auto.components.settings.AccountsPane.d5267cce63',
               '). The auth cookie still covers workspace discovery; auth alone is not enough for usage. OpenCode Go auth is web-based and shared across Windows and WSL terminals.'
             )}
@@ -162,11 +166,8 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.AccountsPane.02cb127710',
-            'OpenCode Go Workspace ID'
-          )}
-          description={translate(
+          title={t('auto.components.settings.AccountsPane.02cb127710', 'OpenCode Go Workspace ID')}
+          description={t(
             'auto.components.settings.AccountsPane.d70a5287a4',
             'Optional workspace ID override if the automatic lookup fails.'
           )}
@@ -174,7 +175,7 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           className="space-y-2 py-3"
         >
           <Label>
-            {translate('auto.components.settings.AccountsPane.dbdb0b0bd8', 'Workspace ID override')}
+            {t('auto.components.settings.AccountsPane.dbdb0b0bd8', 'Workspace ID override')}
           </Label>
           <div className="flex gap-2">
             <DebouncedSettingsTextInput
@@ -182,7 +183,7 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
               value={settings.opencodeWorkspaceId}
               onEdit={() => recordOpenCodeSettingEdit('workspaceId')}
               commit={(opencodeWorkspaceId) => updateSettings({ opencodeWorkspaceId })}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.settings.AccountsPane.a122332371',
                 'wrk_… (leave blank for automatic lookup)'
               )}
@@ -199,17 +200,17 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
                 }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >
-                {translate('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
+                {t('auto.components.settings.AccountsPane.b398b834c9', 'Clear')}
               </Button>
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AccountsPane.51c9104e13',
               'Find this in the URL after logging into opencode.ai (e.g.'
             )}{' '}
             <code className="text-xs">
-              {translate(
+              {t(
                 'auto.components.settings.AccountsPane.ae3b21eb6c',
                 'opencode.ai/workspace/wrk_…/go'
               )}
