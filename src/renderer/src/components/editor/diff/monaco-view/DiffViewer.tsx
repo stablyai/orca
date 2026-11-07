@@ -14,6 +14,7 @@ import { translate } from '@/i18n/i18n'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from '../../monaco-diff-command-palette-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
@@ -249,6 +250,8 @@ export default function DiffViewer({
 
       const originalEditor = diffEditor.getOriginalEditor()
       const modifiedEditor = diffEditor.getModifiedEditor()
+      const cleanupCommandPaletteShortcuts = installMonacoDiffCommandPaletteShortcuts(diffEditor)
+      diffEditor.onDidDispose(cleanupCommandPaletteShortcuts)
       modifiedEditor.onDidDispose(() => {
         if (diffEditorRef.current !== diffEditor) {
           return
