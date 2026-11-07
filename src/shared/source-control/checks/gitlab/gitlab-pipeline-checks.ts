@@ -21,17 +21,28 @@ export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheck
   return 'completed'
 }
 
-/** GitLab job status to check conclusion; a failed `allow_failure` job is `allowed_failure`. */
+// GitLab's PASSED_WITH_WARNINGS_STATUSES: with allow_failure, these keep the pipeline passed.
+const ALLOWED_FAILURE_STATUSES = new Set(['failed', 'canceled'])
+
+/** Whether GitLab counts this job as passed with warnings rather than as a failure. */
+export function isGitLabAllowedFailure(status: string, allowFailure = false): boolean {
+  return allowFailure && ALLOWED_FAILURE_STATUSES.has(status.toLowerCase())
+}
+
+/** GitLab job status to check conclusion; an allowed failure is `allowed_failure`. */
 export function mapGitLabPipelineJobStatusToConclusion(
   status: string,
   allowFailure = false
 ): PRCheckDetail['conclusion'] {
   const s = status.toLowerCase()
+  if (isGitLabAllowedFailure(s, allowFailure)) {
+    return 'allowed_failure'
+  }
   if (s === 'success') {
     return 'success'
   }
   if (s === 'failed') {
-    return allowFailure ? 'allowed_failure' : 'failure'
+    return 'failure'
   }
   if (s === 'canceled' || s === 'canceling') {
     return 'cancelled'

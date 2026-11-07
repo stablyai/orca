@@ -1,3 +1,4 @@
+import { isGitLabAllowedFailure } from '../../../src/shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import { themedStyles } from './mobile-tasks-dependencies'
 import { mobileTasksChromeStyles } from './mobile-tasks-chrome-styles'
 import { mobileTasksListStyles } from './mobile-tasks-list-styles'
@@ -30,7 +31,10 @@ export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | '
   return null
 }
 
-export function getGitLabPipelineStatusStyle(status: string) {
+export function getGitLabPipelineStatusStyle(status: string, allowFailure = false) {
+  if (isGitLabAllowedFailure(status, allowFailure)) {
+    return styles.pipelineStatusWarning
+  }
   switch (status) {
     case 'success':
       return styles.pipelineStatusSuccess

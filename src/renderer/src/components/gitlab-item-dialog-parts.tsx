@@ -11,6 +11,7 @@ import type {
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
+import { isGitLabAllowedFailure } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type JobTraceState = {
@@ -29,13 +30,14 @@ export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
 
 /** Badge tone for a GitLab job status; kept here to avoid importing the main-process mapper. */
 export function jobStatusTone(status: string, allowFailure = false): string {
+  if (isGitLabAllowedFailure(status, allowFailure)) {
+    return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+  }
   switch (status) {
     case 'success':
       return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
     case 'failed':
-      return allowFailure
-        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-        : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
     case 'running':
     case 'pending':
     case 'created':
@@ -223,7 +225,7 @@ export function PipelineJobRow({
             jobStatusTone(job.status, job.allowFailure)
           )}
           title={
-            job.status === 'failed' && job.allowFailure
+            isGitLabAllowedFailure(job.status, job.allowFailure)
               ? translate(
                   'auto.components.editor.CheckRunDetailsPanel.allowedFailure',
                   'Allowed to fail'

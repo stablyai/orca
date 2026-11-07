@@ -258,7 +258,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                       <View
                         style={[
                           styles.pipelineStatusChip,
-                          getGitLabPipelineStatusStyle(job.status)
+                          getGitLabPipelineStatusStyle(job.status, job.allowFailure)
                         ]}
                       >
                         <Text style={styles.pipelineStatusText}>{job.status}</Text>
