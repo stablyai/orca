@@ -17347,7 +17347,8 @@
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
-          "micDisconnected": "Microphone disconnected. Dictation stopped."
+          "micDisconnected": "Microphone disconnected. Dictation stopped.",
+          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation",

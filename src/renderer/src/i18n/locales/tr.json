@@ -16909,7 +16909,8 @@
           "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
-          "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu."
+          "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
+          "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Dikteyi durdur",

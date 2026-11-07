@@ -19,6 +19,7 @@ import {
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
 import { publishDictationMeter } from './dictation-meter-store'
+import { stopDictationAtAudioLimit } from './dictation-audio-limit-stop'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -145,7 +146,9 @@ export function DictationController() {
             )
           )
           stopDictationRef.current?.()
-        }
+        },
+        onAudioLimitReached: () =>
+          stopDictationAtAudioLimit(dictationRunRef, runId, stopDictationRef)
       })
       captureStarted = true
       if (captureResult?.fellBackToDefaultMicrophone) {

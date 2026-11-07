@@ -16698,7 +16698,8 @@
           "unknownModel": "所選模型已無法使用。請在「設定 > 語音」中選擇其他模型。",
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
-          "micDisconnected": "麥克風已中斷連線。聽寫已停止。"
+          "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
+          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止聽寫",

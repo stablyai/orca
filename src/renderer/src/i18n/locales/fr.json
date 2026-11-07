@@ -16876,7 +16876,8 @@
           "unknownModel": "Le modèle sélectionné n'est plus disponible. Choisissez-en un autre dans Paramètres > Voix.",
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
-          "micDisconnected": "Micro déconnecté. Dictée arrêtée."
+          "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
+          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Arrêter la dictée",
