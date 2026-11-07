@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { resolveTerminalPalette } from '../../../shared/terminal-themes/terminal-theme-selection'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
-import { isPlainObject, parseHooksJsonText } from '../../agent-hooks/hooks-json-read'
+import { isPlainObject, parseHooksJsonText, readHooksJson } from '../../agent-hooks/hooks-json-read'
 import { writeHooksJsonAsync } from '../../agent-hooks/hooks-json-write-async'
-import { getSharedManagedScriptPath } from '../../agent-hooks/installer-utils'
+import { getSharedManagedScriptPath, writeHooksJson } from '../../agent-hooks/installer-utils'
 import { defaultClaudeConfigDir } from '../claude-config-dir-pin'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/claude-profile-homes'
 import { claudeCodeThemeFromTerminal, type ClaudeCodeTheme } from './claude-code-theme'
@@ -23,6 +23,8 @@ const BUILT_IN_THEMES = new Set([
   'light-ansi'
 ])
 const SYNC_DEBOUNCE_MS = 250
+// Why: Claude Code's theme watcher misses about one replace in four; a second one lands the switch.
+const RELOAD_RETRY_MS = 1_500
 
 /** What Orca replaced in one config dir's settings.json, so turning the sync off can put it back. */
 type ThemeOwnership = {
@@ -75,36 +77,49 @@ async function isDirectory(path: string): Promise<boolean> {
 }
 
 /** Atomic so Claude Code's theme watcher never reads a half-written file. */
-async function writeThemeFile(configDir: string, theme: ClaudeCodeTheme): Promise<void> {
-  const dir = join(configDir, 'themes')
-  const path = join(dir, THEME_FILE_NAME)
-  const serialized = `${JSON.stringify(theme, null, 2)}\n`
-  if ((await readFile(path, 'utf-8').catch(() => null)) === serialized) {
-    return
-  }
-  await mkdir(dir, { recursive: true })
+async function replaceFile(path: string, content: string): Promise<void> {
   // Why not .json: Claude Code only loads .json files, so it never sees the temp file as a theme.
-  const tmp = join(dir, `.orca-${randomUUID()}.tmp`)
+  const tmp = join(dirname(path), `.orca-${randomUUID()}.tmp`)
   try {
-    await writeFile(tmp, serialized, 'utf-8')
+    await writeFile(tmp, content, 'utf-8')
     await rename(tmp, path)
   } finally {
     await rm(tmp, { force: true })
   }
 }
 
+/** Collects each theme file a pass replaced, so a running session's missed reload can be retried. */
+type ReplacedThemeFiles = string[]
+
+async function writeThemeFile(
+  configDir: string,
+  theme: ClaudeCodeTheme,
+  replaced: ReplacedThemeFiles
+): Promise<void> {
+  const path = join(configDir, 'themes', THEME_FILE_NAME)
+  const serialized = `${JSON.stringify(theme, null, 2)}\n`
+  if ((await readFile(path, 'utf-8').catch(() => null)) === serialized) {
+    return
+  }
+  await mkdir(dirname(path), { recursive: true })
+  await replaceFile(path, serialized)
+  replaced.push(path)
+}
+
 async function applyToConfigDir(
   configDir: string,
   theme: ClaudeCodeTheme,
-  owned: ThemeOwnership | undefined
+  owned: ThemeOwnership | undefined,
+  replaced: ReplacedThemeFiles
 ): Promise<ThemeOwnership | undefined> {
   // The file goes first so settings never name a theme Claude Code cannot load.
-  await writeThemeFile(configDir, theme)
+  await writeThemeFile(configDir, theme, replaced)
   if (owned?.userChangedTheme) {
     return owned
   }
+  // Why sync: the hook installer edits this file synchronously too, so neither can interleave.
   const settingsPath = join(configDir, 'settings.json')
-  const { value: settings } = await readJson(settingsPath)
+  const settings = readHooksJson(settingsPath)
   if (!settings) {
     console.warn(`[claude-theme] Skipping ${settingsPath}: it is not valid JSON`)
     return owned
@@ -117,7 +132,7 @@ async function applyToConfigDir(
   if (current === THEME_SETTING || (current !== undefined && typeof current !== 'string')) {
     return undefined
   }
-  await writeHooksJsonAsync(settingsPath, { ...settings, theme: THEME_SETTING })
+  writeHooksJson(settingsPath, { ...settings, theme: THEME_SETTING })
   return { previousTheme: current ?? null }
 }
 
@@ -157,13 +172,14 @@ async function releasedTheme(
 async function restoreConfigDir(
   configDir: string,
   owned: ThemeOwnership,
-  terminalBase: string
+  terminalBase: string,
+  replaced: ReplacedThemeFiles
 ): Promise<boolean> {
   if (owned.userChangedTheme || !(await isDirectory(configDir))) {
     return true
   }
   const settingsPath = join(configDir, 'settings.json')
-  const { value: settings } = await readJson(settingsPath)
+  const settings = readHooksJson(settingsPath)
   if (!settings) {
     console.warn(`[claude-theme] Could not restore ${settingsPath}: it is not valid JSON`)
     return false
@@ -172,11 +188,15 @@ async function restoreConfigDir(
     return true
   }
   const { theme: _orcaTheme, ...rest } = settings
-  await writeHooksJsonAsync(
+  writeHooksJson(
     settingsPath,
-    owned.previousTheme === null ? rest : { ...rest, theme: owned.previousTheme }
+    owned.previousTheme === null ? rest : { ...settings, theme: owned.previousTheme }
   )
-  await writeThemeFile(configDir, await releasedTheme(configDir, owned.previousTheme, terminalBase))
+  await writeThemeFile(
+    configDir,
+    await releasedTheme(configDir, owned.previousTheme, terminalBase),
+    replaced
+  )
   return true
 }
 
@@ -184,11 +204,12 @@ export type ClaudeCodeThemeSyncTarget =
   | { enabled: true; theme: ClaudeCodeTheme }
   | { enabled: false; terminalBase: string }
 
-/** One pass over every Claude Code config dir Orca's terminals can launch with. */
+/** One pass over every Claude Code config dir Orca's terminals can launch with; returns the theme files it replaced. */
 export async function syncClaudeCodeThemeConfigDirs(
   target: ClaudeCodeThemeSyncTarget,
   userDataPath: string
-): Promise<void> {
+): Promise<ReplacedThemeFiles> {
+  const replaced: ReplacedThemeFiles = []
   const owned = await readOwnership()
   const next = new Map(owned)
   if (target.enabled) {
@@ -200,7 +221,7 @@ export async function syncClaudeCodeThemeConfigDirs(
       if (!(await isDirectory(dir))) {
         continue
       }
-      const result = await applyToConfigDir(dir, target.theme, owned.get(dir)).catch(
+      const result = await applyToConfigDir(dir, target.theme, owned.get(dir), replaced).catch(
         (error: unknown) => {
           console.warn(`[claude-theme] Could not sync ${dir}:`, error)
           return owned.get(dir)
@@ -214,7 +235,7 @@ export async function syncClaudeCodeThemeConfigDirs(
     }
   } else {
     for (const [dir, entry] of owned) {
-      const restored = await restoreConfigDir(dir, entry, target.terminalBase).catch(
+      const restored = await restoreConfigDir(dir, entry, target.terminalBase, replaced).catch(
         (error: unknown) => {
           console.warn(`[claude-theme] Could not restore ${dir}:`, error)
           return false
@@ -227,6 +248,17 @@ export async function syncClaudeCodeThemeConfigDirs(
   }
   if (JSON.stringify([...owned]) !== JSON.stringify([...next])) {
     await writeHooksJsonAsync(ownershipPath(), Object.fromEntries(next))
+  }
+  return replaced
+}
+
+/** Replaces each file again with the content it holds now; a reload that already landed sees no change. */
+async function republishThemeFiles(paths: ReplacedThemeFiles): Promise<void> {
+  for (const path of paths) {
+    const content = await readFile(path, 'utf-8').catch(() => null)
+    if (content !== null) {
+      await replaceFile(path, content)
+    }
   }
 }
 
@@ -258,6 +290,10 @@ const SYNC_SETTING_KEYS: readonly (keyof GlobalSettings)[] = [
   'disabledPlugins'
 ]
 
+function warnSyncFailed(error: unknown): void {
+  console.warn('[claude-theme] Sync failed:', error)
+}
+
 /** Keeps Claude Code's theme on the terminal palette while the setting is on, and restores it when off. */
 export function startClaudeCodeThemeSync(host: {
   getSettings: () => SyncSettings
@@ -278,8 +314,15 @@ export function startClaudeCodeThemeSync(host: {
     }
     lastSynced = key
     queue = queue
-      .then(() => syncClaudeCodeThemeConfigDirs(target, host.userDataPath))
-      .catch((error: unknown) => console.warn('[claude-theme] Sync failed:', error))
+      .then(async () => {
+        const replaced = await syncClaudeCodeThemeConfigDirs(target, host.userDataPath)
+        if (replaced.length > 0) {
+          setTimeout(() => {
+            queue = queue.then(() => republishThemeFiles(replaced)).catch(warnSyncFailed)
+          }, RELOAD_RETRY_MS)
+        }
+      })
+      .catch(warnSyncFailed)
   }
   const schedule = (): void => {
     if (timer) {
