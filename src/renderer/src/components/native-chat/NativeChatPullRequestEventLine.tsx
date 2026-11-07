@@ -1,5 +1,5 @@
 import { CircleCheck, CircleX } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat/native-chat-types'
 import {
@@ -34,6 +34,7 @@ export function NativeChatPullRequestEventLine({
   block: NativeChatTextBlock
   messageId?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const event = messageId ? parsePullRequestEventItemId(messageId) : null
   const failing = block.tone === 'failure'
   const Icon = failing ? CircleX : CircleCheck
@@ -51,12 +52,12 @@ export function NativeChatPullRequestEventLine({
       {event ? (
         <span className="min-w-0 truncate">
           {failing
-            ? translate('components.native-chat.ciResultLine.failingLead', 'CI failing on')
-            : translate('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
+            ? t('components.native-chat.ciResultLine.failingLead', 'CI failing on')
+            : t('components.native-chat.ciResultLine.greenLead', 'CI green on')}{' '}
           <LineLink
             href={`https://${event.forgeHost}/${event.owner}/${event.repo}/pull/${event.number}`}
           >{`${event.repo}#${event.number}`}</LineLink>{' '}
-          {translate('components.native-chat.ciResultLine.at', 'at')}{' '}
+          {t('components.native-chat.ciResultLine.at', 'at')}{' '}
           <LineLink
             href={`https://${event.forgeHost}/${event.owner}/${event.repo}/commit/${event.headSha}`}
           >
@@ -72,14 +73,11 @@ export function NativeChatPullRequestEventLine({
         <NativeChatCardHideButton
           updates={{ nativeChatCiResultLines: false }}
           settingSectionId={NATIVE_CHAT_CI_RESULT_LINES_SETTING_SECTION_ID}
-          hiddenMessage={translate(
+          hiddenMessage={t(
             'components.native-chat.ciResultLine.hidden',
             "Orca won't show CI result lines anymore"
           )}
-          ariaLabel={translate(
-            'components.native-chat.ciResultLine.hide',
-            "Don't show CI result lines"
-          )}
+          ariaLabel={t('components.native-chat.ciResultLine.hide', "Don't show CI result lines")}
         />
       </span>
     </div>
