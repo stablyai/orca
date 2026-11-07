@@ -27,6 +27,7 @@ import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picke
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
@@ -197,6 +198,7 @@ export function ProjectedAgentMenuItems({
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
@@ -213,7 +215,7 @@ export function ProjectedAgentMenuItems({
             key={width}
             variant="launch"
             disabled
-            aria-label={translate(
+            aria-label={t(
               'auto.components.tab.bar.QuickLaunchButton.agentsLoading',
               'Loading agents'
             )}
@@ -240,24 +242,18 @@ export function ProjectedAgentMenuItems({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
           {needsServerUpdate
-            ? translate(
+            ? t(
                 'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
                 'Update Orca on this server to list terminal agents'
               )
             : detectionFailed
-              ? translate(
+              ? t(
                   'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
                   'Couldn’t list terminal agents for this workspace'
                 )
               : detectedIds && detectedIds.length > 0
-                ? translate(
-                    'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
-                    'No enabled agents'
-                  )
-                : translate(
-                    'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                    'No agents detected'
-                  )}
+                ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+                : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
         </DropdownMenuItem>
       ) : null}
       {pickerInventory ? (
@@ -280,7 +276,7 @@ export function ProjectedAgentMenuItems({
                 <AgentIcon agent={agent} size={14} />
                 <span className="flex-1">{label}</span>
                 <span className="font-normal text-muted-foreground">
-                  {chatUnavailableLabel(row.reason)}
+                  {chatUnavailableLabel(row.reason, t)}
                 </span>
               </DropdownMenuItem>
             )
@@ -290,7 +286,7 @@ export function ProjectedAgentMenuItems({
           const rowContent = (
             <>
               <AgentIcon agent={agent} size={14} />
-              <span className="flex-1">{rowLabel(row)}</span>
+              <span className="flex-1">{rowLabel(row, t)}</span>
               {showsDefaultAgentShortcut ? (
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
               ) : null}
@@ -315,7 +311,7 @@ export function ProjectedAgentMenuItems({
                   variant="launch"
                   disabled={disabled}
                   onSelect={() => runLaunch(row)}
-                  title={rowTitle(row, label)}
+                  title={rowTitle(row, label, t)}
                 >
                   {rowContent}
                 </DropdownMenuItem>
@@ -357,9 +353,10 @@ function SurfaceChoiceRow({
   runLaunch: (row: NewTabAgentMenuRow) => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const otherButton = useRef<HTMLButtonElement>(null)
   const releaseTarget = useRef<{ event: PointerEvent; target: EventTarget } | null>(null)
-  const title = rowTitle(row, label)
+  const title = rowTitle(row, label, t)
   return (
     <DropdownMenuItem
       variant="launch"
@@ -399,7 +396,7 @@ function SurfaceChoiceRow({
       <AgentSurfaceLaunchButton
         ref={otherButton}
         surface={other.kind === 'chat' ? 'chat' : 'terminal'}
-        title={rowTitle(other, label)}
+        title={rowTitle(other, label, t)}
         className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
         onKeyDown={(event) => {
           // Stopped so the row's own Enter handling does not start the row's surface instead.

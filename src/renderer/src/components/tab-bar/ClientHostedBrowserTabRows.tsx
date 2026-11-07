@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../store'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import {
@@ -24,6 +24,7 @@ export default function ClientHostedBrowserTabRows({
   groupActiveTabId: string | null
   includeTopTabBorder: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const activeRowId = useActiveClientHostedBrowserRowId({ worktreeId, groupId, groupActiveTabId })
   const focusGroup = useAppStore((state) => state.focusGroup)
 
@@ -61,7 +62,7 @@ export default function ClientHostedBrowserTabRows({
             }).catch((error: unknown) => {
               // Report refused closes visibly because this host has no other handle on the remote page.
               toast.error(
-                translate(
+                t(
                   'browser.clientHosted.hostRowCloseFailed',
                   "Couldn't close this page. The device hosting it may be busy — try again."
                 )
