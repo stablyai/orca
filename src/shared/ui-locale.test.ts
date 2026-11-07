@@ -6,7 +6,6 @@ import {
   normalizeUiLocaleTag,
   shouldShowLanguageSwitcher
 } from './ui-locale'
-
 describe('ui-locale', () => {
   it('maps Traditional Chinese system locales to zh-Hant and keeps Simplified on zh', () => {
     for (const tag of ['zh-TW', 'zh-HK', 'zh-MO', 'zh-Hant']) {
@@ -23,6 +22,7 @@ describe('system language detection', () => {
     ['en-US', 'en', 'supported'],
     ['fr_CA.UTF-8', 'fr', 'supported'],
     ['pt-PT', 'pt', 'supported'],
+    ['gl-ES', 'gl', 'supported'],
     ['tr_TR.UTF-8', 'tr', 'supported'],
     ['zh-Hans-TW', 'zh', 'supported'],
     ['zh-Hant-CN', 'zh-Hant', 'supported'],

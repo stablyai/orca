@@ -20,6 +20,7 @@ const LAZY_LOCALE_LOADERS: Record<
   pt: () => import('../../renderer/src/i18n/locales/pt.json'),
   ru: () => import('../../renderer/src/i18n/locales/ru.json'),
   tr: () => import('../../renderer/src/i18n/locales/tr.json'),
+  gl: () => import('../../renderer/src/i18n/locales/gl.json'),
   zh: () => import('../../renderer/src/i18n/locales/zh.json'),
   'zh-Hant': () => import('../../renderer/src/i18n/locales/zh-Hant.json')
 }

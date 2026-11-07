@@ -12,6 +12,7 @@ import {
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
   UI_LANGUAGE_TURKISH,
+  UI_LANGUAGE_GALICIAN,
   UI_LANGUAGE_NATIVE_NAMES,
   type BuiltInUiLanguage,
   type UiLanguage
@@ -41,9 +42,9 @@ export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_PORTUGUESE, labelKey: 'settings.appearance.language.portuguese' },
   { value: UI_LANGUAGE_RUSSIAN, labelKey: 'settings.appearance.language.russian' },
   { value: UI_LANGUAGE_TURKISH, labelKey: 'settings.appearance.language.turkish' },
-  { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' }
+  { value: UI_LANGUAGE_GERMAN, labelKey: 'settings.appearance.language.german' },
+  { value: UI_LANGUAGE_GALICIAN, labelKey: 'settings.appearance.language.galician' }
 ]
-
 export function getUiLanguageChoiceLabel(
   choice: UiLanguageChoice,
   translateFn: (key: string, fallback: string) => string
