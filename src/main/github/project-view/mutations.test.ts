@@ -122,6 +122,13 @@ describe('updateIssueBySlug', () => {
     ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
   })
 
+  it('keeps a Project body edit successful when the accepted response has no representation', async () => {
+    runRestMock.mockResolvedValueOnce({ ok: true, data: null })
+    await expect(
+      updateIssueBySlug({ owner: 'acme', repo: 'widgets', number: 12, updates: { body: 'saved' } })
+    ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
+  })
+
   it('closes slug-addressed issues with completed and not planned reasons via gh issue close', async () => {
     await expect(
       updateIssueBySlug({

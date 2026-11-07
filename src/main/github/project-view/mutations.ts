@@ -65,8 +65,12 @@ export async function updateIssueBySlug(
     if (!result.ok) {
       return { ok: false, error: result.error }
     }
-    if (body !== undefined && result.data.body === body) {
-      bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
+    try {
+      if (body !== undefined && result.data?.body === body) {
+        bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
+      }
+    } catch {
+      // Optional display data cannot turn an accepted edit into a failed write.
     }
   }
   const labelResult = await updateIssueLabels(args, base)
