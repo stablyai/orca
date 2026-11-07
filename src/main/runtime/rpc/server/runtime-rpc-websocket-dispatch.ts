@@ -7,7 +7,7 @@ import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
-import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../ws-transport'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
@@ -17,29 +17,28 @@ import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-
-// Stamp proven scope at transport boundary; status.get has no connection context.
-function injectDeviceScope(response: string, scope: DeviceScope): string {
-  try {
-    const parsed = JSON.parse(response) as RpcResponse
-    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
-      return response
-    }
-    ;(parsed.result as Record<string, unknown>).deviceScope = scope
-    return JSON.stringify(parsed)
-  } catch {
-    return response
-  }
-}
+import { RUNTIME_CLIENT_RELAY_CONNECTION_CAPABILITIES } from '../../../../shared/mobile-desktop-relay-contract'
+import type { RuntimeClientRelayCaller } from './runtime-rpc-binary-routing'
+import { runtimeClientRelayAdmission } from './runtime-client-relay-admission'
+import { injectDeviceScope } from './runtime-rpc-status-connection-stamp'
 
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
+  // Only an encrypted socket gives the relay a connection to own; the capability promises exactly this admission.
+  private relaysRuntimeClients(
+    scope: DeviceScope,
+    socket: AuthenticatedMobileSocket | undefined
+  ): boolean {
+    return scope === 'runtime' && socket !== undefined && this.mobileDesktopRelay !== null
+  }
+
   // Relay only to configured execution hosts; unreachable targets fail, never run locally. Return null after relay/reply.
   private relayMobileRequest(
     request: RpcRequest,
     rawMessage: string,
     reply: (response: string) => void,
     sendBinary: RpcBinarySender,
-    socket: AuthenticatedMobileSocket | undefined
+    socket: AuthenticatedMobileSocket | undefined,
+    runtimeClient?: RuntimeClientRelayCaller
   ): RpcRequest | null {
     const { executionHost } = request
     if (executionHost === undefined) {
@@ -88,10 +87,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           deviceId: socket.device.deviceId,
           deviceToken: socket.device.clientId,
           clientCapabilities: () => socket.clientCapabilities,
+          ...runtimeClient,
           reply,
-          sendBinary: (bytes) => {
-            sendBinary(bytes)
-          }
+          sendBinary: (bytes) => sendBinary(bytes) !== false
         },
         target.environmentId,
         request,
@@ -178,6 +176,30 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         return
       }
       request = localRequest
+    } else if (this.relaysRuntimeClients(device.scope, authenticatedSocket)) {
+      const admission = runtimeClientRelayAdmission(
+        request,
+        callerScope,
+        this.dispatcher.methodPermission(request.method)
+      )
+      if (admission.kind === 'refused') {
+        reply(JSON.stringify(this.buildError(request.id, admission.code, admission.message)))
+        return
+      }
+      if (admission.kind === 'relay') {
+        const localRequest = this.relayMobileRequest(
+          request,
+          rawMessage,
+          reply,
+          sendBinary,
+          authenticatedSocket,
+          authenticatedSocket && this.runtimeClientRelayCaller(authenticatedSocket, device.deviceId)
+        )
+        if (!localRequest) {
+          return
+        }
+        request = localRequest
+      }
     }
 
     // Why: bind the device to this socket so ws.on('close') knows which client disconnected.
@@ -198,9 +220,13 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
       this.buildError(id, code, message)
     )
+    const connectionCapabilities = this.relaysRuntimeClients(device.scope, authenticatedSocket)
+      ? RUNTIME_CLIENT_RELAY_CONNECTION_CAPABILITIES
+      : []
     const replyForRequest =
       request.method === 'status.get'
-        ? (response: string): void => boundedReply(injectDeviceScope(response, device.scope))
+        ? (response: string): void =>
+            boundedReply(injectDeviceScope(response, device.scope, connectionCapabilities))
         : boundedReply
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined

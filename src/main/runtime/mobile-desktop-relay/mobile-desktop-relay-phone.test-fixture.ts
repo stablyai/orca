@@ -6,6 +6,7 @@ import {
   decryptBytes,
   deriveSharedKey,
   encrypt,
+  encryptBytes,
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
@@ -32,9 +33,11 @@ export function pair(
 export async function connectPhone(
   desktop: OrcaRuntimeRpcServer,
   name: string,
-  cleanups: (() => Promise<void> | void)[]
+  cleanups: (() => Promise<void> | void)[],
+  scope: 'mobile' | 'runtime' = 'mobile',
+  clientCapabilities: readonly string[] = []
 ) {
-  const pairing = pair(desktop, 'mobile', name)
+  const pairing = pair(desktop, scope, name)
   const keys = generateKeyPair()
   const sharedKey = deriveSharedKey(keys.secretKey, publicKeyFromBase64(pairing.publicKeyB64))
   const ws = new WebSocket(pairing.endpoint)
@@ -51,7 +54,11 @@ export async function connectPhone(
       if (text.includes('e2ee_ready')) {
         ws.send(
           encrypt(
-            JSON.stringify({ type: 'e2ee_auth', deviceToken: pairing.deviceToken }),
+            JSON.stringify({
+              type: 'e2ee_auth',
+              deviceToken: pairing.deviceToken,
+              clientCapabilities
+            }),
             sharedKey
           )
         )
@@ -78,6 +85,7 @@ export async function connectPhone(
     frames,
     binaries,
     close: () => ws.close(),
+    sendBinary: (bytes: Uint8Array) => ws.send(encryptBytes(bytes, sharedKey)),
     send(
       id: string,
       method: string,
