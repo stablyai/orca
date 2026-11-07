@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -11,7 +12,7 @@ import {
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+
 import type * as WebRuntimeSessionEnvironment from '@/runtime/web-runtime-session-environment'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import WorktreeCardAgents from '../sidebar/workspace-card/activity/WorktreeCardAgents'
@@ -29,8 +30,8 @@ const effects = vi.hoisted(() => ({
     error: { code: 'unavailable', message: 'Unit-test transport boundary' }
   }))
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: effects.rpc
 }))
 vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => ({

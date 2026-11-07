@@ -33,7 +33,7 @@ import { useTaskPageDetailRouting } from '../../src/renderer/src/components/task
 import { useLinearIssueWorkspaceDetail } from '../../src/renderer/src/components/linear-issue-workspace-detail-state'
 import { assert, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor, render, fireEvent, screen } from '@testing-library/react'
-import { deferred } from '../../src/renderer/src/store/slices/linear-slice-test-harness'
+import { deferred } from '../../src/renderer/src/store/slices/linear/linear-slice-test-harness'
 import { clearLinearRequestMaps } from '../../src/renderer/src/store/slices/linear/linear-slice-request-state'
 import { useTaskPageLinearListSelectionPrelude } from '../../src/renderer/src/components/task-page/linear/use-task-page-linear-list-selection'
 import { LinearStateCell } from '../../src/renderer/src/components/task-page/linear/task-page-linear-issue-model'

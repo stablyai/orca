@@ -41,7 +41,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 type BrowserPaneProps = {

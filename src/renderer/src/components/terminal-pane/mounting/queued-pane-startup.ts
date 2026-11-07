@@ -1,4 +1,4 @@
-import type { PtyPaneStartup } from '../pty-connection-types'
+import type { PtyPaneStartup } from '../pty-connection/startup/pty-pane-startup'
 
 export function paneOwnsQueuedStartup(
   paneStartup: PtyPaneStartup | null | undefined,

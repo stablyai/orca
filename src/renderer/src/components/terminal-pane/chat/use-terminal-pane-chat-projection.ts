@@ -4,12 +4,12 @@ import {
   nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
 } from '../../native-chat/native-chat-leaf-routing'
-import { canContinueAgentSessionInNewSession } from '../terminal-agent-session-continuation'
+import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolvePaneAgentSessionId } from '../pane-agent-session-id'
+import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import { canPaneOfferResumeInNewChat } from '../../tab-bar/tab-session-history-switch'
 
 export function useTerminalPaneChatProjection({

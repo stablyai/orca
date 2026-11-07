@@ -11,6 +11,7 @@ import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
+  fontContributionRows,
   statusBarContributionRows,
   statusBarItemTitles,
   withMode
@@ -37,6 +38,8 @@ export type PluginContributionSource = {
   themes: readonly { id: string; label: string; base?: 'light' | 'dark' }[]
   terminalThemes: readonly { id: string; label: string; mode?: 'light' | 'dark' | 'unknown' }[]
   iconThemes: readonly { id: string; label: string }[]
+  /** Family names as the manifest writes them. */
+  fonts: readonly string[]
   syntaxes: readonly {
     id: string
     label: string
@@ -63,6 +66,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   themes: [],
   terminalThemes: [],
   iconThemes: [],
+  fonts: [],
   syntaxes: [],
   languagePacks: [],
   panels: [],
@@ -93,6 +97,7 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     themes: contributes.themes.map(titled),
     terminalThemes: contributes.terminalThemes.map(titled),
     iconThemes: contributes.iconThemes.map(titled),
+    fonts: contributes.fonts.map((font) => font.family),
     syntaxes: contributes.syntaxes.map(titled),
     languagePacks: contributes.languagePacks,
     panels: contributes.panels.map((panel) => panel.title),
@@ -127,6 +132,7 @@ export function summaryContributionSource(
       mode: base(item.name)
     })),
     iconThemes: of('iconThemes').map((item) => ({ id: item.name, label: item.name })),
+    fonts: of('fonts').map((item) => item.name),
     syntaxes: of('syntaxes').map((item) => ({
       id: item.name,
       label: item.name,
@@ -218,6 +224,7 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
+  rows.push(...fontContributionRows(source.fonts))
   for (const syntax of source.syntaxes) {
     const files = fileList(syntax.extensions, syntax.filenames)
     const label = translate(

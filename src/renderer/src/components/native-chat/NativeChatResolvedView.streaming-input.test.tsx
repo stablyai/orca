@@ -3,18 +3,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatComposerProps } from './native-chat-composer-types'
 import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type * as StreamingModule from '../../../../shared/native-chat/native-chat-streaming'
-import { clearPendingSendCacheForTests } from './native-chat-pending'
+import { clearPendingSendCacheForTests } from './session/terminal/delivery/native-chat-pending'
 
 const probe = vi.hoisted<{
   session: NativeChatLiveSession | null
   inputs: (readonly NativeChatMessage[])[]
   shown: NativeChatMessage[]
 }>(() => ({ session: null, inputs: [], shown: [] }))
-vi.mock('./use-native-chat-retained-session', () => ({
+vi.mock('./session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => probe.session
 }))
 vi.mock('./NativeChatMessageList', () => ({

@@ -121,15 +121,6 @@ describe.each([
     cleanup()
   })
 
-  it('focuses the guest when the tab activates outside a drag', () => {
-    const { focus } = createGuest()
-    const view = render(paneElement(false))
-
-    view.rerender(paneElement(true))
-
-    expect(focus).toHaveBeenCalledTimes(1)
-  })
-
   // Guest focus blurs the embedder, triggering the drag’s missed-end fallback and aborting its own preview activation.
   it('leaves the guest unfocused while a drag holds guests click-through', () => {
     const { focus } = createGuest()

@@ -6,7 +6,7 @@ import {
   requestedFingerprint,
   SCOPE,
   message
-} from './structured-queued-edit.test-fixture'
+} from './queue/editing/structured-queued-edit.test-fixture'
 import { useLayoutEffect, useRef } from 'react'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'

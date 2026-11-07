@@ -4,8 +4,8 @@ import { getConnectionId } from '@/lib/connection-context'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
-import { getTerminalPathExistsCacheKey } from '../terminal-path-exists-cache'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { getTerminalPathExistsCacheKey } from './files/terminal-path-exists-cache'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   makeBuffer,
   makeBufferLine,

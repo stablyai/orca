@@ -2,8 +2,8 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { MessageRow } from './NativeChatMessageRow'
-import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
-import { NativeChatSignInContext } from './native-chat-sign-in'
+import { useStructuredAgentSessionDeliveryNotices } from './session/structured/delivery/use-structured-agent-session-delivery-notices'
+import { NativeChatSignInContext } from './host-access/native-chat-sign-in'
 
 const signInView = { signingIn: false, signIn: () => {} }
 

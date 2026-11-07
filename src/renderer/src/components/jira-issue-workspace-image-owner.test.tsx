@@ -57,7 +57,7 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-jira-client', () => {
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => {
   function request<T>(
     queue: PendingRead<T>[],
     target: RuntimeClientTarget,
@@ -73,11 +73,13 @@ vi.mock('@/runtime/runtime-jira-client', () => {
     jiraListTransitionsForTarget: (target: RuntimeClientTarget, key: string) =>
       request(boundary.transitions, target, key),
     jiraListPrioritiesForTarget: async () => [],
-    jiraListAssignableUsersForTarget: async () => [],
     jiraUpdateIssueForTarget: async () => ({ ok: true }),
     jiraAddIssueCommentForTarget: async () => ({ ok: true, id: 'added' })
   }
 })
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
+}))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {

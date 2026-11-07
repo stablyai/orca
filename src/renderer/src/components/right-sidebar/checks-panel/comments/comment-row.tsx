@@ -3,7 +3,7 @@ import {
   useGitHubImagePending,
   type GitHubImageIntake
 } from '@/components/github/use-github-image-uploads'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -82,12 +82,6 @@ export function CommentRow({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
   const [submittingEdit, setSubmittingEdit] = useState(false)
-
-  useEffect(() => {
-    if (!editing) {
-      setDraft(comment.body)
-    }
-  }, [comment.body, editing])
 
   const handleStartEdit = useCallback((): void => {
     setDraft(comment.body)

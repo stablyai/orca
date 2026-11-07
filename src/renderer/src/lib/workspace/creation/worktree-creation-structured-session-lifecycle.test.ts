@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+import { toast } from 'sonner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
 import { retryBackgroundWorktreeCreation } from './worktree-creation-flow'
@@ -21,7 +22,7 @@ import { StructuredAgentSessionCreateRefusalError } from '../../agent-session/la
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
@@ -42,8 +43,8 @@ import {
 import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
 import '../../agent-session/launch/structured-agent-session-launch-prompt'
 import { hasStagedStructuredLaunchPrompt } from '../../agent-session/launch/structured-agent-session-staged-prompt'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
@@ -75,7 +76,7 @@ vi.mock(
     launchStructuredAgentSession: mocks.createSession
   })
 )
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
@@ -544,4 +545,35 @@ describe('creation chat handoff', () => {
     expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toEqual([])
     expect(mocks.createSession).not.toHaveBeenCalled()
   })
+})
+
+it('returns a classified late legacy preparation error to the composer without a second error surface', async () => {
+  const failureNotice = vi.spyOn(toast, 'error')
+  const { worktreeCreationAgentLaunchOptions } =
+    await import('./worktree-creation-host-agent-launch')
+  const onLegacyPreparationFailure = vi.fn()
+  const late: WorktreeCreationRequest = {
+    ...request,
+    agentLaunchRoute: 'terminal-tui',
+    launchInputs: { sessionOptions: { model: 'opus' } },
+    creationStartup: {
+      legacy: () => {
+        throw new Error('Invalid Arguments')
+      },
+      onLegacyPreparationFailure
+    }
+  }
+  useAppStore.setState({
+    createWorktree: async () => {
+      worktreeCreationAgentLaunchOptions(late).legacyStartup?.()
+      throw new Error('preparation must not reach create')
+    }
+  })
+  await executeWorktreeCreation('creation-1', late)
+  expect(onLegacyPreparationFailure).toHaveBeenCalledWith(
+    expect.objectContaining({ message: 'Invalid Arguments' })
+  )
+  expect(onLegacyPreparationFailure).toHaveBeenCalledOnce()
+  expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
+  expect(failureNotice).not.toHaveBeenCalled()
 })

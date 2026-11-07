@@ -1,9 +1,9 @@
 import { useTerminalPaneTabState } from '../controller/use-terminal-pane-tab-state'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '../../../store/index'
-import { resolveNativeChatLeafTitleAgent } from '../native-chat-leaf-title-agent'
+import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useTerminalPaneStoreActions } from '../controller/use-terminal-pane-store-actions'
-import { selectUnifiedTerminalTabFields } from '../terminal-unified-tab-lookup'
+import { selectUnifiedTerminalTabFields } from '../controller/tab-state/terminal-unified-tab-lookup'
 import { canToggleNativeChat } from '../../../../../shared/native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,

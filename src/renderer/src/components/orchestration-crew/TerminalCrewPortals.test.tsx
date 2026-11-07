@@ -24,7 +24,7 @@ vi.mock('./use-terminal-crew-identity', () => ({
     return { target: { kind: 'local' }, party: paneKey }
   }
 }))
-vi.mock('../native-chat/use-orchestration-crew', () => ({
+vi.mock('../native-chat/worker-lifetime/use-orchestration-crew', () => ({
   useOrchestrationCrew: () => {
     rig.crew()
     return {

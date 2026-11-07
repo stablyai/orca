@@ -1,4 +1,8 @@
-import { useAppStateValue, useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
+import {
+  useAppStateValue,
+  useAppStateView,
+  useAppStateViewActive
+} from '@/store/retained-views/app-state-view'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
@@ -11,7 +15,7 @@ import {
   selectLivePtyIdsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useAppStore } from '@/store/index'
-import { selectKnownWorktreeById } from '@/store/selectors'
+import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames

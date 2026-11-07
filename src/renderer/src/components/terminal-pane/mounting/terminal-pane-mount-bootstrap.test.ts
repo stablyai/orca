@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import {
   runTerminalPaneBootstrapSplits,
   type BootstrapSplitManager

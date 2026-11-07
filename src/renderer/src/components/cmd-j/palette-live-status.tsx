@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'

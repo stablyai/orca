@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../../../store/index'
 
 import { serializeTerminalLayout } from '../terminal-layout-dom-serialization'
-import { mergeCapturedLeafState } from '../../merge-captured-leaf-state'
+import { mergeCapturedLeafState } from '../../snapshots/merge-captured-leaf-state'
 import { resolveTerminalLayoutActiveLeafId } from '../ownership/terminal-layout-active-leaf'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 

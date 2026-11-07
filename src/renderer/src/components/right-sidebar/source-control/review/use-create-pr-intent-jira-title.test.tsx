@@ -12,7 +12,7 @@ import { useSourceControlCreatePrIntentReview } from './use-create-pr-intent-rev
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 
 const runtime = vi.hoisted(() => ({ generate: vi.fn() }))
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   generateRuntimePullRequestFields: runtime.generate
 }))
 afterEach(() => {

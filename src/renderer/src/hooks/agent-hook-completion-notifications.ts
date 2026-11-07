@@ -6,11 +6,11 @@ import type {
   AgentCompletionStatusSnapshot
 } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import { dispatchTerminalNotification } from '@/components/terminal-pane/use-notification-dispatch'
+import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
 import { collectLeafIdsInOrder } from '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
-import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-hook-terminal-lifecycle'
-import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/agent-task-complete-policy'
+import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
+import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
 import {
   shouldSyncAgentHookCompletionForStoreUpdate,
   type AgentHookCompletionStoreSnapshot

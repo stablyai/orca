@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'
+import type { TerminalTabRetirementState } from '@/store/terminals/terminal-tab-retirement'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectResult, PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import {
+  installIpcPtyWindow,
+  restorePtySpecWindow
+} from '../../pty-transport/ipc/pty-transport-test-harness'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -24,9 +27,7 @@ vi.mock('../../../terminal/running-terminal-close-guard', () => ({
 }))
 vi.mock('../../../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: vi.fn() }))
 vi.mock('../detach/terminal-pane-tab-detach', () => ({
-  detachTerminalPaneToTab: vi.fn(),
-  isTerminalTabStripDropTarget: vi.fn(),
-  resolveTerminalTabStripDropTarget: vi.fn()
+  detachTerminalPaneToTab: vi.fn()
 }))
 vi.mock('./terminal-pane-close-identity', () => ({
   resolveTabTitleAfterPaneClose: vi.fn(),

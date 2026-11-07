@@ -2,12 +2,12 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { linearGetIssue, linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
-import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
-import type { LinearMutationResult } from '@/runtime/runtime-linear-client'
+import { linearGetIssue, linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
+import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
+import type { LinearMutationResult } from '@/runtime/linear/runtime-linear-client'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import type { WorkspaceRecordState } from '@/store/workspace-record-selectors'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import type { WorkspaceRecordState } from '@/store/workspaces/selection/workspace-host-target'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
@@ -20,11 +20,11 @@ const { getState } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState } }))
-vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', () => ({
   linearGetIssue: vi.fn(),
   linearUpdateIssue: vi.fn()
 }))
-vi.mock('@/runtime/runtime-linear-project-client', () => ({ linearTeamStates: vi.fn() }))
+vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({ linearTeamStates: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))
 
 const issue: LinearIssue = {

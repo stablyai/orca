@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import {
   NativeChatVisualOwnerContext,
   type NativeChatVisualOwner
-} from './native-chat-visual-owner'
+} from './media/visuals/native-chat-visual-owner'
 import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-opened-pull-requests'
 
 const host = vi.hoisted(() => ({ capability: vi.fn(), read: vi.fn() }))

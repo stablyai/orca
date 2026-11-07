@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { operationGitContext } from '../listing/operation-target'
-import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
+import { getRuntimeGitBranchCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { refreshGitStatusForWorktreeStrict } from '../sync/git-status-refresh'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'

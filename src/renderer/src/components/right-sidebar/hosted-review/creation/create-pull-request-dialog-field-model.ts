@@ -4,15 +4,15 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import type {
   RuntimeGeneratePullRequestFieldsOverrides,
   RuntimeGitContext
-} from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-client-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type {
   PullRequestFieldRevisions,
   PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 
 export type PullRequestGenerationOutcome = { result: PullRequestGenerationFields | null }
 

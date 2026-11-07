@@ -11,7 +11,7 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 import { TabDragPointerSensor } from '../tab-group/tab-drag-pointer-sensor'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
 import {
   addWorkspace,
@@ -29,7 +29,7 @@ import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

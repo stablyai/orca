@@ -7,7 +7,7 @@ import {
 } from '../../../../../../shared/terminal/links/terminal-links'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
-import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
+import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,
@@ -15,14 +15,14 @@ import {
   terminalPathWslDistro,
   type TerminalFileContext
 } from '../../host-files/terminal-file-path-mapping'
-import type { createTerminalPathExistenceBatch } from '../../terminal-path-existence-batch'
+import type { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import {
   getTerminalPathExistsCacheKey,
   readTerminalPathExistence,
   writeTerminalPathExistence,
   startTerminalPathExistsProbe,
   type TerminalPathExistsCache
-} from '../../terminal-path-exists-cache'
+} from './terminal-path-exists-cache'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import {
   hostFileLinkTargetExists,

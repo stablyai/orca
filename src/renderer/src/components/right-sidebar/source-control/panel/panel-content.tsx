@@ -231,6 +231,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           className={`sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border ${dockBackground} backdrop-blur-sm`}
         >
           <GitHistoryPanel
+            worktreeId={currentWorktreeId ?? undefined}
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTabRetirementPlan } from '../slices/terminal-tab-retirement'
+import type { TerminalTabRetirementPlan } from './terminal-tab-retirement'
 
 const PTY = 'ssh:ssh-box@@pty-1'
 const TAB = 'web-terminal-tab-1'

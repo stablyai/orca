@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { stripSshReconnectOwnedErrorLines } from '../TerminalErrorToast'
-import { mapPaneTerminalErrors } from '../terminal-error-accumulation'
+import { stripSshReconnectOwnedErrorLines } from './terminal-error-display'
+import { mapPaneTerminalErrors } from './terminal-error-accumulation'
 import type { TerminalPaneMobileController } from '../controller/use-terminal-pane-mobile-actions'
 
 export function useSshReconnectErrorOwnership({

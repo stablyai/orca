@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { useAppStateValue } from '@/store/app-state-view'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { formatDiffComments } from '../../../../../../shared/diff-comments-format'

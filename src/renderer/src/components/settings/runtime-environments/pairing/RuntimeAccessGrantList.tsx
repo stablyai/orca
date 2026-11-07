@@ -103,6 +103,13 @@ export function RuntimeAccessGrantList({
                         'Last used with older encryption. Update Orca where this link is used.'
                       )}
                     />
+                  ) : grant.olderPairingMethod ? (
+                    <div className="text-muted-foreground text-xs">
+                      {translate(
+                        'auto.components.settings.RuntimeAccessGrantList.olderPairingMethod',
+                        'Uses an older pairing method. Update Orca on the device that uses this link.'
+                      )}
+                    </div>
                   ) : null}
                 </div>
                 <Button

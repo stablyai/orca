@@ -280,7 +280,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  'src/renderer/src/runtime/hosted-terminals/streams/',
+  'src/renderer/src/runtime/hosted-terminals/snapshots/',
+  'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
   'src/shared/agent-status/lifecycle/agent-turn-outcome',
   'src/shared/agent-status/contracts/agent-status-types',
@@ -293,7 +295,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
   'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
-  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
@@ -567,11 +569,14 @@ function isProductBundlePath(file, extraPrefixes) {
 // These shared fixtures are consumed only by unit tests.
 export function isUnitTestSupportSource(file) {
   return (
-    file === 'src/renderer/src/store/slices/editor-slice-test-harness.ts' ||
-    file === 'src/renderer/src/store/slices/browser-slice-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-runtime-session-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
     file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
     file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
   )
 }

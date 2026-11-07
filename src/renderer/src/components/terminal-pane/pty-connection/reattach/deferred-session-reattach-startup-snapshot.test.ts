@@ -4,8 +4,12 @@ import { startDeferredSessionReattach } from './deferred-session-reattach-connec
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
-vi.mock('../../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
-vi.mock('./paired-parked-terminal-restore', () => ({ isRemoteRuntimePtyId: () => false }))
+vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', () => ({
+  warnTerminalLifecycleAnomaly: vi.fn()
+}))
+vi.mock('../../../../../../shared/remote-runtime/remote-runtime-pty-id', () => ({
+  isRemoteRuntimePtyId: () => false
+}))
 vi.mock('../instrumentation/pty-connect-diagnostics', () => ({
   recordPtyConnectDiagnostic: vi.fn()
 }))

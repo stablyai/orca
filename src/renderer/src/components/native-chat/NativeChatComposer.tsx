@@ -1,4 +1,4 @@
-import { NativeChatTextAttachmentScope } from './NativeChatTextAttachments'
+import { NativeChatTextAttachmentScope } from './media/text/NativeChatTextAttachments'
 import { forwardRef } from 'react'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
 import type {

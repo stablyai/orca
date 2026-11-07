@@ -749,7 +749,7 @@
         "insecureOrigin": "Orca가 이 페이지에서의 페어링을 거부했습니다. 이 페이지는 다른 컴퓨터에 있고 일반 http이므로 네트워크 경로에 있는 누구나 이 페이지를 대체하여 페어링 코드를 가져갈 수 있습니다. https로, 이 컴퓨터의 localhost에서, 또는 SSH 터널을 통해 웹 클라이언트를 여세요. 그래도 허용하려면 서버 운영자가 ORCA_ALLOW_INSECURE_WEB_PAIRING=1로 Orca를 다시 시작할 수 있습니다.",
         "deviceDowngraded": "이 Orca 서버는 더 이상 이 브라우저의 로그인 키를 지원하지 않습니다(다운그레이드되었을 수 있음). 서버를 업데이트하거나 이 브라우저를 다시 페어링하세요.",
         "unauthorized": "권한이 없습니다. 이 웹 클라이언트를 다시 페어링하세요.",
-        "unauthorizedNewLink": "권한이 없습니다. 새 페어링 링크를 요청하세요."
+        "unauthorizedLinkUsedOrExpired": "권한이 없습니다. 이 페어링 링크가 만료되었거나 이미 사용되었을 수 있습니다. Orca에서 새 페어링 링크를 만든 후 여세요."
       }
     },
     "store": {
@@ -1452,13 +1452,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "대상 워크스페이스를 더 이상 사용할 수 없습니다.",
-        "16a21d6413": "SSH 재연결에는 대화형 자격 증명이 필요합니다.",
-        "386db94f3e": "대상 프로젝트를 더 이상 사용할 수 없습니다.",
-        "3ad7d77f57": "대상 워크스페이스가 이 자동화 실행 대상과 다른 호스트에 있습니다.",
-        "workspaceHostUnresolved": "대상 워크스페이스는 두 개 이상의 호스트에 걸쳐 있으므로 이 실행에는 사용할 단일 호스트가 없습니다."
-      },
       "useComposerState": {
         "b2ead86962": "PR 기반을 해결하지 못했습니다.",
         "3db83fc58a": "이 호스트에 첨부 파일에 사용할 수 있는 프로젝트 경로가 없습니다.",
@@ -7682,7 +7675,8 @@
           "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
           "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다.",
           "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다.",
-          "legacyEncryption": "이전 암호화 방식을 사용합니다. 이 기기에서 Orca 앱을 업데이트하세요."
+          "legacyEncryption": "이전 암호화 방식을 사용합니다. 이 기기에서 Orca 앱을 업데이트하세요.",
+          "olderPairingMethod": "이전 페어링 방식을 사용 중입니다. 이 휴대폰의 Orca 앱을 업데이트하세요."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "앱스토어",
@@ -8083,6 +8077,7 @@
           "6f6d5188ed": "{{value0}} 취소",
           "434e4a6af6": "현재 링크",
           "df142657a5": "아직 사용되지 않음",
+          "olderPairingMethod": "이전 페어링 방식을 사용 중입니다. 이 링크를 사용하는 기기의 Orca를 업데이트하세요.",
           "b18d1764ef": "마지막으로 사용된 날짜: {{value0}}",
           "linkName": "링크 · {{value0}}",
           "activeLinks": "활성 링크",
@@ -10610,7 +10605,11 @@
               "micDefault": "시스템 기본값",
               "dictationLanguageTitle": "받아쓰기 언어",
               "dictationLanguageDescription": "음성 모델에 말하는 언어를 알려 줍니다.",
-              "dictationLanguageKeyword": "언어"
+              "dictationLanguageKeyword": "언어",
+              "modelUnloadTitle": "음성 모델 언로드",
+              "modelUnloadDescription": "로컬 음성 모델을 메모리에서 언로드할 시점을 선택합니다.",
+              "modelUnloadKeyword": "언로드",
+              "modelMemoryKeyword": "메모리"
             }
           }
         },
@@ -12929,7 +12928,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "아직 commits이 없습니다",
-            "781a8bcf7b": "그래프 로드 중...",
             "d0fb0f4bf2": "commits 새로 고침",
             "9f7535d22b": "Refs는 정확한 commit을 가리키는 브랜치 또는 태그 이름입니다. Git에 commit에 대한 명명된 참조가 있는 경우에만 나타납니다.",
             "9289ba0cb9": "refs란 무엇인가요?",
@@ -14084,6 +14082,7 @@
             "openLog": "로그 열기",
             "revealLog": "로그 위치 열기",
             "openWorkingDirectory": "작업 디렉터리 열기",
+            "revealArtifactsFolder": "아티팩트 폴더 열기",
             "copySessionId": "세션 ID 복사",
             "copyLogPath": "로그 경로 복사",
             "messageCount": "메시지 {{value0}}개",
@@ -14131,7 +14130,6 @@
             "f8a2c4d1e0": "탐색기 검색 모드"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "파일 로드 중…",
             "b2c3d4e5f6": "이 commit에는 파일 변경 사항이 없습니다",
             "c3d4e5f6a7": "모든 변경 사항을 함께 열기"
           },
@@ -16903,7 +16901,10 @@
           "reuseLiveSession": "활성 세션 재사용",
           "freshEachRun": "실행마다 새로 시작",
           "precheckEnabled": "활성화됨, {{timeout}}",
-          "precheckNone": "없음"
+          "precheckNone": "없음",
+          "migrate": "마이그레이션",
+          "migrateNotice": "{{host}}이(가) 새 원격 호스트로 업그레이드되었습니다. 계속 실행하려면 이 자동화를 마이그레이션하세요.",
+          "needsMigration": "마이그레이션 필요"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "취소",
@@ -18531,18 +18532,6 @@
           "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
           "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
         }
-      },
-      "agyInstall": {
-        "open": "설치",
-        "title": "Antigravity 설치",
-        "description": "터미널에서 Enter를 눌러 공식 설치 프로그램을 실행하세요. 이 터미널을 닫으면 실행 중인 명령이 중지됩니다.",
-        "target": "설치 위치: {{location}}",
-        "thisDevice": "이 기기",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity 설치 프로그램",
-        "detected": "PATH에서 Antigravity가 감지되었습니다. 설치가 끝나면 터미널을 닫으세요.",
-        "close": "터미널 닫기",
-        "recheck": "Agent 다시 확인"
       }
     },
     "native-chat": {
@@ -19960,6 +19949,13 @@
           "description": "말하는 언어입니다. 자동 감지를 선택하면 모델이 매번 언어를 판단합니다.",
           "title": "받아쓰기 언어",
           "auto": "자동 감지"
+        },
+        "modelUnload": {
+          "title": "음성 모델 언로드",
+          "description": "받아쓰기를 마친 뒤 로컬 모델을 메모리에 유지하는 시간입니다. 로드되어 있는 동안에는 받아쓰기가 바로 시작됩니다. \"즉시\"를 선택하면 메모리를 비우므로 받아쓰기마다 모델 로드를 기다립니다.",
+          "cloud": "클라우드 모델은 제공업체 서버에서 실행되므로 여기에는 아무것도 로드되지 않습니다.",
+          "never": "안 함",
+          "immediately": "즉시"
         }
       }
     },
@@ -22778,6 +22774,7 @@
       "noRunnableHost": "이 자동화에는 실행할 호스트가 없습니다.",
       "wslMoveInProgress": "이 자동화의 프로젝트를 WSL 호스트로 옮기는 중이어서 Orca가 이번 실행을 건너뛰었습니다. 이동이 끝나면 실행이 재개됩니다.",
       "wslMoveOwnedByHost": "이 자동화의 프로젝트는 이제 WSL 호스트에서 실행되며, 해당 호스트가 그곳에서 이 자동화를 실행합니다. Orca는 더 이상 이 로컬 사본을 실행하지 않습니다.",
+      "managedHostServer": "{{host}}(으)로 마이그레이션 필요",
       "missedGraceWindow": "Orca가 다시 확인했을 때 이 실행을 보충할 수 있는 유예 시간이 이미 지나 있었습니다.",
       "targetMissing": "자동화 호스트가 더 이상 등록되어 있지 않아 이 자동화를 실행할 곳이 없습니다.",
       "targetReplaced": "자동화 호스트가 제거된 후 다시 등록되었으므로, 이 자동화를 실행하려면 다시 연결해야 합니다.",
@@ -22819,6 +22816,17 @@
         "effortRepeated": "추가 인수에 추론 수준이 두 번 이상 지정되어 있습니다."
       },
       "hostUpdateRequired": "추가 인수를 사용하려면 이 호스트의 Orca를 업데이트하세요."
+    },
+    "setupTrust": {
+      "reviewTitle": "이 자동화의 새 설정 명령을 승인할까요?",
+      "reviewBody": "브랜치의 <code>orca.yaml</code> 설정 명령이 변경되어 실행에서 설정을 건너뛰었습니다. 승인하면 이후 실행에서 이 명령을 사용합니다. <repo/>을(를) 신뢰하는 경우에만 승인하세요.",
+      "approve": "승인",
+      "approved": "설정을 승인했습니다. 이 자동화의 이후 실행에서 실행됩니다.",
+      "skippedSinceApproved": "브랜치의 orca.yaml 설정 명령이 변경되어 이 실행에서는 설정이 실행되지 않았습니다. 이후 승인되었으므로 이후 실행에서 실행됩니다.",
+      "skippedReview": "설정이 실행되지 않았습니다. 이 실행 브랜치의 orca.yaml 설정 명령이 이 자동화에 승인된 명령과 다릅니다. 이후 실행에서 설정을 실행하려면 검토하세요.",
+      "reviewAction": "설정 검토 및 승인",
+      "listSkipped": "설정 건너뜀",
+      "listSkippedTitle": "브랜치의 orca.yaml 설정 명령이 변경되어 마지막 실행에서 설정을 건너뛰었습니다. 작업 메뉴에서 검토하세요."
     }
   },
   "codeHost": {
@@ -23176,5 +23184,32 @@
     "discussionAction": "토론에 참여",
     "checkAction": "호환성 확인",
     "settingsStatus": "Orca {{version}}에는 macOS {{macos}} 이상이 필요합니다. 이 버전이 이 Mac의 최신 버전입니다."
+  },
+  "gitGraph": {
+    "copyHash": "커밋 해시 복사",
+    "parents": "부모 커밋",
+    "files": "파일",
+    "currentBranch": "현재 브랜치",
+    "allBranches": "모든 브랜치",
+    "chosenBranches": "선택한 브랜치",
+    "searchRefs": "브랜치 및 태그 검색",
+    "oldServer": "이 서버의 Orca 버전은 현재 브랜치만 표시합니다",
+    "copyBranch": "브랜치 이름 복사",
+    "switchWorkspace": "워크스페이스로 전환",
+    "workspaceClosed": "이 브랜치는 더 이상 다른 작업 공간에 열려 있지 않습니다.",
+    "workspaceCheckFailed": "이 작업 공간을 확인할 수 없습니다. 연결된 후 다시 시도하세요.",
+    "refresh": "커밋 새로 고침",
+    "branchTag": "브랜치 / 태그",
+    "graph": "그래프",
+    "resizeColumn": "그래프 열 너비 조절",
+    "message": "메시지",
+    "author": "작성자",
+    "date": "날짜",
+    "loadMore": "더 불러오기",
+    "noCommits": "아직 커밋이 없습니다",
+    "historyChanged": "기록이 다시 변경되었습니다. Git 그래프를 새로 고친 후 다시 시도하세요.",
+    "loadFailed": "Git 기록을 불러오지 못했습니다",
+    "updateHost": "Git 그래프를 열려면 {{host}}의 Orca를 업데이트하세요",
+    "title": "Git 그래프"
   }
 }

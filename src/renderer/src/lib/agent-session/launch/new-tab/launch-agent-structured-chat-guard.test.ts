@@ -11,16 +11,16 @@ import {
   mockToastError,
   mockCallStructuredAgentSession,
   mockCreateSupport,
-  structuredLaunchIntent,
   liveStore,
   main
 } from './launch-agent-structured-chat-test-fixture'
+import { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import type { launchAgentInNewTab } from './launch-agent-in-new-tab'
-import '@/store/slices/store-test-helpers'
-import { makeUnifiedTab } from '@/store/slices/store-session-test-harness'
+import '@/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import {
@@ -29,7 +29,7 @@ import {
   retireStructuredAgentSessionLaunchCancellationTombstone
 } from '../structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '../structured-agent-session-launch-persistence'
-import * as capabilities from '@/runtime/local-runtime-capabilities'
+import * as capabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const mockCreateUnifiedTab = vi.fn<AppState['createUnifiedTab']>()

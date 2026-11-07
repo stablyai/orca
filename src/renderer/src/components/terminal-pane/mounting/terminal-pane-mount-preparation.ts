@@ -1,3 +1,4 @@
+import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/connection-context'
@@ -19,14 +20,14 @@ import {
   terminalUrlOpenHintOptionsFor
 } from '../links/terminal-link-open-hints'
 import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
-import type { TerminalPathExistsCache } from '../terminal-path-exists-cache'
+import type { TerminalPathExistsCache } from '../links/files/terminal-path-exists-cache'
 import type { TerminalLinkActionContext } from '../links/terminal-link-action-request'
-import type { TerminalHttpLinkActionDestinations } from '../links/http/terminal-url-link-hit-testing'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 import { fitAndFocusPanes, fitPanes } from '../viewport/mounted-pane-fit'
-import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from '../layout/terminal-layout-normalization'
 import { applyTerminalAppearance } from '../appearance/terminal-appearance'
 import { terminalLinkClickBehaviorFor } from '../links/gestures/terminal-link-click-behavior'

@@ -11,7 +11,7 @@ import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { routeNativeChatRootKeyToInput } from './native-chat-root-key-routing'
 import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
-import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
+import { useNativeChatPromptCardFocus } from './prompts/use-native-chat-prompt-card-focus'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
 const mocks = vi.hoisted(() => {

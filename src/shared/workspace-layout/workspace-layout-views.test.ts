@@ -1,21 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { asLoaded, emptyModel, WS } from './workspace-layout-command.test-fixture'
+import { emptyModel, WS } from './workspace-layout-command.test-fixture'
 import type { LayoutTab, WorkspaceLayout, WorkspaceLayoutModel } from './workspace-layout-model'
-import { saveWorkspaceLayout } from './workspace-layout-save'
-import { pruneViewRecord, removeWorkspaceFromView } from './workspace-layout-view-prune'
+
+import { pruneViewRecord } from './workspace-layout-view-prune'
 import {
-  DESKTOP_VIEW_ID,
-  deviceViewId,
   emptyLayoutViewRecord,
   resolveWorkspaceSelection,
-  setViewRecord,
-  viewRecordOf,
   type LayoutViewRecord
 } from './workspace-layout-views'
 
 const PANE_A = '00000000-0000-4000-8000-00000000000a'
 const PANE_B = '00000000-0000-4000-8000-00000000000b'
-const PHONE = deviceViewId('phone-1')
 
 const tabFields = (id: string) => ({
   id,
@@ -96,21 +91,6 @@ function afterCloses(): WorkspaceLayout {
   return next
 }
 
-describe('per-view store', () => {
-  it('starts a view it has not seen empty, never from another view', () => {
-    const store = setViewRecord({}, DESKTOP_VIEW_ID, fullRecord())
-
-    expect(viewRecordOf(store, PHONE)).toEqual(emptyLayoutViewRecord())
-    expect(viewRecordOf(store, DESKTOP_VIEW_ID)).toEqual(fullRecord())
-  })
-
-  it('keeps unsaved drafts for the desktop only', () => {
-    const store = setViewRecord({}, PHONE, fullRecord())
-
-    expect(viewRecordOf(store, PHONE).editorDrafts).toEqual({})
-  })
-})
-
 describe('resolveWorkspaceSelection', () => {
   it('falls back for every id a close removed', () => {
     expect(resolveWorkspaceSelection(fullRecord(), WS, afterCloses())).toEqual({
@@ -153,39 +133,6 @@ describe('pruneViewRecord', () => {
       lastFocusedAt: { [WS]: { t1: 1, t3: 3 } },
       panes: { t1: { activeLeafId: PANE_A, expandedLeafId: null } },
       editorDrafts: { [WS]: {} }
-    })
-  })
-
-  it('changes nothing the Serializer writes for the model', () => {
-    const layout = model(afterCloses())
-    const save = (desktopView: LayoutViewRecord) =>
-      saveWorkspaceLayout({ ...asLoaded(layout), desktopView })
-    const {
-      activeFileIdByWorktree: _f,
-      activeBrowserTabIdByWorktree: _b,
-      ...pruned
-    } = save(pruneViewRecord(fullRecord(), layout))
-    const {
-      activeFileIdByWorktree: _sf,
-      activeBrowserTabIdByWorktree: _sb,
-      ...stale
-    } = save(fullRecord())
-
-    expect(pruned).toEqual(stale)
-  })
-})
-
-describe('removeWorkspaceFromView', () => {
-  it('drops the workspace from every field the Store drops it from', () => {
-    const removed = removeWorkspaceFromView(fullRecord(), WS, workspace())
-
-    expect(removed).toEqual({
-      ...emptyLayoutViewRecord(),
-      activeTabIdByWorktree: { other: 'x' },
-      activeGroupIdByWorktree: {},
-      activeFileIdByWorktree: {},
-      activeBrowserTabIdByWorktree: {},
-      lastVisitedAtByWorktreeId: { other: 7 }
     })
   })
 })

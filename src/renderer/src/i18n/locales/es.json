@@ -757,7 +757,7 @@
         "insecureOrigin": "Orca se negó a emparejar desde esta página: usa http sin cifrar en otro equipo, así que cualquiera en la ruta de red podría reemplazarla y quedarse con el código de emparejamiento. Abre el cliente web por https, en localhost en este equipo o a través de un túnel SSH. Para permitirlo de todos modos, el operador del servidor puede reiniciar Orca con ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "Este servidor Orca ya no admite la clave de inicio de sesión de este navegador (puede que se haya degradado). Actualiza el servidor o vuelve a emparejar este navegador.",
         "unauthorized": "No autorizado. Vuelve a emparejar este cliente web.",
-        "unauthorizedNewLink": "No autorizado. Pide un nuevo enlace de emparejamiento."
+        "unauthorizedLinkUsedOrExpired": "No autorizado. Es posible que este enlace de emparejamiento haya caducado o ya se haya usado. Crea un nuevo enlace de emparejamiento en Orca y ábrelo."
       }
     },
     "store": {
@@ -1460,13 +1460,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "El espacio de trabajo de destino ya no está disponible.",
-        "16a21d6413": "La reconexión SSH requiere credenciales interactivas.",
-        "386db94f3e": "El proyecto de destino ya no está disponible.",
-        "3ad7d77f57": "El espacio de trabajo de destino está en un host distinto al destino de ejecución de esta automatización.",
-        "workspaceHostUnresolved": "El espacio de trabajo de destino abarca más de un host, así que esta ejecución no tiene un único host que usar."
-      },
       "useComposerState": {
         "b2ead86962": "No se pudo resolver la base del PR.",
         "3db83fc58a": "No hay ninguna ruta de proyecto remoto disponible para los archivos adjuntos.",
@@ -7975,7 +7968,8 @@
           "diagnosticsCopyFailed": "No se pudieron copiar los diagnósticos",
           "5e2c7a1f84": "Mientras usas un terminal en tu teléfono, Orca lo reduce para que se ajuste a la pantalla de tu teléfono. Cuando cierra la aplicación o la abandona, esto controla si permanece en el tamaño del teléfono (para que las herramientas CLI interactivas no vuelvan a fluir) o cambia de tamaño a su escritorio. Siempre puedes usar Restaurar o Restaurar todo en el banner para cambiar el tamaño manualmente.",
           "codeRefreshesAutomatically": "El código se actualiza automáticamente. Un código copiado funciona hasta 10 minutos.",
-          "legacyEncryption": "Usa un cifrado anterior. Actualiza la app de Orca en este dispositivo."
+          "legacyEncryption": "Usa un cifrado anterior. Actualiza la app de Orca en este dispositivo.",
+          "olderPairingMethod": "Usa un método de vinculación antiguo. Actualiza la app de Orca en este teléfono."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8377,6 +8371,7 @@
           "6f6d5188ed": "Revocar {{value0}}",
           "434e4a6af6": "Enlace actual",
           "df142657a5": "Aún no se ha usado",
+          "olderPairingMethod": "Usa un método de vinculación antiguo. Actualiza Orca en el dispositivo que usa este enlace.",
           "b18d1764ef": "Usado por última vez {{value0}}",
           "linkName": "Enlace · {{value0}}",
           "activeLinks": "Enlaces activos",
@@ -10904,7 +10899,11 @@
               "micDefault": "valor predeterminado del sistema",
               "dictationLanguageTitle": "Idioma de dictado",
               "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
-              "dictationLanguageKeyword": "idioma"
+              "dictationLanguageKeyword": "idioma",
+              "modelUnloadTitle": "Descargar modelo de voz",
+              "modelUnloadDescription": "Elige cuándo se descarga de la memoria el modelo de voz local.",
+              "modelUnloadKeyword": "descargar",
+              "modelMemoryKeyword": "memoria"
             }
           }
         },
@@ -13236,7 +13235,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Aún no hay commits",
-            "781a8bcf7b": "Cargando gráfico…",
             "d0fb0f4bf2": "Actualizar commits",
             "9f7535d22b": "Las refs son nombres de ramas o tags que apuntan a ese commit exacto. Solo aparecen cuando Git tiene una ref con nombre para el commit.",
             "9289ba0cb9": "¿Qué son las refs?",
@@ -14452,6 +14450,7 @@
             "openLog": "Abrir registro",
             "revealLog": "Mostrar registro en carpeta",
             "openWorkingDirectory": "Abrir directorio de trabajo",
+            "revealArtifactsFolder": "Mostrar carpeta de artefactos",
             "copySessionId": "Copiar ID de sesión",
             "copyLogPath": "Copiar ruta de registro",
             "messageCount": "{{value0}} mens.",
@@ -14499,7 +14498,6 @@
             "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Cargando archivos…",
             "b2c3d4e5f6": "No hay cambios de archivos en este commit",
             "c3d4e5f6a7": "Abrir todos los cambios juntos"
           },
@@ -17320,7 +17318,10 @@
           "reuseLiveSession": "Reutilizar sesión activa",
           "freshEachRun": "Nueva en cada ejecución",
           "precheckEnabled": "Activada, {{timeout}}",
-          "precheckNone": "Ninguna"
+          "precheckNone": "Ninguna",
+          "migrate": "Migrar",
+          "migrateNotice": "{{host}} se actualizó a un nuevo host remoto. Migra esta automatización para que siga ejecutándose.",
+          "needsMigration": "Requiere migración"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancelar",
@@ -20456,6 +20457,13 @@
           "description": "El idioma que hablas. Con Detectar automáticamente, el modelo lo deduce cada vez.",
           "title": "Idioma de dictado",
           "auto": "Detectar automáticamente"
+        },
+        "modelUnload": {
+          "title": "Descargar modelo de voz",
+          "description": "Cuánto tiempo permanece el modelo local en memoria después de dictar. Mientras está cargado, el dictado empieza al instante; «Inmediatamente» libera la memoria, así que cada dictado espera a que el modelo se cargue.",
+          "cloud": "Los modelos en la nube se ejecutan en los servidores del proveedor, así que aquí no queda nada cargado.",
+          "never": "Nunca",
+          "immediately": "Inmediatamente"
         }
       }
     },
@@ -20517,17 +20525,6 @@
           "reviewStatus": "Consulta el estado de la incidencia, la revisión y las verificaciones de CI en cada árbol de trabajo",
           "managePullRequests": "Lee, comenta y fusiona pull requests sin salir de Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Instalar",
-        "title": "Instalar Antigravity",
-        "description": "Pulsa Intro en el terminal para ejecutar el instalador oficial. Al cerrar este terminal se detiene cualquier comando que siga ejecutándose.",
-        "target": "Ubicación de instalación: {{location}}",
-        "thisDevice": "Este dispositivo",
-        "terminal": "Instalador de Antigravity",
-        "detected": "Se ha detectado Antigravity en PATH. Cierra el terminal cuando termine la instalación.",
-        "close": "Cerrar terminal",
-        "recheck": "Volver a comprobar agentes"
       }
     },
     "jiraUserPicker": {
@@ -23467,6 +23464,7 @@
       "noRunnableHost": "Esta automatización no tiene host donde ejecutarse.",
       "wslMoveInProgress": "El proyecto de esta automatización se está moviendo a su host WSL, por lo que Orca omitió esta ejecución. Las ejecuciones se reanudarán cuando termine el traslado.",
       "wslMoveOwnedByHost": "El proyecto de esta automatización ahora se ejecuta en su host WSL, que ejecuta allí esta automatización. Orca ya no ejecuta esta copia local.",
+      "managedHostServer": "Requiere migración a {{host}}",
       "missedGraceWindow": "Cuando Orca volvió a comprobarlo, ya había vencido el período de gracia para recuperar esta ejecución omitida.",
       "targetMissing": "El host de la automatización ya no está registrado, por lo que esta automatización no tiene dónde ejecutarse.",
       "targetReplaced": "El host de la automatización se eliminó y se volvió a registrar, por lo que hay que volver a vincular esta automatización antes de poder ejecutarla.",
@@ -23508,6 +23506,17 @@
         "effortRepeated": "Los argumentos adicionales establecen el esfuerzo más de una vez."
       },
       "hostUpdateRequired": "Actualiza Orca en este host para usar argumentos adicionales."
+    },
+    "setupTrust": {
+      "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",
+      "reviewBody": "Una ejecución omitió la configuración porque cambiaron los comandos de configuración de <code>orca.yaml</code> de su rama. Si los apruebas, las ejecuciones posteriores usarán estos comandos. Apruébalos solo si confías en <repo/>.",
+      "approve": "Aprobar",
+      "approved": "Configuración aprobada. Las ejecuciones posteriores de esta automatización la ejecutarán.",
+      "skippedSinceApproved": "La configuración no se ejecutó en esta ejecución porque cambiaron los comandos de configuración de orca.yaml de su rama. Ya se aprobaron, así que las ejecuciones posteriores los ejecutarán.",
+      "skippedReview": "No se ejecutó la configuración: la rama de esta ejecución contiene comandos de configuración de orca.yaml diferentes de los aprobados para esta automatización. Revísalos para que las ejecuciones posteriores ejecuten la configuración.",
+      "reviewAction": "Revisar y aprobar la configuración",
+      "listSkipped": "Configuración omitida",
+      "listSkippedTitle": "La última ejecución omitió la configuración porque cambiaron los comandos de configuración de orca.yaml de su rama. Revísalos desde el menú de acciones."
     }
   },
   "codeHost": {
@@ -23865,5 +23874,32 @@
     "discussionAction": "Participar en la conversación",
     "checkAction": "Comprobar compatibilidad",
     "settingsStatus": "Orca {{version}} requiere macOS {{macos}} o posterior. Esta es la última versión para este Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Copiar hash del commit",
+    "parents": "Commits padre",
+    "files": "Archivos",
+    "currentBranch": "Rama actual",
+    "allBranches": "Todas las ramas",
+    "chosenBranches": "Ramas elegidas",
+    "searchRefs": "Buscar ramas y etiquetas",
+    "oldServer": "Esta versión de Orca del servidor solo muestra la rama actual",
+    "copyBranch": "Copiar nombre de rama",
+    "switchWorkspace": "Cambiar al espacio de trabajo",
+    "workspaceClosed": "Esta rama ya no está abierta en otro espacio de trabajo.",
+    "workspaceCheckFailed": "No se pudo comprobar este espacio de trabajo. Inténtalo de nuevo cuando haya conexión.",
+    "refresh": "Actualizar commits",
+    "branchTag": "Rama / Etiqueta",
+    "graph": "Grafo",
+    "resizeColumn": "Cambiar el tamaño de la columna del gráfico",
+    "message": "Mensaje",
+    "author": "Autor",
+    "date": "Fecha",
+    "loadMore": "Cargar más",
+    "noCommits": "Aún no hay commits",
+    "historyChanged": "El historial volvió a cambiar. Actualiza el grafo de Git para volver a intentarlo.",
+    "loadFailed": "No se pudo cargar el historial de Git",
+    "updateHost": "Actualiza Orca en {{host}} para abrir el grafo de Git",
+    "title": "Grafo de Git"
   }
 }

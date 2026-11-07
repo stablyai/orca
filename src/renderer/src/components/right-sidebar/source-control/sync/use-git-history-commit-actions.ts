@@ -3,8 +3,8 @@ import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getRuntimeGitCommitCompare } from '@/runtime/runtime-git-diff-client'
-import { getRuntimeGitRemoteCommitUrl } from '@/runtime/runtime-git-working-tree-client'
+import { getRuntimeGitCommitCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
+import { getRuntimeGitRemoteCommitUrl } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { detectLanguage } from '@/lib/language-detect'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
@@ -41,11 +41,13 @@ export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
   activeRepoTarget,
+  ownerConnectionId,
   resolveSplitTargetGroupId
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoTarget: RuntimeClientTarget | null
+  ownerConnectionId?: string | null
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
 }): GitHistoryCommitActions {
   const scope = useSourceControlScope()
@@ -70,7 +72,7 @@ export function useGitHistoryCommitActions({
       if (cached) {
         return cached.entries
       }
-      const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+      const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
       const result = await getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
@@ -93,7 +95,7 @@ export function useGitHistoryCommitActions({
       commitCompareCacheRef.current.set(item.id, result)
       return result.entries
     },
-    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -216,7 +218,7 @@ export function useGitHistoryCommitActions({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
           },
           { sha: item.id }
         )
@@ -268,7 +270,7 @@ export function useGitHistoryCommitActions({
       }
       void explainCommitWithDefaultAgent(activeWorktreeId, item)
     },
-    [activeRepoTarget, activeWorktreeId, copyCommitText, scope, worktreePath]
+    [activeRepoTarget, activeWorktreeId, copyCommitText, scope, worktreePath, ownerConnectionId]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

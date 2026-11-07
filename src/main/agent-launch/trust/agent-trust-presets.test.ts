@@ -91,6 +91,16 @@ describe('markCursorWorkspaceTrusted', () => {
       rmSync(workspace, { recursive: true, force: true })
     }
   })
+
+  it('uses the project directory cursor-agent reads', () => {
+    // Names computed by cursor-agent's own rule (2026.09.28 and 2026.11.05) for these paths.
+    markCursorWorkspaceTrusted('/orca-missing/My Repo_v2/Ünï  code--x.1', testState.fakeHomeDir)
+    markCursorWorkspaceTrusted('C:\\Users\\Jane Doe\\orca\\feat', testState.fakeHomeDir)
+    expect(readdirSync(join(testState.fakeHomeDir, '.cursor', 'projects')).sort()).toEqual([
+      'C-Users-Jane-Doe-orca-feat',
+      'orca-missing-My-Repo-v2-n-code-x-1'
+    ])
+  })
 })
 
 describe('markKimiWorkspaceTrusted', () => {

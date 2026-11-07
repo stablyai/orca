@@ -3,7 +3,15 @@ import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
+import {
+  GitGraph,
+  GitCompareArrows,
+  Eye,
+  ShieldAlert,
+  Pin,
+  ListChecks,
+  Smartphone
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -12,7 +20,7 @@ import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
@@ -38,7 +46,7 @@ import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
@@ -84,17 +92,20 @@ export default function EditorFileTab({
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
   // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
-  const ModeIcon = isConflictReview
-    ? ShieldAlert
-    : isCheckDetails
-      ? ListChecks
-      : isDiff
-        ? GitCompareArrows
-        : isMarkdownPreviewTab
-          ? Eye
-          : file.language === 'simulator'
-            ? Smartphone
-            : null
+  const ModeIcon =
+    file.mode === 'git-graph'
+      ? GitGraph
+      : isConflictReview
+        ? ShieldAlert
+        : isCheckDetails
+          ? ListChecks
+          : isDiff
+            ? GitCompareArrows
+            : isMarkdownPreviewTab
+              ? Eye
+              : file.language === 'simulator'
+                ? Smartphone
+                : null
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}

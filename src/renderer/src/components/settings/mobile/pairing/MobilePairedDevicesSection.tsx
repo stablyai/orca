@@ -51,6 +51,13 @@ export function MobilePairedDevicesSection({
                       'Uses older encryption. Update the Orca app on this device.'
                     )}
                   />
+                ) : device.olderPairingMethod ? (
+                  <div className="text-muted-foreground text-xs">
+                    {translate(
+                      'auto.components.settings.MobilePane.olderPairingMethod',
+                      'Uses an older pairing method. Update the Orca app on this phone.'
+                    )}
+                  </div>
                 ) : null}
               </div>
               <Button

@@ -1155,7 +1155,7 @@
         "insecureOrigin": "Orca 拒絕從此頁面配對：它是另一臺機器上的純 http 頁面，因此網路路徑上的任何人都可以替換它並取走配對碼。請透過 https、本機的 localhost 或 SSH 隧道開啟網頁用戶端。如仍要允許，伺服器操作員可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新啟動 Orca。",
         "deviceDowngraded": "此 Orca 伺服器不再支援此瀏覽器的登入金鑰（可能已被降級）。請更新伺服器，或重新配對此瀏覽器。",
         "unauthorized": "未授權。請重新配對此網頁用戶端。",
-        "unauthorizedNewLink": "未授權。請索取新的配對連結。"
+        "unauthorizedLinkUsedOrExpired": "未授權。此配對連結可能已過期或已被使用。請在 Orca 中建立新的配對連結並開啟。"
       }
     },
     "store": {
@@ -1858,13 +1858,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "目標工作區不再可用。",
-        "16a21d6413": "SSH 重新連線需要互動式憑證。",
-        "386db94f3e": "目標專案不再可用。",
-        "3ad7d77f57": "目標工作區所在的主機與此自動化執行目標不同。",
-        "workspaceHostUnresolved": "目標工作區跨越多個主機，因此此執行沒有可使用的單一主機。"
-      },
       "useComposerState": {
         "b2ead86962": "無法解析 PR 的基礎參照。",
         "3db83fc58a": "此主機沒有可用於附件的專案路徑。",
@@ -8189,7 +8182,8 @@
           "diagnosticsCopyFailed": "無法複製診斷訊息",
           "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
           "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。",
-          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。"
+          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。",
+          "olderPairingMethod": "使用較舊的配對方式。請更新這支手機上的 Orca App。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8596,6 +8590,7 @@
           "6f6d5188ed": "撤銷 {{value0}}",
           "434e4a6af6": "目前連結",
           "df142657a5": "尚未使用",
+          "olderPairingMethod": "使用較舊的配對方式。請更新使用此連結之裝置上的 Orca。",
           "b18d1764ef": "最後使用 {{value0}}",
           "linkName": "連結 · {{value0}}",
           "activeLinks": "有效連結",
@@ -11123,7 +11118,11 @@
               "micDefault": "系統預設",
               "dictationLanguageTitle": "聽寫語言",
               "dictationLanguageDescription": "告訴語音模型你說的是哪種語言。",
-              "dictationLanguageKeyword": "語言"
+              "dictationLanguageKeyword": "語言",
+              "modelUnloadTitle": "卸載語音模型",
+              "modelUnloadDescription": "選擇何時從記憶體中卸載本機語音模型。",
+              "modelUnloadKeyword": "卸載",
+              "modelMemoryKeyword": "記憶體"
             }
           }
         },
@@ -13378,7 +13377,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚無提交",
-            "781a8bcf7b": "正在載入圖表...",
             "d0fb0f4bf2": "重新整理提交記錄",
             "9f7535d22b": "引用是指向該確切提交的分支或標籤名稱。它們僅出現在 Git 具有該提交的命名引用的位置。",
             "9289ba0cb9": "什麼是引用？",
@@ -14537,6 +14535,7 @@
             "openLog": "開啟日誌",
             "revealLog": "顯示日誌",
             "openWorkingDirectory": "開啟工作目錄",
+            "revealArtifactsFolder": "顯示成品資料夾",
             "copySessionId": "複製工作階段 ID",
             "copyLogPath": "複製日誌路徑",
             "messageCount": "{{value0}} 則訊息",
@@ -14580,7 +14579,6 @@
             "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "正在載入檔案…",
             "b2c3d4e5f6": "此提交沒有檔案變更",
             "c3d4e5f6a7": "一起開啟所有變更"
           },
@@ -17324,7 +17322,10 @@
           "reuseLiveSession": "重複使用執行中的工作階段",
           "freshEachRun": "每次執行都新建",
           "precheckEnabled": "已啟用，{{timeout}}",
-          "precheckNone": "無"
+          "precheckNone": "無",
+          "migrate": "遷移",
+          "migrateNotice": "{{host}} 已升級為新的遠端主機。請遷移此自動化以繼續執行。",
+          "needsMigration": "需要遷移"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -18931,17 +18932,6 @@
           "reviewStatus": "查看每個工作樹的議題狀態、審查狀態與 CI 檢查",
           "managePullRequests": "不離開 Orca，即可閱讀、留言與合併 PR"
         }
-      },
-      "agyInstall": {
-        "open": "安裝",
-        "title": "安裝 Antigravity",
-        "description": "在終端機中按 Enter 執行官方安裝程式。關閉終端機會停止仍在執行的命令。",
-        "target": "安裝位置：{{location}}",
-        "thisDevice": "此裝置",
-        "terminal": "Antigravity 安裝程式",
-        "detected": "已在 PATH 中偵測到 Antigravity。安裝程式完成後請關閉終端機。",
-        "close": "關閉終端機",
-        "recheck": "重新偵測代理程式"
       }
     },
     "jiraIssueAssigneeField": {
@@ -20344,6 +20334,13 @@
           "description": "你說的語言。選擇自動偵測時，模型每次都會自行判斷語言。",
           "title": "聽寫語言",
           "auto": "自動偵測"
+        },
+        "modelUnload": {
+          "title": "卸載語音模型",
+          "description": "停止聽寫後本機模型在記憶體中保留多久。模型已載入時，聽寫會立即開始；選擇「立即」會釋放記憶體，因此每次聽寫都要等待模型載入。",
+          "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
+          "never": "從不",
+          "immediately": "立即"
         }
       }
     },
@@ -22696,6 +22693,7 @@
       "noRunnableHost": "此自動化沒有可供執行的主機。",
       "wslMoveInProgress": "此自動化的專案正在移至其 WSL 主機，因此 Orca 略過了此次執行。移動完成後便會恢復執行。",
       "wslMoveOwnedByHost": "此自動化的專案現在在其 WSL 主機上執行，自動化本身也由該主機執行。Orca 不再執行這個本機副本。",
+      "managedHostServer": "需要遷移到 {{host}}",
       "missedGraceWindow": "Orca 再次檢查時，此次執行的補執行寬限期已過。",
       "targetMissing": "自動化主機已不在註冊清單中，因此已無處執行此自動化。",
       "targetReplaced": "自動化主機已被移除並重新註冊，因此必須為此自動化重新建立關聯後才能執行。",
@@ -22737,6 +22735,17 @@
         "effortRepeated": "額外引數重複設定了推理強度。"
       },
       "hostUpdateRequired": "請更新此主機上的 Orca 以使用額外引數。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要核准此自動化的新設定命令嗎？",
+      "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
+      "approve": "核准",
+      "approved": "已核准設定。此自動化之後的執行將執行它。",
+      "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
+      "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",
+      "reviewAction": "審查並核准設定",
+      "listSkipped": "已略過設定",
+      "listSkippedTitle": "由於分支的 orca.yaml 設定命令已變更，上次執行略過了設定。請從動作選單中審查。"
     }
   },
   "codeHost": {
@@ -23124,5 +23133,32 @@
     "discussionAction": "加入討論",
     "checkAction": "檢查相容性",
     "settingsStatus": "Orca {{version}} 需要 macOS {{macos}} 或以上版本。這是適用於此 Mac 的最新版本。"
+  },
+  "gitGraph": {
+    "copyHash": "複製提交雜湊",
+    "parents": "父提交",
+    "files": "檔案",
+    "currentBranch": "目前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "選定分支",
+    "searchRefs": "搜尋分支和標籤",
+    "oldServer": "此伺服器的 Orca 版本僅顯示目前分支",
+    "copyBranch": "複製分支名稱",
+    "switchWorkspace": "切換至工作區",
+    "workspaceClosed": "此分支已不再於其他工作區中開啟。",
+    "workspaceCheckFailed": "無法檢查此工作區。請在連線後重試。",
+    "refresh": "重新整理提交",
+    "branchTag": "分支 / 標籤",
+    "graph": "圖",
+    "resizeColumn": "調整圖形欄寬",
+    "message": "訊息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "載入更多",
+    "noCommits": "尚無提交",
+    "historyChanged": "歷史記錄再次變更。請重新整理 Git 圖後重試。",
+    "loadFailed": "無法載入 Git 歷史記錄",
+    "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
+    "title": "Git 圖"
   }
 }

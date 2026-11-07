@@ -1,4 +1,4 @@
-import { usePluginTerminalThemes } from '@/store/plugin-themes'
+import { usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import { toast } from 'sonner'

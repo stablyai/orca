@@ -250,6 +250,9 @@ export class MobileSocketWiring {
             metadata.transport === 'direct' ? metadata.sourceClass : undefined,
             channel.transcriptHashB64 ? 'v2' : 'legacy'
           )
+          if (device.deviceToken === undefined) {
+            this.deviceRegistry.retireForkedTicket(device.deviceId)
+          }
           this.onReady?.(socket)
         },
         onError: (code, reason) => {
