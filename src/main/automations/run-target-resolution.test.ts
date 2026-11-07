@@ -171,3 +171,59 @@ describe('resolveAutomationRunTarget projectId drift', () => {
     })
   })
 })
+
+describe('resolveAutomationRunTarget on a managed SSH host', () => {
+  it('skips a desktop row whose SSH host now runs automations on its Orca server', () => {
+    const sshContext = { hostId: 'ssh:box', path: '/srv/repo' } as const
+    const store = makeStore(
+      [makeSetup(sshContext)],
+      [makeRepo({ connectionId: 'box', path: '/srv/repo' })]
+    )
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
+    const automation = makeAutomation(makeRunContext(sshContext), {
+      executionTargetType: 'ssh',
+      executionTargetId: 'box'
+    })
+
+    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
+      ok: false,
+      errorCode: 'managedHostServer',
+      errorParams: { host: 'Build box' }
+    })
+  })
+})
+
+describe('resolveAutomationRunTarget on a managed SSH workspace pin', () => {
+  it('skips a local row whose pinned workspace is on a managed SSH host', () => {
+    const store = makeStore([makeSetup()], [makeRepo()])
+    store.automationOwnerPrecondition = () => ({
+      selector: { kind: 'ssh', targetId: 'box', targetGeneration: 7 }
+    })
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
+
+    expect(resolveAutomationRunTarget(store, makeAutomation(makeRunContext()))).toMatchObject({
+      ok: false,
+      errorCode: 'managedHostServer'
+    })
+  })
+})

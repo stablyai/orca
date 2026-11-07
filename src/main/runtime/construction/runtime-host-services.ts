@@ -1,3 +1,4 @@
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
@@ -5,7 +6,7 @@ import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-re
 
 import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
-import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 
 import { OrcaRuntimeWithAgentProviderSessionRows } from './runtime-agent-provider-session-rows'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -19,7 +20,7 @@ import type * as CompatibilityAuthority from '../orchestration/terminal-authorit
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
-import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
+import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
@@ -119,6 +120,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
     return confirmRunTerminalShellAlone(this.ptyController, ptyId)
+  }
+
+  /** Includes resume-identity-only provider rows. */
+  getAgentProviderSessionRows(tabId?: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionSnapshotFn?.(tabId) ?? []
+  }
+
+  getAgentStatusRowsForPane(paneKey: string): AgentStatusIpcPayload[] {
+    return this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
   }
 
   getTerminalPtyIdForHandle(handle: string): string | null {
@@ -290,12 +300,13 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
         },
         ...target
       ),
-    cleanupRemovedFolderWorkspaceState: (worktreeId) => {
-      if (this.store) {
-        this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
-      }
-      // Folder ids are minted by this store and shared with no other host.
-      this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
+    cleanupRemovedFolderWorkspaceState: (worktreeId): void | Promise<void> => {
+      // Retire runs after the awaited store cleanup, so the delete cannot
+      // report before the Codex pretrust purge lands; failures degrade here.
+      const cleanup = this.store && this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
+      return Promise.resolve(cleanup).then(() => {
+        this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
+      })
     },
     emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
   })

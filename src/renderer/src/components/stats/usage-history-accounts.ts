@@ -1,5 +1,5 @@
 import type { UsageHistoryRow } from '../../../../shared/usage-history-types'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { buildClaudeStatusSwitchGroups } from '../status-bar/status-bar-claude-accounts'
 import { buildCodexStatusSwitchGroups } from '../status-bar/status-bar-codex-accounts'
 import { getAgentLabel } from '@/lib/agent-catalog'

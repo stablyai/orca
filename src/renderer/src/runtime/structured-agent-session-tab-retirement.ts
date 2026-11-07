@@ -2,7 +2,7 @@ import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/struc
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
-import { forgetUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
+import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
@@ -15,9 +15,9 @@ import {
 import { clearWebSessionCloseIntent, recordWebSessionCloseIntent } from './web-session-close-intent'
 import type { WebSessionIntentOwner } from './web-session-intent-owner'
 import { captureWebSessionIntentOwner } from './web-runtime-session-environment'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const inFlightRetirements = new Map<string, Promise<boolean>>()

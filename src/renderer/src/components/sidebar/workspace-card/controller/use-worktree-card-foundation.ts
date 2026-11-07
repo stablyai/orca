@@ -10,7 +10,7 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {

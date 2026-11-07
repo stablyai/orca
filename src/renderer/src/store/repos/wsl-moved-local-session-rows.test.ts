@@ -5,7 +5,7 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace-session-host-hydration'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace/persistence/workspace-session-host-hydration'
 import { wslMovedSessionReadApi } from './wsl-moved-local-session-rows'
 
 const HOST: ExecutionHostId = 'runtime:wsl%3AUbuntu'

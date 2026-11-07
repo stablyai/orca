@@ -1,9 +1,9 @@
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { measureSettingsWork } from '../../../../shared/global-settings-test-fixture'
 import * as profile from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
@@ -24,8 +24,10 @@ const rpc: { call: Mock; supports: Mock } = vi.hoisted(() => ({
   call: vi.fn(),
   supports: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: rpc.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: rpc.supports
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({

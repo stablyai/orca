@@ -3,7 +3,14 @@ import {
   PLUGIN_APP_THEME_TOKENS,
   type PluginThemeRegistration
 } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
-import { browserColorProbe, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
+import {
+  browserColorProbe,
+  HOST_PILL_OUTLINE_MIX_TOKEN,
+  hostPillOutlineMix,
+  safePluginThemeTokens,
+  type ColorProbe
+} from './plugin-theme-tokens'
+import { CHAT_SELECTION_MIX_TOKEN, chatSelectionMix } from './chat-selection-mix'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
@@ -172,13 +179,14 @@ function paintPluginTokens(
   const root = options.root ?? document.documentElement
   // Why clear first: built-ins must be read without the previous theme's overrides.
   setPluginTokens(root, {})
-  const safe = safePluginThemeTokens(
-    tokens,
-    base,
-    (options.builtIns ?? documentBuiltIns)(),
-    options.probe ?? browserColorProbe
-  )
-  setPluginTokens(root, withFloatingSurfaces(safe))
+  const builtIns = (options.builtIns ?? documentBuiltIns)()
+  const probe = options.probe ?? browserColorProbe
+  const safe = safePluginThemeTokens(tokens, base, builtIns, probe)
+  setPluginTokens(root, {
+    ...withFloatingSurfaces(safe),
+    [HOST_PILL_OUTLINE_MIX_TOKEN]: `${hostPillOutlineMix(safe, base, builtIns, probe)}%`,
+    [CHAT_SELECTION_MIX_TOKEN]: `${chatSelectionMix(safe, base, builtIns, probe)}%`
+  })
   return safe
 }
 

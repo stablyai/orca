@@ -1,10 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '../types'
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import { markRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
-import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 it('does not restore a stale owner after its visibility write resolves', async () => {
   markRuntimeEnvironmentCompatible('env-a')

@@ -9,7 +9,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type {
@@ -42,7 +42,7 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: mocks.details,
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.item
 }))

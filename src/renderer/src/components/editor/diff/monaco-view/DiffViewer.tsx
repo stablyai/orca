@@ -30,12 +30,15 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from '../review/diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from '../../monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from '../../editor-unicode-highlight-options'
 import { usePluginSyntaxLanguage } from '../../use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { cn } from '@/lib/utils'
+import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
 export default function DiffViewer({
   modelKey,
@@ -356,9 +359,11 @@ export default function DiffViewer({
       renderOverviewRuler: true,
       scrollbar: diffEditorScrollbarOptions,
       padding: { top: 0 },
-      find: monacoFindOptions
+      find: monacoFindOptions,
+      unicodeHighlight: buildEditorUnicodeHighlightOptions(language)
     }),
     [
+      language,
       editable,
       sideBySide,
       diffTypography,
@@ -386,7 +391,10 @@ export default function DiffViewer({
           <DiffEditor
             height="100%"
             // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
-            className="code-editor-backdrop"
+            className={cn(
+              'code-editor-backdrop',
+              wholeFileDiffTintClass(originalContent, modifiedContent)
+            )}
             language={language}
             original={originalContent}
             modified={modifiedContent}

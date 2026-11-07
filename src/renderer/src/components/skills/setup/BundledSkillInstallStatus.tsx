@@ -1,5 +1,5 @@
 import { RefreshCw } from 'lucide-react'
-import type { BundledSkillUnsupportedReason } from '@/runtime/runtime-bundled-skills-client'
+import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { Button } from '../../ui/button'
 import { skillInstallResultLine } from './bundled-skill-setup-result-copy'
 import {

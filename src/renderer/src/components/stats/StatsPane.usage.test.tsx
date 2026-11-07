@@ -6,7 +6,7 @@ import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-f
 import type { UsageHistoryRow } from '../../../../shared/usage-history-types'
 import type { AppState } from '../../store'
 import type { UsageHistorySource } from './use-usage-history'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { StatsPane } from './StatsPane'
 
 const noop = vi.fn(async () => {})

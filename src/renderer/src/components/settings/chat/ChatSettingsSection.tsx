@@ -12,6 +12,8 @@ import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { getChatAppearanceSearchEntries } from '../appearance/chat/chat-appearance-search'
+import { ChatTurnActivitySetting } from './ChatTurnActivitySetting'
+import { getChatTurnActivityTitle } from './chat-turn-activity-search'
 import { getChatBehaviorTitle } from './chat-behavior-search'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ChatAgentLaunchSettings } from './ChatAgentLaunchSettings'
@@ -101,6 +103,14 @@ export function ChatSettingsSection({
               </Card>
             </section>
           ) : null}
+          <ChatTurnActivitySetting
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisible={matchesSettingsSearch(query, [
+              { title },
+              { title: getChatTurnActivityTitle() }
+            ])}
+          />
           {showDesktopOnlySettings ? (
             <NativeChatInlineVisualsSetting
               settings={settings}

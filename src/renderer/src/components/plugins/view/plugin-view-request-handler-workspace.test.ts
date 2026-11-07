@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { handlePluginViewRequest } from './plugin-view-request-handler'
 
 const activation = vi.hoisted(() => ({ activateAndRevealWorkspace: vi.fn() }))
-vi.mock('@/lib/worktree-activation', () => activation)
+vi.mock('@/lib/workspace/activation/worktree-activation', () => activation)
 
 const KEY = 'acme.todos'
 const TAB = `plugin:${KEY}/todos`

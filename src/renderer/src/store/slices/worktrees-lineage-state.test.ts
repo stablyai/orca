@@ -140,7 +140,7 @@ describe('worktree lineage state', () => {
       childWorktreeIds: [],
       lineage
     }
-    mockApi.worktrees.updateLineage.mockResolvedValue(null)
+    mockApi.worktrees.updateLineage.mockResolvedValue({ lineage: null, workspaceLineage: null })
     store.setState({
       worktreesByRepo: { repo1: [parent, child] },
       worktreeLineageById: {}
@@ -164,7 +164,7 @@ describe('worktree lineage state', () => {
       childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
       parentWorkspaceKey: folderWorkspaceKey('folder-1')
     })
-    mockApi.worktrees.updateLineage.mockResolvedValue(lineage)
+    mockApi.worktrees.updateLineage.mockResolvedValue({ lineage })
     store.setState({
       workspaceLineageByChildKey: { [oldWorkspaceLineage.childWorkspaceKey]: oldWorkspaceLineage }
     } as Partial<AppState>)
@@ -184,6 +184,29 @@ describe('worktree lineage state', () => {
         createdAt: lineage.createdAt
       }
     })
+  })
+
+  it('keeps a folder workspace parent the host reports when the worktree lineage is cleared', async () => {
+    const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
+    const folderParent = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+      parentWorkspaceKey: folderWorkspaceKey('folder-9'),
+      parentInstanceId: 'folder-9'
+    })
+    mockApi.worktrees.updateLineage.mockResolvedValue({
+      lineage: null,
+      workspaceLineage: folderParent
+    })
+
+    await store.getState().assignWorktreeParent(lineage.worktreeId, {
+      parentWorktreeId: folderWorkspaceKey('folder-9')
+    })
+
+    expect(store.getState().worktreeLineageById[lineage.worktreeId]).toBeUndefined()
+    expect(
+      store.getState().workspaceLineageByChildKey[worktreeWorkspaceKey(lineage.worktreeId)]
+    ).toEqual(folderParent)
   })
 
   it('assigns a parent through the worktree owner runtime when host-stamped', async () => {

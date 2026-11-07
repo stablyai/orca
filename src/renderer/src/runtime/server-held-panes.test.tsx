@@ -15,8 +15,8 @@ import type {
 } from '../../../shared/workspace-layout/workspace-layout-published'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
-import { NewerDaemonHoldBanner } from '@/components/terminal-pane/NewerDaemonHoldBanner'
-import { newerDaemonHoldStore } from '@/components/terminal-pane/newer-daemon-hold-state'
+import { NewerDaemonHoldBanner } from '@/components/terminal-pane/session-restore/newer-daemon/NewerDaemonHoldBanner'
+import { newerDaemonHoldStore } from '@/components/terminal-pane/session-restore/newer-daemon/newer-daemon-hold-state'
 import {
   CAPABLE,
   ENV,
@@ -33,7 +33,7 @@ import {
 } from './server-layout-frames.test-fixture'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 const hoisted = vi.hoisted(
@@ -59,7 +59,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 vi.mock('./runtime-layout-client', () => ({
   subscribeRuntimeLayout: (...args: never[]) => hoisted.subscribe!(...args)
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: hoisted.callRuntimeRpc }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hoisted.callRuntimeRpc
+}))
 vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null

@@ -7,7 +7,7 @@ import { hostedReviewInfoFromGitHubPRInfo as gitHubPRToChecksPanelReview } from 
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { useAppStore } from '@/store/index'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'

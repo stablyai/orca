@@ -23,22 +23,17 @@ import {
   getZoomEntries
 } from './appearance-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
-import {
-  getUiLanguageChoiceLabel,
-  SHOW_UI_LANGUAGE_SETTING,
-  UI_LANGUAGE_CHOICES
-} from '@/i18n/supported-languages'
+import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
-import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 import {
   AppearanceThemeControl,
   AppearanceThemeSlotSelect,
   CodeEditorThemeSelect
 } from './themes/AppearanceThemeControl'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
+import { useIconThemePickerLabels, useUiLanguagePickerLabels } from './use-appearance-picker-labels'
 
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
@@ -62,8 +57,9 @@ export function AppearanceInterfaceSection({
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const pluginLanguagePacks = usePluginLanguagePacks()
-  const pluginIconThemes = usePluginIconThemes()
+  const iconThemes = useIconThemePickerLabels()
+  const pluginIconThemes = iconThemes.themes
+  const languages = useUiLanguagePickerLabels()
   const themeSlots = [
     {
       base: 'light' as const,
@@ -235,14 +231,11 @@ export function AppearanceInterfaceSection({
                   {
                     key: 'icon-themes',
                     options: [
-                      {
-                        value: 'built-in',
-                        label: translate(
-                          'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.builtIn',
-                          'Built-in'
-                        )
-                      },
-                      ...pluginIconThemes.map((theme) => ({ value: theme.id, label: theme.label }))
+                      { value: 'built-in', label: iconThemes.builtIn },
+                      ...pluginIconThemes.map((theme) => ({
+                        value: theme.id,
+                        label: iconThemes.labels.get(theme.id) ?? theme.label
+                      }))
                     ]
                   }
                 ]}
@@ -270,14 +263,14 @@ export function AppearanceInterfaceSection({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {UI_LANGUAGE_CHOICES.map((choice) => (
+                  {UI_LANGUAGE_CHOICES.map((choice, index) => (
                     <SelectItem key={choice.value} value={choice.value}>
-                      {getUiLanguageChoiceLabel(choice, translate)}
+                      {languages.choices[index]}
                     </SelectItem>
                   ))}
-                  {pluginLanguagePacks.map((pack) => (
+                  {languages.packs.map((pack) => (
                     <SelectItem key={pack.id} value={pack.id}>
-                      {pack.displayName ?? `${pack.locale} — ${pack.pluginKey}`}
+                      {languages.packLabels.get(pack.id) ?? pack.locale}
                     </SelectItem>
                   ))}
                 </SelectContent>

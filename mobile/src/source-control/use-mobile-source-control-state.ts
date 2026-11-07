@@ -68,6 +68,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   }, [recordCommitFailure])
 
   const loaders = useMobileSourceControlLoaders({
+    hostId,
     client,
     connState,
     statusIdentityKey,
@@ -242,6 +243,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     createPrAction,
     loadStatus,
     rebaseBaseRef: loaders.rebaseBaseRef,
+    refreshing: loaders.refreshing,
     openDiffForFile,
     ...runners
   }

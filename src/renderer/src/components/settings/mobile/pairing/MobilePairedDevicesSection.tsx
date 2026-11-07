@@ -2,6 +2,7 @@ import { Trash2 } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { PairedMobileDevice } from '../../../mobile/paired-mobile-devices'
+import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
 
 export type PairedDevice = PairedMobileDevice
 
@@ -43,6 +44,21 @@ export function MobilePairedDevicesSection({
                   {translate('auto.components.settings.MobilePane.254a6d09e4', 'Paired')}
                   {new Date(device.pairedAt).toLocaleDateString(getIntlLocale())}
                 </div>
+                {device.usesLegacyEncryption ? (
+                  <LegacyEncryptionNotice
+                    message={translate(
+                      'auto.components.settings.MobilePane.legacyEncryption',
+                      'Uses older encryption. Update the Orca app on this device.'
+                    )}
+                  />
+                ) : device.olderPairingMethod ? (
+                  <div className="text-muted-foreground text-xs">
+                    {translate(
+                      'auto.components.settings.MobilePane.olderPairingMethod',
+                      'Uses an older pairing method. Update the Orca app on this phone.'
+                    )}
+                  </div>
+                ) : null}
               </div>
               <Button
                 variant="ghost"

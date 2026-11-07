@@ -1,5 +1,5 @@
 // The `layout.apply` call itself: one intent to a main, answered once the frame holding it is in.
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterLayoutFrame, layoutFramePositionKey } from '@/runtime/layout-frame-position'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'

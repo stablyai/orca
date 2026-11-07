@@ -16,7 +16,7 @@ export type MobileNativeChatMicProps = {
   onMicPress?: () => void
   /** Starting or recording: the mic is live and its release must reach the hook. */
   micActive?: boolean
-  /** Still opening the mic; taps are ignored until recording begins. */
+  /** Waiting on the host; speech is already held, and a tap stops once recording begins. */
   micStarting?: boolean
   /** Transcribing after stop; taps are ignored until the transcript lands. */
   micProcessing?: boolean

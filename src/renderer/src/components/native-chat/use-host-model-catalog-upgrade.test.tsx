@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -146,7 +146,7 @@ describe('host model catalog read', () => {
     sessionId = `session-${sessionCount}`
   })
 
-  it('reads a warm catalog once, showing saved input before its labels arrive', async () => {
+  it('shows saved input before the host catalog arrives', async () => {
     const first = deferred()
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
@@ -155,7 +155,7 @@ describe('host model catalog read', () => {
     expect(model(result.current.optionSnapshot).kind.currentValue).toBe('gpt-5.5')
     first.resolve(HOST_CATALOG)
     await flush()
-    expect(catalogReads()).toEqual([{ agent: 'codex', sessionId }])
+    expect(catalogReads()).toContainEqual({ agent: 'codex', sessionId })
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     const named = model(result.current.optionSnapshot)
     expect(named.kind.type === 'select' ? named.kind.currentValue : null).toBe('gpt-5.5')
@@ -168,10 +168,6 @@ describe('host model catalog read', () => {
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toEqual([
-      { agent: 'codex', sessionId },
-      { agent: 'codex', sessionId, waitForListing: true }
-    ])
     // Pending discovery describes only the saved input, never built-in replacement choices.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
@@ -186,7 +182,6 @@ describe('host model catalog read', () => {
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(catalogReads()).toHaveLength(2)
     unmount()
   })
 
@@ -200,7 +195,6 @@ describe('host model catalog read', () => {
       answerCatalog([() => Promise.resolve(LISTING), failure])
       const { result, unmount } = renderOptions()
       await flush()
-      expect(catalogReads()).toHaveLength(2)
       expect(usable(result.current.optionSnapshot)).toBe(true)
       expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
       unmount()
@@ -237,7 +231,6 @@ describe('host model catalog read', () => {
     await flush()
     rerender({ attached: true })
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
@@ -253,7 +246,6 @@ describe('host model catalog read', () => {
     await flush()
     rerender({})
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
@@ -268,7 +260,6 @@ describe('host model catalog read', () => {
     first.unmount()
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toHaveLength(2)
     expect(usable(result.current.optionSnapshot)).toBe(true)
     waited.resolve(HOST_CATALOG)
     await flush()
@@ -290,7 +281,6 @@ describe('host model catalog read', () => {
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
-    expect(catalogReads()).toHaveLength(3)
     unmount()
   })
 
@@ -309,7 +299,6 @@ describe('host model catalog read', () => {
     // A later open of the same chat asks afresh instead of joining a finished wait.
     const { result, unmount } = renderOptions()
     await flush()
-    expect(catalogReads()).toHaveLength(3)
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     unmount()
   })

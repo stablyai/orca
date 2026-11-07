@@ -1,7 +1,7 @@
 import type { DocPreviewGrantRequest } from '../../../preload/api/doc-preview-api'
 import { basename, dirname, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import type { AppState } from '@/store/types'

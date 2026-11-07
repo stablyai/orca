@@ -4,7 +4,7 @@ import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { capturePRCheckContract } from './pr-check-observation-contract'
 import { getGitHubSourceRuntimeTarget } from './github-source-runtime-context'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from './github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from './work-items/github/github-work-item-source-lookup'
 import { useAppStore } from '@/store'
 
 export async function readPRCheckRefreshOwner(args: {

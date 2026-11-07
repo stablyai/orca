@@ -6,7 +6,7 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from '@/store/slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   resolveWorktreeOperationRoute,
   type WorktreeOperationRoute

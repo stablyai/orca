@@ -11,6 +11,7 @@ import {
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({
@@ -79,6 +80,17 @@ export function promptSkillRefs(document: JSONContent | undefined): AgentJournal
       ? [{ name: token.slice(1), path }]
       : []
   return [...own, ...(document.content ?? []).flatMap((child) => promptSkillRefs(child))]
+}
+
+export function promptHasInteractionModeSkill(
+  agent: string,
+  text: string,
+  document: JSONContent | undefined
+): boolean {
+  return (
+    agentSessionInteractionCommand(agent, text) !== null &&
+    promptSkillRefs(document).some((skill) => text.trimEnd() === `/${skill.name}`)
+  )
 }
 
 export function fileReferenceContent(path: string): JSONContent {

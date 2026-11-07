@@ -51,6 +51,7 @@ import type {
 } from './row-types'
 import type { SidebarFeedDomains } from './sidebar-feed-domains'
 import { planSidebarRows } from './sidebar-row-plan'
+import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { SortBy } from './smart-sort'
 import { selectVisibleSidebarWorktrees } from './visible-worktrees'
 import { isIdleWorkspaceActivity } from './workspace-activity-facts'
@@ -295,9 +296,10 @@ export function renderSidebarFeedRows(
 export function buildSidebarFeedRows(
   domains: SidebarFeedDomains,
   catalog: SidebarFeedCatalog,
-  view: SidebarFeedView
+  view: SidebarFeedView,
+  lineagePolicy: FeedLineagePolicy = {}
 ): SidebarFeedRows {
-  const index = indexSidebarFeed(domains, catalog.repos)
+  const index = indexSidebarFeed(domains, catalog.repos, lineagePolicy)
   const planned = planSidebarFeedRows(
     domains,
     index,

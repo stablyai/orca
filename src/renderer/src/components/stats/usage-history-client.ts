@@ -6,11 +6,12 @@ import {
   type UsageSnapshotQuery
 } from '../../../../shared/usage-history-rpc'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   fetchProviderAccountsSnapshot,
   type ProviderAccountsSnapshot
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import type { ManagedDataAccountsState } from '../../../../shared/managed-account-types'
 
 const HISTORY_REFRESH_TIMEOUT_MS = 15 * 60_000

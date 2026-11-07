@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
@@ -51,7 +51,8 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   const context = getKeybindingContext(event.target)
-  const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+  const floatingWorkspaceFocused =
+    isEventTargetInsideFloatingWorkspacePanel(event.target) || isFloatingWorkspacePanelFocused()
   const matchShortcut = (actionId: KeybindingActionId): boolean =>
     keybindingMatchesAction(actionId, event, shortcutPlatform, keybindings, {
       context,
@@ -231,7 +232,10 @@ export function handleTerminalWorkspaceKeyDown(
   }
   if (matchShortcut('tab.previousRecent')) {
     if (claimTabSwitch()) {
-      dispatchWorkspaceTabCommand({ type: 'previous-recent' })
+      dispatchWorkspaceTabCommand({
+        type: 'previous-recent',
+        floatingPanelOwned: floatingWorkspaceFocused
+      })
     }
     return
   }
@@ -261,7 +265,8 @@ export function handleTerminalWorkspaceKeyDown(
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: switchAllTypesDirection ?? switchSameTypeDirection ?? 1,
-      scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type'
+      scope: switchAllTypesDirection !== null ? 'all-types' : 'same-type',
+      floatingPanelOwned: floatingWorkspaceFocused
     })
   }
   const terminalTabDirection = matchShortcut('tab.nextTerminal')
@@ -273,7 +278,8 @@ export function handleTerminalWorkspaceKeyDown(
     dispatchWorkspaceTabCommand({
       type: 'switch',
       direction: terminalTabDirection,
-      scope: 'terminal'
+      scope: 'terminal',
+      floatingPanelOwned: floatingWorkspaceFocused
     })
   }
 }

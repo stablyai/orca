@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/tab-types'
-import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { WORKTREE_REFRESH_CONCURRENCY } from './worktrees'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'

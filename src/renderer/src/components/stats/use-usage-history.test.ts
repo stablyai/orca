@@ -7,9 +7,9 @@ import { USAGE_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/usage-histo
 import { useUsageHistory } from './use-usage-history'
 
 const remote = vi.hoisted(() => ({ supports: vi.fn(), call: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: remote.supports,
-  callRuntimeRpc: remote.call
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: remote.call }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: remote.supports
 }))
 
 beforeEach(() => {
