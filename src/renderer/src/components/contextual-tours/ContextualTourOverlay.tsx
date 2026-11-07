@@ -30,12 +30,9 @@ import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-act
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
-import { useTranslation } from 'react-i18next'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 export function ContextualTourOverlay(): JSX.Element | null {
-  const { i18n } = useTranslation()
-  const language = i18n.resolvedLanguage ?? i18n.language
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
   const activeStepIndex = useAppStore((s) => s.activeContextualTourStepIndex)
   const activeTourSource = useAppStore((s) => s.activeContextualTourSource)
@@ -83,11 +80,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const telemetryFurthestStepIndexRef = useRef(0)
   const telemetryDefinedStepCountRef = useRef(1)
 
-  const activeTour = useMemo(() => {
-    // getContextualTour reads the active global catalog, so language is a cache key.
-    void language
-    return activeTourId ? getContextualTour(activeTourId) : null
-  }, [activeTourId, language])
+  const activeTour = useMemo(
+    () => (activeTourId ? getContextualTour(activeTourId) : null),
+    [activeTourId]
+  )
 
   const emitContextualTourOutcome = useCallback(
     (outcome: ContextualTourOutcome): void => {

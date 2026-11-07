@@ -2,6 +2,7 @@ import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
+import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import {
   buildSidebarHostOptions,
@@ -28,7 +29,7 @@ export function useSidebarHostScopeOptions(): {
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostOptions = useMemo(() => {
-    void language
+    readUiLanguageMemoInput(language)
     return buildSidebarHostOptions({
       repos,
       sshTargetLabels,

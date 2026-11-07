@@ -18,6 +18,7 @@ import type {
 } from '@/store/slices/terminal-quick-command-hosts'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { translateExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { readUiLanguageMemoInput } from '@/i18n/ui-language-memo-input'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]
@@ -174,7 +175,7 @@ export function useTerminalQuickCommandHosts(
   )
 
   const hosts = useMemo(() => {
-    void language
+    readUiLanguageMemoInput(language)
     if (!enabled) {
       return DISABLED_TERMINAL_QUICK_COMMAND_HOSTS
     }
