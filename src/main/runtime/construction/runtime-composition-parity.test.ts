@@ -46,6 +46,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Offscreen WebContents need Electron.'
   },
   {
+    wiring: 'runtime.setRecipeWorkspaceCreator',
+    missingOn: 'orcad',
+    reason:
+      'orcad has no VM recipe runner, and only advertises recipe creation once a creator is set.'
+  },
+  {
     wiring: 'ctor:getSetupTerminalTitle',
     missingOn: 'orcad',
     reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
