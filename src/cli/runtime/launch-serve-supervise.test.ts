@@ -20,6 +20,7 @@ class FakeChildProcess extends EventEmitter {
 
 describe('serveOrcaApp --supervise', () => {
   let root: string
+  const stdoutTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY')
 
   beforeEach(async () => {
     spawnMock.mockReset()
@@ -34,10 +35,40 @@ describe('serveOrcaApp --supervise', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks()
+    if (stdoutTty) {
+      Object.defineProperty(process.stdout, 'isTTY', stdoutTty)
+    } else {
+      Reflect.deleteProperty(process.stdout, 'isTTY')
+    }
     delete process.env.ORCA_APP_EXECUTABLE
     delete process.env.ORCA_SERVE_RUNTIME
     delete process.env.ORCA_USER_DATA_PATH
     await rm(root, { recursive: true, force: true })
+  })
+
+  it.each([
+    { supervise: true, tty: false, noPairing: false, disabled: true },
+    { supervise: true, tty: true, noPairing: false, disabled: false },
+    { supervise: false, tty: false, noPairing: false, disabled: false },
+    { supervise: true, tty: true, noPairing: true, disabled: true }
+  ])('sets pairing policy before spawning: %j', async ({ supervise, tty, noPairing, disabled }) => {
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: tty })
+    const child = new FakeChildProcess()
+    child.kill.mockImplementation((signal: NodeJS.Signals) =>
+      queueMicrotask(() => child.emit('exit', null, signal))
+    )
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => {
+        if (supervise) {
+          process.emit('SIGTERM', 'SIGTERM')
+        } else {
+          child.emit('exit', 0, null)
+        }
+      })
+      return child
+    })
+    await serveOrcaApp({ supervise, noPairing })
+    expect(spawnMock.mock.calls[0][1].includes('--serve-no-pairing')).toBe(disabled)
   })
 
   it('restarts a child that died instead of exiting, and stops on SIGTERM', async () => {
