@@ -5,6 +5,7 @@ import type {
 } from '../../shared/git/remotes/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git/status/git-status-types'
 import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
+import type { GitSubmoduleRepo } from '../../shared/git/status/git-submodule-repo-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
 import type {
@@ -88,11 +89,16 @@ export const gitApi = {
     connectionId?: string
     pushTarget?: GitPushTarget
   }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
+  submoduleRepos: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<GitSubmoduleRepo[]> => ipcRenderer.invoke('git:submoduleRepos', args),
   fetch: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:fetch', args),
   syncFork: (args: {
     worktreePath: string
@@ -106,12 +112,14 @@ export const gitApi = {
     forceWithLease?: boolean
     connectionId?: string
     pushTarget?: unknown
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:push', args),
   pull: (args: {
     worktreePath: string
     worktreeId?: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }): Promise<void> => ipcRenderer.invoke('git:pull', args),
   fastForward: (args: {
     worktreePath: string

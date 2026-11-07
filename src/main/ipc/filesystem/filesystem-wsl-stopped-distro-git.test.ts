@@ -155,6 +155,7 @@ describe('background Git for a stopped WSL distro', () => {
     ['git:status', { worktreePath: UNC_ROOT }],
     ['git:conflictOperation', { worktreePath: UNC_ROOT }],
     ['git:upstreamStatus', { worktreePath: UNC_ROOT }],
+    ['git:submoduleRepos', { worktreePath: UNC_ROOT }],
     ['git:branchCompare', { worktreePath: UNC_ROOT, baseRef: 'main' }],
     // Status followers: re-read whenever status changes, so each is a background poll.
     ['git:history', { worktreePath: UNC_ROOT, limit: 50 }],

@@ -11,6 +11,7 @@ import {
   resolveRuntimeFilePath,
   resolveRuntimeWorktreeByPath
 } from './web-runtime-worktree-catalog'
+import { resolveWorktreeForParentAction } from './web-git-submodule-guard'
 
 export const webGitStatusAbortControllers = new Map<string, AbortController>()
 
@@ -147,8 +148,10 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         pushTarget
       })
     },
-    fetch: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    // Submodule repositories are served by this machine's main process only.
+    submoduleRepos: async () => [],
+    fetch: async ({ worktreePath, pushTarget, submodulePath }) => {
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.fetch', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
@@ -165,16 +168,16 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         60_000
       )
     },
-    push: async ({ worktreePath, publish, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    push: async ({ worktreePath, publish, pushTarget, submodulePath }) => {
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.push', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         publish,
         pushTarget
       })
     },
-    pull: async ({ worktreePath, pushTarget }) => {
-      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+    pull: async ({ worktreePath, pushTarget, submodulePath }) => {
+      const worktree = await resolveWorktreeForParentAction(worktreePath, submodulePath)
       await callRuntimeResult('git.pull', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
