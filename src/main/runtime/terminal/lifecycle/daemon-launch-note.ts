@@ -28,6 +28,14 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     return pty
   }
 
+  protected abstract watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void
+
+  /** Watch a launched agent's composer and keep its launch in the daemon. */
+  protected watchLaunchedAgent(pty: RuntimePtyWorktreeRecord, agent: TuiAgent | null): void {
+    this.watchLaunchComposer(pty.ptyId, agent)
+    this.armDaemonLaunchNote(pty.ptyId, pty)
+  }
+
   /** Keep main's admitted launch in the daemon, which outlives main. */
   protected armDaemonLaunchNote(ptyId: string, pty: RuntimePtyWorktreeRecord): void {
     if (pty.launchToken && pty.launchConfig) {
