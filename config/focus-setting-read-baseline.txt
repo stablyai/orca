@@ -223,7 +223,6 @@
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
 1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
-1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab.ts
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts
@@ -253,7 +252,6 @@
 1 src/renderer/src/runtime/web-runtime-initial-terminal-bootstrap-dispatch.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
-1 src/renderer/src/runtime/web-runtime-terminal-create-operation.ts
 1 src/renderer/src/runtime/web-runtime-terminal-creation.ts
 1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts

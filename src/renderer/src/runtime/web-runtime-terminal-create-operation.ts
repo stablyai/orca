@@ -5,7 +5,6 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../shared/r
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { agentProviderSessionForHostEnsure } from './agent-session-ensure-provider-session'
 import { translate } from '../i18n/i18n'
-import { useAppStore } from '../store'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 import {
   createAgentSessionCreateOperation,
@@ -32,7 +31,7 @@ import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snap
 import type {
   CreatedAgentTerminalIdentity,
   CreatedWebRuntimeSessionTerminal,
-  CreateWebRuntimeSessionTerminalArgs
+  CreateWebRuntimeSessionTerminalOnHostArgs
 } from './web-runtime-session-types'
 import {
   readActiveWorkspaceSelection,
@@ -49,12 +48,9 @@ import { buildPlainCreateTerminalParams } from './web-runtime-plain-terminal-cre
 import { agentSessionCreateRequest } from './agent-session-create-request'
 
 export async function createWebRuntimeSessionTerminalResult(
-  args: CreateWebRuntimeSessionTerminalArgs
+  args: CreateWebRuntimeSessionTerminalOnHostArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
-  const environmentId = resolveWebRuntimeSessionEnvironmentId(
-    args.environmentId,
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId
-  )
+  const environmentId = resolveWebRuntimeSessionEnvironmentId(args.environmentId, null)
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {
