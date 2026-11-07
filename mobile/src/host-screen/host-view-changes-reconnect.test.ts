@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { createElement, type ReactElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,20 +8,14 @@ vi.mock('react-native', () => ({
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) }
 }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('../cache/worktree-cache', () => ({
-  getCachedWorktrees: () => null,
-  setCachedWorktrees: () => {}
-}))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
-vi.mock('../transport/use-worktree-resync', () => ({
-  useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
-}))
 
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+import { createOrcaQueryClient } from '../query/orca-query-client'
 
 function reply(result: unknown): RpcResponse {
   return { id: 'reply', ok: true, result, _meta: { runtimeId: 'runtime' } }
@@ -54,7 +49,6 @@ function desktop() {
 const SIDEBAR_FEED = { refresh: () => {}, changed: () => {}, onInstalled: () => () => {} }
 // Keep callbacks stable as in the screen; refresh lifecycle depends on their identities.
 const NO_CAPABILITIES: string[] = []
-const fetchRepoMetadata = async (): Promise<void> => {}
 
 let renderer: ReactTestRenderer | null = null
 
@@ -78,7 +72,6 @@ async function mountScreen(client: FakeSession) {
       client,
       connState,
       embedded: true,
-      fetchRepoMetadata,
       hostCapabilities: NO_CAPABILITIES,
       hostId: 'host-1',
       sidebarFeed: SIDEBAR_FEED,
@@ -87,15 +80,18 @@ async function mountScreen(client: FakeSession) {
     })
     return null
   }
+  const queryClient = createOrcaQueryClient()
+  const screen = (connState: ConnectionState): ReactElement =>
+    createElement(QueryClientProvider, { client: queryClient }, createElement(Probe, { connState }))
   await act(async () => {
-    renderer = create(createElement(Probe, { connState: 'connected' }))
+    renderer = create(screen('connected'))
   })
   return {
     view: () => held.view!,
     state: () => held.state!,
     connect: async (connState: ConnectionState) => {
       await act(async () => {
-        renderer!.update(createElement(Probe, { connState }))
+        renderer!.update(screen(connState))
       })
     }
   }

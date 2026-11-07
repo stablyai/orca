@@ -10,6 +10,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
+import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from '../transport/rpc-client'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
 import {
@@ -35,6 +36,13 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   refetchOnWindowFocus?: boolean
   // Kept fresh by a subscription, so the connected edge leaves it alone.
   streamBacked?: boolean
+  // Desktop change events that make this family stale (host-event-router), and the least time between reads they cause.
+  signal?: HostQuerySignal
+}
+
+export type HostQuerySignal = {
+  events: readonly Exclude<RuntimeClientEventStreamMessage['type'], 'ready' | 'end'>[]
+  floorMs?: number
 }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
@@ -50,7 +58,7 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
   target: HostQueryTarget,
   input: TInput
 ) {
-  const { family, fetch, streamBacked, ...freshness } = query
+  const { family, fetch, streamBacked, signal, ...freshness } = query
   const queryKey = hostQueryKey(hostId, family, target, input)
   return queryOptions({
     ...freshness,
@@ -58,7 +66,7 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     // No abort signal: the host has no cancel, and a screen that unmounts still wants the answer cached.
     queryFn: ({ client: queryClient }) =>
       fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey)),
-    meta: { streamBacked }
+    meta: { streamBacked, signal }
   })
 }
 
@@ -104,7 +112,7 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   host: { hostId: string; client: RpcClient | null },
   target: HostQueryTarget,
   input: TInput,
-  options?: { enabled?: boolean; subscribed?: boolean }
+  options?: { enabled?: boolean; subscribed?: boolean; refetchInterval?: number | false }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
@@ -115,7 +123,11 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
     const observer = observerOptions(query, client, hostId, target, input)
     return enabled ? observer : { ...observer, queryFn: skipToken }
   }, [query, client, hostId, keyHash, enabled])
-  return useQuery({ ...queryOptions, subscribed: options?.subscribed })
+  return useQuery({
+    ...queryOptions,
+    subscribed: options?.subscribed,
+    refetchInterval: options?.refetchInterval
+  })
 }
 
 // One query per input (e.g. one per open folder), combined into one value; keep `combine` stable so the value is memoized.
