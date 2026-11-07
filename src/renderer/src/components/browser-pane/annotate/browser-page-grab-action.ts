@@ -3,7 +3,6 @@ import type {
   BrowserGrabPayload,
   BrowserGrabScreenshot
 } from '../../../../../shared/browser-grab-types'
-import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
@@ -15,7 +14,8 @@ export function runBrowserGrabActionShortcut({
   grabPayloadRef,
   toolTargetIdRef,
   recordFeatureInteraction,
-  showGrabToast
+  showGrabToast,
+  copyGrabScreenshot
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -28,6 +28,7 @@ export function runBrowserGrabActionShortcut({
     type: BrowserPageGrabToastState['type'],
     payload?: BrowserGrabPayload | null
   ) => void
+  copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
 }): void {
   if (grabIntent === 'annotate') {
     return
@@ -42,10 +43,7 @@ export function runBrowserGrabActionShortcut({
       const dataUrl = payload.screenshot?.dataUrl
       if (dataUrl?.startsWith('data:image/png;base64,')) {
         recordFeatureInteraction('browser-grab')
-        void window.api.ui.writeClipboardImage(dataUrl).then(
-          () => showGrabToast('Screenshotted', 'success', payload),
-          () => showGrabToast(imageCopyFailedMessage(), 'error', payload)
-        )
+        copyGrabScreenshot(dataUrl, payload)
       } else {
         showGrabToast('No screenshot available', 'error', payload)
       }
