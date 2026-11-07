@@ -12,6 +12,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DictationEnginePreference } from '../mobile-web-shell/bridge/bridge-speech-verbs'
+import { isSpeechBusyError } from '../platform/native-speech'
 import { onDeviceSpeechLocale } from '../platform/on-device-speech-locale'
 import {
   DEFAULT_DICTATION_ENGINE_PREFERENCE,
@@ -22,13 +23,15 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 type PhoneSpeech =
-  | { status: SpeechAvailabilityStatus }
+  | { status: SpeechAvailabilityStatus | 'checking' }
   | { status: 'downloading'; progress: number }
 
 function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | undefined {
   switch (phone?.status) {
     case undefined:
       return undefined
+    case 'checking':
+      return t('settings.voiceTranscribeOn.phoneChecking', 'Checking…')
     case 'ready':
       return t('settings.voiceTranscribeOn.phoneReady', 'Ready on this phone')
     case 'needs-download':
@@ -43,20 +46,23 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
   }
 }
 
-// Assets are only ever downloaded on this tap, so say the size first. The OS reports none up front; these are measured for en-US (iOS 456 MB, Android's system pack 63 MB).
-const PHONE_SPEECH_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
+// Assets are only ever downloaded on this tap, so say the size first when we know it. The OS reports none up front;
+// these were measured for en-US only (iOS 456 MB, Android's system pack 63 MB), so other languages show no size.
+const PHONE_SPEECH_EN_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
   ios: 450,
   android: 65
 }
 
-function downloadSizeText(t: Translate): string | undefined {
-  const size = PHONE_SPEECH_DOWNLOAD_MB[Platform.OS]
+function downloadSizeText(t: Translate, locale: string): string | undefined {
+  const size = /^en(-|$)/i.test(locale) ? PHONE_SPEECH_EN_DOWNLOAD_MB[Platform.OS] : undefined
   return size === undefined
     ? undefined
     : t('settings.voiceTranscribeOn.downloadSize', 'About {{size}} MB', {
         size: size.toLocaleString(getUiIntlLocale())
       })
 }
+
+const PHONE_SPEECH_RECHECK_MS = 3_000
 
 // A shell built before on-device speech has nothing to choose between.
 export function voiceTranscribeOnShown(): boolean {
@@ -75,10 +81,24 @@ export function VoiceTranscribeOnSection() {
   const downloadingRef = useRef(false)
   const supported = voiceTranscribeOnShown()
 
+  // A busy speech service shows as checking and is asked again while this screen is open; it is never read as unsupported.
   const readPhone = useCallback(async () => {
-    const available = await speechAvailability(onDeviceSpeechLocale()).catch(() => null)
-    setPhone(available === null ? { status: 'unsupported' } : { status: available.status })
+    try {
+      const available = await speechAvailability(onDeviceSpeechLocale())
+      setPhone({ status: available.status })
+    } catch (error) {
+      setPhone({ status: isSpeechBusyError(error) ? 'checking' : 'unsupported' })
+    }
   }, [])
+
+  // Keyed on the state object: each busy answer is a new one, so it schedules the next check.
+  useEffect(() => {
+    if (phone?.status !== 'checking') {
+      return
+    }
+    const recheck = setTimeout(() => void readPhone(), PHONE_SPEECH_RECHECK_MS)
+    return () => clearTimeout(recheck)
+  }, [phone, readPhone])
 
   useEffect(() => {
     if (!supported) {
@@ -105,7 +125,7 @@ export function VoiceTranscribeOnSection() {
   }
 
   const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
-  const downloadSize = downloadSizeText(t)
+  const downloadSize = downloadSizeText(t, onDeviceSpeechLocale())
 
   const download = () => {
     if (downloadingRef.current) {

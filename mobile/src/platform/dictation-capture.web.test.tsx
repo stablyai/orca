@@ -206,6 +206,39 @@ describe('draining the shell ring', () => {
       ...Array.from(afterwards)
     ])
   })
+
+  it('a second end waits for the stop already in flight, even when its own stop would be refused', async () => {
+    let stops = 0
+    const shell = createAudioShell({
+      refuse: (verb) => {
+        if (verb !== 'native.audio.stop') {
+          return null
+        }
+        stops += 1
+        return stops > 1
+          ? new BridgeNativeVerbRefusedError('native_verb_failed', 'the bridge is full')
+          : null
+      }
+    })
+    const pair = createFakeBridgePortPair({ serveNativeVerb: shell.serveNativeVerb })
+    const capture = await mount(pair)
+    const chunks: DictationCaptureChunk[] = []
+    capture.onChunk((chunk) => chunks.push(chunk))
+    await capture.open()
+    capture.begin()
+    const tail = pcm(768, 41)
+    shell.speak(tail)
+    let tailOnSecondEnd: number[] = []
+    await act(async () => {
+      void capture.end()
+      const second = capture.end().then(() => {
+        tailOnSecondEnd = chunks.flatMap((chunk) => Array.from(chunk.data))
+      })
+      await pair.flush()
+      await second
+    })
+    expect(tailOnSecondEnd).toEqual(Array.from(tail))
+  })
 })
 
 describe('a capture the page loses', () => {

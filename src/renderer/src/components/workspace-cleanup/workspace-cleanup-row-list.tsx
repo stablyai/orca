@@ -8,7 +8,7 @@ import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-lis
 import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   findWorkspaceCleanupCandidateRepo,
   groupWorkspaceCleanupReposById

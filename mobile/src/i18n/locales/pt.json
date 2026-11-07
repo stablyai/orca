@@ -1512,7 +1512,8 @@
       "microphonePermissionDenied": "Permissão de acesso ao microfone negada",
       "noSpeech": "Nenhuma fala detectada.",
       "phoneUnavailable": "O ditado neste celular não está pronto. Baixe-o nos ajustes de Voz ou escolha Automático.",
-      "phoneFailed": "O ditado neste celular parou de funcionar. Tente novamente."
+      "phoneFailed": "O ditado neste celular parou de funcionar. Tente novamente.",
+      "phoneBusy": "O ditado neste celular ainda está iniciando. Tente novamente em instantes."
     }
   },
   "host": {
@@ -2912,7 +2913,8 @@
       "phoneDownloading": "Baixando… {{progress}}%",
       "phoneUnsupported": "Indisponível neste celular",
       "download": "Baixar para este celular",
-      "downloadSize": "Cerca de {{size}} MB"
+      "downloadSize": "Cerca de {{size}} MB",
+      "phoneChecking": "Verificando…"
     }
   },
   "sourceControl": {

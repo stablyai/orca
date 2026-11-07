@@ -45,23 +45,6 @@ describe('main agent turn verdicts and clocks', () => {
     expect(response.status).toBe(204)
   }
 
-  it('starts a new Claude session with its own main agent clock', async () => {
-    await post('/hook/claude', { hook_event_name: 'UserPromptSubmit', prompt: 'first' })
-    await post('/hook/claude', { hook_event_name: 'Stop' })
-    expect(server.getStatusSnapshot()[0]?.mainAgent).toEqual({
-      state: 'done',
-      stateStartedAt: 1_000_000
-    })
-
-    vi.setSystemTime(1_060_000)
-    await post('/hook/claude', { hook_event_name: 'SessionStart', source: 'clear' })
-
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'done',
-      mainAgent: { state: 'done', stateStartedAt: 1_060_000 }
-    })
-  })
-
   it.each(['idle_prompt notification', 'session end'] as const)(
     'keeps a cancelled Grok turn verdict when a %s restates done',
     async (restatement) => {

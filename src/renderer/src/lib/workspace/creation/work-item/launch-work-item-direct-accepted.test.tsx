@@ -10,7 +10,7 @@ import * as preflight from './launch-work-item-direct-preflight'
 import { adoptAgentSessionLaunchVerdict } from '../../../agent-session/launch/routing/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '../../../agent-session/launch/routing/agent-launch-request-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import { readDirectSetupRequest } from './direct-work-item-setup-test-fixture'
 import { DirectWorkItemSetupDialog } from '@/components/new-workspace/DirectWorkItemSetupDialog'
 

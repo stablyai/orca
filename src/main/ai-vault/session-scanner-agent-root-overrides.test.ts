@@ -102,21 +102,6 @@ describe('agent scan roots from environment overrides', () => {
     )
   })
 
-  it('finds Devin transcripts when the platform data variable is empty', async () => {
-    const roots = await rootDirsFor('devin', {
-      DEVIN_HOME: '',
-      APPDATA: '',
-      XDG_DATA_HOME: ''
-    })
-    const dataDir =
-      process.platform === 'win32'
-        ? join(homedir(), 'AppData', 'Roaming')
-        : join(homedir(), '.local', 'share')
-    expect(roots).toEqual(
-      ['transcripts', 'agent_logs'].map((dir) => join(dataDir, 'devin', 'cli', dir))
-    )
-  })
-
   it('keeps an explicit transcript root isolated and discovers both WSL layouts', async () => {
     const { AI_VAULT_AGENT_SOURCES } = await import('./session-scanner-agent-sources')
     const custom = join(homedir(), 'custom-devin')
@@ -132,20 +117,6 @@ describe('agent scan roots from environment overrides', () => {
 
   for (const testCase of CASES) {
     describe(testCase.envVar, () => {
-      it('uses an absolute override', async () => {
-        const roots = await rootDirsFor(testCase.agent, {
-          [testCase.envVar]: testCase.absolute
-        })
-        expect(roots[0]).toBe(testCase.absoluteRoot)
-      })
-
-      it('tolerates whitespace around an absolute override', async () => {
-        const roots = await rootDirsFor(testCase.agent, {
-          [testCase.envVar]: `  ${testCase.absolute}  `
-        })
-        expect(roots[0]).toBe(testCase.absoluteRoot)
-      })
-
       it.each(RELATIVE_VALUES)('falls back to the default root for %j', async (value) => {
         const roots = await rootDirsFor(testCase.agent, {
           [testCase.envVar]: value

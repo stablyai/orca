@@ -14,7 +14,7 @@ import {
   readRuntimeIssueCommand,
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,

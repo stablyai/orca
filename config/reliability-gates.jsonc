@@ -2752,7 +2752,7 @@
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
         "node config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/store/repos/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -2769,7 +2769,7 @@
         "src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts",
         "src/main/ipc/ephemeral-vm.test.ts",
         "src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts",
-        "src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "src/renderer/src/store/repos/repos-ephemeral-vm-cleanup-retention.test.ts",
         "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts"
       ],
       "assertionRefs": [
@@ -2784,10 +2784,8 @@
         {
           "file": "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
           "assertions": [
-            "ordinary runtime bytes remain unchanged and create no feature sidecar",
             "malformed, future, oversized, and unknown feature data is preserved without poisoning v1 records",
-            "current-main poisoned bytes migrate to a rollback-readable projection",
-            "unchanged compatibility metadata is not rewritten during lifecycle updates"
+            "current-main poisoned bytes migrate to a rollback-readable projection"
           ]
         },
         {
@@ -2801,8 +2799,7 @@
         {
           "file": "src/shared/ephemeral-vm-recipe-process.test.ts",
           "assertions": [
-            "recipe commands have no implicit wall-clock deadline",
-            "a stopped process that ignores graceful termination is force-killed and settled"
+            "synchronous graceful termination settles cancellation and clears the force-kill timer"
           ]
         },
         {
@@ -5018,7 +5015,10 @@
         },
         {
           "file": "src/shared/doc-preview-scheme.test.ts",
-          "assertions": ["preview URLs round-trip per segment and reject a malformed grant id"]
+          "assertions": [
+            "malformed grant ids and unsupported schemes are refused",
+            "undecodable percent escapes are refused"
+          ]
         },
         {
           "file": "src/main/ipc/doc-preview-grant-ipc.test.ts",
@@ -5178,16 +5178,6 @@
           "durationSeconds": 195,
           "summary": "Candidate with the sole delta that the preview pane does not hand focus to its guest — the tree as it stood before this change — failed at the target=_blank press: six real presses reached the anchor, the embedder had the webview as its active element, and main's own log answered each report with registered true, grant live, focused false. This is the gap the rewrite found: since previews became browser pages they had no chrome to pass focus on, so the one route out of a preview was shut.",
           "currentCommand": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
-        },
-        {
-          "date": "2026-08-27",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
-          "result": "passed",
-          "durationSeconds": 2.05,
-          "summary": "39/39 on the title-parity trio at the relocated path, replacing the 2026-08-27 record of the same three files, which killed five mutants as sole deltas: disabling the document branch restores New Tab for a named document, dropping the grant-URL refusal puts the scheme into the title, the tab mirror and the written session, returning New Tab instead of the file name breaks the fallback, removing the guest listener leaves the document unable to name its tab, and making the scheme test parse rather than prefix-match lets a title that merely looks like a preview URL through.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts"
         },
         {
           "date": "2026-08-27",
@@ -5424,7 +5414,8 @@
         "Audit1412 retires this complete dated receipt because a source in its selector was deleted or reduced. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-08-27\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 1.5,\n          \"summary\": \"175/175 at the relocated paths on the unified tool authority, replacing the 2026-08-27 record of the same command at 174/174. That run killed twelve of fourteen mutants as sole deltas — dropping the document branch from the one authority door, removing either browsing-registration refusal or the mint-side refusal that is its converse, deleting the registration notification or widening it to the worktree-wide and any-tab waits, disposing revoked state by grant instead of by page, dropping the hosting-renderer or destroyed-contents check, rebuilding the renderer tool target from the grant, and deleting the teardown identity check under a re-mint — and reported two as ill-posed rather than as kills. The relocation changed no file it names except their directory.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser/browser-preview-tool-authorization.test.ts src/main/ipc/browser/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-lifecycle.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-policy-profile.test.ts src/main/browser/guest-lifecycle/manager/browser-manager-annotation-bridge.test.ts src/main/browser/backends/offscreen-browser-backend-lifecycle.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx\"\n        }",
         "Audit1412 retires this complete dated receipt because a source in its selector was deleted or reduced. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-08-27\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 0.32,\n          \"summary\": \"55/55 on the candidate that gives every guest one attach door. A preview used to reach its policies through an installer of its own, which meant the manager's attachment bookkeeping — the set registration consults and the cleanup teardown runs — never knew a preview existed. It is now a profile on `attachGuestPolicies`, and the doc policy is what that profile installs. Red-green with each mutant as the sole delta: deleting the profile branch hands a previewed document the browsing machinery (clicked-link routing, frame routing, popup child windows, anti-detection over the debugger) and lets it navigate off-grant; dropping the manager's destroyed wiring leaves the guest answerable through the grant-keyed authority after it dies and its id marked attached forever; and making the window fork ask for the default profile is caught at the fork itself. The absence assertions are paired with a presence precondition in the same run: a browsing guest attached through the same method observably takes every one of those things, so a profile that fenced nothing, or an attach path that had stopped installing anything at all, fails rather than passing empty.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/main/browser/guest-lifecycle/manager/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/document-preview/doc-preview-guest-policy.test.ts\"\n        }",
         "Audit1412 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[]}. Remaining provider scope applies only to unchanged-source receipts.",
-        "Audit1421 removes browser-address-bar-suggestions.test.ts. Document suggestion title/path matching, recency merging and path-prefix ranking alarms are lost. No equivalent replacement coverage is claimed. Historical receipts remain scoped to unchanged selectors; the reduced command has no new execution result."
+        "Audit1421 removes browser-address-bar-suggestions.test.ts. Document suggestion title/path matching, recency merging and path-prefix ranking alarms are lost. No equivalent replacement coverage is claimed. Historical receipts remain scoped to unchanged selectors; the reduced command has no new execution result.",
+        "Audit1803 retires this complete dated receipt because doc-preview-scheme.test.ts was reduced. It does not validate the reduced selector. Original receipt verbatim: {\"date\":\"2026-08-27\",\"runner\":\"local\",\"platform\":\"macos\",\"command\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts\",\"result\":\"passed\",\"durationSeconds\":2.05,\"summary\":\"39/39 on the title-parity trio at the relocated path, replacing the 2026-08-27 record of the same three files, which killed five mutants as sole deltas: disabling the document branch restores New Tab for a named document, dropping the grant-URL refusal puts the scheme into the title, the tab mirror and the written session, returning New Tab instead of the file name breaks the fallback, removing the guest listener leaves the document unable to name its tab, and making the scheme test parse rather than prefix-match lets a title that merely looks like a preview URL through.\",\"currentCommand\":\"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser/pages/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts\"}"
       ],
       "demotionRule": "Demote if a paired HTML preview creates a browser workspace on either side, renders from anything other than the orca-preview scheme, serves a read the host reported as truncated or over-cap, serves a document without the self-only content security policy, lets the preview session carry an off-machine request, reads an SSH path that canonicalizes outside its grant root, steals focus from the source editor when it opens, removes unrelated editor or terminal state on close, hides a document that rendered because one subresource was refused, leaves a grant readable after the tab or renderer that owns it is gone, mints one for a sender that is not the trusted renderer, opens a browser tab for a navigation the document started with no one at the keyboard, or lets the guest gather an ICE candidate; or if a paired browser creation this gate still owns produces duplicate client or host identities or loses its requested split."
     },
@@ -7730,7 +7721,7 @@
       "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then independently assert the Floating launch call and PTY transport select local IPC with no WSL project runtime.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/slices/repos-project-mutations.test.ts src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/store/slices/local-detected-agent-state.test.ts src/renderer/src/store/project-groups/repos-project-group-create-race.test.ts src/renderer/src/store/project-groups/repos-project-groups-delete.test.ts src/renderer/src/store/project-groups/repos-project-groups-owner-routing.test.ts src/renderer/src/store/projects/repos-project-host-capability.test.ts src/renderer/src/store/projects/repos-project-host-lifecycle.test.ts src/renderer/src/store/repos/repos-remove-project-purge-leak.test.ts src/renderer/src/store/repos/repos-update-serialization.test.ts src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts --reporter=dot",
         "Headed Electron/CDP STA-4027 journey on Orca environment windows 2 with a selected Ubuntu-24.04 WSL project and local Floating Workspace"
       ],
@@ -7738,7 +7729,13 @@
         "src/renderer/src/hooks/useDetectedAgents.test.tsx",
         "src/renderer/src/store/slices/detected-agents.test.ts",
         "src/renderer/src/store/slices/local-detected-agent-state.test.ts",
-        "src/renderer/src/store/slices/repos-project-mutations.test.ts",
+        "src/renderer/src/store/project-groups/repos-project-group-create-race.test.ts",
+        "src/renderer/src/store/project-groups/repos-project-groups-delete.test.ts",
+        "src/renderer/src/store/project-groups/repos-project-groups-owner-routing.test.ts",
+        "src/renderer/src/store/projects/repos-project-host-capability.test.ts",
+        "src/renderer/src/store/projects/repos-project-host-lifecycle.test.ts",
+        "src/renderer/src/store/repos/repos-remove-project-purge-leak.test.ts",
+        "src/renderer/src/store/repos/repos-update-serialization.test.ts",
         "src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts"
       ],
@@ -7759,7 +7756,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/store/slices/repos-project-mutations.test.ts",
+          "file": "src/renderer/src/store/repos/repos-remove-project-purge-leak.test.ts",
           "assertions": [
             "removing one project evicts its authority-scoped agent inventory without disturbing another project"
           ]
@@ -8109,7 +8106,6 @@
         "config/scripts/diagnostics/remote-agent-authority/remote-agent-session-authority-repro.mjs",
         "config/scripts/development/remote-session-cleanup/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
-        "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts",
         "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts",
         "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts",
@@ -8390,24 +8386,30 @@
       "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser/hosts/browser-session-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.test.ts src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts src/renderer/src/store/slices/settings/settings.test.ts src/renderer/src/store/slices/browser/hosts/browser-session-host-selection.test.ts src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.test.ts src/renderer/src/store/repos/ssh-repo-readoption-drafts.test.ts src/renderer/src/store/folder-workspaces/folder-workspace-readoption-drafts.test.ts src/renderer/src/store/repos/repo-catalog-readoption-drafts.test.ts src/renderer/src/store/folder-workspaces/all-host-folder-workspace-catalogs.test.ts src/renderer/src/store/catalog-settlement-notifications.test.ts src/renderer/src/store/repos/repos-stale-fetch.test.ts src/renderer/src/store/folder-workspaces/folder-workspace-routing.test.ts src/renderer/src/store/project-groups/nested-repository-operations.test.ts src/renderer/src/store/repos/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/project-admission/dialog/AddRepoStartSteps.test.tsx --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
       "testFiles": [
         "src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
-        "src/renderer/src/store/slices/settings.test.ts",
+        "src/renderer/src/store/slices/settings/settings.test.ts",
         "src/renderer/src/store/slices/browser/hosts/browser-session-host-selection.test.ts",
         "src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts",
         "src/renderer/src/web/web-preload-api-runtime-environment.test.ts",
         "src/renderer/src/components/sidebar/project-admission/dialog/AddRepoStartSteps.test.tsx",
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
         "src/renderer/src/lib/workspace/ownership/worktree-runtime-owner.test.ts",
-        "src/renderer/src/store/slices/repos-catalog-reconciliation.test.ts",
-        "src/renderer/src/store/slices/repos-project-groups.test.ts",
-        "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
+        "src/renderer/src/store/repos/ssh-repo-readoption-drafts.test.ts",
+        "src/renderer/src/store/folder-workspaces/folder-workspace-readoption-drafts.test.ts",
+        "src/renderer/src/store/repos/repo-catalog-readoption-drafts.test.ts",
+        "src/renderer/src/store/folder-workspaces/all-host-folder-workspace-catalogs.test.ts",
+        "src/renderer/src/store/catalog-settlement-notifications.test.ts",
+        "src/renderer/src/store/repos/repos-stale-fetch.test.ts",
+        "src/renderer/src/store/folder-workspaces/folder-workspace-routing.test.ts",
+        "src/renderer/src/store/project-groups/nested-repository-operations.test.ts",
+        "src/renderer/src/store/repos/repos-selected-owner-routing.test.ts",
         "src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts",
         "src/renderer/src/store/slices/worktrees-fetch-owner-routing.test.ts",
         "tests/e2e/pr11346-selected-runtime-add.spec.ts"
@@ -8428,7 +8430,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
+          "file": "src/renderer/src/store/repos/repos-selected-owner-routing.test.ts",
           "assertions": [
             "keeps a selected-runtime import refresh across an overlapping local refresh",
             "drops reversed same-host folder responses without replacing the newer folder catalog",
@@ -10404,7 +10406,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-detach-attach-handoff.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/TerminalRemoteRuntimeReconnectBanner.test.tsx src/shared/remote-runtime/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal/terminal-create-idempotency.test.ts src/main/runtime/terminal/launch/orca-runtime-terminal-create-idempotency.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/repos/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/runtime/hosts/platform-probe/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/renderer/src/runtime/hosts/ssh/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
@@ -10446,7 +10448,7 @@
         "src/main/runtime/terminal/launch/orca-runtime-terminal-create-idempotency.test.ts",
         "tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts",
         "src/renderer/src/store/slices/terminals-hydration.test.ts",
-        "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
+        "src/renderer/src/store/repos/repos-ssh-host-reconciliation.test.ts",
         "src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts",
         "src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts",
         "src/main/ipc/ssh/ssh.test.ts",
@@ -10609,7 +10611,7 @@
           "assertions": ["batches restored terminal reconnect wake hints into one store update"]
         },
         {
-          "file": "src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts",
+          "file": "src/renderer/src/store/repos/repos-ssh-host-reconciliation.test.ts",
           "assertions": [
             "a provider result becomes stale when same-ID repo ownership turns malformed or contradictory during the await"
           ]
@@ -14434,7 +14436,9 @@
         {
           "file": "src/shared/cross-platform-path.test.ts",
           "assertions": [
-            "comparison keys preserve literal POSIX backslashes while folding Windows drive and UNC spellings"
+            "POSIX literal backslashes preserve containment and relative identity",
+            "Windows drive and UNC roots enforce containment",
+            "WSL Linux-tail comparisons remain case-sensitive and relative suffix bytes remain exact"
           ]
         },
         {

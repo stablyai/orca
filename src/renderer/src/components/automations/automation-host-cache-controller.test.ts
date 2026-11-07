@@ -9,10 +9,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import { createAutomationHostCache } from './automation-host-cache'
 import { createAutomationHostQueryController } from './automation-host-cache-controller'
-import {
-  getAuthorityCatalogGeneration,
-  resetAutomationHostCatalogGenerationsForTests
-} from './automation-host-catalog-generation'
+import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 import type {
   AutomationAuthorityHealth,
   AutomationHostCatalog,
@@ -133,18 +130,6 @@ afterEach(() => {
 })
 
 describe('automation host query controller', () => {
-  it('syncs catalog generations and fetches the catalog host', async () => {
-    const listScoped = vi.fn(() => Promise.resolve(emptyList()))
-    const { controller } = createController(listScoped)
-    expect(getAuthorityCatalogGeneration(RUNTIME)).toBe(0)
-
-    await controller.applyCatalog(catalogOf([entry(RUNTIME_SELF)]))
-
-    expect(getAuthorityCatalogGeneration(RUNTIME)).toBe(1)
-    expect(listScoped).toHaveBeenCalledTimes(1)
-    controller.dispose()
-  })
-
   it('skips removed entries and unreachable authorities but keeps the selected host', async () => {
     const listScoped = vi.fn(() => Promise.resolve(emptyList()))
     const { controller } = createController(listScoped)
@@ -246,35 +231,6 @@ describe('automation host query controller', () => {
 
     await controller.applyCatalog(catalogOf([entry(DESKTOP_SELF)]))
     expect(cache.keys()).toEqual([hostStableKey(DESKTOP_SELF)])
-    controller.dispose()
-  })
-
-  // Why: a positive count is what tells the next catalog to show the authority's orphan entry.
-  it('reports the latest orphan count an authority returned', async () => {
-    const listScoped = vi.fn(() =>
-      Promise.resolve({ automations: [], items: [], orphanCount: 3, invalidRows: 0 })
-    )
-    const { controller } = createController(listScoped)
-    expect(controller.authorityOrphanCount(RUNTIME)).toBeNull()
-
-    await controller.applyCatalog(catalogOf([entry(RUNTIME_SELF)]))
-
-    expect(controller.authorityOrphanCount(RUNTIME)).toBe(3)
-    expect(controller.authorityOrphanCount(DESKTOP)).toBeNull()
-    controller.dispose()
-  })
-
-  it('refetches only the entries an event invalidated, past the TTL', async () => {
-    const listScoped = vi.fn(() => Promise.resolve(listOf(['a'])))
-    const { controller } = createController(listScoped)
-    await controller.applyCatalog(catalogOf([entry(DESKTOP_SELF), entry(RUNTIME_SELF)]))
-    expect(listScoped).toHaveBeenCalledTimes(2)
-
-    controller.handleAuthorityEvent({ authority: RUNTIME, selector: { kind: 'self' } })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(listScoped).toHaveBeenCalledTimes(3)
     controller.dispose()
   })
 

@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspaceUpdates } from '../repos/repo-state'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
+import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 

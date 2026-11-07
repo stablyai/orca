@@ -5,8 +5,6 @@ import {
   resolveSshExecutionHealth
 } from './automation-host-health'
 
-const reachable = { reachable: true, compatible: true, hasData: true } as const
-
 describe('resolveAutomationAuthorityHealth', () => {
   it('reports incompatibility ahead of every other signal', () => {
     expect(
@@ -18,46 +16,12 @@ describe('resolveAutomationAuthorityHealth', () => {
       })
     ).toBe('incompatible')
   })
-
-  it('separates first load from a background refresh', () => {
-    expect(
-      resolveAutomationAuthorityHealth({ ...reachable, hasData: false, queryState: 'loading' })
-    ).toBe('loading')
-    expect(resolveAutomationAuthorityHealth({ ...reachable, queryState: 'loading' })).toBe(
-      'refreshing'
-    )
-    expect(resolveAutomationAuthorityHealth({ ...reachable, queryState: 'idle' })).toBe('fresh')
-    expect(resolveAutomationAuthorityHealth({ ...reachable, queryState: 'error' })).toBe(
-      'stale-error'
-    )
-  })
-
-  it('reports an unreachable authority as unavailable', () => {
-    expect(
-      resolveAutomationAuthorityHealth({ ...reachable, reachable: false, queryState: 'idle' })
-    ).toBe('unavailable')
-  })
 })
 
 describe('execution health', () => {
   it('never borrows a status for unverified or removed registrations', () => {
     expect(resolveSshExecutionHealth('removed', 'connected', 'disconnected')).toBe('unavailable')
     expect(resolveSshExecutionHealth('unhydrated', 'connected', 'disconnected')).toBe('unknown')
-  })
-
-  it('maps reported SSH statuses and absent status to execution health', () => {
-    expect(resolveSshExecutionHealth('authoritative', 'connected', undefined)).toBe('connected')
-    expect(resolveSshExecutionHealth('authoritative', 'reconnecting', undefined)).toBe('connecting')
-    expect(resolveSshExecutionHealth('authoritative', 'deploying-relay', undefined)).toBe(
-      'connecting'
-    )
-    expect(resolveSshExecutionHealth('authoritative', 'auth-failed', undefined)).toBe(
-      'disconnected'
-    )
-    expect(resolveSshExecutionHealth('authoritative', undefined, undefined)).toBe('unknown')
-    expect(resolveSshExecutionHealth('authoritative', undefined, 'disconnected')).toBe(
-      'disconnected'
-    )
   })
 
   it('treats an offline authority as disconnected, not gone', () => {

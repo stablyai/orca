@@ -71,7 +71,7 @@ import * as openExistingStructuredSession from '@/lib/open-existing-structured-s
 import { structuredSessionOpenFeedback } from '@/lib/activate-ai-vault-structured-session'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import * as droppedRows from '@/store/repos/dropped-repo-worktree-rows'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { collectionVisits } from '../../../../shared/collection-visits.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
