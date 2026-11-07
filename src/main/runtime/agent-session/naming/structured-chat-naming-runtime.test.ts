@@ -93,4 +93,15 @@ describe('structured chat naming runtime', () => {
       }
     }
   )
+  it('reports unsupported Gemini CLI naming without selecting another agent', async () => {
+    const state = rig()
+    const record = agentSessionRecordFixture()
+    record.provider = 'gemini'
+    record.accountHome = { variable: 'GEMINI_CLI_HOME', path: '/pinned-account' }
+    expect(await state.deps.generate(record, 'Repair login')).toMatchObject({
+      error: expect.stringContaining('Agent "gemini" does not support chat names.')
+    })
+    expect(mocks.generate).not.toHaveBeenCalled()
+    expect(mocks.native).not.toHaveBeenCalled()
+  })
 })

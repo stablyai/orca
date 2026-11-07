@@ -42,6 +42,7 @@ import type { AcpSignInWatch } from './acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../antigravity/antigravity-acp-launch-spec'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { GEMINI_ACP_LAUNCH_SPEC } from '../gemini/gemini-acp-launch-spec'
 
 /** Model discovery never authenticates interactively. */
 export type AcpModelDiscovery =
@@ -154,6 +155,7 @@ export type AcpLaunchSpec = {
    *  turns made outside it; absent, the replay is only dropped. */
   historyCatchUp?: AcpHistoryTurnIdentity
   modelDiscovery: AcpModelDiscovery
+  restingOptionKeys?: readonly ('model' | 'effort')[]
   visualsSkill?: AcpVisualsSkillLoader
   transcriptImport: StructuredAgentTranscriptImport | null
   sessionHistory: StructuredAgentSessionHistory
@@ -161,6 +163,8 @@ export type AcpLaunchSpec = {
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
+  /** The original protocol cannot safely distinguish loaded history from a new response. */
+  resumeUnavailable?: true
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
@@ -311,6 +315,7 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OPENCODE_LAUNCH_SPEC,
   OPENCODE2_LAUNCH_SPEC,
   OMP_LAUNCH_SPEC,
+  GEMINI_ACP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC
 ]
 
