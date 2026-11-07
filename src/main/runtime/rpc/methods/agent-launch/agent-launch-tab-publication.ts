@@ -1,4 +1,4 @@
-import { claudeLaunchAccountReceipt } from '../../../claude-accounts/claude-launch-inheritance'
+import { claudeLaunchAccountReceipt } from '../../../../claude-accounts/claude-launch-inheritance'
 /** Publish a stable-id tab before cold admission/spawn for replay-safe launches; its pane waits for the launch.
  * Best-effort only: unresolved workspace, chat default, absent layout owner or occupied pane falls back to publication at spawn.
  * After restart the pane behaves as an ordinary pane. */
