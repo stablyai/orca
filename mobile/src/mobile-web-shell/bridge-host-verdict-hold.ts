@@ -37,6 +37,8 @@ export type BridgeVerdictHold = {
   snapshot: (client: RpcClient, state?: ConnectionState) => BridgeConnectionSnapshot
   // False when the frame waits for the verdict (or is refused over the cap), or cancels one that waits.
   admit: (message: BridgeClientMessage) => boolean
+  // True when a reconnect's re-send of an open page stream waits for the verdict.
+  holdReplay: (id: string, resend: () => void) => boolean
   // On the verdict opening: re-send init if what the page last heard changed, then send what waited.
   publish: (resendInit: () => void, dispatch: (message: DesktopBound) => void) => void
   // The document ended; parked frames never left the phone, so a disposal fails them definitely.
@@ -54,9 +56,17 @@ export function createBridgeVerdictHold(
   const open = (): boolean => readHostStatus === undefined || readHostStatus() !== null
   let openAtInit: boolean | null = null
   let parked: DesktopBound[] = []
+  // Keyed by page stream id: a later connection's re-send replaces the one it superseded.
+  let replays = new Map<string, () => void>()
+  const waiting = (): boolean => parked.length > 0 || replays.size > 0
   const take = (): DesktopBound[] => {
     const taken = parked
     parked = []
+    return taken
+  }
+  const takeReplays = (): (() => void)[] => {
+    const taken = [...replays.values()]
+    replays = new Map()
     return taken
   }
   return {
@@ -73,7 +83,7 @@ export function createBridgeVerdictHold(
       // While anything waits, later frames wait behind it so the verdict's flush keeps page order.
       if (
         !isDesktopBound(message) ||
-        (open() && parked.length === 0) ||
+        (open() && !waiting()) ||
         message.method === 'status.get' ||
         PHONE_ONLY_NATIVE_VERBS.has(message.method)
       ) {
@@ -86,15 +96,25 @@ export function createBridgeVerdictHold(
       }
       return false
     },
+    holdReplay: (id, resend) => {
+      if (open() && !waiting()) {
+        return false
+      }
+      replays.set(id, resend)
+      return true
+    },
     publish: (resendInit, dispatch) => {
       if (openAtInit !== open()) {
         resendInit()
       }
+      // Streams the page already held resume before anything it sent while it waited.
       if (open()) {
+        takeReplays().forEach((resend) => resend())
         take().forEach(dispatch)
       }
     },
     settle: (notify) => {
+      replays = new Map()
       for (const message of take()) {
         if (notify) {
           sendError(message.id, new BridgeHostDisposedError())

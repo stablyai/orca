@@ -1,6 +1,7 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
 import type { RpcEnvelopeFields } from './rpc-envelope-fields'
+import type { RpcStreamReplayHold } from './rpc-client-stream-request'
 import type { RelayHostReachability } from './relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
@@ -12,6 +13,8 @@ type SubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
   // Repeat these top-level fields on subscription replay and unsubscribe.
   envelope?: RpcEnvelopeFields
+  // The owner decides when a new connection may re-send this stream (a page waits for its verdict).
+  holdReplay?: RpcStreamReplayHold
 }
 
 type StreamingListener = (result: unknown) => void
