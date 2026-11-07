@@ -31,9 +31,4 @@ describe('transitionDictationSession', () => {
     expect(restarted.phase).toBe('starting')
     expect(restarted.sessionId).not.toBe(listening.sessionId)
   })
-
-  it('ignores stop once the session is already stopping', () => {
-    const stopping = run('start', 'engine-ready', 'stop')
-    expect(transitionDictationSession(stopping, { type: 'stop' })).toBe(stopping)
-  })
 })

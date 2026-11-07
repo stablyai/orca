@@ -1,6 +1,9 @@
 import type { SttEvent } from './stt-service'
 import type { SttWorkerProcess } from './stt-worker-process'
 
+/** Session events carry the stream they belong to. */
+export type SttWorkerEvent = SttEvent & { streamId?: string }
+
 export function waitForSttWorkerReady(worker: SttWorkerProcess, timeoutMs: number): Promise<void> {
   const { promise, resolve, reject } = Promise.withResolvers<void>()
   let settled = false
@@ -52,11 +55,11 @@ export function waitForSttWorkerReady(worker: SttWorkerProcess, timeoutMs: numbe
 export function attachSttWorkerLifecycle(args: {
   worker: SttWorkerProcess
   isCurrent: () => boolean
-  onMessage: (event: SttEvent) => void
+  onMessage: (event: SttWorkerEvent) => void
   onError: (error: Error) => void
   onExit: () => void
 }): () => void {
-  const onWorkerMessage = (event: SttEvent): void => {
+  const onWorkerMessage = (event: SttWorkerEvent): void => {
     if (args.isCurrent()) {
       args.onMessage(event)
     }

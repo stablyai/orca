@@ -124,7 +124,10 @@ export function acpSignInRequiredFailure(
   error: AcpAgentError
 ): SubmissionRejectionFact {
   const detail = providerDiagnostic(acpPromptErrorDetail(dialect, error), 'person')
-  return agentSessionFailureFact('notSignedIn', detail ? { detail } : {})
+  return agentSessionFailureFact('notSignedIn', {
+    ...(detail ? { detail } : {}),
+    ...(dialect.signInAccount ? { account: dialect.signInAccount } : {})
+  })
 }
 
 /** Why the agent refused a prompt, as the person is told; a missing model outranks its sign-in wording. */
@@ -206,7 +209,10 @@ export class AcpTurnFailures {
     }
     this.rows.set(turn, evidence)
     const failure = authenticationRequired
-      ? agentSessionFailureFact('notSignedIn', { detail: diagnostic })
+      ? agentSessionFailureFact('notSignedIn', {
+          detail: diagnostic,
+          ...(this.dialect.signInAccount ? { account: this.dialect.signInAccount } : {})
+        })
       : evidence.modelNotSelected
         ? agentSessionFailureFact('modelNotSelected')
         : usageLimited

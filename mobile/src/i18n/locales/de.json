@@ -111,7 +111,7 @@
       "scanCodeStep": "QR-Code scannen",
       "title": "Mit Desktop koppeln",
       "tryAgain": "Erneut versuchen",
-      "codeExpiredOrReplaced": "Dieser Kopplungscode ist abgelaufen oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
+      "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
       "defaultText": "Standard (100 %)",
@@ -1279,14 +1279,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert.",
+      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert. Orca auf dem Computer aktualisieren, um auf mehreren Geräten gleichzeitig zu diktieren.",
       "cloudModelNeedsKey": "OpenAI-Schlüssel erforderlich",
       "deleteFailed": "Modell konnte nicht gelöscht werden",
       "desktopUpdateRequired": "Die gekoppelte Orca-Desktop-App aktualisieren, um die Spracheingabeeinstellungen auf dem Smartphone zu nutzen.",
       "downloadFailed": "Download konnte nicht gestartet werden",
       "loadFailed": "Diktatmodelle konnten nicht geladen werden",
+      "modelBusy": "Ein anderes Gerät diktiert mit einem anderen Spracherkennungsmodell. Erneut versuchen, sobald es fertig ist.",
       "repairRequired": "Dieses Smartphone erneut mit dem Computer koppeln, um das Diktat zu nutzen.",
       "serverUpdateRequired": "Orca auf diesem Server aktualisieren, um das Diktat zu nutzen.",
+      "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
     }
@@ -4073,6 +4075,7 @@
       "noRunnableHost": "Dieser Automatisierung fehlt ein Host zur Ausführung.",
       "wslMoveInProgress": "Das Projekt dieser Automatisierung wird auf seinen WSL-Host verschoben. Deshalb hat Orca diese Ausführung übersprungen. Die Ausführungen werden nach Abschluss des Verschiebens fortgesetzt.",
       "wslMoveOwnedByHost": "Das Projekt dieser Automatisierung läuft jetzt auf seinem WSL-Host, der die Automatisierung dort ausführt. Orca führt diese lokale Kopie nicht mehr aus.",
+      "managedHostServer": "Migration zu {{host}} erforderlich",
       "missedGraceWindow": "Bei der nächsten Prüfung durch Orca war die Nachholfrist für diese verpasste Ausführung bereits abgelaufen.",
       "targetMissing": "Der Host der Automatisierung ist nicht mehr registriert. Daher gibt es für diese Automatisierung keinen Ausführungsort.",
       "targetReplaced": "Der Host der Automatisierung wurde entfernt und erneut registriert. Daher muss diese Automatisierung vor der Ausführung erneut zugeordnet werden.",

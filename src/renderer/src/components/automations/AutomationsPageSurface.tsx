@@ -5,7 +5,7 @@ import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
 import { getAutomationAuthorityTarget } from './automation-host-client'
-import type { AutomationListRow } from './automation-list-row-identity'
+import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
@@ -32,6 +32,7 @@ export function AutomationsPageSurface({
     draftEffects,
     editorActions,
     saveAutomation,
+    migrateAction,
     managementActions,
     runActions,
     externalActions,
@@ -246,6 +247,9 @@ export function AutomationsPageSurface({
             )
           }
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+          onReviewSetup={(content) =>
+            runSelectedRowAction((row) => managementActions.reviewSkippedSetup(row, content))
+          }
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
       ) : pageView === 'run' ? (
@@ -268,7 +272,13 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            presentation.selectedRepo?.displayName ??
+            (selected &&
+              automationProjectName(
+                selected,
+                presentation.selectedRepo,
+                repoMap,
+                !!destination.rowRecoveryHost(selectedRow?.key ?? null)?.servedBy
+              )) ??
             translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
@@ -291,6 +301,8 @@ export function AutomationsPageSurface({
           requestExternalAction={externalActions.requestExternalAction}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
+          migrateAutomation={() => runSelectedRowAction(migrateAction.migrateAutomation)}
+          isMigrating={!!selectedRow && migrateAction.migratingRowKey === selectedRow.key}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
           requestDeleteAutomation={() =>
             runSelectedRowAction(managementActions.requestDeleteAutomation)

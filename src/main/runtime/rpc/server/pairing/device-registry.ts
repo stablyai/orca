@@ -3,6 +3,11 @@ import { withDeviceSighting, type DeviceSightingFraming } from './device-sightin
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
+import {
+  isExchangeSignIn,
+  planTicketExchange,
+  promoteExchangedTicket
+} from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
 import { DeviceRegistryStore } from './device-registry-store'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
@@ -36,10 +41,13 @@ import type { NetworkSourceClass } from '../../network-source-class'
 
 // Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
+// Unpersisted, a restart would refuse and prune a signed-in row as an expired unused offer.
+const FIRST_SIGHTING_RETRY_MS = 60_000
 
 export class DeviceRegistry extends DeviceRegistryStore {
   /** First sightings this session, kept even when their persist failed. */
   private readonly seenDeviceIds = new Set<string>()
+  private firstSightingRetryPending = false
 
   addDevice(
     name: string,
@@ -201,7 +209,34 @@ export class DeviceRegistry extends DeviceRegistryStore {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findTokenDevice(this.devices, token, this.seenDeviceIds)
+    const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
+    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
+  }
+
+  /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
+  exchangePairingTicket(deviceId: string, presentedToken: string, exchangeToken: string): void {
+    this.adoptExternalEdits()
+    const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
+    this.devices = this.save(next, { durable: true })
+  }
+
+  /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
+  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
+    const promoted = promoteExchangedTicket(device)
+    try {
+      this.devices = this.save(
+        this.devices.map((d) => (d === device ? promoted : d)),
+        { durable: true }
+      )
+      return this.getDevice(device.deviceId) ?? promoted
+    } catch (error) {
+      console.error('[runtime] Failed to retire an exchanged pairing token:', error)
+      return {
+        ...device,
+        token: device.exchangeToken,
+        callerFingerprint: promoted.callerFingerprint
+      }
+    }
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
@@ -255,9 +290,22 @@ export class DeviceRegistry extends DeviceRegistryStore {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
-      withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
-    )
+    const sight = ({ offerExpiresAt: _paired, ...device }: DeviceEntry): DeviceEntry => {
+      const firstSighting =
+        device.ticket === true && device.lastSeenAt === 0
+          ? { ...device, ticketFirstSeenAt: seenAt }
+          : device
+      return withDeviceSighting(seen(firstSighting, seenAt, sourceClass), seenAt, framing)
+    }
+    try {
+      this.replaceRow(deviceId, sight)
+    } catch (error) {
+      // Keep the sighting in memory so any later save writes it, and retry until one lands.
+      this.devices = this.devices.map((d) => (d.deviceId === deviceId ? sight(d) : d))
+      this.firstSightingRetryPending = true
+      this.scheduleLastSeenFlush(FIRST_SIGHTING_RETRY_MS)
+      throw error
+    }
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
@@ -277,14 +325,14 @@ export class DeviceRegistry extends DeviceRegistryStore {
         ? withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
         : device
     )
-    if (this.pendingLastSeenFlush) {
-      return
+    this.scheduleLastSeenFlush(LAST_SEEN_FLUSH_DELAY_MS)
+  }
+
+  private scheduleLastSeenFlush(delayMs: number): void {
+    if (!this.pendingLastSeenFlush) {
+      this.pendingLastSeenFlush = setTimeout(() => this.flushPendingLastSeen(), delayMs)
+      this.pendingLastSeenFlush.unref?.()
     }
-    this.pendingLastSeenFlush = setTimeout(
-      () => this.flushPendingLastSeen(),
-      LAST_SEEN_FLUSH_DELAY_MS
-    )
-    this.pendingLastSeenFlush.unref?.()
   }
 
   flushPendingLastSeen(): void {
@@ -293,7 +341,15 @@ export class DeviceRegistry extends DeviceRegistryStore {
     }
     this.cancelPendingLastSeenFlush()
     // Failed bookkeeping must not terminate the runtime.
-    this.saveOrLog({}, 'persist device lastSeen')
+    try {
+      this.devices = this.save(this.devices)
+      this.firstSightingRetryPending = false
+    } catch (error) {
+      console.error('[runtime] Failed to persist device lastSeen:', error)
+      if (this.firstSightingRetryPending) {
+        this.scheduleLastSeenFlush(FIRST_SIGHTING_RETRY_MS)
+      }
+    }
   }
 }
 

@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
 import {
   prepareDirectWorkItemSetup,
   type DirectWorkItemLaunchResult
@@ -192,9 +193,7 @@ export async function launchWorkItemDirect(
       resolvedCompareBaseRef,
       {
         executionHostId: context.executionHostId,
-        ...(confirmedSetup.approvedSetupHash !== undefined
-          ? { approvedSetupHash: confirmedSetup.approvedSetupHash }
-          : {})
+        ...pickApprovedSetupHashes(confirmedSetup)
       }
     )
     const worktreeId = result.worktree.id

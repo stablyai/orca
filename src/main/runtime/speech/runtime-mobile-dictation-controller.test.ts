@@ -115,3 +115,21 @@ describe('mobile dictation cancel', () => {
     ).resolves.toEqual({ dictationId: 'd-2', modelId: 'test-model', dedupesResentChunks: true })
   })
 })
+
+describe('mobile dictation on several phones', () => {
+  it('keeps each phone in its own dictation at the same time', async () => {
+    const controller = await startPhoneDictation()
+
+    await controller.start({ dictationId: 'd-1', modelId: 'test-model', clientId: 'phone-b' })
+    sink({ type: 'final', text: 'from phone b' })
+
+    await expect(controller.finish({ dictationId: 'd-1', clientId: 'phone-b' })).resolves.toEqual({
+      dictationId: 'd-1',
+      text: 'from phone b'
+    })
+    await expect(controller.finish({ dictationId: 'd-1', clientId: 'phone-a' })).resolves.toEqual({
+      dictationId: 'd-1',
+      text: 'before the drop'
+    })
+  })
+})

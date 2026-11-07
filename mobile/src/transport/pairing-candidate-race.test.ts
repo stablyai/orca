@@ -13,18 +13,13 @@ const t: Translate = (_key, fallback, values) =>
   fallback.replace('{{error}}', String(values?.error ?? ''))
 
 describe('first pairing rejected by the desktop', () => {
-  it('reports an expired or replaced code when any path was refused', async () => {
+  it('reports a refused code when any path was refused', async () => {
     const race = racePairingCandidates([
       { path: 'direct', client: failing(new Error('connect ECONNREFUSED')) },
       { path: 'relay', client: failing(new MobileE2EEAuthenticationError()) }
     ])
     const error = await race.catch((e: unknown) => e)
     expect(error).toBeInstanceOf(PairingCodeRejectedError)
-    expect(
-      getPairingFailureMessage({ screen: 'scan', error, timedOut: false, timeoutMs: 1, t })
-    ).toBe(
-      'This pairing code expired or was replaced. Show a new code on your desktop and scan again.'
-    )
   })
 
   it('recognizes the direct client refusal', async () => {

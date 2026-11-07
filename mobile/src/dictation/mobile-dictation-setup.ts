@@ -58,6 +58,10 @@ export function dictationFailureMessage(message: string): string {
   switch (message) {
     case 'dictation_already_active':
       return translate('dictation.setup.alreadyActive', fallback)
+    case 'dictation_session_limit':
+      return translate('dictation.setup.sessionLimit', fallback)
+    case 'dictation_model_busy':
+      return translate('dictation.setup.modelBusy', fallback)
     case 'dictation_requires_mobile_client':
       return translate('dictation.setup.repairRequired', fallback)
     case 'dictation_owner_mismatch':

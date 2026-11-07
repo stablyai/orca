@@ -1903,13 +1903,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Der Zielarbeitsbereich ist nicht mehr verfügbar.",
-        "16a21d6413": "Die erneute SSH-Verbindung erfordert die interaktive Eingabe von Zugangsdaten.",
-        "386db94f3e": "Das Zielprojekt ist nicht mehr verfügbar.",
-        "3ad7d77f57": "Der Zielarbeitsbereich befindet sich auf einem anderen Host als das Ausführungsziel dieser Automatisierung.",
-        "workspaceHostUnresolved": "Der Zielarbeitsbereich erstreckt sich über mehrere Hosts, daher steht für diese Ausführung kein einzelner Host zur Verfügung."
-      },
       "useComposerState": {
         "b2ead86962": "Die PR-Basis konnte nicht ermittelt werden.",
         "3db83fc58a": "Auf diesem Host ist kein Projektpfad für Anhänge verfügbar.",
@@ -11295,7 +11288,11 @@
               "micDefault": "Systemstandard",
               "dictationLanguageTitle": "Diktiersprache",
               "dictationLanguageDescription": "Teile dem Sprachmodell mit, welche Sprache du sprichst.",
-              "dictationLanguageKeyword": "Sprache"
+              "dictationLanguageKeyword": "Sprache",
+              "modelUnloadTitle": "Sprachmodell entladen",
+              "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
+              "modelUnloadKeyword": "entladen",
+              "modelMemoryKeyword": "speicher"
             }
           }
         },
@@ -17549,7 +17546,10 @@
           "reuseLiveSession": "Laufende Sitzung wiederverwenden",
           "freshEachRun": "Bei jeder Ausführung neu",
           "precheckEnabled": "Aktiviert, {{timeout}}",
-          "precheckNone": "Keine"
+          "precheckNone": "Keine",
+          "migrate": "Migrieren",
+          "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
+          "needsMigration": "Migration erforderlich"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -20641,6 +20641,13 @@
           "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
           "title": "Diktiersprache",
           "auto": "Automatisch erkennen"
+        },
+        "modelUnload": {
+          "title": "Sprachmodell entladen",
+          "description": "Wie lange das lokale Modell nach dem Diktieren im Speicher bleibt. Solange es geladen ist, beginnt das Diktieren sofort; „Sofort“ gibt den Speicher frei, sodass jedes Diktat auf das Laden des Modells wartet.",
+          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
+          "never": "Nie",
+          "immediately": "Sofort"
         }
       }
     },
@@ -23011,6 +23018,7 @@
       "noRunnableHost": "Dieser Automatisierung fehlt ein Host zur Ausführung.",
       "wslMoveInProgress": "Das Projekt dieser Automatisierung wird auf seinen WSL-Host verschoben. Deshalb hat Orca diese Ausführung übersprungen. Die Ausführungen werden nach Abschluss des Verschiebens fortgesetzt.",
       "wslMoveOwnedByHost": "Das Projekt dieser Automatisierung läuft jetzt auf seinem WSL-Host, der die Automatisierung dort ausführt. Orca führt diese lokale Kopie nicht mehr aus.",
+      "managedHostServer": "Migration zu {{host}} erforderlich",
       "missedGraceWindow": "Bei der nächsten Prüfung durch Orca war die Nachholfrist für diese verpasste Ausführung bereits abgelaufen.",
       "targetMissing": "Der Host der Automatisierung ist nicht mehr registriert. Daher gibt es für diese Automatisierung keinen Ausführungsort.",
       "targetReplaced": "Der Host der Automatisierung wurde entfernt und erneut registriert. Daher muss diese Automatisierung vor der Ausführung erneut zugeordnet werden.",
@@ -23052,6 +23060,17 @@
         "effortRepeated": "Zusätzliche Argumente legen den Denkaufwand mehrfach fest."
       },
       "hostUpdateRequired": "Orca auf diesem Host aktualisieren, um zusätzliche Argumente zu verwenden."
+    },
+    "setupTrust": {
+      "reviewTitle": "Neue Einrichtungsbefehle für diese Automatisierung genehmigen?",
+      "reviewBody": "Eine Ausführung hat die Einrichtung übersprungen, weil sich die Einrichtungsbefehle in der <code>orca.yaml</code> ihres Branches geändert haben. Nach der Genehmigung verwenden spätere Ausführungen diese Befehle. Genehmige nur, wenn du <repo/> vertraust.",
+      "approve": "Genehmigen",
+      "approved": "Einrichtung genehmigt. Spätere Ausführungen dieser Automatisierung führen sie aus.",
+      "skippedSinceApproved": "Die Einrichtung wurde bei dieser Ausführung nicht ausgeführt, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Sie wurden inzwischen genehmigt, daher führen spätere Ausführungen sie aus.",
+      "skippedReview": "Die Einrichtung wurde nicht ausgeführt: Der Branch dieser Ausführung enthält andere orca.yaml-Einrichtungsbefehle als die für diese Automatisierung genehmigten. Prüfe sie, damit spätere Ausführungen die Einrichtung ausführen.",
+      "reviewAction": "Einrichtung prüfen und genehmigen",
+      "listSkipped": "Einrichtung übersprungen",
+      "listSkippedTitle": "Die letzte Ausführung hat die Einrichtung übersprungen, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Prüfe sie über das Aktionsmenü."
     }
   },
   "codeHost": {
