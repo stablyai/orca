@@ -15,6 +15,10 @@ import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-inpu
 import { classifyMobileNativeChatSend } from '../mobile-native-chat-send-classification'
 import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
 import {
+  beginMobileNativeChatInFlightSend,
+  settleMobileNativeChatInFlightSend
+} from '../composer/mobile-native-chat-in-flight-sends'
+import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
 } from '../mobile-native-chat-terminal-write-lock'
@@ -64,7 +68,8 @@ export function useMobileNativeChatMessageSend(args: {
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
-    onUnconfirmed: () => void
+    onUnconfirmed: () => void,
+    inFlightId?: string | null
   ) => void
   onSendError: (message: string) => void
 }): MobileNativeChatMessageSend {
@@ -92,7 +97,7 @@ export function useMobileNativeChatMessageSend(args: {
       recordControlSend: boolean,
       sharedDeadline?: number,
       sentAt?: number,
-      onHandBack?: () => void
+      intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
@@ -125,6 +130,13 @@ export function useMobileNativeChatMessageSend(args: {
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
+      // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
+      const inFlightId = syncComposer
+        ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
+            command: classification !== 'chat',
+            carried: intent?.carried
+          })
+        : null
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
@@ -150,6 +162,7 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText)
           }
+          settleMobileNativeChatInFlightSend(inFlightId)
           onSendError('Message not sent')
           return 'rejected'
         }
@@ -181,24 +194,31 @@ export function useMobileNativeChatMessageSend(args: {
       if (outcome === 'unknown') {
         if (classification === 'chat') {
           // Lost acknowledgement proves no failure; wait for the transcript, then hand back text it never showed.
-          holdUnconfirmedSend(origin, text, () => {
-            // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
-            if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
-              onSendError(UNCONFIRMED_SEND_MESSAGE)
-              return
-            }
-            restoreRejectedDraft(origin, draftText)
-            onHandBack?.()
-            onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
-          })
+          holdUnconfirmedSend(
+            origin,
+            text,
+            () => {
+              // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
+              if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
+                onSendError(UNCONFIRMED_SEND_MESSAGE)
+                return
+              }
+              restoreRejectedDraft(origin, draftText)
+              intent?.onHandBack?.()
+              onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+            },
+            inFlightId
+          )
         } else {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })
           }
+          settleMobileNativeChatInFlightSend(inFlightId, 'sent')
           onSendError(UNCONFIRMED_SEND_MESSAGE)
         }
         return 'unknown'
       }
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
       if (outcome === 'rejected') {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
@@ -240,7 +260,7 @@ export function useMobileNativeChatMessageSend(args: {
       _attachments?: readonly unknown[],
       sentAt?: number,
       intent?: MobileNativeChatSendIntent
-    ) => sendMessage(text, images, true, true, deadline, sentAt, intent?.onHandBack),
+    ) => sendMessage(text, images, true, true, deadline, sentAt, intent),
     [sendMessage]
   )
 

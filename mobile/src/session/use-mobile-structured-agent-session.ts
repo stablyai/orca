@@ -120,7 +120,7 @@ export function useMobileStructuredAgentSession(
   })
 
   const sends = useMobileStructuredSends({
-    sessionKey,
+    ...stateArgs,
     cursor: state.cursor,
     submissions: state.submissions,
     queuedMessages,
@@ -186,9 +186,7 @@ export function useMobileStructuredAgentSession(
     commandsWait,
     stateRef,
     stopping: turnIndicator.stopping,
-    accept: sends.accept,
-    acknowledge: sends.acknowledge,
-    reject: sends.reject,
+    ...sends,
     commandPending: commandPendingRef,
     sendsOut,
     controller: goal.commands,

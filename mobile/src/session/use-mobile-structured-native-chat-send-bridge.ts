@@ -13,7 +13,13 @@ import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
 } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  beginMobileNativeChatInFlightSend,
+  settleMobileNativeChatInFlightSend
+} from './native-chat/composer/mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import { structuredSessionOperationId } from './structured-session-operation-id'
+import { isSlashCommandDraft } from '../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
@@ -69,9 +75,17 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
+      // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
+      const clientMessageId = structuredSessionOperationId()
+      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
+        clientMessageId,
+        command: intent?.goal === true || isSlashCommandDraft(text),
+        carried: intent?.carried
+      })
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
         ...intent,
+        clientMessageId,
         onCreated: (id) => {
           created.clientMessageId = id
           intent?.onCreated?.(id)
@@ -81,15 +95,19 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
-      if (outcome === 'rejected') {
-        handBack()
-      } else if (outcome === 'unknown' && created.clientMessageId) {
+      if (outcome === 'unknown' && created.clientMessageId) {
         // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
         holdUnconfirmed(created.clientMessageId, () => {
           handBack()
           intent?.onHandBack?.()
           onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+          settleMobileNativeChatInFlightSend(inFlightId)
         })
+        return outcome
+      }
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
+      if (outcome === 'rejected') {
+        handBack()
       }
       return outcome
     },
