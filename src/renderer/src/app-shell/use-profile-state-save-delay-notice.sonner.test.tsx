@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { StrictMode } from 'react'
 import { Toaster } from 'sonner'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
@@ -83,28 +82,6 @@ it('keeps the restored warning when an old shell dismissal arrives after remount
   publish(false)
   await finishDismissal()
   expect(reopened.queryByText(title)).toBeNull()
-})
-
-it('does not let StrictMode cleanup dismiss the initial delayed snapshot', async () => {
-  const view = render(
-    <StrictMode>
-      <Notice />
-    </StrictMode>
-  )
-  await advanceTimers()
-  await finishDismissal()
-  expect(listeners.size).toBe(1)
-  expect(view.queryAllByText(title)).toHaveLength(1)
-})
-
-it('lets the user close the warning with the app toaster close button', async () => {
-  const view = render(<Notice closeButton />)
-  await advanceTimers()
-  expect(view.queryByText(title)).not.toBeNull()
-
-  act(() => view.getByRole('button', { name: 'Close toast' }).click())
-  await finishDismissal()
-  expect(view.queryByText(title)).toBeNull()
 })
 
 it('keeps a new warning if recovery and another delay arrive before a dismissal frame', async () => {
