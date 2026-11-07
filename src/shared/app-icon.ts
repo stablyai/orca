@@ -4,12 +4,37 @@ export const APP_ICON_OPTIONS = [
   { id: 'blue', label: 'Blue Orca' }
 ] as const
 
-export type AppIconId = (typeof APP_ICON_OPTIONS)[number]['id']
+export type BuiltInAppIconId = (typeof APP_ICON_OPTIONS)[number]['id']
+
+// Why one id, not a stored path: the imported image always lives at a fixed userData location.
+export const CUSTOM_APP_ICON_ID = 'custom'
+
+export type AppIconId = BuiltInAppIconId | typeof CUSTOM_APP_ICON_ID
 
 export const DEFAULT_APP_ICON_ID: AppIconId = 'classic'
 
-export function normalizeAppIconId(value: unknown): AppIconId {
-  return APP_ICON_OPTIONS.some((option) => option.id === value)
-    ? (value as AppIconId)
-    : DEFAULT_APP_ICON_ID
+function isAppIconId(value: unknown): value is AppIconId {
+  return value === CUSTOM_APP_ICON_ID || APP_ICON_OPTIONS.some((option) => option.id === value)
 }
+
+export function normalizeAppIconId(value: unknown): AppIconId {
+  return isAppIconId(value) ? value : DEFAULT_APP_ICON_ID
+}
+
+export const CUSTOM_APP_ICON_MAX_BYTES = 10 * 1024 * 1024
+export const CUSTOM_APP_ICON_MIN_SIDE = 64
+export const CUSTOM_APP_ICON_MAX_SIDE = 4096
+
+export type CustomAppIconImportFailureCode =
+  | 'unsupportedFormat'
+  | 'unreadable'
+  | 'tooLarge'
+  | 'notSquare'
+  | 'tooSmall'
+  | 'tooBig'
+  | 'undecodable'
+  | 'saveFailed'
+
+export type CustomAppIconImportResult =
+  | { ok: true; previewDataUrl: string }
+  | { ok: false; code: CustomAppIconImportFailureCode }
