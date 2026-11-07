@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { isWindowsDesktopClient } from '@/lib/windows-path-access'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { WINDOWS_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-platform-defaults'
@@ -24,14 +25,23 @@ function weightsRenderAlike(fontFamily: string, first: number, second: number): 
   if (!context) {
     return false
   }
-  const rasterize = (weight: number): Uint8ClampedArray => {
+  const rasterize = (weight: number): Uint8ClampedArray | null => {
     context.clearRect(0, 0, canvas.width, canvas.height)
+    context.font = '1px serif'
+    const rejected = context.font
     context.font = `${weight} 32px ${fontFamily}`
+    // An unparsable family leaves the sentinel font, which would compare equal and hide the notice.
+    if (context.font === rejected) {
+      return null
+    }
     context.fillText(PROBE_TEXT, 0, 36)
     return context.getImageData(0, 0, canvas.width, canvas.height).data
   }
   const firstPixels = rasterize(first)
   const secondPixels = rasterize(second)
+  if (!firstPixels || !secondPixels) {
+    return false
+  }
   return firstPixels.every((value, index) => value === secondPixels[index])
 }
 
@@ -67,9 +77,15 @@ function TerminalFontWeightChoice(): React.JSX.Element {
         }
         options={choices.map((choice) => ({
           value: choice.weight,
+          ariaLabel: `${choice.label}, ${choice.weight}`,
           label: (
-            <span className="flex flex-col items-center gap-0.5 py-0.5">
-              <span className="text-lg" style={{ fontFamily, fontWeight: choice.weight }}>
+            // The button must be the pointer target, or sonner reads a quick click as a swipe.
+            <span className="pointer-events-none flex flex-col items-center gap-0.5 py-0.5">
+              <span
+                aria-hidden
+                className="text-lg"
+                style={{ fontFamily, fontWeight: choice.weight }}
+              >
                 {SAMPLE_TEXT}
               </span>
               <span className="text-xs">
@@ -84,9 +100,13 @@ function TerminalFontWeightChoice(): React.JSX.Element {
 }
 
 /** One persistent choice for Windows profiles moved off the old 500 default; it returns until Okay or close. */
-export function useWindowsTerminalFontWeightNotice(): void {
+export function useWindowsTerminalFontWeightNotice(persistedUIReady: boolean): void {
+  // The probe measures this client's fonts, so only the Windows desktop may settle the notice.
   const noticePending = useAppStore(
-    (s) => s.settings?.terminalFontWeightWindowsRegular === 'notice-pending'
+    (s) =>
+      persistedUIReady &&
+      isWindowsDesktopClient() &&
+      s.settings?.terminalFontWeightWindowsRegular === 'notice-pending'
   )
   const weightChosenElsewhere = useAppStore(
     (s) => noticePending && !CHOICE_WEIGHTS.includes(s.settings?.terminalFontWeight ?? Number.NaN)

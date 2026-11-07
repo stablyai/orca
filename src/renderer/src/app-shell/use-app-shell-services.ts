@@ -49,7 +49,7 @@ export function useAppShellServices(): void {
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
-  useWindowsTerminalFontWeightNotice()
+  useWindowsTerminalFontWeightNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
