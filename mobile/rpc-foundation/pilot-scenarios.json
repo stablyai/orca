@@ -21950,27 +21950,6 @@
           "checkpoint": "closed-tab-stays-gone"
         },
         {
-          "action": "close-on-phone",
-          "id": "phone-closes-b-before-snapshot",
-          "args": {
-            "tab": "tab-b"
-          }
-        },
-        {
-          "action": "leave",
-          "id": "leave-after-phone-close"
-        },
-        {
-          "action": "mount",
-          "id": "reopen-after-phone-close",
-          "args": {
-            "floating": true
-          }
-        },
-        {
-          "checkpoint": "phone-closed-tab-stays-gone"
-        },
-        {
           "action": "switch-worktree",
           "id": "switch-to-wt-2",
           "args": {

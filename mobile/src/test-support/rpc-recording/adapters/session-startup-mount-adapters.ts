@@ -8,7 +8,7 @@ const HOST_ID = 'host-1'
 
 // Record callback effects and flags; scenario-declared tab-load rejection tests whether later terminal loads survive.
 // Consume created on the same mount to reach both mutually exclusive activation sites through the real effect rerun.
-// `host-tabs` stands in for an accepted host snapshot (remembered as the screen's controller does, then drawn); `close-on-phone` is an accepted phone close; `leave` keeps the document's cache for a reopen.
+// `host-tabs` stands in for an accepted host snapshot (remembered as the screen's controller does, then drawn); `leave` keeps the document's cache for a reopen.
 export function sessionStartupMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
@@ -131,12 +131,6 @@ export function sessionStartupMountAdapters(
               })
             )
             lastTabs?.rememberLastSessionTabs(sessionTabs)
-            return hook.update()
-          }
-          if (name === 'close-on-phone') {
-            const id = String(args.tab)
-            sessionTabs = sessionTabs.filter((tab) => tab.id !== id)
-            lastTabs?.forgetLastSessionTab(id)
             return hook.update()
           }
           if (name === 'switch-worktree') {

@@ -39,7 +39,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     forceReconnectHost
   } = scope
   // A strip drawn from cache has no active tab until the host's snapshot lands, so the body shows a state, not an empty frame.
-  const nothingActive = scope.activeSessionTab === null
+  const nothingActive = scope.activeSessionTab === null && !activeHandle
   const showLoadingState = connState === 'connected' && !terminalsLoaded && nothingActive
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
