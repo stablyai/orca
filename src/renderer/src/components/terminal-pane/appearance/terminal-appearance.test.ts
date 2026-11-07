@@ -9,7 +9,7 @@ import {
 } from './terminal-appearance'
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { _resetTerminalViewAttributesPublisherForTest } from '../terminal-view-attributes-publisher'
+import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 
 function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {

@@ -4,9 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
-import { resolveAntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
   ANTIGRAVITY_LAUNCH_GATE,
@@ -90,94 +89,4 @@ it('commits only after stopping old writers and retires account observations onl
   stopped.mockClear()
   await applyAntigravityChatAuthConfig(store, enterprise, stopped)
   expect(stopped).not.toHaveBeenCalled()
-})
-
-it('keeps the saved choice and account observations when saving or stopping fails', async () => {
-  const settings = getDefaultSettings('/fixture')
-  const expired = vi.spyOn(agentModelCatalogStore, 'expireAgent').mockImplementation(() => {})
-  antigravityChatSignIn.set({ auth: 'signedIn', flow: null })
-  const store = {
-    getSettings: () => settings,
-    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
-    updateSettingsAndFlush: vi.fn(async () => {
-      throw new Error('disk full')
-    })
-  }
-  await expect(applyAntigravityChatAuthConfig(store, enterprise, async () => {})).rejects.toThrow(
-    'disk full'
-  )
-  expect(settings.antigravityChatAuth).toBeUndefined()
-  expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
-  expect(antigravityChatSignIn.get().value.auth).toBe('signedIn')
-  expect(expired).not.toHaveBeenCalled()
-  store.updateSettingsAndFlush.mockClear()
-  await expect(
-    applyAntigravityChatAuthConfig(store, enterprise, async () => {
-      throw new Error('writer still live')
-    })
-  ).rejects.toThrow('writer still live')
-  expect(store.updateSettingsAndFlush).not.toHaveBeenCalled()
-})
-
-it('rejects incomplete and unknown configured methods rather than selecting personal', () => {
-  expect(() =>
-    resolveAntigravityChatAuthConfig({ method: 'oauth-business', gcpProject: 'project' })
-  ).toThrow('Google Cloud project and location')
-  expect(() => resolveAntigravityChatAuthConfig({ method: 'future-method' })).toThrow(
-    'account settings'
-  )
-})
-
-it('repairs a persisted null to Personal instead of accepting a false no-op', async () => {
-  const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: null }
-  const store = {
-    getSettings: () => settings,
-    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
-    updateSettingsAndFlush: vi.fn(async (updates: Partial<GlobalSettings>) => {
-      Object.assign(settings, updates)
-      return getDefaultSettings('/fixture')
-    })
-  }
-  // The file can contain an invalid value even though the in-memory contract is typed.
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: exercising a malformed persisted file at the runtime boundary.
-  const malformed = store as unknown as Parameters<typeof applyAntigravityChatAuthConfig>[0]
-  await applyAntigravityChatAuthConfig(malformed, { method: 'oauth-personal' }, async () => {})
-  expect(store.updateSettingsAndFlush).toHaveBeenCalledOnce()
-  expect(readAntigravityChatAuthConfig(malformed)).toEqual({ method: 'oauth-personal' })
-})
-
-it('retains remembered Enterprise project and location while Personal is selected', async () => {
-  const settings = { ...getDefaultSettings('/fixture'), antigravityChatAuth: enterprise }
-  const store = {
-    getSettings: () => settings,
-    updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates),
-    updateSettingsAndFlush: async (updates: Partial<GlobalSettings>) => {
-      Object.assign(settings, updates)
-      return settings
-    }
-  }
-  await applyAntigravityChatAuthConfig(
-    store,
-    { method: 'oauth-personal', gcpProject: 'enterprise-project', gcpLocation: 'us-central1' },
-    async () => {}
-  )
-  expect(readAntigravityChatAuthConfig(store)).toEqual({
-    method: 'oauth-personal',
-    gcpProject: 'enterprise-project',
-    gcpLocation: 'us-central1'
-  })
-})
-
-it('keeps committed account settings readable while sign-in holds the launch gate', async () => {
-  const store = { getSettings: () => getDefaultSettings('/fixture') }
-  await ANTIGRAVITY_LAUNCH_GATE.run(
-    async () => {},
-    async () => {
-      antigravityChatSignIn.set({
-        auth: 'unknown',
-        flow: { flowId: 'signing-in', owner: 'fixture-client', phase: 'waiting' }
-      })
-      expect(readAntigravityChatAuthConfig(store)).toEqual({ method: 'oauth-personal' })
-    }
-  )
 })

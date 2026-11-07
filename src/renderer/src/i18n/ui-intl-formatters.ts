@@ -50,6 +50,25 @@ export function uiNumberFormat(options: Intl.NumberFormatOptions): Intl.NumberFo
   )
 }
 
+// Intl formatter caches key on option identity, so these must be module constants.
+const MINUTE_UNIT_FORMAT: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'minute',
+  unitDisplay: 'long'
+}
+const HOUR_UNIT_FORMAT: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'hour',
+  unitDisplay: 'long'
+}
+
+/** "45 minutes", or "2 hours" for whole hours, in the UI language. */
+export function formatMinutesDuration(minutes: number): string {
+  return minutes % 60 === 0
+    ? uiNumberFormat(HOUR_UNIT_FORMAT).format(minutes / 60)
+    : uiNumberFormat(MINUTE_UNIT_FORMAT).format(minutes)
+}
+
 export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
   return cachedFormatter(
     collators,

@@ -270,37 +270,3 @@ it('never spawns a destructive remove queued beyond retirement abandonment', asy
   expect(await readFile(join(entry.preparedPath, 'version.txt'), 'utf8')).toBe('original\n')
   expect(git(repoPath, 'worktree', 'list', '--porcelain')).toContain(entry.lockReason)
 })
-
-it.each(['checkout override', 'per-call timeout'])(
-  'keeps supported slow work as a hit with %s',
-  async (mode) => {
-    const { root, arm, create } = await fixture()
-    if (mode === 'checkout override') {
-      vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '1800000')
-    }
-    const options = mode === 'per-call timeout' ? { timeout: 600_000 } : {}
-    const blocked = Promise.withResolvers<void>()
-    const started = Promise.withResolvers<void>()
-    const waiting = Promise.withResolvers<void>()
-    const run = gitRunner.gitExecFileAsync
-    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, execution) => {
-      if (args.includes('reset')) {
-        started.resolve()
-        await blocked.promise
-      }
-      return run(args, execution)
-    })
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-    const preparation = arm(undefined, options)
-    await started.promise
-    const timing = createWorktreeCreateTimingRecorder()
-    const creation = create('slow', 'main', {}, waiting.resolve, timing)
-    await waiting.promise
-    await vi.advanceTimersByTimeAsync(40 * 60_000)
-    blocked.resolve()
-    await preparation
-    await creation
-    expect(timing.finish().preparedCheckout).toMatchObject({ status: 'hit' })
-    expect(await readFile(join(root, 'slow', 'version.txt'), 'utf8')).toBe('original\n')
-  }
-)

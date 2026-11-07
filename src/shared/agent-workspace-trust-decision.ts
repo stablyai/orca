@@ -29,3 +29,10 @@ export function needsAgentWorkspaceTrustDecision(
 ): boolean {
   return globalEnabled !== false && repoDecision === undefined
 }
+
+export function resolveAgentWorkspaceTrustOwner(args: {
+  worktreeId?: string
+  trustWorktreeId?: string
+}): string | undefined {
+  return args.trustWorktreeId ?? args.worktreeId
+}

@@ -5,7 +5,7 @@ import { mocks, hostMocks } from './launch-work-item-direct-test-fixture'
 import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
 
 import * as inventory from '../../../agent-detection-target-inventory'
-import * as localCapabilities from '@/runtime/local-runtime-capabilities'
+import * as localCapabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 
@@ -111,7 +111,6 @@ describe('direct workspace defaults', () => {
         actionId: 'fixChecks',
         repoId: 'repo-1',
         repo: null,
-        settings: useAppStore.getState().settings,
         promptDelivery: 'submit-after-ready',
         launchPlatform: 'darwin',
         launchSource: 'task_page',

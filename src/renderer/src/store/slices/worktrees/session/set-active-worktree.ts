@@ -2,7 +2,7 @@ import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { projectWorktreeTabModelReconciliation } from '../../tabs'
-import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
+import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {

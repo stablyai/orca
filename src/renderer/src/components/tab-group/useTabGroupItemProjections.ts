@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -106,9 +106,9 @@ export function useTabGroupItemProjections({
     () =>
       groupTabs
         .filter((item) => isEditorTabContentType(item.contentType))
-        .map((item) => {
+        .map((item): GroupEditorItem | null => {
           const file = openFileById.get(item.entityId)
-          return file ? { ...file, tabId: item.id } : null
+          return file ? { ...file, isPreview: item.isPreview, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
     [groupTabs, openFileById]

@@ -234,7 +234,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         enableMainAuthority()
         const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
         mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
-        const { _resetTerminalPaneRecoveryForTests } = await import('../../terminal-pane-recovery')
+        const { _resetTerminalPaneRecoveryForTests } =
+          await import('../../render-health/recovery/terminal-pane-recovery')
         _resetTerminalPaneRecoveryForTests()
         const deps = createDeps({ isVisibleRef: { current: false } })
         const { pane, dataCallback } = await connectHiddenPane(deps)
@@ -324,7 +325,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           onPtySpawn?: (ptyId: string) => void
         }
         transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler = await import('../../terminal-side-effect-facts-handler')
+        const factsHandler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
 
         // Hidden Codex startups use the ordinary delivery gate; main owns startup query replies.
         dataCallback('startup probe output\r\n')
@@ -348,7 +350,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           onPtySpawn?: (ptyId: string) => void
         }
         transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler = await import('../../terminal-side-effect-facts-handler')
+        const factsHandler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
 
         factsHandler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-id',
@@ -380,7 +383,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           onPtySpawn?: (ptyId: string) => void
         }
         transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler = await import('../../terminal-side-effect-facts-handler')
+        const factsHandler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
 
         factsHandler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-id',
@@ -412,7 +416,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
           onPtySpawn?: (ptyId: string) => void
         }
         transportOptions.onPtySpawn?.('pty-id')
-        const factsHandler = await import('../../terminal-side-effect-facts-handler')
+        const factsHandler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         factsHandler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-id',
           seq: 12,
@@ -493,7 +498,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         expect(setHiddenRendererPty).not.toHaveBeenCalled()
 
         // Why: gate off keeps the byte-scan responder authoritative — the fact must not produce a second reply.
-        const factsHandler = await import('../../terminal-side-effect-facts-handler')
+        const factsHandler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         factsHandler._dispatchTerminalSideEffectBatchForTest({
           ptyId: 'pty-id',
           seq: 12,

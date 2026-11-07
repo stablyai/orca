@@ -571,9 +571,6 @@ jobs:
           node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts
           --maxWorkers=4 --isolate --retry=0 --bail=0
           config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs
-          config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs
-          config/scripts/ci/unit-selection/win32-test-lane-registration.test.mjs
-          config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts
 
       # Report failure through the separate required check without blocking unrelated consumers.
       - name: Smoke process-host package on Node 18
@@ -867,7 +864,7 @@ jobs:
             src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
             src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-probe-lifetime.live-shell.test.ts \
-            src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \

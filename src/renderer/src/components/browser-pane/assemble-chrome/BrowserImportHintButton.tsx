@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isLinuxUserAgent, isMacUserAgent } from '@/lib/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'

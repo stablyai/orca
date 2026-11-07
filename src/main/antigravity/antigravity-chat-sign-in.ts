@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as accountTypes from '../../shared/antigravity-account-types'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
-import { ANTIGRAVITY_LAUNCH_SPEC, type AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { acpPrivateTempConnect } from '../acp/acp-private-temp'
 import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import {
@@ -158,7 +158,7 @@ async function runFlow(current: Flow, host: AntigravityChatSignInHost): Promise<
 }
 
 async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<void> {
-  const spec: AcpLaunchSpec = ANTIGRAVITY_LAUNCH_SPEC
+  const spec = ANTIGRAVITY_LAUNCH_SPEC
   const { signal } = current.ended
   const closed = (): void => signal.throwIfAborted()
   const publishModels = captureSignInModelPublisher(
@@ -174,7 +174,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
       dataDirectory
     })
   // Reuse chat launch resolution without downloading a runtime.
-  const launch = await prepareAcpLaunch(deps, resolve, closed)
+  const launch = await prepareAcpLaunch(resolve, closed)
   const connect = await acpPrivateTempConnect(deps, closed)
   const home = launch.env.GEMINI_HOME
   const cwd = await mkdtemp(join(tmpdir(), 'orca-antigravity-sign-in-'))
@@ -193,7 +193,7 @@ async function signIn(current: Flow, host: AntigravityChatSignInHost): Promise<v
   }
   try {
     connection = connect(
-      { ...launch, args: spec.args({ fullAccess: false, pluginDir: null }), cwd },
+      { ...launch, args: launch.spec.args({ fullAccess: false, pluginDir: null }), cwd },
       {
         clientInfo: { name: 'orca', version: '1' },
         signIn: { ...ANTIGRAVITY_LAUNCH_SPEC.signIn, link: (link) => receiveLink(current, link) }

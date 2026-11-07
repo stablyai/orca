@@ -180,7 +180,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   }
   installPluginImageProtocolHandler({
     cache: pluginImageCache,
-    findValidPlugin: (pluginKey) => state.pluginService?.findValidPlugin(pluginKey) ?? null
+    findValidPlugin: (pluginKey) => state.pluginService?.findValidPlugin(pluginKey) ?? null,
+    findApprovedPlugin: (pluginKey) =>
+      state.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
   })
   const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
     root: bundledPluginRoot,

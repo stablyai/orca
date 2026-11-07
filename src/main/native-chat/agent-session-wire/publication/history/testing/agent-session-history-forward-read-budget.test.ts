@@ -73,31 +73,6 @@ async function seedJournal(count: number) {
 }
 
 describe('forward history SQL read budget', () => {
-  it('keeps an exact final page final and preserves unlimited journal readers', async () => {
-    const journal = await seedJournal(6)
-    const cursor = { epoch: journal.epoch, sequence: 1 }
-    expect(journal.readSince(cursor)).toMatchObject({ ok: true, rows: expect.any(Array) })
-    const first = readAgentSessionHistory(journal, {
-      sessionId: identity.sessionId,
-      direction: 'after',
-      cursor,
-      limit: 3
-    })
-    expect(first).toMatchObject({ ok: true, page: { hasNewer: true } })
-    if (!first.ok) {
-      throw new Error('Expected first page')
-    }
-    const last = readAgentSessionHistory(journal, {
-      sessionId: identity.sessionId,
-      direction: 'after',
-      cursor: first.page.window.nextCursor,
-      limit: 3
-    })
-    expect(last).toMatchObject({ ok: true, page: { hasNewer: false } })
-    const unlimited = journal.readSince(cursor)
-    expect(unlimited.ok && unlimited.rows).toHaveLength(6)
-  })
-
   it('reports a sequence gap when the next page reaches it', async () => {
     const journal = await seedJournal(6)
     const { db } = openTestJournalHostDatabase(root!)

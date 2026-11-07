@@ -16,7 +16,8 @@ import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from './editor/autosave/editor-autosave'
-import { createTestStore, makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { createTestStore, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useTerminalKeyboardShortcuts } from './use-terminal-keyboard-shortcuts'
 import { agentMenuShortcutLabels } from './tab-bar/agent-menu-shortcut-labels'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
@@ -88,7 +89,7 @@ vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.clos
 vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
   cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
@@ -98,7 +99,9 @@ vi.mock('@/runtime/runtime-worktree-selector', () => ({
 vi.mock('@/runtime/browser-workspace-tab-close', () => ({
   closeBrowserWorkspaceTabOnHosts: () => ({ closesLocally: true, removesVisibleTab: true })
 }))
-vi.mock('../store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews: vi.fn() }))
+vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
+  destroyWorkspaceWebviews: vi.fn()
+}))
 
 const controller = {
   activeWorktreeId: 'repo-1::/repo/worktree',
@@ -395,11 +398,19 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
   })
+
+  it('routes a tab chord to the floating panel when its event target is inside it', () => {
+    mocks.targetInsideFloatingPanel = true
+    nextTab()
+    expect(switchFloatingWorkspaceTab).toHaveBeenCalledWith(mocks.state, 1, 'all-types')
+    expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
 })
 
 describe('tab.closeAll confirmation', () => {
   const worktreeId = controller.activeWorktreeId!
   const closeFile = vi.fn()
+  const closeUnifiedTabs = vi.fn()
   const queueEditorCloseRequests = vi.fn()
   let settle: (confirmed: boolean) => void
 
@@ -413,7 +424,18 @@ describe('tab.closeAll confirmation', () => {
       openFiles: [makeOpenFile({ id: 'file-1', worktreeId })],
       editorBufferIdOf: {},
       editorBufferViews: {},
-      unifiedTabsByWorktree: { [worktreeId]: [] },
+      unifiedTabsByWorktree: {
+        [worktreeId]: [
+          makeUnifiedTab({
+            id: 'file-tab',
+            entityId: 'file-1',
+            worktreeId,
+            groupId: 'group',
+            contentType: 'editor'
+          })
+        ]
+      },
+      closeUnifiedTabs,
       getActiveTab: () => null
     }
     confirmBulkClose.mockImplementation(
@@ -460,7 +482,7 @@ describe('tab.closeAll confirmation', () => {
       await act(async () => {
         settle(true)
       })
-      expect(closeFile).toHaveBeenCalledExactlyOnceWith('file-1')
+      expect(closeUnifiedTabs).toHaveBeenCalledExactlyOnceWith(['file-tab'])
     }
   )
 
@@ -483,7 +505,7 @@ describe('tab.closeAll confirmation', () => {
       settle(true)
     })
     expect(closeFile).not.toHaveBeenCalled()
-    expect(queueEditorCloseRequests).toHaveBeenCalledExactlyOnceWith(['file-1'])
+    expect(queueEditorCloseRequests).toHaveBeenCalledExactlyOnceWith(['file-tab'])
   })
 
   it('skips files pinned while shortcut confirmation is pending', async () => {

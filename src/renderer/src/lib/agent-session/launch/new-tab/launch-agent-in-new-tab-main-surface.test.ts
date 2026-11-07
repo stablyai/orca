@@ -1,13 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { planQueuedPaneAgentLaunch } from '../../../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultSettings
 } from '../../../../../../shared/constants'
 import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import {
+  makeWorktree,
+  makeFolderWorkspace
+} from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { resolveQueuedInitialCwd } from '@/components/terminal-pane/mounting/queued-initial-cwd'
+import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
+import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -28,10 +35,21 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
+vi.mock('@/lib/host-chat-program-acquisition', async (original) => ({
+  ...(await original<object>()),
+  acquireAgentLaunchChoices: async () => ({ detected: ['claude', 'codex'] })
+}))
+
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+
+vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () => ({
+  pasteAgentLaunchPromptOnceReady: async () => ({ delivered: true, failureNotified: false })
+}))
+
 createStoreCascadesMockApi()
 
-import { makeFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { makeFolderWorkspace as makeLaunchFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -71,8 +89,8 @@ describe('launchAgentInNewTab main-window surface', () => {
         nativeChatProviders: { claude: true }
       },
       folderWorkspaces: [
-        makeFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
-        makeFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
+        makeLaunchFolderWorkspace({ id: 'captured', executionHostId: 'local' }),
+        makeLaunchFolderWorkspace({ id: 'captured', executionHostId: 'runtime:rival' })
       ]
     }))
     store.getState().setActiveFolderWorkspace('captured', 'local')
@@ -151,3 +169,118 @@ describe('launchAgentInNewTab main-window surface', () => {
     expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('terminal')
   })
 })
+
+// A new tab can mount during its publication; its first spawn must already own the cwd.
+it.each(
+  (['claude', 'codex'] as const).flatMap((agent) =>
+    (['resolveConflicts', 'fixCommitFailure'] as const).map((actionId) => ({ agent, actionId }))
+  )
+)(
+  'starts section $actionId with $agent outside the folder on its first mount',
+  async ({ agent, actionId }) => {
+    const store = seedMainWindowOnEditor()
+    const folder = makeFolderWorkspace({
+      id: 'feature',
+      folderPath: '/fixture/feat-x',
+      executionHostId: 'local'
+    })
+    const childPath = '/Users/qa/orca/workspaces/app/s-fix'
+    store.setState({
+      folderWorkspaces: [folder],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: MAIN_WORKTREE_ID, repoId: 'repo1', path: childPath, hostId: 'local' })
+        ]
+      }
+    })
+    store.getState().setActiveWorktree('folder:feature')
+    const spawnCwds: string[] = []
+    const starts: ReturnType<typeof store.getState>['pendingStartupByTabId'][string][] = []
+    const mounted = new Set(
+      (store.getState().tabsByWorktree['folder:feature'] ?? []).map((tab) => tab.id)
+    )
+    const unsubscribe = store.subscribe((state) => {
+      for (const tab of state.tabsByWorktree['folder:feature'] ?? []) {
+        if (mounted.has(tab.id) || tab.launchAgent !== agent) {
+          continue
+        }
+        mounted.add(tab.id)
+        starts.push(state.pendingStartupByTabId[tab.id])
+        spawnCwds.push(
+          resolveQueuedInitialCwd(
+            undefined,
+            () => state.consumeTabInitialCwd(tab.id),
+            tab.startupCwd ?? folder.folderPath
+          ).startupCwd
+        )
+        if (tab.agentLaunchPane) {
+          settleAgentLaunchPaneStart(tab.id, tab.agentLaunchPane.leafId, 'section-pty')
+        }
+      }
+    })
+    try {
+      const { runSourceControlAgentActionStart } =
+        await import('@/components/right-sidebar/source-control/ai/runSourceControlAgentActionStart')
+      const recipe = sourceControlActionRecipeEntry({ agentId: agent, surface: 'terminal' })
+      const {
+        launchSourceControlRecoveryAgentWithDefault,
+        getDefaultSourceControlRecoveryLaunchCopy
+      } = await import('@/components/right-sidebar/source-control/ai/recovery-launch')
+      const launched =
+        actionId === 'fixCommitFailure'
+          ? await launchSourceControlRecoveryAgentWithDefault({
+              activeWorktreeId: MAIN_WORKTREE_ID,
+              placementWorkspaceId: 'folder:feature',
+              initialCwd: childPath,
+              activeGroupId: 'folder:feature',
+              activeSourceControlLaunchPlatform: 'darwin',
+              sourceRepoConnectionId: null,
+              executionHostId: 'local',
+              actionId,
+              basePrompt: 'Fix the failed commit',
+              getLaunchActionRecipe: () => recipe,
+              getStoreState: store.getState,
+              copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+            })
+          : await runSourceControlAgentActionStart({
+              selectedAgent: agent,
+              trimmedCommandInput: 'Resolve the conflicts',
+              recipe,
+              saveTargetValue: 'none',
+              actionId: 'resolveConflicts',
+              repoId: 'repo1',
+              repo: store.getState().repos[0] ?? null,
+              worktreeId: MAIN_WORKTREE_ID,
+              placementWorkspaceId: 'folder:feature',
+              initialCwd: childPath,
+              groupId: 'folder:feature',
+              promptDelivery: 'submit-after-ready',
+              launchPlatform: 'darwin',
+              launchSource: 'conflict_resolution',
+              onClose: () => {}
+            })
+      expect(launched).toBe(true)
+      expect(spawnCwds).toEqual(['/Users/qa/orca/workspaces/app/s-fix'])
+      expect(starts).toHaveLength(1)
+      expect(starts[0].trustWorktreeId).toBe(MAIN_WORKTREE_ID)
+      const planned = await planQueuedPaneAgentLaunch(
+        starts[0].agentLaunch,
+        store.getState().settings ?? {},
+        {
+          worktreeId: 'folder:feature',
+          tabId: 'section-tab',
+          leafId: '11111111-1111-4111-8111-111111111111'
+        },
+        { trustWorktreeId: starts[0].trustWorktreeId, cwd: spawnCwds[0] }
+      )
+      expect(planned).toMatchObject({
+        worktreeId: 'folder:feature',
+        trustWorktreeId: MAIN_WORKTREE_ID,
+        cwd: '/Users/qa/orca/workspaces/app/s-fix',
+        launchAgent: agent
+      })
+    } finally {
+      unsubscribe()
+    }
+  }
+)

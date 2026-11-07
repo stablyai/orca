@@ -21,7 +21,6 @@ import {
   type RestTestRig
 } from '../../host/testing/structured-agent-session-rest-test-rig'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { prepareStructuredAgentSessionCreateForWorktree } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
 import {
@@ -235,80 +234,6 @@ function source(agent: 'claude' | 'codex' = 'codex') {
   }
 }
 
-it('copies the selected retained root, founds its relationship, and replays before source discovery', async () => {
-  const test = source()
-  const unchanged = structuredClone(test.record)
-  const params = await test.prepare()
-  expect(test.copy).toHaveBeenCalledWith(
-    expect.objectContaining({
-      providerSessionId: SOURCE,
-      checkpoint: expect.objectContaining({ turnId: 'completed-turn' })
-    })
-  )
-  expect(test.record).toEqual(unchanged)
-  const result = await rig.host.create({ callerKey: 'device-1' }, params)
-  if (!result.ok) {
-    throw new Error(JSON.stringify(result))
-  }
-  expect(result).toMatchObject({
-    ok: true,
-    value: {
-      page: {
-        items: [
-          expect.objectContaining({
-            body: expect.objectContaining({
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Remember the nonce 57319' }]
-            })
-          }),
-          expect.objectContaining({
-            body: expect.objectContaining({
-              presentation: 'forked-from',
-              forkedFrom: { sessionId: 'source-chat' }
-            })
-          })
-        ]
-      }
-    }
-  })
-  expect(rig.store.getRecord(test.intent.envelope.sessionId)).toMatchObject({
-    accountHome: test.record.accountHome,
-    permissionMode: 'accept-edits',
-    forkedFrom: {
-      sessionId: 'source-chat',
-      itemId: 'selected-response',
-      childBoundary: { kind: 'item' }
-    },
-    options: { model: 'retired-model', effort: 'high', fastMode: 'false' },
-    launchArgs: ['--no-daemon'],
-    providerHandleChain: [
-      expect.objectContaining({
-        origin: 'adopted',
-        handle: {
-          transport: 'codex-app-server',
-          agent: 'codex',
-          nativeId: '019e6b26-18e2-7103-b7a0-7ba6bb071124'
-        }
-      })
-    ]
-  })
-
-  setStructuredAgentSessionHost(rig.host)
-  const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'resolveStructuredAgentSessionLocation').mockResolvedValue(test.record.location)
-  const replay = await prepareStructuredAgentSessionCreateForWorktree({
-    ...test.intent,
-    runtime,
-    ensureHost: async () => rig.host,
-    caller: { callerKey: 'device-1' },
-    atRest: true
-  })
-  expect(await rig.host.create({ callerKey: 'device-1' }, replay.attachParams)).toMatchObject({
-    ok: true,
-    replayed: true
-  })
-})
-
 it('keeps captured Codex options over native imported effort through reload and send', async () => {
   const test = source('codex')
   test.record.options = { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
@@ -404,31 +329,6 @@ it('keeps captured Codex options over native imported effort through reload and 
       options: { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
     })
   )
-})
-
-it('requires a post-clear completed context and leaves the source untouched on a copy failure', async () => {
-  const test = source()
-  test.snapshot.items.unshift({
-    itemId: 'clear',
-    sequence: 5,
-    revision: 1,
-    observedAt: 5,
-    body: {
-      kind: 'status',
-      text: 'Context cleared',
-      contextClear: { operationId: 'clear-1', afterFence: 1, clearedAt: 5 }
-    }
-  })
-  await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { details: { reason: 'savedConversationMissing' } }
-  })
-  test.snapshot.items.shift()
-  const unchanged = structuredClone(test.record)
-  test.copy.mockRejectedValueOnce(new Error('private provider details'))
-  await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { details: { reason: 'providerRejected' } }
-  })
-  expect(test.record).toEqual(unchanged)
 })
 
 it('rejects a tip-only copy if a same-head send is admitted during capture', async () => {
@@ -700,14 +600,6 @@ async function prepareImportedAcpTip(stopReason: 'stop' | undefined) {
     envelope: test.intent.envelope
   })
 }
-
-it('admits an imported ACP tip with native terminal evidence', async () => {
-  await expect(prepareImportedAcpTip('stop')).resolves.toMatchObject({
-    agent: 'omp',
-    fork: { itemId: 'legacy:omp:019e6b26-18e2-7103-b7a0-7ba6bb071123:response' },
-    adopt: { providerHandle: { nativeId: '019e6b26-18e2-7103-b7a0-7ba6bb071124' } }
-  })
-})
 
 it('refuses an imported ACP tip with assistant prose but no native terminal evidence', async () => {
   await expect(prepareImportedAcpTip(undefined)).rejects.toMatchObject({

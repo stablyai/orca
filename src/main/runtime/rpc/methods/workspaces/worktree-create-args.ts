@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../shared/worktree/approved-setup-hashes'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import type { z } from 'zod'
@@ -93,9 +94,7 @@ export function buildManagedWorktreeCreateArgs(
       defaultTarget: 'host'
     }),
     setupDecision: params.setupDecision,
-    ...(params.approvedSetupHash !== undefined
-      ? { approvedSetupHash: params.approvedSetupHash }
-      : {}),
+    ...pickApprovedSetupHashes(params),
     ...(params.setupOnly !== undefined ? { setupOnly: params.setupOnly } : {}),
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,

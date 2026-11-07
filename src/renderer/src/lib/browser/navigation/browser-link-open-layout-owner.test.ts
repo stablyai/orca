@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({ getState: vi.fn(), subscribe: vi.fn() }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mocks.getState(), subscribe: mocks.subscribe }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -23,6 +23,7 @@ import type { EditorSaveSettings } from './editor-save-settings'
 import type { NestedWorkerDepthSettings } from './nested-worker-depth'
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-workspace-trust-decision'
+import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -49,4 +50,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EditorSaveSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
-  AgentWorkspaceTrustSettings
+  AgentWorkspaceTrustSettings &
+  KeybindingGlobalSettings

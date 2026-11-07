@@ -749,7 +749,7 @@
         "insecureOrigin": "Orca 拒绝从此页面配对：它是另一台机器上的纯 http 页面，因此网络路径上的任何人都可以替换它并取走配对码。请通过 https、本机的 localhost 或 SSH 隧道打开 Web 客户端。如需仍然允许，服务器操作员可以使用 ORCA_ALLOW_INSECURE_WEB_PAIRING=1 重新启动 Orca。",
         "deviceDowngraded": "此 Orca 服务器不再支持此浏览器的登录密钥（可能已被降级）。请更新服务器，或重新配对此浏览器。",
         "unauthorized": "未授权。请重新配对此 Web 客户端。",
-        "unauthorizedNewLink": "未授权。请索取新的配对链接。"
+        "unauthorizedLinkUsedOrExpired": "未授权。此配对链接可能已过期或已被使用。请在 Orca 中创建新的配对链接并打开。"
       }
     },
     "store": {
@@ -1452,13 +1452,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "目标工作区不再可用。",
-        "16a21d6413": "SSH 重新连接需要交互式凭据。",
-        "386db94f3e": "目标项目不再可用。",
-        "3ad7d77f57": "目标工作区所在的主机与此自动化运行目标不同。",
-        "workspaceHostUnresolved": "目标工作区跨越多个主机，因此此运行没有可供使用的单个主机。"
-      },
       "useComposerState": {
         "b2ead86962": "无法解析 PR 基础引用。",
         "3db83fc58a": "没有可用于附件的远程项目路径。",
@@ -7682,7 +7675,8 @@
           "diagnosticsCopyFailed": "无法复制诊断信息",
           "5e2c7a1f84": "当您在手机上使用终端时，Orca 会将其缩小以适合您的手机屏幕。当您关闭应用程序或切换离开时，这可以控制它是保持手机大小（因此交互式 CLI 工具不会回流）还是将大小调整回桌面。您始终可以使用横幅上的“还原”或“全部还原”来手动调整大小。",
           "codeRefreshesAutomatically": "配对码会自动刷新。复制的配对码最多可使用 10 分钟。",
-          "legacyEncryption": "使用旧版加密。请在此设备上更新 Orca 应用。"
+          "legacyEncryption": "使用旧版加密。请在此设备上更新 Orca 应用。",
+          "olderPairingMethod": "使用较旧的配对方式。请更新这部手机上的 Orca 应用。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "应用商店",
@@ -8083,6 +8077,7 @@
           "6f6d5188ed": "撤销 {{value0}}",
           "434e4a6af6": "当前链接",
           "df142657a5": "尚未使用",
+          "olderPairingMethod": "使用较旧的配对方式。请更新使用此链接的设备上的 Orca。",
           "b18d1764ef": "最后使用 {{value0}}",
           "linkName": "链接 · {{value0}}",
           "activeLinks": "有效链接",
@@ -10610,7 +10605,11 @@
               "micDefault": "系统默认",
               "dictationLanguageTitle": "听写语言",
               "dictationLanguageDescription": "告诉语音模型你说的是哪种语言。",
-              "dictationLanguageKeyword": "语言"
+              "dictationLanguageKeyword": "语言",
+              "modelUnloadTitle": "卸载语音模型",
+              "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
+              "modelUnloadKeyword": "卸载",
+              "modelMemoryKeyword": "内存"
             }
           }
         },
@@ -12929,7 +12928,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚无提交",
-            "781a8bcf7b": "正在加载图表...",
             "d0fb0f4bf2": "刷新提交记录",
             "9f7535d22b": "引用是指向该确切提交的分支或标签名称。它们仅出现在 Git 具有该提交的命名引用的位置。",
             "9289ba0cb9": "什么是参考文献？",
@@ -13297,7 +13295,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 条备注？",
             "markResolved": "标记为已解决",
             "keepFile": "保留文件",
-            "keepDeletion": "保留删除"
+            "keepDeletion": "保留删除",
+            "refreshAll": "全部刷新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -14083,6 +14082,7 @@
             "openLog": "打开日志",
             "revealLog": "显示日志",
             "openWorkingDirectory": "打开工作目录",
+            "revealArtifactsFolder": "显示产物文件夹",
             "copySessionId": "复制会话 ID",
             "copyLogPath": "复制日志路径",
             "messageCount": "{{value0}} 条消息",
@@ -14130,7 +14130,6 @@
             "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "正在加载文件…",
             "b2c3d4e5f6": "此提交没有文件更改",
             "c3d4e5f6a7": "一起打开所有更改"
           },
@@ -16294,7 +16293,8 @@
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
-          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
+          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
+          "stoppedAfterSilence": "静音一分钟后已停止"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",
@@ -16901,7 +16901,10 @@
           "reuseLiveSession": "复用活动会话",
           "freshEachRun": "每次运行新建",
           "precheckEnabled": "已启用，{{timeout}}",
-          "precheckNone": "无"
+          "precheckNone": "无",
+          "migrate": "迁移",
+          "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
+          "needsMigration": "需要迁移"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -17596,6 +17599,10 @@
           "actionsUnavailable": "此客户端不支持插件操作。",
           "messageTooLarge": "消息超过大小限制。",
           "tooManyRequests": "请求过多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "打开此工作树",
+          "reconnect": "请重新连接以查看此工作树的更改。"
         }
       },
       "link": {
@@ -19843,17 +19850,6 @@
           "reviewStatus": "查看每个工作树上的问题状态、审核状态和 CI 检查",
           "managePullRequests": "无需离开 Orca 即可阅读、评论和合并拉取请求"
         }
-      },
-      "agyInstall": {
-        "open": "安装",
-        "title": "安装 Antigravity",
-        "description": "在终端中按 Enter 运行官方安装程序。关闭终端会停止仍在运行的命令。",
-        "target": "安装位置：{{location}}",
-        "thisDevice": "此设备",
-        "terminal": "Antigravity 安装程序",
-        "detected": "已在 PATH 中检测到 Antigravity。安装程序完成后请关闭终端。",
-        "close": "关闭终端",
-        "recheck": "重新检测智能体"
       }
     },
     "jiraUserPicker": {
@@ -19953,6 +19949,13 @@
           "description": "你说的语言。选择自动检测时，模型每次都会自行判断语言。",
           "title": "听写语言",
           "auto": "自动检测"
+        },
+        "modelUnload": {
+          "title": "卸载语音模型",
+          "description": "停止听写后本地模型在内存中保留多久。模型已加载时，听写会立即开始；选择“立即”会释放内存，因此每次听写都要等待模型加载。",
+          "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。",
+          "never": "从不",
+          "immediately": "立即"
         }
       }
     },
@@ -20728,6 +20731,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中启动",
     "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"
@@ -22770,6 +22774,7 @@
       "noRunnableHost": "此自动化没有可运行的主机。",
       "wslMoveInProgress": "此自动化的项目正在移到其 WSL 主机，因此 Orca 跳过了此次运行。移动完成后将恢复运行。",
       "wslMoveOwnedByHost": "此自动化的项目现在在其 WSL 主机上运行，自动化本身也由该主机运行。Orca 不再运行此本地副本。",
+      "managedHostServer": "需要迁移到 {{host}}",
       "missedGraceWindow": "Orca 再次检查时，此次运行的补跑宽限期已过。",
       "targetMissing": "自动化主机已不在注册列表中，因此此自动化已无处运行。",
       "targetReplaced": "自动化主机已被移除并重新注册，因此必须重新关联此自动化后才能运行。",
@@ -22811,6 +22816,17 @@
         "effortRepeated": "额外参数重复设置了推理强度。"
       },
       "hostUpdateRequired": "请更新此主机上的 Orca 以使用额外参数。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要批准此自动化的新设置命令吗？",
+      "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",
+      "approve": "批准",
+      "approved": "已批准设置。此自动化之后的运行将执行它。",
+      "skippedSinceApproved": "由于分支的 orca.yaml 设置命令已更改，此次运行未执行设置。这些命令此后已获批准，之后的运行将执行它们。",
+      "skippedReview": "设置未运行：此次运行分支中的 orca.yaml 设置命令与此自动化已批准的命令不同。请审查它们，以便之后的运行执行设置。",
+      "reviewAction": "审查并批准设置",
+      "listSkipped": "已跳过设置",
+      "listSkippedTitle": "由于分支的 orca.yaml 设置命令已更改，上次运行跳过了设置。请从操作菜单中审查。"
     }
   },
   "codeHost": {
@@ -23168,5 +23184,32 @@
     "discussionAction": "加入讨论",
     "checkAction": "检查兼容性",
     "settingsStatus": "Orca {{version}} 需要 macOS {{macos}} 或更高版本。这是适用于此 Mac 的最新版本。"
+  },
+  "gitGraph": {
+    "copyHash": "复制提交哈希",
+    "parents": "父提交",
+    "files": "文件",
+    "currentBranch": "当前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "选定分支",
+    "searchRefs": "搜索分支和标签",
+    "oldServer": "此服务器的 Orca 版本仅显示当前分支",
+    "copyBranch": "复制分支名称",
+    "switchWorkspace": "切换到工作区",
+    "workspaceClosed": "此分支已不再在其他工作区中打开。",
+    "workspaceCheckFailed": "无法检查此工作区。请在连接后重试。",
+    "refresh": "刷新提交",
+    "branchTag": "分支 / 标签",
+    "graph": "图",
+    "resizeColumn": "调整图形列宽",
+    "message": "消息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "加载更多",
+    "noCommits": "暂无提交",
+    "historyChanged": "历史记录再次发生变化。请刷新 Git 图后重试。",
+    "loadFailed": "无法加载 Git 历史记录",
+    "updateHost": "请更新 {{host}} 上的 Orca 以打开 Git 图",
+    "title": "Git 图"
   }
 }

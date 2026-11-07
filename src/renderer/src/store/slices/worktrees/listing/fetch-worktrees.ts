@@ -1,4 +1,4 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type {
   DirectSshWorktreeFetchOptions,
   WorktreeFetchOptions,

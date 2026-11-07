@@ -130,7 +130,11 @@ export function useNativeChatAvailabilityNotice(input: {
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),
-    content: nativeChatAntigravitySignInContent(unavailable.reason, input.agent),
+    content: nativeChatAntigravitySignInContent(
+      unavailable.reason,
+      input.agent,
+      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined
+    ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

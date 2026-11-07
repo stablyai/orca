@@ -108,11 +108,7 @@ export class AcpStructuredOptions {
   }
 
   matchesNativeRestoredModel(value: string): boolean {
-    if (
-      this.resolvesConfig ||
-      this.picked.has('model') ||
-      (this.dialect.effortChangesModel && this.picked.has('effort'))
-    ) {
+    if (this.resolvesConfig || this.picked.has('model')) {
       return false
     }
     return (
@@ -176,6 +172,15 @@ export class AcpStructuredOptions {
 
   readCommands(): AgentSessionSlashCommand[] | undefined {
     return this.commands
+  }
+
+  offersEffort(value: string): boolean {
+    const option = this.select('thought_level')
+    return !!(
+      option &&
+      (this.dialect.clampsUnlistedEffort ||
+        acpSelectChoices(option).some((choice) => choice.value === value))
+    )
   }
 
   write(key: string, value: string): AcpOptionWrite | null {

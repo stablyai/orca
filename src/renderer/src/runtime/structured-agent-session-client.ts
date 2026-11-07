@@ -6,7 +6,6 @@ import type {
 } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
-import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../shared/agent-session/agent-session-conversation-command'
 import { AGENT_SESSION_ATTENTION_ACK_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-attention-capabilities'
 import {
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
@@ -30,13 +29,15 @@ import {
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY
 } from '../../../shared/agent-session/agent-session-create-capabilities'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
-import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { subscribeRuntimeRpc } from './rpc/subscriptions/runtime-rpc-subscribe'
+import { STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS } from './native-chat/requests/structured-agent-session-request-timeouts'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
  *  proved it understands it. */
@@ -166,17 +167,6 @@ export async function readStructuredAgentSessionItem(
   )
   return result?.item ?? null
 }
-
-const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
-  ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
-  // The host may start an agent at rest before rewinding it, as it does for a command.
-  ['agentSession.rewind', 195_000],
-  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
-  ['agentSession.modelCatalog', 90_000],
-  ['agentSession.sleepWorkspace', 120_000],
-  // All bounded-concurrency provider starts and dispatch settlements precede the reply.
-  ['agentSession.restartContinue', 600_000]
-])
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,

@@ -4,7 +4,7 @@ import {
   isRuntimeEnvironmentContinuationPending,
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import '@/store/slices/runtime-status'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import {

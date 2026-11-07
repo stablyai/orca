@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { prepareAcpStructuredLaunch } from '../acp/acp-structured-launch-preparation'
@@ -418,7 +418,6 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   const prepareChat = async () =>
     prepareAcpStructuredLaunch(
       {
-        spec: ANTIGRAVITY_LAUNCH_SPEC,
         resolveLaunch: async () => ({
           ...launch,
           prefixArgs: [],

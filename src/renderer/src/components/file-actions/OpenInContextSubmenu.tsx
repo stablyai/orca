@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import React, { useCallback } from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
 import {
@@ -7,7 +8,6 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
-import { useAppStore } from '@/store/index'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -33,7 +33,7 @@ export function OpenInContextSubmenu({
   workspaceId,
   owner
 }: OpenInContextSubmenuProps): React.JSX.Element {
-  const openInApplications = useAppStore(
+  const openInApplications = useAppStateValue(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
   const { route: openInRoute, workspace, runtimeSshHost } = useOpenInPathRoute(workspaceId, owner)

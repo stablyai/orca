@@ -17,7 +17,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: mocks.watchHostContact
 }))
 

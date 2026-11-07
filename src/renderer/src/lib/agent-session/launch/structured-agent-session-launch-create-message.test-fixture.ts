@@ -66,7 +66,9 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 // This machine's host closes the chat's tab when asked.
-vi.mock('../../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('../../../runtime/structured-agent-session-status-feed', () => {
   const idle = { status: 'idle', hostExecutionPhase: 'idle' }
   const working = { status: 'working', hostExecutionPhase: 'idle' }

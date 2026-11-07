@@ -2,7 +2,7 @@ import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/stru
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
-import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
@@ -40,7 +40,7 @@ import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees

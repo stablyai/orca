@@ -1,6 +1,6 @@
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { openMobileEmulatorTab } from './open-mobile-emulator-tab'
 import {
   consumePrelaunchedSimulatorSession,
@@ -27,7 +27,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 vi.mock('sonner', () => ({
   toast: {

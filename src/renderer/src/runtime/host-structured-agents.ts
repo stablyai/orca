@@ -9,8 +9,8 @@ import {
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { ensureLocalRuntimeCapabilities } from './hosts/capabilities/local-runtime-capabilities'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 
 /** One registered-agent cache per execution host/runtime. Query only capable hosts; unknown/unsupported hosts offer built-ins. Runtime changes invalidate learned lists until that instance answers. */
 

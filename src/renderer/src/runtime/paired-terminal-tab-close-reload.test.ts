@@ -12,8 +12,8 @@ import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
 import { resetWebSessionCloseReplaysForTests } from './web-session-close-replay'
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -23,7 +23,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()

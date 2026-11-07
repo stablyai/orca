@@ -4,6 +4,7 @@ import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
+import type { ApprovedSetupHashes } from '../../shared/worktree/approved-setup-hashes'
 import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
 import { shouldRunSetupForCreate } from './effective-hook-config'
 
@@ -20,9 +21,10 @@ export function checkCreatedWorktreeSetupTrust(
   repo: Repo,
   createdYamlHooks: OrcaHooks | null,
   decision: SetupDecision | undefined,
-  approvedSetupHash: string | undefined
+  approved: ApprovedSetupHashes
 ): SetupTrustMismatch | undefined {
-  if (approvedSetupHash === undefined) {
+  const { approvedSetupHash, approvedSetupHashes } = approved
+  if (approvedSetupHash === undefined && approvedSetupHashes === undefined) {
     return undefined
   }
   const policy = resolveHookCommandSourcePolicy(repo.hookSettings?.commandSourcePolicy, {
@@ -33,7 +35,8 @@ export function checkCreatedWorktreeSetupTrust(
     return undefined
   }
   const contentHash = hashOrcaHookTrustContent(scriptContent)
-  return contentHash === approvedSetupHash ? undefined : { contentHash, scriptContent }
+  const matches = contentHash === approvedSetupHash || approvedSetupHashes?.includes(contentHash)
+  return matches ? undefined : { contentHash, scriptContent }
 }
 
 function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {

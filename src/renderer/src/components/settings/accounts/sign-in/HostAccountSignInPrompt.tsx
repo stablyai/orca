@@ -8,7 +8,7 @@ import {
   readHostAccountSignIn,
   submitHostAccountSignInCode,
   subscribeHostAccountSignIns
-} from '@/runtime/runtime-host-account-sign-in-client'
+} from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import {
   isHostAccountSignInPage,
   type HostAccountSignInProvider

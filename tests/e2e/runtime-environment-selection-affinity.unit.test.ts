@@ -13,8 +13,8 @@ import {
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
 } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { resetRuntimeEnvironmentStatusOwners } from '../../src/main/ipc/runtime-environments/runtime-environment-request-connections'
 import { pairingCode } from '../../src/main/ipc/runtime-environments/runtime-environments-ipc-test-harness'
 

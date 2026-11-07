@@ -1,3 +1,8 @@
+import {
+  canLaunchSourceControlSectionAgentInPlace,
+  showSourceControlAgentStartedIn
+} from './section-agent-placement'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import {
@@ -89,6 +94,9 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
 
 export async function launchSourceControlRecoveryAgentWithDefault({
   activeWorktreeId,
+  placementWorkspaceId,
+  initialCwd,
+  executionHostId,
   activeGroupId,
   activeSourceControlLaunchPlatform,
   sourceRepoConnectionId,
@@ -100,6 +108,9 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   copy
 }: {
   activeWorktreeId: string
+  placementWorkspaceId?: string
+  initialCwd?: string
+  executionHostId?: ExecutionHostId
   activeGroupId: string | null | undefined
   activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
   sourceRepoConnectionId?: string | null
@@ -157,8 +168,16 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
+  const liveStore = useAppStore.getState()
+  const inPlace =
+    placementWorkspaceId &&
+    canLaunchSourceControlSectionAgentInPlace(liveStore, activeWorktreeId, placementWorkspaceId)
+      ? placementWorkspaceId
+      : undefined
+
   // A saved or default agent may open as a chat without its CLI.
   const opensAsChat = (agent: TuiAgent): boolean =>
+    !placementWorkspaceId &&
     agentChoiceMayOpenAsChat(
       useAppStore.getState(),
       agent,
@@ -196,11 +215,22 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   )
   const result = launchAgentInNewTab({
     requestId: newAgentLaunchRequestId(),
+    ...(placementWorkspaceId && !inPlace ? { activate: false } : {}),
     agent,
-    worktreeId: activeWorktreeId,
-    groupId: activeGroupId ?? activeWorktreeId,
+    worktreeId: inPlace ?? activeWorktreeId,
+    ...(inPlace && inPlace !== activeWorktreeId ? { trustWorktreeId: activeWorktreeId } : {}),
+    groupId:
+      placementWorkspaceId && !inPlace
+        ? (liveStore.activeGroupIdByWorktree[activeWorktreeId] ?? activeWorktreeId)
+        : ((inPlace ? liveStore.activeGroupIdByWorktree[inPlace] : undefined) ??
+          activeGroupId ??
+          placementWorkspaceId ??
+          activeWorktreeId),
+    ...((!placementWorkspaceId || inPlace) && initialCwd ? { initialCwd } : {}),
     prompt: commandInput,
     ...projection,
+    ...(placementWorkspaceId ? { requestedSurface: 'terminal' as const } : {}),
+    ...(executionHostId ? { selectedExecutionHostId: executionHostId } : {}),
     promptDelivery: 'submit-after-ready',
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
@@ -221,9 +251,13 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     return false
   }
 
-  if (result.surface.kind === 'local-terminal') {
+  if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
     focusTerminalTabSurface(result.surface.tabId)
   }
-  toast.success(copy.success)
+  if (placementWorkspaceId && !inPlace) {
+    showSourceControlAgentStartedIn(activeWorktreeId, executionHostId)
+  } else {
+    toast.success(copy.success)
+  }
   return true
 }

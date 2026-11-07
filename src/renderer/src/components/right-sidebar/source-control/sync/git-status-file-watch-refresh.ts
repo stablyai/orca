@@ -12,7 +12,7 @@ import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
 } from '../../../../../../shared/ui-chrome-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
@@ -24,6 +24,7 @@ type UseGitStatusFileWatchRefreshParams = {
   activeConnectionId: string | null
   activeRepoSupportsGit: boolean
   activeWorktreeId: string | null
+  runtimeEnvironmentId?: string | null
   enabled: boolean
   fetchStatus: () => void
   gitStatusHugeByWorktree: Record<string, unknown> | undefined
@@ -58,6 +59,7 @@ export function shouldRefreshGitStatusForFileChange(
 }
 
 export function useGitStatusFileWatchRefresh({
+  runtimeEnvironmentId,
   activeConnectionId,
   activeRepoSupportsGit,
   activeWorktreeId,
@@ -72,7 +74,9 @@ export function useGitStatusFileWatchRefresh({
   worktreePath
 }: UseGitStatusFileWatchRefreshParams): void {
   const activeRuntimeEnvironmentId = useAppStore((state) =>
-    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
+    runtimeEnvironmentId !== undefined
+      ? runtimeEnvironmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus

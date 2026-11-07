@@ -9,7 +9,7 @@ import {
   reconcileReadoptedSshRepoRows
 } from '../slices/superseded-ssh-repo-rows'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'

@@ -5,6 +5,12 @@ import {
 
 export type GitStatusRefreshReason = 'activity' | 'safety'
 
+export function admissionTierForGitStatusRefreshReason(
+  reason: GitStatusRefreshReason
+): 'status' | 'background' {
+  return reason === 'safety' ? 'background' : 'status'
+}
+
 // Share pacing across scheduler rebuilds so host/target changes cannot bypass the activity floor (#7983).
 export type GitStatusRefreshPacing = {
   lastRunEndedAt: number

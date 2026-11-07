@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/app-state-view'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   getWorkspaceEditorSshHost,
@@ -24,7 +24,9 @@ export function useOpenInPathRoute(
 } {
   const route = useMemo(() => getRouteForLocalPathOpenOwner(owner), [owner])
   const workspace = useMemo(() => (workspaceId ? { workspaceId } : null), [workspaceId])
-  const runtimeSshHost = useAppStore(useShallow((s) => getWorkspaceEditorSshHost(s, workspace)))
+  const runtimeSshHost = useAppStateValue(
+    useShallow((s) => getWorkspaceEditorSshHost(s, workspace))
+  )
   return { route, workspace, runtimeSshHost }
 }
 

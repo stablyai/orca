@@ -7,7 +7,7 @@ import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-fl
 import {
   collectBrowserWebviewIds,
   destroyWebviewsRemovedFromStore
-} from '../store/slices/browser-webview-cleanup'
+} from '../store/slices/browser/cleanup/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function useTerminalWindowLifecycle(

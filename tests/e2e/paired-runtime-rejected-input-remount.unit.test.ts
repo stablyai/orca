@@ -410,7 +410,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       const { connectPanePty } =
         await import('@/components/terminal-pane/pty-connection/connect-pane-pty')
       const { _resetTerminalPaneRecoveryForTests } =
-        await import('@/components/terminal-pane/terminal-pane-recovery')
+        await import('@/components/terminal-pane/render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
 
       const pane = createPane()

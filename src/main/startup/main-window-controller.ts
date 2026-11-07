@@ -235,7 +235,6 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       }
     }
     clearExpectedRendererReload(rendererWebContentsId)
-    state.automations?.setWebContents(null)
     clearMainWindowAgentStatusListeners()
   })
   logStartupMilestone('load-start')

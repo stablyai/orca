@@ -749,7 +749,7 @@
         "insecureOrigin": "Orca はこのページからのペアリングを拒否しました。このページが別のマシン上の平文 http であるため、ネットワーク経路上の誰でも置き換えてペアリングコードを奪う可能性があります。https で、このコンピュータの localhost で、または SSH トンネル経由で Web クライアントを開いてください。それでも許可するには、サーバーの管理者が ORCA_ALLOW_INSECURE_WEB_PAIRING=1 を指定して Orca を再起動できます。",
         "deviceDowngraded": "この Orca サーバーはこのブラウザのサインインキーをサポートしなくなりました (ダウングレードされた可能性があります)。サーバーを更新するか、このブラウザを再度ペアリングしてください。",
         "unauthorized": "未認証です。この Web クライアントを再度ペアリングしてください。",
-        "unauthorizedNewLink": "未認証です。新規ペアリングリンクを依頼してください。"
+        "unauthorizedLinkUsedOrExpired": "未認証です。このペアリングリンクは期限切れか、すでに使用された可能性があります。Orca で新規ペアリングリンクを作成して開いてください。"
       }
     },
     "store": {
@@ -1452,13 +1452,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "ターゲットワークスペースは使用できなくなりました。",
-        "16a21d6413": "SSH の再接続には対話型の認証情報が必要です。",
-        "386db94f3e": "対象のプロジェクトは利用できなくなりました。",
-        "3ad7d77f57": "対象ワークスペースは、この自動化実行ターゲットとは別のホスト上にあります。",
-        "workspaceHostUnresolved": "ターゲットワークスペースは複数のホストにまたがっているため、この実行では使用する単一のホストがありません。"
-      },
       "useComposerState": {
         "b2ead86962": "PR ベースを解決できませんでした。",
         "3db83fc58a": "このホスト上に、添付に使用できるプロジェクトパスがありません。",
@@ -7719,7 +7712,8 @@
           "diagnosticsCopyFailed": "診断情報のコピーに失敗しました",
           "5e2c7a1f84": "スマートフォンでターミナルを使用している間、Orca はスマートフォンの画面に合わせてターミナルを縮小します。アプリを閉じるか別のアプリに切り替えるときに、アプリをスマートフォンサイズのままにするか (インタラクティブ CLI ツールがリフローしないように)、サイズを変更してデスクトップに戻るかを制御します。バナーの [復元] または [すべて復元] を使用すると、いつでも手動でサイズを変更できます。",
           "codeRefreshesAutomatically": "コードは自動的に更新されます。コピーしたコードは最大10分間有効です。",
-          "legacyEncryption": "古い暗号化方式を使用しています。このデバイスの Orca アプリを更新してください。"
+          "legacyEncryption": "古い暗号化方式を使用しています。このデバイスの Orca アプリを更新してください。",
+          "olderPairingMethod": "古いペアリング方式を使用しています。この電話の Orca アプリを更新してください。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "アプリストア",
@@ -8120,6 +8114,7 @@
           "6f6d5188ed": "{{value0}}を取り消す",
           "434e4a6af6": "現在のリンク",
           "df142657a5": "まだ使用されていません",
+          "olderPairingMethod": "古いペアリング方式を使用しています。このリンクを使用しているデバイスの Orca を更新してください。",
           "b18d1764ef": "最後に使用したのは {{value0}}",
           "linkName": "リンク · {{value0}}",
           "activeLinks": "有効なリンク",
@@ -10647,7 +10642,11 @@
               "micDefault": "システムのデフォルト",
               "dictationLanguageTitle": "音声入力の言語",
               "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
-              "dictationLanguageKeyword": "言語"
+              "dictationLanguageKeyword": "言語",
+              "modelUnloadTitle": "音声モデルの解放",
+              "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
+              "modelUnloadKeyword": "解放",
+              "modelMemoryKeyword": "メモリ"
             }
           }
         },
@@ -12929,7 +12928,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "まだコミットはありません",
-            "781a8bcf7b": "グラフを読み込んでいます…",
             "d0fb0f4bf2": "コミットを更新する",
             "9f7535d22b": "Ref は、そのコミットそのものを指すブランチ名またはタグ名です。これらは、Git にコミットの名前付き参照がある場合にのみ表示されます。",
             "9289ba0cb9": "リファレンスとは何ですか?",
@@ -13297,7 +13295,8 @@
             "clearNotesFromFile_other": "{{path}} から {{count}} 件のメモを削除しますか？",
             "markResolved": "解決済みとしてマーク",
             "keepFile": "ファイルを残す",
-            "keepDeletion": "削除を維持"
+            "keepDeletion": "削除を維持",
+            "refreshAll": "すべて更新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14083,6 +14082,7 @@
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
             "openWorkingDirectory": "作業ディレクトリを開く",
+            "revealArtifactsFolder": "成果物フォルダを表示",
             "copySessionId": "セッション ID をコピー",
             "copyLogPath": "ログパスをコピー",
             "messageCount": "{{value0}} 件のメッセージ",
@@ -14130,7 +14130,6 @@
             "f8a2c4d1e0": "エクスプローラー検索モード"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "ファイルを読み込み中…",
             "b2c3d4e5f6": "このコミットにはファイルの変更がありません",
             "c3d4e5f6a7": "すべての変更をまとめて開く"
           },
@@ -16294,7 +16293,8 @@
           "5d2c3e7ae3": "音声が検出されませんでした。",
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
-          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
+          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
@@ -16901,7 +16901,10 @@
           "reuseLiveSession": "実行中のセッションを再利用",
           "freshEachRun": "実行ごとに新規作成",
           "precheckEnabled": "有効、{{timeout}}",
-          "precheckNone": "なし"
+          "precheckNone": "なし",
+          "migrate": "移行",
+          "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
+          "needsMigration": "移行が必要"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -17596,6 +17599,10 @@
           "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
           "messageTooLarge": "メッセージがサイズ制限を超えています。",
           "tooManyRequests": "リクエストが多すぎます。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "このワークツリーを開く",
+          "reconnect": "再接続して、このワークツリーの変更を表示してください。"
         }
       },
       "link": {
@@ -18525,18 +18532,6 @@
           "reviewStatus": "すべてのワークツリーで Issue の状態、レビュー状況、CI チェックを確認",
           "managePullRequests": "Orca から離れずに、PR の閲覧、コメント、マージ"
         }
-      },
-      "agyInstall": {
-        "open": "インストール",
-        "title": "Antigravity をインストール",
-        "description": "ターミナルで Enter キーを押すと公式インストーラーが実行されます。このターミナルを閉じると、実行中のコマンドは停止します。",
-        "target": "インストール先：{{location}}",
-        "thisDevice": "このデバイス",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity インストーラー",
-        "detected": "PATH 上に Antigravity が検出されました。インストールが完了したらターミナルを閉じてください。",
-        "close": "ターミナルを閉じる",
-        "recheck": "Agent を再確認"
       }
     },
     "native-chat": {
@@ -19954,6 +19949,13 @@
           "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
           "title": "音声入力の言語",
           "auto": "自動検出"
+        },
+        "modelUnload": {
+          "title": "音声モデルの解放",
+          "description": "音声入力を終えたあと、ローカルモデルをメモリに残しておく時間です。読み込まれている間は音声入力がすぐに始まります。「すぐに」を選ぶとメモリを解放し、毎回モデルの読み込みを待ってから音声入力が始まります。",
+          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
+          "never": "しない",
+          "immediately": "すぐに"
         }
       }
     },
@@ -20729,6 +20731,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}} で開始しました",
     "actionSaveFailed": "このアクションを保存できませんでした。設定でもう一度保存してください。",
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"
@@ -22771,6 +22774,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",
@@ -22812,6 +22816,17 @@
         "effortRepeated": "追加の引数で推論レベルが複数回指定されています。"
       },
       "hostUpdateRequired": "追加の引数を使用するには、このホストの Orca を更新してください。"
+    },
+    "setupTrust": {
+      "reviewTitle": "このオートメーションの新しいセットアップコマンドを承認しますか？",
+      "reviewBody": "ブランチの <code>orca.yaml</code> のセットアップコマンドが変更されたため、実行でセットアップがスキップされました。承認すると、以降の実行でこれらのコマンドが使われます。<repo/> を信頼できる場合のみ承認してください。",
+      "approve": "承認",
+      "approved": "セットアップを承認しました。このオートメーションの以降の実行で実行されます。",
+      "skippedSinceApproved": "ブランチの orca.yaml のセットアップコマンドが変更されたため、この実行ではセットアップが実行されませんでした。その後承認されたため、以降の実行では実行されます。",
+      "skippedReview": "セットアップは実行されませんでした。この実行のブランチにある orca.yaml のセットアップコマンドが、このオートメーションで承認済みのものと異なります。以降の実行でセットアップを実行するには、内容を確認してください。",
+      "reviewAction": "セットアップを確認して承認",
+      "listSkipped": "セットアップをスキップ",
+      "listSkippedTitle": "ブランチの orca.yaml のセットアップコマンドが変更されたため、前回の実行でセットアップがスキップされました。アクションメニューから確認してください。"
     }
   },
   "codeHost": {
@@ -23169,5 +23184,32 @@
     "discussionAction": "ディスカッションに参加",
     "checkAction": "互換性を確認",
     "settingsStatus": "Orca {{version}} には macOS {{macos}} 以降が必要です。この Mac ではこのバージョンが最新です。"
+  },
+  "gitGraph": {
+    "copyHash": "コミットハッシュをコピー",
+    "parents": "親コミット",
+    "files": "ファイル",
+    "currentBranch": "現在のブランチ",
+    "allBranches": "すべてのブランチ",
+    "chosenBranches": "選択したブランチ",
+    "searchRefs": "ブランチとタグを検索",
+    "oldServer": "このサーバーのOrcaは現在のブランチのみ表示します",
+    "copyBranch": "ブランチ名をコピー",
+    "switchWorkspace": "ワークスペースに切り替え",
+    "workspaceClosed": "このブランチは別のワークスペースで開かれていません。",
+    "workspaceCheckFailed": "このワークスペースを確認できませんでした。接続後にもう一度お試しください。",
+    "refresh": "コミットを更新",
+    "branchTag": "ブランチ / タグ",
+    "graph": "グラフ",
+    "resizeColumn": "グラフ列の幅を変更",
+    "message": "メッセージ",
+    "author": "作成者",
+    "date": "日付",
+    "loadMore": "さらに読み込む",
+    "noCommits": "コミットはまだありません",
+    "historyChanged": "履歴が再び変更されました。Gitグラフを更新して再試行してください。",
+    "loadFailed": "Git履歴を読み込めませんでした",
+    "updateHost": "Gitグラフを開くには{{host}}のOrcaを更新してください",
+    "title": "Gitグラフ"
   }
 }
