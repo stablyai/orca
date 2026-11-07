@@ -12,6 +12,15 @@ import {
 
 // Desktop chat's math grammar (src/renderer/src/components/sidebar/chat-markdown-math.ts) for markdown-it.
 
+/** markdown-it's env for every parse of one document. */
+export type MathEnv = {
+  /** Chat's `\(…\)` and `\[…\]` delimiters too. */
+  chatMath: boolean
+  /** Set by the parse: the first line of a top-level display opener still waiting for its closer.
+   *  A closer added later turns everything from that line on into one formula. */
+  waitingMathLine?: number
+}
+
 /** Where each delimiter sits in one inline source, so every opener's search is a lookup. */
 type InlineMathIndex = {
   escaped: Uint8Array
@@ -265,6 +274,11 @@ function blockMath(
   // An unclosed block is chat still streaming in; GitHub keeps an unclosed `$$` as text.
   if (isCitationBracketMath(opener, body) || (!closed && !chatDelimiters(state.env))) {
     failed.set(scan, { from: startLine, to: line })
+    // A container's scan stops at its end, so only a top-level opener can reach later text.
+    if (!closed && state.level === 0) {
+      const env: MathEnv = state.env
+      env.waitingMathLine = Math.min(env.waitingMathLine ?? startLine, startLine)
+    }
     return false
   }
   if (silent) {

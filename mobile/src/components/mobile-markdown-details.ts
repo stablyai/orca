@@ -18,9 +18,14 @@ const MAX_SECTION_DEPTH = 8
 const DETAILS_TAG = /<\/?(?:details|summary)[\s/>]/i
 const DETAILS_CLOSE = /^<\/details\s*>$/i
 
+/** Whether the text holds any `<details>` or `<summary>` markup. */
+export function hasDetailsMarkup(text: string): boolean {
+  return DETAILS_TAG.test(text)
+}
+
 /** One HTML block cut around its `<details>` markup. */
 function detailsPieces(html: string): DetailsPiece[] {
-  if (!DETAILS_TAG.test(html)) {
+  if (!hasDetailsMarkup(html)) {
     return [{ kind: 'html', value: html }]
   }
   const pieces: DetailsPiece[] = []

@@ -216,7 +216,7 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture(sendSurfaceId)
 
   const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
