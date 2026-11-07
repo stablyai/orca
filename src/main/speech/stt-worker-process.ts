@@ -11,12 +11,11 @@ export type SttWorkerRequest =
   | { type: 'feed'; streamId: string; samples: Float32Array; sampleRate: number }
   | { type: 'stop'; streamId: string }
   | { type: 'discard'; streamId: string }
-  // Carries the renderer's audio port for the stream.
   | { type: 'attach-audio'; streamId: string }
 
 export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'> & {
   /** False when the process can't take a port (orcad's forked child), so audio stays on IPC. */
-  attachAudioPort?(streamId: string, port: MessagePortMain): boolean
+  attachAudioPort(streamId: string, port: MessagePortMain): boolean
 }
 export type SpawnSttWorkerProcess = () => SttWorkerProcess
 

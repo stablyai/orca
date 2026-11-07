@@ -10,7 +10,6 @@ type UtilityParentPort = {
 
 export type SttWorkerParentPort = {
   post(message: unknown): void
-  /** Only a utility process receives ports. */
   onMessage(listener: (message: unknown, ports: readonly MessagePortMain[]) => void): void
 }
 

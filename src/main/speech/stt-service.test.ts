@@ -238,6 +238,7 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'mobile:phone-a:1')
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop:1:0:1')
     await service.startDictation('openai-model', vi.fn(), undefined, 'desktop:2:0:1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService hands the port to the mock worker untouched; only its identity is checked.
     const port = { id: 'port' } as never
 
     expect(service.attachAudioPort('desktop:2:0:1', port)).toBe(false)

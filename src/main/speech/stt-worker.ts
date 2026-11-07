@@ -22,7 +22,6 @@ type SessionStream = {
 // A desktop renderer's audio for one stream, posted straight here instead of through main.
 type AudioPortInput = {
   port: MessagePortMain
-  ended: boolean
   onEnded: (() => void) | null
 }
 
@@ -169,13 +168,13 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
   if (!port) {
     return
   }
-  const input: AudioPortInput = { port, ended: false, onEnded: null }
+  const input: AudioPortInput = { port, onEnded: null }
   // The renderer closes its end after 'end'; a close alone means it went away.
   const end = (): void => {
-    if (input.ended) {
+    if (audioPorts.get(streamId) !== input) {
       return
     }
-    input.ended = true
+    audioPorts.delete(streamId)
     port.close()
     input.onEnded?.()
   }
@@ -196,11 +195,10 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
 function handleStop(streamId: string): void {
   const input = audioPorts.get(streamId)
   // Main's stop can overtake the renderer's last frames on the port; finish only after them.
-  if (input && !input.ended) {
+  if (input) {
     input.onEnded = () => handleStop(streamId)
     return
   }
-  audioPorts.delete(streamId)
   const stream = streams.get(streamId)
   streams.delete(streamId)
   try {
@@ -217,8 +215,9 @@ function handleStop(streamId: string): void {
 
 // A canceled dictation drops its audio undecoded.
 function handleDiscard(streamId: string): void {
-  audioPorts.get(streamId)?.port.close()
+  const input = audioPorts.get(streamId)
   audioPorts.delete(streamId)
+  input?.port.close()
   streams.delete(streamId)
   parentPort.post({ type: 'stopped', streamId })
 }

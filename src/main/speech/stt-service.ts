@@ -64,7 +64,7 @@ export class SttService {
     if (session?.phase !== 'active' || !session.engine) {
       return false
     }
-    return session.engine.worker.attachAudioPort?.(session.streamId, port) ?? false
+    return session.engine.worker.attachAudioPort(session.streamId, port)
   }
 
   stopDictation(owner = 'desktop', options: { discard?: boolean } = {}): Promise<void> {
