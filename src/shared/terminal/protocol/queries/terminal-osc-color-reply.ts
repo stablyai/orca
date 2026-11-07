@@ -116,11 +116,28 @@ function isTerminalOscColorQueryReply(reply: string | null): reply is string {
   return reply !== null
 }
 
+/**
+ * Prefer live `options.theme` slots; fill any missing fg/bg from the composed appearance.
+ * Without this, OSC 10/11 queries silently get no reply when the pane theme lost a slot
+ * (#32242, #14799, #39529) and TUIs pin dark forever.
+ */
+export function mergeTerminalOscColorQueryReplyColors(
+  theme: TerminalOscColorQueryReplyColors | null | undefined,
+  fallback?: TerminalOscColorQueryReplyColors | null
+): TerminalOscColorQueryReplyColors {
+  return {
+    foreground: theme?.foreground ?? fallback?.foreground,
+    background: theme?.background ?? fallback?.background
+  }
+}
+
 export function terminalOscColorQueryReplies(
   colors: TerminalOscColorQueryReplyColors,
-  slots: readonly TerminalOscColorQuerySlot[]
+  slots: readonly TerminalOscColorQuerySlot[],
+  fallback?: TerminalOscColorQueryReplyColors | null
 ): string[] | null {
-  const replies = slots.map((slot) => terminalOscColorQueryReply(colors, slot))
+  const resolved = mergeTerminalOscColorQueryReplyColors(colors, fallback)
+  const replies = slots.map((slot) => terminalOscColorQueryReply(resolved, slot))
   return replies.every(isTerminalOscColorQueryReply) ? replies : null
 }
 
@@ -220,7 +237,8 @@ export function parseTerminalOscColorQuery(
 export function sendTerminalOscColorQueryReplies(
   data: string,
   colors: TerminalOscColorQueryReplyColors,
-  sendInput: (data: string) => boolean | void
+  sendInput: (data: string) => boolean | void,
+  fallback?: TerminalOscColorQueryReplyColors | null
 ): boolean {
   let sent = false
   let offset = 0
@@ -231,7 +249,7 @@ export function sendTerminalOscColorQueryReplies(
     }
     const query = parseTerminalOscColorQuery(data, oscIndex)
     if (query.kind === 'match') {
-      const replies = terminalOscColorQueryReplies(colors, query.slots)
+      const replies = terminalOscColorQueryReplies(colors, query.slots, fallback)
       if (replies) {
         for (const reply of replies) {
           sendInput(reply)

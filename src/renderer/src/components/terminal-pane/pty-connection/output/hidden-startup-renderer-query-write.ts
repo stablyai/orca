@@ -13,7 +13,9 @@ import {
   DEFAULT_DA1_RESPONSE,
   sendTerminalOscColorQueryReplies
 } from '../../emulation/terminal-capability-replies'
+import { resolveTerminalOscColorQueryFallback } from '../../emulation/terminal-osc-color-query-fallback'
 import { recordHiddenRendererSkip } from '../instrumentation/e2e-terminal-pty-harness'
+import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 /** Hidden-pane startup renderer query extraction, output skipping, and salvage from discarded restore data. */
@@ -122,7 +124,8 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,
         session.pane.terminal,
-        session.sendDesktopQueryReplyImmediate
+        session.sendDesktopQueryReplyImmediate,
+        resolveTerminalOscColorQueryFallback(useAppStore.getState().settings)
       )
     }
     let unansweredQueryData = ''
@@ -188,7 +191,8 @@ export function bindHiddenRendererQueryAdmission(session: ConnectPanePtySession)
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,
         session.pane.terminal,
-        session.sendDesktopQueryReplyImmediate
+        session.sendDesktopQueryReplyImmediate,
+        resolveTerminalOscColorQueryFallback(useAppStore.getState().settings)
       )
     }
     if (extracted.statelessQueryData) {

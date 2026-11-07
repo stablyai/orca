@@ -5,6 +5,7 @@ import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernatio
 import { observeTerminalBracketedPasteModeOutput } from '../../input/paste/terminal-bracketed-paste'
 import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
 import { sendTerminalOscColorQueryReplies } from '../../emulation/terminal-capability-replies'
+import { resolveTerminalOscColorQueryFallback } from '../../emulation/terminal-osc-color-query-fallback'
 import { isDropSentinelMeta } from '../../pty-transport/delivery/terminal-stream-position'
 
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
@@ -171,7 +172,8 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
         pendingForegroundQuery.oscColorQueryData,
         session.pane.terminal,
         // Why: OSC color reply sent immediately so the remote debounce can't delay it past the program's read window (#7329).
-        session.sendDesktopQueryReplyImmediate
+        session.sendDesktopQueryReplyImmediate,
+        resolveTerminalOscColorQueryFallback(useAppStore.getState().settings)
       )
     }
     if (pendingForegroundQuery?.statelessQueryData) {
