@@ -1129,16 +1129,13 @@
       "modelDescriptions": {
         "parakeetV3": "Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.",
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
-        "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
-        "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
         "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
-        "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
-        "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
-        "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
         "gpt4oMiniTranscribe": "Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.",
-        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key."
+        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key.",
+        "retiredForEngine": "No longer offered: the speech engine can no longer run it. Delete it to free up space.",
+        "nemotron": "Korean, Chinese, Japanese and many more languages, with automatic language detection."
       }
     },
     "diagnostics": {
@@ -9759,7 +9756,8 @@
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
           "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held.",
           "speechGpuLabel": "Use GPU",
-          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer."
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
+          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -17360,6 +17358,7 @@
           "noModel": "No speech model selected. Download one in Settings > Voice.",
           "disabled": "Voice dictation is disabled. Enable it in Settings > Voice.",
           "notReady": "Speech model not ready. Download it in Settings > Voice.",
+          "modelNeedsUpdate": "Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.",
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
