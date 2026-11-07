@@ -8,7 +8,7 @@ import {
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))

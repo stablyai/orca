@@ -28,7 +28,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AppState } from '@/store/types'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../lib/structured-chat-tab-index'
 
 /** The paired host validates every stored attachment path when admitting a structured send. */
 export type NativeChatRuntimeSessionAttachmentOwner = {

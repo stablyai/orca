@@ -18,7 +18,7 @@ import type {
   NativeChatStructuredComposerTransport
 } from './native-chat-composer-types'
 
-import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import { createStructuredSessionComposerMock } from './NativeChatStructuredSession.test-composer'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'

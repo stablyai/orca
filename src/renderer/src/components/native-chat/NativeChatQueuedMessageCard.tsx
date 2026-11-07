@@ -42,7 +42,7 @@ import {
   type QueuedEditAttachTarget
 } from './NativeChatQueuedMessageComposer'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
-import { nativeChatImageLabelCopy } from './native-chat-image-label'
+import { nativeChatImageLabelCopy } from './media/images/native-chat-image-label'
 import { NATIVE_CHAT_UNKERNED_CSS, nativeChatTextHasUnkernedRun } from './native-chat-unkerned-runs'
 
 /** The visible caption under the text; the default waiting hold needs none. */

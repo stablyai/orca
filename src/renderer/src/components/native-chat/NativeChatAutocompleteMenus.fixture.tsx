@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
-import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
+import { nativeChatAppearanceStyle } from './appearance/native-chat-appearance-style'
 
 function CommandMenu({ invertedAccent = false }: { invertedAccent?: boolean }) {
   return (

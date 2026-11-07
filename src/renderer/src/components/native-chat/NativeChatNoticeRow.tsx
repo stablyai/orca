@@ -9,8 +9,8 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
 import { NativeChatForkedFromContext } from './native-chat-fork-context'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -27,7 +27,10 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
-import { NativeChatDetailsDisclosure, ProviderFrameRow } from './NativeChatTranscriptChrome'
+import {
+  NativeChatDetailsDisclosure,
+  ProviderFrameRow
+} from './messages/diagnostics/NativeChatProviderDetails'
 import { NativeChatSignInButton } from './NativeChatSignInButton'
 import {
   agentSessionFailureDetailText,

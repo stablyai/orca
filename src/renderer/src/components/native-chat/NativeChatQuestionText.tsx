@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
 
 type QuestionTextProps = Pick<ComponentProps<typeof NativeChatMarkdown>, 'content' | 'className'>
 

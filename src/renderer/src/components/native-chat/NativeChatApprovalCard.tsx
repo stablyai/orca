@@ -5,13 +5,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { approvalDetailPreview } from '../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../shared/agent-session/agent-session-approval-blocked-path'
 import {
   isNewerApprovalSubject,
   isPlanApprovalSubject
 } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
 import type { ChatApproval } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'

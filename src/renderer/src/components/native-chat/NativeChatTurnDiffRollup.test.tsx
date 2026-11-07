@@ -12,7 +12,7 @@ import { TooltipProvider } from '../ui/tooltip'
 
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { session, stubLayout, stubResizeObserver } from './native-chat-windowing-test-harness'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

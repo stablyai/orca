@@ -2,7 +2,7 @@ import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
-} from './native-chat-appearance-style'
+} from './appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
 import { useNativeChatRowTypography } from './use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'

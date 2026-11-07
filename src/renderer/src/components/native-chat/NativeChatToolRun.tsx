@@ -30,7 +30,7 @@ import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
 import { NativeChatToolRunMembers, revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { NativeChatToolRunMemberList } from './NativeChatToolRunMemberList'
 import { NativeChatBrowserRunPageButton } from './NativeChatBrowserPageButton'
-import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+import { NativeChatImageAttachments } from './media/images/NativeChatImageAttachments'
 import { nativeChatToolRunViewedImages } from '../../../../shared/native-chat/tools/native-chat-tool-viewed-images'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 

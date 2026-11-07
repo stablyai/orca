@@ -4,7 +4,10 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
-import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
+import {
+  copyableNativeChatImageSrc,
+  keepPreviewOpenForChatMenu
+} from './media/images/native-chat-image-copy'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'

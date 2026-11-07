@@ -23,7 +23,7 @@ const unusedChatLeaves = vi.hoisted(() => ({
     throw new Error('Unexpected sender navigation in transcript fixture')
   })
 }))
-vi.mock('./NativeChatInlineVisual', () => ({
+vi.mock('./media/visuals/NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: unusedChatLeaves.inlineVisual
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({

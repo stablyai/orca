@@ -10,7 +10,7 @@ import type { NativeChatTabSession } from '../tab-bar/tab-session-history-switch
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
 import { NativeChatResumeInCliButton } from './NativeChatResumeInCliButton'
-import { NativeChatSettingsButton } from './NativeChatSettingsButton'
+import { NativeChatSettingsButton } from './appearance/NativeChatSettingsButton'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { NativeChatHandOff } from './use-native-chat-hand-off'
 

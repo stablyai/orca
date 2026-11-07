@@ -1,10 +1,8 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { AppState } from '@/store/types'
-import {
-  createNativeChatTabOwnerSelector,
-  findTerminalTabWorktreeId
-} from './native-chat-file-link'
+import { createNativeChatTabOwnerSelector } from './pane/ownership/native-chat-tab-owner'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../lib/structured-chat-tab-index'
 
 export type NativeChatRuntimeOwnerState = Pick<AppState, 'tabsByWorktree'> &
   WorktreeRuntimeOwnerState

@@ -31,7 +31,7 @@ import {
 } from './native-chat-orca-stop-context'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 import { nativeChatMessageCopyText } from '../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
 type UsageLimitActions = {

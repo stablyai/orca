@@ -2,8 +2,8 @@ import { NativeChatThreadGoalBanner } from './NativeChatThreadGoalBanner'
 import { NativeChatStructuredWorkerLifetimeStrip } from './NativeChatStructuredWorkerLifetimeStrip'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { StructuredAgentSessionThreadGoal } from './use-structured-agent-session-thread-goal'
-import type { NativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
-import { NativeChatTextAttachments } from './NativeChatTextAttachments'
+import type { NativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
+import { NativeChatTextAttachments } from './media/text/NativeChatTextAttachments'
 
 /** The strips on the composer's top edge: the thread goal, then a temporary worker's lifetime. */
 export function NativeChatStructuredComposerTabStrips(props: {
