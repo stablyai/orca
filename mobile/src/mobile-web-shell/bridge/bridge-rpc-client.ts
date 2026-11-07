@@ -139,9 +139,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
   })
 
-  const handshake = createBridgeInitHandshake(() => {
-    sendFrame(createPageReadyFrame())
-  })
+  const handshake = createBridgeInitHandshake(() => sendFrame(createPageReadyFrame()))
 
   // Before-init calls expose mount-order bugs; after-close calls stay inert because teardown callers generally have no catch.
   function requireSession(): void {

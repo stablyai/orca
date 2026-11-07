@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../page-storage-keys'
-import pageAsyncStorage, { PageStorageRefusedError, publishPageStorage } from './page-async-storage'
+import pageAsyncStorage, {
+  PageStorageRefusedError,
+  publishPageStorage,
+  replacePageStorage
+} from './page-async-storage'
 
 type Write = { key: string; value: string | null }
 
@@ -65,6 +69,28 @@ describe('what init primed', () => {
     publish({ 'orca:pins:host-1': '["wt-1"]' })
     publish({ 'orca:pins:host-2': '["wt-2"]' })
     await expect(pageAsyncStorage.getItem('orca:pins:host-1')).resolves.toBeNull()
+  })
+
+  it('notifies subscribers only for keys that changed when replacePageStorage updates in place', async () => {
+    publish({
+      'orca:custom-accessory-keys': '[]',
+      'orca:terminalTextScale': '1'
+    })
+    const seen: [string, string | null][] = []
+    const unsubscribe = pageAsyncStorage.subscribe((key, value) => {
+      seen.push([key, value])
+    })
+    replacePageStorage({
+      'orca:custom-accessory-keys': '[{"id":"custom-1","label":"ls","bytes":"ls","enter":true}]',
+      'orca:terminalTextScale': '1'
+    })
+    unsubscribe()
+    expect(seen).toEqual([
+      ['orca:custom-accessory-keys', '[{"id":"custom-1","label":"ls","bytes":"ls","enter":true}]']
+    ])
+    await expect(pageAsyncStorage.getItem('orca:custom-accessory-keys')).resolves.toBe(
+      '[{"id":"custom-1","label":"ls","bytes":"ls","enter":true}]'
+    )
   })
 })
 
