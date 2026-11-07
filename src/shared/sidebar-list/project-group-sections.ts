@@ -3,11 +3,12 @@ import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
 } from './folder-workspace-lanes'
+import type { ExecutionHostId } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import { getDistinctProjectGroups, getEffectiveProjectGroupManualRank } from '../project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
-import { appendOrderedGroups } from './group-sections'
+import { appendOrderedGroups, getProjectSectionHostIds } from './group-sections'
 import { compareCodePoints, compareSidebarText } from './text-order'
 import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './worktree-group-entry'
@@ -19,6 +20,7 @@ import {
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
 import { compareRootProjectEntries } from '../root-project-order'
+import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -103,10 +105,41 @@ export function appendProjectGroupSections(
     )
   }
 
+  const addProjectGroupSubtreeHostCounts = (
+    projectGroup: ProjectGroup,
+    counts: Map<ExecutionHostId, number>
+  ): void => {
+    const add = (hostId: ExecutionHostId): void => {
+      counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+    }
+    for (const [, group] of groupByProjectGroupId.get(projectGroup.id) ?? []) {
+      getProjectSectionHostIds(ctx, group).forEach(add)
+    }
+    for (const { folderWorkspace } of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
+      add(getFolderWorkspaceHostId(folderWorkspace, projectGroup, ctx.defaultHostId))
+    }
+    for (const childGroup of childGroupsByParentId.get(projectGroup.id) ?? []) {
+      addProjectGroupSubtreeHostCounts(childGroup, counts)
+    }
+  }
+
+  // Why: a collapsed group has no rows left to tell host sections which machines it belongs to.
+  const getCollapsedProjectGroupHostCounts = (
+    projectGroup: ProjectGroup
+  ): Map<ExecutionHostId, number> | undefined => {
+    const counts = new Map<ExecutionHostId, number>()
+    addProjectGroupSubtreeHostCounts(projectGroup, counts)
+    return counts.size > 0 ? counts : undefined
+  }
+
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
     const key = getProjectGroupHeaderKey(projectGroup.id)
+    const collapsed = collapsedGroups.has(key)
+    const hostWorktreeCounts = collapsed
+      ? getCollapsedProjectGroupHostCounts(projectGroup)
+      : undefined
     result.push({
       type: 'header',
       key,
@@ -114,9 +147,10 @@ export function appendProjectGroupSections(
       count: getProjectGroupSubtreeCount(projectGroup.id),
       icon: { kind: 'project' },
       projectGroup,
-      projectGroupDepth: depth
+      projectGroupDepth: depth,
+      ...(hostWorktreeCounts ? { hostWorktreeCounts } : {})
     })
-    if (!collapsedGroups.has(key)) {
+    if (!collapsed) {
       // The group's folders, with whatever is nested under them, precede its projects.
       appendWorktreeRows(result, ctx.repoOf, ctx.occurrencePlan, {
         collapsedGroups,

@@ -148,52 +148,45 @@ export function addHostSectionRows(args: {
   const usedPendingRows = new Set<Row>()
   // Each host's last emitted header path, so a sibling group repeats only what differs.
   const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
+  const pushPendingPath = (
+    path: readonly Extract<Row, { type: 'header' }>[],
+    hostId: ExecutionHostId
+  ): void => {
+    const hostRows = rowsByHostId.get(hostId) ?? []
+    const localizedPendingRows = localizePendingRowsForHost(path, hostId)
+    const keys = localizedPendingRows.map(getPendingRowKey)
+    const emitted = emittedPathByHostId.get(hostId) ?? []
+    let shared = 0
+    while (shared < keys.length && keys[shared] === emitted[shared]) {
+      shared += 1
+    }
+    if (shared < keys.length || keys.length !== emitted.length) {
+      hostRows.push(...localizedPendingRows.slice(shared))
+      emittedPathByHostId.set(hostId, keys)
+    }
+    if (localizedPendingRows.length > 0) {
+      path.forEach((pendingRow) => usedPendingRows.add(pendingRow))
+    }
+    rowsByHostId.set(hostId, hostRows)
+  }
   const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
-    const unused = rows.filter((row) => !usedPendingRows.has(row))
-    if (unused.length === 0) {
-      return
-    }
-    const hostScopedRow = unused.some((row) => row.hostWorktreeCounts)
-    if (!hostScopedRow) {
-      globalRows.push(...unused)
-      return
-    }
-    for (const row of unused) {
+    for (const row of rows) {
+      if (usedPendingRows.has(row)) {
+        continue
+      }
       for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
-        if (count <= 0) {
-          continue
+        if (count > 0) {
+          // A collapsed group has no row of its own to pull in the group path above it.
+          pushPendingPath(pendingRows.slice(0, pendingRows.indexOf(row) + 1), hostId)
         }
-        const hostRows = rowsByHostId.get(hostId) ?? []
-        const hostIds = row.hostWorktreeIds?.get(hostId)
-        hostRows.push({
-          ...row,
-          count,
-          hostId,
-          worktreeIds: hostIds ?? row.worktreeIds
-        })
-        rowsByHostId.set(hostId, hostRows)
       }
     }
+    globalRows.push(...rows.filter((row) => !row.hostWorktreeCounts && !usedPendingRows.has(row)))
   }
 
   const pushHostRow = (row: Row, rowHostId: ExecutionHostId): void => {
-    const hostRows = rowsByHostId.get(rowHostId) ?? []
-    const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
-    const path = localizedPendingRows.map(getPendingRowKey)
-    const emitted = emittedPathByHostId.get(rowHostId) ?? []
-    let shared = 0
-    while (shared < path.length && path[shared] === emitted[shared]) {
-      shared += 1
-    }
-    if (shared < path.length || path.length !== emitted.length) {
-      hostRows.push(...localizedPendingRows.slice(shared))
-      emittedPathByHostId.set(rowHostId, path)
-    }
-    if (localizedPendingRows.length > 0) {
-      pendingRows.forEach((pendingRow) => usedPendingRows.add(pendingRow))
-    }
-    hostRows.push(row)
-    rowsByHostId.set(rowHostId, hostRows)
+    pushPendingPath(pendingRows, rowHostId)
+    rowsByHostId.get(rowHostId)?.push(row)
   }
 
   // Pending headers that do not enclose a header at `depth` end before it.
