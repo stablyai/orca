@@ -134,7 +134,7 @@ function ok(result: unknown): RpcResponse {
 }
 
 type Reply = RpcResponse | Promise<RpcResponse>
-type Answer = (method: string, relativePath: string) => Reply
+type Answer = (method: string, relativePath: string, params: unknown) => Reply
 type Host = {
   answer: Answer
   client: RpcClient
@@ -162,7 +162,7 @@ function createHost(answer: Answer): Host {
           typeof params === 'object' && params !== null && 'relativePath' in params
             ? String(params.relativePath)
             : ''
-        return host.answer(method, relativePath)
+        return host.answer(method, relativePath, params)
       }
     }),
     async setState(renderer: ReactTestRenderer, next: ConnectionState) {
@@ -239,6 +239,55 @@ async function pressByLabel(
     pressable.props.onPress()
   })
   await settleQueryNotifications()
+}
+
+async function pressText(renderer: ReactTestRenderer, text: string): Promise<void> {
+  const pressable = renderer.root
+    .findAll((node) => String(node.type) === 'Pressable')
+    .find((node) =>
+      node
+        .findAll((child) => String(child.type) === 'Text')
+        .some((child) => child.props.children === text)
+    )
+  if (!pressable) {
+    throw new Error(`Unable to find pressable: ${text}`)
+  }
+  await act(async () => {
+    pressable.props.onPress()
+  })
+  await settleQueryNotifications()
+}
+
+async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<void> {
+  const input = renderer.root.find((node) => String(node.type) === 'TextInput')
+  await act(async () => {
+    input.props.onChangeText(text)
+  })
+  await settleQueryNotifications()
+}
+
+// A host that pages: `limit` rows strictly after the `after` cursor, as files.readDir does since #35115.
+function pagingHost(folders: Record<string, MobileDirEntry[]>) {
+  return createHost((_method, relativePath, params) => {
+    const entries = folders[relativePath] ?? []
+    const page: Record<string, unknown> =
+      typeof params === 'object' && params !== null ? params : {}
+    const after: Record<string, unknown> =
+      typeof page.after === 'object' && page.after !== null ? page.after : {}
+    const start = entries.findIndex((candidate) => candidate.name === after.name) + 1
+    const limit = typeof page.limit === 'number' ? page.limit : entries.length
+    return ok({
+      entries: entries.slice(start, start + limit),
+      total: entries.length,
+      hasMore: start + limit < entries.length
+    })
+  })
+}
+
+function snapshots(count: number): MobileDirEntry[] {
+  return Array.from({ length: count }, (_, index) =>
+    entry(`snap-${String(index + 1).padStart(4, '0')}.png`)
+  )
 }
 
 function renderedText(renderer: ReactTestRenderer): string {
@@ -412,6 +461,44 @@ describe('MobileFileExplorerPanel', () => {
     // The folder comes from the synthesized tree; a readDir for it would fail on this desktop.
     await pressByLabel(renderer, 'Open folder src')
     expect(renderedText(renderer)).toContain('app.ts')
+  })
+
+  it('pages a big folder with Show more, and a reconnect keeps the pages already shown', async () => {
+    const host = pagingHost({
+      '': [entry('snapshots', true), entry('videos', true)],
+      snapshots: snapshots(1200)
+    })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder snapshots')
+    expect(renderedText(renderer)).toContain('snap-0500.png')
+    expect(renderedText(renderer)).not.toContain('snap-0501.png')
+    expect(renderedText(renderer)).toContain('1,200')
+    expect(renderedText(renderer)).toContain('500 of 1,200')
+
+    await pressText(renderer, 'Show 500 more')
+    expect(renderedText(renderer)).toContain('snap-1000.png')
+    expect(renderedText(renderer)).not.toContain('snap-1001.png')
+    expect(renderedText(renderer)).toContain('Show 200 more')
+    expect(renderedText(renderer)).toContain('videos')
+
+    await host.setState(renderer, 'disconnected')
+    await host.setState(renderer, 'connected')
+    expect(renderedText(renderer)).toContain('snap-1000.png')
+    expect(renderedText(renderer)).toContain('1,000 of 1,200')
+  })
+
+  it('says how much of a part-loaded folder the filter searched, and Search all reads the rest', async () => {
+    pagingHost({ '': [entry('snapshots', true)], snapshots: snapshots(12_000) })
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder snapshots')
+    await typeFilter(renderer, 'snap-110')
+    expect(renderedText(renderer)).not.toContain('snap-1100.png')
+    expect(renderedText(renderer)).toContain('Searched 500 of 12,000 in snapshots.')
+
+    await pressByLabel(renderer, 'Search all of snapshots')
+    expect(renderedText(renderer)).toContain('snap-1100.png')
+    expect(renderedText(renderer)).toContain('snap-11000.png')
+    expect(renderedText(renderer)).not.toContain('Searched')
   })
 
   describe('Retry while the host is unreachable', () => {

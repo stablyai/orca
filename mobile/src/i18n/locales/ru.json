@@ -1385,10 +1385,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
       "loadFolderFailed": "Не удалось загрузить папку",
+      "loadedOfTotal": "{{loaded}} из {{total}}",
       "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
+      "searchAll": "Искать везде",
+      "searchAllIn": "Искать во всей папке {{folder}}",
+      "searched": "Просмотрено {{loaded}} из {{total}} в {{folder}}.",
+      "searching": "Поиск в {{folder}}… {{loaded}} из {{total}}",
+      "showMore": "Показать ещё {{rows}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
     "fileExplorerRowActions": {

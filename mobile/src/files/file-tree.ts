@@ -16,12 +16,16 @@ export type TreeNode = {
   depth: number
   kind: 'directory' | MobileFileKind
   isSymlink?: boolean
+  /** A folder too big for one page shows how many entries it has. */
+  entryCount?: number
 }
 
 export type DirectoryState = {
   entries: MobileDirEntry[]
   loading?: boolean
   error?: string
+  /** Set when the host sent only the first `entries.length` of `total`. */
+  total?: number
 }
 
 export type DirectoryCache = Record<string, DirectoryState | undefined>
@@ -34,7 +38,20 @@ export type InlineStatusNode = {
   message?: string
 }
 
-export type FileExplorerRow = TreeNode | InlineStatusNode
+/** Ends a part-loaded folder: "Show more" in the tree, "Searched N of M" in filter results. */
+export type FolderPagingNode = {
+  id: string
+  relativePath: string
+  depth: number
+  kind: 'more' | 'searched'
+  loaded: number
+  total: number
+}
+
+export type FileExplorerRow = TreeNode | InlineStatusNode | FolderPagingNode
+
+/** Rows per "Show more"; a folder bigger than this shows its entry count. */
+export const DIRECTORY_PAGE_SIZE = 500
 
 const DESKTOP_EXCLUDED_NAMES = new Set(['.git', 'node_modules'])
 const BINARY_EXTENSIONS = new Set([
@@ -79,7 +96,7 @@ function visitDirectory(
 
   for (const entry of visibleEntries) {
     const childPath = joinRelativePath(relativePath, entry.name)
-    rows.push(toTreeNode(entry, childPath, depth))
+    rows.push(toTreeNode(entry, childPath, depth, cache))
     if (entry.isDirectory && expanded.has(childPath)) {
       const childState = getDirectoryCacheState(cache, childPath)
       if (childState?.loading) {
@@ -102,12 +119,38 @@ function visitDirectory(
       }
     }
   }
+  const paging = folderPagingNode('more', relativePath, depth, state)
+  if (paging) {
+    rows.push(paging)
+  }
 }
 
-/** Rows whose name contains the query, across every folder loaded so far, with their parent folders. */
-export function filterDirectoryCache(cache: DirectoryCache, query: string): TreeNode[] {
+function folderPagingNode(
+  kind: FolderPagingNode['kind'],
+  relativePath: string,
+  depth: number,
+  state: DirectoryState | undefined
+): FolderPagingNode | null {
+  if (state?.total === undefined || state.entries.length >= state.total) {
+    return null
+  }
+  return {
+    id: `${kind}:${relativePath}`,
+    relativePath,
+    depth,
+    kind,
+    loaded: state.entries.length,
+    total: state.total
+  }
+}
+
+/**
+ * Rows whose name contains the query, across every folder loaded so far, with their parent folders.
+ * A part-loaded folder always shows, ending in a row that says how much of it was searched.
+ */
+export function filterDirectoryCache(cache: DirectoryCache, query: string): FileExplorerRow[] {
   const needle = query.trim().toLowerCase()
-  const rows: TreeNode[] = []
+  const rows: FileExplorerRow[] = []
   if (needle !== '') {
     collectMatches('', 0, cache, needle, rows)
   }
@@ -119,34 +162,46 @@ function collectMatches(
   depth: number,
   cache: DirectoryCache,
   needle: string,
-  rows: TreeNode[]
+  rows: FileExplorerRow[]
 ): boolean {
-  const entries = (getDirectoryCacheState(cache, relativePath)?.entries ?? [])
+  const state = getDirectoryCacheState(cache, relativePath)
+  const entries = (state?.entries ?? [])
     .filter(shouldIncludeMobileFileExplorerEntry)
     .sort(compareDirectoryEntries)
   let matched = false
   for (const entry of entries) {
     const childPath = joinRelativePath(relativePath, entry.name)
     const nameMatches = entry.name.toLowerCase().includes(needle)
-    const childRows: TreeNode[] = []
+    const childRows: FileExplorerRow[] = []
     const childMatches =
       entry.isDirectory && collectMatches(childPath, depth + 1, cache, needle, childRows)
     if (nameMatches || childMatches) {
-      rows.push(toTreeNode(entry, childPath, depth), ...childRows)
+      rows.push(toTreeNode(entry, childPath, depth, cache), ...childRows)
       matched = true
     }
   }
-  return matched
+  const searched = folderPagingNode('searched', relativePath, depth, state)
+  if (searched) {
+    rows.push(searched)
+  }
+  return matched || searched !== null
 }
 
-function toTreeNode(entry: MobileDirEntry, relativePath: string, depth: number): TreeNode {
+function toTreeNode(
+  entry: MobileDirEntry,
+  relativePath: string,
+  depth: number,
+  cache: DirectoryCache
+): TreeNode {
+  const total = entry.isDirectory ? getDirectoryCacheState(cache, relativePath)?.total : undefined
   return {
     id: `${entry.isDirectory ? 'dir' : 'file'}:${relativePath}`,
     name: entry.name,
     relativePath,
     depth,
     kind: entry.isDirectory ? 'directory' : getMobileFileKind(relativePath),
-    isSymlink: entry.isSymlink
+    isSymlink: entry.isSymlink,
+    ...(total !== undefined && total > DIRECTORY_PAGE_SIZE ? { entryCount: total } : {})
   }
 }
 

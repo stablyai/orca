@@ -21,6 +21,8 @@ import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
+import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
+import { useRefreshHint } from '../query/refresh-hint'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -68,11 +70,15 @@ function folderPathOf(key: QueryKey): string | undefined {
     : undefined
 }
 
+function directoryState(read: Extract<DirectoryRead, { kind: 'directory' }>): DirectoryState {
+  return { entries: read.entries, total: read.total }
+}
+
 // A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
 function folderState(read: FolderRead, connState: ConnectionState): DirectoryState {
   switch (hostScreenState(read, connState)) {
     case 'data':
-      return { entries: read.data?.kind === 'directory' ? read.data.entries : [] }
+      return read.data?.kind === 'directory' ? directoryState(read.data) : { entries: [] }
     case 'empty-loading':
       return { entries: [], loading: true }
     case 'empty-error':
@@ -161,7 +167,7 @@ export function MobileFileExplorerPanel(props: {
       ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
         const relativePath = folderPathOf(key)
         return relativePath !== undefined && data?.kind === 'directory'
-          ? [[relativePath, { entries: data.entries }]]
+          ? [[relativePath, directoryState(data)]]
           : []
       }),
       ...folders.map(({ relativePath }, index): [string, DirectoryState] => [
@@ -179,6 +185,14 @@ export function MobileFileExplorerPanel(props: {
       setExpanded,
       loadDirectory: refreshDirectory
     })
+
+  const { folderPaging, searching, showMore, searchAll } = useMobileFileExplorerPaging({
+    scope,
+    hostId,
+    client,
+    target
+  })
+  const refreshing = useRefreshHint(searching)
 
   const retryDirectory = useCallback(
     (relativePath: string) => {
@@ -219,6 +233,9 @@ export function MobileFileExplorerPanel(props: {
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
         onOpenActions={openRowActions}
+        folderPaging={folderPaging}
+        onShowMore={showMore}
+        onSearchAll={searchAll}
       />
     )
   }
@@ -241,6 +258,7 @@ export function MobileFileExplorerPanel(props: {
         )
       }
       title={t('files.fileExplorerPanel.title', 'Files')}
+      refreshing={refreshing}
       subtitle={
         rootRead?.kind === 'legacy' && rootRead.truncated
           ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
@@ -300,6 +318,7 @@ export function MobileFileExplorerPanel(props: {
         data={rows}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        extraData={folderPaging}
         contentContainerStyle={[
           styles.listContent,
           treeReady && { paddingBottom: spacing.sm + filterBarHeight }
