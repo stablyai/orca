@@ -20,7 +20,7 @@ import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-const offers = vi.hoisted(() => ({ checks: 0 }))
+const offers = vi.hoisted(() => ({ checks: 0, lookups: 0 }))
 vi.mock('../../../../shared/native-chat/native-chat-fork-offer', async (importOriginal) => {
   const actual = await importOriginal<typeof ForkOffer>()
   return {
@@ -93,6 +93,14 @@ const EMPTY_DIFFS = new Map()
 const EMPTY_KEYS = new Set<string>()
 const LINE = { draws: false, thinking: false }
 
+/** Every eligibility decision, in any search, asks this set; count those asks. */
+class CountedSet extends Set<string> {
+  override has(id: string): boolean {
+    offers.lookups++
+    return super.has(id)
+  }
+}
+
 const request = vi.fn()
 function forkSurface(
   ids: Iterable<string>,
@@ -105,7 +113,12 @@ function forkSurface(
     pending: false,
     request
   }
-  return { ...rowAction, contextFloorSequence: floor, forkableItemIds: new Set(ids), rowAction }
+  return {
+    ...rowAction,
+    contextFloorSequence: floor,
+    forkableItemIds: new CountedSet(ids),
+    rowAction
+  }
 }
 
 let sideChat: NativeChatSideChat | undefined
@@ -113,6 +126,7 @@ function Pane(props: {
   fork: NativeChatForkSurface
   conversation: Conversation
   listening?: boolean
+  drawn?: boolean
 }): React.JSX.Element {
   sideChat = useNativeChatSideChat(props.fork)
   return (
@@ -120,7 +134,7 @@ function Pane(props: {
       <NativeChatSideChatForkPointContext.Provider
         value={props.listening === false ? undefined : sideChat?.reportForkPoint}
       >
-        <Transcript conversation={props.conversation} />
+        {props.drawn === false ? null : <Transcript conversation={props.conversation} />}
       </NativeChatSideChatForkPointContext.Provider>
     </NativeChatForkContext.Provider>
   )
@@ -138,23 +152,36 @@ beforeEach(() => {
   sideChat = undefined
 })
 
-it.each([100, 1000])(
-  'checks each of %i turns once per streamed update, and Send adds none',
-  async (size) => {
-    const fork = forkSurface(allReplies(size))
+it.each([
+  [100, 'forkable'],
+  [1000, 'forkable'],
+  [100, 'unmatched'],
+  [1000, 'unmatched']
+] as const)(
+  'decides each of %i responses (%s) once per streamed update, and Send adds no search',
+  async (size, replies) => {
+    const fork = forkSurface(replies === 'forkable' ? allReplies(size) : ['elsewhere'])
     const view = render(<Pane fork={fork} conversation={conversation(size, 'a')} />)
-    const rootRows = size * 2 + 2
+    const responses = size + 1
 
     for (const text of ['ab', 'abc', 'abcd']) {
       offers.checks = 0
+      offers.lookups = 0
       view.rerender(<Pane fork={fork} conversation={conversation(size, text)} />)
-      expect(offers.checks).toBeLessThanOrEqual(rootRows)
+      expect(offers.checks).toBeLessThanOrEqual(size * 2 + 2)
+      expect(offers.lookups).toBeLessThanOrEqual(responses)
     }
 
     offers.checks = 0
+    offers.lookups = 0
     await act(() => sideChat!.open('why?'))
     expect(offers.checks).toBe(0)
-    expect(request).toHaveBeenCalledWith(`reply-${size - 1}`, { question: 'why?' })
+    expect(offers.lookups).toBeLessThanOrEqual(1)
+    if (replies === 'forkable') {
+      expect(request).toHaveBeenCalledWith(`reply-${size - 1}`, { question: 'why?' })
+    } else {
+      expect(request).not.toHaveBeenCalled()
+    }
   }
 )
 
@@ -222,4 +249,18 @@ it('has nothing to fork once a rewind empties the conversation', async () => {
 
   expect(outcome).toHaveProperty('refused')
   expect(request).not.toHaveBeenCalled()
+})
+
+it('forgets the fork point while no transcript is drawn, and takes the next one', async () => {
+  const fork = forkSurface(allReplies(2))
+  const c = conversation(2, 'a')
+  const view = render(<Pane fork={fork} conversation={c} />)
+
+  view.rerender(<Pane fork={fork} conversation={c} drawn={false} />)
+  expect(await act(() => sideChat!.open('q'))).toHaveProperty('refused')
+  expect(request).not.toHaveBeenCalled()
+
+  view.rerender(<Pane fork={fork} conversation={c} />)
+  await act(() => sideChat!.open('q'))
+  expect(request).toHaveBeenCalledWith('reply-1', { question: 'q' })
 })
