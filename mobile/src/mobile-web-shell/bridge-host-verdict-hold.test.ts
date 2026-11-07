@@ -26,15 +26,27 @@ describe('the connection verdict hold', () => {
     bridge.host.receive(
       clientFrame({ type: 'request', id: bridgeId(3), method: 'native.pdf.view', params: {} })
     )
-    // status.get is how the page learns the verdict, so it alone goes through.
+    // status.get is how the page learns the verdict, so it alone reaches the desktop.
     bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(4), method: 'status.get' }))
+    // The device store never leaves the phone, so a cached page can read it before (or without) a verdict.
+    const storeRead = { action: 'read', table: 'cache', keys: ['host-list'] }
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(5),
+        method: 'native.store.rows',
+        params: storeRead
+      })
+    )
     bridge.client.pushState('connected')
     await flushBridge()
 
     expect(bridge.client.requests.map((request) => request.method)).toEqual(['status.get'])
     expect(bridge.client.streams).toEqual([])
-    expect(bridge.nativeCalls).toEqual([])
-    expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'handshaking' } })
+    expect(bridge.nativeCalls).toEqual([{ verb: 'native.store.rows', params: storeRead }])
+    expect(bridge.frames().findLast((frame) => frame.type === 'state')).toMatchObject({
+      connection: { state: 'handshaking' }
+    })
   })
 
   it('re-sends init as connected once the verdict opens, then sends what waited', () => {
