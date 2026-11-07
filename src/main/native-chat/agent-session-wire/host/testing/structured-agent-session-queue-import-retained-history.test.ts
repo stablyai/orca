@@ -20,7 +20,10 @@ import {
 } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import { insertTestJournalRow } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_SESSION as SESSION
+} from './structured-agent-session-host-test-data'
 
 import {
   db,
@@ -192,7 +195,7 @@ it('a retired personal handoff in a marker-5 prefix keeps Stop lifted without re
     v: journalRowSchemaVersion([]),
     epoch,
     seq: prefix,
-    ts: Date.now(),
+    ts: HOST_TEST_NOW,
     fence: 0,
     itemId: agentJournalSubmissionKey('H'),
     revision: 1,
@@ -207,8 +210,8 @@ it('a retired personal handoff in a marker-5 prefix keeps Stop lifted without re
       sessionId,
       epoch,
       prefix + 1,
-      Date.now(),
-      JSON.stringify({ v: 5, kind: 'outcomes', epoch, seq: prefix + 1, ts: Date.now() })
+      HOST_TEST_NOW,
+      JSON.stringify({ v: 5, kind: 'outcomes', epoch, seq: prefix + 1, ts: HOST_TEST_NOW })
     )
   db()
     .prepare('INSERT INTO journal_outcome_epochs VALUES (?,?,?,?,?,?)')
