@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from './orchestration-db'
+import {
+  rollbackLifecycleWriteTransaction,
+  type LifecycleWriteTransaction
+} from './lifecycle-transition'
 import { runLifecycleWriteTransaction } from './lifecycle-write-transaction-runner'
 
 describe('guarded lifecycle transitions', () => {
@@ -57,5 +61,48 @@ describe('guarded lifecycle transitions', () => {
     ).toThrow('database or disk is full')
     expect(db.db.isTransaction).toBe(false)
     expect(db.getTask(task.id)?.status).toBe('ready')
+  })
+})
+
+describe('lifecycle write rollback guards', () => {
+  it('skips a rollback after the failed statement already ended the transaction (#38123)', () => {
+    // SQLite aborts the transaction on disk/IO errors; a later ROLLBACK would throw
+    // "cannot rollback - no transaction is active" and hide the real failure.
+    const exec = vi.fn()
+    const db = { isTransaction: false, exec } as never
+    const transaction: LifecycleWriteTransaction = { savepoint: null }
+
+    expect(() => rollbackLifecycleWriteTransaction(db, transaction)).not.toThrow()
+    expect(exec).not.toHaveBeenCalled()
+  })
+
+  it('rolls back a savepoint only while its transaction stands', () => {
+    const exec = vi.fn()
+    const db = { isTransaction: true, exec } as never
+
+    rollbackLifecycleWriteTransaction(db, { savepoint: 'worker_report_transaction' })
+
+    expect(exec.mock.calls).toEqual([
+      ['ROLLBACK TO worker_report_transaction'],
+      ['RELEASE worker_report_transaction']
+    ])
+  })
+
+  it('reports the operation failure even when the rollback itself throws', () => {
+    const db = {
+      isTransaction: true,
+      exec: (sql: string) => {
+        if (sql === 'BEGIN IMMEDIATE' || sql.startsWith('SAVEPOINT')) {
+          return
+        }
+        throw new Error('cannot rollback - no transaction is active')
+      }
+    } as never
+
+    expect(() =>
+      runLifecycleWriteTransaction(db, 'worker_report_transaction', () => {
+        throw new Error('disk I/O error')
+      })
+    ).toThrow('disk I/O error')
   })
 })

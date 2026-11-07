@@ -67,6 +67,7 @@ export function settleWorkerReport(
   )
 }
 
+/** Apply a worker report inside the caller's savepoint, rejecting an inactive dispatch. */
 export function settleWorkerReportInTransaction(
   this: OrchestrationDb,
   params: WorkerReportSettlementParams
@@ -222,8 +223,12 @@ export function settleWorkerReportInTransaction(
     taskUpdate = { changes: taskTransition.changed ? 1 : 0 }
   }
   if (dispatchUpdate.changes !== 1 || taskUpdate.changes !== 1) {
-    this.db.exec('ROLLBACK TO settle_worker_report')
-    this.db.exec('RELEASE settle_worker_report')
+    // Guard the savepoint rollback: a failed statement can already have ended the transaction,
+    // and rolling back then replaces this rejection with "no transaction is active" (#38123).
+    if (this.db.isTransaction) {
+      this.db.exec('ROLLBACK TO settle_worker_report')
+      this.db.exec('RELEASE settle_worker_report')
+    }
     return {
       action: 'rejected',
       code: 'inactive_dispatch',

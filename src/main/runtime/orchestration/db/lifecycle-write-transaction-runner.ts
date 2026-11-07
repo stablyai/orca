@@ -16,7 +16,12 @@ export function runLifecycleWriteTransaction<T>(
     commitLifecycleWriteTransaction(db, transaction)
     return result
   } catch (error) {
-    rollbackLifecycleWriteTransaction(db, transaction)
+    try {
+      rollbackLifecycleWriteTransaction(db, transaction)
+    } catch {
+      // The failure that brought us here is the one to report; a rollback error such as
+      // "cannot rollback - no transaction is active" must not replace it (#38123).
+    }
     throw error
   }
 }
