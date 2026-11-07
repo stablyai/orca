@@ -87,6 +87,16 @@ export function deriveGiteaCommitStatus(rollup: RawGiteaCombinedStatus | null): 
     : 'neutral'
 }
 
+/** Gitea identifies the head by ref or by an owner-prefixed label (AGit PRs included). */
+export function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
+  const ref = raw.head?.ref?.trim()
+  if (ref === branchName) {
+    return true
+  }
+  const label = raw.head?.label?.trim()
+  return label === branchName || label?.endsWith(`:${branchName}`) === true
+}
+
 export function mapGiteaPullRequestState(
   raw: Pick<RawGiteaPullRequest, 'draft' | 'merged' | 'state'>
 ): GiteaPullRequestInfo['state'] {

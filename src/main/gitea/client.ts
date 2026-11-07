@@ -2,13 +2,15 @@ import {
   deriveGiteaCommitStatus,
   mapGiteaPullRequest,
   mapGiteaPullRequestState,
+  matchesBranch,
   type GiteaPullRequestInfo,
   type RawGiteaCombinedStatus,
   type RawGiteaPullRequest
 } from './pull-request-mappers'
 import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
-import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
+import { invalidateGiteaPullRequestScanTree } from './pull-request-scan-cache'
+import { fetchGiteaBranchPullRequestCandidates } from './pull-request-branch-lookup'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -18,8 +20,6 @@ import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 const REQUEST_TIMEOUT_MS = 5000
 // Forgejo may spend several seconds loading reviewers for one pulls page.
 const PULL_REQUEST_LIST_TIMEOUT_MS = 15_000
-const PULL_REQUEST_PAGE_LIMIT = 50
-const MAX_PULL_REQUEST_PAGES = 5
 
 type GiteaAuthConfig = {
   apiBaseUrl: string | null
@@ -129,9 +129,8 @@ function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
 
 /** Invalidate after creation so card refreshes cannot reuse a cached miss. */
 export function invalidateGiteaPullRequestScanForRepo(repo: GiteaRepoRef): void {
-  const repoKey = giteaPullRequestScanKey(repo)
-  invalidateGiteaPullRequestScan(repoKey)
-  invalidateGiteaPullRequestScan(`${repoKey}::strict`)
+  // Covers the base listing, its strict variant and every head-filtered probe.
+  invalidateGiteaPullRequestScanTree(giteaPullRequestScanKey(repo))
 }
 
 async function getCommitStatus(
@@ -154,15 +153,6 @@ async function normalizePullRequest(
 ): Promise<GiteaPullRequestInfo | null> {
   const status = await getCommitStatus(repo, raw.head?.sha?.trim())
   return mapGiteaPullRequest(raw, status)
-}
-
-function matchesBranch(raw: RawGiteaPullRequest, branchName: string): boolean {
-  const ref = raw.head?.ref?.trim()
-  if (ref === branchName) {
-    return true
-  }
-  const label = raw.head?.label?.trim()
-  return label === branchName || label?.endsWith(`:${branchName}`) === true
 }
 
 export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
@@ -258,26 +248,20 @@ export async function getGiteaPullRequestForBranch(
   }
 
   if (branchName) {
-    const pullRequests = await scanGiteaPullRequests(
-      // Strict scans must not inherit an empty result produced by a failed lenient scan.
-      throwOnFailure ? `${giteaPullRequestScanKey(repo)}::strict` : giteaPullRequestScanKey(repo),
-      (page) =>
-        requestJson<RawGiteaPullRequest[]>(
-          repo,
-          `/repos/${encodedRepoPath(repo)}/pulls`,
-          {
-            searchParams: {
-              state: 'all',
-              sort: 'recentupdate',
-              page,
-              limit: PULL_REQUEST_PAGE_LIMIT
-            },
-            timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
-          },
-          throwOnFailure
-        ),
-      PULL_REQUEST_PAGE_LIMIT,
-      MAX_PULL_REQUEST_PAGES
+    const pullRequests = await fetchGiteaBranchPullRequestCandidates(
+      {
+        scanKey: giteaPullRequestScanKey(repo),
+        apiBaseUrl: configuredApiBaseUrl(repo),
+        throwOnFailure,
+        fetchList: (params) =>
+          requestJson<RawGiteaPullRequest[]>(
+            repo,
+            `/repos/${encodedRepoPath(repo)}/pulls`,
+            { searchParams: params, timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS },
+            throwOnFailure
+          )
+      },
+      branchName
     )
     const raw = pullRequests.find((item) => matchesBranch(item, branchName))
     if (raw) {
