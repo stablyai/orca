@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { createTestStore } from '../store-test-helpers'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import type { AppState } from '../../types'
 import type { WorktreeLineage } from '../../../../../shared/worktree/lineage-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -14,7 +14,7 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import {
   RUNTIME_CATALOG_STALE_MS,
   resetRuntimeCatalogListingForTests
-} from '../runtime-status-hydration'
+} from '../runtime-status/runtime-status-hydration'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {

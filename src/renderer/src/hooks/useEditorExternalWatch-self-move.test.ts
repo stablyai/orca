@@ -21,7 +21,7 @@ import {
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { getOpenFilesForExternalFileChange } from '@/components/editor/autosave/editor-autosave'
 import { __clearSelfWriteRegistryForTests } from '@/components/editor/external-changes/editor-self-write-registry'
 import {

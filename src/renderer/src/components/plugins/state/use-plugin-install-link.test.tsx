@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { parsePluginInstallLink } from '../../../../../shared/plugins/catalog/plugin-install-link'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { usePluginInstallLink } from './use-plugin-install-link'
 
 const toastError = vi.hoisted(() => vi.fn())
@@ -16,7 +16,7 @@ const storeState = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 
-const { openPluginInstallLink } = await import('@/store/plugin-preview-request')
+const { openPluginInstallLink } = await import('@/store/plugins/navigation/plugin-preview-request')
 
 let root: Root | null = null
 let hook: ReturnType<typeof usePluginInstallLink> | null = null

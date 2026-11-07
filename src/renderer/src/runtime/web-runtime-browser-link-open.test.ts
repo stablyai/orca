@@ -1,7 +1,7 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
-import '../store/slices/store-test-helpers'
+import '../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import '../../../shared/session-tabs-runtime-capabilities'
 import '../../../shared/protocol-version'
@@ -15,7 +15,8 @@ import * as workspaceBrowserTabOpen from '../lib/browser/workspace/workspace-bro
 import { openHttpLink } from '../lib/browser/navigation/http-link-routing'
 import { captureLinkOpenIntent } from '../lib/link-open-intent'
 import { beginLinkOpenRequest } from '../lib/link-open-request'
-import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
 import {
   resetWebSessionTabsSyncTestState,

@@ -3,7 +3,7 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 
 import './project-host-routing'
-import '../adopt-from-endpoint'
+import '../host-catalog/endpoint-catalog-adoption'
 
 // Normalize wire catalog fields at ingest so null repoId/path cannot crash Settings/sidebar trim/grouping readers (3bcc5be3, v1.4.188 Linux).
 const repos = [
@@ -41,7 +41,7 @@ function badSetups(): ProjectHostSetup[] {
   return [base('repo:repo-1::local', 'orca'), corrupted]
 }
 
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 
 it.each([false, true])(

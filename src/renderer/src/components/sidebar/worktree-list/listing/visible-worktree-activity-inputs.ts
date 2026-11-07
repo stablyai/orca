@@ -4,7 +4,7 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
 import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
-import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/structured-chat-slept-at'
+import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-chat-slept-at'
 
 export type TerminalActivityTab = Pick<TerminalTab, 'id'>
 export type BrowserActivityTab = Pick<BrowserWorkspace, 'id'>

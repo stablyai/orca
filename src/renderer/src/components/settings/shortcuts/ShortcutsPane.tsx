@@ -41,7 +41,7 @@ import {
 } from './shortcut-binding-list-mutations'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { useEditablePluginCommands } from '@/store/plugin-panels'
+import { useEditablePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'

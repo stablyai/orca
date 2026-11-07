@@ -3,7 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
-import { useThemeBackgroundStore } from '@/store/theme-background'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget

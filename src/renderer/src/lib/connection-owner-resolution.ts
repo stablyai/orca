@@ -20,9 +20,9 @@ import {
 } from './folder-workspace-connection'
 import {
   selectFolderWorkspaces,
-  resolveQualifiedIndexedFolderWorkspace,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
 

@@ -8,7 +8,7 @@ import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
@@ -18,7 +18,7 @@ import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-s
 import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
 import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
 import { defaultScopeSource } from '@/lib/default-creation-host'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null

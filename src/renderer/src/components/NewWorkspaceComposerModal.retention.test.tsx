@@ -13,7 +13,7 @@ import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspac
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentPickerDraft } from '../../../shared/agent-launch/picker/agent-launch-picker'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const evidence = vi.hoisted(() => {
   const trace: {

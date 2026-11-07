@@ -11,7 +11,7 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 import { TabDragPointerSensor } from '../tab-group/tab-drag-pointer-sensor'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
 import {
   addWorkspace,

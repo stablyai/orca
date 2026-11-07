@@ -21,7 +21,7 @@ import {
 } from '@/components/dashboard-popout/preview-terminal-options'
 import { openStandaloneTerminal } from '@/components/standalone-terminal/open-standalone-terminal'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
-import { usePluginFontReady } from '@/store/plugin-fonts'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 
 export type PlainSshTerminalPhase =
   | { kind: 'opening' }

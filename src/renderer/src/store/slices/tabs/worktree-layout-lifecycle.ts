@@ -9,7 +9,7 @@ import type { AppState } from '../../types'
 export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { getTerminalActivationSpawnSuppression } from '../terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
 import { collapseEmptiedKeptGroups } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,

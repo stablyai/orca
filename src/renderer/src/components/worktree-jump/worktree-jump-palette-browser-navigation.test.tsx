@@ -24,7 +24,7 @@ import type { QuickActionPaletteItem } from './worktree-jump-palette-model'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []

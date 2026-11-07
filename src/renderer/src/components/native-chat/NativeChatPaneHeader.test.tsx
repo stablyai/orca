@@ -5,13 +5,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({

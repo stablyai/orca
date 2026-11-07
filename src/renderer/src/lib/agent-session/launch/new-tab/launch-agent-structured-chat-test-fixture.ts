@@ -1,9 +1,12 @@
+import type { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { createTestStore, seedStore } from '@/store/slices/store-test-helpers'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeTab, makeUnifiedTab, makeTabGroup } from '@/store/slices/store-session-test-harness'
-import { drawTabsFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import type * as Frames from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
+import { drawTabsFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import type * as Frames from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { registerStructuredSelectionCatalogStore } from '../../options/structured-agent-session-selection-controller'
@@ -74,25 +77,6 @@ function launchScenarioSettings(): GlobalSettings {
     agentPermissionDefault: undefined,
     agentPermissionOverrides: undefined
   })
-}
-
-export function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
-  return {
-    sessionId,
-    worktreeId,
-    executionHostId: 'local' as const,
-    target: { kind: 'local' as const },
-    params: {
-      envelope: {
-        sessionId,
-        clientOperationId: `operation-${sessionId}`,
-        expectedRuntimeFence: null,
-        payloadFingerprint: 'f'.repeat(64)
-      },
-      worktree: `id:${worktreeId}`,
-      agent: 'codex' as const
-    }
-  }
 }
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))

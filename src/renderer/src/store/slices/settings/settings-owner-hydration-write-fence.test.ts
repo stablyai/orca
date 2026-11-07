@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { markRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 it('does not overwrite a settings write with an older owner hydration', async () => {

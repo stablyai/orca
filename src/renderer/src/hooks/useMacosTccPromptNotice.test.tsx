@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import { UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
-import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
+import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
 import { i18n } from '@/i18n/i18n'
 import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 

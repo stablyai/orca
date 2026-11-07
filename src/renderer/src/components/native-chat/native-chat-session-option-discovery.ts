@@ -25,7 +25,7 @@ import type {
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store/index'
-import { selectFileListWorktree } from '@/store/selectors'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string

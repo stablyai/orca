@@ -13,7 +13,10 @@ import type { AppState } from '@/store/types'
 import { dedupePaletteWorktrees } from './workspace/search/palette-repo-resolution'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function getPaletteOwnershipWorktreeIds(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>

@@ -11,7 +11,10 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Tab } from '../../../../shared/tab-types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 function chatLabel(tab: Tab): string {
   return tab.customLabel?.trim() || tab.generatedLabel?.trim() || tab.label

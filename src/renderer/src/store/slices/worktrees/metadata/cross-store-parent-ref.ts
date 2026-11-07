@@ -8,7 +8,7 @@ import { crossStoreParentRefOfRow } from '../../../../../../shared/worktree/line
 import { assertCrossStoreLineageSupported } from '../../../../../../shared/worktree-runtime-capabilities'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
-import { selectLineageStoreInstallationId } from '../../../cross-store-lineage-parents'
+import { selectLineageStoreInstallationId } from './cross-store-lineage-parents'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 
 /** Whether a parent lives in another Orca store than the child, so the link needs a cross-store ref. */

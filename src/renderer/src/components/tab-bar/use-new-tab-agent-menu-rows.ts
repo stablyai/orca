@@ -3,7 +3,7 @@ import {
   useAppStateView,
   useAppStateViewActive,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'

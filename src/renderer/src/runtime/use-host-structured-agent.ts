@@ -1,4 +1,4 @@
-import { useAppViewExternalStore, useAppStateValue } from '@/store/app-state-view'
+import { useAppViewExternalStore, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback } from 'react'
 import type { AgentSessionRegisteredAgent } from '../../../shared/agent-session/agent-session-registered-agents'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'

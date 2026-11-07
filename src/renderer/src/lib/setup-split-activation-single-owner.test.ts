@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { type AppState, useAppStore } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'
 import { getDefaultSettings } from '../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'

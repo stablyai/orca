@@ -16,7 +16,7 @@ import {
   folderRelativePathToIncludeGlob,
   selectedExplorerFolderRelativePath
 } from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
-import { usePluginCommands } from '@/store/plugin-panels'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useAppStore } from '../store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../shared/keybindings'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'

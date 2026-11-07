@@ -33,7 +33,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export type CheckRunDetailsOwnership = Pick<
   OpenFile,

@@ -1,5 +1,8 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
+import {
+  diffCommentOwnerKey,
+  type DiffCommentOwner
+} from '@/store/slices/diff-comments/diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'

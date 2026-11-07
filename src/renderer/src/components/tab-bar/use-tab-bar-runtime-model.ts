@@ -27,7 +27,7 @@ import {
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 const isWindows = navigator.userAgent.includes('Windows')
 export const isMacOs = navigator.userAgent.includes('Mac')

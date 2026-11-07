@@ -11,7 +11,7 @@ import {
   recordLiveEntriesFullRebuild
 } from './worktree-agent-live-index-patch'
 import './worktree-agent-orchestration-index'
-import { createWorktreeRecordSelector } from '@/store/worktree-record-selector-cache'
+import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 // Why frozen and exported: card hooks return these from their inactive branch,

@@ -10,12 +10,12 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
 import { useAppStore } from '@/store/index'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   captureHostIdentityFence,
   isHostIdentityFenceCurrent,
   type HostIdentityFence
-} from '@/store/host-catalog-fencing'
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'

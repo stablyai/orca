@@ -2,7 +2,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,

@@ -4,7 +4,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { canonicalSourceControlActionSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useSavedSourceControlActionStart } from './use-saved-source-control-action-start'
 
 const { launch } = vi.hoisted(() => ({ launch: vi.fn() }))
