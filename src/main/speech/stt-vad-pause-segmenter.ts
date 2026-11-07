@@ -22,7 +22,7 @@ export class VadPauseSegmenter {
   private readonly pauseFrames: number
   private readonly minSpeechFrames: number
   private readonly prerollSamples: number
-  private unscored = new Float32Array(0)
+  private unscored: Float32Array = new Float32Array(0)
   private preroll: Float32Array[] = []
   private prerollLength = 0
   private inSpeech = false
