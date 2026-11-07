@@ -12,6 +12,8 @@ import {
 
 // Why a bound: a torn OSC is held across reads, and a runaway one must not grow forever.
 const MAX_PENDING_OSC_CHARS = 256
+// Shell command markers can carry the command line (fish's cmdline_url); match the OSC 133 scanner's carry.
+const MAX_PENDING_OSC_133_CHARS = 4096
 
 type ColorSlot = 'foreground' | 'background' | 'cursor'
 
@@ -37,6 +39,16 @@ function mayBeColorOsc(input: string, bodyStart: number, appearance: boolean): b
   return input[bodyStart] === '1' && (next === '0' || next === '1' || (appearance && next === '2'))
 }
 
+// Why char codes: this runs for every OSC in every PTY read.
+function isOsc133(input: string, bodyStart: number): boolean {
+  return (
+    input.charCodeAt(bodyStart) === 0x31 &&
+    input.charCodeAt(bodyStart + 1) === 0x33 &&
+    input.charCodeAt(bodyStart + 2) === 0x33 &&
+    input.charCodeAt(bodyStart + 3) === 0x3b
+  )
+}
+
 /** Mirror app-set OSC 10/11 and their resets for the PTY owner, and OSC 4/12 for an owner that answers them; theme
  *  changes drop overrides like the viewer does. */
 export class TerminalOscColorOverrideTracker {
@@ -48,11 +60,11 @@ export class TerminalOscColorOverrideTracker {
   private readonly maxPendingChars: number
   private markerEndsInput = false
 
-  /** `appearance`: also track palette and cursor, holding a torn SET of every palette slot. `onOsc133` sees each
+  /** `appearance`: also track palette and cursor, holding a torn SET of every palette slot. `commandMarkers` sees each
    *  OSC 133 payload in this same pass; `adjacent` means no other output since the previous one. */
   constructor(
     private readonly appearance = false,
-    private readonly onOsc133?: (payload: string, adjacent: boolean) => void
+    private readonly commandMarkers?: { noteMarker: (payload: string, adjacent: boolean) => void }
   ) {
     this.maxPendingChars = appearance ? MAX_APPEARANCE_OSC_BODY_CHARS + 16 : MAX_PENDING_OSC_CHARS
   }
@@ -69,19 +81,20 @@ export class TerminalOscColorOverrideTracker {
       const isBel = input[terminator] === '\x07'
       if (terminator === -1 || (!isBel && terminator === input.length - 1)) {
         const tail = input.slice(offset)
-        this.pending = tail.length <= this.maxPendingChars ? tail : ''
+        const maxChars =
+          this.commandMarkers && isOsc133(tail, 2)
+            ? MAX_PENDING_OSC_133_CHARS
+            : this.maxPendingChars
+        this.pending = tail.length <= maxChars ? tail : ''
         this.markerEndsInput = markerEnd === offset && this.pending !== ''
         return
       }
-      if (this.onOsc133 && input.startsWith('133;', bodyStart)) {
-        this.onOsc133(input.slice(bodyStart + 4, terminator), markerEnd === offset)
-        markerEnd = isBel ? terminator + 1 : terminator + 2
-      }
-      if (
-        (isBel || input[terminator + 1] === '\\') &&
-        mayBeColorOsc(input, bodyStart, this.appearance)
-      ) {
+      const terminated = isBel || input[terminator + 1] === '\\'
+      if (terminated && mayBeColorOsc(input, bodyStart, this.appearance)) {
         this.apply(input.slice(bodyStart, terminator), currentBase)
+      } else if (terminated && this.commandMarkers && isOsc133(input, bodyStart)) {
+        this.commandMarkers.noteMarker(input.slice(bodyStart + 4, terminator), markerEnd === offset)
+        markerEnd = isBel ? terminator + 1 : terminator + 2
       }
       offset = input.indexOf('\x1b]', isBel ? terminator + 1 : terminator)
     }

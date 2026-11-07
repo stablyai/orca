@@ -15,12 +15,14 @@ export type PtyStartupIngressOptions = {
   /** Host-wide viewer colours, read per query so a theme change reaches a long-lived pane.
    *  Defaults to this process's pushed colours. */
   resolveHostColors?: () => TerminalOscColorQueryReplyColors | null
-  /** The PTY's foreground process group (tcgetpgrp). Lets the owner drop a colour query whose asker already exited;
-   *  absent (ConPTY), every query is answered at once. */
-  readForegroundGroup?: () => number | null | undefined
+  /** Lets the owner drop a colour reply once another group holds the terminal; ConPTY has none. */
+  readForegroundGroup?: PtyForegroundGroupReader
   write: (data: string) => void
   onEmission: (emission: PtyIngressEmission) => void
 }
+
+/** The PTY's foreground process group (tcgetpgrp); null or undefined when it cannot be read. */
+export type PtyForegroundGroupReader = () => number | null | undefined
 
 export type PtyIngressSourceSpan = {
   data: string
@@ -30,8 +32,10 @@ export type PtyIngressSourceSpan = {
 
 export type PtyStartupIngressOperation =
   | { kind: 'data'; chunk: PtyIngressSourceSpan }
+  // A reply's echo already claimed in its read, emitted suppressed once a colour query held ahead of it settles.
+  | { kind: 'echo'; chunk: PtyIngressSourceSpan }
   | { kind: 'close-query' }
-  | { kind: 'snapshot' }
+  | { kind: 'snapshot'; final: boolean }
   | { kind: 'teardown' }
   | { kind: 'expire' }
   | { kind: 'release-echo' }

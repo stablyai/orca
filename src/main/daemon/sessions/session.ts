@@ -270,7 +270,7 @@ export class Session extends SessionProcessInspection {
 
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
+    this.startupIngress.snapshotBarrier(true)
     // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
     this.recoveryBarrier.flushPending()
     return held

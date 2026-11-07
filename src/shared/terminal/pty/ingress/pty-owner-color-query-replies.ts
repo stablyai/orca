@@ -34,9 +34,9 @@ export class PtyOwnerColorQueryReplies {
   constructor(
     private readonly intent: PtyStartupIngressIntent | undefined,
     private readonly resolveHostColors: () => TerminalOscColorQueryReplyColors | null = getPtyOwnerHostColors,
-    onOsc133?: (payload: string, adjacent: boolean) => void
+    commandMarkers?: { noteMarker: (payload: string, adjacent: boolean) => void }
   ) {
-    this.overrides = new TerminalOscColorOverrideTracker(this.ownsAppearance, onOsc133)
+    this.overrides = new TerminalOscColorOverrideTracker(this.ownsAppearance, commandMarkers)
   }
 
   /** A launcher-pinned PTY's owner is its only theme responder, so viewers and the host never answer it. */

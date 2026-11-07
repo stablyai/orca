@@ -96,8 +96,10 @@ describe('PTY owner colour replies after the asker exits', () => {
     expect(writes).toEqual([REPLY])
     expect(visible()).toBe(`${PROMPT}${COMMAND_START}${DA1}`)
 
-    // A command already proven live is answered at once.
+    // Every later query waits too: a live asker can still exit right after its next query.
     ingress.accept(QUERY)
+    expect(writes).toEqual([REPLY])
+    vi.advanceTimersByTime(20)
     expect(writes).toEqual([REPLY, REPLY])
   })
 
@@ -212,14 +214,40 @@ describe('PTY owner colour replies after the asker exits', () => {
     expect(emissions.at(-1)?.rawEndSeq).toBe(ingress.acceptedRawSequence)
   })
 
-  it('answers at once at the prompt and at an Oh My Posh prompt', () => {
+  it('answers at once at the prompt', () => {
     const { ingress, writes } = createHarness()
     ingress.accept(QUERY)
     ingress.accept(PROMPT)
     ingress.accept(QUERY)
-    // OMP closes its own prompt zone with adjacent B C D;0 (#10923); no command is running.
-    ingress.accept(`\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D;0\x07${QUERY}`)
 
-    expect(writes).toEqual([REPLY, REPLY, REPLY])
+    expect(writes).toEqual([REPLY, REPLY])
+  })
+
+  it('keeps watching a command whose app closes its own prompt zone (B C D;0, #10923)', () => {
+    vi.useFakeTimers()
+    const { ingress, writes, setGroup, runCommand } = createHarness()
+    runCommand()
+    ingress.accept(`\x1b]133;B\x07\x1b]133;C\x07\x1b]133;D;0\x07${QUERY}`)
+    setGroup(SHELL_GROUP)
+    ingress.accept(PROMPT)
+    vi.runAllTimers()
+
+    expect(writes).toEqual([])
+  })
+
+  it('tracks a long command marker torn across reads, and ignores one cut short by a bare ESC', () => {
+    vi.useFakeTimers()
+    const { ingress, writes } = createHarness()
+    ingress.accept(PROMPT)
+    ingress.accept(`\x1b]133;C;cmdline_url=${'x'.repeat(400)}`)
+    ingress.accept('\x07')
+    ingress.accept(QUERY)
+    ingress.accept(PROMPT)
+    vi.runAllTimers()
+    expect(writes).toEqual([])
+
+    ingress.accept('\x1b]133;C\x1b[31m')
+    ingress.accept(QUERY)
+    expect(writes).toEqual([REPLY])
   })
 })

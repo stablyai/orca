@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: classification, echo suppression and the colour-reply hold share one ordered operation queue; splitting them would split the ordering invariant. */
 import { nextQueryCandidate, parsePtyStartupQuery } from './pty-startup-query'
 import { PtyOwnerColorQueryReplies } from './pty-owner-color-query-replies'
 import { TerminalKittyKeyboardModeTracker } from '../../protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
@@ -57,7 +58,7 @@ export class PtyStartupIngress {
     this.colorQueries = new PtyOwnerColorQueryReplies(
       options.intent,
       options.resolveHostColors,
-      (payload, adjacent) => this.askerWait.noteMarker(payload, adjacent)
+      this.askerWait
     )
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
     this.delivery = new PtyStartupReplyDelivery(
@@ -100,8 +101,9 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  snapshotBarrier(): number {
-    this.enqueue({ kind: 'snapshot' })
+  /** `final`: the session's last checkpoint, which must not miss bytes held behind a colour query. */
+  snapshotBarrier(final = false): number {
+    this.enqueue({ kind: 'snapshot', final })
     return this.rawHighWater
   }
 
@@ -138,8 +140,12 @@ export class PtyStartupIngress {
   private applyOperation(operation: PtyStartupIngressOperation): void {
     switch (operation.kind) {
       case 'data':
-        return this.askerWait.waiting
-          ? this.settleAskerWait(this.askerWait.review(operation.chunk))
+      case 'echo':
+        if (this.askerWait.waiting) {
+          return this.settleAskerWait(this.askerWait.review(operation))
+        }
+        return operation.kind === 'echo'
+          ? this.emit(operation.chunk, true, '')
           : this.processEchoSpan(operation.chunk)
       case 'asker-wait':
         this.settleAskerWait(this.askerWait.judge(true))
@@ -157,6 +163,8 @@ export class PtyStartupIngress {
         this.clearDeadline()
         return
       case 'snapshot':
+        this.releasePendingInSourceOrder(false, operation.final)
+        return
       case 'release-echo':
         this.releasePendingInSourceOrder(false)
         return
@@ -192,7 +200,7 @@ export class PtyStartupIngress {
         if (match.kind === 'partial') {
           const tail = slicePtyIngressSourceSpan(input, match.offset)
           if (match.offset > 0) {
-            this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset), true)
+            this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
           }
           // Keep a query ahead of echo only while the combined candidate stays viable, including partial terminators.
           // BEL-led readline echoes can complete real queries; disproven candidates must release before the echo (#12112).
@@ -200,7 +208,7 @@ export class PtyStartupIngress {
           if (this.tornQuery.span) {
             const resolved = combinePtyIngressSourceSpans(this.tornQuery.span, tail)
             if (parsePtyStartupQuery(resolved.data, 0, this.scope).kind !== 'none') {
-              this.processQuerySpan(tail, true)
+              this.processQuerySpan(tail)
               return
             }
             // Unlike ordinary ConPTY barrier release, combined candidate+tail is now disproven as a query; release it unconditionally.
@@ -214,21 +222,29 @@ export class PtyStartupIngress {
       if (match.offset > 0) {
         this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
       }
+      const echoEnd = match.offset + match.length
+      const echo = slicePtyIngressSourceSpan(input, match.offset, echoEnd)
+      if (this.askerWait.waiting) {
+        // A colour query in the prefix holds everything after it, this claimed echo included.
+        this.applyOperation({ kind: 'echo', chunk: echo })
+        return this.applyOperation({
+          kind: 'data',
+          chunk: slicePtyIngressSourceSpan(input, echoEnd)
+        })
+      }
       // Release torn candidates before suppressed ranges so raw sequence accounting stays aligned.
       this.releaseQueryPending()
-      const echoEnd = match.offset + match.length
-      this.emit(slicePtyIngressSourceSpan(input, match.offset, echoEnd), true, '')
+      this.emit(echo, true, '')
       input = slicePtyIngressSourceSpan(input, echoEnd)
     }
 
     if (input.data.length > 0) {
-      this.processQuerySpan(input, true)
+      this.processQuerySpan(input)
     }
   }
 
-  /** `mayHold`: only held or later-read bytes follow the span, so a colour query can hold the rest of it. A span
-   *  before a complete echo answers at once: the echo is already claimed and is emitted next. */
-  private processQuerySpan(span: PtyIngressSourceSpan, mayHold = false): void {
+  /** A colour query whose asker may be exiting holds the rest of the span; callers defer what follows. */
+  private processQuerySpan(span: PtyIngressSourceSpan): void {
     const input = combinePtyIngressSourceSpans(this.tornQuery.take(), span)
     const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
 
@@ -264,11 +280,9 @@ export class PtyStartupIngress {
       const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
       const asker =
         query.kind === 'kitty'
-          ? null
-          : this.askerWait.sampleAt(querySpan, input.data, query.endIndex)
-      if (asker?.presence === 'unsure' && mayHold) {
-        const held = slicePtyIngressSourceSpan(input, candidateIndex)
-        this.askerWait.hold(held, asker.group, query.endIndex - candidateIndex)
+          ? 'present'
+          : this.askerWait.consider(input, candidateIndex, query.endIndex)
+      if (asker === 'held') {
         return
       }
       // What stands in for an answered query: nothing, or a mixed OSC's SETs for the viewers. An exited asker's
@@ -279,7 +293,7 @@ export class PtyStartupIngress {
             ? ''
             : null
           : this.colorQueries.answer(query, (reply) =>
-              asker?.presence === 'gone' ? true : this.delivery.answer(reply, 'owner')
+              asker === 'gone' ? true : this.delivery.answer(reply, 'owner')
             )
       if (query.kind === 'kitty' && replacement !== null) {
         this.scope.kitty = false
@@ -300,8 +314,8 @@ export class PtyStartupIngress {
   private settleAskerWait(verdict: PtyQueryAskerVerdict | null): void {
     const held = verdict && this.askerWait.settle(verdict)
     if (held) {
-      this.processQuerySpan(held.from, true)
-      held.later.forEach((chunk) => this.applyOperation({ kind: 'data', chunk }))
+      this.processQuerySpan(held.from)
+      held.later.forEach((read) => this.applyOperation(read))
     }
   }
 
@@ -312,13 +326,13 @@ export class PtyStartupIngress {
     }
   }
 
-  /** Settle held askers first (a barrier ends only a wait proven gone; teardown drops them); anything still behind one stays held.
-   * Release query before echo defensively: it would own earlier bytes, though current classification never arms both.
+  /** Settle held askers first: a barrier ends only a wait proven gone, a final snapshot judges each, teardown drops them.
+   * Anything still behind a held asker stays held. Release query before echo defensively: it would own earlier bytes, though current classification never arms both.
    * Retain torn colors across barriers unless explicitly included: viewers lack reply authority, so only hold timeout/teardown ends them. */
-  private releasePendingInSourceOrder(includeColorQuery: boolean): void {
+  private releasePendingInSourceOrder(includeColorQuery: boolean, drain = includeColorQuery): void {
     do {
-      this.settleAskerWait(includeColorQuery ? 'gone' : this.askerWait.judge(false))
-    } while (includeColorQuery && this.askerWait.waiting)
+      this.settleAskerWait(includeColorQuery ? 'gone' : this.askerWait.judge(drain))
+    } while (drain && this.askerWait.waiting)
     if (this.askerWait.waiting) {
       return
     }
