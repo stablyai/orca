@@ -262,9 +262,10 @@ describe('a stop while a failed phone dictation is reaching the computer', () =>
     seam.read = { revision: 1, committed: '', tentative: '', failure: 'failed' }
     // The drain tick reads the failure and starts the computer's session.
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 600))
+      await vi.waitFor(() =>
+        expect(rpc.requests.map((request) => request.method)).toEqual(['speech.dictation.start'])
+      )
     })
-    expect(rpc.requests.map((request) => request.method)).toEqual(['speech.dictation.start'])
     await act(async () => {
       const stopped = dictation().stop()
       await pump(rpc, sent)
