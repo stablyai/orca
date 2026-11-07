@@ -1,6 +1,6 @@
 // Input owns departure from following; layout and application writes also produce scroll events.
 
-import { createContext, useCallback, useEffect, useMemo } from 'react'
+import { createContext, useCallback, useMemo } from 'react'
 import {
   readerGestureDirection,
   readerGestureLeavesEnd,
@@ -76,36 +76,9 @@ type ReaderScrollCallbacks = {
   onReaderAct?: () => void
 }
 
-type LastInput = { keyboard: boolean; count: number }
-const lastInputByDocument = new WeakMap<Document, LastInput>()
-/** The input count when a window blur took focus from the transcript. */
-const windowBlurInputCount = new WeakMap<HTMLElement, number>()
-
-// Unlike :focus-visible, scripted focus after a click is not inherited from a previously focused field.
-function trackLastInput(doc: Document): void {
-  if (lastInputByDocument.has(doc)) {
-    return
-  }
-  const lastInput: LastInput = { keyboard: false, count: 0 }
-  lastInputByDocument.set(doc, lastInput)
-  const record = (keyboard: boolean) => () => {
-    lastInput.keyboard = keyboard
-    lastInput.count += 1
-  }
-  doc.addEventListener('keydown', record(true), true)
-  doc.addEventListener('pointerdown', record(false), true)
-}
-
 export type NativeChatReaderScrollInputHandlers = Pick<
   React.HTMLAttributes<HTMLDivElement>,
-  | 'onWheel'
-  | 'onTouchMove'
-  | 'onKeyDown'
-  | 'onFocus'
-  | 'onBlur'
-  | 'onPointerDown'
-  | 'tabIndex'
-  | 'role'
+  'onWheel' | 'onTouchMove' | 'onKeyDown' | 'onPointerDown' | 'tabIndex' | 'role'
 >
 
 /** Invalidate pending navigation on input, and detach only when the transcript can move away. */
@@ -153,7 +126,6 @@ export function nativeChatReaderScrollInputHandlers({
     },
     // The scrollbar belongs to the scroller itself; a press on its content does not scroll.
     onPointerDown: (event) => {
-      delete event.currentTarget.dataset.keyboardFocus
       if (event.target === event.currentTarget) {
         onReaderScroll()
         report({ kind: 'scrollbar-press' }, event)
@@ -167,38 +139,6 @@ export function nativeChatReaderScrollInputHandlers({
       }
       onReaderAct?.()
       report({ kind: 'content-press' }, event)
-    },
-    onFocus: (event) => {
-      const transcript = event.currentTarget
-      if (event.target !== transcript) {
-        return
-      }
-      const lastInput = lastInputByDocument.get(transcript.ownerDocument)
-      const blurredAt = windowBlurInputCount.get(transcript)
-      windowBlurInputCount.delete(transcript)
-      // Returning to the app with no input since leaving restores focus as it was.
-      if (blurredAt !== undefined && blurredAt === lastInput?.count) {
-        return
-      }
-      if (lastInput?.keyboard) {
-        transcript.dataset.keyboardFocus = 'true'
-      } else {
-        delete transcript.dataset.keyboardFocus
-      }
-    },
-    onBlur: (event) => {
-      const transcript = event.currentTarget
-      if (event.target !== transcript) {
-        return
-      }
-      if (transcript.ownerDocument.hasFocus()) {
-        delete transcript.dataset.keyboardFocus
-      } else {
-        windowBlurInputCount.set(
-          transcript,
-          lastInputByDocument.get(transcript.ownerDocument)?.count ?? 0
-        )
-      }
     }
   }
 }
@@ -225,7 +165,6 @@ export function useNativeChatReaderScrollInput(
   /** A find step moves the transcript for the reader, so it ends following like a gesture. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
 } {
-  useEffect(() => trackLastInput(scrollRef.current?.ownerDocument ?? document), [scrollRef])
   const onReaderScroll = useCallback(() => {
     onScrollInput()
     onTakeScroll?.()
