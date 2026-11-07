@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { AcpJsonRpcPeer } from './acp-json-rpc-peer'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
-import { AcpConnectionClosedError, AcpRequestTimeoutError, AcpRpcError } from './acp-errors'
+import { AcpConnectionClosedError, AcpRpcError } from './acp-errors'
 import type { RequestPermissionResponse } from './generated/acp-protocol.generated'
 
 const opened: { close: () => void }[] = []
@@ -218,25 +218,39 @@ describe('ACP caller-owned waits', () => {
     await rejected
   })
 
-  it('bounds each start step on its own, never by the peer default', async () => {
-    vi.useFakeTimers()
-    const { agent, runtime } = fixture({ peer: { requestTimeoutMs: 20 } })
-    agent.on('initialize', () => {})
-    const initialized = runtime.initialize()
-    await vi.advanceTimersByTimeAsync(59_000)
-    agent.reply(agent.frames[0], { protocolVersion: 1 })
-    await initialized
-    const authenticated = runtime.authenticate('caller-chosen')
-    await vi.advanceTimersByTimeAsync(119_000)
-    agent.reply(agent.frames[1], {})
-    await expect(authenticated).resolves.toEqual({})
-    agent.on('session/new', () => {})
-    const started = expect(runtime.start(startOptions)).rejects.toBeInstanceOf(
-      AcpRequestTimeoutError
-    )
-    await vi.advanceTimersByTimeAsync(300_000)
-    await started
-  })
+  it.each(['new', 'load', 'resume'] as const)(
+    'opens a slow %s session on its real answers, regardless of the peer default',
+    async (kind) => {
+      vi.useFakeTimers()
+      const { agent, runtime } = fixture({ peer: { requestTimeoutMs: 20 } })
+      agent.on('initialize', (frame) => {
+        setTimeout(
+          () =>
+            agent.reply(frame, {
+              protocolVersion: 1,
+              agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {} } }
+            }),
+          75_000
+        )
+      })
+      agent.on(`session/${kind}`, (frame) => {
+        setTimeout(
+          () => agent.reply(frame, kind === 'new' ? { sessionId: 'session-1' } : {}),
+          310_000
+        )
+      })
+      const started = expect(
+        runtime.start({
+          ...startOptions,
+          ...(kind === 'new' ? {} : { sessionId: 'saved-session', resumePreference: kind })
+        })
+      ).resolves.toMatchObject({ kind, sessionId: kind === 'new' ? 'session-1' : 'saved-session' })
+      await vi.advanceTimersByTimeAsync(385_000)
+      await started
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+      await expect(runtime.prompt([...prompt])).resolves.toEqual({ stopReason: 'end_turn' })
+    }
+  )
 
   it('lets request owners withdraw vendor hooks after cancel', async () => {
     const withdrawal = new AbortController()

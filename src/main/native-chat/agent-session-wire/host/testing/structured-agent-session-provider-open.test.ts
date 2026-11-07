@@ -11,8 +11,13 @@ import {
   envelope,
   hostTestState
 } from './structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION, hostTestMessage } from './structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION,
+  hostTestMessage,
+  hostTestSubmission
+} from './structured-agent-session-host-test-data'
 import { acpStartFailure } from '../../../../acp/acp-startup-outcome'
+import { piStartFailure } from '../../../../pi/rpc-startup-outcome'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { structuredAgentSessionStartFailureRowIdentity } from '../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 
@@ -37,6 +42,34 @@ function awaitOpen() {
   }
   return { ...state, open, close, pending, send }
 }
+
+it('stops a failed Pi start and settles its queued send without dispatching', async () => {
+  const { host, open, close, dispatch, pending, send } = awaitOpen()
+  await attach()
+  await vi.waitFor(() => expect(open).toHaveBeenCalledOnce())
+  const sent = await send('queued while Pi starts')
+  expect(sent.ok).toBe(true)
+  if (!sent.ok) {
+    throw new Error('Expected a queued send')
+  }
+  pending.reject(piStartFailure(new Error('failed')))
+  await vi.waitFor(async () => {
+    expect(await hostTestSubmission(host, sent.value.clientMessageId)).toMatchObject({
+      dispatchState: 'rejected',
+      rejection: { kind: 'startFailed' }
+    })
+  })
+  expect(close).toHaveBeenCalledExactlyOnceWith(HOST_TEST_SESSION, undefined)
+  expect(dispatch).not.toHaveBeenCalled()
+  expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({
+        kind: 'status',
+        failure: { kind: 'startFailed' }
+      })
+    })
+  )
+})
 
 it("keeps the exit's words for a direct attach whose exit settled before its final answer", async () => {
   const { host, open, dispatch, pending } = awaitOpen()
