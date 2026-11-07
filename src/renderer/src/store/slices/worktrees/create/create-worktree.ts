@@ -8,7 +8,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   pickClientWorktreeCreateSettings,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../../worktrees-slice-test-harness'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { createTestStore } from '../worktrees-slice-test-harness'
+import { makeWorktree } from '../worktree.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

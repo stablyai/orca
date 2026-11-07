@@ -41,7 +41,7 @@ function badSetups(): ProjectHostSetup[] {
   return [base('repo:repo-1::local', 'orca'), corrupted]
 }
 
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
 
 it.each([false, true])(

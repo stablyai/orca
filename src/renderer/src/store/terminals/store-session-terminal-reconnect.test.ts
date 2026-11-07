@@ -1,13 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { createTestStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
-import {
-  makeTab,
-  makeLayout,
-  createStoreSessionMockApi
-} from '../slices/store-session-test-harness'
+import { createTestStore } from '../app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { makeTab, makeLayout } from './terminal-tab.test-fixture'
+import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
 import '@/components/sidebar/worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'

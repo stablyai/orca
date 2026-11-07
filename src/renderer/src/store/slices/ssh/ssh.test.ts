@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
-import { makeWorktree, TEST_REPO } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
 
 describe('createSshSlice', () => {
   it('clears renderer state and deferred reconnect metadata for a removed SSH target', () => {

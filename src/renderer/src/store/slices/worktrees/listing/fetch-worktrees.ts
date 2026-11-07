@@ -1,9 +1,6 @@
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type {
-  DirectSshWorktreeFetchOptions,
-  WorktreeFetchOptions,
-  WorktreeSlice
-} from '../../worktree-helpers'
+import type { DirectSshWorktreeFetchOptions, WorktreeFetchOptions } from './worktree-fetch-options'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'

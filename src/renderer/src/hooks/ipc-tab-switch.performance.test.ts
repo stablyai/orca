@@ -1,12 +1,9 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { buildActiveSurfacePatch } from '../store/slices/tabs/tabs-surface'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn(), activateOwner: vi.fn() }))

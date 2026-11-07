@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { useSourceControlReviewPushTarget } from './use-review-push-target'
 
 beforeEach(() => vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible'))

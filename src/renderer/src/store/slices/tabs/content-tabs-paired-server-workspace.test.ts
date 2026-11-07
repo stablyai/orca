@@ -10,9 +10,9 @@ import {
   toSshExecutionHostId
 } from '../../../../../shared/execution-host'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../store-cascades-test-harness'
+import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../app-store-cascade-api.test-fixture'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({

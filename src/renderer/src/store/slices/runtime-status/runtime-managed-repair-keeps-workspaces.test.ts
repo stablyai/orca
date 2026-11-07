@@ -14,9 +14,9 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { resetDeferredPeerChecksForTests } from './runtime-environment-peer-replacement'
 
 const WORKTREE_ID = 'repo-1::/root/repo'

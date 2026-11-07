@@ -6,7 +6,7 @@ import type { HostRepoCatalogSnapshot } from '../../../../shared/host-repo-catal
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { getRepoRowIdentity } from './repo-host-identity'
-import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
+import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { hasLiveRepoCatalogApplied, markSavedHostCatalogRow } from './saved-host-catalog-rows'
 

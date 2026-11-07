@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi, describe } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
-import { createTestStore } from './slices/store-test-helpers'
+import { createTestStore } from './app-store-test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 

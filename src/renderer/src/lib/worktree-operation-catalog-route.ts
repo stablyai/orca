@@ -9,7 +9,7 @@ import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
 } from '@/store/workspace-record-selectors'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,

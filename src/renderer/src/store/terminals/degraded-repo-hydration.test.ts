@@ -17,9 +17,9 @@ import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '@/lib/workspace/persistence/workspace-session'
-import { createTestStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 const WORKTREE_ID = 'repo1::/path/degraded'
 const TERMINAL_ID = 'terminal-degraded'

@@ -22,9 +22,10 @@ const main = layoutApplyTestDouble()
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
 globalThis.window = { api: { runtime: { call: main.call } } }
 
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeTab, makeUnifiedTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

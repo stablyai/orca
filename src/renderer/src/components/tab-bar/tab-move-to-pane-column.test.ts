@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
-import { makeRuntimeOwnedWorktree } from '../../store/slices/store-test-helpers'
+import { makeRuntimeOwnedWorktree } from '../../store/slices/worktrees/worktree-owner.test-fixture'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 
 const WT = 'wt-1'

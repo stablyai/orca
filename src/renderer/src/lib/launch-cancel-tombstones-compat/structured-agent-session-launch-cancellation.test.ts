@@ -24,7 +24,7 @@ import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

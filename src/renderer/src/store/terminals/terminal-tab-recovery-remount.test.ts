@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import './terminal-tab-retirement'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createStoreSessionMockApi } from '../slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 

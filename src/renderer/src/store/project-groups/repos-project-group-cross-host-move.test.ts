@@ -12,7 +12,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

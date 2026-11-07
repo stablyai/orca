@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
 
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 import {
   MIXED_FOLDER,
   MIXED_GROUP

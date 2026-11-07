@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 
 // Load the native graph during collection; fixture state stays per test.
 const {
@@ -32,8 +32,9 @@ export async function verifyMirroredTerminalLineage(
     getRows: () => DashboardAgentRow[]
   }
 ): Promise<void> {
-  const { makeUnifiedTab, makeWorktree, TEST_REPO } =
-    await import('@/store/slices/store-test-helpers')
+  const { makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+    { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture'),
+    { TEST_REPO } = await import('@/store/repos/repo.test-fixture')
   const { selectDashboardOrchestration } =
     await import('@/components/dashboard/dashboard-orchestration-selection')
   const { selectWorktreeAgentRowsCached } =

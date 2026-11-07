@@ -1,6 +1,6 @@
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
+import type { createTestStore } from '../../src/renderer/src/store/app-store-test-fixture'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 
 const bridge = vi.hoisted(() => {

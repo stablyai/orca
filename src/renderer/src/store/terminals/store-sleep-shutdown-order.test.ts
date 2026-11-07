@@ -3,12 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
-import { createTestStore, makeRuntimeOwnedWorktree, seedStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
-import {
-  applySleepRuntimeRpcDefault,
-  createStoreCascadesMockApi
-} from '../slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeRuntimeOwnedWorktree } from '../slices/worktrees/worktree-owner.test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { applySleepRuntimeRpcDefault } from './terminal-sleep-rpc.test-fixture'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 
 const orderHarness = vi.hoisted(() => {
   const events: string[] = []

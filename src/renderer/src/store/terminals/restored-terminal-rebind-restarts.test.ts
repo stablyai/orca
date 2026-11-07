@@ -29,8 +29,8 @@ import {
   bootWindowFromPartitions,
   type StoredPartition
 } from '../../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../slices/store-session-test-harness'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
+import { createTestStore } from '../app-store-test-fixture'
 import { getOrphanTerminalIds } from './terminal-orphan-cleanup'
 import { buildLayoutFrameSlices } from '../workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from '../workspace-layout-frame-store-patch'

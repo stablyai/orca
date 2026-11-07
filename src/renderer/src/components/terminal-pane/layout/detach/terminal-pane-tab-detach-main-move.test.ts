@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '../../../../store/app-store-cascade-api.test-fixture'
 import { LEAF_1, LEAF_2, splitLayout, unboundSplitLayout } from './terminal-pane-tab-detach-fixture'
 import {
   detachFrom,

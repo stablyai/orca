@@ -3,14 +3,13 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore, makeRuntimeOwnedWorktree, seedStore } from '../slices/store-test-helpers'
-import { makeTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeRuntimeOwnedWorktree } from '../slices/worktrees/worktree-owner.test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
-import {
-  applySleepRuntimeRpcDefault,
-  createStoreCascadesMockApi
-} from '../slices/store-cascades-test-harness'
+import { applySleepRuntimeRpcDefault } from './terminal-sleep-rpc.test-fixture'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())

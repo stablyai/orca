@@ -21,9 +21,10 @@ import {
   capturedPanesByTabId,
   parkedWatchersByTabId
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 
 function createRetirementStore() {
   const store = createTestStore()

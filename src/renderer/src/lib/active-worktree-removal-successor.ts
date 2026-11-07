@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRepoMapFromState } from '@/store/selectors'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   isAutomaticDeselection,
   subscribeWorktreeDeselectionIntent,

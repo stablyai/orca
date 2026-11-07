@@ -5,7 +5,7 @@ import {
   resetAgentPaneAuthorityAliasesForTests,
   resolveAgentPaneAuthorityKey
 } from '../slices/agent-status/agent-pane-authority'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/app-store-test-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import {
   _getProjectRuntimePreflightContextCacheSizeForTest,

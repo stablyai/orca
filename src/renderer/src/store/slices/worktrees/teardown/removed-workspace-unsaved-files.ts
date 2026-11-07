@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import {
   collectRemovalUnsavedFiles,
   currentUnsavedText,
@@ -9,7 +9,7 @@ import {
 } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
 import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
-import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
+import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   findFolderWorkspaceRecord,

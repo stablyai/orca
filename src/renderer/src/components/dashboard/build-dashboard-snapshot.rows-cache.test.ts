@@ -19,7 +19,7 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/runtime/structured-chat-name-observation', () => ({

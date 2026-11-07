@@ -45,7 +45,7 @@ const mocks = vi.hoisted<BridgeMocks>(() => ({
 }))
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/app-store-test-fixture')
   const useAppStore = createTestStore()
   mocks.store = useAppStore
   return { useAppStore }
@@ -69,8 +69,9 @@ import {
   structuredAgentSessionTurnCompletionFeedCountForTests as retainedCount
 } from '@/runtime/structured-agent-session-turn-completion-feed'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
-import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../store/repos/repo.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
 
 // Worktree ids encode their repo (`repoId::path`); the unread reducer buckets by that prefix.

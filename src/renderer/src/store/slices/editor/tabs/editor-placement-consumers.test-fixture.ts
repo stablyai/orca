@@ -1,6 +1,8 @@
 import { useAppStore } from '@/store/index'
-import { makeOpenFile, makeTabGroup, makeUnifiedTab } from '../../store-session-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { makeOpenFile } from '../types/open-file.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import {
   makeFolderWorkspace,
   makeProjectGroup
