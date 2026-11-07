@@ -8,7 +8,7 @@ const SILENCE_PROBABILITY = 0.35
 export const VAD_PAUSE_SECONDS = 0.6
 // Silence kept ahead of detected speech so a soft first syllable isn't clipped.
 const SPEECH_PREROLL_SECONDS = 0.4
-// Silero's minimum speech: a click or cough alone doesn't end a phrase, so it is never decoded (and hallucinated) by itself.
+// Silero's minimum speech: a click or cough alone doesn't end a phrase; it waits for the speech after it, as without a detector.
 const MIN_PHRASE_SPEECH_SECONDS = 0.25
 
 export type VadStream = Pick<TranscribeCpp.VadSession, 'streamFeed' | 'streamFlush'>
