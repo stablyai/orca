@@ -5,7 +5,7 @@ import {
   getKeybindingPlatform,
   getKeybindingResetBindings,
   isKeybindingActionId,
-  LEGACY_MAC_SEARCH_BINDINGS,
+  getLegacySearchBindings,
   normalizeKeybindingArrayForAction,
   resolveKeybindingOverrides
 } from '../../../../shared/keybindings'
@@ -60,9 +60,7 @@ function migrateWebSearchKeybindings(): void {
 }
 
 function getWebDefaultOverrides(): KeybindingOverrides {
-  return legacySearchDefaults && getWebKeybindingPlatform() === 'darwin'
-    ? LEGACY_MAC_SEARCH_BINDINGS
-    : {}
+  return legacySearchDefaults ? getLegacySearchBindings(getWebKeybindingPlatform()) : {}
 }
 
 export function createEmptyWebKeybindingDocument(): WebKeybindingDocument {

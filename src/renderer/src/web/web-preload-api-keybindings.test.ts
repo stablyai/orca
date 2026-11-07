@@ -55,6 +55,36 @@ describe('web keybindings preload API', () => {
     })
   })
 
+  it.each([
+    ['Linux x86_64', 'linux'],
+    ['Windows NT 10.0', 'win32']
+  ] as const)(
+    'preserves existing %s web shortcuts and resets to Ctrl+K',
+    async (userAgent, platform) => {
+      const { storage } = installBrowserGlobals(userAgent)
+      storage.setItem('orca.web.settings.v1', '{}')
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+      const old = await window.api.keybindings.get()
+      expect(getEffectiveKeybindingsForAction('worktree.palette', platform, old.overrides)).toEqual(
+        ['Mod+Shift+J']
+      )
+      expect(getEffectiveKeybindingsForAction('terminal.clear', platform, old.overrides)).toEqual([
+        'Mod+K'
+      ])
+      const reset = await window.api.keybindings.setAction({
+        actionId: 'worktree.palette',
+        bindings: null
+      })
+      expect(
+        getEffectiveKeybindingsForAction('worktree.palette', platform, reset.overrides)
+      ).toEqual(['Mod+K'])
+      expect(getEffectiveKeybindingsForAction('terminal.clear', platform, reset.overrides)).toEqual(
+        []
+      )
+    }
+  )
+
   it.each(['common', 'platform'])(
     'keeps an explicit %s palette chord ahead of the generated clear shortcut',
     async (section) => {
@@ -183,8 +213,7 @@ describe('web keybindings preload API', () => {
     })
     expect(saved.overrides['worktree.palette']).toEqual(aliases)
     expect(getEffectiveKeybindingsForAction(toggle, saved.platform, saved.overrides)).toEqual([
-      'Mod+Shift+F11',
-      'Mod+Shift+J'
+      'Mod+Shift+F11'
     ])
   })
 })
