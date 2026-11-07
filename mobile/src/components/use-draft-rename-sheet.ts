@@ -107,10 +107,14 @@ export function useDraftRenameSheet({
           latest?.token === token && phase !== 'idle' ? { ...latest, phase } : latest
         )
       )
-      if (unsavedRef.current.key === key) {
+      // Only the text this save sent is done; anything typed since (an older save landing late) stays.
+      const sent = (text: string | null | undefined) => text?.trim() === name
+      if (unsavedRef.current.key === key && sent(unsavedRef.current.text)) {
         unsavedRef.current = { key, text: null }
       }
-      setHostMutationDraft(key, null)
+      if (sent(readHostMutationDraft(key))) {
+        setHostMutationDraft(key, null)
+      }
       setAttempt((latest) => (latest?.token === token ? null : latest))
       if (mountedRef.current) {
         onRenamed?.()
