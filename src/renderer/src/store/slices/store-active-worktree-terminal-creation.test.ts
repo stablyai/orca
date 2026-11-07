@@ -14,7 +14,7 @@ import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-r
 import { resolveTerminalPaneOwnerContext } from '@/components/terminal-pane/host-state/terminal-pane-owner-context'
 
 const remoteCreate = vi.hoisted(() => vi.fn(async () => ({ status: 'created' })))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: remoteCreate
 }))
 
