@@ -57,7 +57,7 @@ function dictation(): UseMobileDictationResult {
 }
 
 describe('leaving the app while dictating', () => {
-  it('finishes and inserts what was heard, but a brief inactive state does not', async () => {
+  it('finishes and inserts what was heard, but a permission prompt or brief inactive state does not', async () => {
     const rpc = createFakeRpcClient()
     const transcripts: string[] = []
     function Probe(): null {
@@ -73,9 +73,12 @@ describe('leaving the app while dictating', () => {
     })
     await act(async () => {
       const started = dictation().start()
+      // Android's permission prompt reports background while the start is still open.
+      appState.handlers.forEach((handler) => handler('background'))
       await pump(rpc)
       await started
     })
+    expect(dictation().status).toBe('recording')
 
     await act(async () => {
       appState.handlers.forEach((handler) => handler('inactive'))

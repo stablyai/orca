@@ -280,9 +280,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       }
     }
     const sub = capture.onInterruption(interrupted)
-    // A backgrounded app loses the microphone (Android pauses it, iOS suspends the app), so leaving is an interruption too.
+    // A backgrounded app loses the microphone, so leaving finishes. Not while starting: Android's permission prompt reports background.
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'background') {
+      if (state === 'background' && statusRef.current === 'recording') {
         interrupted()
       }
     })
