@@ -4,6 +4,7 @@ import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-a
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
+import { captureTerminalContextText } from '@/lib/terminal-context-text'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -103,7 +104,7 @@ export function prepareAgentSessionForkFromPane({
   const agent = sourceAgent ?? tabAgent
   // This forks context, not the process; xterm capture works for both local and SSH panes.
   const prompt = buildAgentSessionForkPrompt({
-    capturedText: pane.serializeAddon.serialize({ scrollback: 800 }),
+    capturedText: captureTerminalContextText(pane.terminal),
     sourceLabel: paneKey,
     agentLabel: agent
   })
@@ -136,7 +137,7 @@ export async function copyAgentSessionForkContext(
 // Standalone Copy Context omits the dialog’s fork instructions so it can be pasted into another tool.
 export async function copyAgentSessionContextFromPane(pane: ManagedPane): Promise<boolean> {
   return copyAgentSessionContext(
-    pane.serializeAddon.serialize({ scrollback: 800 }),
+    captureTerminalContextText(pane.terminal),
     () => pane.terminal.focus(),
     translate(
       'auto.components.terminal.pane.terminal.agent.session.fork.f62b40e2c7',
