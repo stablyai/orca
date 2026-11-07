@@ -53,6 +53,7 @@ import { useNativeChatProvisionalLaunch } from './host-access/use-native-chat-pr
 import { useStructuredAgentSessionHostExecution } from './session/status/structured-agent-session-status-hooks'
 import { useNativeChatRewindHost } from './use-native-chat-rewind-host'
 import { NativeChatRowActionsProvider } from './NativeChatRowActionsProvider'
+import { useNativeChatPaneFork } from './use-native-chat-fork'
 import { NativeChatQueuedMessageList } from './queue/NativeChatQueuedMessageList'
 import {
   cancelStructuredPrompt,
@@ -198,9 +199,11 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     surfaceReady: !composerShown || install.slot.kind === 'install'
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
+  const fork = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
     props,
     controller,
+    fork,
     sendThroughLaunch: provisionalLaunch.sendThroughLaunch,
     starting: provisionalLaunch.starting,
     transportEnabled: provisionalLaunch.transportEnabled,
@@ -279,7 +282,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           ) : viewState.kind === 'empty' ? (
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
-            <NativeChatRowActionsProvider pane={props} chat={controller}>
+            <NativeChatRowActionsProvider pane={props} chat={controller} fork={fork}>
               <NativeChatUsageLimitActionsProvider
                 recovery={controller}
                 pane={props}
