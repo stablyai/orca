@@ -9,6 +9,7 @@ const INTL_LOCALE: Record<SupportedUiLocale, string> = {
   fr: 'fr',
   ja: 'ja',
   ko: 'ko',
+  pl: 'pl',
   pt: 'pt-BR',
   ru: 'ru',
   tr: 'tr',
