@@ -83,36 +83,39 @@ export function bundledSkillSetupActionLabel(
     : t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
 }
 
-export function bundledSkillSetupResultHeadline(changes: BundledSkillSetupChanges): string {
+export function bundledSkillSetupResultHeadline(
+  changes: BundledSkillSetupChanges,
+  t: Translate = translate
+): string {
   const installed =
     changes.agents.length > 1
       ? changes.alreadyInstalled
-        ? translate(
+        ? t(
             'auto.components.settings.bundledSkillSetupCopy.installedForMore',
             'Installed for {{value0}} more agents',
             { value0: changes.agents.length }
           )
-        : translate(
+        : t(
             'auto.components.settings.bundledSkillSetupCopy.installedForAgents',
             'Installed for {{value0}} agents',
             { value0: changes.agents.length }
           )
       : changes.agents.length === 1
-        ? translate(
+        ? t(
             'auto.components.settings.bundledSkillSetupCopy.installedForAgent',
             'Installed for {{value0}}',
             { value0: agentNames(changes.agents) }
           )
         : null
   const updated = changes.replaced
-    ? translate(
+    ? t(
         'auto.components.settings.bundledSkillSetupCopy.replacedWithBackup',
         'Replaced · Your copy was saved as a backup'
       )
-    : translate('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
+    : t('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
   return changes.updates
     ? installed
       ? `${updated} · ${installed}`
       : updated
-    : (installed ?? translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed'))
+    : (installed ?? t('auto.components.skills.skillPlanOpCopy.installed', 'Installed'))
 }

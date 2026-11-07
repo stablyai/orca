@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { PluginCatalogLayout, type PluginCatalogFilter } from './PluginCatalogLayout'
 import { PluginListGroup } from './PluginListGroup'
@@ -46,10 +47,10 @@ import { PluginDetailPage } from '../page/PluginDetailPage'
 import { useOrcaVersion, type PluginPageNavigation } from '../state/use-plugin-page-navigation'
 import type { PluginLogsState } from '../state/use-plugin-logs'
 
-function resultCountLabel(count: number): string {
+function resultCountLabel(count: number, t: Translate = translate): string {
   return count === 1
-    ? translate('auto.components.settings.PluginManager.resultCountOne', '1 plugin matches')
-    : translate('auto.components.settings.PluginManager.resultCount', '{{value0}} plugins match', {
+    ? t('auto.components.settings.PluginManager.resultCountOne', '1 plugin matches')
+    : t('auto.components.settings.PluginManager.resultCount', '{{value0}} plugins match', {
         value0: count
       })
 }
@@ -100,6 +101,7 @@ export function PluginManager({
   setSourcesOpen,
   onConsent
 }: PluginManagerProps): React.JSX.Element {
+  const t = useTranslate()
   const [search, setSearch] = useState('')
   const [chosenTab, setTab] = useState<PluginCatalogFilter>('all')
   const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
@@ -209,7 +211,7 @@ export function PluginManager({
     catalog.sources.every((source) => !source.error) &&
     visibleCatalogCount === 0
 
-  const installedTitle = translate('auto.components.settings.PluginManager.installed', 'Installed')
+  const installedTitle = t('auto.components.settings.PluginManager.installed', 'Installed')
   const installedGroup = pluginsLoading ? (
     <PluginListGroup layout="grid" title={installedTitle} showHeading={false}>
       <PluginCardSkeletons />
@@ -221,14 +223,14 @@ export function PluginManager({
       notice={
         <CatalogNotice
           tone="error"
-          title={translate(
+          title={t(
             'auto.components.settings.PluginManager.installedFailedTitle',
             'Couldn’t read your installed plugins.'
           )}
           body={pluginsError}
           actions={
             <Button variant="ghost" size="xs" onClick={() => void onRefreshInstalled()}>
-              {translate('auto.components.settings.PluginManager.retry', 'Retry')}
+              {t('auto.components.settings.PluginManager.retry', 'Retry')}
             </Button>
           }
         />
@@ -242,10 +244,7 @@ export function PluginManager({
         detail={
           // Why: with no catalog loaded every installed plugin lands here, listed or not.
           catalog.sources.length > 0
-            ? translate(
-                'auto.components.settings.PluginManager.notFromCatalog',
-                'not from a catalog'
-              )
+            ? t('auto.components.settings.PluginManager.notFromCatalog', 'not from a catalog')
             : undefined
         }
       >
@@ -259,7 +258,7 @@ export function PluginManager({
       layout="grid"
       title={
         filter === 'updates'
-          ? translate('auto.components.settings.PluginManager.updatesTitle', 'Updates')
+          ? t('auto.components.settings.PluginManager.updatesTitle', 'Updates')
           : installedTitle
       }
       showHeading={false}
@@ -364,7 +363,7 @@ export function PluginManager({
             body=""
             actions={
               <Button variant="ghost" size="xs" onClick={() => void catalog.refresh()}>
-                {translate('auto.components.settings.PluginManager.retry', 'Retry')}
+                {t('auto.components.settings.PluginManager.retry', 'Retry')}
               </Button>
             }
           />
@@ -407,7 +406,7 @@ export function PluginManager({
           <div className="@container/plugin-catalog">{installedGroup}</div>
         )}
         <p className="sr-only" aria-live="polite">
-          {narrowed ? resultCountLabel(resultCount) : ''}
+          {narrowed ? resultCountLabel(resultCount, t) : ''}
         </p>
       </PluginCatalogLayout>
       {dialogs}
