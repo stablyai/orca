@@ -21,6 +21,7 @@ import { stopDictationAtAudioLimit } from './dictation-audio-limit-stop'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
 import {
+  canStartDictation,
   initialDictationSession,
   isDictationUnderway,
   transitionDictationSession,
@@ -125,7 +126,7 @@ export function DictationController() {
   }, [dispatch, finishCapture, finishDictationSession])
 
   const startDictation = useCallback(async () => {
-    if (sessionRef.current.phase !== 'idle') {
+    if (!canStartDictation(sessionRef.current.phase)) {
       return
     }
 
@@ -299,7 +300,7 @@ export function DictationController() {
   )
 
   useHoldDictationGesture({
-    getDictationState: () => sessionRef.current.phase,
+    canStartDictation: () => canStartDictation(sessionRef.current.phase),
     keybindings,
     settings,
     startDictation,

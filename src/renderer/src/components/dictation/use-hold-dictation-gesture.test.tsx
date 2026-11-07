@@ -34,7 +34,7 @@ function holdSettings(): GlobalSettings {
 
 function Probe(): null {
   useHoldDictationGesture({
-    getDictationState: () => dictationState,
+    canStartDictation: () => dictationState === 'idle',
     keybindings: {},
     settings: holdSettings(),
     startDictation,

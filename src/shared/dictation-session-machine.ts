@@ -19,7 +19,7 @@ export type DictationSessionEvent =
   | { type: 'final-text' }
   /** The engine failed mid-session: drop the session while capture and the engine tear down. */
   | { type: 'abandon' }
-  /** Starting failed: drop the session and show the error. */
+  /** Starting failed: drop the session and show the error; a new start is allowed from there. */
   | { type: 'fail' }
   /** Drop the session and its words. */
   | { type: 'cancel' }
@@ -34,6 +34,10 @@ export const initialDictationSession: DictationSession = {
   heardFinalText: false
 }
 
+export function canStartDictation(phase: DictationState): boolean {
+  return phase === 'idle' || phase === 'error'
+}
+
 export function isDictationUnderway(phase: DictationState): boolean {
   return phase === 'starting' || phase === 'listening'
 }
@@ -45,7 +49,7 @@ export function transitionDictationSession(
 ): DictationSession {
   switch (event.type) {
     case 'start': {
-      if (session.phase !== 'idle') {
+      if (!canStartDictation(session.phase)) {
         return session
       }
       const run = session.run + 1
