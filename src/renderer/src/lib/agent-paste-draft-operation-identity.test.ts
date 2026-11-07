@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { GeneratedAgentInputNotices } from '../../../main/runtime/generated-agent-input-notices'
 
 const h = vi.hoisted(() => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hoisted slot starts empty until beforeEach sets it.
   notices: null as GeneratedAgentInputNotices | null,
   answerAfterMs: 0,
   rpc: vi.fn(),
@@ -46,6 +47,7 @@ beforeEach(() => {
         return { settled: true }
       }
       const kept = notices.upsert({
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window's registration params carry the notice fields upsert takes.
         ...(params as unknown as Parameters<GeneratedAgentInputNotices['upsert']>[0]),
         origin: 'window',
         handle: '',

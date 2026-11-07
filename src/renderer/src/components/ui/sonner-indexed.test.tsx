@@ -91,6 +91,7 @@ beforeEach(async () => {
   // Count actual private row renders while still executing its original hooks and JSX.
   const createElement = React.createElement
   const wrappers = new WeakMap<object, React.ElementType>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wrapper forwards every argument to the original createElement.
   vi.spyOn(React, 'createElement').mockImplementation(((
     type: React.ElementType,
     props: Record<string, unknown>,
@@ -99,6 +100,7 @@ beforeEach(async () => {
     if (typeof type === 'function' && type.name === 'Toast') {
       let wrapped = wrappers.get(type)
       if (!wrapped) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded above: sonner's Toast is a function component taking a toast prop.
         const original = type as React.FunctionComponent<{ toast: { id: string | number } }>
         wrapped = function CountedToast(p: { toast: { id: string | number } }) {
           rendered.set(p.toast.id, (rendered.get(p.toast.id) ?? 0) + 1)
@@ -173,6 +175,7 @@ it.each([100, 1_000])('keeps one-ID store work independent of %i historical reco
   const values = Map.prototype.values
   const valuesSpy = vi.spyOn(Map.prototype, 'values').mockImplementation(function () {
     const iterator = values.call(this)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: it forwards to the real iterator's next and is its own iterator.
     return {
       ...iterator,
       next: () => {

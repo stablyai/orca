@@ -104,6 +104,7 @@ it('qualifies a retained send by the verified runtime, never resending a refused
   const target = { kind: 'environment' as const, environmentId: 'env' }
   rememberRuntimeEnvironmentCompatibility(
     'env',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     compatibilityEntry({
       runtimeId: 'h1',
       capabilities: [
@@ -155,6 +156,7 @@ it('qualifies a retained send by the verified runtime, never resending a refused
 it('clears only the refusing environment after runtime_environment_changed, sending once', async () => {
   capabilities.unsupported.clear()
   const status = (runtimeId: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     compatibilityEntry({
       runtimeId,
       capabilities: [

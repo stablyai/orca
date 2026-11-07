@@ -259,6 +259,7 @@ describe('runtime RPC call queue', () => {
       queue.enqueue('runtime-a', 'terminal.send', () => held)
     )
     type Entry = { run: unknown; waiting: boolean; previous: unknown; next: unknown }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RuntimeRpcCallQueue keeps its lanes as `queues`, each with a `foreground` lane.
     const lanes = (queue as unknown as { queues: Map<string, { foreground: object }> }).queues
     const state = lanes.get('runtime-a')!
     const entries: Entry[] = []

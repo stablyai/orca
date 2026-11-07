@@ -40,6 +40,7 @@ function setUp(claimRemoteDesktopHost: () => Promise<boolean> = async () => true
   const notices = new GeneratedAgentInputNotices()
   installPtyWriteIpcHandlers({
     mainWindow,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; the PTY write handlers reach only the members stubbed here.
     runtime: {
       generatedInputNotices: notices,
       claimRemoteDesktopHost,

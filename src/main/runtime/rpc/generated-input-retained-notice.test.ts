@@ -132,8 +132,8 @@ it('leaves the notice to the client when the request does not ask the host to ke
 // The callers this runtime tells apart: a desktop window across its renderer's reloads (a new
 // connection each time), another window, and a paired phone.
 function viewers(runtime: OrcaRuntimeService) {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only the runtime and the caller identities given here.
   const as = (fields: Record<string, string>) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers read only the runtime and the caller identities given here.
     ({
       runtime,
       clientCapabilities: [GENERATED_INPUT_REGISTER_RUNTIME_CAPABILITY],
@@ -430,7 +430,9 @@ it.each([10, 100])(
     )
     const subscribers = contexts.map((context) => {
       const subscriber = {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty array holds no element of another type.
         messages: [] as { type: string; revision?: number; frame?: { id: string } }[],
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty array holds no element of another type.
         added: [] as GeneratedAgentInputNotice[],
         pageReads: 0,
         snapshots: 0
@@ -445,6 +447,7 @@ it.each([10, 100])(
       })
       if ('stream' in m.subscribe) {
         void m.subscribe.handler(null, context, (message) => {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notice stream's messages carry a type and optional revision and frame id.
           subscriber.messages.push(message as (typeof subscriber.messages)[number])
           feed.receive(message)
         })

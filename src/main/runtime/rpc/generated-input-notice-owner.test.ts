@@ -68,6 +68,7 @@ type HeldCall = { name: string; release: (reached: boolean) => void }
 async function desktopAndHost() {
   const host = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
   const local = await createAgentPromptSubmissionRuntime(() => {}, 'claude')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an empty array holds no element of another type.
   const link = { to: host.runtime, online: true, hold: false, held: [] as HeldCall[], sent: 0 }
   let statusChanged = (): void => {}
   forwardGeneratedInputNotices(local.runtime.generatedInputNotices, {
@@ -96,6 +97,7 @@ async function desktopAndHost() {
   const window = (connection: string) =>
     as(local.runtime, { connectionId: connection, noticeOrigin: 'desktop-window:1' })
   const view = async (context: RpcContext, window?: string) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the page method answers a GeneratedInputNoticesPage.
     const answer = (await page.handler(
       window ? { window } : {},
       context
@@ -165,6 +167,7 @@ function sendFromWindow(d: Desktop, id: string, screen = DIALOG) {
   )
   d.host.runtime.onPtyData('pty-prompt', screen, 0)
   observe.dispatched()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send method handler is async.
   const sending = send.handler(params, fromDesktop(d.host.runtime)) as Promise<unknown>
   return {
     observe,

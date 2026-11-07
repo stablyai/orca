@@ -56,6 +56,7 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOri
 vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
   // Like the real writer: told of its handoff synchronously, just before the bytes go.
   sendRuntimePtyInputVerified: (...args: unknown[]) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sendRuntimePtyInputVerified's fourth argument is its optional options.
     ;(args[3] as { beforeSend?: () => void } | undefined)?.beforeSend?.()
     return testState.sendRuntimePtyInputVerified(...args)
   }

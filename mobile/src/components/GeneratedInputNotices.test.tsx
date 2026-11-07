@@ -266,6 +266,7 @@ it.each([100, 1_000])('isolates visible rows and host subscriptions at %i notice
 it('keeps old list props on the live count and item source after a remote dismissal', async () => {
   const view = await mountNotices(6)
   await act(async () => view.rows()[0].props.onToggle())
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: 'older-list' is the host element the mocked OlderGeneratedInputNotices renders with its items list.
   const previous = view.mounted.root.findByType('older-list' as never).props
     .items as GeneratedInputNoticeList
   expect(previous.size).toBe(6)

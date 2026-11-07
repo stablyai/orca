@@ -271,6 +271,7 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   // The ordinary compatibility check's verified status, as every remote call leaves it cached.
   rememberRuntimeEnvironmentCompatibility(
     'env',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     compatibilityEntry({
       runtimeId: runtime.getRuntimeId(),
       capabilities: capable

@@ -93,6 +93,7 @@ function setUp() {
   h.call.mockReset()
   h.subscribe.mockReset()
   const notices = new GeneratedAgentInputNotices()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; the channels this test calls reach only the members stubbed here.
   const remote = registerRuntimeHandlers({
     generatedInputNotices: notices,
     cleanupSubscriptionsForConnection: vi.fn(),
@@ -168,6 +169,7 @@ it('holds a cancellable remote request and settles it from the host answer alone
   let respond: (response: unknown) => void = () => {}
   h.subscribe.mockImplementation(async (...args: unknown[]) => {
     await connecting.promise
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: subscribeRuntimeEnvironment's sixth argument is its callbacks object.
     const callbacks = args[5] as { onEvent: (payload: unknown) => void }
     remoteRuntimeRequestDispatchObserver(args[3])?.()
     respond = (response) => callbacks.onEvent({ type: 'response', response })
@@ -274,6 +276,7 @@ it('follows a cancellable request to an older generated host by its local id', a
   })
   let respond: (response: unknown) => void = () => {}
   h.subscribe.mockImplementation(async (...args: unknown[]) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: subscribeRuntimeEnvironment's sixth argument is its callbacks object.
     const callbacks = args[5] as { onEvent: (payload: unknown) => void }
     remoteRuntimeRequestDispatchObserver(args[3])?.()
     respond = (response) => callbacks.onEvent({ type: 'response', response })
@@ -336,6 +339,7 @@ it('spends a generated request’s own end on main preparation, never on its ans
   })
   // ast-grep-ignore: test-no-wall-clock -- main's dispatch end is a real timer; the expiry is the behavior under test
   await expect(call('op-answered', Date.now() + 20)).resolves.toMatchObject({ ok: true })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callRuntimeEnvironment's eighth argument is its call options, which carry the signal.
   const { signal } = h.call.mock.calls[0][7] as { signal: AbortSignal }
   expect(signal.aborted).toBe(false)
   expect(notices.noticeOf('op-answered')).toBeUndefined()

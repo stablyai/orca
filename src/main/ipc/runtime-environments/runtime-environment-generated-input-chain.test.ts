@@ -74,6 +74,7 @@ function pairedChain(
   })
   cleanups.push(() => closeRemoteRuntimeSharedControlConnection(environmentId))
   h.handle.mockReset()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; the channels this test calls reach only the members stubbed here.
   const remote = registerRuntimeHandlers({
     generatedInputNotices: notices,
     cleanupSubscriptionsForConnection: vi.fn(),

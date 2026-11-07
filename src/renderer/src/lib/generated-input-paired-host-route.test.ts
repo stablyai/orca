@@ -190,7 +190,9 @@ it('lets only authenticated evidence from another runtime retire the status it w
     error: { code: 'invalid_argument', message: 'terminal must be a string' },
     _meta: { runtimeId }
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
   rememberRuntimeEnvironmentCompatibility('env', compatibilityEntry(fenced as never))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
   rememberRuntimeEnvironmentCompatibility('other', compatibilityEntry(status('o1', []) as never))
   // The same runtime's own invalid argument says nothing about a replacement.
   hostCall.mockResolvedValueOnce(refusal('h1'))
@@ -227,12 +229,14 @@ it('lets only authenticated evidence from another runtime retire the status it w
   expect(hostCall.mock.calls[1][0].params).not.toHaveProperty('operationId')
 
   // A late refusal of the earlier status never removes the newer one that replaced it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
   rememberRuntimeEnvironmentCompatibility('env', compatibilityEntry(fenced as never))
   const late = Promise.withResolvers<unknown>()
   hostCall.mockReset()
   hostCall.mockReturnValueOnce(late.promise)
   const pending = sendGeneratedTerminalInputToHandle(target, 'terminal', request)
   await vi.waitFor(() => expect(hostCall).toHaveBeenCalledOnce())
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
   const newer = compatibilityEntry(status('h3', [GENERATED_INPUT_RUNTIME_CAPABILITY]) as never)
   rememberRuntimeEnvironmentCompatibility('env', newer)
   late.resolve(refusal('h2'))
@@ -262,6 +266,7 @@ it('refuses to route by a status its own selection crossed a repair for', async 
 it('routes by a published status over the pairing of the snapshot that published it', async () => {
   rememberRuntimeEnvironmentCompatibility('env', compatibilityEntry())
   clearRecentRuntimeCompatibilityFailure('env', {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     status: status('h1', [GENERATED_INPUT_RUNTIME_CAPABILITY]) as never,
     snapshot: { pairingRevision: 4 }
   })
@@ -309,6 +314,7 @@ it('ends a request on its own joined status, whatever then happens to the cache 
     submit: true,
     operationId: 'op-crossed-joined'
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
   const newer = compatibilityEntry(status('h3', [GENERATED_INPUT_RUNTIME_CAPABILITY]) as never)
   rememberRuntimeEnvironmentCompatibility('env', newer)
   crossed.resolve({
@@ -341,6 +347,7 @@ it('carries the accepted id on a cancellable paired call, never on its wire para
   hostSubscribe.mockResolvedValue({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
   rememberRuntimeEnvironmentCompatibility(
     'env',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     compatibilityEntry(status('h1', [GENERATED_INPUT_RUNTIME_CAPABILITY]) as never)
   )
   const abort = new AbortController()
@@ -377,6 +384,7 @@ function windowEvent() {
 }
 
 const ORIGIN = 'desktop-window:7'
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: notice requests carry an optional part.
 const partOf = (params: unknown) => (params as { part?: { final: boolean } } | undefined)?.part
 
 /** The renderer's real generated client, through the real IPC handler, main ingress and routing,
@@ -411,6 +419,7 @@ async function pairedWindow(options: {
   })
   cleanups.push(() => closeRemoteRuntimeSharedControlConnection(environmentId))
   h.handle.mockReset()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; the channels this test calls reach only the members stubbed here.
   const remote = registerRuntimeHandlers({
     generatedInputNotices: notices,
     cleanupSubscriptionsForConnection: vi.fn(),
@@ -440,6 +449,7 @@ async function pairedWindow(options: {
     (_channel: string, payload: { type: string; subscriptionId: string }) => {
       ipcLog.push({ step: `event:${payload.type}`, subscriptionId: payload.subscriptionId })
       for (const listener of listeners) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preload listener takes main's subscription event payload as sent.
         listener({}, payload as never)
       }
     }
@@ -469,6 +479,7 @@ async function pairedWindow(options: {
           callbacks: Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
         ) => {
           calls.push(args)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window's subscribe args are the preload's subscription args.
           return subscribeRuntimeEnvironmentFromPreload(ipc, args as never, callbacks)
         }
       }
@@ -801,6 +812,7 @@ it('keeps a joined status selection across a publication that replaces its cache
   })
   // The reachable successor's status, published through the cache's own entry point.
   clearRecentRuntimeCompatibilityFailure(w.environmentId, {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cache routing reads only runtimeId and capabilities of a RuntimeStatus.
     status: successor as never,
     snapshot: {
       pairingRevision: resolveEnvironment(w.userDataPath, w.environmentId).pairingRevision!
@@ -830,6 +842,7 @@ it('delivers a live-cancellable request to an older host over the cancellable ro
     capabilities: [],
     // An older host: its process unknown, only streamed text, every write acknowledged.
     answer: (params) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the older host's terminal requests carry text or a screen read.
       const { text, screen } = params as { text?: string; screen?: true }
       return text !== undefined
         ? { send: { accepted: true, bytesWritten: text.length } }
@@ -855,12 +868,14 @@ it('delivers a live-cancellable request to an older host over the cancellable ro
   expect(outcome).toBe('delivered')
   expect(live.signal.aborted).toBe(false)
   const frames = w.server.requests.filter(({ method }) => method === 'terminal.send')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: filtered to terminal.send frames, which carry text.
   expect(frames.map(({ params }) => (params as { text: string }).text)).toEqual([
     '\u001b[200~exact live prompt\u001b[201~',
     '\r'
   ])
   // The old host's wire is what it always was: no id, end or generated field.
   for (const { params } of frames) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal.send frame's params is an object.
     expect(Object.keys(params as object).sort()).toEqual(['client', 'terminal', 'text'])
   }
   // One selection, and every frame fixed to its pairing; the local metadata stays local.

@@ -45,12 +45,14 @@ function windowEvent() {
 // only for the window's current document.
 it('holds a window’s request at its IPC ingress, for its current document only', async () => {
   const notices = new GeneratedAgentInputNotices()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial runtime; the channels this test calls reach only the members stubbed here.
   const remote = registerRuntimeHandlers({
     generatedInputNotices: notices,
     cleanupSubscriptionsForConnection: vi.fn(),
     getRuntimeId: () => 'local-runtime'
   } as never)
   const handler = (channel: string) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ipcMain.handle's second argument is the channel's handler.
     handleMock.mock.calls.find(([name]) => name === channel)![1] as (
       event: unknown,
       args: unknown
@@ -75,8 +77,10 @@ it('holds a window’s request at its IPC ingress, for its current document only
     expectedEnvironmentRuntimeId: 'host-runtime'
   })
   const replaced = { sender: event.sender, senderFrame: {} }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ingress reads only sender/senderFrame of the event and the stored environment record.
   expect(remote(replaced as never, host as never, call('op-stale-frame'))).toBeNull()
   expect(notices.isPending('op-stale-frame')).toBe(false)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ingress reads only sender/senderFrame of the event and the stored environment record.
   expect(remote(event as never, host as never, call('op-remote'))).not.toBeNull()
   expect(notices.isPending('op-remote')).toBe(true)
   // Accepted, never dispatched: not sent.

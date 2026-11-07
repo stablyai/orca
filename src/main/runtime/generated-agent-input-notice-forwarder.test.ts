@@ -20,9 +20,11 @@ function hosts() {
   const hostsApi: GeneratedInputNoticeHosts = {
     call: (host, method, params) =>
       new Promise((resolve, reject) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder's notice calls carry an id and an optional part.
         const part = (params as { part?: { index: number } }).part
         calls.push({
           host: host.environmentId,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the forwarder's notice calls carry an id and an optional part.
           id: (params as { id: string }).id,
           method,
           ...(part ? { index: part.index } : {}),
@@ -35,6 +37,7 @@ function hosts() {
                     retained: true,
                     dismissed: true,
                     part:
+                      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded by `part &&` above: this call carries a part.
                       part && !(params as { part: { final: boolean } }).part.final
                         ? 'accepted'
                         : undefined
@@ -87,6 +90,7 @@ it.each([100, 1_000])(
     const notices = new GeneratedAgentInputNotices()
     const { calls, hostsApi } = hosts()
     // Count the actual enumeration map, including work before the first attempted call.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: GeneratedInputNoticeCommands keeps its enumeration map as `current`.
     const current = (notices.commands as unknown as { current: Map<string, unknown> }).current
     const reads = vi.spyOn(current, 'get')
     const owed = notices.commands.owedTo.bind(notices.commands)
@@ -189,6 +193,7 @@ it('drains a parked discard after the earlier multipart copy is cancelled withou
   const call = hostsApi.call
   hostsApi.call = (host, method, params, options) => {
     if (method === 'terminal.dismissGeneratedInputNotice') {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a dismissal call carries the notice id.
       remote.dismiss((params as { id: string }).id, 'window')
     }
     return call(host, method, params, options)

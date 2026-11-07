@@ -123,6 +123,7 @@ function limited(end: number, timeoutMs = 60_000) {
   observeRemoteRuntimeRequestDispatch(params, () => events.push('frame'))
   limitRemoteRuntimeRequestDispatch(params, {
     end,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: withRemaining receives the params object given above.
     withRemaining: (sent, remainingMs) => ({ ...(sent as object), timeoutMs: remainingMs }),
     handedOff: () => events.push('handed-off')
   })
@@ -174,6 +175,7 @@ it.each(['shared', 'cached', 'one-shot', 'subscription'] as const)(
     await send(inTime.params)
     const [frame] = sends(server)
     // Serialized at the handoff: only the time left, never the duration prepared earlier.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a terminal.send frame carries the timeoutMs set above.
     expect((frame.params as { timeoutMs: number }).timeoutMs).toBeLessThanOrEqual(2_000)
     expect(frame.params).toMatchObject({ terminal: 'terminal', text: 'exact', submit: true })
     expect(inTime.events).toEqual(['handed-off', 'frame'])
@@ -209,8 +211,11 @@ it.each(
   const expired = limited(began + 1000)
   let armed = true
   const stringify = JSON.stringify
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy forwards every argument to the real stringify.
   const serialized = vi.spyOn(JSON, 'stringify').mockImplementation(((...args: unknown[]) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only request envelopes are inspected, each field optional.
     const value = args[0] as { method?: string; params?: unknown } | undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stringify of a request envelope returns a string.
     const text = Reflect.apply(stringify, JSON, args) as string
     // The handoff's own bytes: the copy carrying only the time left.
     if (
