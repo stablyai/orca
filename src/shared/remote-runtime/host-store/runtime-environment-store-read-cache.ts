@@ -5,6 +5,16 @@ import { statSync } from 'node:fs'
 // A stat signature still sees every write, including ones from the CLI or another Orca process.
 const MAX_CACHED_KEYS = 8
 
+let localWrites = 0
+/** Writers in this process call this so their own write is never hidden behind a coarse-timestamp or reused-inode stat. */
+export function noteEnvironmentRegistryWrite(): void {
+  localWrites++
+}
+
+function signatureOf(paths: readonly string[]): string {
+  return `${localWrites}|${paths.map(fileSignature).join('|')}`
+}
+
 function fileSignature(path: string): string {
   const stats = statSync(path, { bigint: true, throwIfNoEntry: false })
   return stats
@@ -22,7 +32,7 @@ export function createFileSignatureCache<T>(): FileSignatureCache<T> {
   const cache = new Map<string, { signature: string; value: T }>()
   return {
     read(key, paths, read) {
-      const signature = paths.map(fileSignature).join('|')
+      const signature = signatureOf(paths)
       const cached = cache.get(key)
       if (cached?.signature === signature) {
         // Callers own their copy; one mutating a result must not leak into the next read.
@@ -31,7 +41,7 @@ export function createFileSignatureCache<T>(): FileSignatureCache<T> {
       const value = read()
       cache.delete(key)
       // Re-stat after reading: a write racing the read must not be pinned under the pre-write signature.
-      if (paths.map(fileSignature).join('|') === signature) {
+      if (signatureOf(paths) === signature) {
         cache.set(key, { signature, value: structuredClone(value) })
         if (cache.size > MAX_CACHED_KEYS) {
           cache.delete(cache.keys().next().value!)

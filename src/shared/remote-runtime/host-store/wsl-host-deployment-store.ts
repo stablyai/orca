@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { noteEnvironmentRegistryWrite } from './runtime-environment-store-read-cache'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
@@ -169,6 +170,7 @@ export function writeWslHostDeployment(
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
     { durable: true }
   )
+  noteEnvironmentRegistryWrite()
 }
 
 export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {

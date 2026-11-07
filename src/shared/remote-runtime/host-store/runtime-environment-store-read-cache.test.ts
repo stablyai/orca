@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createFileSignatureCache } from './runtime-environment-store-read-cache'
+import {
+  createFileSignatureCache,
+  noteEnvironmentRegistryWrite
+} from './runtime-environment-store-read-cache'
 
 let dir: string | undefined
 afterEach(() => {
@@ -30,6 +33,16 @@ describe('file signature read cache', () => {
     writeFileSync(missing, '{}')
     cache.read(dir, [store, missing], read)
     expect(read).toHaveBeenCalledTimes(3)
+  })
+
+  it('rereads after an in-process write even when the file stat looks unchanged', () => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-env-cache-'))
+    const cache = createFileSignatureCache<number>()
+    const read = vi.fn(() => read.mock.calls.length)
+    cache.read(dir, [join(dir, 'missing.json')], read)
+    noteEnvironmentRegistryWrite()
+    cache.read(dir, [join(dir, 'missing.json')], read)
+    expect(read).toHaveBeenCalledTimes(2)
   })
 
   it('does not cache a failed read', () => {

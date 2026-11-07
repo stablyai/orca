@@ -31,7 +31,10 @@ import {
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
 import { isWslHostsServing } from '../../wsl-host-internal-gate'
-import { createFileSignatureCache } from './runtime-environment-store-read-cache'
+import {
+  createFileSignatureCache,
+  noteEnvironmentRegistryWrite
+} from './runtime-environment-store-read-cache'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -173,6 +176,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
   writeSecureFile(path, serialized, { durable: true })
+  noteEnvironmentRegistryWrite()
   environmentStoreWrites++
 }
 
