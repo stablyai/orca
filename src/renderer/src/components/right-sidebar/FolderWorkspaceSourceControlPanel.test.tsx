@@ -226,6 +226,19 @@ it.each([3, 30])(
   }
 )
 
+it('labels same-repo sections by worktree name and a detached section by its HEAD', async () => {
+  const [onBranch, detached] = setup(2)
+  useAppStore.setState({
+    worktreesByRepo: { repo: [onBranch!, { ...detached!, branch: '', head: 'abc1234def' }] }
+  })
+  await render()
+  expect(
+    [...container.querySelectorAll('section button[aria-expanded]')].map(
+      (toggle) => toggle.textContent
+    )
+  ).toEqual(['ChildChild 0feature-0', 'ChildChild 1Detached HEAD · abc1234'])
+})
+
 function ActiveStatusObserver() {
   useWorktreeGitStatusObservation(null)
   return null
