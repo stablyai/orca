@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { readFileSync, rmSync } from 'node:fs'
+import { readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
+import { resolveCliCommand } from './node-cli-command-resolution'
 import { getSpawnArgsForWindows, wrapWindowsStartWait } from './windows-batch-spawn'
 
 export type WindowsHostInteractiveLoginSpawn = {
@@ -30,10 +31,33 @@ function buildPidRelayScript(command: string, args: string[], pidFilePath: strin
     `$Command = Read-OrcaValue '${encodeUtf8(command)}'`,
     `$Arguments = @(${encodedArgs})`,
     `[IO.File]::WriteAllText((Read-OrcaValue '${encodeUtf8(pidFilePath)}'), [string]$PID)`,
-    '& $Command @Arguments',
-    'if ($null -eq $LASTEXITCODE) { exit 0 }',
+    'try { & $Command @Arguments } catch { exit 1 }',
+    'if ($null -eq $LASTEXITCODE) { exit 1 }',
     'exit $LASTEXITCODE'
   ].join('; ')
+}
+
+export function resolveWindowsInteractiveLoginCommand(command: string): string {
+  if (process.platform !== 'win32' || /\.(cmd|exe|bat)$/i.test(command)) {
+    return command
+  }
+  for (const ext of ['.cmd', '.exe', '.bat']) {
+    const withExt = `${command}${ext}`
+    try {
+      if (statSync(withExt).isFile()) {
+        return withExt
+      }
+    } catch {
+      // not found
+    }
+  }
+  if (!command.includes('\\') && !command.includes('/')) {
+    const resolved = resolveCliCommand(command, { platform: 'win32' })
+    if (resolved && /\.(cmd|exe|bat)$/i.test(resolved)) {
+      return resolved
+    }
+  }
+  return command
 }
 
 function readPidFile(pidFilePath: string): number | null {
@@ -68,7 +92,8 @@ export function buildWindowsHostInteractiveLoginSpawn(
   command: string,
   args: string[]
 ): WindowsHostInteractiveLoginSpawn {
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
+  const resolvedCommand = resolveWindowsInteractiveLoginCommand(command)
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedCommand, args)
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${randomUUID()}.pid`)
   const powershell = win32.join(
     process.env.SystemRoot ?? 'C:\\Windows',
