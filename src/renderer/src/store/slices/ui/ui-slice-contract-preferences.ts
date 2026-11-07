@@ -2,11 +2,13 @@ import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser-devtools-dock'
 import type {
   ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../../shared/agents-view-thread-filters'
+import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
-  ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
   WorkspaceHostOrder,

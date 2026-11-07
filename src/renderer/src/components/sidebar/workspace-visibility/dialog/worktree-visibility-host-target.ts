@@ -7,7 +7,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveWorktreeVisibilityHostTarget(
   state: Pick<AppState, 'repos' | 'settings' | 'detectedWorktreesByRepo'>,

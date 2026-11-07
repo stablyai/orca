@@ -5,7 +5,7 @@ import type { PluginFileTypeHostSuggestion } from '../../../../preload/api/plugi
 import { fileTypeOfPath } from '../../../../shared/plugins/contributions/plugin-file-type'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { requestPluginPreview } from '@/store/plugin-preview-request'
+import { requestPluginPreview } from '@/store/plugins/navigation/plugin-preview-request'
 import { pluginDisplayNameFromKey } from '../plugins/list/plugin-display-name'
 import { Button } from '../ui/button'
 

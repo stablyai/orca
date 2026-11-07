@@ -1,7 +1,7 @@
 import { getUiLanguageChoiceLabel, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
+import { usePluginLanguagePacks } from '@/store/plugins/localization/plugin-language-packs'
 import { disambiguatedPluginContentLabels } from '../../plugins/presentation/plugin-name-disambiguation'
 
 /** Icon themes with their picker labels; a plugin one sharing a name shows its publisher. */

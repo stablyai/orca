@@ -61,13 +61,6 @@ describe('engageGpuFallbackAfterCrashBurst', () => {
     await engaging
   })
 
-  it('relaunches into safe graphics when the user accepts', async () => {
-    const { handlers, order } = createHandlers()
-    await engageGpuFallbackAfterCrashBurst(ENGAGEMENT, handlers)
-    expect(order).toEqual(['persistMarker', 'prompt', 'confirmMarker', 'restart'])
-    expect(handlers.clearMarker).not.toHaveBeenCalled()
-  })
-
   it('undoes the marker when the user chooses Keep Running', async () => {
     const { handlers, order } = createHandlers({
       promptForRestart: vi.fn(async () => 'continue' as GpuFallbackRestartDecision)

@@ -3,7 +3,7 @@ import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-targe
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { toast } from 'sonner'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { openDocPreviewSource } from '../workspace-doc/doc-preview-document-actions'
 

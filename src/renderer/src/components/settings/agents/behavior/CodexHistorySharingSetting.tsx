@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../../../shared/execution-host'

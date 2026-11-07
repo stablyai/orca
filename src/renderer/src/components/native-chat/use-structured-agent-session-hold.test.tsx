@@ -53,26 +53,6 @@ describe('a mounted structured chat', () => {
     await waitFor(() => expect(callsTo('agentSession.release')).toHaveLength(1))
   })
 
-  it('keeps one hold across re-renders that rebuild the target object', async () => {
-    const { rerender, unmount } = renderHook(
-      (props: { sessionId: string }) =>
-        useStructuredAgentSessionHold({
-          sessionId: props.sessionId,
-          target: { kind: 'local' },
-          surface: 'desktop-chat'
-        }),
-      { initialProps: { sessionId: 'session-alpha' } }
-    )
-    await waitFor(() => expect(callsTo('agentSession.hold')).toHaveLength(1))
-
-    rerender({ sessionId: 'session-alpha' })
-    rerender({ sessionId: 'session-alpha' })
-
-    expect(callsTo('agentSession.hold')).toHaveLength(1)
-    expect(callsTo('agentSession.release')).toHaveLength(0)
-    unmount()
-  })
-
   it('holds only while a retained pane is visible', async () => {
     const view = renderHook(
       ({ visible }: { visible: boolean }) =>

@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import React, { useCallback } from 'react'
 import { ExternalLink, FolderOpen } from 'lucide-react'
 import {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, type JSX } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useAppStore } from '@/store'
-import type { WorktreePurgeTarget } from '@/store/slices/worktree-helpers'
+import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
 import {
   flushRemovalPendingEdits,

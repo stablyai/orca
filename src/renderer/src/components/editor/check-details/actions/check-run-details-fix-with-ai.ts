@@ -14,7 +14,7 @@ import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { useAppStore } from '@/store/index'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import {
   saveSourceControlActionRecipe,
@@ -26,7 +26,7 @@ import type {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export async function startCheckRunDetailsFixWithAI(args: {
   worktreeId: string
@@ -123,7 +123,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     if (!args.worktreeId) {
       return null
     }
-    return findWorktreeById(selectWorktreesByRepo(useAppStore.getState()), args.worktreeId)
+    return findFirstIndexedWorktree(selectWorktreesByRepo(useAppStore.getState()), args.worktreeId)
   }, [args.worktreeId])
   const canFixWithAI = isCheckRunDetailsFixCandidate(args.check, args.details)
   const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId)

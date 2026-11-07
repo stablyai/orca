@@ -5,7 +5,8 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
@@ -29,7 +30,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
@@ -235,7 +236,10 @@ export function buildAgentLaunchRouteInput(
           workspaceId: workspace.worktreeId,
           requestedCwd: tuiCustomization?.cwd,
           workspacePath: workspace.worktreeId
-            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+            ? findFirstIndexedWorktree<Worktree>(
+                selectWorktreesByRepo(store) ?? {},
+                workspace.worktreeId
+              )?.path
             : undefined,
           resolveFolderWorkspacePath: (folderWorkspaceId) =>
             selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)

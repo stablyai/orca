@@ -3,8 +3,8 @@ import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { createTestStore } from '../slices/store-test-helpers'
-import { TEST_REPO } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { TEST_REPO } from './repo.test-fixture'
 import {
   nativeChatPastedTextToken,
   nativeChatPastedTextOperations

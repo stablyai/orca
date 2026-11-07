@@ -43,9 +43,9 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   callRuntimeRpc: runtimeRpc.callRuntimeRpc
 }))
 
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from '../worktrees/listing/authoritative-worktree-removal-memory'
 import type { AppState } from '../../types'
 import type {

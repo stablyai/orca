@@ -4,7 +4,7 @@ import {
   publishedStructuredSessions
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { AppState } from '../../store'
+import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {

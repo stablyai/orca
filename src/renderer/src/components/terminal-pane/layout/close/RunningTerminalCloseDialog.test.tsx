@@ -8,7 +8,7 @@ import type { AppState } from '@/store/types'
 import {
   useRunningTerminalCloseConfirmStore,
   type RunningTerminalCloseConfirmRequest
-} from '@/store/running-terminal-close-confirm'
+} from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import RunningTerminalCloseDialog from './RunningTerminalCloseDialog'
 
 const initialState = useAppStore.getInitialState()

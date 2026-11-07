@@ -10,7 +10,7 @@ import {
   FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
 } from '../../../../../shared/file-write-disk-precondition'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
-import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
   installRuntimeFileClientEnvironment,

@@ -1,4 +1,4 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
   isStaleWorktreeCatalogPublication

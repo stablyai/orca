@@ -1,6 +1,6 @@
 import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { EditorContent } from './EditorContent'
 import { EditorPanelHeader } from './EditorPanelHeader'
@@ -12,7 +12,7 @@ import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { translate } from '@/i18n/i18n'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -174,7 +174,7 @@ export function EditorPanelShell({
           renameDialogFile
             ? getUntitledFileRoot(
                 renameDialogFile,
-                findWorktreeById(
+                findFirstIndexedWorktree(
                   selectWorktreesByRepo(useAppStore.getState()),
                   renameDialogFile.worktreeId
                 )?.path

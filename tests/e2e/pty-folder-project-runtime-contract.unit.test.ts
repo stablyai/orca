@@ -30,8 +30,8 @@ import type {
   IpcPtyTransportOptions,
   PtyTransport
 } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
-import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
-import { makeTab } from '../../src/renderer/src/store/slices/store-session-test-harness'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeTab } from '../../src/renderer/src/store/terminals/terminal-tab.test-fixture'
 import {
   existsSyncMock,
   wslUncDirectoryExistsAsyncMock

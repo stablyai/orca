@@ -7,7 +7,7 @@ import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
 } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 type RuntimeFileMutationTarget = { kind: 'environment'; environmentId: string }
 export type RuntimeFileImportSession = {

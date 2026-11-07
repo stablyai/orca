@@ -2,11 +2,11 @@ import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/b
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { isBrowserPageMountAdmitted } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   createBrowserLinkTestStore,

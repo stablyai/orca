@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import 'zustand'
 import type { RemoteBrowserPageHandle } from '../store/slices/browser/browser-slice-contract'
-import '../store/slices/runtime-status'
+import '../store/slices/runtime-status/create-runtime-status-slice'
 import './rpc/testing/runtime-compatibility-test-fixture'
 import {
   ensureBrowserClientHostOnRuntimeContact,

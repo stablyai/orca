@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
 import {
   getWorkspaceEditorSshHost,

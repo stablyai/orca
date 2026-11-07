@@ -47,7 +47,7 @@ vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspecti
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import { closeTerminalTab } from './terminal-tab-actions'
 import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 

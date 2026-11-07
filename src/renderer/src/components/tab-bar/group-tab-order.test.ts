@@ -3,8 +3,8 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { getActiveTabNavOrder, getGroupVisibleTabOrder } from './group-tab-order'
 import { buildOrderedTabItems } from './tab-bar-item-model'
-import { makeOpenFile } from '../../store/slices/store-session-test-harness'
-import { makeTerminalTab } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeOpenFile } from '../../store/slices/editor/types/open-file.test-fixture'
+import { makeTerminalTab } from '../../store/terminals/terminal-row.test-fixture'
 
 function terminalTab(id: string, groupId: string, entityId: string, sortOrder: number): Tab {
   return {
