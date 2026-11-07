@@ -23,7 +23,7 @@ import {
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
 // Capture ownership before tab removal can erase it.
-const chipScopes = new Map<string, string>()
+const chipScopes = new Map<string, { scope: string; chip: NativeChatComposerImageAttachment }>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
 
@@ -52,13 +52,20 @@ export function dropCapturedNativeChatPendingAttachments(
 }
 
 export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
-  return currentDraftScope(chipScopes.get(id) ?? scope)
+  return currentDraftScope(chipScopes.get(id)?.scope ?? scope)
 }
 
 export function nativeChatPendingAttachmentSource(scope: string, id: string) {
-  return nativeChatPendingAttachmentSnapshot(pendingDestination(scope, id)).find(
-    (chip) => chip.id === id && chip.pending
-  )
+  const indexed = chipScopes.get(id)
+  return indexed?.scope === pendingDestination(scope, id) && indexed.chip.pending
+    ? indexed.chip
+    : undefined
+}
+
+export function isNativeChatPendingAttachmentSource(scope: string, chip: object): boolean {
+  const id = 'id' in chip && typeof chip.id === 'string' ? chip.id : undefined
+  const indexed = id ? chipScopes.get(id) : undefined
+  return indexed?.scope === scope && indexed.chip === chip
 }
 
 export function hasNativeChatPendingAttachment(id: string): boolean {
@@ -83,12 +90,12 @@ export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
 
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {
   for (const chip of pendingCache.get(scopeKey) ?? []) {
-    if (chipScopes.get(chip.id) === scopeKey) {
+    if (chipScopes.get(chip.id)?.scope === scopeKey) {
       chipScopes.delete(chip.id)
     }
   }
   for (const chip of next) {
-    chipScopes.set(chip.id, scopeKey)
+    chipScopes.set(chip.id, { scope: scopeKey, chip })
   }
   if (next.length === 0) {
     pendingCache.delete(scopeKey)
@@ -195,7 +202,7 @@ export function moveLaunchPendingAttachmentListeners(from: string, to: string): 
 }
 
 function pendingDestination(scope: string, id: string): string {
-  return currentDraftScope(chipScopes.get(id) ?? scope)
+  return currentDraftScope(chipScopes.get(id)?.scope ?? scope)
 }
 
 /** Persist completed images in attachment order; return false if already removed. */

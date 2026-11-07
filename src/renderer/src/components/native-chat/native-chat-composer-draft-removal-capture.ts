@@ -37,6 +37,21 @@ export function captureNativeChatDraftRemovalScopes(
   submissionsOnly = false,
   attempts: ReadonlySet<NativeChatDraftLoadAttempt> = new Set(load.attempt ? [load.attempt] : [])
 ) {
+  const keys = new Map<unknown, string>()
+  const parsed = new Map<unknown, string | undefined>()
+  const key = (value: unknown) => {
+    if (!keys.has(value)) {
+      keys.set(value, nativeChatDraftValueKey(value))
+    }
+    return keys.get(value)!
+  }
+  const parsedKey = (value: unknown) => {
+    if (!parsed.has(value)) {
+      const draft = parseStoredNativeChatComposerDraft(value)
+      parsed.set(value, draft ? key(draft) : undefined)
+    }
+    return parsed.get(value)
+  }
   const pending: ReturnType<typeof captureNativeChatPendingAttachments> = submissionsOnly
     ? new Map()
     : captureNativeChatPendingAttachments()
@@ -91,33 +106,29 @@ export function captureNativeChatDraftRemovalScopes(
               ...(load.appendsBeforeLoad.get(scope) ?? [])
             ])
           ]
-      const expected = new Set<string>([nativeChatDraftValueKey(saved.get(scope))])
+      const expected = new Set<string>([key(saved.get(scope))])
       if (record && !submissionsOnly) {
-        expected.add(nativeChatDraftValueKey(savedNativeChatComposerDraftForm(record)))
+        expected.add(key(savedNativeChatComposerDraftForm(record)))
       }
       for (const operation of operations) {
         if ('draft' in operation) {
-          expected.add(nativeChatDraftValueKey(operation.draft))
+          expected.add(key(operation.draft))
         }
       }
       const entries = journalByScope.get(scope) ?? []
       for (const entry of entries) {
         if (entry && typeof entry === 'object' && 'draft' in entry && entry.draft) {
-          expected.add(nativeChatDraftValueKey(entry.draft))
+          expected.add(key(entry.draft))
         }
       }
       const loaded = new Set<string>()
-      for (const operation of operations) {
-        const input = parseStoredNativeChatComposerDraft(operation.applied?.input)
-        if (input) {
-          loaded.add(nativeChatDraftValueKey(input))
-        }
-      }
+      const censusRoots = new Set<string>()
       for (const value of expected) {
         if (value !== 'undefined') {
           const parsed = parseStoredNativeChatComposerDraft(JSON.parse(value))
           if (parsed) {
-            loaded.add(nativeChatDraftValueKey(parsed))
+            censusRoots.add(value)
+            loaded.add(key(parsed))
           }
         }
       }
@@ -133,6 +144,21 @@ export function captureNativeChatDraftRemovalScopes(
           operationSet: new Set(operations),
           expected,
           loaded,
+          censusRoots,
+          predecessors: operations.flatMap((operation) => {
+            const applied = operation.applied
+            if (!applied) {
+              return []
+            }
+            const loaded = parsedKey(applied.input)
+            return [
+              {
+                input: key(applied.input),
+                output: key(applied.output),
+                loaded
+              }
+            ]
+          }),
           journal: new Set(entries.map(nativeChatComposerDraftJournalReplayKey)),
           submissions: [...(submissions.get(scope) ?? [])].map((submission) => ({
             submission,

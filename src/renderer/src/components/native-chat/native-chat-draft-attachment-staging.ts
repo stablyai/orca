@@ -1,6 +1,20 @@
 import {
-  hasNativeChatPendingAttachment,
+  staged,
+  currentFiles,
+  pendingResources,
+  releaseFiles,
+  type StagedFiles
+} from './native-chat-staged-file-owner'
+export { currentFiles, pendingResources, type StagedFiles } from './native-chat-staged-file-owner'
+import {
+  transferNativeChatStagedFiles,
+  reconcileIncomingNativeChatStagedFiles,
+  type NativeChatStagedTransfer
+} from './native-chat-staged-file-transfer'
+export type { NativeChatStagedTransfer } from './native-chat-staged-file-transfer'
+import {
   nativeChatPendingAttachmentScope,
+  nativeChatPendingAttachmentSource,
   nativeChatPendingAttachmentSnapshot
 } from './native-chat-pending-attachment-cache'
 import { prepareNativeChatStagedUpload } from './native-chat-staged-upload'
@@ -13,26 +27,6 @@ export type NativeChatStagedInput = {
   attachments?: readonly { path: string }[]
 }
 
-export type StagedFiles = {
-  scope: string
-  paths: Set<string>
-  resources: Map<string, object>
-  pending: Map<object, string>
-  draftPaths: Set<string>
-  heldInputs: Set<Set<string>>
-  leases: Set<Set<string>>
-  draft?: NativeChatComposerDraft
-  referenceText?: string
-  textReferences: Set<string>
-  movedTo?: StagedFiles
-  uploads: Map<string, Map<string, Promise<string>>>
-}
-const staged = new Map<string, StagedFiles>()
-export const pendingResources = new WeakMap<
-  object,
-  Map<string, { resource: object; files: StagedFiles }>
->()
-
 export function captureNativeChatStagedRemoval(scope: string, chips: readonly object[] = []) {
   const files = staged.get(scope)
   return {
@@ -44,19 +38,6 @@ export function captureNativeChatStagedRemoval(scope: string, chips: readonly ob
   }
 }
 export type NativeChatStagedRemoval = ReturnType<typeof captureNativeChatStagedRemoval>
-
-export function currentFiles(files: StagedFiles): StagedFiles {
-  let owner = files
-  while (owner.movedTo) {
-    owner = owner.movedTo
-  }
-  while (files.movedTo && files.movedTo !== owner) {
-    const next = files.movedTo
-    files.movedTo = owner
-    files = next
-  }
-  return owner
-}
 
 function inputPaths(files: StagedFiles, input: NativeChatStagedInput): string[] {
   const referenced = new Set(
@@ -85,6 +66,7 @@ export function stageNativeChatDraftFile(scope: string, path: string, source?: o
       heldInputs: new Set(),
       leases: new Set(),
       textReferences: new Set(),
+      draftReferences: new Set(),
       uploads: new Map()
     }
     staged.set(scope, files)
@@ -100,33 +82,29 @@ export function stageNativeChatDraftFile(scope: string, path: string, source?: o
   files.draftPaths.add(path)
 }
 
-export function moveNativeChatStagedFiles(from: string, to: string): void {
+export function moveNativeChatStagedFiles(
+  from: string,
+  to: string
+): NativeChatStagedTransfer | undefined {
   if (from === to) {
     return
   }
-  const files = staged.get(from)
-  if (!files) {
+  const source = staged.get(from)
+  if (!source) {
     return
   }
+  const files = currentFiles(source)
   const existing = staged.get(to)
-  if (existing) {
-    existing.paths.forEach((path) => files.paths.add(path))
-    existing.resources.forEach((resource, path) => files.resources.set(path, resource))
-    existing.pending.forEach((path, chip) => files.pending.set(chip, path))
-    existing.draftPaths.forEach((path) => files.draftPaths.add(path))
-    existing.leases.forEach((lease) => files.leases.add(lease))
-    existing.heldInputs.forEach((held) => files.heldInputs.add(held))
-    for (const [target, uploads] of existing.uploads) {
-      const held = files.uploads.get(target) ?? new Map<string, Promise<string>>()
-      uploads.forEach((upload, path) => held.set(path, held.get(path) ?? upload))
-      files.uploads.set(target, held)
-    }
-    existing.movedTo = files
+  const destination = existing ? currentFiles(existing) : undefined
+  if (files === destination) {
+    staged.delete(from)
+    return
   }
-  staged.set(to, files)
-  files.scope = to
+  const { owner, incoming } = transferNativeChatStagedFiles(files, destination)
+  staged.set(to, owner)
+  owner.scope = to
   staged.delete(from)
-  files.draft = undefined
+  return incoming
 }
 
 export function pruneFiles(files: StagedFiles, selected?: ReadonlyMap<string, object>): void {
@@ -158,21 +136,26 @@ export function pruneFiles(files: StagedFiles, selected?: ReadonlyMap<string, ob
 export function reconcileNativeChatStagedDraft(
   scope: string,
   draft?: NativeChatComposerDraft,
-  removal?: NativeChatStagedRemoval
+  removal?: NativeChatStagedRemoval,
+  incoming?: NativeChatStagedTransfer
 ): void {
   const files = staged.get(scope)
-  if (!files || (!removal && files.draft === draft)) {
+  if (!files) {
     return
   }
   const previous = files.draft
   files.draft = draft
-  if (
-    previous &&
-    draft &&
-    previous.text === draft.text &&
-    previous.images === draft.images &&
-    previous.pastedTextFiles === draft.pastedTextFiles
-  ) {
+  const unchanged =
+    previous === draft ||
+    (previous &&
+      draft &&
+      previous.text === draft.text &&
+      previous.images === draft.images &&
+      previous.pastedTextFiles === draft.pastedTextFiles)
+  if (!removal && unchanged) {
+    if (incoming) {
+      reconcileIncomingNativeChatStagedFiles(files, incoming)
+    }
     return
   }
   if (files.referenceText !== draft?.text) {
@@ -183,16 +166,14 @@ export function reconcileNativeChatStagedDraft(
       )
     )
   }
-  const images = new Set(draft?.images.map(({ path }) => path))
-  const pasted = new Set(Object.values(draft?.pastedTextFiles ?? {}))
-  files.draftPaths = new Set(
-    [...files.paths].filter((path) => {
-      if (images.has(path) || pasted.has(path)) {
-        return true
-      }
-      return files.textReferences.has(path)
-    })
-  )
+  if (!unchanged) {
+    files.draftReferences = new Set([
+      ...files.textReferences,
+      ...(draft?.images.map(({ path }) => path) ?? []),
+      ...Object.values(draft?.pastedTextFiles ?? {})
+    ])
+  }
+  files.draftPaths = new Set([...files.paths].filter((path) => files.draftReferences.has(path)))
   if (!removal?.deferPrune) {
     pruneFiles(files, removal?.resources)
   }
@@ -204,22 +185,6 @@ export function holdNativeChatStagedInput(scope: string, input: NativeChatStaged
     files.heldInputs.clear()
     files.heldInputs.add(new Set(inputPaths(files, input)))
     pruneFiles(files)
-  }
-}
-
-function releaseFiles(files: StagedFiles, paths: string[]): void {
-  releaseBrowserAttachmentFiles(paths)
-  for (const path of paths) {
-    files.paths.delete(path)
-    files.resources.delete(path)
-    files.draftPaths.delete(path)
-    files.textReferences.delete(path)
-    files.uploads.forEach((uploads) => uploads.delete(path))
-  }
-  if (!files.paths.size) {
-    if (staged.get(files.scope) === files) {
-      staged.delete(files.scope)
-    }
   }
 }
 
@@ -273,12 +238,12 @@ export function stageNativeChatPendingImage(
   id: string | null,
   path: string
 ): boolean {
-  if (!id || !hasNativeChatPendingAttachment(id)) {
+  const chip = id ? nativeChatPendingAttachmentSource(scope, id) : undefined
+  if (!id || !chip) {
     releaseBrowserAttachmentFiles([path])
     return false
   }
   const destination = nativeChatPendingAttachmentScope(scope, id)
-  const chip = nativeChatPendingAttachmentSnapshot(destination).find((chip) => chip.id === id)
   stageNativeChatDraftFile(destination, path)
   const files = staged.get(destination)!
   if (chip) {

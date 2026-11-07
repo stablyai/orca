@@ -180,8 +180,13 @@ export function handBackNativeChatQueuedEdit(
   )
   redirectNativeChatEditDraft(edit.scopeKey, edit.destination)
   moveNativeChatPendingAttachments(edit.scopeKey, edit.destination)
-  moveNativeChatStagedFiles(edit.scopeKey, edit.destination)
-  reconcileNativeChatStagedDraft(edit.destination, records.get(edit.destination))
+  const incoming = moveNativeChatStagedFiles(edit.scopeKey, edit.destination)
+  reconcileNativeChatStagedDraft(
+    edit.destination,
+    records.get(edit.destination),
+    undefined,
+    incoming
+  )
   const pastes: object[] = []
   for (const token of draft.text.split(NATIVE_CHAT_PASTED_TEXT_TOKEN)) {
     const id = nativeChatPastedTextId(token)

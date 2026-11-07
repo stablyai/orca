@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 import { formatNativeChatFileReference } from './native-chat-composer-target'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
-import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
+import { partitionNativeChatAttachmentPaths } from './native-chat-image-paste'
 import { nativeChatAttachmentOwnerChangedNotice } from './native-chat-attachment-upload'
 import {
   nativeChatWorkspaceAttachmentMismatchNotice,
@@ -163,17 +163,15 @@ export function useNativeChatResolvedPathAttachments({
                     }
               ) || attached
           } else {
-            const images = attachable.filter(
-              ({ path }) => acceptsImages && isNativeChatImageAttachmentPath(path)
+            const { images, references } = partitionNativeChatAttachmentPaths(
+              attachable,
+              acceptsImages
             )
             appendImageAttachments(images.map(({ path, connectionId }) => ({ path, connectionId })))
-            const references = attachable.filter((path) => !images.includes(path))
             for (const sources of new Set(references.map((path) => path.returnSources))) {
               fileSources.push(...(sources ?? [{}]))
             }
-            filePaths.push(
-              ...attachable.filter((path) => !images.includes(path)).map(({ path }) => path)
-            )
+            filePaths.push(...references.map(({ path }) => path))
             attached = true
           }
         }

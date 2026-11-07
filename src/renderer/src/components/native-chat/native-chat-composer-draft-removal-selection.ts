@@ -19,8 +19,7 @@ import {
 } from './native-chat-composer-draft-persistence'
 import {
   nativeChatComposerDraftStorage,
-  KEEP_NATIVE_CHAT_DRAFT,
-  parseStoredNativeChatComposerDraft
+  KEEP_NATIVE_CHAT_DRAFT
 } from './native-chat-composer-draft-storage'
 import { selectNativeChatDraftRemovalProducts } from './native-chat-composer-draft-removal-products'
 import type { NativeChatStagedRemoval } from './native-chat-draft-attachment-staging'
@@ -56,7 +55,9 @@ export function consumeNativeChatDraftRemovalScope(
     return true
   }
   const current = records.get(scope)
-  if (edit?.returning && current && selection.eligible(scope, current)) {
+  const selected =
+    (selection.selected.get(scope) ?? false) && current === selection.current.get(scope)
+  if (edit?.returning && current && selected) {
     edit.returning.revoked = current
   }
   for (const [id, operation] of captured.pastes) {
@@ -69,17 +70,6 @@ export function consumeNativeChatDraftRemovalScope(
   }
   const retire = (operation: NativeChatDraftRemovalScope['operations'][number]) => {
     operation.retired = true
-    const applied = operation.applied
-    if (
-      applied &&
-      ('draft' in operation || captured.expected.has(nativeChatDraftValueKey(applied.input)))
-    ) {
-      captured.expected.add(nativeChatDraftValueKey(applied.output))
-      const parsed = parseStoredNativeChatComposerDraft(applied.output)
-      if (parsed) {
-        captured.loaded.add(nativeChatDraftValueKey(parsed))
-      }
-    }
     if (unconfirmed.get(scope) === operation) {
       unconfirmed.delete(scope)
     }
@@ -88,7 +78,6 @@ export function consumeNativeChatDraftRemovalScope(
     retire(operation)
   }
   supersedeNativeChatComposerDraftRead(scope, captured.foreignRead)
-  const selected = selection.selected.get(scope) ?? false
   if (selected) {
     dirtyScopes.delete(scope)
     if (!edit) {

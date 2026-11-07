@@ -93,11 +93,11 @@ describe('native-chat composer draft store', () => {
 
   it('replays a change storage had not confirmed when the window went away', async () => {
     const uncommitted = createMemoryNativeChatComposerDraftStorage()
-    uncommitted.write = () => new Promise(() => {})
+    uncommitted.update = () => new Promise(() => {})
     const lost = await reload({ using: uncommitted })
     lost.drafts.writeNativeChatDraftCache('tab-1:pane', 'typed, then Orca quit')
     window.dispatchEvent(new Event('pagehide'))
-    expect(uncommitted.drafts.size).toBe(0)
+    expect(uncommitted.drafts.get('tab-1:pane')).toBeUndefined()
 
     const reloaded = await reload()
     expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('typed, then Orca quit')
@@ -634,12 +634,13 @@ describe('native-chat composer draft store', () => {
     expect(modules.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('mine, not saved yet')
   })
 
-  it('records the workspace a draft was written in, and deletes a closed chat’s draft with it', async () => {
+  it('clears matching pane drafts without treating a conversation’s saved owner as current membership', async () => {
     const owner = { workspaceId: 'repo::/wt', executionHostId: 'local' as const }
     modules.store.setNativeChatComposerDraftOwnerResolver((scopeKey) =>
-      scopeKey === 'agent-session:closed' ? owner : undefined
+      scopeKey === 'agent-session:closed' || scopeKey === 'tab-1:pane' ? owner : undefined
     )
     modules.drafts.writeNativeChatDraftCache('agent-session:closed', 'unsent')
+    modules.drafts.writeNativeChatDraftCache('tab-1:pane', 'pane draft')
     modules.drafts.writeNativeChatDraftCache('agent-session:other', 'kept')
     modules.store.flushNativeChatComposerDrafts()
     expect(storedDraft('agent-session:closed')?.owner).toEqual(owner)
@@ -647,10 +648,13 @@ describe('native-chat composer draft store', () => {
     const reloaded = await reload()
     reloaded.store.deleteNativeChatComposerDraftsOwnedBy({ ...owner, executionHostId: 'ssh:box' })
     expect(reloaded.drafts.readNativeChatDraftCache('agent-session:closed')).toBe('unsent')
+    expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('pane draft')
     reloaded.store.deleteNativeChatComposerDraftsOwnedBy(owner)
-    expect(reloaded.drafts.readNativeChatDraftCache('agent-session:closed')).toBe('')
-    expect(storedDraft('agent-session:closed')).toBeNull()
-    expect(storedDraft('agent-session:other')?.text).toBe('kept')
+    await reloaded.store.nativeChatComposerDraftWritesSettled()
+    const next = await reload()
+    expect(next.drafts.readNativeChatDraftCache('agent-session:closed')).toBe('unsent')
+    expect(next.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('')
+    expect(next.drafts.readNativeChatDraftCache('agent-session:other')).toBe('kept')
   })
 
   it('keeps a conversation’s draft when a tab is closed, and drops it when deleted by its key', async () => {

@@ -30,7 +30,7 @@ export function moveNativeChatComposerDraft(
     return
   }
   const source = readNativeChatComposerDraft(sourceScope)
-  moveNativeChatStagedFiles(sourceScope, destinationScope)
+  const incoming = moveNativeChatStagedFiles(sourceScope, destinationScope)
   moveNativeChatPendingAttachments(sourceScope, destinationScope)
   for (const operation of nativeChatPastedTextOperations.values()) {
     if (operation.scopeKey === sourceScope) {
@@ -44,6 +44,11 @@ export function moveNativeChatComposerDraft(
       deferredRemovals.set(sourceScope, { destinationScope, savedAt: destination.savedAt })
     }
   }
-  reconcileNativeChatStagedDraft(destinationScope, records.get(destinationScope))
+  reconcileNativeChatStagedDraft(
+    destinationScope,
+    records.get(destinationScope),
+    undefined,
+    incoming
+  )
   deleteNativeChatComposerDraft(sourceScope)
 }

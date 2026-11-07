@@ -15,6 +15,11 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { JOURNAL_KEY } from './native-chat-composer-draft-journal'
+import {
+  addNativeChatPendingAttachment,
+  clearNativeChatPendingAttachmentsForTests,
+  settleNativeChatPendingAttachmentReferences
+} from './native-chat-pending-attachment-cache'
 import { createChatDraftRemovalReceipt } from '@/store/slices/worktrees/teardown/chat-draft-removal-receipt'
 
 const { locate } = vi.hoisted(() => ({ locate: vi.fn() }))
@@ -54,6 +59,7 @@ async function reload() {
 }
 beforeEach(async () => {
   clearNativeChatComposerDraftsForTests()
+  clearNativeChatPendingAttachmentsForTests()
   localStorage.clear()
   storage = createIndexedDbNativeChatComposerDraftStorage(nativeChatDraftTestDatabase())
   setNativeChatComposerDraftStorageForTests(storage)
@@ -62,6 +68,7 @@ beforeEach(async () => {
 })
 afterEach(() => {
   clearNativeChatComposerDraftsForTests()
+  clearNativeChatPendingAttachmentsForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -262,3 +269,43 @@ it('a production retry begun during membership lookup cannot retain its captured
   await reload()
   expect(readNativeChatComposerDraft(SCOPE).text).toBe('')
 })
+
+it.each([false, true])(
+  'a retry after captured PDF completion clears only the captured base (foreign replacement: %s)',
+  async (foreign) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(storage, 'loadAll').mockRejectedValueOnce(new Error('transient database failure'))
+    await hydrateNativeChatComposerDrafts()
+    addNativeChatPendingAttachment(SCOPE, { id: 'captured-pdf', path: '', pending: true })
+    const locating = deferred<void>()
+    const reply = deferred<typeof location>()
+    locate.mockImplementation(() => {
+      locating.resolve()
+      return reply.promise
+    })
+    const removing = remove()
+    await locating.promise
+    if (foreign) {
+      await storage.write(SCOPE, { ...draft, text: 'independent foreign input' })
+    }
+    expect(
+      settleNativeChatPendingAttachmentReferences(SCOPE, [
+        { id: 'captured-pdf', path: '/report.pdf' }
+      ])
+    ).toBe(true)
+    await nativeChatComposerDraftWritesSettled()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(readNativeChatComposerDraft(SCOPE).text).toBe(
+      foreign ? 'independent foreign input @/report.pdf' : 'captured unsent @/report.pdf'
+    )
+    reply.resolve(location)
+    await removing
+    const expected = foreign ? 'independent foreign input @/report.pdf' : ''
+    expect(readNativeChatComposerDraft(SCOPE).text).toBe(expected)
+    expect((await storage.read(SCOPE))?.text ?? '').toBe(expected)
+    vi.useRealTimers()
+    await reload()
+    expect(readNativeChatComposerDraft(SCOPE).text).toBe(expected)
+  }
+)

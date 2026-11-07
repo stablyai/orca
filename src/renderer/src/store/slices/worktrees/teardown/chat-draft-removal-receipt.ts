@@ -177,17 +177,26 @@ export function createChatDraftRemovalReceipt(get: () => DraftState, submissions
         }
         const selected: NativeChatDraftRemovalScope[] = []
         const unavailable = new Set<string>()
+        const admitted = new Set([...candidates.values()].map(({ destination }) => destination))
+        for (const [destination, stream] of returns.streams) {
+          if (!admitted.has(destination)) {
+            stream.stop()
+            stream.release()
+          }
+        }
         await boundedDraftWork([...candidates.values()], async (candidate) => {
+          const stream = returns.streams.get(candidate.destination)
           const owner = authorities.get(candidate.authority)
           if (
             !owner ||
             !isHostIdentityContinued(owner.fence) ||
             !isOrcaSessionId(candidate.sessionId)
           ) {
+            stream?.stop()
+            stream?.release()
             return
           }
           const endpoint = JSON.stringify(owner.route.target)
-          const stream = returns.streams.get(candidate.destination)
           if (unavailable.has(endpoint)) {
             stream?.stop()
             stream?.release()
