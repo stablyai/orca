@@ -20,7 +20,10 @@ const audioPorts = new Map<string, AudioPortInput>()
 // transcribe-cpp decodes off the event loop; one queue keeps feeds behind init and stop behind feeds.
 let queue: Promise<void> = Promise.resolve()
 function enqueue(task: () => void | Promise<void>): void {
-  queue = queue.then(task)
+  // A task that throws must not stop every later one; the session's timeouts report the stream.
+  queue = queue.then(task).catch((err: unknown) => {
+    console.error('[speech-worker] task failed:', err)
+  })
 }
 
 async function handleInit(init: SttRecognizerInit): Promise<void> {
@@ -61,11 +64,15 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
   port.on('message', ({ data }) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the desktop preload holds the other end, and it sends SpeechAudioPortMessage.
     const msg = data as SpeechAudioPortMessage
-    enqueue(() =>
-      msg.type === 'end'
+    enqueue(() => {
+      // A discard or end ran first; a late frame must not reopen the stream.
+      if (audioPorts.get(streamId) !== input) {
+        return
+      }
+      return msg.type === 'end'
         ? end()
         : handleFeed({ type: 'feed', streamId, samples: msg.samples, sampleRate: msg.sampleRate })
-    )
+    })
   })
   port.on('close', end)
   audioPorts.set(streamId, input)
