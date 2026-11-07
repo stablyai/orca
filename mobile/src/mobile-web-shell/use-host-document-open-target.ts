@@ -18,7 +18,9 @@ export function useHostDocumentOpenTarget(hostId: string): {
   onRouteParamClear: (param: BridgeClearableRouteParam, value: string) => void
   onPageLocation: (href: string) => void
 } {
-  const open = firstParam(useLocalSearchParams<{ open?: string | string[] }>().open)
+  const requested = firstParam(useLocalSearchParams<{ open?: string | string[] }>().open)
+  // Only this host's sessions: a deep link can set the param too.
+  const open = requested.startsWith(`/h/${encodeURIComponent(hostId)}/session/`) ? requested : ''
   const router = useRouter()
   const navigation = useNavigation<{ setParams: (params: Record<string, string>) => void }>()
   const [openable, setOpenable] = useState('')
