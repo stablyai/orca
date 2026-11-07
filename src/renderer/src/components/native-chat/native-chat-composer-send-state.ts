@@ -1,6 +1,7 @@
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import {
   isStructuredAgentSessionHostCommand,
@@ -23,6 +24,7 @@ export type NativeChatComposerSendState = {
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
 export function nativeChatComposerSendState(input: {
+  agent: AgentType
   draft: string
   messageDelivery: boolean
   imageAttachments: readonly NativeChatComposerImageAttachment[]
@@ -31,7 +33,7 @@ export function nativeChatComposerSendState(input: {
   structuredTransport:
     | Pick<
         NativeChatStructuredComposerTransport,
-        'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp'
+        'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
       >
     | undefined
   editSession: { canSave: boolean } | undefined
@@ -52,9 +54,15 @@ export function nativeChatComposerSendState(input: {
   const runsWhileHostHolds =
     input.orcaCommand === true ||
     (transport !== undefined &&
+      !input.messageDelivery &&
       input.goalMode !== true &&
       input.imageAttachments.length === 0 &&
-      isStructuredAgentSessionHostCommand(input.draft, transport.threadGoal !== undefined) &&
+      isStructuredAgentSessionHostCommand(
+        input.draft,
+        transport.threadGoal !== undefined,
+        input.agent,
+        transport.optionSnapshot
+      ) &&
       !structuredAgentSessionCommandChangesConversation(input.draft))
   const draftHeld = localHold || (hostHold && !runsWhileHostHolds)
   const hasDraft = input.draft.trim() !== '' || input.imageAttachments.length > 0

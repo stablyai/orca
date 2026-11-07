@@ -9,8 +9,12 @@ function chordSteersQueued(
 ): boolean {
   const { followUp = 'queue', ...input } = overrides
   const working = input.isWorking ?? false
-  const structuredTransport = { sendFollowUp: { action: followUp, offersChoice: working } }
+  const structuredTransport = {
+    optionSnapshot: [],
+    sendFollowUp: { action: followUp, offersChoice: working }
+  }
   return nativeChatComposerSendState({
+    agent: 'claude',
     draft: '',
     messageDelivery: true,
     imageAttachments: [],

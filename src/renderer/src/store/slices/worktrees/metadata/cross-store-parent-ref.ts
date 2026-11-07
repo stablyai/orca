@@ -4,9 +4,9 @@ import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+import { crossStoreParentRefOfRow } from '../../../../../../shared/worktree/lineage-row-identity'
 import { assertCrossStoreLineageSupported } from '../../../../../../shared/worktree-runtime-capabilities'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentDisplayName } from '../../../repos/owner-routing'
 import { selectLineageStoreInstallationId } from '../../../cross-store-lineage-parents'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
@@ -39,18 +39,11 @@ export async function buildCrossStoreParentRef(
   if (parentStore === undefined || parentStore === lineageStoreKeyOfTarget(childTarget)) {
     throw new Error('That parent is on the same machine. Choose it as a parent there instead.')
   }
-  if (parseWorkspaceKey(parent.id)?.type === 'folder') {
-    throw new Error("A folder workspace can't parent a workspace on another machine yet.")
-  }
-  const installationId = selectLineageStoreInstallationId(state, parentStore)
-  if (!installationId || !parent.instanceId) {
+  const ref = crossStoreParentRefOfRow(selectLineageStoreInstallationId(state, parentStore), parent)
+  if (!ref) {
     throw new Error(
       "Couldn't confirm the parent's machine. Refresh the workspace list and try again."
     )
   }
-  return {
-    installationId,
-    workspaceKey: worktreeWorkspaceKey(parent.id),
-    instanceId: parent.instanceId
-  }
+  return ref
 }

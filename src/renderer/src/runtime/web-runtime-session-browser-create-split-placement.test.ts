@@ -10,8 +10,8 @@ import {
   makeSnapshot,
   resetBrowserTabCreateEnvironment,
   stubBrowserTabCreateEnvironment
-} from './web-runtime-session-test-harness'
-import { stubBrowserCreateRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubBrowserCreateRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -66,7 +66,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

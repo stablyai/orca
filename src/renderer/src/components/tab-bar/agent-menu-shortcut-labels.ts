@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/keybindings'
 import { resolveWindowShortcutAction } from '../../../../shared/window-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/app-state-view'
 import {
   readAgentTabShortcutActions,
   resolveAgentTabShortcutAction
@@ -19,7 +19,7 @@ import type { NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export function useAgentMenuShortcutLabels(
   model: NewTabAgentMenuModel | undefined
 ): Map<TuiAgent, string> | undefined {
-  const keybindings = useAppStore((s) => s.keybindings)
+  const keybindings = useAppStateValue((s) => s.keybindings)
   const worktreeId = model?.state === 'settled' ? model.pickerContext?.workspace.worktreeId : null
   return worktreeId
     ? agentMenuShortcutLabels(worktreeId, keybindings, getShortcutPlatform())

@@ -17,6 +17,7 @@ import { isPublicCatalogListing } from './plugin-public-catalog'
 import { pluginDisplayNameFromKey } from './plugin-display-name'
 import { sanitizePluginDisplayText } from '../../../../../shared/plugins/manifest/plugin-display-text'
 import type { PluginAutoUpdateState } from '../../../../../shared/plugins/catalog/plugin-update-policy'
+import { withDisambiguatedPluginNames } from '../presentation/plugin-name-disambiguation'
 
 /** One plugin as the list and detail page show it, whether installed, listed, or both. */
 export type PluginListEntry = {
@@ -47,6 +48,8 @@ export type PluginListEntry = {
   verifiedSource: PluginVerifiedSource
   /** Other catalogs listing this installed plugin; none of them can update or replace it. */
   alsoListedBy: readonly string[]
+  /** `name` ends with " (publisher)" because another listed plugin shares the name. */
+  nameShowsPublisher?: boolean
   /** Listed by (and if installed, installed from) the official or community catalog, so a public
    *  install count may show. Never for dev, local or Git installs. */
   installCountEligible?: boolean
@@ -272,7 +275,7 @@ export function buildPluginListEntries(
   const catalogIdsOf = (pluginKey: string): string[] =>
     (listingsByKey.get(pluginKey) ?? []).map((listing) => listing.marketplaceSourceId)
   const installedKeys = new Set(installed.map((plugin) => plugin.pluginKey))
-  return {
+  return withDisambiguatedPluginNames({
     installed: installed.map((plugin) => {
       const { listing, ownCatalog } = sourceListing(
         plugin,
@@ -319,7 +322,7 @@ export function buildPluginListEntries(
         ),
         installCountEligible: isPublicCatalogListing(candidates[0], catalogById)
       }))
-  }
+  })
 }
 
 /** Search across what a user can see or would type: name, key, publisher, description, categories. */

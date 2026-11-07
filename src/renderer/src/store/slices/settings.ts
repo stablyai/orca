@@ -6,9 +6,9 @@ import { toast } from 'sonner'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { assertRuntimeStatusCompatible } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
@@ -34,7 +34,7 @@ import {
 import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null

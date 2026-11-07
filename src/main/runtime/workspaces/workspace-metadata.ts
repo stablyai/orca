@@ -76,6 +76,13 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
+        resolveFolderParent: async (selector) => {
+          const parent = await this.worktreeLineage.resolveParent(selector)
+          if (parent.type !== 'folder') {
+            throw new Error('selector_not_found')
+          }
+          return { folderWorkspaceId: parent.folderWorkspace.id }
+        },
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
         readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),

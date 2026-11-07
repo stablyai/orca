@@ -1,6 +1,6 @@
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
-import type { BundledSkillUnsupportedReason } from '@/runtime/runtime-bundled-skills-client'
+import type { BundledSkillUnsupportedReason } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'

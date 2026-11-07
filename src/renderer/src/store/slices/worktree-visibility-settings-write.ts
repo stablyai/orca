@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   LOCAL_EXECUTION_HOST_ID,

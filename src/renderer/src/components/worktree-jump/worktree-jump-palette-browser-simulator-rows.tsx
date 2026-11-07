@@ -13,7 +13,7 @@ import {
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
-import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 

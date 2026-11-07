@@ -1,7 +1,7 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -55,6 +55,7 @@ export function createModelLifetimeFixture(register = true) {
     const file = modelLifetimeFile(id)
     const model = modelLifetimeEditorModel(file.filePath, `${id}\n${'x'.repeat(256 * 1024)}`)
     store.setState({ openFiles: [...store.getState().openFiles, file], activeFileId: id })
+    store.getState().createUnifiedTab(workspace, 'editor', { entityId: id, label: id })
     return { file, model }
   }
   return { store, bridge, attach, add }

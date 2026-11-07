@@ -7,8 +7,10 @@ import { structuredSessionNotices } from './native-chat-structured-session-notic
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 
 const permission = vi.hoisted(() => ({ capability: vi.fn(), settings: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: permission.capability,
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: permission.capability
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: permission.settings
 }))
 

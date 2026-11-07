@@ -8,7 +8,7 @@ import { localDesktopSession } from '../../../shared/workspace-layout/workspace-
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { setGroupRatioThroughLayoutOwner } from '../components/tab-group/tab-group-layout-owner-commands'
-import { layoutOwnerPaneGestures } from '../components/terminal-pane/terminal-pane-layout-owner-gestures'
+import { layoutOwnerPaneGestures } from '../components/terminal-pane/layout/ownership/terminal-pane-layout-owner-gestures'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { provideLayoutFrameTerminalPanes } from './layout-frame-terminal-panes'
@@ -23,7 +23,7 @@ vi.mock('./workspace-layout-frame-sync', async (importOriginal) => ({
   showStartupLayoutFrames: () => {}
 }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -1,3 +1,4 @@
+import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
@@ -153,8 +154,8 @@ export function buildRecentTabSwitcherModel(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
   const dirtyFileIds = new Set(
-    state.openFiles
-      .filter((file) => file.worktreeId === worktreeId && file.isDirty)
+    workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId])
+      .filter((file) => file.isDirty)
       .map((file) => file.id)
   )
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true

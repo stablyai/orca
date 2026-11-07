@@ -129,7 +129,9 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     function drain(): void {
       const pending = queue.current
       while (pending.active < MAX_CONCURRENT_TERMINATIONS && pending.head < pending.items.length) {
-        const target = pending.items[pending.head++]!
+        // Why: oxc React Compiler 0.152 emits a member postfix update used as a value as a prefix one.
+        const target = pending.items[pending.head]!
+        pending.head += 1
         pending.active += 1
         void terminate(target).finally(() => {
           pending.active -= 1

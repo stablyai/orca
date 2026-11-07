@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { XTERM_COMPOSITION_SESSION_END_EVENT } from '@/components/terminal-pane/terminal-ime-composition-route'
+import { XTERM_COMPOSITION_SESSION_END_EVENT } from '@/components/terminal-pane/input/ime/terminal-ime-composition-route'
 import { afterEach, describe, expect, it } from 'vitest'
 import { installTypingLatencyInputEvents, type TypingInputSignal } from './input-events'
 

@@ -5,6 +5,7 @@ import type { PluginStatusBarOverrides } from '../../../shared/plugins/contribut
 import type { PluginDeclarativeTone } from '../../../shared/plugins/declarative/plugin-declarative-catalog'
 import {
   fromPlugin,
+  installedPluginDisplayNames,
   isLivePlugin,
   usePluginPanelsStore,
   ensurePluginPanelsLoaded,
@@ -54,15 +55,17 @@ export function collectPluginStatusBarItems(
         return []
       }
       const command = plugin.commands.find((candidate) => candidate.id === declared.command)
+      const names = installedPluginDisplayNames(plugins)
+      const pluginName = names.get(plugin.pluginKey) ?? plugin.name
       return [
         {
           key: `${plugin.pluginKey}/${declared.id}`,
-          pluginName: plugin.name,
+          pluginName,
           ...(item.text ? { text: item.text } : {}),
           ...(item.icon ? { icon: item.icon } : {}),
           tone: item.tone ?? 'neutral',
-          tooltip: item.tooltip || plugin.name,
-          command: command ? fromPlugin(plugin, command) : null
+          tooltip: item.tooltip || pluginName,
+          command: command ? fromPlugin(plugin, command, names) : null
         }
       ]
     })

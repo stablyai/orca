@@ -6,7 +6,7 @@ import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
 
 const hostRef: { current: unknown } = { current: null }
 
-vi.mock('../../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 

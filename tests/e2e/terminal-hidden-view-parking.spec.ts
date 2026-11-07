@@ -20,7 +20,7 @@ import {
 } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
-import { TERMINAL_TAB_PARK_FLIP_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
+import { TERMINAL_TAB_PARK_FLIP_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/parking/verdict/terminal-park-verdict-flip-telemetry'
 
 // Dev/exposeStore parking wiring exposes this handle and the applied delay override.
 type ParkingDebugWindow = Window & {

@@ -1,11 +1,11 @@
 import type { AppState } from './types'
-import type { HostRoute } from '../runtime/runtime-client-target'
+import type { HostRoute } from '../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
-} from '../runtime/runtime-environment-revision'
+} from '../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isRemovedRuntimeHostId } from './slices/stale-runtime-host-rows'
 import {
   getEnvironmentSshStateGeneration,
@@ -13,7 +13,7 @@ import {
 } from './slices/runtime-environment-ssh'
 import { getLocalSshTargetConnectionGeneration } from './slices/ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
-import { getRuntimeTargetHostId } from '../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../runtime/rpc/targets/runtime-client-target'
 
 /** Fence by pairing/runtime incarnation and SSH target generation, not unrelated catalog/connection churn. */
 export type HostIdentityFence = {

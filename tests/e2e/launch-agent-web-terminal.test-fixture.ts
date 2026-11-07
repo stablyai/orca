@@ -2,14 +2,15 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import type * as TerminalOperation from '@/runtime/web-runtime-terminal-create-operation'
+import type * as TerminalOperation from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+import type * as RuntimeRpcClient from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { AgentLaunchChoices } from '../../src/shared/agent-launch/choices/agent-launch-choices'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
+import type * as LaunchAgentKindModule from '../../src/shared/agent-kind'
 
 const mocks = vi.hoisted(() => ({
   actualOperation: false,
@@ -66,6 +67,7 @@ export const store = {
     ]
   },
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string }[] },
+  unifiedTabsByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -95,40 +97,53 @@ export const store = {
   markNativeChatLaunchPromptFailed: vi.fn()
 }
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.capability,
   runtimeEnvironmentSupportsCapabilities: async (
     environmentId: string,
     capabilities: Parameters<typeof RuntimeRpcClient.runtimeEnvironmentSupportsCapabilities>[1]
-  ) => Promise.all(capabilities.map((capability) => mocks.capability(environmentId, capability))),
+  ) => Promise.all(capabilities.map((capability) => mocks.capability(environmentId, capability)))
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.hostRpc
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('sonner', () => ({
   toast: { message: vi.fn(), error: mocks.toastError, success: mocks.toastSuccess }
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.reveal
+}))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
 vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn() }))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
-  tuiAgentToAgentKind: (agent: string) => agent
+  tuiAgentToAgentKind: mockLaunchAgentKind
 }))
-vi.mock('@/runtime/web-runtime-terminal-create-operation', async (importOriginal) => {
-  const actual = await importOriginal<typeof TerminalOperation>()
-  return {
-    createWebRuntimeSessionTerminalResult: (
-      ...args: Parameters<typeof actual.createWebRuntimeSessionTerminalResult>
-    ) =>
-      mocks.actualOperation
-        ? actual.createWebRuntimeSessionTerminalResult(...args)
-        : mocks.createWebRuntimeSessionTerminal(...args)
+const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
+vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
+  ...(await importOriginal<typeof LaunchAgentKindModule>()),
+  tuiAgentToAgentKind: mockLaunchAgentKind
+}))
+
+vi.mock(
+  '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof TerminalOperation>()
+    return {
+      createWebRuntimeSessionTerminalResult: (
+        ...args: Parameters<typeof actual.createWebRuntimeSessionTerminalResult>
+      ) =>
+        mocks.actualOperation
+          ? actual.createWebRuntimeSessionTerminalResult(...args)
+          : mocks.createWebRuntimeSessionTerminal(...args)
+    }
   }
-})
+)
 vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/web-runtime-terminal-placement-settlement', () => ({
+vi.mock('@/runtime/hosted-terminals/placement/web-runtime-terminal-placement-settlement', () => ({
   settleWebRuntimeTerminalPlacement: vi.fn(async () => {})
 }))
 vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({

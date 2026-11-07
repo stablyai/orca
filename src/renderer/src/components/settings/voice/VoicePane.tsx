@@ -10,11 +10,14 @@ import { useAppStore } from '@/store/index'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
+import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
+import { VoiceModelUnloadSetting } from './VoiceModelUnloadSetting'
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getOpenaiTranscriptionSearchEntry } from './voice-pane-search'
 import { translate } from '@/i18n/i18n'
+import { readIpcErrorMessage } from '@/lib/ipc-error'
 
 type VoicePaneProps = {
   settings: GlobalSettings
@@ -167,12 +170,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       )
     } catch (err) {
       toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.VoicePane.8572bbb537',
-              'Failed to save OpenAI API key'
-            )
+        readIpcErrorMessage(err) ??
+          translate(
+            'auto.components.settings.VoicePane.8572bbb537',
+            'Failed to save OpenAI API key'
+          )
       )
     } finally {
       if (mountedRef.current) {
@@ -228,6 +230,22 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         onUpdateVoiceSettings={updateVoiceSettings}
         onOpenOpenAiDialog={openOpenAiDialog}
         onRefreshModelStates={refreshModelStates}
+      />
+
+      <Separator />
+
+      <VoiceDictationLanguageSetting
+        voiceSettings={voiceSettings}
+        selectedModel={selectedModel}
+        onUpdateVoiceSettings={updateVoiceSettings}
+      />
+
+      <Separator />
+
+      <VoiceModelUnloadSetting
+        voiceSettings={voiceSettings}
+        selectedModel={selectedModel}
+        onUpdateVoiceSettings={updateVoiceSettings}
       />
 
       {showOpenAiSettingsRow && (

@@ -14,6 +14,10 @@ import {
   type TerminalPaletteSettings,
   type TerminalThemeLookupSettings
 } from '../../../shared/terminal-themes/terminal-theme-selection'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../components/plugins/presentation/plugin-name-disambiguation'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
@@ -77,11 +81,16 @@ export function getAvailableTerminalThemeOptions(
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
   )
+  const labels = disambiguatedPluginContentLabels(
+    pluginThemes,
+    [...builtinOptions, ...customOptions].map((option) => option.label)
+  )
+  const pluginNames = disambiguatedContentPluginNames(pluginThemes)
   const pluginOptions = pluginThemes.map((theme) => ({
     value: theme.id,
-    label: theme.label,
+    label: labels.get(theme.id) ?? theme.label,
     group: 'plugin' as const,
-    sourceLabel: theme.pluginName,
+    sourceLabel: pluginNames.get(theme.pluginKey) ?? theme.pluginName,
     mode: theme.mode,
     previewTheme: theme.terminal
   }))

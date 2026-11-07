@@ -10,7 +10,7 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from './work-item-repo-row'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { captureHostIdentityFence, type HostIdentityFence } from '@/store/host-catalog-fencing'
 
 export function githubTaskIdentity(item: Pick<GitHubWorkItem, 'url'>): string {

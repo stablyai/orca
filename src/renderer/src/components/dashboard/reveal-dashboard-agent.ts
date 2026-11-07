@@ -1,5 +1,5 @@
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import {
   structuredAgentSessionOwnerForTab,

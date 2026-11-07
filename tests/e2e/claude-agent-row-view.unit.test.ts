@@ -14,21 +14,21 @@ import { claudeRosterToSnapshots } from '../../src/shared/claude-subagent-roster
 import { decodeAgentSubagentsField } from '../../src/shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { ClaudeAgentViewBridge } from '../../src/main/claude/agent-view/agent-view-bridge'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { RUNTIME_PROTOCOL_VERSION } from '../../src/shared/protocol-version'
 import { buildSubagentChildRows } from '@/components/sidebar/workspace-card/activity/worktree-subagent-child-rows'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import WorktreeCardAgents from '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({ info: vi.fn(), transport: vi.fn(), owner: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: mocks.info } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealWorkspace: vi.fn()
 }))
@@ -37,7 +37,7 @@ vi.mock('@/lib/terminal-tab-owner-activation', () => ({ activateTerminalTabOnOwn
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/stale-agent-row', () => ({
+vi.mock('@/components/terminal-pane/agent-status/stale-agent-row', () => ({
   dismissStaleAgentRowByKey: vi.fn()
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 1000 }))
@@ -45,11 +45,11 @@ vi.mock('@/store', async () => {
   const { create } = await import('zustand')
   return { useAppStore: create(() => ({})) }
 })
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwner>()),
   resolveOwnerOrLocal: mocks.owner
 }))
-vi.mock('@/runtime/runtime-rpc-environment-call', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-environment-call', () => ({
   callRuntimeEnvironmentWithRevision: (args: {
     method: string
     params: unknown
@@ -227,7 +227,7 @@ async function click(index: number) {
 }
 
 const actualOwner = await vi.importActual<typeof WorktreeRuntimeOwner>(
-  '@/lib/worktree-runtime-owner'
+  '@/lib/workspace/ownership/worktree-runtime-owner'
 )
 
 beforeEach(async () => {
@@ -722,7 +722,8 @@ it.each(['list', 'compatibility'] as const)(
       owner = { endpoint: { kind: 'environment', environmentId: 'remote' }, at: 'local' }
       mocks.owner.mockImplementation(() => ({ kind: 'resolved', owner }))
       delayStatus = gate
-      const { clearRuntimeCompatibilityCache } = await import('@/runtime/runtime-rpc-client')
+      const { clearRuntimeCompatibilityCache } =
+        await import('@/runtime/rpc/compatibility/runtime-compatibility-cache')
       clearRuntimeCompatibilityCache()
     }
     const old = viewClaudeAgentFromRow(child('restored'))

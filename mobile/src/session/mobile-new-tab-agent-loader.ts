@@ -78,34 +78,22 @@ export async function loadMobileAgentLaunchContext(
   return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
 }
 
-export type MobileNewTabAgentInventory = Pick<MobileAgentLaunchContext, 'detectedAgents'> & {
-  options: MobileNewTabAgentOption[]
+export async function loadMobileDetectedAgents(
+  args: MobileAgentLaunchContextArgs
+): Promise<Pick<MobileAgentLaunchContext, 'detectedAgents' | 'repo'>> {
+  const detected = await loadDetectedAgents(args.client, args.worktreeId, args)
+  return { detectedAgents: interpretDetectedAgents(detected), repo: detected.repo }
 }
 
-export async function loadMobileNewTabAgentOptions(
-  args: MobileAgentLaunchContextArgs & { settled?: MobileNewTabAgentInventory | null }
-): Promise<MobileNewTabAgentInventory> {
-  // Settings remain live; settled detection is reused until explicitly refreshed.
-  if (args.settled) {
-    const reply = await newTabSettingsRead.request(args.client)
-    return newTabAgentInventory(newTabSettingsRead.interpret(reply)(), args.settled.detectedAgents)
-  }
-  const context = await loadMobileAgentLaunchContext(args)
-  return newTabAgentInventory(context.settings, context.detectedAgents)
-}
-
-function newTabAgentInventory(
+export function newTabAgentOptionsFrom(
   settings: unknown,
   detectedAgents: unknown[]
-): MobileNewTabAgentInventory {
-  return {
-    options: buildMobileNewTabAgentOptions(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      settings as MobileNewTabAgentSettings | undefined,
-      detectedAgents
-    ),
+): MobileNewTabAgentOption[] {
+  return buildMobileNewTabAgentOptions(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    settings as MobileNewTabAgentSettings | undefined,
     detectedAgents
-  }
+  )
 }
 
 type DetectedAgentsReply = {

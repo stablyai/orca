@@ -12,6 +12,7 @@ type AvailabilityCopyId = Extract<
   | 'codexSystemNotSignedIn'
   | 'codexManagedNotSignedIn'
   | 'antigravityNotSignedIn'
+  | 'antigravitySystemNotSignedIn'
   | 'agentCommandNotSignedIn'
   | 'interactiveAgentNotSignedIn'
   | 'agentNotSignedIn'
@@ -20,6 +21,8 @@ type AvailabilityCopyId = Extract<
   | 'cliMissingInWslDistro'
   | 'cliTooOld'
   | 'modelUnavailable'
+  | 'modelUnavailableUpdate'
+  | 'modelNotSelected'
 >
 
 export const AVAILABILITY_PIECES: Record<
@@ -76,10 +79,28 @@ export const AVAILABILITY_PIECES: Record<
       COPY.antigravityNotSignedIn,
       values
     ),
+  antigravitySystemNotSignedIn: (values) =>
+    translate(
+      'components.native-chat.failureWords.antigravitySystemNotSignedIn',
+      COPY.antigravitySystemNotSignedIn,
+      values
+    ),
   modelUnavailable: (values) =>
     translate(
       'components.native-chat.failureWords.modelUnavailable',
       COPY.modelUnavailable,
+      values
+    ),
+  modelNotSelected: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelNotSelected',
+      COPY.modelNotSelected,
+      values
+    ),
+  modelUnavailableUpdate: (values) =>
+    translate(
+      'components.native-chat.failureWords.modelUnavailableUpdate',
+      COPY.modelUnavailableUpdate,
       values
     ),
   cliMissing: (values) =>

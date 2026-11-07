@@ -3,7 +3,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -11,9 +11,11 @@ let dir: string
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'orca-device-registry-parent-'))
+  vi.useFakeTimers({ toFake: ['performance'] })
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -21,6 +23,8 @@ function removeOnDisk(deviceId: string): void {
   const path = join(dir, DEVICE_REGISTRY_FILENAME)
   const rows: { deviceId: string }[] = JSON.parse(readFileSync(path, 'utf8'))
   writeFileSync(path, JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
+  // Another process's edit is seen once the registry's one-second stat window has passed.
+  vi.advanceTimersByTime(1000)
 }
 
 function delegatedRegistry() {

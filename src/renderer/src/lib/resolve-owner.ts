@@ -16,11 +16,11 @@ import {
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedWorktreeOwnerForHost,
-  resolveQualifiedIndexedRepoOwnerForHost,
   findIndexedDetectedWorktrees,
   resolveIndexedFolderWorkspaceOwner,
   resolveIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { resolveQualifiedIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
 import {
   hostAuthorityFromOperationRoute,
   SELF_LOCAL_AUTHORITY,
@@ -41,7 +41,7 @@ import {
 } from './folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** A worktree id, a `folder:` workspace key, or the floating workspace; `hostId` when the row names one. */

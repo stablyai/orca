@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { ChevronDown, FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
-import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
+import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
@@ -10,7 +10,7 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../task-page-source-context'
 import { Button } from '@/components/ui/button'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearIssueTable({
   model
 }: {

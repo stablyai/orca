@@ -25,8 +25,8 @@ import {
   repoFixture,
   worktreeFixture
 } from './native-chat-workspace-test-fixtures'
-import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
-import type * as HttpLinkRouting from '@/lib/http-link-routing'
+import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
+import type * as HttpLinkRouting from '@/lib/browser/navigation/http-link-routing'
 
 import * as imageCachePinning from '@/components/editor/document-images/local-image-cache-pinning'
 import { ImageVisibilityObserver } from './native-chat-image-visibility-observer.test-fixture'
@@ -38,14 +38,17 @@ const mocks = vi.hoisted(() => ({
   openHttpLink: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFilePreview: mocks.readRuntimeFilePreview
 }))
-vi.mock('@/components/terminal-pane/terminal-file-open-routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof TerminalFileOpenRouting>()),
-  openDetectedFilePath: mocks.openDetectedFilePath
-}))
-vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
+vi.mock(
+  '@/components/terminal-pane/links/files/terminal-file-open-routing',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof TerminalFileOpenRouting>()),
+    openDetectedFilePath: mocks.openDetectedFilePath
+  })
+)
+vi.mock('@/lib/browser/navigation/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRouting>()),
   openHttpLink: mocks.openHttpLink
 }))

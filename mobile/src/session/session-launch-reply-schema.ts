@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Require an explicit opened verdict so malformed replies cannot masquerade as declined opens.

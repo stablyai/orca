@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useAppStore } from '@/store'
@@ -23,7 +24,7 @@ export function useDiffCommentView(
   const select = useMemo(() => createDiffCommentViewSelector(), [])
   const [selection, runtimeEnvironmentId, externalSshTargetId, operationProvenance] =
     sourceParts(source)
-  return useAppStore((state) =>
+  return useAppStateValue((state) =>
     select(
       state,
       worktreeId,
@@ -38,7 +39,7 @@ export function useDiffCommentView(
 /** The notes of a captured copy (an open confirmation), through the same cached read. */
 export function useOwnedDiffComments(owner: DiffCommentOwner | null): DiffComment[] | undefined {
   const select = useMemo(() => createOwnedDiffCommentsSelector(), [])
-  return useAppStore((state) => select(state, owner))
+  return useAppStateValue((state) => select(state, owner))
 }
 
 /** A composer target whose owner is captured when it opens, so a later submit saves to that copy. */
