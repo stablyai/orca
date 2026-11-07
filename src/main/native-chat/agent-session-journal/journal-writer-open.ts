@@ -6,6 +6,8 @@ import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-
 import type { JournalWriterSession } from './journal-writer-session'
 import { journalLogNeedsFounding } from './journal-sql-meta'
 import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
+import { JournalSqlScope } from './journal-sql-scope'
+import { readJournalSqlQueueRecovery } from './journal-sql-queue-recovery'
 
 /** Today's opening effects over a persisted projection, each bounded by live work, legacy cards or
  *  pending sends: the projection already holds what a restore would rebuild. */
@@ -38,7 +40,12 @@ export async function openJournalWriterSession(
   const order = journalInputOrder(state)
   order.markOpeningRecovery()
   order.newestTurn.reopen(state.lastSequence)
-  await recoverJournalQueue(session.journal, db)
+  const scope = new JournalSqlScope(db, sessionId, state.epoch)
+  const positions = readJournalSqlQueueRecovery(scope, (id) => collaborators.queuedMessages.get(id))
+  await recoverJournalQueue(session.journal, db, positions)
+  db.prepare('DELETE FROM journal_proj_recovery_positions WHERE session_id=? AND epoch=?').run(
+    ...scope.prefix
+  )
   return openedThrough
 }
 

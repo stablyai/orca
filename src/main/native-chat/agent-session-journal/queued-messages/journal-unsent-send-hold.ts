@@ -29,6 +29,36 @@ export type UnsentSendHold =
   /** Restrict settlement when only part of a close completed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
+type UnsentSendSelection = {
+  hold: UnsentSendHold
+  /** Failed initialization proves these handed-over sends did not run. */
+  unrun?: true | ((submission: AgentJournalSubmission) => boolean)
+}
+
+export function journalUnsentSendBatch(
+  journal: Pick<JournalRecoveryJournal, 'inputOrder' | 'itemBody'>,
+  input: UnsentSendSelection
+): { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[] {
+  return journal.inputOrder
+    .recoverableSubmissions()
+    .filter((entry) =>
+      input.unrun
+        ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
+        : isQueuedAgentJournalSubmission(entry) &&
+          (input.hold.cause === 'hostRestarted'
+            ? journal.inputOrder.recoveryPending(entry.clientMessageId)
+            : (input.hold.which?.(entry) ?? true))
+    )
+    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
+    .map((submission) => ({
+      submission,
+      body: unsentSendKeptAsCard(
+        submission,
+        journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
+      )
+    }))
+}
+
 /** A linked attempt returns its own row; host-derived work is not replayed after restart. */
 export function unsentSendKeptAsCard(
   submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
@@ -78,39 +108,31 @@ export function isUnansweredHandedOverSubmission(
  * Try every row before throwing on write failure; return the latest settled admission cursor. */
 export async function holdUnsentSends(
   journal: JournalRecoveryJournal,
-  input: {
+  input: UnsentSendSelection & {
     fence: number
-    hold: UnsentSendHold
-    /** Settle handed-over sends instead when failed initialization proves none ran. */
-    unrun?: true | ((submission: AgentJournalSubmission) => boolean)
+    positions?: ReturnType<typeof legacyQueuePositions>
   }
 ): Promise<number | null> {
   const { hold } = input
-  const unsent = journal.inputOrder
-    .recoverableSubmissions()
-    .filter((entry) =>
-      input.unrun
-        ? isUnansweredHandedOverSubmission(entry) && (input.unrun === true || input.unrun(entry))
-        : isQueuedAgentJournalSubmission(entry) &&
-          (hold.cause === 'hostRestarted'
-            ? journal.inputOrder.recoveryPending(entry.clientMessageId)
-            : (hold.which?.(entry) ?? true))
-    )
-    .sort((a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0))
-  if (unsent.length === 0) {
+  const kept = journalUnsentSendBatch(journal, input)
+  if (kept.length === 0) {
     return null
   }
   const { epoch } = journal.physicalCursor()
-  const kept = unsent.map((submission) => ({
-    submission,
-    body: unsentSendKeptAsCard(
-      submission,
-      journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
-    )
-  }))
-  const positions = journal.inputOrder.legacy
-    ? legacyQueuePositions(journal, kept, Boolean(input.unrun))
-    : currentQueuePositions(journal, kept)
+  const positions =
+    input.positions ??
+    (journal.inputOrder.legacy
+      ? legacyQueuePositions(
+          {
+            state: journal.queuedMessages.displayState(),
+            order: journal.inputOrder,
+            cards: journal.queuedMessages.list(),
+            get: (id) => journal.queuedMessages.get(id)
+          },
+          kept,
+          Boolean(input.unrun)
+        )
+      : currentQueuePositions(journal, kept))
   const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
     surface: 'rejection'
   })
@@ -182,7 +204,7 @@ export async function holdUnsentSends(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'settling unsent sends failed')
   }
-  return unsent.at(-1)?.acceptedSequence ?? 0
+  return kept.at(-1)?.submission.acceptedSequence ?? 0
 }
 
 /** Failed starts return the person's direct input in the rejection's own transaction. */
@@ -251,11 +273,13 @@ function currentQueuePositions(
 /** Finish old-order conversion before any new runtime admission can stamp format 3. */
 export async function recoverJournalQueue(
   journal: JournalRecoveryJournal,
-  db: Database.Database
+  db: Database.Database,
+  positions?: ReturnType<typeof legacyQueuePositions>
 ): Promise<void> {
   await holdUnsentSends(journal, {
     fence: journal.queuedMessages.inputState().highestFence,
-    hold: { cause: 'hostRestarted' }
+    hold: { cause: 'hostRestarted' },
+    ...(positions ? { positions } : {})
   })
   const withdrawn = journal.queuedMessages.list().filter((row) => {
     if (row.body.from?.orchestration?.message === 'task' && row.deliveryMode === 'steer') {

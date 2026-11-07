@@ -13,6 +13,7 @@ import {
   type JournalLogWatermark
 } from './journal-sql-meta'
 import { deleteJournalSqlProjectionPage } from './journal-sql-projection-sweep'
+import { stageJournalSqlQueueRecovery } from './journal-sql-queue-recovery'
 
 export type JournalSqlConversionTable = { name: string; columns: string[]; rows: unknown[][] }
 
@@ -65,6 +66,7 @@ export function prepareJournalSqlConversion(
       },
       (item, key) => provenance.source(item, key)
     )
+    stageJournalSqlQueueRecovery(db, staging, loaded.state)
     staging.exec('COMMIT')
     return { sessionId, epoch: watermark.epoch, watermark, tables: stagedTables(staging) }
   } finally {

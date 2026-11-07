@@ -4,31 +4,38 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalRecoveryJournal } from '../submissions/journal-pending-submission-recovery'
+import type { JournalReducerState } from '../projection/journal-reducer'
+import type { QueuedMessageRow } from './queued-message-table'
+import type { JournalInputOrder } from '../input-order/journal-input-order'
 
 type QueuedMessagePositionMove = { messageId: string; position: number }
 
 /** Merge logical places once, then materialize finite ranks with the first successful keep. */
 export function legacyQueuePositions(
-  journal: JournalRecoveryJournal,
+  input: {
+    state: JournalReducerState
+    order: JournalInputOrder
+    cards: readonly QueuedMessageRow[]
+    get: (id: string) => QueuedMessageRow | null | undefined
+  },
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[],
   unrun: boolean
 ): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {
+  const { state, order: owner } = input
   const cards = [
     ...new Map(
       [
-        ...[...memoryJournalMap(journal.queuedMessages.displayState().queue.cards).values()].filter(
+        ...[...memoryJournalMap(state.queue.cards).values()].filter(
           (card) => card.state !== 'withdrawn'
         ),
-        ...journal.queuedMessages.list()
+        ...input.cards
       ].map((card) => [card.messageId, card])
     ).values()
   ].sort(compareQueuedRows)
-  const kept = (id: string) => journal.inputOrder.keptCard(id)
-  const { epoch } = journal.physicalCursor()
-  const state = journal.queuedMessages.displayState()
+  const kept = (id: string) => owner.keptCard(id)
+  const { epoch } = state
   const forcedBatch = batch.some(({ submission }) =>
-    journal.inputOrder.legacy!.forced(submission.clientMessageId)
+    owner.legacy!.forced(submission.clientMessageId)
   )
   const earlier: string[] = []
   const rest: (typeof cards)[number][] = []
@@ -36,7 +43,7 @@ export function legacyQueuePositions(
   const explicitHeads = new Map(
     batch.flatMap(({ submission }) => {
       const id = submission.origin === 'client' ? submission.queuedMessageId : undefined
-      const card = id ? journal.queuedMessages.get(id) : null
+      const card = id ? input.get(id) : null
       if (id && card?.consumedAs === submission.clientMessageId) {
         cardsById.set(id, card)
         return [[submission.clientMessageId, id] as const]
@@ -62,18 +69,14 @@ export function legacyQueuePositions(
   const at = new Map<number, string[]>()
   const head: string[] = []
   const firstCut = batch
-    .flatMap(
-      ({ submission }) =>
-        journal.inputOrder.legacy!.place(submission.clientMessageId)?.context.cut ?? []
-    )
+    .flatMap(({ submission }) => owner.legacy!.place(submission.clientMessageId)?.context.cut ?? [])
     .reduce((a, b) => Math.min(a, b), Infinity)
   let previousBoundary = 0
   for (let i = 0; i < rest.length; i++) {
     if (
       rest[i].state === 'waiting' &&
       kept(rest[i].messageId) &&
-      (journal.inputOrder.legacy!.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) <
-        firstCut
+      (owner.legacy!.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) < firstCut
     ) {
       previousBoundary = i + 1
     }
@@ -87,8 +90,8 @@ export function legacyQueuePositions(
       head.push(id)
       continue
     }
-    const after = journal.inputOrder.legacy!.forced(submission.clientMessageId)
-      ? journal.inputOrder.legacy!.predecessors(state, submission.clientMessageId).position
+    const after = owner.legacy!.forced(submission.clientMessageId)
+      ? owner.legacy!.predecessors(state, submission.clientMessageId).position
       : -Infinity
     let low = 0,
       high = rest.length
