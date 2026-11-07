@@ -41,11 +41,12 @@ import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
 import { useWslHostUnavailableReason } from '../../../../lib/wsl-host-availability'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 /** Coordinates scoped navigation while retaining the actual worktree root for file operations and runtime routing. */
 function FileExplorerFiles(): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const explorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const setRightSidebarExplorerView = useAppStore((s) => s.setRightSidebarExplorerView)
@@ -229,11 +230,8 @@ function FileExplorerFiles(): React.JSX.Element {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
         {explorerView === 'search'
-          ? translate(
-              'auto.components.right.sidebar.Search.98c8435e36',
-              'Select a workspace to search'
-            )
-          : translate(
+          ? t('auto.components.right.sidebar.Search.98c8435e36', 'Select a workspace to search')
+          : t(
               'auto.components.right.sidebar.FileExplorer.79b1537dd3',
               'Select a workspace to browse files'
             )}
@@ -343,7 +341,7 @@ function FileExplorerFiles(): React.JSX.Element {
               <SearchResultsPane {...searchPanel.resultsProps} />
             ) : (
               <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.right.sidebar.Search.98c8435e36',
                   'Select a workspace to search'
                 )}

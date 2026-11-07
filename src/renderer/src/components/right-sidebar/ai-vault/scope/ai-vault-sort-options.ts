@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   AiVaultSearchSort,
   AiVaultSort
@@ -11,39 +12,38 @@ export type AiVaultSortMenu<Value extends string> = {
   ariaLabel: (selectedLabel: string) => string
 }
 
-export function aiVaultBrowseSortMenu(): AiVaultSortMenu<AiVaultSort> {
+export function aiVaultBrowseSortMenu(t: Translate = translate): AiVaultSortMenu<AiVaultSort> {
   return {
     options: [
       {
         value: 'updated',
-        label: translate(
-          'auto.components.right.sidebar.AiVaultPanelControls.lastUpdated',
-          'Last updated'
-        )
+        label: t('auto.components.right.sidebar.AiVaultPanelControls.lastUpdated', 'Last updated')
       },
       {
         value: 'created',
-        label: translate('auto.components.right.sidebar.AiVaultPanelControls.created', 'Created')
+        label: t('auto.components.right.sidebar.AiVaultPanelControls.created', 'Created')
       }
     ],
     ariaLabel: (selectedLabel) =>
-      translate('sessionSearch.panel.sortSessionsAriaLabel', 'Sort sessions: {{value0}}', {
+      t('sessionSearch.panel.sortSessionsAriaLabel', 'Sort sessions: {{value0}}', {
         value0: selectedLabel
       })
   }
 }
 
-export function aiVaultSearchSortMenu(): AiVaultSortMenu<AiVaultSearchSort> {
+export function aiVaultSearchSortMenu(
+  t: Translate = translate
+): AiVaultSortMenu<AiVaultSearchSort> {
   return {
     options: [
       {
         value: 'relevance',
-        label: translate('sessionSearch.panel.sortRelevance', 'Most relevant')
+        label: t('sessionSearch.panel.sortRelevance', 'Most relevant')
       },
-      { value: 'newest', label: translate('sessionSearch.panel.sortNewest', 'Newest') }
+      { value: 'newest', label: t('sessionSearch.panel.sortNewest', 'Newest') }
     ],
     ariaLabel: (selectedLabel) =>
-      translate('sessionSearch.panel.sortResultsAriaLabel', 'Sort results: {{value0}}', {
+      t('sessionSearch.panel.sortResultsAriaLabel', 'Sort results: {{value0}}', {
         value0: selectedLabel
       })
   }

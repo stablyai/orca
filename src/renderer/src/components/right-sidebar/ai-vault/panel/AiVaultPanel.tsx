@@ -18,6 +18,7 @@ import { openAiVaultSessionLogInOrca } from '../session-actions/ai-vault-session
 import { revealAiVaultSessionPath } from '../session-actions/ai-vault-session-path-actions'
 import { useAiVaultOriginalPaneActions } from '../session-actions/ai-vault-original-pane-actions'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
@@ -62,6 +63,7 @@ export default function AiVaultPanel({
   onSessionOpened,
   resumeHere
 }: AiVaultPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     workspaceId: activeWorktreeId,
     worktree: activeWorktree,
@@ -305,17 +307,17 @@ export default function AiVaultPanel({
         {searching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
-                label={aiVaultResultCountLabel(filteredSessions.length)}
+                label={aiVaultResultCountLabel(filteredSessions.length, t)}
                 value={searchSort}
-                menu={aiVaultSearchSortMenu()}
+                menu={aiVaultSearchSortMenu(t)}
                 onChange={setSearchSort}
               />
             )
           : sessions.length > 0 && (
               <AiVaultSessionListBar
-                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length)}
+                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length, t)}
                 value={sort}
-                menu={aiVaultBrowseSortMenu()}
+                menu={aiVaultBrowseSortMenu(t)}
                 onChange={setSort}
               />
             )}
@@ -364,13 +366,13 @@ export default function AiVaultPanel({
             onCopyId={(session) =>
               void copyText(
                 session.sessionId,
-                translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
+                t('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
               )
             }
             onCopyPath={(session) =>
               void copyText(
                 formatClipboardFilePath(session.filePath, session.executionHostId),
-                translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
+                t('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
               )
             }
             onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
