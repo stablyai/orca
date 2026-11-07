@@ -185,7 +185,9 @@ export function restoreHistoricalPersonAcceptance(
     const queue = { cards: new Map(card ? [[card.messageId, card]] : []) }
     if (
       journalSubmissionIsPersonal({ queue }, submission) ||
-      (!card && record.format < 3 && journalLegacySubmissionIsPersonal(state, submission))
+      (!card &&
+        (record.format === 1 || record.format === 2) &&
+        journalLegacySubmissionIsPersonal(state, submission))
     ) {
       owner.seedPersonAcceptance(submission.acceptedSequence ?? 0)
     }

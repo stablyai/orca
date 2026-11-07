@@ -152,7 +152,7 @@ it.each([1_000, 10_000])(
         vi.spyOn(statement, 'iterate').mockImplementation(function* (...args) {
           for (const row of iterate(...args)) {
             cursorVisits++
-            payloadBytes += Buffer.byteLength(row.value_json)
+            payloadBytes += Buffer.byteLength(String(row.value_json))
             yield row
           }
         })
