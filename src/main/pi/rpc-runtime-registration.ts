@@ -26,6 +26,8 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,
+    onChildWorkEvidence: (sessionId, evidence, producer) =>
+      context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onSettled: ({ sessionId, clientMessageId, outcome }) => {
       if (outcome.state === 'admitted') {
         return

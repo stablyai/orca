@@ -23,6 +23,7 @@ import type { AgentSessionProviderHandleLink } from '../../../shared/agent-sessi
 import { PiRpcSessionStartup } from './rpc-session-startup'
 import { PiHistoryCapture, type PiHistoryCaptureDeps } from './history/rpc-history-capture'
 import { closeFailedPiSession } from './rpc-failure-cleanup'
+import type { PiRpcNativeWorkersDeps } from './rpc-native-workers'
 
 export type PiRpcConnection = Pick<
   JsonlRpcAgentConnection,
@@ -39,20 +40,21 @@ export type PiRpcConnection = Pick<
   | 'lastCloseResult'
   | 'onExit'
 >
-export type PiRpcSessionDeps = PiHistoryCaptureDeps & {
-  openConnection?: (
-    launch: ProviderProcessLaunch,
-    handlers: JsonlRpcAgentConnectionOptions
-  ) => PiRpcConnection
-  onLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void
-  onSettled: (input: {
-    sessionId: string
-    clientMessageId: string
-    fence: number
-    outcome: AgentSessionDispatchOutcome
-  }) => void
-  logger: StructuredAgentSessionLogger
-}
+export type PiRpcSessionDeps = PiHistoryCaptureDeps &
+  PiRpcNativeWorkersDeps & {
+    openConnection?: (
+      launch: ProviderProcessLaunch,
+      handlers: JsonlRpcAgentConnectionOptions
+    ) => PiRpcConnection
+    onLifecycle: (event: StructuredAgentSessionLifecycleEvent) => void
+    onSettled: (input: {
+      sessionId: string
+      clientMessageId: string
+      fence: number
+      outcome: AgentSessionDispatchOutcome
+    }) => void
+    logger: StructuredAgentSessionLogger
+  }
 
 export class PiRpcSession {
   readonly connection: PiRpcConnection
@@ -135,12 +137,7 @@ export class PiRpcSession {
           error
         })
     })
-    this.dialogs = new PiRpcDialogCallbacks(
-      this.lane,
-      (frame) => this.connection.send(frame),
-      (error) => this.fail(error),
-      resolvedLaunch.backgroundWork?.directory ?? null
-    )
+    this.dialogs = PiRpcDialogCallbacks.forSession(this, deps, resolvedLaunch.backgroundWork)
     this.connection = (
       deps.openConnection ?? ((spec, handlers) => new JsonlRpcAgentConnection(spec, handlers))
     )(launch, {
@@ -206,6 +203,7 @@ export class PiRpcSession {
     this.openedLink = result.link ?? null
     this.history.start(this.startup.historyAnchor)
     this.startup.reportAfterOpen(this.generation, result.reportedOptions)
+    this.dialogs.nativeWorkers?.activate()
     return result
   }
 
@@ -227,6 +225,7 @@ export class PiRpcSession {
   fail(error: Error): void {
     this.failure ??= error
     this.startupFailure.reject(this.failure)
+    this.dialogs.nativeWorkers?.end()
     this.deps.logger.error('Pi RPC session failed', {
       scope: 'pi-rpc',
       sessionId: this.input.identity.sessionId,

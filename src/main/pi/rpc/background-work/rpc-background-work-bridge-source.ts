@@ -3,6 +3,8 @@
 // a private folder (never a prompt or dialog, which other extensions and the model would see) and
 // the answer leaves as a status line.
 
+import { getPiNativeWorkersBridgeSource } from './rpc-native-workers-bridge-source'
+
 export const PI_BACKGROUND_WORK_STATUS_KEY = 'orca-background-work'
 export const PI_BACKGROUND_WORK_DIR_ENV = 'ORCA_PI_BACKGROUND_WORK_DIR'
 export const PI_BACKGROUND_WORK_BRIDGE_FILE = 'orca-background-work.ts'
@@ -13,6 +15,7 @@ export function getPiBackgroundWorkBridgeSource(): string {
   return [
     `const REGISTRY = Symbol.for(${JSON.stringify(SESSION_LIVENESS_REGISTRY_KEY)})`,
     `const STATUS_KEY = ${JSON.stringify(PI_BACKGROUND_WORK_STATUS_KEY)}`,
+    getPiNativeWorkersBridgeSource(),
     '',
     // Providers register in their own session_start, which can run before ours, so install at load.
     'function sessionLivenessRegistry() {',
@@ -98,8 +101,10 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '    } catch {',
     '      return',
     '    }',
+    '    let closeWorkers = () => {}',
     '    close = () => {',
     '      live = false',
+    '      closeWorkers()',
     '      try {',
     '        watcher.close()',
     '      } catch {}',
@@ -107,6 +112,7 @@ export function getPiBackgroundWorkBridgeSource(): string {
     '    try {',
     "      ctx.ui.setStatus(STATUS_KEY, 'ready:' + instance)",
     '    } catch {}',
+    '    try { closeWorkers = observeNativeWorkers(pi, ctx, instance) } catch {}',
     '    answer()',
     '  })',
     "  pi.on('session_shutdown', (_event, ctx) => {",
