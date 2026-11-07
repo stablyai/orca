@@ -32,6 +32,7 @@ import { desktopBrowserExtensions } from './browser-extension-commands'
 const ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 let directory: string
 
+/** Creates an unpacked install record in the temporary source folder, with per-case overrides. */
 function extension(overrides: Partial<InstalledBrowserExtension> = {}): InstalledBrowserExtension {
   return {
     id: ID,
