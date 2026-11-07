@@ -1,8 +1,8 @@
+import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { useAppStore } from '@/store/index'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   searchRuntimeRepoBaseRefs,
   watchRuntimeRepoBaseRefDefault
@@ -27,7 +27,8 @@ export function BaseRefPicker({
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
   // Resolve refs on the explicit host or the repo row’s owner.
-  const ownerHostId = useAppStore((state) => {
+  const viewActive = useAppStateViewActive()
+  const ownerHostId = useAppStateValue((state) => {
     if (hostId) {
       return hostId
     }
@@ -66,7 +67,10 @@ export function BaseRefPicker({
     // Drop the previous repo’s default before loading so its Following label cannot describe the new repo.
     setDefaultBaseRef(null)
     setRemoteCount(0)
-    if (!ownerHostId) {
+  }, [ownerHostId, repoId])
+
+  useEffect(() => {
+    if (!viewActive || !ownerHostId) {
       return
     }
     return watchRuntimeRepoBaseRefDefault(ownerHostId, repoId, {
@@ -80,9 +84,12 @@ export function BaseRefPicker({
         setRemoteCount(0)
       }
     })
-  }, [ownerHostId, repoId])
+  }, [ownerHostId, repoId, viewActive])
 
   useEffect(() => {
+    if (!viewActive) {
+      return
+    }
     if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
       setBaseRefResults([])
       setIsSearchingBaseRefs(false)
@@ -122,7 +129,7 @@ export function BaseRefPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [baseRefQuery, ownerHostId, repoId])
+  }, [baseRefQuery, ownerHostId, repoId, viewActive])
 
   const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
 

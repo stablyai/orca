@@ -12,7 +12,11 @@ import {
   pointerCount,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 import { MAILBOX_POINTER_ENTER_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 
 describe('orchestration mailbox crash recovery', () => {

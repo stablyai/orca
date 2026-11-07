@@ -117,7 +117,9 @@ export function useAgentBucketCounts(): AgentBucketCounts {
   const state = useAppStore(selectAgentBucketCountState)
   // Cache per worktree so status/title churn in one workspace does not rebuild every row pipeline.
   const cacheRef = useRef<ReturnType<typeof createDashboardBucketCountsCache>>(undefined!)
-  cacheRef.current ??= createDashboardBucketCountsCache()
+  if (cacheRef.current == null) {
+    cacheRef.current = createDashboardBucketCountsCache()
+  }
   return useMemo(() => {
     // Freshness follows agentStatusEpoch in state; read the clock when that generation invalidates the memo, not as a dependency.
     // oxlint-disable-next-line react/purity -- wall time is sampled per epoch tick, as explained above.

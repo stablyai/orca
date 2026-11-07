@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { join } from 'node:path'
 import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
@@ -38,7 +39,7 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as sessionId
 } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
@@ -49,7 +50,7 @@ import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-sess
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
 afterEach(() => {
@@ -519,7 +520,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection

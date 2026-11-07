@@ -14,7 +14,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
 import { useComposerState } from './useComposerState'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
 

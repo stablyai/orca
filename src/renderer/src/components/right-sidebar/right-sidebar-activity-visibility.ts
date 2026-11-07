@@ -19,7 +19,10 @@ export function getVisibleRightSidebarActivityItems(
 ): ActivityBarItem[] {
   return items.filter(
     (item) =>
-      (!item.gitOnly || !isFolder || (item.perforceCapable === true && isPerforce)) &&
+      (!item.gitOnly ||
+        !isFolder ||
+        (item.perforceCapable === true && isPerforce) ||
+        (isFolderWorkspace && item.id === 'source-control')) &&
       (!item.folderOnly || isFolderWorkspace) &&
       (!item.sshOnly || hasSshHost)
   )

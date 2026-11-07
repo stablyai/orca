@@ -1,7 +1,8 @@
+import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
-import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
@@ -36,6 +37,9 @@ export function buildWorktreePurgeState(
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
+  for (const target of targets) {
+    retireRemovedWorktreeCommitDrafts(target.id, target.hostId)
+  }
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
     return buildFullWorktreePurgeState(s, targets, changedPaneKeys)
@@ -193,6 +197,7 @@ export function buildFullWorktreePurgeState(
     gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+    gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
     expandedDirs: omitByWorktree(s.expandedDirs),
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),

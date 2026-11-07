@@ -6,7 +6,8 @@ import {
   mobileComposerSkillTokens
 } from './native-chat/composer/mobile-native-chat-composer-menu'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
@@ -85,9 +86,13 @@ describe('useMobileStructuredSessionCommands', () => {
       close: () => {}
     }
     await act(async () => {
-      renderer = create(createElement(Probe, { client, sessionId: 'a' }))
+      renderer = createWithQueryClient(createElement(Probe, { client, sessionId: 'a' }))
     })
-    expect(sendRequest).toHaveBeenCalledWith('agentSession.commands', { sessionId: 'a' })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'agentSession.commands',
+      { sessionId: 'a' },
+      { failWhenDisconnected: true }
+    )
     expect(hook!.commands).toEqual(lists.a)
 
     lists.a = [...lists.a!, { name: 'research', kind: 'skill' }]
@@ -126,7 +131,7 @@ describe('useMobileStructuredSessionCommands', () => {
       close: () => {}
     }
     await act(async () => {
-      renderer = create(createElement(Probe, { client, sessionId: 'a' }))
+      renderer = createWithQueryClient(createElement(Probe, { client, sessionId: 'a' }))
     })
     catalog = [...catalog, { name: 'research', kind: 'skill' as const }]
     await act(async () => hook!.refresh())
@@ -180,7 +185,7 @@ describe('useMobileStructuredSessionCommands', () => {
       }
       try {
         await act(async () => {
-          renderer = create(
+          renderer = createWithQueryClient(
             createElement(Probe, { client, sessionId: 'a', commandsOnRequest: true })
           )
         })
@@ -296,7 +301,7 @@ describe('useMobileStructuredSessionCommands', () => {
         }
       })
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Probe, { client, sessionId: 'a', commandsOnRequest: true, observe: true })
       )
     })
@@ -414,7 +419,7 @@ describe('useMobileStructuredSessionCommands', () => {
       }
       try {
         await act(async () => {
-          renderer = create(
+          renderer = createWithQueryClient(
             createElement(Probe, {
               client,
               sessionId: host.sessionId,

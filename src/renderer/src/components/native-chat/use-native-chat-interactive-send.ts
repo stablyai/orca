@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   nativeChatAskRequiresTerminal,
@@ -22,7 +22,7 @@ import {
   sendNativeChatMessage,
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
-import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-question-answered-inference'
+import { inferQuestionAnsweredFromCurrentStatus } from '../terminal-pane/agent-status/input-inference/agent-question-answered-inference'
 
 // Agent TUIs use Escape to cancel questions or deny approvals.
 const ESC = '\x1b'

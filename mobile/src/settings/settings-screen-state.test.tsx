@@ -37,6 +37,10 @@ vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
+vi.mock('./voice-transcribe-on-section', () => ({
+  VoiceTranscribeOnSection: () => null,
+  voiceTranscribeOnShown: () => false
+}))
 vi.mock('../dictation/use-dictation-setup-poller', () => ({
   useDictationSetupPoller: ({ refresh }: { refresh: () => Promise<unknown> }) => {
     useEffect(() => {

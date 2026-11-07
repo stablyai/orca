@@ -14,7 +14,7 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 import { parseHostAuthorityKey } from '../../../shared/host-authority'
 
-import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 
 import { captureHostIdentityFence } from '@/store/host-catalog-fencing'
 

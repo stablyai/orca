@@ -12,7 +12,8 @@ import {
   PanelRight,
   PenTool,
   Server,
-  SquareTerminal
+  SquareTerminal,
+  Type
 } from 'lucide-react'
 import type {
   PluginHostListEntry,
@@ -101,6 +102,7 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   themes: <Palette />,
   terminalThemes: <SquareTerminal />,
   iconThemes: <Blocks />,
+  fonts: <Type />,
   syntaxes: <Highlighter />,
   languagePacks: <Languages />,
   panels: <PanelRight />,
@@ -253,10 +255,11 @@ function useContributionRowActions(
       }
       case 'themes':
       case 'terminalThemes':
+      case 'fonts':
       case 'customEditors':
       case 'vmRecipes':
       case 'statusBarItems':
-        // Themes have "Use now" above the list; editors open from their new files; recipes have nothing to try here.
+        // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }
   }

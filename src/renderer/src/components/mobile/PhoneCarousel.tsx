@@ -4,6 +4,7 @@ import { HomeSlide } from './slides/HomeSlide'
 import { WorktreeListSlide } from './slides/WorktreeListSlide'
 import { TerminalSlide } from './slides/TerminalSlide'
 import { translate } from '@/i18n/i18n'
+import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
 const DWELL_MS = 4500
 const TAP_BEFORE_PUSH_MS = 240
@@ -92,7 +93,7 @@ export function PhoneCarousel(): React.JSX.Element {
       return
     }
     const id = requestAnimationFrame(() => {
-      void containerRef.current?.offsetHeight
+      forceLayoutReflow(containerRef.current)
     })
     return () => cancelAnimationFrame(id)
   }, [phase])

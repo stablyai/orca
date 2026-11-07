@@ -11,6 +11,7 @@ import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-sea
 import { getRepositoryGitHooksSearchEntries } from './execution/repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './execution/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
+import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -28,6 +29,7 @@ export function getRepositoryPaneSearchEntries(
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
     getRepositoryFormatterSearchEntry(),
+    getRepositoryAgentTrustSearchEntry(),
     {
       title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
       description: translate(

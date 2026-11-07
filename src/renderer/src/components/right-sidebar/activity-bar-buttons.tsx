@@ -1,6 +1,6 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/utils'

@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
-import { ClearPaneTitleMenuItem } from '@/components/terminal-pane/ClearPaneTitleMenuItem'
+import { ClearPaneTitleMenuItem } from '@/components/terminal-pane/titles/ClearPaneTitleMenuItem'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 

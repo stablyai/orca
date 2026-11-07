@@ -1,4 +1,6 @@
+import { memo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { PerforcePanel } from '../../perforce/perforce-panel'
 import { usePerforceWorkspace } from '../../perforce/use-perforce-workspace'
 import { usePerforceWorkspaceTarget } from '@/lib/perforce-workspace-target'
@@ -6,7 +8,8 @@ import { perforceWorkspaceKey } from '../../../../runtime/runtime-perforce-clien
 import { SourceControlPanelReady } from './panel-ready'
 import { useSourceControlPanelModel } from './use-panel-model'
 
-export function SourceControlPanel() {
+export const SourceControlPanel = memo(function SourceControlPanel() {
+  useUiLanguageRevision()
   const model = useSourceControlPanelModel()
   const { activeRepo, activeWorktree, activeConnectionId, isFolder, worktreePath } = model
   const perforceTarget = usePerforceWorkspaceTarget(
@@ -57,4 +60,4 @@ export function SourceControlPanel() {
       worktreePath={worktreePath}
     />
   )
-}
+})

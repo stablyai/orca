@@ -62,6 +62,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   runHooks?: boolean
   activate?: boolean
   setupDecision?: 'run' | 'skip' | 'inherit'
+  /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean
@@ -87,6 +90,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
   startupSuppressUpdatePrompt?: boolean
+  /** Main-internal: the startup terminal's tab title, such as an automation run's. */
+  startupTitle?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string

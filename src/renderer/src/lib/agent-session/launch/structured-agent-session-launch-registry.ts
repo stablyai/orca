@@ -1,5 +1,5 @@
-import { launchStateLifecycle } from '../../structured-agent-session-launch-lifecycle'
-import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
+import { launchStateLifecycle } from './structured-agent-session-launch-lifecycle'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { useSyncExternalStore } from 'react'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { StructuredLaunchFailure } from './structured-agent-session-launch-failure'

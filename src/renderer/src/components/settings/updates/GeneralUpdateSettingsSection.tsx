@@ -17,7 +17,7 @@ import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/hooks/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/update-delay'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)

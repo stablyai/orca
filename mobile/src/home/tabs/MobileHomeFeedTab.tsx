@@ -1,4 +1,4 @@
-import { ScrollView, View } from 'react-native'
+import { ScrollView } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { spacing } from '../../theme/mobile-theme'
@@ -27,8 +27,9 @@ export function MobileHomeFeedTab(props: {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data } = props
   const title = <MobileHomeTabHeader title={t('home.tabs.feed', 'Feed')} />
+  // Keychain reads can outlast the splash; show the title instead of a blank frame.
   if (!data.hostCatalogLoaded) {
-    return <View style={styles.fill} />
+    return title
   }
   if (data.hostCatalog.length === 0) {
     return (
@@ -78,6 +79,5 @@ export function MobileHomeFeedTab(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  fill: { flex: 1 },
   content: { paddingHorizontal: spacing.lg }
 }))

@@ -11,6 +11,35 @@ private let networkBlockRules = """
   ]
   """
 
+/// Compiled once per launch and shared by every view, so later mounts load without waiting; main thread only.
+private enum NetworkBlockRuleList {
+  private static var compiled: WKContentRuleList?
+
+  /// Synchronous once compiled in this process; nil means isolation is unavailable.
+  static func load(_ completion: @escaping (WKContentRuleList?) -> Void) {
+    if let compiled {
+      completion(compiled)
+      return
+    }
+    // Optional chaining would skip completion when the store is absent, leaving loading forever; fail closed instead.
+    guard let store = WKContentRuleListStore.default() else {
+      completion(nil)
+      return
+    }
+    store.compileContentRuleList(
+      forIdentifier: networkBlockIdentifier,
+      encodedContentRuleList: networkBlockRules
+    ) { ruleList, _ in
+      DispatchQueue.main.async {
+        if let ruleList {
+          compiled = ruleList
+        }
+        completion(ruleList)
+      }
+    }
+  }
+}
+
 /// CSP fences fetch/XHR; document-start script blocks unobservable WebSocket and service-worker APIs.
 /// Match Android; both non-configurable and non-writable prevent page replacement.
 private let networkApiBlocker = """
@@ -179,6 +208,19 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   private var isolationReady = false
   private var isolationFailed = false
   private let loadState = MobileWebShellLoadStateMachine()
+  private var keyboardPreparationPending = false
+  private var windowObservers: [NSObjectProtocol] = []
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    loadWhenIsolated()
+  }
+
+  deinit {
+    for observer in windowObservers {
+      NotificationCenter.default.removeObserver(observer)
+    }
+  }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -211,6 +253,18 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
       webView.leadingAnchor.constraint(equalTo: leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
+    for name in [
+      UIWindow.didBecomeKeyNotification, UIScene.didActivateNotification,
+      UIApplication.didBecomeActiveNotification,
+      UIResponder.keyboardDidHideNotification, UITextField.textDidEndEditingNotification,
+      UITextView.textDidEndEditingNotification
+    ] {
+      windowObservers.append(NotificationCenter.default.addObserver(
+        forName: name, object: nil, queue: .main
+      ) { [weak self] _ in
+        self?.loadWhenIsolated()
+      })
+    }
     installNetworkBlock(into: configuration.userContentController)
     backEdgePan.isEnabled = false
     backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
@@ -397,40 +451,66 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {
-    guard let store = WKContentRuleListStore.default() else {
-      // Optional chaining skips completion when the store is absent, leaving loading forever; fail closed instead.
-      isolationFailed = true
-      pendingDocumentUrl = nil
-      return
-    }
-    store.compileContentRuleList(
-      forIdentifier: networkBlockIdentifier,
-      encodedContentRuleList: networkBlockRules
-    ) { [weak self] ruleList, _ in
-      DispatchQueue.main.async {
-        guard let self else { return }
-        guard let ruleList else {
-          self.isolationFailed = true
-          self.pendingDocumentUrl = nil
-          // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
-          if self.appliedSessionId != nil {
-            self.failPropUpdate(.isolationUnavailable)
-          }
-          return
+    NetworkBlockRuleList.load { [weak self] ruleList in
+      guard let self else { return }
+      guard let ruleList else {
+        self.isolationFailed = true
+        self.pendingDocumentUrl = nil
+        // Rule compilation can finish after refusal; the state machine prevents a second terminal reason.
+        if self.appliedSessionId != nil {
+          self.failPropUpdate(.isolationUnavailable)
         }
-        controller.add(ruleList)
-        self.isolationReady = true
-        self.loadWhenIsolated()
+        return
       }
+      controller.add(ruleList)
+      self.isolationReady = true
+      self.loadWhenIsolated()
     }
   }
 
   private func loadWhenIsolated() {
-    guard isolationReady, let url = pendingDocumentUrl else { return }
-    pendingDocumentUrl = nil
-    // Only our own load raises this flag; every document ending clears it.
-    loadState.shellLoadStarted()
-    webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+    guard isolationReady, pendingDocumentUrl != nil, !keyboardPreparationPending,
+      let window, window.isKeyWindow,
+      window.windowScene?.activationState == .foregroundActive else { return }
+    keyboardPreparationPending = true
+    DispatchQueue.main.async { [weak self, weak window] in
+      guard let self else { return }
+      guard let window, self.window === window, window.isKeyWindow,
+        window.windowScene?.activationState == .foregroundActive else {
+        self.keyboardPreparationPending = false
+        self.loadWhenIsolated()
+        return
+      }
+      let delay: TimeInterval
+      switch MobileWebShellKeyboardWarmup.prepare(in: window) {
+      case .ready(let remainingDelay):
+        delay = remainingDelay
+      case .waitingForTextInput:
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+          guard let self else { return }
+          self.keyboardPreparationPending = false
+          self.loadWhenIsolated()
+        }
+        return
+      case .failed:
+        self.keyboardPreparationPending = false
+        self.failPropUpdate(.documentLoadFailed)
+        return
+      }
+      DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak window] in
+        guard let self else { return }
+        self.keyboardPreparationPending = false
+        guard let window, self.window === window, window.isKeyWindow,
+          window.windowScene?.activationState == .foregroundActive else {
+          self.loadWhenIsolated()
+          return
+        }
+        guard self.isolationReady, let url = self.pendingDocumentUrl else { return }
+        self.pendingDocumentUrl = nil
+        self.loadState.shellLoadStarted()
+        self.webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+      }
+    }
   }
 
   private func emit(_ emission: MobileWebShellLoadEmission?) {

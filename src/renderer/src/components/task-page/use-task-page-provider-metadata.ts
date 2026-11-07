@@ -2,7 +2,7 @@ import type { TaskPageResumeRestorationModel } from './use-task-page-resume-rest
 import { useState, useEffect } from 'react'
 import type { LinearTeam } from '../../../../shared/linear/workspace-types'
 import type { JiraProject } from '../../../../shared/jira/jira-types'
-import { jiraListProjects } from '@/runtime/runtime-jira-client'
+import { jiraListProjects } from '@/runtime/jira/runtime-jira-client'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationModel) {
   const {

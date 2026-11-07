@@ -7,12 +7,15 @@ import {
   buildImportedHookSettings,
   formatCandidateProvenance,
   formatCandidateSource,
+  getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
-  ignoresSharedSetupScripts,
   inspectSetupScriptPromptState,
   isSilentSetupScriptPromptState
 } from '@/lib/setup-script-prompt'
-import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
+import {
+  checkRuntimeHooks,
+  inspectRuntimeSetupScriptImports
+} from '@/runtime/repo-hooks/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
@@ -22,6 +25,7 @@ import { openSetupScriptSettings } from './open-setup-script-settings'
 import { trackSetupScriptPromptExposure } from './setup-script-prompt-exposure-telemetry'
 import {
   findSetupScriptPromptRepo,
+  isSharedSetupIgnored,
   markSetupScriptPromptSaved,
   type SetupScriptPromptState
 } from './setup-script-prompt-render-state'
@@ -29,7 +33,7 @@ import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalida
 import { useRenderedSetupScriptPromptState } from './useRenderedSetupScriptPromptState'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/selectors'
 
@@ -386,12 +390,12 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const isInspectionError = renderedPromptState.status === 'error'
   const candidate = renderedPromptState.status === 'ok' ? renderedPromptState.candidate : null
   const isPackageManagerSuggestion = candidate?.provider === 'package-manager'
-  const sharedSetupIgnored =
-    renderedPromptState.status === 'ok' &&
-    candidate === null &&
-    ignoresSharedSetupScripts(activeRepo)
+  const sharedSetupIgnored = isSharedSetupIgnored(renderedPromptState, activeRepo)
   const candidateSource = candidate ? formatCandidateSource(candidate) : null
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
+  const detectedSetupPreview = candidate
+    ? getDetectedSetupPreviewContent(candidate, detectedSetupDraft)
+    : null
 
   return (
     <SetupScriptPromptCardShell
@@ -400,10 +404,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       isInspectionError={isInspectionError}
       sharedSetupIgnored={sharedSetupIgnored}
       isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
-      hasCandidate={Boolean(candidate)}
       candidateSource={candidateSource}
       candidateProvenance={candidateProvenance}
-      detectedSetupDraft={detectedSetupDraft}
+      detectedSetupPreview={detectedSetupPreview}
       isImporting={importingRepoHostIdentity === activeRepoHostIdentity}
       renderedStateOk={renderedPromptState.status === 'ok'}
       onDismiss={handleDismiss}

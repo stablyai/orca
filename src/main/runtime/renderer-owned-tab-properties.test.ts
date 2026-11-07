@@ -29,7 +29,7 @@ import {
 } from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tab-mutation-methods'
+import { SESSION_TAB_MUTATION_METHODS } from './rpc/methods/session-tabs/session-tab-mutation-methods'
 
 function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)

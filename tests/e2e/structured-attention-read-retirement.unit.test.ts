@@ -23,7 +23,8 @@ import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
 } from '../../src/shared/agent-session/agent-session-attention'
-import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey

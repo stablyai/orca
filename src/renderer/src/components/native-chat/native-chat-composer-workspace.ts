@@ -1,15 +1,15 @@
 import type { AppState } from '@/store/types'
 import { workspaceTabs } from '@/lib/structured-chat-tab-index'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { findIndexedRepoOwnerForHost } from '@/lib/repo-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
-import { resolvePaneWslDistro } from '@/components/terminal-pane/terminal-pane-wsl-distro'
+import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
 import type { Repo } from '../../../../shared/repo-types'
 import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   selectWorktreesByRepo,

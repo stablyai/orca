@@ -78,7 +78,7 @@ vi.mock('./input/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
 vi.mock('./composer/MobileNativeChatComposerMenu', () => ({
-  MobileNativeChatComposerMenu: 'Suggestions'
+  MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
 vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

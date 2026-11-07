@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
 import { toWorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,
   showWorkspaceListChangedToast

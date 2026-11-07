@@ -1,0 +1,215 @@
+import { useAppStore } from '@/store/index'
+import {
+  findPendingLinkedWorkItemCreationId,
+  pendingCreationChatDraftScopeKey,
+  type WorktreeCreationPhase,
+  type WorktreeCreationRequest
+} from '@/lib/workspace/creation/pending-worktree-creation'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import {
+  isInstantFolderWorktreeCreation,
+  showWorktreeCreationError
+} from '@/lib/workspace/creation/worktree-creation-surface'
+import { executeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow-execute'
+import {
+  getInitialWorktreeCreationPhase,
+  getWorktreeCreationIndeterminate
+} from '@/lib/workspace/creation/worktree-creation-flow-startup'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace-create-error-format'
+
+type ContinueBackgroundWorktreeCreationOptions = {
+  revealCreationSurface?: boolean
+}
+
+// Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
+function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
+  const originView = useAppStore.getState().activeView
+  executeWorktreeCreation(creationId, request, originView).catch((error: unknown) => {
+    console.error('worktree create: unhandled failure', creationId, error)
+    const store = useAppStore.getState()
+    if (!store.pendingWorktreeCreations[creationId]) {
+      return
+    }
+    const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
+    showWorktreeCreationError(store, creationId, originView, message)
+  })
+}
+
+// The chat composer shows before the worktree exists, so a linked item's draft starts there.
+function seedPendingChatDraft(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  prior?: WorktreeCreationRequest
+): void {
+  const draft = request.launchDraftPrompt
+  if (
+    !draft ||
+    draft === prior?.launchDraftPrompt ||
+    request.promptDelivery !== 'draft' ||
+    request.agentLaunchRoute !== 'structured-native-chat'
+  ) {
+    return
+  }
+  updateNativeChatComposerDraft(
+    pendingCreationChatDraftScopeKey(creationId),
+    { text: draft, document: promptTextContent(draft) },
+    'immediate'
+  )
+}
+
+function revealPendingCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  phase: WorktreeCreationPhase
+): void {
+  const store = useAppStore.getState()
+  const indeterminate = getWorktreeCreationIndeterminate(request)
+  const loaderVisible = !(
+    isInstantFolderWorktreeCreation(store, request) &&
+    phase !== 'preparing' &&
+    phase !== 'provisioning-vm'
+  )
+  store.beginPendingWorktreeCreation({
+    creationId,
+    phase,
+    status: 'creating',
+    startedAt: Date.now(),
+    indeterminate,
+    loaderVisible,
+    request
+  })
+  seedPendingChatDraft(creationId, request)
+  // Creation UI renders only in terminal view; activate it before publishing the panel.
+  if (loaderVisible) {
+    store.setActiveView('terminal')
+  }
+  store.setSidebarOpen(true)
+}
+
+/** Start creation without blocking the composer; the pending panel owns preparation and errors. */
+export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
+  const store = useAppStore.getState()
+  const existingCreationId = findPendingLinkedWorkItemCreationId(
+    store.pendingWorktreeCreations,
+    request
+  )
+  if (existingCreationId) {
+    store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
+    store.setActivePendingWorktreeCreation(existingCreationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+    return existingCreationId
+  }
+  // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
+  const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
+  startWorktreeCreation(creationId, request)
+  return creationId
+}
+
+/** Stage a pending entry before async preflight so the UI shows immediate progress. */
+export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
+  const creationId = createBrowserUuid()
+  revealPendingCreation(creationId, request, 'preparing')
+  return creationId
+}
+
+/** Continue a staged pending entry once async preflight has produced a final request. */
+export function continueBackgroundWorktreeCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  options: ContinueBackgroundWorktreeCreationOptions = {}
+): boolean {
+  const store = useAppStore.getState()
+  const staged = store.pendingWorktreeCreations[creationId]
+  if (!staged) {
+    return false
+  }
+  seedPendingChatDraft(creationId, request, staged.request)
+  // Remote creates emit no phases; use captured submit-owner progress mode so Retry cannot change with focused runtime.
+  store.updatePendingWorktreeCreation(creationId, {
+    phase: getInitialWorktreeCreationPhase(request),
+    status: 'creating',
+    startedAt: Date.now(),
+    error: undefined,
+    provisioningLog: undefined,
+    checkoutProgress: undefined,
+    request
+  })
+  // Late background preflight preserves pending rows without reselecting creation after navigation.
+  if (options.revealCreationSurface !== false) {
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+  }
+  startWorktreeCreation(creationId, request)
+  return true
+}
+
+/** Re-run a failed creation from its panel, reusing the captured request. */
+export function retryBackgroundWorktreeCreation(creationId: string): void {
+  const store = useAppStore.getState()
+  const entry = store.pendingWorktreeCreations[creationId]
+  if (!entry) {
+    return
+  }
+  if (entry.chatInputHandedOff && entry.worktreeId) {
+    store.updatePendingWorktreeCreation(creationId, { status: 'creating', error: undefined })
+    store.setActivePendingWorktreeCreation(creationId)
+    store.setActiveView('terminal')
+    void retryCreatedWorktreeChat(creationId, entry.worktreeId, entry.request)
+    return
+  }
+  store.updatePendingWorktreeCreation(creationId, {
+    status: 'creating',
+    loaderVisible: true,
+    startedAt: Date.now(),
+    phase: getInitialWorktreeCreationPhase(entry.request),
+    error: undefined,
+    provisioningLog: undefined,
+    progressDetail: undefined,
+    checkoutProgress: undefined,
+    worktreeId: undefined
+  })
+  store.setActivePendingWorktreeCreation(creationId)
+  store.setActiveView('terminal')
+  store.setSidebarOpen(true)
+  startWorktreeCreation(creationId, entry.request)
+}
+
+async function retryCreatedWorktreeChat(
+  creationId: string,
+  worktreeId: string,
+  request: WorktreeCreationRequest
+): Promise<void> {
+  const { launchStructuredWorktreeSession } = await import('./worktree-creation-structured-session')
+  const result = await launchStructuredWorktreeSession({
+    creationId,
+    worktreeId,
+    request,
+    agentLaunchRoute: 'structured-native-chat',
+    shouldActivateOnCompletion: true,
+    activation: false,
+    primaryTabId: null
+  })
+  if (result.cancelled || result.retainedInput) {
+    return
+  }
+  const { completeWorktreeCreation } = await import('./worktree-creation-completion')
+  await completeWorktreeCreation({
+    creationId,
+    worktreeId,
+    request,
+    structuredLaunchAccepted: true,
+    activation: result.activation,
+    primaryTabId: result.primaryTabId,
+    backendSpawned: false,
+    hostPlannedStartup: false,
+    focusOnCompletion: false
+  })
+}

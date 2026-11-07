@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   findIndexedWorktreeOwner,
   findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

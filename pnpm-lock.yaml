@@ -205,8 +205,8 @@ patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.330': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.330': 17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e
-  '@xterm/addon-webgl@0.20.0-beta.329': 3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45
-  '@xterm/xterm@6.1.0-beta.336': 492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8
+  '@xterm/addon-webgl@0.20.0-beta.329': a12343c037a1a504d80da0a0bbdbbdc7ce3440a088021a95da1dd6f62b98d110
+  '@xterm/xterm@6.1.0-beta.336': 13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
@@ -243,7 +243,7 @@ importers:
         version: 2.5.6
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.330
-        version: 0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/headless':
         specifier: 6.1.0-beta.334
         version: 6.1.0-beta.334
@@ -439,34 +439,34 @@ importers:
         version: 8.18.2
       '@vitejs/plugin-react':
         specifier: ^6.1.2
-        version: 6.1.2(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+        version: 6.1.2(oxc-transform-react@0.152.0)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
       '@vscode/ripgrep-universal':
         specifier: 1.18.0
         version: 1.18.0
       '@xterm/addon-fit':
         specifier: 0.12.0-beta.332
-        version: 0.12.0-beta.332(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.12.0-beta.332(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-image':
         specifier: 0.10.0-beta.331
-        version: 0.10.0-beta.331(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.10.0-beta.331(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-ligatures':
         specifier: 0.11.0-beta.330
-        version: 0.11.0-beta.330(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.11.0-beta.330(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-search':
         specifier: 0.17.0-beta.330
-        version: 0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-unicode11':
         specifier: 0.10.0-beta.330
-        version: 0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-web-links':
         specifier: 0.13.0-beta.330
-        version: 0.13.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.13.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.329
-        version: 0.20.0-beta.329(patch_hash=3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))
+        version: 0.20.0-beta.329(patch_hash=a12343c037a1a504d80da0a0bbdbbdc7ce3440a088021a95da1dd6f62b98d110)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))
       '@xterm/xterm':
         specifier: 6.1.0-beta.336
-        version: 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+        version: 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
       ajv:
         specifier: 8.20.0
         version: 8.20.0
@@ -563,6 +563,9 @@ importers:
       node-gyp:
         specifier: 12.3.0
         version: 12.3.0
+      oxc-transform-react:
+        specifier: ~0.152.0
+        version: 0.152.0
       oxfmt:
         specifier: ^0.74.0
         version: 0.74.0
@@ -1821,6 +1824,128 @@ packages:
 
   '@oxc-project/types@0.154.0':
     resolution: {integrity: sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA==}
+
+  '@oxc-transform-react/binding-android-arm-eabi@0.152.0':
+    resolution: {integrity: sha512-HrGZlhhyJUxz5tDWnsBliNrlhSVxM9lLF468EKab1uBBUMbMzfwHdO4aOHbI8x4EbI/gIzpMXqJbtWRwBLdwZw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [android]
+
+  '@oxc-transform-react/binding-android-arm64@0.152.0':
+    resolution: {integrity: sha512-h+LtkA/nSQsfZdCe6c3F28236gIZhpl3Bu9MjwEI7X0J+CGpEEShmZuXw5b7lwqXQnhr5l1ZIIZ4NA5tU5FW+Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [android]
+
+  '@oxc-transform-react/binding-darwin-arm64@0.152.0':
+    resolution: {integrity: sha512-EycvN1vJ5gjer1+AD4Czi/Z0gpD4ud/oRbiwDV3BDOiuN5PVrR5Dz0oqkoKtE+/eKK6QqygEtZrZzc8ARJkLLA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@oxc-transform-react/binding-darwin-x64@0.152.0':
+    resolution: {integrity: sha512-5YUXuvxXi+7GmZPho95qteMlG8WgIhCbpYOug8MhyuTZzYtrr8CDBsdMzheBgiRNj9lPkFvduhQ4MK+QVQ06CQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [darwin]
+
+  '@oxc-transform-react/binding-freebsd-x64@0.152.0':
+    resolution: {integrity: sha512-HZrLNspvHfOo1umeCkeskU7UBEXWjuQSoBGidHwjUQVOhsbDNp9k3oihXenEBFgShPycLEC11wAZSD3DtiIkXA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [freebsd]
+
+  '@oxc-transform-react/binding-linux-arm-gnueabihf@0.152.0':
+    resolution: {integrity: sha512-qfPsGd0sbaUeLtQDojSf+reHYMBHWX+4mdq1lsARkRzGjoHCvstnTr+nKb7sTtGsdPYhbSgbPINI+h1V+KSF5A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@oxc-transform-react/binding-linux-arm-musleabihf@0.152.0':
+    resolution: {integrity: sha512-lYpuYevetblWvNsylYb3BxKbXd2t+BhUqwIoa3/98zmWeLbB+VBfxV8APdZV9gbw2W04HknXKU386pt/5duvfw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm]
+    os: [linux]
+
+  '@oxc-transform-react/binding-linux-arm64-gnu@0.152.0':
+    resolution: {integrity: sha512-8eIPBuC+1WpE3Z7AiieAVhbkt6PLEbT4Rnm4SeVOMvIUKTml+s2PSzMu2qAUtFdIB4SFVshTj9SliturT3GHCg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-transform-react/binding-linux-arm64-musl@0.152.0':
+    resolution: {integrity: sha512-rv4dvLnqhgen1tqb7eoB/fNfD5fq+Bf3RTH9YuJ+8SNdqOk2TjAXFUdve0XtjD9Wost0fQ605bVXVrStVY/IEQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-transform-react/binding-linux-ppc64-gnu@0.152.0':
+    resolution: {integrity: sha512-zP9xCGiJFyHkP6B7UtVQ99nfYXe8e7eqLqZv0C+Zr2jlhNuLMBsB77QuRczlhtRQqncRWzBI8BkQzy/Lo7GyaQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ppc64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-transform-react/binding-linux-riscv64-gnu@0.152.0':
+    resolution: {integrity: sha512-INC57B7OIgMEoUe4NquHvg77tlYL4E6aMglhKs3FY5k5oB9/+hd2y0Xg1DVco5uDtkgilnSQRM5P0Ptz7CxXPg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-transform-react/binding-linux-riscv64-musl@0.152.0':
+    resolution: {integrity: sha512-4oPU+QTufHexk7GOGe/JapxAfYlU5EXUsN5J0IsBC9s3SsGUTTjpmXQYiDe4dkX5/BGerE+9mYDG94jNwuk99A==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-transform-react/binding-linux-s390x-gnu@0.152.0':
+    resolution: {integrity: sha512-xt4qy3y+9s32F/pz7ymaf1VfDRI+cKwDnW2poFID2r51dC/gln3QGGDaqv2XLaZGQT5o4uGwIry+9CQY5AHNeA==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [s390x]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-transform-react/binding-linux-x64-gnu@0.152.0':
+    resolution: {integrity: sha512-6va4CIMFzejx2i8KhLAYuunai7b85vRpZSLvuBR4bK2ywuTb6V0kJDFJwiKjWHQRNzEvRjbl887+jqa1rKl8QQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@oxc-transform-react/binding-linux-x64-musl@0.152.0':
+    resolution: {integrity: sha512-l1QfEbsREILsAWIcmpEsEu9PKjmN6BKmE1Oe97QJDUjeJ3z5lBn5g2feC3nof3JJc5SsG8BiY4F+cm1yHRhmeQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@oxc-transform-react/binding-openharmony-arm64@0.152.0':
+    resolution: {integrity: sha512-UmdDypmnG1WSZxzQXd8GfhbZQq//XsvMu5/mm+I1uCW3v+9UwpD1J7H+jg91W4xtRY1c0qAhUoMsZi+6vB7Qug==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [openharmony]
+
+  '@oxc-transform-react/binding-win32-arm64-msvc@0.152.0':
+    resolution: {integrity: sha512-JgETFwNiqqB0BfTKMamnVF1zBMnburMoeqnyBgWwKj+JdEqgFqO/0G/O+eWUfNW4xPryjh6HGuq9eNHZLRYrjg==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [arm64]
+    os: [win32]
+
+  '@oxc-transform-react/binding-win32-ia32-msvc@0.152.0':
+    resolution: {integrity: sha512-j2oFkpEG89D38wVY43OtU1s9QUmq0C1+Dpp62PB+SDDTAMsUwU2HofnhK3h9iYTAs7wH/6YqzWOM4XjQ6g/Nmw==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [ia32]
+    os: [win32]
+
+  '@oxc-transform-react/binding-win32-x64-msvc@0.152.0':
+    resolution: {integrity: sha512-iFxYqUqkN/8D0migw/RVZoEvVcJhZ1NzJuRBal0Fgt7V1yJed0QQIHd719kL4OrVmX5f5u2tNZxJB1UJiQ0D/Q==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    cpu: [x64]
+    os: [win32]
 
   '@oxfmt/binding-android-arm-eabi@0.74.0':
     resolution: {integrity: sha512-xxQwrf5EPI5zxvuCTW8r6tzCTjPQ+h6+HqJ0iRKRy2zS1yBllt/xLVjoIyUc+FnR7g0a5g1SZv2yyDYhTItLbA==}
@@ -6705,6 +6830,10 @@ packages:
     resolution: {integrity: sha512-syxUKHeUll89RIABQADcI7sikYrwyssvA6gj4phSSIPezKVM8yMaLAiLLSc7fmzVvrwybfFGFbW5zme9sX87rg==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
+  oxc-transform-react@0.152.0:
+    resolution: {integrity: sha512-CAx+SKDU4uSOmQnyn7daMj/v/h8tF3fnaUMi4yImKAARPnXV0BieHe/qw1LTcK4KlnIuAhpfUJfSfNKIBh8HqQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+
   oxfmt@0.74.0:
     resolution: {integrity: sha512-G4OP7FgwGYZR5ttRpCOOfJdyRsSyvtn34vSXnjDq6Oqed5Dufg5mB44mank+51nAdHOKuTJ0lj0mksY7L+N61A==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -9138,6 +9267,63 @@ snapshots:
 
   '@oxc-project/types@0.154.0': {}
 
+  '@oxc-transform-react/binding-android-arm-eabi@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-android-arm64@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-darwin-arm64@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-darwin-x64@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-freebsd-x64@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-arm-gnueabihf@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-arm-musleabihf@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-arm64-gnu@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-arm64-musl@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-ppc64-gnu@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-riscv64-gnu@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-riscv64-musl@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-s390x-gnu@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-x64-gnu@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-linux-x64-musl@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-openharmony-arm64@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-win32-arm64-msvc@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-win32-ia32-msvc@0.152.0':
+    optional: true
+
+  '@oxc-transform-react/binding-win32-x64-msvc@0.152.0':
+    optional: true
+
   '@oxfmt/binding-android-arm-eabi@0.74.0':
     optional: true
 
@@ -11132,10 +11318,12 @@ snapshots:
     transitivePeerDependencies:
       - '@types/d3-selection'
 
-  '@vitejs/plugin-react@6.1.2(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
+  '@vitejs/plugin-react@6.1.2(oxc-transform-react@0.152.0)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+    optionalDependencies:
+      oxc-transform-react: 0.152.0
 
   '@vitest/mocker@5.0.5(msw@2.14.3(@types/node@18.19.130)(typescript@7.0.2))(vite@8.3.5(@types/node@18.19.130)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))':
     dependencies:
@@ -11168,43 +11356,43 @@ snapshots:
 
   '@xmldom/xmldom@0.8.15': {}
 
-  '@xterm/addon-fit@0.12.0-beta.332(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-fit@0.12.0-beta.332(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-image@0.10.0-beta.331(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-image@0.10.0-beta.331(patch_hash=f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-ligatures@0.11.0-beta.330(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-ligatures@0.11.0-beta.330(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
       lru-cache: 11.5.1
       opentype.js: 2.0.0
 
-  '@xterm/addon-search@0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-search@0.17.0-beta.330(patch_hash=eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-serialize@0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-serialize@0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-unicode11@0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-unicode11@0.10.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-web-links@0.13.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-web-links@0.13.0-beta.330(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
-  '@xterm/addon-webgl@0.20.0-beta.329(patch_hash=3ee97834cfea40170579a67787eca5795747dde9e7580400ed124a4061027f45)(@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8))':
+  '@xterm/addon-webgl@0.20.0-beta.329(patch_hash=a12343c037a1a504d80da0a0bbdbbdc7ce3440a088021a95da1dd6f62b98d110)(@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f))':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)
+      '@xterm/xterm': 6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)
 
   '@xterm/headless@6.1.0-beta.334': {}
 
-  '@xterm/xterm@6.1.0-beta.336(patch_hash=492680fa6c129af0f6b856fb7329b62c1d2340bd3636dc5f880a21a1068dc5a8)': {}
+  '@xterm/xterm@6.1.0-beta.336(patch_hash=13fe36ae05192b0d49d57ffb25bf138d725d606770e3335f8e6308dac8d8819f)': {}
 
   abbrev@4.0.0: {}
 
@@ -13955,6 +14143,28 @@ snapshots:
       '@oxc-parser/binding-win32-arm64-msvc': 0.148.0
       '@oxc-parser/binding-win32-ia32-msvc': 0.148.0
       '@oxc-parser/binding-win32-x64-msvc': 0.148.0
+
+  oxc-transform-react@0.152.0:
+    optionalDependencies:
+      '@oxc-transform-react/binding-android-arm-eabi': 0.152.0
+      '@oxc-transform-react/binding-android-arm64': 0.152.0
+      '@oxc-transform-react/binding-darwin-arm64': 0.152.0
+      '@oxc-transform-react/binding-darwin-x64': 0.152.0
+      '@oxc-transform-react/binding-freebsd-x64': 0.152.0
+      '@oxc-transform-react/binding-linux-arm-gnueabihf': 0.152.0
+      '@oxc-transform-react/binding-linux-arm-musleabihf': 0.152.0
+      '@oxc-transform-react/binding-linux-arm64-gnu': 0.152.0
+      '@oxc-transform-react/binding-linux-arm64-musl': 0.152.0
+      '@oxc-transform-react/binding-linux-ppc64-gnu': 0.152.0
+      '@oxc-transform-react/binding-linux-riscv64-gnu': 0.152.0
+      '@oxc-transform-react/binding-linux-riscv64-musl': 0.152.0
+      '@oxc-transform-react/binding-linux-s390x-gnu': 0.152.0
+      '@oxc-transform-react/binding-linux-x64-gnu': 0.152.0
+      '@oxc-transform-react/binding-linux-x64-musl': 0.152.0
+      '@oxc-transform-react/binding-openharmony-arm64': 0.152.0
+      '@oxc-transform-react/binding-win32-arm64-msvc': 0.152.0
+      '@oxc-transform-react/binding-win32-ia32-msvc': 0.152.0
+      '@oxc-transform-react/binding-win32-x64-msvc': 0.152.0
 
   oxfmt@0.74.0:
     dependencies:

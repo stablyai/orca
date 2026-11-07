@@ -3,8 +3,9 @@ import {
   linearTeamLabels,
   linearTeamMembers,
   linearTeamStates
-} from '@/runtime/runtime-linear-project-client'
-import { getLinearRuntimeTarget, type RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+} from '@/runtime/linear/runtime-linear-project-client'
+import { getLinearRuntimeTarget } from '@/runtime/linear/runtime-linear-client'
+import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
 import type {
   LinearLabel,
   LinearMember,

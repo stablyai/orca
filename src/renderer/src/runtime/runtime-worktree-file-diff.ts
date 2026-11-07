@@ -1,13 +1,13 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import { perforceTargetForFile } from '@/lib/perforce-workspace-target'
-import type { RuntimeGitContext } from './runtime-git-client-context'
-import { getRuntimeGitDiff } from './runtime-git-diff-client'
+import type { RuntimeGitContext } from './source-control/git/runtime-git-client-context'
+import { getRuntimeGitDiff } from './source-control/git/runtime-git-diff-client'
 import { runPerforceOperation } from './runtime-perforce-client'
 
 /** A file's working diff from the version control its workspace uses: Perforce, else Git. */
 export async function getRuntimeWorktreeFileDiff(
   context: RuntimeGitContext,
-  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean },
+  args: { filePath: string; staged: boolean; compareAgainstHead?: boolean; oldPath?: string },
   options?: { wakeWslDistro?: boolean }
 ): Promise<GitDiffResult> {
   const perforce = await perforceTargetForFile(context)

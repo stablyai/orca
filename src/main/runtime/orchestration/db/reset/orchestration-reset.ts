@@ -1,4 +1,4 @@
-import { LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { ResetRemovedWork } from '../../../../../shared/orchestration-removed-work'
 import {

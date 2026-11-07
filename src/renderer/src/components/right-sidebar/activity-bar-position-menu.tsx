@@ -1,5 +1,5 @@
 import React from 'react'
-import type { ActivityBarPosition } from '@/store/slices/editor'
+import type { ActivityBarPosition } from '@/store/slices/editor/types/open-file'
 import {
   ContextMenuContent,
   ContextMenuItem,

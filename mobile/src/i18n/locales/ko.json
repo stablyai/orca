@@ -110,7 +110,8 @@
       "pastePairingCode": "또는 페어링 코드 붙여넣기",
       "scanCodeStep": "QR 코드를 스캔하세요",
       "title": "데스크톱과 페어링",
-      "tryAgain": "다시 시도"
+      "tryAgain": "다시 시도",
+      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
     },
     "terminalSettings": {
       "defaultText": "기본 (100%)",
@@ -186,6 +187,7 @@
       "sendMessage": "메시지 보내기",
       "sendQueue": "대기열에 추가",
       "sendSteer": "지금 보내기",
+      "sendSteerQueued": "다음 항목 보내기",
       "sendQueueHint": "현재 턴이 끝난 뒤 실행됩니다",
       "sendSteerHint": "Agent가 지금 하고 있는 작업에 들어갑니다"
     },
@@ -219,7 +221,9 @@
       "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다."
     },
     "message": {
-      "copyMessage": "메시지 복사"
+      "copyMessage": "메시지 복사",
+      "forkFromResponse": "이 응답에서 분기",
+      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
     },
     "messageActionsSheet": {
       "clipboardRejected": "클립보드에서 텍스트를 거부했습니다.",
@@ -301,7 +305,8 @@
       "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
-      "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다"
+      "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
+      "forkedFrom": "분기 원본"
     },
     "orcaStop": {
       "canContinue": "이 대화에서 계속할 수 있습니다.",
@@ -621,6 +626,12 @@
       "outcomeUnknownReturned": "Orca가 대화가 이 메시지로 돌아갔는지 확인하지 못했습니다. 메시지가 입력창으로 돌아왔으며, Orca는 다음 메시지가 전송되기 전에 대화를 확인합니다.",
       "timeout": "이 메시지로 돌아간 후 채팅이 업데이트되지 않았습니다. 최신 내용을 보려면 다시 열세요.",
       "pending": "대화가 이전 메시지로 돌아갈 때까지 기다리세요."
+    },
+    "fork": {
+      "busy": "다른 채팅이나 터미널을 여는 중입니다. 기다린 다음 {{agent}} 채팅을 다시 분기하세요.",
+      "unconfirmed": "{{agent}}이(가) 분기를 확인하지 못했습니다. 채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
+      "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다. {{detail}}",
+      "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요."
     }
   },
   "common": {
@@ -1068,6 +1079,12 @@
     "mermaidDiagram": {
       "expand": "다이어그램 확대",
       "label": "Mermaid 다이어그램"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "계획",
+        "exitPlanMode": "계획 모드 종료"
+      }
     }
   },
   "connection": {
@@ -1258,14 +1275,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "컴퓨터나 다른 휴대폰에서 이미 받아쓰기를 사용 중입니다.",
+      "alreadyActive": "컴퓨터나 다른 휴대폰에서 이미 받아쓰기를 사용 중입니다. 여러 기기에서 동시에 받아쓰려면 컴퓨터의 Orca를 업데이트하세요.",
       "cloudModelNeedsKey": "OpenAI 키 필요",
       "deleteFailed": "모델을 삭제하지 못했습니다.",
       "desktopUpdateRequired": "모바일 음성 설정을 사용하려면 페어링된 데스크톱의 Orca 앱을 업데이트하세요.",
       "downloadFailed": "다운로드를 시작하지 못했습니다.",
       "loadFailed": "받아쓰기 모델을 로드하지 못했습니다.",
+      "modelBusy": "다른 기기가 다른 음성 모델로 받아쓰기 중입니다. 끝나면 다시 시도하세요.",
       "repairRequired": "받아쓰기를 사용하려면 이 휴대폰을 컴퓨터와 다시 페어링하세요.",
       "serverUpdateRequired": "음성 받아쓰기를 사용하려면 이 서버의 Orca를 업데이트하세요.",
+      "sessionLimit": "이 컴퓨터에서 받아쓰기 중인 기기가 너무 많습니다. 하나가 끝나면 다시 시도하세요.",
       "sessionLost": "받아쓰기 중 컴퓨터와의 연결이 끊어졌습니다. 다시 시도하세요.",
       "updateFailed": "받아쓰기 설정을 업데이트하지 못했습니다."
     }
@@ -1277,7 +1296,6 @@
       "connecting": "데스크톱에 연결 중…",
       "emptyState": "찾은 파일이 없습니다.",
       "loadFailed": "파일을 불러올 수 없습니다.",
-      "loadInterrupted": "폴더 로드가 중단되었습니다.",
       "title": "파일",
       "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
       "waiting": "데스크톱 대기 중…"
@@ -1449,7 +1467,10 @@
       "microphoneInitFailed": "마이크를 초기화하지 못했습니다.",
       "microphoneInterrupted": "마이크 사용이 중단되어 음성 받아쓰기가 멈췄습니다. 다시 시도하세요.",
       "microphonePermissionDenied": "마이크 권한이 거부되었습니다.",
-      "noSpeech": "음성이 감지되지 않았습니다."
+      "noSpeech": "음성이 감지되지 않았습니다.",
+      "phoneUnavailable": "이 휴대폰의 받아쓰기가 준비되지 않았습니다. 음성 설정에서 다운로드하거나 자동을 선택하세요.",
+      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요.",
+      "phoneBusy": "이 휴대폰의 받아쓰기가 아직 시작 중입니다. 잠시 후 다시 시도하세요."
     }
   },
   "host": {
@@ -1497,7 +1518,8 @@
       "removeHost": "호스트 제거",
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
-      "unpin": "고정 해제"
+      "unpin": "고정 해제",
+      "rename": "이름 변경"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -1579,6 +1601,12 @@
       "thisComputer": "이 컴퓨터",
       "waitingForDesktop": "아직 데스크톱 응답을 기다리는 중",
       "workspaceOptions": "워크스페이스 옵션"
+    },
+    "workspaceRenameSheet": {
+      "title": "워크스페이스 이름 변경",
+      "emptyUsesBranch": "비워 두면 브랜치 이름을 사용합니다.",
+      "emptyUsesFolder": "비워 두면 폴더 이름을 사용합니다.",
+      "failed": "워크스페이스 이름을 변경하지 못했습니다. {{reason}}"
     }
   },
   "navigation": {
@@ -1953,13 +1981,11 @@
       "saveNote": "메모 저장"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "변경 사항을 불러올 수 없습니다.",
       "committedChangesFailed": "커밋된 변경 사항을 불러오지 못했습니다.",
       "committedChangesUnavailable": "커밋된 변경 사항을 사용할 수 없습니다.",
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
       "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 데스크톱의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
-      "invalidSourceControlResponse": "소스 제어 응답이 올바르지 않습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
     "diffReviewQueue": {
@@ -2094,7 +2120,8 @@
       "usageLimitWindowWeeklyModel": "모델별 주간",
       "waitForBackgroundTasks": "백그라운드 작업이 끝날 때까지 기다리세요.",
       "waitForStart": "에이전트가 시작을 마칠 때까지 기다리세요.",
-      "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다."
+      "writeFailed": "Orca가 이 메시지를 에이전트에 전달하지 못해 전송되지 않았습니다.",
+      "pluginInputRequired": "\"{{plugin}}\" 플러그인이 터미널 창에서 입력을 기다리고 있어 {{agent}}이(가) 중지되었습니다. 채팅 세션에서 플러그인을 비활성화하거나 {{agent}} 터미널에서 작업을 실행하세요."
     },
     "fileReader": {
       "copyReviewNotes": "리뷰 메모 복사",
@@ -2325,7 +2352,8 @@
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
-      "allowAutoClose": "자동 닫기 허용"
+      "allowAutoClose": "자동 닫기 허용",
+      "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "이 워크스페이스 호스트에서는 활성화된 AI 에이전트가 감지되지 않았습니다.",
@@ -2797,6 +2825,20 @@
     },
     "agents": {
       "permissionOwnAll": "에이전트 자체 설정"
+    },
+    "voiceTranscribeOn": {
+      "heading": "받아쓰기 위치",
+      "description": "이 휴대폰이 들은 음성은 휴대폰 밖으로 나가지 않습니다. 자동은 이 휴대폰이 받아쓸 수 없을 때 컴퓨터를 사용합니다.",
+      "automatic": "자동",
+      "phone": "이 휴대폰",
+      "computer": "컴퓨터",
+      "phoneReady": "이 휴대폰에서 사용 가능",
+      "phoneNeedsDownload": "언어 다운로드 필요",
+      "phoneDownloading": "다운로드 중… {{progress}}%",
+      "phoneUnsupported": "이 휴대폰에서는 사용할 수 없음",
+      "download": "이 휴대폰에 다운로드",
+      "downloadSize": "약 {{size}}MB",
+      "phoneChecking": "확인 중…"
     }
   },
   "sourceControl": {
@@ -3982,6 +4024,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "원래 에이전트 창을 사용할 수 없습니다. 저장된 출력은 여기에 유지됩니다.",
       "openAgent": "에이전트 열기",
       "retryHistory": "기록 다시 불러오기",
+      "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+      "retryFullOutput": "다시 시도",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "불러온 기록에 일치하는 실행이 없습니다. 계속하려면 더 불러오세요.",
       "noMatchingRunsYet": "아직 일치하는 실행이 없습니다.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4022,7 +4066,11 @@
       "notReported": "보고되지 않음",
       "searchOptions": "옵션 검색",
       "task": "작업",
-      "review": "확인"
+      "review": "확인",
+      "discardChangesTitle": "변경 사항을 버릴까요?",
+      "discardChangesMessage": "이 자동화에서 저장하지 않은 변경 사항이 사라집니다.",
+      "discard": "버리기",
+      "keepEditing": "계속 편집"
     },
     "orphanIssues": {
       "hostReselection": "실행하기 전에 이 자동화를 편집하고 호스트를 다시 선택하세요.",
@@ -4040,6 +4088,7 @@
       "noRunnableHost": "이 자동화에는 실행할 호스트가 없습니다.",
       "wslMoveInProgress": "이 자동화의 프로젝트를 WSL 호스트로 옮기는 중이어서 Orca가 이번 실행을 건너뛰었습니다. 이동이 끝나면 실행이 재개됩니다.",
       "wslMoveOwnedByHost": "이 자동화의 프로젝트는 이제 WSL 호스트에서 실행되며, 해당 호스트가 그곳에서 이 자동화를 실행합니다. Orca는 더 이상 이 로컬 사본을 실행하지 않습니다.",
+      "managedHostServer": "{{host}}(으)로 마이그레이션 필요",
       "missedGraceWindow": "Orca가 다시 확인했을 때 이 실행을 보충할 수 있는 유예 시간이 이미 지나 있었습니다.",
       "targetMissing": "자동화 호스트가 더 이상 등록되어 있지 않아 이 자동화를 실행할 곳이 없습니다.",
       "targetReplaced": "자동화 호스트가 제거된 후 다시 등록되었으므로, 이 자동화를 실행하려면 다시 연결해야 합니다.",

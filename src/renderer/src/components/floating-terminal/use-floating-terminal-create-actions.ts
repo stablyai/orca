@@ -7,7 +7,7 @@ import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'

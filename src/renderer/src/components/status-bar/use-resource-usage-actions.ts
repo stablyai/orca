@@ -5,7 +5,10 @@ import {
   type MutableRefObject,
   type SetStateAction
 } from 'react'
-import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree
+} from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'

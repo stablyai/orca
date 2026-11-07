@@ -7,6 +7,9 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
+import { syncThemeBackgroundVideo } from '../lib/theme-background-video'
+import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
+import { useWindowActive } from '../hooks/use-window-active'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
 import {
   findCodeEditorTheme,
@@ -28,11 +31,12 @@ import {
   usePluginThemes
 } from '../store/plugin-themes'
 import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
+import { usePluginFontRegistration } from '../store/plugin-fonts'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 
 /** The Match Terminal app theme while the requested mode's slot selects it, else null. */
 function useTerminalAppTheme(selected: boolean): TerminalAppTheme | null {
@@ -92,6 +96,7 @@ export function useDocumentAppearance(): void {
   const codeFontSmoothing = useAppStore((s) => s.settings?.codeFontSmoothing)
   const editorFontFamily = useAppStore((s) => s.settings?.editorFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
+  usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
@@ -160,14 +165,23 @@ export function useDocumentAppearance(): void {
 
   // Why gated: the image only shows through translucent terminals and chats, so otherwise it would
   // cost decode and switch terminals to transparent rendering for nothing.
+  const paintsBackground = surfaceOpacity < 1 && !reduceEffects
   useEffect(() => {
     if (pluginThemesLoaded) {
-      applyThemeBackground(
-        surfaceOpacity < 1 && !reduceEffects ? themeBackground : null,
-        surfaceOpacity
-      )
+      applyThemeBackground(paintsBackground ? themeBackground : null, surfaceOpacity)
     }
-  }, [pluginThemesLoaded, surfaceOpacity, reduceEffects, themeBackground])
+  }, [pluginThemesLoaded, paintsBackground, surfaceOpacity, themeBackground])
+
+  const reduceMotion = usePrefersReducedMotion()
+  const video =
+    paintsBackground && !reduceMotion && themeBackground?.videoUrl ? themeBackground : null
+  // Why only while active: each frame costs a decode and a window composite, even unfocused.
+  const windowActive = useWindowActive(video !== null)
+  useEffect(() => {
+    if (pluginThemesLoaded) {
+      syncThemeBackgroundVideo(video, windowActive)
+    }
+  }, [pluginThemesLoaded, video, windowActive])
 
   // Why after the paint above: a followed editor reads the colors it just painted. Built-in
   // choices resolve before the plugin list loads; a plugin choice follows the app until then.

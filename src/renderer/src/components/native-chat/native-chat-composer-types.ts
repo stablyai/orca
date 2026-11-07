@@ -14,7 +14,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from './drafts/native-chat-launch-prompt'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
@@ -185,7 +185,8 @@ export type NativeChatComposerHandle = {
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
-  insertTypedText: (text: string) => boolean
+  /** Dictated text is spaced from the text around the caret. */
+  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean

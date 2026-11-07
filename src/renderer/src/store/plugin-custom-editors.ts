@@ -3,7 +3,12 @@ import { create } from 'zustand'
 import type { PluginHostCustomEditor, PluginHostListEntry } from '../../../preload/api-types'
 import { matchPluginFile } from '../../../shared/plugins/contributions/plugin-file-match'
 import { customEditorMayOpenByDefault } from '../../../shared/plugins/contributions/plugin-custom-editor-core-file-types'
-import { isLivePlugin, keyedPluginContribution, usePluginListDerived } from './plugin-panels'
+import {
+  installedPluginDisplayNames,
+  isLivePlugin,
+  keyedPluginContribution,
+  usePluginListDerived
+} from './plugin-panels'
 import { usePluginFramesIsolated } from './plugin-frame-isolation'
 
 /** A custom editor from an enabled plugin. `key` is unique across plugins; `iconUrl` is its own
@@ -29,7 +34,9 @@ export function collectActivePluginCustomEditors(
   return plugins
     .filter(isLivePlugin)
     .flatMap((plugin) =>
-      (plugin.customEditors ?? []).map((editor) => keyedPluginContribution(plugin, editor))
+      (plugin.customEditors ?? []).map((editor) =>
+        keyedPluginContribution(plugin, editor, installedPluginDisplayNames(plugins))
+      )
     )
 }
 

@@ -20,7 +20,7 @@ import { attachFingerprintFields } from '../native-chat/agent-session-wire/acqui
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-sessions/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime

@@ -8,9 +8,10 @@ import { BrowserExtensionInstallDialog } from './components/browser-extension-in
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
-import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
-import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
+import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
+import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
+import AgentWorkspaceTrustDecisionDialog from './components/agent-workspace-trust/AgentWorkspaceTrustDecisionDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
@@ -43,7 +44,7 @@ import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSsh
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { AddToChatPointMenuHost } from './components/native-chat/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
-import { setRuntimeFileWriteGuard } from './runtime/runtime-file-mutation-client'
+import { setRuntimeFileWriteGuard } from './runtime/files/mutations/runtime-file-mutation-client'
 import { checkoutPerforceFileBeforeWrite } from './lib/perforce-checkout-before-write'
 
 // Both the desktop and the web entry load App, so every save in either one passes this guard.
@@ -134,6 +135,7 @@ function App(): React.JSX.Element {
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
+      <AgentWorkspaceTrustDecisionDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />

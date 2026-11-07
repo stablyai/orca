@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
@@ -17,7 +18,7 @@ export function useAgentPickerRefusedWake(
       : undefined
   // The target this open already woke; cleared on close so the next open may wake again.
   const wokenFor = useRef<{ worktreeId: string | null } | null>(null)
-  const failed = useAppStore(
+  const failed = useAppStateValue(
     (state) =>
       worktreeId !== undefined && state.readLocalAgentInventory(worktreeId).state === 'failed'
   )

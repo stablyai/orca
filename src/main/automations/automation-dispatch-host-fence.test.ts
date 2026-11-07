@@ -7,7 +7,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 import type { Automation } from '../../shared/automations-types'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
-import { AutomationService } from './service'
+import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 
 vi.mock('electron', () => ({
@@ -65,27 +65,11 @@ function reRegisterTarget(store: Store): void {
   store.addSshTarget(sshTarget(store.allocateSshTargetGeneration()))
 }
 
-function attachedService(store: Store): {
-  service: AutomationService
-  send: ReturnType<typeof vi.fn>
-} {
-  const send = vi.fn()
-  const service = new AutomationService(store, { tickMs: 60_000 })
-  service.setWebContents({ isDestroyed: () => false, send } as never)
-  return { service, send }
-}
-
-async function evaluateAt(
-  store: Store,
-  service: AutomationService,
-  automationId: string,
-  when: string
-): Promise<void> {
+async function evaluateAt(store: Store, automationId: string, when: string): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  service.setRendererReady()
+  await tickAt(when)
   await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
@@ -105,12 +89,14 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
     const automation = seedSshAutomation(store)
-    const { service, send } = attachedService(store)
+    const launch = vi.fn(async () => ({ workspaceId: 'wt-1', terminalSessionId: 'tab-1' }))
+    const service = startedAutomationService(store, launch)
     reRegisterTarget(store)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    service.stop()
 
-    expect(send).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
     expect(store.listAutomationRuns(automation.id)[0]).toMatchObject({
       status: 'skipped_unavailable',
       error: REPLACED
@@ -122,25 +108,24 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
     const automation = seedSshAutomation(store)
-    const { service, send } = attachedService(store)
+    const launch = vi.fn(async () => ({ workspaceId: 'wt-1', terminalSessionId: 'tab-1' }))
+    const service = startedAutomationService(store, launch)
     store.updateSshTarget(TARGET_ID, { orcadFence: { environmentId: 'env-1' } })
     const before = store.listAutomations()[0]
 
-    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
-    service.setRendererReady()
-    await vi.advanceTimersByTimeAsync(0)
+    await tickAt('2026-05-13T09:01:00')
     await expect(service.runNow(automation.id)).rejects.toThrow(
       "This automation now runs on its SSH host's Orca server."
     )
     await service.recordRefusedRun(automation.id)
 
-    expect(send).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
     expect(store.listAutomationRuns(automation.id)).toEqual([])
     expect(store.listAutomations()[0]).toEqual(before)
 
     store.updateSshTarget(TARGET_ID, { orcadFence: undefined })
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:02:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:02:00')
 
-    expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.anything())
+    await vi.waitFor(() => expect(launch).toHaveBeenCalledTimes(1))
   })
 })

@@ -15,10 +15,14 @@ import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-sessio
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import {
+  useMobileHostModelCatalogUpgrade,
+  type HostModelCatalogCache
+} from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
   acceptedStructuredSessionSelectionOutcome,
+  structuredAgentSessionOptionAvailability,
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
@@ -28,6 +32,8 @@ const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
 export function useMobileStructuredAgentOptions(args: {
   agent: string | null
+  /** This world's last host lists for the chat's agent; absent, the picker waits for the host. */
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -51,6 +57,7 @@ export function useMobileStructuredAgentOptions(args: {
 }) {
   const {
     agent,
+    modelCatalogCache,
     client,
     enabled,
     fence,
@@ -95,6 +102,7 @@ export function useMobileStructuredAgentOptions(args: {
     sessionId,
     turnId,
     unloadedTurnRevisions,
+    modelCatalogCache,
     client,
     optionStamp,
     sendSelection: hostSupport?.sendSelection === true,
@@ -124,11 +132,32 @@ export function useMobileStructuredAgentOptions(args: {
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
   const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  const readBaseOptionSnapshot = useCallback(
+    (view = readOptionState()) => {
+      const shown = structuredAgentSessionShownSnapshot(view)
+      const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
+      return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+    },
+    [acceptsPicks, legacyHostPermissions, readOptionState]
+  )
   const readOptionSnapshot = useCallback(() => {
-    const shown = structuredAgentSessionShownSnapshot(readOptionState())
-    const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, legacyHostPermissions, readOptionState])
+    const view = readOptionState()
+    return structuredAgentSessionOptionAvailability({
+      controller,
+      view,
+      snapshot: readBaseOptionSnapshot(view),
+      ready: acceptsPicks,
+      providerStarting,
+      isCurrentContext
+    })
+  }, [
+    controller,
+    readOptionState,
+    readBaseOptionSnapshot,
+    acceptsPicks,
+    providerStarting,
+    isCurrentContext
+  ])
   const optionSnapshot = readOptionSnapshot()
 
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
@@ -138,6 +167,7 @@ export function useMobileStructuredAgentOptions(args: {
       hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
         ? modelOption.kind.currentValue
         : undefined,
+    modelCatalogCache,
     client,
     sessionId,
     enabled,
@@ -160,7 +190,7 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: readOptionSnapshot(),
+      snapshot: readBaseOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
       existingChat: createdHere === undefined || args.hasTurn === true,
@@ -215,6 +245,7 @@ export function useMobileStructuredAgentOptions(args: {
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
       optionSnapshot,
+      admits: writer.admits,
       demandModelCatalog,
       setStructuredOption,
       readOptionSnapshot

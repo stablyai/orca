@@ -23,7 +23,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'

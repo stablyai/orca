@@ -1,4 +1,4 @@
-import { acceptedAnswerSender } from './orchestration/accepted-answer-sender'
+import { acceptedAnswerSender } from './orchestration/mailbox/senders/accepted-answer-sender'
 import { OrcaRuntimeService } from './orca-runtime'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 // Name senders from production-owned Dispatch tasks, mirrored workspace chat/terminal tabs and PTY records.
@@ -11,13 +11,17 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
-import { reconcileLifecycleMessage } from './orchestration/lifecycle-reconciliation'
+import { reconcileLifecycleMessage } from './orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
-import { structuredMailSource } from './orchestration/structured-mail-source'
+import { structuredMailSource } from './orchestration/mailbox/structured-mail/structured-mail-source'
 import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
-import type { MessageRow } from './orchestration/types'
+import type { MessageRow } from './orchestration/db/orchestration-records'
 import { parseStartOptions } from './rpc/methods/orchestration/worker/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))

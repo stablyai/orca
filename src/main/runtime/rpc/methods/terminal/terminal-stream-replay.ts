@@ -1,4 +1,9 @@
-import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import {
+  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+  scanTerminalReplyQuerySequences,
+  type TerminalReplyQuerySequence
+} from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
+import type { PublishedTerminalOutput } from '../../../terminal/output/terminal-published-output-ring'
 import {
   iterateTerminalOutputFrameChunks,
   type TerminalOutputFrameChunk,
@@ -83,6 +88,46 @@ export function stripSnapshotBoundaryQuerySuffixes(
     offset = removeEnd
   }
   return output + data.slice(offset)
+}
+
+/** Joins a resume gap into one chunk ending at its last seq, without the reply queries the desktop already answered.
+ * Color-scheme subscribe/withdraw are mode state, not queries, so they stay. */
+export function buildResumeGapChunk(output: PublishedTerminalOutput[]): TerminalOutputChunk | null {
+  const last = output.at(-1)
+  if (!last) {
+    return null
+  }
+  const joined = output.map((chunk) => chunk.data).join('')
+  const { queries } = scanTerminalReplyQuerySequences(
+    joined,
+    0,
+    EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+  )
+  let data = ''
+  let offset = 0
+  for (const query of queries) {
+    if (query.data === '\x1b[?2031h' || query.data === '\x1b[?2031l') {
+      continue
+    }
+    data += joined.slice(offset, query.startSeq)
+    offset = query.endSeq
+  }
+  data += joined.slice(offset)
+  const rawLength = output.reduce((total, chunk) => total + chunk.rawLength, 0)
+  const cwd = output.findLast((chunk) => chunk.cwd !== undefined)?.cwd
+  return {
+    data,
+    bytes: terminalStreamByteLength(data),
+    meta: {
+      seq: last.seq,
+      rawLength,
+      ...(data.length !== rawLength || output.some((chunk) => chunk.transformed)
+        ? { transformed: true }
+        : {}),
+      // The batcher sends this as a Metadata frame, as it did for each live chunk.
+      ...(cwd !== undefined ? { cwd } : {})
+    }
+  }
 }
 
 export function appendAckPendingOutput(

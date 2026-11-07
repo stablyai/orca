@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../shared/constants'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
-import { makeCandidate, deferred } from './workspace-cleanup-slice-test-harness'
-import { assertWorkspaceCleanupAgentStopApproved } from './workspace-cleanup-agent-evidence'
+import { makeCandidate, deferred } from './workspace-cleanup/workspace-cleanup-slice-test-harness'
+import { assertWorkspaceCleanupAgentStopApproved } from './workspace-cleanup/workspace-cleanup-agent-evidence'
 import { makeAgentEntry } from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
-import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   createTestStore,
   mockApi,

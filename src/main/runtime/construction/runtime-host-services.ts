@@ -5,7 +5,7 @@ import type { RuntimeRepositoryCommandSurface } from '../repositories/runtime-re
 
 import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
-import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/orchestration-legacy-worker-terminal-recovery'
+import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -21,7 +21,7 @@ import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contrac
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
-import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/worker-terminal-release-reconciliation'
+import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech-catalog'
@@ -128,10 +128,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   confirmTerminalShellAlone(ptyId: string): Promise<boolean> {
     return confirmRunTerminalShellAlone(this.ptyController, ptyId)
-  }
-
-  getTerminalPtyIdForHandle(handle: string): string | null {
-    return this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
   }
 
   /** Includes resume-identity-only provider rows. */
