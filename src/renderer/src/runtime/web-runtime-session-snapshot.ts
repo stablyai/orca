@@ -1,6 +1,6 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { useAppStore } from '../store'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,

@@ -3,7 +3,7 @@ import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { reuseEqualCatalogRows } from '../../../catalog-row-reconciliation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

@@ -9,12 +9,8 @@ import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import {
-  findGroupForTab,
-  findTabAndWorktree,
-  pickNextActiveTab,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
+import { pickNextActiveTab, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'

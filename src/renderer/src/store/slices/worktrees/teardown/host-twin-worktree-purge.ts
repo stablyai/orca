@@ -21,7 +21,7 @@ import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
 import { getRepoHostSummaries } from '../listing/worktree-host-ownership'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
-import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
+import { collectPtyIdsForTab } from '../../../terminals/terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {

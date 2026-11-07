@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { probeHostLiveTerminals } from '../hosted-terminals/inventory/host-live-terminal-probe'
 import {
   markHostSessionMirrorHydrated,

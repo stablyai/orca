@@ -2,7 +2,7 @@ import type { GitHubImageIntake } from '@/components/github/use-github-image-upl
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { formatDiffComments } from '@/lib/diff-comments-format'
+import { formatDiffComments } from '../../../../shared/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import { DiffCommentCard } from './DiffCommentCard'

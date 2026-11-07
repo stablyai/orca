@@ -6,7 +6,10 @@ import { createTestStore, seedStore } from '../../store-test-helpers'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
 
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 const mockCallRuntimeRpc = vi.hoisted(() => vi.fn())
 

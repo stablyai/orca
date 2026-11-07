@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import {
   worktreeLaunchWorkspace,
   type AgentLaunchRouteView

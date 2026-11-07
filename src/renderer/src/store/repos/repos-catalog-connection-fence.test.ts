@@ -13,7 +13,7 @@ import { createTestStore } from '../slices/store-test-helpers'
 
 const sshState = vi.hoisted(() => ({ generation: 0 }))
 
-vi.mock('../slices/runtime-environment-ssh', async (importOriginal) => ({
+vi.mock('../slices/ssh/runtime-environment-ssh', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getEnvironmentSshStateGeneration: () => sshState.generation
 }))

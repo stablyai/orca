@@ -6,7 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 
 import type { Tab } from '../../../../shared/tab-types'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { makeTabGroup } from '@/store/slices/store-test-helpers'
 import {
   makeFolderWorkspace,

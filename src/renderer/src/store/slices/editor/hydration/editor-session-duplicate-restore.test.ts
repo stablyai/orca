@@ -6,7 +6,7 @@ import { buildWorkspaceSessionPayload } from '../../../../lib/workspace/persiste
 import { createStoreSessionMockApi } from '../../store-session-test-harness'
 import { createTestStore } from '../../store-test-helpers'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

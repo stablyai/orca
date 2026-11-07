@@ -3,7 +3,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal/links/terminal-github-pr-link-detector'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { singlePaneLayoutSnapshot } from './terminal-helpers'
+import { singlePaneLayoutSnapshot } from '../terminals/terminal-single-pane-layout'
 import { makeTerminalTab, makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,

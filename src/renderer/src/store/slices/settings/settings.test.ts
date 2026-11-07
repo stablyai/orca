@@ -14,7 +14,7 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import {
   RUNTIME_CATALOG_STALE_MS,
   resetRuntimeCatalogListingForTests
-} from '../runtime-status-hydration'
+} from '../runtime-status/runtime-status-hydration'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {

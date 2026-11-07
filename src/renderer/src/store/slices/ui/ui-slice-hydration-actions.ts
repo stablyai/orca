@@ -16,9 +16,9 @@ import { normalizeContextualTourIds } from '../../../../../shared/contextual-tou
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeWorktreeCardProperties,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter

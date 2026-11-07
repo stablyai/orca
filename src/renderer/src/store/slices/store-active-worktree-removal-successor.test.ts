@@ -4,7 +4,7 @@ import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-rem
 import { createTestStore, makeWorktree, seedStore, TEST_REPO } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
-import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs/tabs-drawn-from-main.test-fixture'
 
 const storeAccess = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store', () => ({ useAppStore: storeAccess }))

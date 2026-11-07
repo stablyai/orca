@@ -1,4 +1,4 @@
-import '../../src/renderer/src/store/slices/terminal-hydration-store-test-bootstrap'
+import '../../src/renderer/src/store/terminals/terminal-hydration-store.test-bootstrap'
 import { describe, expect, it, vi } from 'vitest'
 import { applyPtyBinding } from '../../src/main/persistence/loading-store/pty-binding-session-update'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'

@@ -10,9 +10,9 @@ import { isRemovedRuntimeHostId } from './slices/stale-runtime-host-rows'
 import {
   getEnvironmentSshStateGeneration,
   getEnvironmentSshTargetConnectionGeneration
-} from './slices/runtime-environment-ssh'
-import { getLocalSshTargetConnectionGeneration } from './slices/ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
+} from './slices/ssh/runtime-environment-ssh'
+import { getLocalSshTargetConnectionGeneration } from './slices/ssh/create-ssh-slice'
+import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status/runtime-status-connection-generation'
 import { getRuntimeTargetHostId } from '../runtime/rpc/targets/runtime-client-target'
 
 /** Fence by pairing/runtime incarnation and SSH target generation, not unrelated catalog/connection churn. */

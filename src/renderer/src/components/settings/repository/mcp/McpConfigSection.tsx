@@ -18,7 +18,7 @@ import {
   MCP_STARTER_CONFIG
 } from '../../../../../../shared/mcp-config'
 import { useAppStore } from '../../../../store/index'
-import { selectRuntimeAwareSshStatus } from '../../../../store/slices/runtime-environment-ssh-selectors'
+import { selectRuntimeAwareSshStatus } from '../../../../store/slices/ssh/runtime-environment-ssh-selectors'
 import {
   worktreeHostMatchOptions,
   worktreeMatchesHost

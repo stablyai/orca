@@ -16,7 +16,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
-import { drawTabsFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()

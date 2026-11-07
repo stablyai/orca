@@ -306,11 +306,11 @@
 1 src/renderer/src/store/repos/repo-host-identity.ts
 1 src/renderer/src/store/repos/repo-reorder-host-split.ts
 3 src/renderer/src/store/repos/create-repo-slice.ts
-1 src/renderer/src/store/slices/runtime-status.ts
+1 src/renderer/src/store/slices/runtime-status/create-runtime-status-slice.ts
 2 src/renderer/src/store/slices/settings/settings-owner-hydration-publication.ts
 5 src/renderer/src/store/slices/settings/create-settings-slice.ts
 8 src/renderer/src/store/slices/store-test-helpers.ts
-1 src/renderer/src/store/slices/terminal-tab-retirement.ts
+1 src/renderer/src/store/terminals/terminal-tab-retirement.ts
 3 src/renderer/src/store/slices/workspace-attention/workspace-unread-characterization-fixture.ts
 1 src/renderer/src/store/slices/settings/worktree-visibility-owner-settings.ts
 3 src/renderer/src/store/slices/settings/worktree-visibility-settings-write.ts

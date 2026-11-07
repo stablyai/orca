@@ -23,7 +23,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

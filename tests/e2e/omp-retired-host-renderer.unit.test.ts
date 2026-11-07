@@ -1,4 +1,4 @@
-import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/store/slices/agent-pane-authority'
+import { resetAgentPaneAuthorityAliasesForTests } from '../../src/renderer/src/store/slices/agent-status/agent-pane-authority'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../src/main/agent-hooks/server'
 import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/server-status-identity'

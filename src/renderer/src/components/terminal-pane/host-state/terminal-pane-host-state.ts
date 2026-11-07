@@ -10,7 +10,7 @@ import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh-selectors'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean

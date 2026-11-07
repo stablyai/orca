@@ -31,7 +31,7 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: vi.fn(() => Promise.resolve())
 }))
 
-const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-test-harness')
 createTabsSliceMockApi()
 
 const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
