@@ -30,6 +30,11 @@ function samePath(a: string, b: string, platform: NodeJS.Platform): boolean {
 
 // Pin only nondefault homes: even an explicit default changes the CLI's Keychain identity.
 // Preserve the trimmed path's spelling; normalization is only for comparison.
+/** Only the Claude CLI honors $CLAUDE_CONFIG_DIR; Claude-compatible variants keep their home-relative dir. */
+export function claudeCompatibleConfigDir(configDirName: string): string {
+  return configDirName === '.claude' ? defaultClaudeConfigDir() : join(homedir(), configDirName)
+}
+
 export function claudeConfigDirEnvPatch(
   accountHome: string,
   options: { env?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {}
