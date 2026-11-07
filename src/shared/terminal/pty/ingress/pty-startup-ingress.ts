@@ -315,12 +315,13 @@ export class PtyStartupIngress {
     }
   }
 
-  /** Settle held askers first: a barrier ends only a wait proven gone; teardown and a final snapshot drop them.
+  /** Settle held askers first: a barrier ends only a wait proven gone, a final snapshot (the PTY may outlive it, as on
+   *  sleep) judges each as it stands, teardown drops them.
    * Anything still behind a held asker stays held. Retain torn colors across barriers unless explicitly included:
    * viewers lack reply authority, so only hold timeout/teardown ends them. */
   private releasePendingInSourceOrder(includeColorQuery: boolean, drain = includeColorQuery): void {
     do {
-      this.settleAskerWait(includeColorQuery || drain ? 'gone' : this.askerWait.judge(false))
+      this.settleAskerWait(includeColorQuery ? 'gone' : this.askerWait.judge(drain))
     } while (drain && this.askerWait.waiting)
     if (this.askerWait.waiting) {
       return

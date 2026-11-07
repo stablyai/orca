@@ -253,6 +253,20 @@ describe('PTY owner colour replies after the asker exits', () => {
     }
   })
 
+  it('judges a query completed after an earlier verdict afresh', () => {
+    vi.useFakeTimers()
+    const { ingress, writes, runCommand } = createHarness()
+    runCommand()
+    ingress.accept(QUERY)
+    ingress.accept('\x1b]11;?')
+    vi.advanceTimersByTime(20)
+    expect(writes).toEqual([REPLY])
+    ingress.accept(`\x07${PROMPT}`)
+    vi.runAllTimers()
+
+    expect(writes).toEqual([REPLY])
+  })
+
   it('answers at once at the prompt', () => {
     const { ingress, writes } = createHarness()
     ingress.accept(QUERY)

@@ -43,7 +43,8 @@ export class PtyQueryAskerWait {
 
   /** The verdict for the colour query at [start, end) of `input`, or `held` once it and the rest of `input` wait. */
   consider(input: PtyIngressSourceSpan, start: number, end: number): PtyQueryAskerVerdict | 'held' {
-    if (this.verdict && input.rawStartSeq + start < this.verdict.untilSeq) {
+    // Only a query wholly inside the covered reads takes the verdict; one completed later is judged afresh.
+    if (this.verdict && input.rawStartSeq + end <= this.verdict.untilSeq) {
       return this.verdict.presence
     }
     const sample = this.presence.sample(() => this.lastFinishEndOf(input) > end)
@@ -96,7 +97,8 @@ export class PtyQueryAskerWait {
     const from = this.query.take()
     const later = this.later
     this.later = []
-    // A finish marker bounds the asker's output; otherwise it covers every read seen before the verdict changed.
+    // A finish marker bounds the asker's output; otherwise it covers every read seen before the verdict changed (the
+    // read that showed another group is judged afresh: its bytes may already be the next program's).
     const coveredSeq = this.finishSeq >= 0 ? this.finishSeq : this.reviewedEndSeq
     this.finishSeq = -1
     this.reviewedEndSeq = -1
