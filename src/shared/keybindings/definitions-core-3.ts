@@ -260,7 +260,7 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'clear'],
-    defaultBindings: platformBindings(['Mod+K'])
+    defaultBindings: { darwin: [], linux: ['Mod+K'], win32: ['Mod+K'] }
   },
   {
     id: 'terminal.focusNextPane',

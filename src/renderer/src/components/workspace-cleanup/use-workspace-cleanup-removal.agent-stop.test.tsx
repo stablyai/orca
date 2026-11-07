@@ -8,7 +8,7 @@ import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cle
 import type {
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup-removal'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() }

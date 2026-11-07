@@ -4,7 +4,7 @@ import {
   flushAsyncTicks
 } from '../../pty-connection/test-fixtures/pty-connection-test-async'
 import type { PtyPreconnectInputEntry } from '../input/pty-preconnect-input-buffer'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport: input kind', () => {
   const originalWindow: typeof window | undefined = globalThis.window

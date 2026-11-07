@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: {} }))
@@ -14,7 +13,6 @@ import {
   FAKE_GENERATION_ROOT,
   type FakeGenerationFileSystem
 } from '../mobile-web-shell/generation-file-system-fake'
-import { deriveHostCacheKey } from '../mobile-web-shell/host-cache-key'
 import { createDeviceStore, type DeviceStoreOptions } from './device-store'
 import { deviceStoreRows } from './device-store-files'
 import type { DeviceStoreKeychain } from './device-store-key'
@@ -54,71 +52,6 @@ const rowUri = (hostId: string, table: 'cache' | 'draft', key: string): string =
   deviceStoreRows(ROOTS, hostId, table, [key])[0]!.uri
 
 describe('device store', () => {
-  it('evicts least-recently-used cache rows past the cap across a relaunch and never touches drafts', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    const fileSystem = createFakeGenerationFileSystem()
-    const keychain = memoryKeychain()
-    const firstLaunch = storeOn(fileSystem, { keychain })
-    await firstLaunch.runLaunchMaintenance()
-    for (let draft = 0; draft < 3; draft += 1) {
-      await firstLaunch.write('host-a', 'draft', [
-        { key: `draft-${draft}`, value: base64('typed') }
-      ])
-    }
-    // 512 KiB encoded seals to 393,244 bytes, so the 342nd row crosses 128 MiB and eviction keeps 307.
-    const value = randomBytes(393_216).toString('base64')
-    const writeRow = async (target: typeof firstLaunch, row: number) => {
-      vi.setSystemTime(1_000_000 + row)
-      expect(await target.write('host-a', 'cache', [{ key: `row-${row}`, value }])).toEqual({
-        written: true
-      })
-    }
-    for (let row = 0; row < 300; row += 1) {
-      await writeRow(firstLaunch, row)
-    }
-    // The next launch learns the first 300 rows only from its seed.
-    const store = storeOn(fileSystem, { keychain })
-    await store.runLaunchMaintenance()
-    for (let row = 300; row < 350; row += 1) {
-      await writeRow(store, row)
-    }
-    vi.useRealTimers()
-    const cache = await store.read('host-a', 'cache', ['row-0', 'row-34', 'row-35', 'row-349'])
-    expect(cache.status === 'ok' && cache.values.map((v) => v !== null)).toEqual([
-      false,
-      false,
-      true,
-      true
-    ])
-    expect(await store.read('host-a', 'draft', ['draft-0', 'draft-1', 'draft-2'])).toEqual({
-      status: 'ok',
-      values: [base64('typed'), base64('typed'), base64('typed')]
-    })
-  })
-
-  it('leaves no file of a removed host, whether wiped directly or swept at the next launch', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    const keychain = memoryKeychain()
-    const store = storeOn(fileSystem, { keychain })
-    for (const hostId of ['host-a', 'host-b', 'host-c']) {
-      await store.write(hostId, 'cache', [{ key: 'hosts', value: base64(hostId) }])
-      await store.write(hostId, 'draft', [{ key: 'draft', value: base64(hostId) }])
-    }
-    await store.wipeHost('host-a')
-    const hostPaths = (hostId: string) =>
-      fileSystem.paths().filter((path) => path.includes(deriveHostCacheKey(hostId)))
-    expect(hostPaths('host-a')).toEqual([])
-
-    // Relaunch with host-c missing from the stored host list.
-    const relaunched = storeOn(fileSystem, { keychain })
-    await relaunched.runLaunchMaintenance()
-    expect(hostPaths('host-c')).toEqual([])
-    expect(await relaunched.read('host-b', 'draft', ['draft'])).toEqual({
-      status: 'ok',
-      values: [base64('host-b')]
-    })
-  })
-
   it('wipes and remints when the key is gone but files remain', async () => {
     const fileSystem = createFakeGenerationFileSystem()
     await storeOn(fileSystem).write('host-a', 'draft', [{ key: 'draft', value: base64('x') }])

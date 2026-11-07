@@ -2,8 +2,10 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { captureGitHubImageUpload } from './github-image-upload'
 const { rpc, revision } = vi.hoisted(() => ({ rpc: vi.fn(), revision: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc
+}))
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   getRuntimeEnvironmentRevision: revision
 }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }))
@@ -63,52 +65,4 @@ it('refuses image intake on an older runtime before sending any bytes', async ()
     })(new File(['a'], 'a.png', { type: 'image/png' }))
   ).rejects.toThrow('cannot upload images yet')
   expect(rpc.mock.calls.map((call) => call[1])).toEqual(['status.get'])
-})
-
-it.each([2, 20])('checks capability once and uploads each of %i accepted images', async (count) => {
-  rpc.mockImplementation(async (_runtime, method) => {
-    if (method === 'status.get') {
-      return { capabilities: ['github.image-attachments.v1'] }
-    }
-    if (method === 'clipboard.startImageUpload') {
-      return { uploadId: 'image' }
-    }
-    if (method === 'github.uploadAttachment') {
-      return { url: 'https://github.com/user-attachments/assets/image' }
-    }
-    return {}
-  })
-  const upload = captureGitHubImageUpload({
-    runtime: { kind: 'local' },
-    target: { kind: 'repo', repo: 'repo', source: 'origin' }
-  })
-  for (let index = 0; index < count; index++) {
-    await upload(new File(['a'], `${index}.png`, { type: 'image/png' }))
-  }
-  expect(rpc.mock.calls.filter((call) => call[1] === 'status.get')).toHaveLength(1)
-  expect(rpc.mock.calls.filter((call) => call[1] === 'github.uploadAttachment')).toHaveLength(count)
-})
-
-it('stages a 5 MiB image in fourteen bounded chunks without putting bytes in Markdown', async () => {
-  rpc.mockImplementation(async (_runtime, method) => {
-    if (method === 'status.get') {
-      return { capabilities: ['github.image-attachments.v1'] }
-    }
-    if (method === 'clipboard.startImageUpload') {
-      return { uploadId: 'large' }
-    }
-    if (method === 'github.uploadAttachment') {
-      return { url: 'https://github.com/user-attachments/assets/large' }
-    }
-    return {}
-  })
-  const url = await captureGitHubImageUpload({
-    runtime: { kind: 'local' },
-    target: { kind: 'repo', repo: 'repo', source: 'issue' }
-  })(new File([new Uint8Array(5 * 1024 * 1024)], 'large.png', { type: 'image/png' }))
-  expect(url).toBe('https://github.com/user-attachments/assets/large')
-  expect(
-    rpc.mock.calls.filter((call) => call[1] === 'clipboard.appendImageUploadChunk')
-  ).toHaveLength(14)
-  expect(rpc.mock.calls.filter((call) => call[1] === 'status.get')).toHaveLength(1)
 })

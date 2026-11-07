@@ -4,7 +4,7 @@ import { openDetectedFilePath } from './terminal-file-open-routing'
 import { getConnectionId } from '@/lib/connection-context'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { downloadAndOpenRemoteTerminalFile } from '../../terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   flushAsyncWork,
@@ -42,7 +42,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('../../terminal-remote-file-download-open', () => ({
+vi.mock('./terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 

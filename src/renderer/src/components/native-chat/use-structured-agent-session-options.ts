@@ -1,4 +1,4 @@
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'

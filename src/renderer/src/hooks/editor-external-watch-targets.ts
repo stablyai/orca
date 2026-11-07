@@ -1,10 +1,10 @@
 import type { AppState } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {

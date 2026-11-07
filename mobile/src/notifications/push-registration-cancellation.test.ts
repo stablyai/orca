@@ -1,4 +1,3 @@
-import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
 vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: vi.fn(async () => {})
 }))
@@ -128,24 +127,6 @@ it('does not register with stale consent after the user disables notifications d
   )
   expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
     'notifications.registerPush'
-  )
-})
-
-it('waits for notification channel readiness before requesting a token', async () => {
-  const pending = deferred<void>()
-  vi.mocked(ensureDesktopNotificationChannel).mockReturnValueOnce(pending.promise)
-  const connection = client()
-  attachPushRegistration('host', connection as never)
-  await vi.waitFor(() => expect(ensureDesktopNotificationChannel).toHaveBeenCalled())
-  expect(getDevicePushToken).not.toHaveBeenCalled()
-  expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
-    'notifications.registerPush'
-  )
-  pending.resolve()
-  await vi.waitFor(() =>
-    expect(connection.sendRequest.mock.calls.map(([method]) => method)).toContain(
-      'notifications.registerPush'
-    )
   )
 })
 

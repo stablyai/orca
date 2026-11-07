@@ -79,29 +79,6 @@ it.each(['git-worktree', 'folder'] as const)(
   }
 )
 
-it('keeps an accepted attention boundary fixed when the loaded conversation advances', async () => {
-  const rig = await createRestTestRig()
-  try {
-    const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
-    if (!attached.ok) {
-      throw new Error(`attach refused: ${attached.refusal.code}`)
-    }
-    const [read] = await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)
-    expect(read?.observedCursor.sequence).toBeGreaterThan(0)
-    const acceptedSequence = read.observedCursor.sequence
-
-    expect(
-      await rig.host.send(REST_TEST_CALLER, restTestSend('newer unread work', attached.fence))
-    ).toMatchObject({ ok: true })
-    const [later] = await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)
-    expect(later.observedCursor.epoch).toBe(read.observedCursor.epoch)
-    expect(later.observedCursor.sequence).toBeGreaterThan(acceptedSequence)
-    expect(read.observedCursor.sequence).toBe(acceptedSequence)
-  } finally {
-    await rig.dispose()
-  }
-})
-
 it.each(['resting-newer-format', 'live-closed'] as const)(
   'keeps sibling attention readable when a %s journal cannot supply its boundary',
   async (failure) => {

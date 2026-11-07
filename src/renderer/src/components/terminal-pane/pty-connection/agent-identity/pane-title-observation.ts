@@ -1,6 +1,6 @@
-import { resolvePaneTitleDecision } from '../../terminal-title-evidence'
+import { resolvePaneTitleDecision } from '../../titles/terminal-title-evidence'
 import { useAppStore } from '@/store'
-import { shouldSeedCacheTimerOnInitialTitle } from '../../cache-timer-seeding'
+import { shouldSeedCacheTimerOnInitialTitle } from '../../titles/cache-timer-seeding'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

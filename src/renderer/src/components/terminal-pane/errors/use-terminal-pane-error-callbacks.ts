@@ -1,8 +1,8 @@
 import { useCallback, useRef } from 'react'
 import { isTerminalSessionStateSaveFailure } from '../../../../../shared/workspace-session/terminal-session-state-save-failure'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import { appendPaneTerminalError, clearPaneTerminalError } from '../terminal-error-accumulation'
-import { stripSshReconnectOwnedErrorLines } from '../TerminalErrorToast'
+import { appendPaneTerminalError, clearPaneTerminalError } from './terminal-error-accumulation'
+import { stripSshReconnectOwnedErrorLines } from './terminal-error-display'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
 
 export function useTerminalPaneErrorCallbacks({

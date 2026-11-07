@@ -1,4 +1,4 @@
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import {
@@ -14,7 +14,7 @@ import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/hos
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'

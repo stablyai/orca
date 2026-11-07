@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardCard,

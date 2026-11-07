@@ -39,7 +39,7 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
 vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({

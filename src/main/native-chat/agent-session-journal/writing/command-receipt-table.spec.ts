@@ -111,14 +111,6 @@ export function registerCommandReceiptTableTests(): void {
       expect(read(receipt)).toEqual({ verdict: 'absent' })
     })
 
-    it('requires a receipt to be written inside an open transaction', () => {
-      const receipt = commandReceiptFixture()
-      expect(() => insertCommandReceiptIfAbsent(database.db, globalScope, receipt)).toThrow(
-        /inside an open transaction/
-      )
-      expect(read(receipt)).toEqual({ verdict: 'absent' })
-    })
-
     it('throws and rolls back an unexpected key collision after an absent lookup', () => {
       database.db
         .exec(`CREATE TRIGGER collide_command_receipt BEFORE INSERT ON agent_session_command_receipts

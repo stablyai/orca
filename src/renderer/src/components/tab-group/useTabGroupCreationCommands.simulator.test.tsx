@@ -5,9 +5,9 @@ import type { AppState } from '@/store/types'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
 import { toast } from 'sonner'
 
@@ -21,7 +21,7 @@ vi.mock('@/store', () => ({
   )
 }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => ({ attached: false })),
   runtimeEnvironmentSupportsCapability: async () => false
 }))

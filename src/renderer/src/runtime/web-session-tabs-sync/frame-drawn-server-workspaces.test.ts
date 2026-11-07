@@ -10,7 +10,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from './testing/web-session-tabs-sync.test-fixture'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import type { WebSessionTabsSyncState } from './state'

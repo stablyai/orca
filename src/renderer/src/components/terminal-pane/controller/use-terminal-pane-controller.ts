@@ -6,7 +6,7 @@ import { useTerminalPaneStoreBindings } from './use-terminal-pane-store-bindings
 import { useTerminalPaneStartupActions } from './use-terminal-pane-startup-actions'
 import { useTerminalPaneLayoutPersistence } from '../layout/persistence/use-terminal-pane-layout-persistence'
 import { useTerminalPaneLayoutBindings } from '../layout/ownership/use-terminal-pane-layout-bindings'
-import { useHostPaneTitleSync } from '../use-host-pane-title-sync'
+import { useHostPaneTitleSync } from '../titles/use-host-pane-title-sync'
 import { useTerminalPaneCloseActions } from '../layout/close/use-terminal-pane-close-actions'
 import { useTerminalPaneTabDetachActions } from '../layout/detach/use-terminal-pane-tab-detach-actions'
 import { useTerminalPaneLifecycleStage } from '../mounting/use-terminal-pane-lifecycle-stage'
@@ -17,7 +17,7 @@ import { useTerminalPaneTitleEffects } from './use-terminal-pane-title-effects'
 import { useTerminalPaneContextActions } from './use-terminal-pane-context-actions'
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
 import { useTerminalPaneProjection } from './use-terminal-pane-projection'
-import { useLayoutOwnerPaneTree } from '../use-layout-owner-pane-tree'
+import { useLayoutOwnerPaneTree } from '../layout/ownership/use-layout-owner-pane-tree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 // Switch point: the mounted tab follows main's pane tree. Chosen once per build, so hook order is fixed.

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { createBrowserMockApi } from './browser-slice-test-harness'
-import './editor-slice-test-harness'
+import { createBrowserMockApi } from './browser/browser-slice-test-harness'
+import './editor/editor-slice-test-harness'
 import { createTestStore as createAppStore, seedStore } from './store-test-helpers'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 import type { AppState } from '../types'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

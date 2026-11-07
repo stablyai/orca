@@ -1,4 +1,4 @@
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../../../../../shared/draft-paste-ready-scanner'

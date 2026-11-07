@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 type Handlers = {
   onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
@@ -26,8 +26,10 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/runtime/use-worktree-runtime-target', () => ({
   useActiveAccountOwner: () => ({ target: mocks.owner, wslHostDistro: null })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (target: RuntimeClientTarget, handlers: Handlers) => {
     const watcher = { target, handlers, closed: false }
     mocks.watchers.push(watcher)

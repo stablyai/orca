@@ -23,7 +23,7 @@ import {
   loadLocalImageSrc
 } from '../../document-images/useLocalImageSrc'
 import { subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated } from '../../document-images/local-image-src-cache'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   createRawMarkdownHtmlBlock,
   createRawMarkdownHtmlInline,

@@ -19,7 +19,9 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))

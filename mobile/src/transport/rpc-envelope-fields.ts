@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { RpcRequest } from './types'
 
 // Pass added top-level host fields through unchanged so new fields need no mobile binary update.

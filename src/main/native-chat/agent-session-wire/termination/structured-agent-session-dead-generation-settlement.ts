@@ -1,7 +1,6 @@
 import { providerTimelineExecutionItems } from '../../agent-session-timeline/provider-timeline-history'
 import {
   agentSessionFailureFact,
-  MAX_PROVIDER_DIAGNOSTIC_CHARS,
   type SubmissionRejectionFact
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -12,8 +11,11 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
 import '../../agent-session-journal/writing/journal-row-builders'
-import { journalLifecycleMutationItemId } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
-import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+import {
+  journalLifecycleMutationItemId,
+  type JournalLifecycleMutationInput
+} from '../../agent-session-journal/writing/journal-lifecycle-mutation'
+
 import {
   endedUnseenMessageBody,
   runningCallEnd,
@@ -43,8 +45,6 @@ import {
 } from './structured-agent-session-unfinished-work'
 
 import './structured-agent-session-stale-state-settlement'
-
-export const MAX_UNEXPECTED_EXIT_REASON_CHARS = MAX_PROVIDER_DIAGNOSTIC_CHARS
 
 export type StructuredAgentSessionDeadGenerationInput = {
   journal: DeadGenerationJournal

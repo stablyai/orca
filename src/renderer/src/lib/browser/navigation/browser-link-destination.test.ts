@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { buildBrowserPage, buildWorkspaceFromPage } from '@/store/slices/browser-page-records'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage
+} from '@/store/slices/browser/pages/browser-page-records'
 import {
   browserLinkPageMatches,
   browserOpenResultForPage,

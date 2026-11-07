@@ -70,7 +70,9 @@ export function createRemoteRuntimeTransportMocks(
 
   function resetRemoteRuntimeTransport(): void {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
     vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))

@@ -10,7 +10,7 @@ import {
   runtimeHostContactForEntry,
   isRuntimeHostContactRevokedVerdict
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function newTabAgentMenuHostFacts(state: AppState, workspace: ProspectiveWorkspace) {
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })

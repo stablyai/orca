@@ -25,7 +25,6 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
@@ -33,7 +32,6 @@ const {
   requestTerminalPaneRecovery
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -51,10 +49,6 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
 }))
 
 // Only the request is spied: connect still needs the real generation/instance registry.
@@ -81,7 +75,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
 }))
 

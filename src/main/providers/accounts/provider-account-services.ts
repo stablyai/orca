@@ -141,6 +141,8 @@ export function createProviderAccountServices(
   rateLimits.setAntigravityUsageEnabledResolver(() =>
     store.getUI().statusBarItems.includes('antigravity')
   )
+  // Hidden Muse meters must not spawn the Muse CLI.
+  rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )

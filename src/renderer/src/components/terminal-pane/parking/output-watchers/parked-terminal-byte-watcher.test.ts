@@ -39,7 +39,7 @@ type MockStoreState = {
 const dispatchTerminalNotification = vi.fn()
 let mockStoreState: MockStoreState
 
-vi.mock('../../use-notification-dispatch', () => ({
+vi.mock('../../notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
 
@@ -554,7 +554,7 @@ describe('startParkedTerminalByteWatcher', () => {
   it('consumes host facts without a raw terminal stream for paired PTYs', async () => {
     const remotePtyId = 'remote:env-1@@terminal-1'
     const { dispose } = await startWatcher({ ptyId: remotePtyId })
-    const handler = await import('../../terminal-side-effect-facts-handler')
+    const handler = await import('../../pty-transport/output/terminal-side-effect-facts-handler')
 
     expect(onData).toBeNull()
     handler._dispatchTerminalSideEffectBatchForTest({
@@ -590,7 +590,7 @@ describe('startParkedTerminalByteWatcher', () => {
       facts: TerminalSideEffectFact[],
       options: { seq?: number; replay?: boolean } = {}
     ): Promise<void> {
-      const handler = await import('../../terminal-side-effect-facts-handler')
+      const handler = await import('../../pty-transport/output/terminal-side-effect-facts-handler')
       handler._dispatchTerminalSideEffectBatchForTest({
         ptyId: PTY_ID,
         seq: options.seq ?? 0,
@@ -605,7 +605,7 @@ describe('startParkedTerminalByteWatcher', () => {
         await import('../../../../../../shared/agent-status/transport/agent-status-osc')
       const { createTerminalTitleTracker } =
         await import('../../../../../../shared/terminal/output/terminal-output-side-effects')
-      const handler = await import('../../terminal-side-effect-facts-handler')
+      const handler = await import('../../pty-transport/output/terminal-side-effect-facts-handler')
       const processStatusChunk = createAgentStatusOscProcessor()
       let pending: TerminalSideEffectFact[] = []
       const tracker = createTerminalTitleTracker({

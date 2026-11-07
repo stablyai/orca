@@ -1,4 +1,4 @@
-import { focusNativeChatCover } from '@/components/terminal-pane/native-chat-covered-pane'
+import { focusNativeChatCover } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 import { getOverlayFocusOwners } from '../overlay-focus-ownership'
 import type { ManagedPane } from './pane-manager-types'
 

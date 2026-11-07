@@ -1,6 +1,6 @@
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
+import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -11,7 +11,7 @@ import { getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
-import { addCodexAccountOnHost } from '@/runtime/runtime-host-account-sign-in-client'
+import { addCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,

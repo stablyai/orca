@@ -1,13 +1,13 @@
-import { createAgentSessionTrustWorktreeOptions } from '@/runtime/agent-session-create-request'
+import { createAgentSessionTrustWorktreeOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
-import { remoteRestoreSpawnIntentParams } from '../../../../runtime/remote-restore-spawn-intent'
-import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
-import { agentProviderSessionForHostEnsure } from '@/runtime/agent-session-ensure-provider-session'
+import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
+import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
+import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './input/remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -19,8 +19,8 @@ import {
 } from './input/remote-runtime-input-journal'
 import type { AcceptedInputOptions } from '../input/pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
-import { isSshSignInPendingTerminalError } from '../../terminal-ssh-sign-in-error'
-import { terminalCreateThemeParams } from '../../terminal-view-attributes-publisher'
+import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
@@ -47,7 +47,7 @@ import type {
 import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
 import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import { agentResumeHostAuthorityCapability } from '../../../../runtime/agent-resume-host-authority-capability'
+import { agentResumeHostAuthorityCapability } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -62,17 +62,20 @@ import type {
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
-import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../../../runtime/runtime-rpc-result'
-import { latestTerminalRetirementProof } from '../../../../runtime/web-session-terminal-orphan-recovery-surface-index'
+import {
+  RuntimeRpcCallError,
+  unwrapRuntimeRpcResult
+} from '../../../../runtime/rpc/calls/runtime-rpc-result'
+import { latestTerminalRetirementProof } from '../../../../runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-recovery-surface-index'
 import {
   getRemoteRuntimePtyEnvironmentId,
-  getRemoteRuntimeTerminalHandle,
-  runtimeTerminalErrorMessage
-} from '../../../../runtime/runtime-terminal-stream'
+  getRemoteRuntimeTerminalHandle
+} from '../../../../runtime/hosted-terminals/identity/remote-runtime-pty-owner'
+import { runtimeTerminalErrorMessage } from '../../../../runtime/hosted-terminals/streams/runtime-terminal-error-message'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getRemoteRuntimeTerminalMultiplexer } from '../../../../runtime/remote-runtime-terminal-multiplexer'
-import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/remote-runtime-terminal-snapshot-state'
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { getRemoteRuntimeTerminalMultiplexer } from '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-policy'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import {
   hostRecordedExitCode,
   hostRecordsTerminalExit,
@@ -82,10 +85,8 @@ import {
   watchHostRebindAfterExit,
   type HostRebindAfterExitWatch
 } from './attachment/remote-terminal-host-rebind-after-exit'
-import type {
-  RemoteRuntimeMultiplexedTerminal,
-  RemoteRuntimeSnapshotOutcome
-} from '../../../../runtime/remote-runtime-terminal-multiplexer-types'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
+import type { RemoteRuntimeSnapshotOutcome } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import {
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
@@ -102,7 +103,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
-} from '@/runtime/agent-session-create-operation'
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
 import { replaceFitOverridePtyId, setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { replaceDriverPtyId, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import {
@@ -110,9 +111,9 @@ import {
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
-import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-terminal-handle-events'
+import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
-import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
+import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
@@ -128,12 +129,12 @@ import {
 import {
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   isRuntimeEnvironmentPairingChangedError,
   refreshRuntimeEnvironmentsAfterPairingChange,
   runtimeEnvironmentPairingChangedError
-} from '@/runtime/runtime-environment-pairing-refresh'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33

@@ -25,11 +25,11 @@ export function getPairingFailureMessage(args: {
           { seconds }
         )
   }
-  // Old and new desktops both refuse an expired or rotated code as unauthorized.
+  // Desktops refuse an expired, rotated or already-used (single-use) code as unauthorized.
   if (error instanceof PairingCodeRejectedError) {
     return t(
-      'app.pairScan.codeExpiredOrReplaced',
-      'This pairing code expired or was replaced. Show a new code on your desktop and scan again.'
+      'app.pairScan.codeNoLongerValid',
+      'This pairing code expired, was already used, or was replaced. Show a new code on your desktop and scan again.'
     )
   }
   return screen === 'scan'

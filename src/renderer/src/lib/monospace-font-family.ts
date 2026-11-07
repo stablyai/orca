@@ -1,3 +1,5 @@
+import { isPluginFontFamilyName } from '../../../shared/plugins/contributions/plugin-font-contribution'
+
 export const BUNDLED_SYMBOLS_FONT_FAMILY = 'Orca Nerd Font Symbols'
 
 // Cross-platform monospace chain: browsers skip fonts absent on the current OS, so listing all is safe.
@@ -22,9 +24,11 @@ export function buildFontFamily(fontFamily: string): string {
   const trimmed = fontFamily.trim()
   const parts = trimmed ? [`"${trimmed}"`] : []
   const lowerParts = parts.map((p) => p.toLowerCase())
+  // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback, so it must keep all of them.
+  const isPluginFamily = isPluginFontFamilyName(trimmed)
   for (const fallback of FALLBACK_FONTS) {
     const lower = fallback.toLowerCase()
-    if (!lowerParts.some((p) => p.includes(lower))) {
+    if (isPluginFamily || !lowerParts.some((p) => p.includes(lower))) {
       // Generic keywords like "monospace" are unquoted; named fonts are quoted.
       parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
     }

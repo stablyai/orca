@@ -3,7 +3,7 @@ import {
   readHostAgentLaunchSettings,
   hostAgentLaunchSettingsSource
 } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   agentLaunchNeedsPreparedCommand,

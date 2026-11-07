@@ -3,7 +3,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
 import { isGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
-import { AskParams } from '../schemas'
+import { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { rejectFederatedExplicitTarget } from '../routing'
 import { askRemoteRunHome } from './ask-remote'
 import {

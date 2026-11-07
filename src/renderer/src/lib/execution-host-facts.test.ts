@@ -83,9 +83,11 @@ it('resolves a detected local copy project runtime without borrowing its visible
   }
   const platform = vi.spyOn(rendererPlatform, 'getRendererAppPlatform').mockReturnValue('win32')
   try {
-    expect(
-      resolveWorktreeExecutionHostPlatform(selected, id, 'C:\\repo', undefined, 'local')
-    ).toEqual({ kind: 'known', platform: 'linux', hostKind: 'local' })
+    expect(resolveWorktreeExecutionHostPlatform(selected, id, 'C:\\repo', 'local')).toEqual({
+      kind: 'known',
+      platform: 'linux',
+      hostKind: 'local'
+    })
   } finally {
     platform.mockRestore()
   }
@@ -136,7 +138,6 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
       { ...nested, activeWorktreeId: 'folder:folder' },
       'folder:folder',
       'C:\\project',
-      undefined,
       'runtime:linux-box'
     )
     expect(ordinary).toMatchObject({ kind: 'known', platform: 'win32', hostKind: 'ssh' })
@@ -147,7 +148,6 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
         nested,
         'folder:folder',
         'C:\\project',
-        undefined,
         'runtime:linux-box'
       )
     ).toEqual(ordinary)

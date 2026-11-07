@@ -14,6 +14,7 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type * as AuthValidation from './rpc/mobile-e2ee-auth-validation'
 import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/device-key-capability'
+import { classifyOrcadTunnelIdentityFailure } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 // Hosts released between v2 and capability-carrying v2 token auth refused the extra field.
 const TOKEN_FOR_HOST_WITHOUT_V2_TOKEN_CAPABILITIES = 'device-token-v2-exact'
@@ -45,7 +46,11 @@ type TestHost = {
 const openHosts: TestHost[] = []
 let userDataPath = ''
 
-async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<TestHost> {
+async function startHost(
+  kind: HostKind,
+  keyPair = nacl.box.keyPair(),
+  options: { revoked?: boolean } = {}
+): Promise<TestHost> {
   const publicKeyB64 = Buffer.from(keyPair.publicKey).toString('base64')
   const token =
     kind === 'v2-without-token-capabilities'
@@ -63,7 +68,7 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
     const channel = new E2EEChannel(ws, {
       serverSecretKey: keyPair.secretKey,
       resolveAuthenticatedDevice: (candidate) =>
-        candidate === token
+        candidate === token && !options.revoked
           ? {
               deviceId: 'device-1',
               scope: 'runtime',
@@ -214,6 +219,27 @@ describe('remote runtime client E2EE framing', () => {
 
     // Only the read-only status check reached the host over legacy; it proved the host is current.
     expect(blocked.requests).toEqual(['status.get over legacy'])
+    expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
+  })
+
+  it('reports a revoked device as unauthorized when a latched host was also downgraded', async () => {
+    const keyPair = nacl.box.keyPair()
+    const current = await startHost('current', keyPair)
+    await expect(ping(current)).resolves.toBe('pong')
+    await current.close()
+
+    const downgraded = await startHost('pre-v2', keyPair, { revoked: true })
+    const error = await ping(downgraded).then(
+      () => null,
+      (rejection: unknown) => rejection
+    )
+
+    expect(error).toMatchObject({ code: 'unauthorized', pairingStage: 'access-grant' })
+    expect(error).not.toHaveProperty('closeCode', 4001)
+    expect(String(error)).not.toContain('Update Orca')
+    // Managed orcad reads this as a revoked pairing, not as a different server on its port.
+    expect(classifyOrcadTunnelIdentityFailure(error).verdict).toBe('unpaired')
+    expect(downgraded.requests).toEqual([])
     expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
   })
 })

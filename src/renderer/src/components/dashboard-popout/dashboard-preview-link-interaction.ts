@@ -10,7 +10,7 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
-import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/terminal-mouse-buffer-position'
+import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pane/input/pointer/terminal-mouse-buffer-position'
 import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/links/http/terminal-url-link-hit-testing'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'

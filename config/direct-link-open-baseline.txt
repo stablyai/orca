@@ -33,5 +33,5 @@
 1 src/renderer/src/components/tab-bar/BrowserTab.tsx
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
 1 src/renderer/src/lib/workspace-ports/workspace-port-actions.ts
-1 src/renderer/src/runtime/antigravity-chat-sign-in-status.ts
+1 src/renderer/src/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status.ts
 3 src/renderer/src/web/preload-api/web-shell-api.ts

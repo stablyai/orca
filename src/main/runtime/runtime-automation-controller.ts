@@ -40,7 +40,7 @@ export class RuntimeAutomationController {
 
   /** Completed automation run terminals no client used, closed before an update; 0 off-headless. */
   releaseFinishedRunTerminals(): Promise<number> {
-    return this.service?.releaseFinishedRunTerminals?.() ?? Promise.resolve(0)
+    return this.service?.runTerminalRetention?.drain() ?? Promise.resolve(0)
   }
 
   /** Keep runtime-owned automation work ahead of queued external probes. */

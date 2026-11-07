@@ -33,8 +33,13 @@ export type WorkspaceTabCommand =
       bulk?: boolean
       floatingPanelGuestOwned?: boolean
     }
-  | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
-  | { type: 'previous-recent' }
+  | {
+      type: 'switch'
+      direction: number
+      scope: 'same-type' | 'all-types' | 'terminal'
+      floatingPanelOwned?: boolean
+    }
+  | { type: 'previous-recent'; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -168,12 +173,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     return true
   }
   if (command.type === 'previous-recent') {
-    if (isFloatingWorkspacePanelFocused()) {
+    if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
   }
-  if (isFloatingWorkspacePanelFocused()) {
+  if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)
     return true
   }

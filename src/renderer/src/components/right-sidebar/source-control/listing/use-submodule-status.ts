@@ -8,7 +8,7 @@ import {
   useSourceControlScope,
   useSourceControlSectionActive
 } from '../panel/worktree-scope'
-import { getRuntimeGitSubmoduleStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitSubmoduleStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,

@@ -1,11 +1,14 @@
-import type { RpcClient } from './rpc-client'
-import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
-import { hostStatusProbe, readProbedHostStatus } from './host-status-probe-operations'
 import type { HostStatusReply } from './host-status-reply-schema'
 import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
+import {
+  connectionHostStatus,
+  decodeHostStatusReply,
+  directConnectionEpoch,
+  hostConnectionEpoch,
+  sendHostStatusRead,
+  type HostStatusClient
+} from '../query/host-status-query'
 
-type ProbeClient = UnvalidatedRpcRequestPort &
-  Partial<Pick<RpcClient, 'getGeneration' | 'getLastConnectedAt' | 'requestRoute'>>
 type ProbeListener = {
   onStatus: (status: HostStatusReply | null) => void
   onAttemptFailed?: () => void
@@ -18,33 +21,22 @@ type SharedProbe = {
 }
 type EpochStatus = { epoch: string; status: HostStatusReply | null }
 const observed = new WeakMap<object, EpochStatus>()
-// Only answers this probe received; recorded proofs may merge in capabilities from an earlier read.
-const probed = new WeakMap<object, EpochStatus>()
 const sharedProbes = new WeakMap<object, SharedProbe>()
-export const runtimeStatusProbeEpoch = (client: ProbeClient) =>
-  `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
-export function readRuntimeStatusProbe(client: ProbeClient): HostStatusReply | null | undefined {
+export const runtimeStatusProbeEpoch = hostConnectionEpoch
+export function readRuntimeStatusProbe(
+  client: HostStatusClient
+): HostStatusReply | null | undefined {
   const entry = observed.get(client)
   return entry?.epoch === runtimeStatusProbeEpoch(client) ? entry.status : undefined
 }
 
-// Why: a routed view answers status.get from a server behind the desktop, which can restart or reconnect while
-// this connection stays up, and a client with no connect time has no epoch to hold an answer to.
-function connectionEpoch(client: ProbeClient): string | null {
-  return client.requestRoute === undefined && typeof client.getLastConnectedAt?.() === 'number'
-    ? runtimeStatusProbeEpoch(client)
-    : null
-}
-
-/** The status this connection already proved, or undefined when it may not stand in for a new read. */
-export function readConnectionStatusProbe(client: ProbeClient): HostStatusReply | null | undefined {
-  const epoch = connectionEpoch(client)
-  const entry = probed.get(client)
-  return epoch !== null && entry?.epoch === epoch ? entry.status : undefined
+/** The status this connection already received, or undefined when it may not stand in for a new read. */
+export function readConnectionStatusProbe(client: HostStatusClient): HostStatusReply | undefined {
+  return connectionHostStatus(client)?.status
 }
 
 export function recordRuntimeStatusProbe(
-  client: ProbeClient,
+  client: HostStatusClient,
   status: HostStatusReply | null
 ): void {
   observed.set(client, { epoch: runtimeStatusProbeEpoch(client), status })
@@ -58,11 +50,11 @@ const FAILURE_RETRY_MAX_DELAY_MS = 15_000
 // Deliver unreadable answers as null without retry; refusals/rejections retry and notify onAttemptFailed after scheduling.
 // Accept the raw sender type because capability callers need not hold a full client.
 export function startRuntimeStatusProbe(
-  client: ProbeClient,
+  client: HostStatusClient,
   onStatus: (status: HostStatusReply | null) => void,
   onAttemptFailed?: () => void
 ): () => void {
-  const epoch = connectionEpoch(client)
+  const epoch = directConnectionEpoch(client)
   if (epoch === null) {
     return runProbe(client, { onStatus, onAttemptFailed }).stop
   }
@@ -87,7 +79,7 @@ export function startRuntimeStatusProbe(
   }
 }
 
-function startSharedProbe(client: ProbeClient, epoch: string): SharedProbe {
+function startSharedProbe(client: HostStatusClient, epoch: string): SharedProbe {
   const listeners = new Set<ProbeListener>()
   const each = (notify: (listener: ProbeListener) => void) => [...listeners].forEach(notify)
   const probe: SharedProbe = {
@@ -108,7 +100,7 @@ function startSharedProbe(client: ProbeClient, epoch: string): SharedProbe {
 }
 
 function runProbe(
-  client: ProbeClient,
+  client: HostStatusClient,
   listener: ProbeListener
 ): { retryNow: () => void; stop: () => void } {
   const epoch = runtimeStatusProbeEpoch(client)
@@ -118,20 +110,18 @@ function runProbe(
 
   function attempt(): void {
     retryTimer = null
-    void hostStatusProbe.request(client).then(
+    void sendHostStatusRead(client).then(
       (reply) => {
         if (cancelled) {
           return
         }
-        const landed = readProbedHostStatus(reply)
+        const landed = decodeHostStatusReply(reply)
         if (!landed) {
           scheduleRetry(false)
           return
         }
         if (epoch === runtimeStatusProbeEpoch(client)) {
-          const entry = { epoch, status: landed.status }
-          observed.set(client, entry)
-          probed.set(client, entry)
+          observed.set(client, { epoch, status: landed.status })
         }
         listener.onStatus(landed.status)
       },

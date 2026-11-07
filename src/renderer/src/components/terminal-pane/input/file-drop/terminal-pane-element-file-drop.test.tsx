@@ -14,7 +14,7 @@ import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
 } from '@/components/native-chat/NativeChatPaneFileDropSurface'
-import { TerminalPaneSurface } from '../../TerminalPaneSurface'
+import { TerminalPaneSurface } from '../../controller/TerminalPaneSurface'
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 
 const mocks = vi.hoisted(() => ({
@@ -52,7 +52,7 @@ vi.mock('@/store/index', () => ({
     { getState: () => mocks.state }
   )
 }))
-vi.mock('@/runtime/runtime-file-import-client', () => ({
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
   importExternalPathsToRuntime: mocks.importPaths
 }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
@@ -70,36 +70,43 @@ vi.mock('@/components/shared/useDaemonActions', () => ({ DaemonActionDialog: () 
 vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
   AgentSessionContinuationDialog: () => null
 }))
-vi.mock('../../CloseTerminalDialog', () => ({ default: () => null }))
-vi.mock('../../TerminalContextMenu', () => ({ default: () => null }))
-vi.mock('../../TerminalErrorToast', () => ({
-  isPaneOwnerUnverifiedError: () => false,
+vi.mock('../../layout/close/CloseTerminalDialog', () => ({ default: () => null }))
+vi.mock('../../context-menu/TerminalContextMenu', () => ({ default: () => null }))
+vi.mock('../../errors/TerminalErrorToast', () => ({
   TerminalErrorToast: () => null
 }))
 vi.mock('../../render-health/recovery/terminal-pane-recovery', () => ({
   requestTerminalPaneRecovery: vi.fn()
 }))
-vi.mock('../../TerminalSessionStateSaveFailureDialog', () => ({
+vi.mock('../../layout/persistence/TerminalSessionStateSaveFailureDialog', () => ({
   TerminalSessionStateSaveFailureDialog: () => null
 }))
 vi.mock('@/components/link-actions/LinkActionPopover', () => ({ LinkActionPopover: () => null }))
-vi.mock('../../TerminalAgentSessionForkDialog', () => ({
+vi.mock('../../session-fork/TerminalAgentSessionForkDialog', () => ({
   TerminalAgentSessionForkDialog: () => null
 }))
-vi.mock('../../SessionRestoredBannerPortals', () => ({ SessionRestoredBannerPortals: () => null }))
+vi.mock('../../session-restore/SessionRestoredBannerPortals', () => ({
+  SessionRestoredBannerPortals: () => null
+}))
 vi.mock('../../../orchestration-crew/TerminalCrewPortals', () => ({
   TerminalCrewPortals: () => null
 }))
-vi.mock('../../TerminalQuickCommandEditorDialog', () => ({
+vi.mock('../../quick-commands/TerminalQuickCommandEditorDialog', () => ({
   TerminalQuickCommandEditorDialog: () => null
 }))
-vi.mock('../../TerminalPaneRecoveryPortals', () => ({
+vi.mock('../../pty-transport/remote-runtime/recovery/TerminalPaneRecoveryPortals', () => ({
   TerminalPaneRecoveryPortals: () => null
 }))
-vi.mock('../../TerminalPaneRuntimePortals', () => ({
-  TerminalPaneCodexRestartPortals: () => null,
-  TerminalPaneMobileDriverPortals: () => null,
-  TerminalPaneProcessExitPortals: () => null,
+vi.mock('../../controller/TerminalPaneCodexRestartPortals', () => ({
+  TerminalPaneCodexRestartPortals: () => null
+}))
+vi.mock('../../mobile-driver/TerminalPaneMobileDriverPortals', () => ({
+  TerminalPaneMobileDriverPortals: () => null
+}))
+vi.mock('../../process-exit/TerminalPaneProcessExitPortals', () => ({
+  TerminalPaneProcessExitPortals: () => null
+}))
+vi.mock('../../pty-transport/recovery/ssh/TerminalPaneSshReconnectPortals', () => ({
   TerminalPaneSshReconnectPortals: () => null
 }))
 
@@ -113,7 +120,7 @@ function ChatClaim(): null {
   })
   return null
 }
-vi.mock('../../TerminalPaneNativeChatPortal', () => ({
+vi.mock('../../chat/TerminalPaneNativeChatPortal', () => ({
   TerminalPaneNativeChatPortal: () =>
     mocks.chatPane &&
     createPortal(

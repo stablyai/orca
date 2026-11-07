@@ -74,7 +74,6 @@ export function resolveAgentLaunchExecutionContext(
     store,
     args.worktreeId,
     workspacePath,
-    undefined,
     executionHostId
   )
   if (fact.kind === 'withheld') {

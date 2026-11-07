@@ -8,11 +8,11 @@ import {
   EDITOR_PLACEMENT,
   seedEditorPlacementConsumers,
   drawEditorPlacementConsumers
-} from '@/store/slices/editor-placement-consumers.test-fixture'
+} from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

@@ -21,7 +21,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('../store', () => ({
   useAppStore: {

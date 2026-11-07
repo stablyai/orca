@@ -5,7 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'

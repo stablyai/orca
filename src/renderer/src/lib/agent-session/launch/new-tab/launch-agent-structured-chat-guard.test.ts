@@ -29,7 +29,7 @@ import {
   retireStructuredAgentSessionLaunchCancellationTombstone
 } from '../structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '../structured-agent-session-launch-persistence'
-import * as capabilities from '@/runtime/local-runtime-capabilities'
+import * as capabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const mockCreateUnifiedTab = vi.fn<AppState['createUnifiedTab']>()

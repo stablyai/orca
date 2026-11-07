@@ -1,14 +1,16 @@
 import type { ILink } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-compatibility-cache'
+import {
+  clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests,
+  markRuntimeEnvironmentCompatible
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   createTerminalHandleLinkProvider,
   extractTerminalHandleLinks,
   findTerminalHandleTarget,
   focusRendererTerminalHandle
 } from './terminal-handle-links'
-import { extractOrchestrationTaskLinks } from '../../terminal-orchestration-task-links'
+import { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 

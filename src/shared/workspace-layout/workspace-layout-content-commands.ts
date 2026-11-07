@@ -204,7 +204,10 @@ export function openAgentSessionTab(
   command: CommandOf<'openAgentSessionTab'>,
   context: LayoutContext
 ): Applied {
-  if (command.initial && !admitsInitialSurface(model, command.workspace, command.initial)) {
+  if (
+    command.initial &&
+    !admitsInitialSurface(model, command.workspace, command.initial, context.visibility)
+  ) {
     return applied(model)
   }
   const drawn = drawnTabOpen(

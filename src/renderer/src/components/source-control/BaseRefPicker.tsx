@@ -2,7 +2,7 @@ import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   searchRuntimeRepoBaseRefs,
   watchRuntimeRepoBaseRefDefault

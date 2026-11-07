@@ -5,7 +5,7 @@ import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
-import { runtimeStatuses } from './browser-slice-test-harness'
+import { runtimeStatuses } from './browser/browser-slice-test-harness'
 import { getAgentDetectionTargetKeyForWorktree } from '@/hooks/useAgentDetectionTarget'
 import {
   buildAgentLaunchRouteInput,

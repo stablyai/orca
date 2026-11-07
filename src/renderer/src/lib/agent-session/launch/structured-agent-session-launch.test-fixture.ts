@@ -90,8 +90,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
       : mocks.callStructuredAgentSession(target, method, params)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
@@ -136,7 +138,7 @@ import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agen
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { useAppStore } from '@/store/index'
 import { registerStructuredSelectionCatalogStore } from '../options/structured-agent-session-selection-controller'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn()
 }))

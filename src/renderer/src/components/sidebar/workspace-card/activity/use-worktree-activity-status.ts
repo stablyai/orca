@@ -11,7 +11,7 @@ import {
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
-import { selectWorkspaceRuntimeEnvironmentId } from '../../../terminal-pane/remote-server-outage'
+import { selectWorkspaceRuntimeEnvironmentId } from '../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** The Start card's rule: a pane with no server yet, or on the stopped one, ended with its distro. */

@@ -71,10 +71,6 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases: fixture.mocks.resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery: fixture.mocks.scheduleTerminalWebglAtlasRecovery
-}))
-
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => fixture.current().getState(),
@@ -96,7 +92,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle: fixture.mocks.shouldSeedCacheTimerOnInitialTitle
 }))
 

@@ -25,7 +25,7 @@ import { resolvedCodexMessageOptions } from '../../src/main/codex/structured/tur
 import { optionSession } from '../../src/main/codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { startStructuredAgentLaunch } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
 import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'

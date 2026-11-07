@@ -8,7 +8,7 @@ import {
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES
 } from '../../../../../../shared/runtime-file-contracts'
 
-import { downloadAndOpenRemoteTerminalFile } from '../../terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   flushDoubleRaf,
@@ -33,7 +33,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('../../terminal-remote-file-download-open', () => ({
+vi.mock('./terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: vi.fn(async () => true)
 }))
 

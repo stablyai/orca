@@ -99,6 +99,7 @@ export function applyRemoveWorktreeSuccessState(
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
       expandedDirs: omitByWorktree(s.expandedDirs),
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
       gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
