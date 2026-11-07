@@ -31,7 +31,7 @@ export function AutomationListStatusCell({
       'Needs migration'
     )
     return (
-      <span className="min-w-0 truncate text-muted-foreground" title={label}>
+      <span className="min-w-0 line-clamp-2 leading-tight text-muted-foreground" title={label}>
         {label}
       </span>
     )
