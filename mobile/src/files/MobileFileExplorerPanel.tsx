@@ -71,7 +71,7 @@ function folderPathOf(key: QueryKey): string | undefined {
 }
 
 function directoryState(read: Extract<DirectoryRead, { kind: 'directory' }>): DirectoryState {
-  return { entries: read.entries, total: read.total }
+  return { entries: read.entries, total: read.total, hasMore: read.hasMore }
 }
 
 // A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
@@ -154,6 +154,15 @@ export function MobileFileExplorerPanel(props: {
     [hostId, queryClient, target]
   )
 
+  const { folderPaging, pagedRevision, searching, showMore, searchAll } =
+    useMobileFileExplorerPaging({
+      scope,
+      hostId,
+      client,
+      target
+    })
+  const refreshing = useRefreshHint(searching)
+
   const directoryCache = useMemo((): DirectoryCache => {
     if (rootRead?.kind === 'legacy') {
       return rootRead.cache
@@ -175,7 +184,7 @@ export function MobileFileExplorerPanel(props: {
         folderState(folderReads[index], connState)
       ])
     ])
-  }, [connState, folderReads, folders, hostId, queryClient, rootRead, target])
+  }, [connState, folderReads, folders, hostId, pagedRevision, queryClient, rootRead, target])
 
   const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
     useMobileFileExplorerRows({
@@ -185,14 +194,6 @@ export function MobileFileExplorerPanel(props: {
       setExpanded,
       loadDirectory: refreshDirectory
     })
-
-  const { folderPaging, searching, showMore, searchAll } = useMobileFileExplorerPaging({
-    scope,
-    hostId,
-    client,
-    target
-  })
-  const refreshing = useRefreshHint(searching)
 
   const retryDirectory = useCallback(
     (relativePath: string) => {

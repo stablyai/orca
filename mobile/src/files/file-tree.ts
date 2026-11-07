@@ -24,8 +24,10 @@ export type DirectoryState = {
   entries: MobileDirEntry[]
   loading?: boolean
   error?: string
-  /** Set when the host sent only the first `entries.length` of `total`. */
+  /** The folder's size as the host last listed it. */
   total?: number
+  /** The host has entries after the last one here. */
+  hasMore?: boolean
 }
 
 export type DirectoryCache = Record<string, DirectoryState | undefined>
@@ -131,16 +133,18 @@ function folderPagingNode(
   depth: number,
   state: DirectoryState | undefined
 ): FolderPagingNode | null {
-  if (state?.total === undefined || state.entries.length >= state.total) {
+  if (!state?.hasMore) {
     return null
   }
+  const loaded = state.entries.length
   return {
     id: `${kind}:${relativePath}`,
     relativePath,
     depth,
     kind,
-    loaded: state.entries.length,
-    total: state.total
+    loaded,
+    // A folder that changed between pages can report a total at or below what is shown.
+    total: Math.max(state.total ?? 0, loaded + 1)
   }
 }
 

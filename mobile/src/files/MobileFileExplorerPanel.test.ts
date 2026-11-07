@@ -487,9 +487,11 @@ describe('MobileFileExplorerPanel', () => {
     expect(renderedText(renderer)).toContain('1,000 of 1,200')
   })
 
-  it('says how much of a part-loaded folder the filter searched, and Search all reads the rest', async () => {
+  it('says how much of a closed, part-loaded folder the filter searched, and Search all reads the rest', async () => {
     pagingHost({ '': [entry('snapshots', true)], snapshots: snapshots(12_000) })
     const renderer = await renderExplorer()
+    // Closed again, so only the cache holds its rows and nothing observes the appends.
+    await pressByLabel(renderer, 'Open folder snapshots')
     await pressByLabel(renderer, 'Open folder snapshots')
     await typeFilter(renderer, 'snap-110')
     expect(renderedText(renderer)).not.toContain('snap-1100.png')
