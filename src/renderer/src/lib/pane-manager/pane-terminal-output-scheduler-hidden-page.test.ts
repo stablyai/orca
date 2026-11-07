@@ -62,7 +62,7 @@ describe('background terminal output in a hidden page', () => {
     const doc = stubDocument('hidden')
     vi.resetModules()
     const { registerStaleDocumentVisibilityRecovery, resetStaleDocumentVisibilityForTesting } =
-      await import('@/components/terminal-pane/stale-document-visibility')
+      await import('@/components/terminal-pane/viewport/visibility/stale-document-visibility')
     const { writeTerminalOutput } = await import('./pane-terminal-output-scheduler')
     registerStaleDocumentVisibilityRecovery(() => {})
     doc.dispatchEvent(new Event('keydown'))

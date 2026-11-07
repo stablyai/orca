@@ -20,6 +20,21 @@ export function claudePlanApprovalMode(
   }
 }
 
+/** Keep a provider's startup restriction until an approved plan successfully restores the requested policy. */
+export function claudeBuildPermissionMode(
+  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'appliedInputOptions'>
+): PermissionMode {
+  const opened = session.firstRootInit?.permissionMode
+  return claudePlanApprovalMode({
+    launchIntent: {
+      permissionMode:
+        session.appliedInputOptions.get('buildPermissionMode') ??
+        (opened !== 'plan' ? opened : undefined) ??
+        session.launchIntent?.permissionMode
+    }
+  })
+}
+
 function logPlanExitFailure(error: unknown): void {
   try {
     console.warn('[claude] leaving Plan mode after an approved plan failed:', error)
@@ -29,23 +44,31 @@ function logPlanExitFailure(error: unknown): void {
 }
 
 /** Claude stays in plan after an approved ExitPlanMode until told. The request is written
- *  before the allow and never awaited, so its failure cannot hold or reject the approval. */
+ *  before the allow and never awaited, so its failure cannot hold or reject the approval.
+ *  Full access reads the mode in wire order: its presentation report can lag behind the plan. */
 export function leaveClaudePlanModeOnApproval(
-  session: Pick<ClaudeSession, 'launchIntent' | 'firstRootInit' | 'reportedOptions'> & {
-    connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
-  },
+  session: Pick<
+    ClaudeSession,
+    'launchIntent' | 'firstRootInit' | 'reportedOptions' | 'orderedPermissionMode'
+  > &
+    Partial<Pick<ClaudeSession, 'appliedInputOptions'>> & {
+      connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
+    },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
   reply: PermissionResult
 ): void {
-  if (
-    prompt.toolName !== 'ExitPlanMode' ||
-    reply.behavior !== 'allow' ||
-    session.reportedOptions.reportedPermissionMode !== 'plan'
-  ) {
+  const mode = session.orderedPermissionMode
+    ? session.orderedPermissionMode()
+    : session.reportedOptions.reportedPermissionMode
+  if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || mode !== 'plan') {
     return
   }
   try {
-    session.connection.setPermissionMode(claudePlanApprovalMode(session)).catch(logPlanExitFailure)
+    const restored = claudePlanApprovalMode(session)
+    session.connection.setPermissionMode(restored).then(() => {
+      session.appliedInputOptions?.set('interactionMode', 'default')
+      session.appliedInputOptions?.set('buildPermissionMode', restored)
+    }, logPlanExitFailure)
   } catch (error) {
     logPlanExitFailure(error)
   }

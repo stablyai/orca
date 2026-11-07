@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
 import { requestMobileStructuredAgentSessionCancel } from './mobile-structured-agent-session-cancel'
 
@@ -74,6 +74,21 @@ describe('phone Stop against a host that stops what the chat has in flight', () 
     const prompt = { itemId: 'prompt-1', expectedRevision: 2 }
     await press({ sent, turnId: 'turn-1', hostStopsConversation: true, prompt }).pressed
     expect(sent[0]).toMatchObject({ turnId: 'turn-1', prompt })
+  })
+
+  it('cancels a card with no running turn by naming only the card', async () => {
+    const sent: SentParams[] = []
+    const prompt = { itemId: 'prompt-1', expectedRevision: 2 }
+    const { pressed, onSendError } = press({
+      sent,
+      turnId: null,
+      hostStopsConversation: true,
+      prompt
+    })
+    expect(await pressed).toBe(true)
+    expect(onSendError).not.toHaveBeenCalled()
+    expect(sent[0]).toMatchObject({ prompt })
+    expect(sent[0]).not.toHaveProperty('turnId')
   })
 
   it("keeps naming a card's turn when the host cannot take the card's identity", async () => {

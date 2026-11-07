@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/leaf-scrollback-resolution'
+import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/snapshots/leaf-scrollback-resolution'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -24,7 +24,7 @@ import {
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000

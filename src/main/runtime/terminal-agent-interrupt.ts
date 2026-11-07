@@ -1,5 +1,5 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
-import { mainAgentState } from '../../shared/main-agent-status'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { mainAgentState } from '../../shared/agent-status/lifecycle/main-agent-status'
 import { writeFencedAgentKeys } from './terminal-agent-fenced-keys'
 import type { TerminalAgentPromptAnswerRuntime } from './terminal-agent-prompt-answer'
 

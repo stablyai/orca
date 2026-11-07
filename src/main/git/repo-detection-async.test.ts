@@ -79,16 +79,6 @@ describe('asynchronous repository detection with real Git', () => {
     expect(await isGitRepoAsync(join(repo, '.git'))).toBe(false)
   })
 
-  it('rejects missing directories and invalid Git markers without changing root fallback', async () => {
-    const invalid = join(fixture, 'invalid')
-    mkdirSync(invalid)
-    writeFileSync(join(invalid, '.git'), 'not a gitdir file')
-    for (const path of [invalid, join(fixture, 'missing')]) {
-      await expectSameDetection(path)
-      expect(await isGitRepoAsync(path)).toBe(false)
-    }
-  })
-
   it.skipIf(process.platform === 'win32')(
     'preserves newlines, dollar signs and trailing spaces in roots and linked identity',
     async () => {

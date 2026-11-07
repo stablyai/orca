@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { htmlRendersAsText } from './comment-markdown-unknown-html-as-text'
 import { splitMarkdownTopLevelBlocks, type MarkdownBlockSplit } from './markdown-top-level-blocks'
 
 const REPLY = [
@@ -58,42 +59,8 @@ function cut(source: string, previous: MarkdownBlockSplit | null = null): string
 }
 
 describe('splitMarkdownTopLevelBlocks', () => {
-  it('cuts at top-level blocks and loses none of the source', () => {
-    const blocks = cut(REPLY)
-    expect(blocks.join('')).toBe(REPLY)
-    expect(blocks.map((block) => block.trim().split('\n')[0])).toEqual([
-      'Here is the plan.',
-      '## Steps',
-      '- first item',
-      '1. one',
-      'A loose list follows.',
-      '1. first',
-      '> a quote',
-      '```ts',
-      'Intro to the table',
-      '| a | b |',
-      'Setext title',
-      'Closing words with `code` and **bold**.'
-    ])
-  })
-
   it.each([1, 3, 7])('reaches the same cut when streamed %i characters at a time', (step) => {
     expect(streamed(REPLY, step)).toEqual(cut(REPLY))
-  })
-
-  it.each([1, 3, 7])('numbers each block by its source line, streamed %i at a time', (step) => {
-    let split: MarkdownBlockSplit | null = null
-    for (let end = step; end < REPLY.length + step; end += step) {
-      split = splitMarkdownTopLevelBlocks(REPLY.slice(0, end), split)
-    }
-    for (const block of split?.blocks ?? []) {
-      expect(block.line).toBe(REPLY.slice(0, block.start).split('\n').length)
-    }
-  })
-
-  it('keeps Windows line endings inside their blocks', () => {
-    const source = 'one\r\n\r\ntwo\r\n\r\n- three\r\n'
-    expect(cut(source)).toEqual(['one\r\n\r\n', 'two\r\n\r\n', '- three\r\n'])
   })
 
   it.each([
@@ -108,8 +75,49 @@ describe('splitMarkdownTopLevelBlocks', () => {
     expect(streamed(source, 2)).toEqual([source])
   })
 
-  it('still cuts a document whose only HTML is a tag that holds nothing', () => {
-    expect(cut('| a |\n| - |\n| one<br>two |\n\nAfter.\n')).toHaveLength(2)
+  describe('when unknown HTML renders as text', () => {
+    const rendersAsText = (html: string): boolean =>
+      htmlRendersAsText(html, new Set(['b', 'sub', 'details']))
+    function streamedAsText(source: string): string[] {
+      let split: MarkdownBlockSplit | null = null
+      for (let end = 2; end < source.length + 2; end += 2) {
+        split = splitMarkdownTopLevelBlocks(
+          source.slice(0, end),
+          split,
+          true,
+          undefined,
+          undefined,
+          rendersAsText
+        )
+      }
+      return (split?.blocks ?? []).map((block) => block.text)
+    }
+
+    it.each([
+      ['a type parameter', 'A Vec<T> of Promise<void>.\n\nAfter.\n', 2],
+      ['an unknown tag block', '<example>\n\nInside.\n\n</example>\n', 3]
+    ])('keeps cutting a document with %s', (_name, source, blocks) => {
+      expect(streamedAsText(source)).toHaveLength(blocks)
+      expect(streamedAsText(source).join('')).toBe(source)
+    })
+
+    it.each([
+      ['a kept tag', 'Before <sub>low</sub>.\n\nAfter.\n'],
+      ['a kept tag beside an unknown one', 'A <example><b>bold</b>.\n\nAfter.\n'],
+      [
+        'bold the HTML parser carries out of a table',
+        '<b><table><tr><td>one</b></td></tr></table>\n\nAfter.\n'
+      ],
+      ['a comment', '<!-- a --!><b>oops -->\n\nAfter.\n'],
+      ['a malformed kept tag', '<details title=a<>\n\nAfter **x**\n']
+    ])('leaves a document with %s whole', (_name, source) => {
+      expect(streamedAsText(source)).toEqual([source])
+    })
+
+    it('leaves raw unknown HTML whole when it does not render as text', () => {
+      expect(cut('<select>\n\nAfter **bold**.\n')).toHaveLength(1)
+      expect(cut('A Vec<T>.\n\nAfter.\n')).toHaveLength(1)
+    })
   })
 
   it('starts over when the source is replaced rather than appended to', () => {

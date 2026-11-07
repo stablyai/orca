@@ -4,7 +4,7 @@
  * whether an older build changed it since. Only identity counts as a change, as for SSH: an older
  * build's tabs and edits inside a moved project stay in the retained rows.
  */
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
 import type { Repo } from '../../../shared/repo-types'
 import {

@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
+import { currentSoftKeyboardHeight } from '../platform/keyboard-occlusion'
 import {
   clearTerminalLiveInputFocusTimer,
   focusTerminalLiveInputTarget,
@@ -9,8 +10,6 @@ import {
 
 type TerminalLiveInputFocusContext = {
   readonly canSend: boolean
-  readonly keyboardHeight: number
-  readonly liveInputEnabled: boolean
   readonly reopenFocusedInputWhenKeyboardHidden: boolean
 }
 
@@ -18,7 +17,6 @@ type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
   TerminalLiveInputFocusContext & {
     readonly activeHandleRef: RefObject<string | null>
     readonly inputRef: RefObject<T | null>
-    readonly commandInputRef: RefObject<TerminalLiveInputFocusTarget | null>
     readonly lifecycleIdentity: object | null
     readonly lifecycleKey: string
     readonly timerRef: TerminalLiveInputFocusTimerRef
@@ -33,29 +31,19 @@ type TerminalLiveInputFocusHandlers = {
 export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget>({
   activeHandleRef,
   canSend,
-  commandInputRef,
   inputRef,
-  keyboardHeight,
   lifecycleIdentity,
   lifecycleKey,
   reopenFocusedInputWhenKeyboardHidden,
-  liveInputEnabled,
   timerRef
 }: UseTerminalLiveInputFocusOptions<T>): TerminalLiveInputFocusHandlers {
   const contextRef = useRef<TerminalLiveInputFocusContext>({
     canSend,
-    keyboardHeight,
-    liveInputEnabled,
     reopenFocusedInputWhenKeyboardHidden
   })
   useLayoutEffect(() => {
-    contextRef.current = {
-      canSend,
-      keyboardHeight,
-      liveInputEnabled,
-      reopenFocusedInputWhenKeyboardHidden
-    }
-  }, [canSend, keyboardHeight, liveInputEnabled, reopenFocusedInputWhenKeyboardHidden])
+    contextRef.current = { canSend, reopenFocusedInputWhenKeyboardHidden }
+  }, [canSend, reopenFocusedInputWhenKeyboardHidden])
 
   const resetLiveInputFocus = useCallback(() => {
     clearTerminalLiveInputFocusTimer(timerRef)
@@ -65,22 +53,13 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   // Retained Expo routes must not carry focus work across navigation or reconnect scopes.
   useLayoutEffect(() => resetLiveInputFocus, [lifecycleIdentity, lifecycleKey, resetLiveInputFocus])
 
-  useLayoutEffect(() => {
-    const inactive = liveInputEnabled ? commandInputRef : inputRef
-    if (inactive.current?.isFocused?.()) {
-      clearTerminalLiveInputFocusTimer(timerRef)
-      const active = liveInputEnabled ? inputRef : commandInputRef
-      active.current?.focus()
-    }
-  }, [commandInputRef, inputRef, liveInputEnabled, timerRef])
-
   const focusLiveInput = useCallback(() => {
     const context = contextRef.current
-    if (!context.canSend || !context.liveInputEnabled) {
+    if (!context.canSend) {
       return
     }
     focusTerminalLiveInputTarget(inputRef.current, {
-      keyboardHeight: context.keyboardHeight,
+      keyboardHeight: currentSoftKeyboardHeight(),
       reopenFocusedInputWhenKeyboardHidden: context.reopenFocusedInputWhenKeyboardHidden,
       refocus: () => scheduleTerminalLiveInputFocus(timerRef, focusLiveInput)
     })
@@ -89,7 +68,7 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   const handleTerminalTap = useCallback(
     (handle: string) => {
       const context = contextRef.current
-      if (handle !== activeHandleRef.current || !context.canSend || !context.liveInputEnabled) {
+      if (handle !== activeHandleRef.current || !context.canSend) {
         return
       }
       // WKWebView still owns first responder during its touchend notification.

@@ -1,6 +1,6 @@
 import http from 'node:http'
 import https from 'node:https'
-import { extractHtmlTitle, findIconHref } from '../html-head-tags'
+import { extractHtmlTitle, findIconHref } from '../network/page-metadata/html-head-tags'
 import {
   LOOPBACK_LOCALHOST_HOSTS,
   connectableLoopbackHost,

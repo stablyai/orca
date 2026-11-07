@@ -1,11 +1,31 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
 import { type SparsePreset, useEffect } from './mobile-tasks-dependencies'
-import {
-  repoBaseRefSearchRead,
-  repoSparsePresetListRead
-} from './mobile-workspace-source-operations'
+import { repoSparsePresetListRead } from './mobile-workspace-source-operations'
+import { repoBaseRefSearchRead } from '../source-control/mobile-repo-base-ref-operations'
 
-export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProjectionModel) {
+export type WorkspaceSourceEffectsInput = Pick<
+  WorkspaceCreateProjectionModel,
+  | 'client'
+  | 'setWorkspaceBaseBranchError'
+  | 'setWorkspaceBaseBranchLoading'
+  | 'setWorkspaceBaseBranchResults'
+  | 'setWorkspaceSparseDraft'
+  | 'setWorkspaceSparsePresetId'
+  | 'setWorkspaceSparsePresets'
+  | 'setWorkspaceSparsePresetsError'
+  | 'setWorkspaceSparsePresetsLoaded'
+  | 'setWorkspaceSparsePresetsLoading'
+  | 'showWorkspaceBaseBranchPicker'
+  | 'tasksSupported'
+  | 'workspaceBaseBranchQuery'
+  | 'workspaceCreateDraft'
+  | 'workspaceCreateTargetRepo'
+  | 'workspaceSparseReloadKey'
+>
+
+export function useMobileTasksWorkspaceSourceEffects<Model extends WorkspaceSourceEffectsInput>(
+  model: Model
+): Model {
   const {
     client,
     setWorkspaceBaseBranchError,
@@ -25,16 +45,16 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     workspaceSparseReloadKey
   } = model
   useEffect(() => {
-    if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetRepo) {
-      setWorkspaceSparsePresets([])
+    // A reconnect keeps the form's preset choice; the reload once connected drops it only if the preset is gone.
+    if (!tasksSupported || !client) {
       setWorkspaceSparsePresetsLoading(false)
-      setWorkspaceSparsePresetsLoaded(false)
-      setWorkspaceSparsePresetsError('')
-      setWorkspaceSparsePresetId(null)
-      setWorkspaceSparseDraft(null)
       return
     }
-    if (workspaceCreateTargetRepo.connectionId) {
+    if (
+      !workspaceCreateDraft ||
+      !workspaceCreateTargetRepo ||
+      workspaceCreateTargetRepo.connectionId
+    ) {
       setWorkspaceSparsePresets([])
       setWorkspaceSparsePresetsLoading(false)
       setWorkspaceSparsePresetsLoaded(false)
@@ -157,4 +177,4 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
   return model
 }
 
-export type WorkspaceSourceEffectsModel = ReturnType<typeof useMobileTasksWorkspaceSourceEffects>
+export type WorkspaceSourceEffectsModel = WorkspaceCreateProjectionModel

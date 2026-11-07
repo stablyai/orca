@@ -4,6 +4,8 @@ import type { ProviderProcessLaunch } from '../provider-process/provider-process
 export type AcpStructuredConnection = Pick<
   AcpAgentConnection,
   | 'initialize'
+  | 'authenticate'
+  | 'requestSessionFreeExtension'
   | 'forkSession'
   | 'start'
   | 'prompt'
@@ -24,7 +26,10 @@ export type AcpStructuredConnection = Pick<
   | 'resumeReading'
   | 'close'
   | 'processTreeUnproven'
-> & { readonly lastCloseResult?: AcpAgentConnection['lastCloseResult'] }
+> & {
+  readonly lastCloseResult?: AcpAgentConnection['lastCloseResult']
+  readonly lostBeforeExit?: AcpAgentConnection['lostBeforeExit']
+}
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (
   launch: ProviderProcessLaunch,

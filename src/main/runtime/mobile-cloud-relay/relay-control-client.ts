@@ -1,7 +1,7 @@
 import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
-import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import {
   RelayConnectionOpenMessageSchema,
@@ -18,6 +18,7 @@ import {
 } from './relay-control-protocol'
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
+
 import { answerRelayHostChallenge } from './relay-host-proof'
 import { RelayControlLiveness } from './relay-control-liveness'
 import { closeRelayControlSocket } from './relay-control-socket-close'

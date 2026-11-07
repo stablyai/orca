@@ -10,6 +10,10 @@ export type RuntimeReadableFileContent = {
   isImage?: boolean
   mimeType?: string
   fileIdentity?: string
+  /** The grant that served a host file outside every workspace, renewed or minted by the read. */
+  terminalArtifactGrantId?: string
+  /** This copy can't be saved where it was read from, such as a file larger than its grant saves. */
+  readOnly?: true
 }
 
 export type RuntimeFileReadArgs = {
@@ -36,6 +40,7 @@ export type RuntimeFileReadArgs = {
 export type RuntimeFileOperationArgs = {
   /** The worktree owner's transport; never the focused server. */
   target: RuntimeClientTarget
+  expectedEnvironmentPairingRevision?: number
   worktreeId: string | null | undefined
   worktreePath: string | null | undefined
   connectionId?: string

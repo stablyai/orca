@@ -201,6 +201,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
         <SourceControlBranchSection
+          activeOpenRowKeys={activeOpenRowKeys}
           branchSummary={branchSummary}
           filteredBranchEntries={filteredBranchEntries}
           totalBranchEntryCount={branchEntries.length}
@@ -225,6 +226,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         // Dock history as reference context while the rest of the pane scrolls.
         <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
           <GitHistoryPanel
+            worktreeId={currentWorktreeId ?? undefined}
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}

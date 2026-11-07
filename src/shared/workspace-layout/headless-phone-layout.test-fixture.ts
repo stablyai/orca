@@ -1,6 +1,6 @@
 // Compare headless phone publication with desktop startup using separate workspaces per case to isolate effects.
 
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from './workspace-layout-legacy-profile.test-fixture'
 import { addWorkspace, emptySession, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
 

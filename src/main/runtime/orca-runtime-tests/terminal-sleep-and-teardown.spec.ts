@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
-  WORKTREE_TEARDOWN_RPC_MARGIN_MS,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from '../workspaces/removal/worktree-teardown'
+import { WORKTREE_TEARDOWN_RPC_MARGIN_MS } from '../workspaces/removal/worktree-teardown-deadline'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -17,7 +16,17 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+
+// A live PTY as a host lists it: the daemon reports its workspace, never just a cwd (#36716).
+function listedPty(
+  id: string,
+  title: string,
+  cwd = TEST_WORKTREE_PATH,
+  worktreeId = TEST_WORKTREE_ID
+) {
+  return { id, cwd, worktreeId, title }
+}
 
 describe('OrcaRuntimeService', () => {
   it('durably closes every terminal in one workspace without touching a sibling', async () => {
@@ -605,13 +614,7 @@ describe('OrcaRuntimeService', () => {
   it('sleeps every freshly discovered worktree PTY without a hydrated renderer graph', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const processLists = [
-      [
-        { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
-        { id: 'pty-2', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
-      ],
-      []
-    ]
+    const processLists = [[listedPty('pty-1', 'Claude'), listedPty('pty-2', 'Shell')], []]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -807,7 +810,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: vi.fn(async () => false),
       getForegroundProcess: async () => null,
-      listProcesses: async () => [{ id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' }]
+      listProcesses: async () => [listedPty('pty-1', 'Claude')]
     })
 
     await expect(runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)).rejects.toThrow(
@@ -829,11 +832,9 @@ describe('OrcaRuntimeService', () => {
     ])
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
-    const otherPty = { id: 'pty-other', cwd: otherWorktreePath, title: 'Other' }
-    const processLists = [
-      [{ id: 'pty-target', cwd: TEST_WORKTREE_PATH, title: 'Target' }, otherPty],
-      [otherPty]
-    ]
+    const otherId = `${TEST_REPO_ID}::${otherWorktreePath}`
+    const otherPty = listedPty('pty-other', 'Other', otherWorktreePath, otherId)
+    const processLists = [[listedPty('pty-target', 'Target'), otherPty], [otherPty]]
     runtime.setPtyController({
       write: () => true,
       kill: () => false,

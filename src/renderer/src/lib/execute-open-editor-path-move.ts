@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { requestEditorSaveQuiesce } from '@/components/editor/editor-autosave'
+import { requestEditorSaveQuiesce } from '@/components/editor/autosave/editor-autosave'
 import {
   beginEditorPathMove,
   settleEditorPathMove
@@ -12,7 +12,7 @@ import {
 } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from '@/lib/open-editor-move-owner'
 import { documentFolderAccess } from '@/lib/local-file-access'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'

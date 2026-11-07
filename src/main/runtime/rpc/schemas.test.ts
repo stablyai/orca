@@ -7,9 +7,9 @@ import {
   OptionalPositiveInt,
   OptionalString
 } from '../../../shared/rpc-contract/rpc-param-primitives'
-import { TERMINAL_METHODS } from './methods/terminal'
-import { TERMINAL_ORPHAN_METHODS } from './methods/terminal-orphan'
-import { WORKTREE_METHODS } from './methods/worktree'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import { TERMINAL_ORPHAN_METHODS } from './methods/terminal/terminal-orphan'
+import { WORKTREE_METHODS } from './methods/workspaces/worktree'
 
 function expectParses(schema: ZodType, value: unknown): void {
   const result = schema.safeParse(value)

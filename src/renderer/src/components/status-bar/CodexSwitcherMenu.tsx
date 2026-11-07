@@ -1,23 +1,8 @@
-import { ChevronDown, ChevronRight, Loader2, RotateCcw } from 'lucide-react'
 import React from 'react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
-import {
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu'
+import { CodexResetCredits, CodexResetConfirmation } from './CodexResetCredits'
+import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
-import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { AccountRuntimeToggle, CodexRestartStatusPrompt } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -26,6 +11,8 @@ import {
   isUnavailableInactiveUsage
 } from './InlineProviderUsage'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
+import { AccountSwitchSection } from './AccountSwitchList'
+import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 
 export function CodexSwitcherMenu({
@@ -42,10 +29,8 @@ export function CodexSwitcherMenu({
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const {
-    accountsExpanded,
     activeTarget,
     canRedeemReset,
-    handleAccountsExpandedToggle,
     handleConfirmReset,
     handleOpenChange,
     handleResetMenuSelect,
@@ -68,10 +53,74 @@ export function CodexSwitcherMenu({
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
-    suppressNextAccountSelect,
-    suppressNextAccountSelectRef,
     switchGroups
   } = useCodexSwitcherController(codex)
+
+  const isBusy = isSwitching || reauthenticatingAccountId !== null
+  const rows = (selectedGroup?.targets ?? []).map((target) => {
+    const inactiveUsage = target.id
+      ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+      : null
+    // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
+    const showSignInAction =
+      !hasActiveRuntimeEnvironment &&
+      !target.active &&
+      target.id !== null &&
+      isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
+    return { target, inactiveUsage, showSignInAction }
+  })
+  const unavailableUsageRows = rows.filter((row) => row.showSignInAction)
+  const renderRow = ({
+    target,
+    inactiveUsage,
+    showSignInAction
+  }: (typeof rows)[number]): React.JSX.Element => (
+    <AccountSwitchRowItem
+      label={target.name}
+      detail={target.detail}
+      active={target.active}
+      key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
+      onSelect={(event) => {
+        // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
+        event.preventDefault()
+        if (!target.active) {
+          void handleSelectAccount(target.id, target.runtimeTarget)
+        }
+      }}
+      disabled={isBusy || target.active}
+      action={
+        showSignInAction ? (
+          <InlineUsageSignInAction
+            accountLabel={target.label}
+            isSigningIn={reauthenticatingAccountId === target.id}
+            disabled={isBusy}
+            onSignIn={() => {
+              if (target.id !== null) {
+                void handleSignInAccount(target.id, target.runtimeTarget)
+              }
+            }}
+          />
+        ) : undefined
+      }
+    >
+      {showSignInAction ? null : renderUsage(target.active, inactiveUsage)}
+    </AccountSwitchRowItem>
+  )
+  function renderUsage(
+    active: boolean,
+    inactiveUsage: (typeof rows)[number]['inactiveUsage']
+  ): React.ReactNode {
+    // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
+    if (active && !hasActiveRuntimeEnvironment) {
+      return <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
+    }
+    if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
+      return <InlineUsageSkeleton />
+    }
+    return inactiveUsage?.rateLimits ? (
+      <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+    ) : null
+  }
 
   return (
     <ProviderDetailsMenu
@@ -80,12 +129,39 @@ export function CodexSwitcherMenu({
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
-      // Reset credits render beside the action below; suppress the generic summary’s duplicate.
-      hidePanelResetCredits
       ariaLabel={translate(
         'auto.components.status.bar.StatusBar.ba55303942',
         'Open Codex details and account switcher'
       )}
+      variant="account"
+      accountLabel={
+        !hasActiveRuntimeEnvironment
+          ? (activeTarget?.label ??
+            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
+      }
+      panelFooter={
+        resetCreditCount !== null ? (
+          <CodexResetCredits
+            resetCreditCount={resetCreditCount}
+            resetCreditExpiry={resetCreditExpiry}
+            canRedeemReset={canRedeemReset}
+            isRedeemingReset={isRedeemingReset}
+            onReset={handleResetMenuSelect}
+            renderAction={(action) => (
+              <DropdownMenuItem
+                asChild
+                disabled={isRedeemingReset}
+                onSelect={(event) => {
+                  event.preventDefault()
+                }}
+              >
+                {action}
+              </DropdownMenuItem>
+            )}
+          />
+        ) : undefined
+      }
       topContent={
         <AccountRuntimeToggle
           groups={switchGroups}
@@ -100,194 +176,20 @@ export function CodexSwitcherMenu({
       open={open}
       onOpenChange={handleOpenChange}
     >
-      <Dialog open={resetConfirmOpen} onOpenChange={setResetConfirmOpen}>
-        <DialogContent className="sm:max-w-[420px]" {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}>
-          <DialogHeader>
-            <DialogTitle>
-              {translate('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
-            </DialogTitle>
-            <DialogDescription>
-              {translate(
-                'auto.components.status.bar.StatusBar.6d1042aa6f',
-                'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">
-            <Checkbox
-              checked={skipFutureResetConfirm}
-              onCheckedChange={(checked) => setSkipFutureResetConfirm(checked === true)}
-            />
-            <span>
-              {translate('auto.components.status.bar.StatusBar.f077f586db', "Don't ask again")}
-            </span>
-          </label>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setResetConfirmOpen(false)}>
-              {translate('auto.components.status.bar.StatusBar.c0e972d726', 'Cancel')}
-            </Button>
-            <Button onClick={() => void handleConfirmReset()} disabled={isRedeemingReset}>
-              {isRedeemingReset ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <RotateCcw className="size-4" />
-              )}
-              {isRedeemingReset
-                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
-                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {resetCreditCount !== null ? (
-        <>
-          <DropdownMenuLabel className="space-y-0.5">
-            <div>
-              {translate(
-                'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
-                '{{count}} rate-limit resets available',
-                {
-                  count: resetCreditCount,
-                  defaultValue_one: '{{count}} rate-limit reset available'
-                }
-              )}
-            </div>
-            {resetCreditExpiry ? (
-              <div className="text-[11px] font-normal text-muted-foreground">
-                {resetCreditExpiry}
-              </div>
-            ) : null}
-          </DropdownMenuLabel>
-          {canRedeemReset ? (
-            <DropdownMenuItem
-              disabled={isRedeemingReset}
-              onSelect={(event) => {
-                event.preventDefault()
-                handleResetMenuSelect()
-              }}
-            >
-              {isRedeemingReset ? (
-                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-              ) : null}
-              {isRedeemingReset
-                ? translate('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
-                : translate('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuSeparator />
-        </>
-      ) : null}
-      <DropdownMenuLabel>
-        {translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
-      </DropdownMenuLabel>
-      <DropdownMenuItem
-        onSelect={(event) => {
-          event.preventDefault()
-          handleAccountsExpandedToggle()
-        }}
-      >
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5 text-[12px]">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-foreground">
-              {activeTarget?.label ??
-                translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')}
-            </span>
-          </div>
-        </div>
-        {accountsExpanded ? (
-          <ChevronDown className="ml-auto size-3.5 text-muted-foreground/85" />
-        ) : (
-          <ChevronRight className="ml-auto size-3.5 text-muted-foreground/85" />
-        )}
-      </DropdownMenuItem>
-      {accountsExpanded ? (
-        <div className="px-1 pb-1">
-          <div className="max-h-[220px] overflow-y-auto rounded-md border border-border/60 bg-accent/5 p-1 scrollbar-sleek">
-            {selectedGroup ? (
-              <>
-                {selectedGroup.targets.map((target) => {
-                  const inactiveUsage = target.id
-                    ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
-                    : null
-                  // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
-                  const showSignInAction =
-                    !hasActiveRuntimeEnvironment &&
-                    !target.active &&
-                    target.id !== null &&
-                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
-                  const isSigningIn = reauthenticatingAccountId === target.id
-                  const isBusy = isSwitching || reauthenticatingAccountId !== null
-
-                  return (
-                    <DropdownMenuItem
-                      key={`${selectedGroup.key}:${target.id ?? 'system'}`}
-                      onSelect={(event) => {
-                        // Why: keep the menu open so the follow-up "restart live Codex tabs" prompt stays in this interaction.
-                        event.preventDefault()
-                        if (suppressNextAccountSelectRef.current) {
-                          suppressNextAccountSelectRef.current = false
-                          return
-                        }
-                        if (!target.active) {
-                          void handleSelectAccount(target.id, target.runtimeTarget)
-                        }
-                      }}
-                      disabled={isBusy || target.active}
-                    >
-                      <div className="flex w-full min-w-0 flex-col gap-0.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="min-w-0 flex-1 whitespace-normal break-words">
-                            {target.label}
-                          </span>
-                          {target.active ? (
-                            <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
-                              {translate(
-                                'auto.components.status.bar.StatusBar.ff0fbe9311',
-                                'Active'
-                              )}
-                            </span>
-                          ) : null}
-                        </div>
-                        {/* Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row. */}
-                        {target.active && !hasActiveRuntimeEnvironment ? (
-                          <InlineUsageBars
-                            limits={codex}
-                            isFetching={codex.status === 'fetching'}
-                          />
-                        ) : inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
-                          <InlineUsageSkeleton />
-                        ) : showSignInAction ? (
-                          <InlineUsageSignInAction
-                            isFetching={inactiveUsage?.isFetching ?? false}
-                            isSigningIn={isSigningIn}
-                            disabled={isBusy}
-                            onSignInPointerDown={suppressNextAccountSelect}
-                            onSignIn={() => {
-                              suppressNextAccountSelect()
-                              if (target.id !== null) {
-                                void handleSignInAccount(target.id, target.runtimeTarget)
-                              }
-                            }}
-                          />
-                        ) : inactiveUsage?.rateLimits ? (
-                          <InlineUsageBars
-                            limits={inactiveUsage.rateLimits}
-                            isFetching={inactiveUsage.isFetching}
-                          />
-                        ) : null}
-                      </div>
-                    </DropdownMenuItem>
-                  )
-                })}
-              </>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <CodexResetConfirmation
+        open={resetConfirmOpen}
+        onOpenChange={setResetConfirmOpen}
+        skipFutureResetConfirm={skipFutureResetConfirm}
+        onSkipChange={setSkipFutureResetConfirm}
+        isRedeemingReset={isRedeemingReset}
+        onConfirm={handleConfirmReset}
+      />
       {open ? <CodexRestartStatusPrompt /> : null}
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        onSelect={() => {
+      <AccountSwitchSection
+        heading={translate('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
+        targets={selectedGroup?.targets ?? []}
+        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',
             repoId: null,
@@ -296,8 +198,16 @@ export function CodexSwitcherMenu({
           openSettingsPage()
         }}
       >
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
-      </DropdownMenuItem>
+        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+        {unavailableUsageRows.length > 0 ? (
+          <>
+            <DropdownMenuLabel className="mt-1">
+              {translate('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+            </DropdownMenuLabel>
+            {unavailableUsageRows.map(renderRow)}
+          </>
+        ) : null}
+      </AccountSwitchSection>
     </ProviderDetailsMenu>
   )
 }

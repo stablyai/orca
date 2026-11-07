@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithResolveExitWaiters } from './terminal/wait/terminal-wait-settlements'
-import type { TerminalWaiter } from './runtime-terminal-contracts'
+import type { TerminalWaiter } from './terminal/wait/terminal-waiter'
 import type { RuntimeTerminalWait } from '../../shared/runtime-terminal-contracts'
 import type { BrowserWindow } from 'electron'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
@@ -7,10 +7,6 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export abstract class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithResolveExitWaiters {
   protected resolveWaiter(waiter: TerminalWaiter, result: RuntimeTerminalWait): void {
     this.terminalWaiters.resolve(waiter, result)
-  }
-
-  protected rejectWaitersForHandle(handle: string, code: string): void {
-    this.terminalWaiters.rejectHandle(handle, code)
   }
 
   protected rejectAllWaiters(code: string): void {

@@ -1,10 +1,14 @@
-import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import type { GitMutationInFlight } from '../../../shared/git-mutation-in-flight'
+import type {
+  GitHistoryItemRef,
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../../shared/git/history/git-history-types'
+import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
   GitStagingArea,
   GitStatusResult
-} from '../../../shared/git-status-types'
+} from '../../../shared/git/status/git-status-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -165,6 +169,25 @@ export async function getRuntimeGitIgnoredPaths(
     target,
     'git.checkIgnored',
     { worktree: toRuntimeWorktreeSelector(context.worktreeId), paths },
+    { timeoutMs: 15_000 }
+  )
+}
+
+export async function getRuntimeGitRefs(
+  context: RuntimeGitContext,
+  query?: string
+): Promise<GitHistoryItemRef[]> {
+  if (context.target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.refs({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId,
+      query
+    })
+  }
+  return callRuntimeRpc(
+    context.target,
+    'git.refs',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), query },
     { timeoutMs: 15_000 }
   )
 }

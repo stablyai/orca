@@ -1,19 +1,19 @@
-import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
+import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
-import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
-import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
+import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace/persistence/workspace-session-host-hydration'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
-} from '../lib/workspace-session-hydration-keys'
+} from '../lib/workspace/persistence/workspace-session-hydration-keys'
 import { hydratePersistedUIAfterStartupRead } from '../lib/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,
@@ -23,7 +23,7 @@ import {
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
 import { getSystemPrefersDark } from '../lib/terminal-theme'
 import {
   collectTerminalProviderSnapshotPtyIds,
@@ -108,6 +108,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Before the session read: a moved project's local rows must leave before the host's merge in.
         // Started before the repo list too; this startup load does not prune, so it need not wait.
         const wslMovedProjectsPromise = useAppStore.getState().fetchWslMovedProjects()
+        // Desktop-only read; must land before the first live host catalog so that answer can drop deleted projects.
+        const hostCatalogSeedPromise = timeRendererStartupStep('seed-host-repo-catalogs', () =>
+          useAppStore.getState().seedReposFromHostCatalogSnapshots()
+        )
         // Skip remote catalogs for first paint; saved runtimes may wait a full connect timeout.
         await timeRendererStartupStep('fetch-repos-local', () =>
           actions.fetchReposForAllHosts({ remoteHosts: 'skip' })
@@ -124,18 +128,21 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
-        const sessionReadPromise = Promise.all([runtimeHostsPromise, wslMovedProjectsPromise]).then(
-          ([startupRuntimeHosts]) =>
-            // Restore cached runtime-host partitions without network waits; skip unreadable ones.
-            timeRendererStartupStep('session-get', () =>
-              fetchWorkspaceSessionWithRuntimeHostOwners(
-                // A moved workspace's retained rows share tab ids with its host's live ones.
-                wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
-                useAppStore.getState().repos,
-                startupRuntimeHosts.hostIds,
-                startupRuntimeHosts.sshHostIdByRuntimeHostId
-              )
+        const sessionReadPromise = Promise.all([
+          runtimeHostsPromise,
+          wslMovedProjectsPromise,
+          hostCatalogSeedPromise
+        ]).then(([startupRuntimeHosts]) =>
+          // Restore cached runtime-host partitions without network waits; skip unreadable ones.
+          timeRendererStartupStep('session-get', () =>
+            fetchWorkspaceSessionWithRuntimeHostOwners(
+              // A moved workspace's retained rows share tab ids with its host's live ones.
+              wslMovedSessionReadApi(useAppStore.getState().wslMovedProjects),
+              useAppStore.getState().repos,
+              startupRuntimeHosts.hostIds,
+              startupRuntimeHosts.sshHostIdByRuntimeHostId
             )
+          )
         )
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(

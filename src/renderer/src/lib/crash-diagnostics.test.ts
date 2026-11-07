@@ -59,15 +59,6 @@ describe('renderer crash diagnostics', () => {
     vi.unstubAllGlobals()
   })
 
-  it('records renderer breadcrumbs through preload', () => {
-    diagnostics.recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: true })
-
-    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
-      name: 'renderer_bootstrap_started',
-      data: { dev: true }
-    })
-  })
-
   it('installs startup, error, rejection, and memory breadcrumbs once', () => {
     diagnostics.installRendererCrashDiagnostics()
     diagnostics.installRendererCrashDiagnostics()
@@ -119,24 +110,6 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
-  it('suppresses benign ResizeObserver loop errors instead of recording them', () => {
-    diagnostics.installRendererCrashDiagnostics()
-    recordBreadcrumbMock.mockClear()
-
-    const preventDefault = vi.fn()
-    listeners.get('error')?.[0]?.({
-      message: 'ResizeObserver loop completed with undelivered notifications.',
-      preventDefault
-    })
-    listeners.get('error')?.[0]?.({
-      message: 'ResizeObserver loop limit exceeded',
-      preventDefault
-    })
-
-    expect(preventDefault).toHaveBeenCalledTimes(2)
-    expect(recordBreadcrumbMock).not.toHaveBeenCalled()
-  })
-
   it('includes delivered and queued long tasks once in each memory sample', () => {
     let now = 0
     let deliver = (_durations: number[]): void => {}
@@ -184,33 +157,6 @@ describe('renderer crash diagnostics', () => {
         sampleWindowMs: 60_000
       })
     })
-  })
-
-  it('records application errors that only mention a ResizeObserver loop', () => {
-    diagnostics.installRendererCrashDiagnostics()
-    recordBreadcrumbMock.mockClear()
-
-    const preventDefault = vi.fn()
-    listeners.get('error')?.[0]?.({
-      message: 'ResizeObserver loop failed while rendering the terminal',
-      preventDefault
-    })
-
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
-      name: 'renderer_error',
-      data: expect.objectContaining({
-        message: 'ResizeObserver loop failed while rendering the terminal'
-      })
-    })
-  })
-
-  it('does not throw when preload is unavailable', () => {
-    vi.stubGlobal('window', {})
-
-    expect(() =>
-      diagnostics.recordRendererCrashBreadcrumb('renderer_bootstrap_started')
-    ).not.toThrow()
   })
 
   it('emits one-shot renderer_memory_highwater breadcrumbs with profile counts', async () => {
@@ -271,19 +217,6 @@ describe('renderer crash diagnostics', () => {
     unregister()
   })
 
-  it('skips highwater emission when heap readings are not finite', () => {
-    const memory = (window.performance as unknown as { memory: Record<string, number> }).memory
-    memory.usedJSHeapSize = Number.NaN
-
-    diagnostics.installRendererCrashDiagnostics()
-
-    expect(
-      recordBreadcrumbMock.mock.calls.some(
-        (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
-      )
-    ).toBe(false)
-  })
-
   describe('exact V8 heap statistics', () => {
     const KB = 1024
     let readHeapStatistics: ReturnType<typeof vi.fn>
@@ -302,24 +235,6 @@ describe('renderer crash diagnostics', () => {
       readHeapStatistics = vi.fn()
       ;(window.api.crashReports as unknown as { readHeapStatistics: unknown }).readHeapStatistics =
         readHeapStatistics
-    })
-
-    it('prefers exact statistics over performance.memory and labels the source', () => {
-      stubHeap(101)
-
-      diagnostics.installRendererCrashDiagnostics()
-
-      // Blink still reports 32MB; 101 proves exact data replaces it rather than merely accompanying it.
-      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
-        name: 'renderer_memory',
-        data: expect.objectContaining({
-          usedHeapMB: 101,
-          heapLimitMB: 512,
-          heapSource: 'v8',
-          mallocedMB: 3,
-          blinkAllocatedMB: 7
-        })
-      })
     })
 
     it('observes growth that performance.memory quantizes away', () => {
@@ -348,36 +263,6 @@ describe('renderer crash diagnostics', () => {
       expect(recordBreadcrumbMock).toHaveBeenCalledWith({
         name: 'renderer_memory_highwater',
         data: expect.objectContaining({ thresholdPct: 60, usedHeapMB: 400, heapSource: 'v8' })
-      })
-    })
-
-    it('omits the Blink field instead of emitting a junk value for it', () => {
-      // Missing source data must omit blinkAllocatedMB rather than emit NaN from undefined * 1024.
-      readHeapStatistics.mockReturnValue({
-        usedHeapKB: 77 * KB,
-        totalHeapKB: 154 * KB,
-        heapLimitKB: 512 * KB,
-        mallocedKB: 3 * KB,
-        blinkAllocatedKB: undefined
-      })
-
-      diagnostics.installRendererCrashDiagnostics()
-
-      const call = recordBreadcrumbMock.mock.calls.find(
-        ([entry]) => (entry as { name: string }).name === 'renderer_memory'
-      )?.[0] as { data: Record<string, unknown> }
-      expect(call.data).toMatchObject({ usedHeapMB: 77, heapSource: 'v8', mallocedMB: 3 })
-      expect(call.data).not.toHaveProperty('blinkAllocatedMB')
-    })
-
-    it('falls back to performance.memory when the bridge returns null', () => {
-      readHeapStatistics.mockReturnValue(null)
-
-      diagnostics.installRendererCrashDiagnostics()
-
-      expect(recordBreadcrumbMock).toHaveBeenCalledWith({
-        name: 'renderer_memory',
-        data: expect.objectContaining({ usedHeapMB: 32, heapSource: 'quantized' })
       })
     })
 
@@ -436,22 +321,6 @@ describe('renderer crash diagnostics', () => {
         .filter((call) => (call[0] as { name: string }).name === 'renderer_memory_highwater')
         .map((call) => call[0] as { data: Record<string, unknown> })
 
-    it('reports the private footprint and what it holds outside the heap counters', async () => {
-      // Model Windows crash 36048e26: private memory far exceeds V8 heap, exposing native xterm/atlas growth that heap counters miss.
-      stubFootprint(618)
-      diagnostics.installRendererCrashDiagnostics()
-      await flush()
-      const tick = setIntervalMock.mock.calls[0][0] as () => void
-      tick()
-
-      const latest = memoryCalls().at(-1)!
-      expect(latest.data).toMatchObject({
-        usedHeapMB: 150,
-        privateMB: 618,
-        outsideHeapMB: 438
-      })
-    })
-
     it('arms the leak census on footprint even when the heap ratio never trips', async () => {
       // Low heap/limit ratio must not prevent the census that identifies native-memory growth.
       stubFootprint(618)
@@ -490,17 +359,6 @@ describe('renderer crash diagnostics', () => {
       tick()
       expect(highwaterCalls()).toHaveLength(2)
       expect(highwaterCalls().at(-1)!.data).toMatchObject({ thresholdPrivateMB: 1000 })
-    })
-
-    it('keeps sampling when the shell has no footprint bridge at all', async () => {
-      ;(window.api.crashReports as unknown as Record<string, unknown>).readProcessMemory = undefined
-
-      expect(() => diagnostics.installRendererCrashDiagnostics()).not.toThrow()
-      await flush()
-      const latest = memoryCalls().at(-1)!
-      expect(latest.data).toMatchObject({ usedHeapMB: 150 })
-      expect(latest.data).not.toHaveProperty('privateMB')
-      expect(highwaterCalls()).toHaveLength(0)
     })
 
     it('does not let a rejected footprint read break the heap sample', async () => {

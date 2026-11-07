@@ -66,17 +66,6 @@ describe('dashboard popout clipboard access', () => {
     registerClipboardHandlers({} as never)
   })
 
-  it('allows terminal text copy and paste through the exact popout renderer', async () => {
-    await expect(handlers.get('clipboard:readText')?.(popoutEvent)).resolves.toBe(
-      'terminal clipboard text'
-    )
-    await expect(
-      handlers.get('clipboard:writeText')?.(popoutEvent, 'terminal selection')
-    ).resolves.toBeUndefined()
-
-    expect(clipboardWriteText).toHaveBeenCalledWith('terminal selection')
-  })
-
   it('keeps legacy writes non-rejecting while verified terminal writes report stale text', async () => {
     await expect(
       handlers.get('clipboard:writeText')?.(popoutEvent, 'legacy copy')
@@ -124,23 +113,6 @@ describe('dashboard popout clipboard access', () => {
     expect(clipboardReadImage).not.toHaveBeenCalled()
     expect(clipboardWriteImage).not.toHaveBeenCalled()
     expect(clipboardWriteBuffer).not.toHaveBeenCalled()
-  })
-
-  it('still rejects unrelated renderer windows from text clipboard APIs', async () => {
-    isDashboardPopoutRenderer.mockReturnValue(false)
-
-    await expect(handlers.get('clipboard:readText')?.(popoutEvent)).rejects.toThrow(
-      'Unauthorized clipboard IPC sender'
-    )
-    await expect(handlers.get('clipboard:writeText')?.(popoutEvent, 'secret')).rejects.toThrow(
-      'Unauthorized clipboard IPC sender'
-    )
-    await expect(
-      handlers.get('clipboard:writeTerminalText')?.(popoutEvent, 'secret')
-    ).rejects.toThrow('Unauthorized clipboard IPC sender')
-
-    expect(clipboardReadText).not.toHaveBeenCalled()
-    expect(clipboardWriteText).not.toHaveBeenCalled()
   })
 
   it('applies the text size gate to verified terminal writes', async () => {

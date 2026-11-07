@@ -6,7 +6,7 @@ import {
   seedStore
 } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
@@ -144,13 +144,6 @@ describe('a revealed terminal’s title, in a layout-owner build', () => {
     expect(layoutApplyTestTransport.sentOfType('renameTab')).toEqual([
       expect.objectContaining({ tabId: TAB, kind: 'custom', title: 'Build' })
     ])
-    expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
-    expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
-  })
-
-  it('writes no pane title into a tab the window already holds', async () => {
-    const state = await setup(true)
-
     expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
     expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
   })

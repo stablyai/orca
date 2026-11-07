@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
-import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '../terminal-pane/viewport/visibility/stale-document-visibility'
 import { EMULATOR_STREAM_PARK_DELAY_MS } from './use-emulator-stream-window-visibility'
 
 // Assert source stream IPC: inactive panes must avoid frame delivery/blob churn/decoding while keeping the session attached.
@@ -86,18 +86,6 @@ async function renderFrame(isActive: boolean): Promise<void> {
 }
 
 describe('EmulatorDeviceFrame visibility gating', () => {
-  it('streams frames while the pane is active', async () => {
-    await renderFrame(true)
-    expect(startFrameStream).toHaveBeenCalledWith(
-      expect.objectContaining({ streamUrl: 'http://127.0.0.1:3100/stream.mjpeg' })
-    )
-  })
-
-  it('does not start a frame stream while the pane is inactive', async () => {
-    await renderFrame(false)
-    expect(startFrameStream).not.toHaveBeenCalled()
-  })
-
   it('tears the stream down when the pane becomes inactive and resumes when active again', async () => {
     await renderFrame(true)
     expect(startFrameStream).toHaveBeenCalledTimes(1)

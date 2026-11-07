@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst } from '../bind-first-pane.test-fixture'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
 import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -16,7 +15,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps title-only foreground work ahead of monitoring in another pane', async () => {
@@ -597,8 +596,7 @@ describe('OrcaRuntimeService', () => {
       1
     )
     const pty = runtime['ptysById'].get('osc-pty')!
-    pty.tabId = null
-    pty.paneKey = null
+    runtime['terminalIdentity'].setRecordedSurface(pty, null, null, undefined)
 
     const { worktrees } = await runtime.getWorktreePs()
     const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
@@ -640,8 +638,7 @@ describe('OrcaRuntimeService', () => {
       payload: { state: 'working', prompt: 'hook-fresh agent', agentType: 'codex' }
     })
     const pty = runtime['ptysById'].get('race-pty')!
-    pty.tabId = null
-    pty.paneKey = null
+    runtime['terminalIdentity'].setRecordedSurface(pty, null, null, undefined)
 
     const { worktrees } = await runtime.getWorktreePs()
     const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)

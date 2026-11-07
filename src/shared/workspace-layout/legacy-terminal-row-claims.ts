@@ -1,8 +1,8 @@
 // Share stored-row ownership between startup hydration and Loader: sessions duplicate terminals in tab-bar entries and legacy workspace rows.
 
-import { isValidTerminalTabId } from '../terminal-tab-id'
-import type { TerminalTab } from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import { isValidTerminalTabId } from './terminal-tab-id'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 
 export type CanonicalPtyOwners = {

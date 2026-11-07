@@ -1,18 +1,20 @@
-import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session-write-failure'
-import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session-wire'
-import type {
-  AgentJournalCursor,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session-journal-types'
+import { structuredAgentSessionSettledSends } from '../../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
+import type { AgentSessionWriteFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
+import type { AgentSessionHistoryResult } from '../../../../../shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   launchStructuredAgentSession,
   type StructuredLaunchHostSeedListener
-} from '@/lib/structured-agent-session-launch-create-call'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/structured-agent-session-launch-errors'
+} from './structured-agent-session-launch-create-call'
+import {
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateUnknownOutcomeError
+} from './structured-agent-session-launch-errors'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readStructuredSessionTabInventory } from '@/runtime/structured-session-tab-inventory'
-import { publishStructuredAgentSessionCreateHydration } from '../../structured-agent-session-create-hydration'
+import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 
 export type StructuredAgentLaunchReceipt = {
   sessionId: string
@@ -74,13 +76,18 @@ export async function recoverPublishedSessionReceipt(
     throw new Error('structured session fence publication unavailable')
   }
   const firstMessage = state.intent.params.firstMessage
-    ? history.page.submissions.find(
-        (submission) =>
-          submission.clientMessageId === state.intent.params.firstMessage?.clientMessageId
+    ? structuredAgentSessionSettledSends(history.page.submissions, []).recorded.get(
+        state.intent.params.firstMessage.clientMessageId
       )
     : undefined
   if (state.intent.params.firstMessage && !firstMessage) {
-    return launchStructuredAgentSession(state.intent, state.onHostSeed, true, () => state.cancelled)
+    if (state.intent.createMessageSupport === true) {
+      publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
+    }
+    throw new StructuredAgentSessionCreateUnknownOutcomeError(
+      'The history page did not confirm the opening message.',
+      'agent_session_operation_unknown'
+    )
   }
   if (state.intent.createMessageSupport === true) {
     publishStructuredAgentSessionCreateHydration(state.intent, history.page, fence)
@@ -150,6 +157,11 @@ export async function launchAndReconcile(
     try {
       return await recoverPublishedSessionReceipt(state)
     } catch {
+      if (state.intent.params.firstMessage) {
+        state.visibilityUnknown = true
+        state.onVisibilityChanged?.()
+        throw error
+      }
       return retrySameIntent(state, error)
     }
   }
@@ -158,11 +170,17 @@ export async function launchAndReconcile(
 }
 
 export async function reconcileUnknownLaunch(
-  state: StructuredLaunchRecoveryState
+  state: StructuredLaunchRecoveryState,
+  requested = false
 ): Promise<StructuredAgentLaunchReceipt> {
   throwIfLaunchCancelled(state)
-  state.visibilityUnknown = false
-  state.onVisibilityChanged?.()
+  if (state.intent.params.firstMessage && !requested) {
+    return recoverPublishedSessionReceipt(state)
+  }
+  if (!state.intent.params.firstMessage) {
+    state.visibilityUnknown = false
+    state.onVisibilityChanged?.()
+  }
   try {
     return await recoverPublishedSessionReceipt(state)
   } catch (error) {

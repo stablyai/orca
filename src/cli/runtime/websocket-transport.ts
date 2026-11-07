@@ -1,10 +1,11 @@
-import type { PairedRuntimeConnection } from '../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope
 } from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
@@ -12,8 +13,11 @@ import {
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
-// Paired CLI callers are not exempt from the host's agent.launch gate like the local socket is.
-const CLI_CLIENT_CAPABILITIES = [AGENT_LAUNCH_RUNTIME_CAPABILITY] as const
+// Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
+const CLI_CLIENT_CAPABILITIES = [
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+] as const
 
 export async function sendWebSocketRequest<TResult>(
   connection: PairedRuntimeConnection,

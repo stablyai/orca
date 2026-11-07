@@ -1,11 +1,14 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import type { GitConflictOperation } from '../../../../../../shared/git-status-types'
+import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
+import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import { WslHostStoppedNotice } from '../../../wsl-host-stopped/WslHostStoppedNotice'
+import { useSourceControlScope } from '../panel/worktree-scope'
 
 export function SourceControlContentStatus({
   unresolvedConflictCount,
@@ -56,8 +59,19 @@ export function SourceControlContentStatus({
   hasFilteredBranchEntries: boolean
   filterQuery: string
 }): React.JSX.Element {
+  // Why: a stopped host can't answer git, so its read error or "clean" result is not the workspace's.
+  const stoppedWslHost = useStoppedWslHost(worktreeId)
+  // Folder sections keep to the plain message and Retry; raw Git output stays in the worktree's own panel.
+  const showRawStatusError = useSourceControlScope() === null
   return (
     <>
+      {stoppedWslHost && (
+        <WslHostStoppedNotice
+          environmentId={stoppedWslHost.environmentId}
+          distro={stoppedWslHost.distro}
+          className="py-6 text-xs"
+        />
+      )}
       {unresolvedConflictCount > 0 && (
         <div className="px-3 pb-2">
           <ConflictSummaryCard
@@ -98,7 +112,7 @@ export function SourceControlContentStatus({
           />
         </div>
       )}
-      {statusReadError !== undefined && (
+      {statusReadError !== undefined && !stoppedWslHost && (
         <div className="px-3 pb-2">
           <div className="flex flex-col gap-1 rounded-md border border-status-warning-border bg-status-warning-background px-3 py-2">
             <div className="flex items-start gap-2">
@@ -110,16 +124,18 @@ export function SourceControlContentStatus({
                 )}
               </span>
             </div>
-            <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
-              {statusReadError}
-            </pre>
+            {showRawStatusError && (
+              <pre className="scrollbar-sleek max-h-24 overflow-auto font-mono text-xs break-words whitespace-pre-wrap text-muted-foreground">
+                {statusReadError}
+              </pre>
+            )}
             <div className="flex justify-end">
               <StatusRetryButton key={worktreeId} onRetry={onRetryStatus} />
             </div>
           </div>
         </div>
       )}
-      {showGenericEmptyState && !normalizedFilter ? (
+      {showGenericEmptyState && !normalizedFilter && !stoppedWslHost ? (
         <EmptyState
           heading={translate(
             'auto.components.right.sidebar.source.control.content.status.3f425c239c',

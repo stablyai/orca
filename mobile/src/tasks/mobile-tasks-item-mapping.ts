@@ -122,7 +122,7 @@ export function projectRowStatusLabel(row: GitHubProjectRow): string {
     return 'Draft'
   }
   if (row.itemType === 'REDACTED') {
-    return 'Redacted'
+    return 'Restricted'
   }
   if (row.content.isDraft) {
     return 'Draft'

@@ -1,6 +1,6 @@
-import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat/input/native-chat-ask-dismiss-key'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -29,7 +29,7 @@ export function NativeChatInteractiveCard({
   /** Take focus when the card takes the input region from the composer. */
   shouldFocus?: boolean
   /** Paste target while the prompt card replaces the composer. */
-  answerInputRef?: React.RefObject<HTMLInputElement | null>
+  answerInputRef?: React.RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element {
   const { sendAnswer, sendRawVerified, cancelPending, cancelAsk } = send
   // Keep paced multi-step answers visible until delivery settles; block duplicate submissions meanwhile.
@@ -58,7 +58,7 @@ export function NativeChatInteractiveCard({
   if (card.kind === 'question') {
     if (requiresTerminal) {
       return (
-        <div className="shrink-0 bg-chat-canvas">
+        <div className="shrink-0 bg-chat-pane">
           <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
             <div className="rounded-lg border border-input bg-card p-3 shadow-xs">
               <p className="text-sm text-foreground">

@@ -1,24 +1,22 @@
 import { randomUUID } from 'node:crypto'
 
-import { createAgentChildWorkAdmission } from '../../../shared/agent-status-child-work-admission'
+import { createAgentChildWorkAdmission } from '../../../shared/agent-status/child-work/agent-status-child-work-admission'
 import {
   agentChildWorkFencesEqual,
   type AgentChildWorkRecord
-} from '../../../shared/agent-status-child-work'
-import { isLiveChildWork } from '../../../shared/agent-status-child-work-liveness'
-import type { AgentChildWorkEvidence } from '../../../shared/agent-status-child-work-evidence'
-import {
-  reconcileAgentChildWorkEvidence,
-  type AgentChildWorkReconcileOutcome
-} from '../../../shared/agent-status-child-work-reconciliation'
+} from '../../../shared/agent-status/child-work/agent-status-child-work'
+import { isLiveChildWork } from '../../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { reconcileAgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
+import type { AgentChildWorkReconcileOutcome } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence-admission'
 import {
   projectAgentChildWorkViews,
   type AgentChildWorkView
-} from '../../../shared/agent-status-child-work-view'
+} from '../../../shared/agent-status/child-work/agent-status-child-work-view'
 import {
   parseAgentStatusSubject,
   type AgentStatusStructuredSessionSubject
-} from '../../../shared/agent-status-subject'
+} from '../../../shared/agent-status/contracts/agent-status-subject'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
 
 // Superseded evidence is an expected refusal.

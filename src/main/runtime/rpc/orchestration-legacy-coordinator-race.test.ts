@@ -8,11 +8,16 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import Database from '../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../runtime-message-waiters'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -470,7 +475,7 @@ describe('legacy coordinator takeover races', () => {
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveWait = () => resolve('notified')
+          resolveWait = () => resolve(new MessageWake())
           signalWaitStarted?.()
         })
     )
@@ -531,7 +536,7 @@ describe('legacy coordinator takeover races', () => {
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveWait = () => resolve('notified')
+          resolveWait = () => resolve(new MessageWake())
           signalWaitStarted?.()
         })
     )

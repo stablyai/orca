@@ -70,6 +70,7 @@ export function installBrowserLinkMaterializationProbe() {
       notifications: {
         enabled: false,
         agentTaskComplete: false,
+        agentNeedsInput: false,
         terminalBell: false,
         suppressWhenFocused: true,
         customSoundId: 'system',
@@ -82,7 +83,7 @@ export function installBrowserLinkMaterializationProbe() {
         enabled: false,
         sttModel: '',
         modelsDir: '',
-        language: 'en',
+        dictationLanguage: 'auto',
         dictationMode: 'hold',
         terminalConfirmBeforeInsert: true,
         userModels: [],

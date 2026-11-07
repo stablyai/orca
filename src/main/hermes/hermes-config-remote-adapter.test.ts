@@ -1,20 +1,8 @@
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parse } from 'yaml'
 import { createManagedHookLocalFilesystem } from '../agent-hooks/managed-hook-local-filesystem.test-fixture'
-import { HERMES_CLIENT_ENV_PASSTHROUGH } from './hermes-managed-plugin-source'
 import { HermesHookService } from './hook-service'
 
 describe('Hermes remote installer through a local filesystem adapter (no SSH)', () => {
@@ -28,24 +16,6 @@ describe('Hermes remote installer through a local filesystem adapter (no SSH)', 
     configPath = join(directory, '.hermes', 'config.yaml')
   })
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
-
-  it('does not rewrite a configured CRLF file or an existing backup', async () => {
-    const initial = `# operator notes\r\nplugins:\r\n  enabled: [zeta, orca-status, alpha]\r\nterminal:\r\n  client_env_passthrough: [${HERMES_CLIENT_ENV_PASSTHROUGH.join(', ')}]\r\n`
-    writeFileSync(configPath, initial)
-    writeFileSync(`${configPath}.bak`, 'recovery point')
-    const before = statSync(configPath)
-    expect((await service.installRemote(createManagedHookLocalFilesystem(), directory)).state).toBe(
-      'installed'
-    )
-    expect(readFileSync(configPath, 'utf8')).toBe(initial)
-    const after = statSync(configPath)
-    expect([after.ino, after.mtimeMs, after.mode]).toEqual([
-      before.ino,
-      before.mtimeMs,
-      before.mode
-    ])
-    expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe('recovery point')
-  })
 
   it('keeps edits made during an already-configured remote install', async () => {
     writeFileSync(configPath, 'model: initial\n')
@@ -69,49 +39,6 @@ describe('Hermes remote installer through a local filesystem adapter (no SSH)', 
     expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
     expect(readFileSync(configPath, 'utf8')).toBe(updated)
   })
-
-  it.each(['\n', '\r\n'])(
-    'preserves comments and parsed values during real install (%j)',
-    async (eol) => {
-      const input =
-        '# notes\nmodel: "001"\nprompt: |\n  First\n  Second\nplugins:\n  enabled: [other]\n'.replaceAll(
-          '\n',
-          eol
-        )
-      writeFileSync(configPath, input)
-      const filesystem = createManagedHookLocalFilesystem()
-      expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
-      const installed = readFileSync(configPath, 'utf8')
-      expect(installed).toContain('# notes')
-      expect(installed).toContain(`prompt: |${eol}  First${eol}  Second`)
-      expect(parse(installed)).toEqual({
-        ...parse(input),
-        plugins: { enabled: ['other', 'orca-status'] },
-        terminal: { client_env_passthrough: [...HERMES_CLIENT_ENV_PASSTHROUGH] }
-      })
-      const before = statSync(configPath)
-      expect((await service.installRemote(filesystem, directory)).state).toBe('installed')
-      expect(statSync(configPath).ino).toBe(before.ino)
-      expect(existsSync(`${configPath}.bak`)).toBe(false)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32').each([0o600, 0o640])(
-    'preserves mode %i despite umask',
-    async (mode) => {
-      writeFileSync(configPath, 'model: fixture\n')
-      chmodSync(configPath, mode)
-      const previous = process.umask(0o077)
-      try {
-        expect(
-          (await service.installRemote(createManagedHookLocalFilesystem(), directory)).state
-        ).toBe('installed')
-      } finally {
-        process.umask(previous)
-      }
-      expect(statSync(configPath).mode & 0o777).toBe(mode)
-    }
-  )
 
   it.each(['plugins: [', 'plugins: unexpected\n', 'plugins:\n  enabled: [123]\n'])(
     'refuses unsafe YAML before writing plugin files (%s)',

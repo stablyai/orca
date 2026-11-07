@@ -1,5 +1,8 @@
+import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
+import { RecipeVmWakeUnavailableError } from '../../../shared/remote-runtime/recipe-vm-wake'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
   ARTIFACT_SHARING_DISABLED_MESSAGE,
@@ -19,8 +22,8 @@ import {
   AgentSessionRefusalError,
   agentSessionRefusalError,
   refuseUnclassified
-} from '../../../shared/agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../../../shared/agent-session/failures/agent-session-write-failure'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 
 class LineageError extends Error {
@@ -31,6 +34,50 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  // #36923: the CLI tells a recipe VM that is waking, failed to wake, or was slept apart.
+  it.each([
+    'runtime_environment_waking',
+    'runtime_environment_wake_failed',
+    'runtime_environment_asleep',
+    'runtime_manually_disconnected'
+  ])('keeps the recipe VM refusal %s', (code) => {
+    const response = mapRuntimeError(
+      'open',
+      { runtimeId: 'host' },
+      new RemoteRuntimeClientError(code, 'VM')
+    )
+    expect(response).toMatchObject({ ok: false, error: { code, message: 'VM' } })
+  })
+
+  it.each(['agent_session_exited_during_start', 'agent_session_operation_unknown'] as const)(
+    'preserves %s while explaining the failed start',
+    (code) => {
+      const startError = terminalStartError('agent_session_exited_during_start', {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+      const error =
+        code === 'agent_session_operation_unknown'
+          ? new Error(code, { cause: startError })
+          : startError
+      const response = mapRuntimeError('start', { runtimeId: 'host' }, error)
+      expect(response).toMatchObject({
+        id: 'start',
+        ok: false,
+        _meta: { runtimeId: 'host' },
+        error: {
+          code,
+          message: expect.stringContaining('Git Bash reported its limit of 128 open terminals')
+        }
+      })
+      expect(response.error.message).toContain('Close some Git Bash terminals and try again.')
+      expect(response.error.message.includes("Couldn't confirm the terminal started.")).toBe(
+        code === 'agent_session_operation_unknown'
+      )
+    }
+  )
+
   it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
     const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
     expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
@@ -452,5 +499,20 @@ describe('thrown agent-session refusals', () => {
     expect(
       'code' in agentSessionRefusalError('agent_session_conflict', { reason: 'claimConflicted' })
     ).toBe(false)
+  })
+
+  // A host without recipe VMs answers the CLI's wake as an older host does; other handlers'
+  // method_not_found-coded errors are not passed through.
+  it('answers the recipe VM wake on a host without VMs as method_not_found, and only it', () => {
+    expect(
+      mapRuntimeError('wake', { runtimeId: 'host' }, new RecipeVmWakeUnavailableError())
+    ).toMatchObject({ ok: false, error: { code: 'method_not_found' } })
+    expect(
+      mapRuntimeError(
+        'other',
+        { runtimeId: 'host' },
+        new RemoteRuntimeClientError('method_not_found', 'x')
+      )
+    ).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
   })
 })

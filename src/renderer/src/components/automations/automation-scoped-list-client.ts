@@ -30,7 +30,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
-  assertExtraAgentArgsSupported,
+  prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
@@ -155,18 +155,55 @@ export async function listAutomationsForOwner(
 }
 
 /** Owned and orphan history reads do not probe. Old hosts may ignore preconditions and return their stored rows; read-only calls cannot mutate behind an unhonored fence. */
-async function listRunsFenced(
+async function listRunsPageFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
   expectedOwner: AutomationOwnerPrecondition,
   options: { limit?: number; cursor?: string } = {}
+): Promise<AutomationRunsPage> {
+  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
+    authority,
+    'automation.runs',
+    { automationId, expectedOwner, preview: true, ...options }
+  )
+  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+}
+
+/** Every run as previews; old hosts ignore `preview` and answer once with full rows and no cursor. */
+async function listRunsFenced(
+  authority: AutomationAuthorityRef,
+  automationId: string,
+  expectedOwner: AutomationOwnerPrecondition
 ): Promise<AutomationRun[]> {
-  const result = await callAuthority<{ runs: AutomationRun[] }>(authority, 'automation.runs', {
-    automationId,
+  const runs: AutomationRun[] = []
+  let cursor: string | undefined
+  do {
+    const page = await listRunsPageFenced(
+      authority,
+      automationId,
+      expectedOwner,
+      cursor ? { cursor } : {}
+    )
+    runs.push(...page.runs)
+    cursor = page.nextCursor ?? undefined
+  } while (cursor)
+  return runs
+}
+
+/** One full run for Details; null when an old host ignored `runId`, whose list rows were never cut. */
+export async function readFullAutomationRun(
+  authority: AutomationAuthorityRef,
+  expectedOwner: AutomationOwnerPrecondition,
+  run: Pick<AutomationRun, 'automationId' | 'id'>
+): Promise<AutomationRun | null> {
+  const result = await callAuthority<{ run?: AutomationRun }>(authority, 'automation.runs', {
+    automationId: run.automationId,
     expectedOwner,
-    ...options
+    runId: run.id,
+    // An old host ignores `runId` and lists; one row keeps that answer small.
+    limit: 1
   })
-  return result.runs
+  return result.run?.id === run.id ? result.run : null
 }
 
 export async function listAutomationRunsForOwner(
@@ -181,12 +218,7 @@ export async function listAutomationRunsPageForOwner(
   automationId: string,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
-  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
-    owner.authority,
-    'automation.runs',
-    { automationId, expectedOwner: ownerPrecondition(owner), ...options }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+  return await listRunsPageFenced(owner.authority, automationId, ownerPrecondition(owner), options)
 }
 
 /** Share owned/orphan mutation transport and capability probing; only the fence precondition differs. */
@@ -198,10 +230,10 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
-  await assertExtraAgentArgsSupported(authority, updates.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, updates)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
-    updates: toRuntimeAutomationUpdateInput(updates),
+    updates: toRuntimeAutomationUpdateInput(prepared),
     expectedOwner,
     destination
   })
@@ -237,9 +269,10 @@ export async function deleteAutomationForOwner(
 export async function updateOrphanAutomation(
   authority: AutomationAuthorityRef,
   id: string,
-  updates: AutomationUpdateInput
+  updates: AutomationUpdateInput,
+  destination?: AutomationDestination
 ): Promise<Automation> {
-  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION)
+  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination)
 }
 
 export async function deleteOrphanAutomation(
@@ -262,12 +295,7 @@ export async function listOrphanAutomationRunsPage(
   automationId: string,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
-  const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
-    authority,
-    'automation.runs',
-    { automationId, expectedOwner: ORPHAN_OWNER_PRECONDITION, ...options }
-  )
-  return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
+  return await listRunsPageFenced(authority, automationId, ORPHAN_OWNER_PRECONDITION, options)
 }
 
 export async function runAutomationNowForOwner(
@@ -293,9 +321,9 @@ export async function createAutomationForDestination(
   }
   await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
-  await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, input)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...toRuntimeAutomationCreateInput(input),
+    ...toRuntimeAutomationCreateInput(prepared),
     destination
   })
   return result.automation

@@ -5,7 +5,7 @@ import {
   type AgentSessionContextReport,
   type AgentSessionContextUsageCategory,
   type AgentSessionTokenUsage
-} from '../../shared/agent-session-context-usage'
+} from '../../shared/agent-session/agent-session-context-usage'
 import type { ClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
@@ -65,7 +65,10 @@ export function claudeContextWindowHint(model: string): number | null {
 
 export type ClaudeMainThreadModel = { initModel: string | null; responseModel: string | null }
 
-function currentInitModel({ initModel, responseModel }: ClaudeMainThreadModel): string | null {
+export function claudeMatchingInitModel({
+  initModel,
+  responseModel
+}: ClaudeMainThreadModel): string | null {
   if (initModel === null || responseModel === null) {
     return initModel
   }
@@ -93,7 +96,7 @@ export function claudeContextWindowFromResult(
     const bases = [key, ...(canonicalModel ? [canonicalModel] : [])].map(contextBaseModelId)
     return [{ key, window, bases }]
   })
-  const initModel = currentInitModel(main)
+  const initModel = claudeMatchingInitModel(main)
   const names = [main.responseModel ?? initModel].flatMap((model) =>
     model ? [contextBaseModelId(model)] : []
   )

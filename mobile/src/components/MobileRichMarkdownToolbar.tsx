@@ -171,7 +171,7 @@ const styles = themedStyleSheet(() => ({
     height: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.xs
   },
   toolbarButtonPressed: {

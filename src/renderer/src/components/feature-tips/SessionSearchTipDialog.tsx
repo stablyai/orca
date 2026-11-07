@@ -1,10 +1,10 @@
 import { useRef, type JSX } from 'react'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   sessionSearchStatusDetails,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history-status-copy'
+} from '@/components/settings/session-history/session-history-status-copy'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { FeatureTipActions } from './FeatureTipActions'

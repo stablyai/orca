@@ -1,7 +1,8 @@
 // Preserve typed final read refusals beside their words so unreadable history cannot render a sendable composer.
 
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -22,7 +23,9 @@ const sendRequest = vi.fn<RpcClient['sendRequest']>()
 const client: RpcClient = {
   sendRequest,
   subscribe: vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
-    listener = onData
+    if (_method === 'agentSession.subscribe') {
+      listener = onData
+    }
     return vi.fn()
   }),
   updateTerminalSubscriptionViewport: () => {},
@@ -37,6 +40,7 @@ const client: RpcClient = {
 function Harness(): null {
   hook = useMobileStructuredAgentSession({
     client,
+    pairedHostClient: client,
     sessionId: SESSION_ID,
     sourceIdentity: 'host-a\0workspace-a',
     enabled: true,
@@ -60,7 +64,7 @@ function refusedRead(reason: string) {
 
 async function readFailedWith(reason: string) {
   act(() => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   act(() => listener?.(refusedRead(reason)))

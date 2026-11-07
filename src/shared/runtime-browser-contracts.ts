@@ -77,6 +77,8 @@ export type BrowserScreencastReadyResult = {
   browserPageId: string
   format: 'jpeg' | 'png'
   tab: BrowserTabInfo
+  // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
+  frameAck?: true
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
@@ -106,6 +108,8 @@ export type BrowserTabInfo = {
   profileLabel?: string | null
   /** Set on a popup window (OAuth, payment): the tab whose page opened it. */
   openerBrowserPageId?: string
+  /** False for a restored tab whose page has not loaded; a command aimed at it loads it. */
+  loaded?: boolean
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
@@ -156,7 +160,8 @@ export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult & 
 export type BrowserProfileClearDefaultCookiesResult = { cleared: boolean }
 export type BrowserHoverResult = { hovered: string }
 export type BrowserDragResult = { dragged: { from: string; to: string } }
-export type BrowserUploadResult = { uploaded: number }
+// Older hosts and server-hosted pages report only the count.
+export type BrowserUploadResult = { uploaded: number; frameUrl?: string }
 export type BrowserWaitResult = { waited: boolean }
 export type BrowserCheckResult = { checked: boolean }
 export type BrowserFocusResult = { focused: string }

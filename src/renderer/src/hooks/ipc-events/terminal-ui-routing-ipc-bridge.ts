@@ -3,7 +3,7 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'

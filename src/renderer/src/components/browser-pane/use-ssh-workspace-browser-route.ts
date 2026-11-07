@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
-import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import type { BrowserLoadFailureRoute } from '../../../../shared/browser-load-failure'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'

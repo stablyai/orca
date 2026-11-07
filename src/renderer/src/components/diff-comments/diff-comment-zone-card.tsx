@@ -1,3 +1,5 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
 import { formatDiffComments } from '@/lib/diff-comments-format'
@@ -6,7 +8,10 @@ import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
 import { DiffCommentCard } from './DiffCommentCard'
 import { DiffCommentDraftCard } from './DiffCommentDraftCard'
 import type { DecoratedDiffComment } from './decorated-diff-comment'
-import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
+import {
+  NotesSendMenu,
+  type NotesSendMenuScope
+} from '../editor/review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 
 export function getRenderSignature(
@@ -46,6 +51,7 @@ function getSingleCommentSendScopes(
 
 // Callbacks arrive as refs so the rendered props keep the decorator's identity semantics.
 export type DiffCommentZoneCardContext = {
+  owner: DiffCommentOwner | null
   worktreeId: string
   filePath: string
   activeGroupId: string
@@ -54,7 +60,7 @@ export type DiffCommentZoneCardContext = {
   onDeleteCommentRef: RefObject<(commentId: string) => void>
   onUpdateCommentRef: RefObject<((commentId: string, body: string) => Promise<boolean>) | undefined>
   clearDeliveredDiffComments: (
-    worktreeId: string,
+    owner: DiffCommentOwner,
     comments: readonly DiffCommentDeliverySnapshot[]
   ) => Promise<boolean>
 }
@@ -63,6 +69,7 @@ export function renderDiffCommentZoneCard(
   root: Root,
   comment: DecoratedDiffComment,
   {
+    owner,
     worktreeId,
     filePath,
     activeGroupId,
@@ -103,6 +110,7 @@ export function renderDiffCommentZoneCard(
         headerActions={
           worktreeId && comment.author === undefined ? (
             <NotesSendMenu
+              owner={owner}
               worktreeId={worktreeId}
               groupId={activeGroupId}
               modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
@@ -116,7 +124,7 @@ export function renderDiffCommentZoneCard(
                 'auto.components.diff.comments.diffCommentZoneCard.noteAlreadySent',
                 'Note already sent'
               )}
-              onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+              onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
             />
           ) : null
         }
@@ -126,6 +134,7 @@ export function renderDiffCommentZoneCard(
 }
 
 export type DiffCommentDraftCardContext = {
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
@@ -140,6 +149,7 @@ export function renderDiffCommentDraftCard(
   root: Root,
   draft: { lineNumber: number; startLine?: number },
   {
+    imageUploadAddress,
     placeholder,
     submitLabel,
     submittingLabel,
@@ -153,6 +163,7 @@ export function renderDiffCommentDraftCard(
   root.render(
     <TooltipProvider delayDuration={400}>
       <DiffCommentDraftCard
+        imageUploadAddress={imageUploadAddress}
         lineNumber={draft.lineNumber}
         startLine={draft.startLine}
         placeholder={placeholder}

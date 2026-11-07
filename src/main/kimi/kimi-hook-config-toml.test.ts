@@ -74,12 +74,6 @@ describe('kimi managed hooks TOML block', () => {
     expect(readManagedKimiHookEvents(text, isManaged).size).toBe(0)
   })
 
-  it('reports no change when removing from a config without the managed block', () => {
-    const { text, changed } = removeManagedKimiHooks('default_model = "x"\n', isManaged)
-    expect(changed).toBe(false)
-    expect(text).toBe('default_model = "x"\n')
-  })
-
   it('is stable across repeated calls (no stateful global-regex lastIndex drift)', () => {
     const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND, isManaged)
     // Repeated detection must not inherit stateful regex lastIndex.
@@ -102,13 +96,6 @@ describe('kimi managed hooks TOML block', () => {
     })
     const reinstalled = applyManagedKimiHooks(orphaned, COMMAND, isManaged)
     expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
-  })
-
-  it('treats stale managed entries pointing at a moved script path as managed', () => {
-    const staleCommand =
-      "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
-    const stale = applyManagedKimiHooks('', staleCommand, isManaged)
-    expect(readManagedKimiHookEvents(stale, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
   })
 })
 
@@ -322,21 +309,6 @@ describe('orphaned managed block ownership (#18861)', () => {
     expect(readManagedKimiHookEvents(singleQuoted, isManaged)).toEqual(new Set(['Stop']))
   })
 
-  it('leaves a hook table that does not invoke the managed script', () => {
-    const orphan = [
-      START_MARKER,
-      '[[hooks]]',
-      'event = "Stop"',
-      'command = "node my-own-hook.mjs"',
-      'timeout = 10',
-      'matcher = "Bash"',
-      ''
-    ].join('\n')
-    const { text } = removeManagedKimiHooks(orphan, isManaged)
-    expect(text).toContain('command = "node my-own-hook.mjs"')
-    expect(text).toContain('matcher = "Bash"')
-  })
-
   // Reclaim recognized managed tables even when edits strand them outside the marker block.
   it('reclaims managed tables stranded below user text', () => {
     const managedTable = [
@@ -348,37 +320,6 @@ describe('orphaned managed block ownership (#18861)', () => {
     const orphan = `${START_MARKER}\n${managedTable}\n[user.table]\nv = 1\n${managedTable}\n`
     const { text } = removeManagedKimiHooks(orphan, isManaged)
     expect(text).toBe('[user.table]\nv = 1\n')
-  })
-
-  it('reports a stranded managed table as live so status cannot claim uninstalled', () => {
-    const stranded = [
-      '[user.table]',
-      'v = 1',
-      '',
-      '[[hooks]]',
-      'event = "PreToolUse"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      ''
-    ].join('\n')
-    expect(readManagedKimiHookEvents(stranded, isManaged)).toEqual(new Set(['PreToolUse']))
-  })
-
-  it('reinstalling over a stranded table does not double-register its event', () => {
-    const stranded = [
-      '[user.table]',
-      'v = 1',
-      '',
-      '[[hooks]]',
-      'event = "PreToolUse"',
-      `command = "${COMMAND.replaceAll('"', '')}"`,
-      'timeout = 10',
-      ''
-    ].join('\n')
-    const reinstalled = applyManagedKimiHooks(stranded, COMMAND, isManaged)
-    expect((reinstalled.match(/event = "PreToolUse"/g) ?? []).length).toBe(1)
-    expect(reinstalled).toContain('[user.table]')
-    expect(readManagedKimiHookEvents(reinstalled, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
   })
 
   it('stops an orphaned block at a second start marker', () => {

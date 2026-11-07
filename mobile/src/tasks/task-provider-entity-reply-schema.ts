@@ -1,4 +1,5 @@
-import { z } from 'zod'
+import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
+import * as z from 'zod'
 import type { GitHubPRFile } from '../../../src/shared/github/pull-request-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { prCount, prFlag, prNullableText, prText } from '../session/github-pr-entity-reply-schema'
@@ -62,7 +63,8 @@ export const detailCheckListSchema = salvagingArray(
     name: z.string(),
     status: z.string(),
     conclusion: prNullableText('conclusion'),
-    url: prNullableText('url')
+    url: prNullableText('url'),
+    observedHeadSha: z.unknown().optional().transform(normalizePRCheckHeadSha)
   })
 )
 

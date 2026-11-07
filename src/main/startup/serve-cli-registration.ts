@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
+import { resolveAppImageRuntimeIdentity } from '../updater/linux-package/appimage-runtime-identity'
 import { prepareAppImageCopyForServe } from '../cli/appimage-serve-preparation'
 import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'

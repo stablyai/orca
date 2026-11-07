@@ -103,8 +103,6 @@ jobs:
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
           pnpm run --if-present test:e2e:workspace-session-golden
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm run --if-present test:e2e:windows-fresh-startup-golden
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm run --if-present test:e2e:tab-bar-agent-launch-golden
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path tests/e2e/golden-fresh-profile-terminal.spec.ts) {

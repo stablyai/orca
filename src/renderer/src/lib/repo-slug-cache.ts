@@ -3,8 +3,8 @@ import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { runtimeTargetForRepoOwner } from './repo-runtime-owner'
 import {
-  githubHostFromIdentityKey,
-  githubRepoIdentityKey
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
 } from '../../../shared/github/repository-identity-key'
 
 /** Lowercased `owner/repo` → Repo[]. */
@@ -12,21 +12,6 @@ export type SlugIndex = Map<string, Repo[]>
 
 /** Keep origin/upstream matches separate so selection-filtered callers can use a fork when an unselected upstream clone exists. */
 export type RepoSlugMatches = { origin: Repo[]; upstream: Repo[] }
-
-/** Fork-parent alias, or null if untrusted. Require resolved origin identity as host fallback for older upstream metadata, or GHES parents could collapse into github.com. */
-export function repoUpstreamIdentityKey(
-  repo: Repo,
-  originIdentityKey: string | null | undefined
-): string | null {
-  const upstream = repo.upstream
-  if (!upstream?.owner || !upstream.repo || !originIdentityKey) {
-    return null
-  }
-  return githubRepoIdentityKey({
-    ...upstream,
-    host: upstream.host ?? githubHostFromIdentityKey(originIdentityKey)
-  })
-}
 
 /** Cache by runtime scope/repo ID, briefly retaining null failures to avoid per-cell retries while recovering after external GHES login. */
 export const slugByRepoId = new Map<string, string | null>()

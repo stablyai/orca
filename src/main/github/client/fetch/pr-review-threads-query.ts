@@ -11,6 +11,12 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           startLine
           originalLine
           originalStartLine
+          diffSide
+          rootHunk: comments(first: 1) {
+            nodes {
+              diffHunk
+            }
+          }
           comments(first: 100) {
             nodes {
               id

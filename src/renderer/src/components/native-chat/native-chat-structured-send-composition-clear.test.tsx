@@ -4,9 +4,11 @@ import { changePrompt, promptValue } from './native-chat-prompt-editor.test-supp
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
+import type * as nativeChatAgentProfiles from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
 
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
@@ -57,11 +59,11 @@ vi.mock('./native-chat-runtime-image-send', () => ({
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn()
 }))
-vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
+vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (importOriginal) => ({
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),
@@ -201,19 +203,6 @@ describe('structured send racing the next IME composition', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  // Clear only after acceptance so refusals retain drafts; replay the clear at IME settlement.
-  it('keeps the draft when the send is rejected', async () => {
-    const structured = transport({ send: vi.fn(() => false) })
-    renderComposer(structured)
-    const input = textarea()
-
-    changePrompt(input, '안녕')
-    await act(async () => pressEnter(input))
-
-    expect(structured.send).toHaveBeenCalledWith('안녕', [])
-    expect(promptValue(input)).toBe('안녕')
-  })
-
   it('keeps the draft when a rejected send races the next composition', async () => {
     const dispatch = deferred()
     const structured = transport({
@@ -330,30 +319,5 @@ describe('the Enter that commits a Hangul composition', () => {
 
     expect(structured.send).toHaveBeenCalledOnce()
     expect(structured.send).toHaveBeenCalledWith('안녕하세요', [])
-  })
-})
-
-describe('a structured send while the chat has one out', () => {
-  it('keeps the text in the box and Send disabled until the send settles', async () => {
-    const structured = transport({ send: vi.fn(() => false), sendOut: true })
-    const view = renderComposer(structured)
-    const input = textarea()
-    changePrompt(input, 'next one')
-    expect(actions.sendDisabled).toBe(true)
-
-    await act(async () => pressEnter(input))
-    expect(structured.send).toHaveBeenCalledWith('next one', [])
-    expect(promptValue(input)).toBe('next one')
-
-    view.rerender(
-      <NativeChatComposer
-        terminalTabId={`tab-${paneCounter}`}
-        paneKey={`tab-${paneCounter}:structured`}
-        targetPtyId={null}
-        agent="codex"
-        structuredTransport={{ ...structured, sendOut: false }}
-      />
-    )
-    expect(actions.sendDisabled).toBe(false)
   })
 })

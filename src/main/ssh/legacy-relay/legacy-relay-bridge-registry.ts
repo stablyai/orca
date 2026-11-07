@@ -28,7 +28,10 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../pty/process-retirement/pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
 const START_BUDGET_MS = 20_000
@@ -52,7 +55,7 @@ export type LegacyRelayBridgeHost = {
   /** Absent: relay-era `orca` commands are refused, as before this host served them. */
   remoteCli?: {
     runtime: () => OrcaRuntimeService | null
-    /** The per-host "Allow this host's orca CLI to control Orca" switch. */
+    /** The per-host browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL). */
     allowed: (targetId: string) => boolean
   }
 }

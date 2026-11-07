@@ -2,7 +2,7 @@ import type { RemovedSshTargetTombstone } from '../../../shared/ssh-types'
 import type { PersistedAutomationHostFilter } from '../../../shared/automation-host-filter'
 import { parseHostStableKey } from '../../../shared/automation-owner-key'
 import { resolveAutomationWorkspaceSshTargetId } from '../../../shared/automation-workspace-pin'
-import type { FolderWorkspaceHostState } from '../../../shared/folder-workspace-execution-host'
+import type { FolderWorkspaceHostState } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 
 export const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
 

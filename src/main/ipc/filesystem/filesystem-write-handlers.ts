@@ -3,13 +3,13 @@ import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { tryDeleteWslUncPath } from '../../wsl-unc-delete'
+import { tryDeleteWslUncPath } from '../../wsl/filesystem/wsl-unc-delete'
 import type { LocalFileAccess } from '../../../shared/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalWriteRequestPath
-} from '../local-file-access-resolution'
-import { isENOENT } from './filesystem-path-containment'
+} from './access/local-file-access-resolution'
+import { isENOENT } from './access/filesystem-path-containment'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
@@ -20,7 +20,7 @@ import type {
 import { writeLocalTextFileWithDiskPrecondition } from './local-disk-write-precondition'
 import { replaceLocalFileBytesIfUnchanged } from './local-disk-bytes-replace'
 import type { FileBytesWritePrecondition } from '../../../shared/file-bytes-write'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {

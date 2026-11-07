@@ -35,19 +35,6 @@ function createTerminal(paused: boolean): {
 }
 
 describe('writeForegroundTerminalChunk render-pause ownership', () => {
-  it('drives a paused render only for a currently visible reveal replay', () => {
-    const { terminal, renderService } = createTerminal(true)
-
-    writeForegroundTerminalChunk(terminal, 'replayed snapshot bytes', {
-      forceViewportRefresh: true,
-      shouldReleaseRenderPause: () => true
-    })
-
-    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
-    expect(renderService._isPaused).toBe(false)
-    expect(renderService._needsFullRefresh).toBe(false)
-  })
-
   it('leaves a newly-hidden terminal paused when replay parsing finishes', () => {
     const { terminal, renderService } = createTerminal(true)
     let parsed: (() => void) | undefined

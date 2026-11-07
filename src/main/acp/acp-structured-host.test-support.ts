@@ -1,25 +1,25 @@
 import { expect } from 'vitest'
 import { z } from 'zod'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session-provider-handle'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { messageText } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
-import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
+import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
 import {
   CALLER,
   envelope,
   hostTestState,
   replaceHostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { AgentSessionRecoveryCapsule } from '../runtime/agent-session-recovery-capsule'
-import { openTestAgentSessionRecordStore } from '../runtime/agent-session-record-store-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
+import { openTestAgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import {
   GROK,
@@ -38,8 +38,8 @@ import type { AcpLaunchSpec } from './acp-launch-specs'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AgentModelCatalogService } from '../native-chat/agent-model-catalog/agent-model-catalog-service'
-import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/structured-agent-session-host-types'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-ownership'
+import type { StructuredAgentSessionHostDeps } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 
 export const hello: AgentJournalMessageItem = {
   kind: 'message',

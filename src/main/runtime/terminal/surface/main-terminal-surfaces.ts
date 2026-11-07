@@ -1,7 +1,8 @@
+import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-query'
 // Publish main-owned workspace panes from Store layout changes, even without a window graph.
 
 import type { PaneStartFactOf } from '../../pane-start-statuses'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { MainPaneBinding } from './main-pane-verdict'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -11,18 +12,19 @@ import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows
 import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
 import { headlessMobileSnapshotContentUnchanged } from '../../mobile-session-snapshot-equality'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import {
   composeMainTerminalSurfaces,
-  pairedRuntimeHostOfBinding,
-  terminalHoldsPane,
   TerminalSurfaceIndex,
   type BoundTerminal,
   type MainTerminalSurfaces
 } from './terminal-surface-index'
 
 export type MainTerminalSurfacesHost = {
-  store: () => Pick<RuntimeStore, 'getWorkspaceSessionHostIds' | 'getSettings'> | null
+  store: () => Pick<
+    RuntimeStore,
+    'getWorkspaceSessionHostIds' | 'getSettings' | 'getWorkspaceSession'
+  > | null
   /** Main's one layout projection. */
   reads: () => WorkspaceLayoutReads
   homeHostId: (key: string) => ExecutionHostId | null
@@ -61,6 +63,7 @@ class MainSurfacePublisher {
       reads: host.reads,
       hostIds: () => host.store()?.getWorkspaceSessionHostIds?.() ?? [],
       homeHostId: host.homeHostId,
+      savedSession: (hostId) => host.store()?.getWorkspaceSession?.(hostId) ?? null,
       generatedTitlesEnabled: () => host.store()?.getSettings?.().tabAutoGenerateTitle === true,
       onChanged: () => this.schedule({ merge: true })
     })
@@ -78,6 +81,10 @@ class MainSurfacePublisher {
           mobileSessionTabs: graph.mobileSessionTabs.map((rows) => this.withMainRows(rows))
         }
       : composed
+  }
+
+  savedSessionTabsOf(worktreeId: string): ReturnType<TerminalSurfaceIndex['sessionTabsOf']> {
+    return this.index.sessionTabsOf(worktreeId)
   }
 
   /** A workspace main owns publishes main's terminal and editor rows; any other, the window's. */
@@ -120,17 +127,13 @@ class MainSurfacePublisher {
   findPaneForPty(ptyId: string): { worktreeId: string; tabId: string; leafId: string } | null {
     const surfaces = this.index.surfaces()
     const terminal = this.host.registered(ptyId)
-    const pane = surfaces.leaves.find(
-      (leaf) =>
-        leaf.ptyId === ptyId &&
-        (pairedRuntimeHostOfBinding(ptyId) !== null ||
-          terminalHoldsPane(
-            terminal,
-            leaf,
-            surfaces.paneFacts.get(`${leaf.tabId}::${leaf.leafId}`)
-          ))
-    )
-    return pane ? { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId } : null
+    return findMainTerminalPane(ptyId, surfaces.leaves, surfaces.paneFacts, terminal)
+  }
+
+  capturePaneLookup(): (
+    ptyId: string
+  ) => { worktreeId: string; tabId: string; leafId: string } | null {
+    return captureMainTerminalPaneLookup(this.index.surfaces(), this.host.registered)
   }
 
   /** Return the main-owned binding; start/failure/sleep status prevents treating its stored terminal as live. */

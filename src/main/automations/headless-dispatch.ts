@@ -1,7 +1,8 @@
 import type {
   Automation,
   AutomationRun,
-  AutomationRunOutputSnapshot
+  AutomationRunOutputSnapshot,
+  AutomationRunSetupSkippedReason
 } from '../../shared/automations-types'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import type { AutomationRunFailureCodeFields } from '../../shared/automation-run-failure-copy'
@@ -9,11 +10,16 @@ import type { AutomationRunFailureCodeFields } from '../../shared/automation-run
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
 export type HeadlessAutomationDispatchLaunch = {
+  sessionKind?: 'terminal' | 'chat'
+  chatSessionId?: string | null
   workspaceId: string
   workspaceDisplayName?: string | null
   terminalSessionId: string | null
   terminalPaneKey?: string | null
   terminalPtyId?: string | null
+  /** Settles once a newly opened terminal's prompt is handed over, or with why it was not; never rejects. */
+  delivery?: Promise<{ error: string | null }>
+  setupSkippedReason?: AutomationRunSetupSkippedReason
   completion?: Promise<
     {
       status: 'completed' | 'dispatch_failed'
@@ -28,6 +34,15 @@ export type HeadlessAutomationDispatcher = (request: {
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
 }) => Promise<HeadlessAutomationDispatchLaunch>
+
+export class AutomationRunLaunchError extends Error {
+  constructor(
+    message: string,
+    readonly target?: HeadlessAutomationDispatchLaunch
+  ) {
+    super(message)
+  }
+}
 
 export function createHeadlessAutomationOutputSnapshotBuffer(): {
   append: (chunk: string) => void

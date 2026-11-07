@@ -6,8 +6,8 @@ import type {
   TerminalInitialOscLink,
   TerminalOscLinkService
 } from './document-scope'
-import type { ParsedFileLinkLocation } from '../../../../src/shared/file-link-location'
-import { classifyTerminalOscLinkTarget } from '../../../../src/shared/terminal-osc-link-target'
+import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
+import { classifyTerminalOscLinkTarget } from '../../../../src/shared/terminal/links/terminal-osc-link-target'
 
 export type TerminalOscLinkTarget =
   | { kind: 'url'; url: string }

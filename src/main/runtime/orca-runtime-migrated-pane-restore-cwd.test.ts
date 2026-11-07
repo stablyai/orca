@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from './orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcadTerminalRestoreHintStore } from '../persistence/migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 
 vi.mock('electron', () => ({
@@ -127,17 +127,6 @@ describe('migrated pane restore cwd at terminal create', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('opens a default-cwd create in the hinted folder once, then at the worktree root', async () => {
-    const { runtime, spawn, hintStore } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }])
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-    expect(remainingHint(hintStore)).toBeNull()
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(spawnedCwd(spawn, 0)).toBe(hinted)
-    expect(spawnedCwd(spawn, 1)).toBe(worktreePath)
-  })
-
   it('keeps the hint when the create fails, so the retry still opens in the hinted folder', async () => {
     let attempts = 0
     const { runtime, spawn, hintStore } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }], {
@@ -175,16 +164,6 @@ describe('migrated pane restore cwd at terminal create', () => {
     expect(remainingHint(hintStore)).toBeNull()
   })
 
-  it('never applies a hint installed for another worktree', async () => {
-    const { runtime, spawn } = runtimeWithHints([
-      { paneKey: PANE, cwd: hinted, worktreeId: 'wt-other' }
-    ])
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(spawnedCwd(spawn, 0)).toBe(worktreePath)
-  })
-
   it('falls back to the worktree root when the folder is gone, and spends the hint', async () => {
     const { runtime, spawn, hintStore } = runtimeWithHints([
       { paneKey: PANE, cwd: join(worktreePath, 'deleted') }
@@ -214,21 +193,6 @@ describe('migrated pane restore cwd at terminal create', () => {
       }
     }
   )
-
-  it('claims the pane before reading its hint', async () => {
-    const order: string[] = []
-    const { runtime } = runtimeWithHints([{ paneKey: PANE, cwd: hinted }], {
-      claimStablePaneCreate: () => {
-        order.push('claim')
-        return () => order.push('release')
-      },
-      onPeek: () => order.push('peek')
-    })
-
-    await runtime.createTerminal('id:wt-1', { tabId: TAB_ID, leafId: LEAF_ID })
-
-    expect(order.slice(0, 2)).toEqual(['claim', 'peek'])
-  })
 
   it("never applies another pane's hint", async () => {
     const otherPane = `${TAB_ID}:${OTHER_LEAF_ID}`

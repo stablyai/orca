@@ -544,7 +544,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   })
 
   it("preserves the user's OPENCODE_CONFIG_DIR when the mirror step fails", async () => {
-    const overlayMirror = await import('../pty/overlay-mirror')
+    const overlayMirror = await import('../pty/scrollback/overlay-mirror')
     const mirrorSpy = vi.spyOn(overlayMirror, 'mirrorEntry').mockImplementation(() => {
       throw new Error('simulated EPERM on symlink')
     })

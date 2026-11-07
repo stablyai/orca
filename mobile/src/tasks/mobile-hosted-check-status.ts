@@ -4,7 +4,10 @@ import type {
 } from '../../../src/shared/github/pull-request-types'
 import { translate } from '../i18n/mobile-i18n'
 import { resolveGitHubPRMergeState } from '../../../src/shared/github/pull-request-merge-state'
-import { getProviderChecksLabel } from '../../../src/shared/provider-check-summary'
+import {
+  getProviderChecksLabel,
+  getProviderChecksOutcome
+} from '../../../src/shared/source-control/checks/provider-check-summary'
 
 export type MobileHostedReviewStatus = {
   state?: string
@@ -76,7 +79,9 @@ export function getHostedMergeLabel(item: MobileHostedReviewStatus): string | nu
 }
 
 export function getHostedChecksLabel(item: { checksSummary?: ProviderCheckSummary }): string {
-  return getProviderChecksLabel(item.checksSummary)
+  return getProviderChecksOutcome(item.checksSummary) === 'cancelled'
+    ? translate('pullRequest.checkStatus.cancelled', 'Cancelled')
+    : getProviderChecksLabel(item.checksSummary)
 }
 
 export function getHostedReviewSignalTone(
@@ -104,13 +109,13 @@ export function getHostedReviewSignalTone(
     return 'neutral'
   }
   if (signal === 'checks') {
-    if (item.checksSummary?.state === 'success') {
+    if (getProviderChecksOutcome(item.checksSummary) === 'success') {
       return 'success'
     }
-    if (item.checksSummary?.state === 'failure') {
+    if (getProviderChecksOutcome(item.checksSummary) === 'failure') {
       return 'danger'
     }
-    if (item.checksSummary?.state === 'pending') {
+    if (getProviderChecksOutcome(item.checksSummary) === 'pending') {
       return 'warning'
     }
     return 'neutral'

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
 import { toAgentStatusIpcPayload } from '../../../../../agent-hooks/server/server-status-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
-import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { projectFleetWorkerPage } from './worker-observation'
 
 const PANE_KEY = 'tab-fleet:leaf-fleet'

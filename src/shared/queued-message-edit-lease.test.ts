@@ -4,12 +4,12 @@ import type { QueuedEditHostFixtureModule } from './queued-edit-host.test-fixtur
 import type {
   AgentSessionQueuedMessageEditHoldParams,
   AgentSessionQueuedMessageEditHoldResult
-} from './agent-session-wire'
+} from './agent-session/requests/agent-session-queued-message-wire'
 
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })

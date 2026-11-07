@@ -1,3 +1,4 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
@@ -69,6 +70,8 @@ export function createMarkdownPreviewActions(
 
     openMarkdownPreview: (file, options) => {
       const initialState = get()
+      const placementWorkspaceId = options?.placementWorkspaceId ?? file.worktreeId
+      const intent = editorPlacementIntent(get, placementWorkspaceId)
       const resolvedRuntimeEnvironmentId =
         file.runtimeEnvironmentId === null
           ? null
@@ -85,18 +88,25 @@ export function createMarkdownPreviewActions(
           ['edit']
         )
       const id = `markdown-preview::${sourceFileId}`
-      // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
-      const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
-        file,
-        initialState.openFiles.find((openFile) => openFile.id === sourceFileId) ??
-          initialState.openFiles.find((openFile) => openFile.id === id)
-      )
+      intent.register(id)
       const anchor = options?.anchor || undefined
       set((s) => {
         const existing = s.openFiles.find((openFile) => openFile.id === id)
-        const worktreeId = file.worktreeId
+        // Why: with the source tab closed, a retarget keeps the authority the preview already reads with.
+        const { externalSshTargetId, terminalArtifactGrantId, readOnly } = inheritFileReadAuthority(
+          file,
+          s.openFiles.find((openFile) => openFile.id === sourceFileId) ??
+            s.openFiles.find((openFile) => openFile.id === id)
+        )
+        const source = s.openFiles.find((openFile) => openFile.id === sourceFileId)
+        const operationProvenance =
+          file.externalSshTargetId !== undefined
+            ? (file.operationProvenance ?? source?.operationProvenance)
+            : (existing?.operationProvenance ??
+              file.operationProvenance ??
+              source?.operationProvenance)
         const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
-        const activeResult = buildEditorActiveResult(s, worktreeId, id)
+        const activeResult = buildEditorActiveResult(s, placementWorkspaceId, id)
 
         if (existing) {
           // Why: a fresh grant means the file was re-resolved; cached bytes may predate it.
@@ -104,6 +114,7 @@ export function createMarkdownPreviewActions(
             terminalArtifactGrantId !== undefined &&
             existing.terminalArtifactGrantId !== terminalArtifactGrantId
           const needsUpdate =
+            existing.operationProvenance !== operationProvenance ||
             existing.relativePath !== file.relativePath ||
             existing.filePath !== file.filePath ||
             existing.language !== file.language ||
@@ -124,6 +135,7 @@ export function createMarkdownPreviewActions(
                         worktreeId: file.worktreeId,
                         language: file.language,
                         runtimeEnvironmentId,
+                        operationProvenance,
                         externalSshTargetId,
                         terminalArtifactGrantId,
                         readOnly,
@@ -149,6 +161,7 @@ export function createMarkdownPreviewActions(
           language: file.language,
           isDirty: false,
           runtimeEnvironmentId,
+          operationProvenance,
           externalSshTargetId,
           terminalArtifactGrantId,
           readOnly,
@@ -162,14 +175,16 @@ export function createMarkdownPreviewActions(
           ...activeResult
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        id,
-        file.worktreeId,
-        `${file.relativePath} (preview)`,
-        'editor',
-        false,
-        options?.targetGroupId
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          id,
+          placementWorkspaceId,
+          `${file.relativePath} (preview)`,
+          'editor',
+          false,
+          options?.targetGroupId
+        )
       )
     },
 

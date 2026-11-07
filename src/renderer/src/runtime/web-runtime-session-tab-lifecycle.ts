@@ -25,7 +25,7 @@ import {
   recordWebSessionFocusIntent
 } from './web-session-focus-intent'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from './web-session-tab-rpc-timeout'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
@@ -45,13 +45,14 @@ export async function activateWebRuntimeSessionTab(args: {
   leafId?: string | null
   /** The local tab visible at the gesture; later navigation away cancels the deferred focus. */
   expectedCurrentLocalTabId?: string | null
+  expectedPairingRevision?: number
 }): Promise<boolean> {
   // COMPAT(legacy-relay-bridge, revisit 2027-01-15): an older relay runs a pane in this tab, and
   // activating that pane on the managed server would start a second shell there that no tab shows.
   // A click names no leaf, so the pane on screen does; the server would otherwise pick the first.
   // Loaded lazily: the module subscribes to main's pane list on import, and terminal panes load it.
   const { hasLegacyRelayBridgedPane, isLegacyRelayBridgedTab } =
-    await import('../components/terminal-pane/legacy-relay-bridge-panes')
+    await import('../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes')
   const leafId =
     args.leafId ??
     (hasLegacyRelayBridgedPane(args.tabId)

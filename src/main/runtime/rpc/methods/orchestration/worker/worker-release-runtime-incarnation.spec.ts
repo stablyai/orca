@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { inspectWorkerTerminal } from './worker-observation'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
-import { makePaneKey } from '../../../../../../shared/stable-pane-id'
-import { registerBoundPty } from '../../../../bind-first-pane.test-fixture'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 export function registerWorkerReleaseRuntimeIncarnationTests(): void {
   const PTY_ID = 'runtime_test:term_worker'

@@ -1,3 +1,4 @@
+import type * as WorktreeListingModule from '../../../../../git/worktrees/catalog/worktree-listing'
 import { describe, expect, it, vi } from 'vitest'
 
 const { ipcHandlers } = vi.hoisted(() => ({
@@ -5,6 +6,13 @@ const { ipcHandlers } = vi.hoisted(() => ({
 }))
 
 // Partially mock Electron: snapshot-pull is registered through ipcMain.handle, which is absent outside Electron.
+vi.mock('../../../../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: listWorktreesStrict
+  }
+})
+
 vi.mock('electron', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ipcMain: {
@@ -17,20 +25,20 @@ vi.mock('electron', async (importOriginal) => ({
 }))
 const { listWorktreesStrict } = vi.hoisted(() => ({ listWorktreesStrict: vi.fn() }))
 // The git binary is the external boundary for worktree.ps; everything above it stays real.
-vi.mock('../../../../../git/worktree', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  listWorktreesStrict
-}))
 
 import type Database from '../../../../../sqlite/sync-database'
-import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { toAgentStatusIpcPayload } from '../../../../../agent-hooks/server/server-status-identity'
 import type { EnrichedAgentHookEventPayload } from '../../../../../agent-hooks/server/server-types'
 import { registerAgentHookHandlers } from '../../../../../ipc/agent-hooks'
 import { installMainWindowAgentStatusListeners } from '../../../../../startup/main-window-agent-status'
 import { mainProcessState } from '../../../../../startup/main-process-state'
 import { agentHookServer } from '../../../../../agent-hooks/server'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { projectFleetWorkerPage } from './worker-observation'

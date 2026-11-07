@@ -82,7 +82,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
 
   return (
     <TabsContent value="description" className="mt-0">
-      {!loading && details && isMR ? (
+      {details && isMR ? (
         <div className="mb-4 rounded-md border border-border/50 bg-muted/20 p-3">
           <div className="flex items-center justify-between gap-2">
             <div>

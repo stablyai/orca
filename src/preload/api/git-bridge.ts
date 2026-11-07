@@ -1,10 +1,17 @@
 import { ipcRenderer } from 'electron'
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
-import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
-import type { ConflictResolution } from '../../shared/source-control-entry-actions'
+import type {
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult
+} from '../../shared/git/remotes/git-fork-sync'
+import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../shared/source-control/listing/source-control-entry-actions'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import type { GitStageWorktreeScope } from '../../shared/git-stage-worktree-scope'
-import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
+import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
+import type {
+  GitHistoryItemRef,
+  GitHistoryOptions,
+  GitHistoryResult
+} from '../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../api-types'
 
 export const gitApi = {
@@ -43,6 +50,11 @@ export const gitApi = {
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:appendGitignore', args),
+  refs: (args: {
+    worktreePath: string
+    connectionId?: string
+    query?: string
+  }): Promise<GitHistoryItemRef[]> => ipcRenderer.invoke('git:refs', args),
   history: (
     args: {
       worktreePath: string

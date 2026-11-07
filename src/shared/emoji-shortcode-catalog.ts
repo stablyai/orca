@@ -57,11 +57,6 @@ export function getStandardEmojiShortcodeEntries(): readonly StandardEmojiShortc
   return loadCatalog().entries
 }
 
-/** Test-only probe for the lazy-boundary guard; never branch on this in product code. */
-export function isEmojiShortcodeCatalogBuiltForTest(): boolean {
-  return catalog !== null
-}
-
 /** Prefer spelled-out names over symbolic +1/-1, cryptic no/v and flag_xx namespaces for branch/directory labels. */
 function primaryShortcode(shortcodes: readonly string[]): string {
   const named = shortcodes.filter((candidate) => /^[a-z]/i.test(candidate))

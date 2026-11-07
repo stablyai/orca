@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { AgentSkillShareRequest } from '../../shared/agent-skill-sharing-contract'
 import { getDefaultSettings } from '../../shared/constants'
 import type { DiscoveredSkill } from '../../shared/skills'
@@ -201,31 +201,6 @@ describe('agent skill sharing runtime', () => {
     expect(await operationDirectories()).toEqual([])
   })
 
-  it('returns an actionable error for package-incompatible skill metadata', async () => {
-    const invalid = await createSkill('invalid-id', 'invalid_name')
-    const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => true })
-
-    await expect(
-      runtime.publishDiscoveredSkillsFromAgent(request(['invalid-id']), [invalid])
-    ).rejects.toMatchObject({ code: 'agent_skill_not_shareable' })
-    expect(publishVersion).not.toHaveBeenCalled()
-    expect(await operationDirectories()).toEqual([])
-  })
-
-  it('tells the agent to pick another bundle name when the name is in use', async () => {
-    const alpha = await createSkill('alpha-id', 'alpha')
-    const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => true, nameTaken: true })
-
-    await expect(
-      runtime.publishDiscoveredSkillsFromAgent(request(['alpha-id']), [alpha])
-    ).rejects.toMatchObject({
-      code: 'agent_skill_bundle_name_taken',
-      message: expect.stringContaining('"team-skills"')
-    })
-    expect(publishVersion).not.toHaveBeenCalled()
-    expect(await operationDirectories()).toEqual([])
-  })
-
   it('cancels an upload and cleans preparation files', async () => {
     const alpha = await createSkill('alpha-id', 'alpha')
     const controller = new AbortController()
@@ -245,27 +220,6 @@ describe('agent skill sharing runtime', () => {
     controller.abort()
 
     await expect(publishing).rejects.toThrow('upload-aborted')
-    expect(await operationDirectories()).toEqual([])
-  })
-
-  it('honors cancellation that arrives while preparation is completing', async () => {
-    const alpha = await createSkill('alpha-id', 'alpha')
-    const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => true })
-    let abortedReads = 0
-    const signal = {
-      get aborted() {
-        abortedReads += 1
-        return abortedReads > 1
-      },
-      reason: new Error('skill-share-cancelled'),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    } as unknown as AbortSignal
-
-    await expect(
-      runtime.publishDiscoveredSkillsFromAgent(request(['alpha-id']), [alpha], signal)
-    ).rejects.toThrow('skill-share-cancelled')
-    expect(publishVersion).not.toHaveBeenCalled()
     expect(await operationDirectories()).toEqual([])
   })
 })

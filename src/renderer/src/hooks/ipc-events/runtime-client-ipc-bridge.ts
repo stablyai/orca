@@ -1,5 +1,6 @@
-import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -13,6 +14,7 @@ import {
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import { hostsBrowserPagesFor } from '@/runtime/browser-client-host-request-answer'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -97,6 +99,14 @@ export function registerRuntimeClientIpcBridge(
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'notificationAttentionAcknowledged') {
+      void window.api.notifications
+        .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
+        .catch((error: unknown) =>
+          console.warn('[notifications] Remote acknowledgement failed', error)
+        )
+      return
+    }
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
@@ -165,16 +175,18 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (event.type === 'linearLinkedIssueUpdated') {
-      void useAppStore
-        .getState()
-        .refreshLinearIssue(event.identifier, event.workspaceId)
-        .catch((error) => {
-          console.error('Failed to refresh updated Linear issue:', error)
-        })
+      void consumeLinearIssueRead(
+        useAppStore.getState().refreshLinearIssue(event.identifier, event.workspaceId)
+      ).catch((error) => {
+        console.error('Failed to refresh updated Linear issue:', error)
+      })
       return
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
     if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    if (event.type !== 'activateWorktree') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.
@@ -258,7 +270,8 @@ export function registerRuntimeClientIpcBridge(
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
             sync: runtimeClientEventsSync.sync
           })
-        }
+        },
+        { hostsBrowserPages: hostsBrowserPagesFor(environmentId) }
       )
       return subscription
     },

@@ -1,6 +1,6 @@
 import type { AgentHookServer } from '../agent-hooks/server'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
-import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../../shared/agent-hook-interrupt-reconciliation'
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 
 /** A host revision proves this relay supports the command; older relays keep the legacy path. */
 export function bindRemoteClaudeInterruptReconciliation(

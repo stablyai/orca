@@ -11,7 +11,7 @@ import {
   getPRCommentGroupRoot,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -21,6 +21,7 @@ import { ConversationCommentCard } from './comment-card'
 
 export function ConversationCommentGroup({
   group,
+  itemType,
   repoPath,
   repoId,
   sourceContext,
@@ -36,6 +37,7 @@ export function ConversationCommentGroup({
   onSubmitReply
 }: {
   group: PRCommentGroup
+  itemType: 'issue' | 'pr'
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
@@ -51,6 +53,7 @@ export function ConversationCommentGroup({
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
   const cardProps = {
+    itemType,
     repoPath,
     repoId,
     sourceContext,

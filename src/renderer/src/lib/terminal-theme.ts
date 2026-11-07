@@ -7,19 +7,22 @@ import {
   normalizeTerminalCustomThemes,
   terminalCustomThemeToXtermTheme,
   type TerminalCustomTheme
-} from '../../../shared/terminal-custom-themes'
+} from '../../../shared/terminal-themes/terminal-custom-themes'
 import {
-  DEFAULT_TERMINAL_THEME_DARK,
-  DEFAULT_TERMINAL_THEME_LIGHT,
   lookupTerminalTheme,
-  selectTerminalTheme
-} from '../../../shared/terminal-theme-selection'
+  resolveTerminalPalette,
+  type TerminalPaletteSettings,
+  type TerminalThemeLookupSettings
+} from '../../../shared/terminal-themes/terminal-theme-selection'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../components/plugins/presentation/plugin-name-disambiguation'
 
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
-export { DEFAULT_TERMINAL_THEME_DARK, DEFAULT_TERMINAL_THEME_LIGHT }
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
-const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
+export const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
 export type EffectiveTerminalAppearance = {
   mode: 'dark' | 'light'
@@ -51,24 +54,10 @@ export function getBuiltinTheme(name: string): ITheme | null {
 }
 
 export function getTerminalTheme(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'> | undefined,
+  settings: TerminalThemeLookupSettings | undefined,
   selection: string
 ): ITheme | null {
   return lookupTerminalTheme(settings, selection)
-}
-
-function getTerminalThemePreview(
-  name: string,
-  settings?: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>,
-  fallbackMode: 'dark' | 'light' = 'dark'
-): ITheme | null {
-  const theme = getTerminalTheme(settings, name)
-  if (theme) {
-    return theme
-  }
-  return getTheme(
-    fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
-  )
 }
 
 export function getAvailableTerminalThemeOptions(
@@ -92,11 +81,16 @@ export function getAvailableTerminalThemeOptions(
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
   )
+  const labels = disambiguatedPluginContentLabels(
+    pluginThemes,
+    [...builtinOptions, ...customOptions].map((option) => option.label)
+  )
+  const pluginNames = disambiguatedContentPluginNames(pluginThemes)
   const pluginOptions = pluginThemes.map((theme) => ({
     value: theme.id,
-    label: theme.label,
+    label: labels.get(theme.id) ?? theme.label,
     group: 'plugin' as const,
-    sourceLabel: theme.pluginName,
+    sourceLabel: pluginNames.get(theme.pluginKey) ?? theme.pluginName,
     mode: theme.mode,
     previewTheme: theme.terminal
   }))
@@ -114,24 +108,24 @@ export function resolveEffectiveTerminalAppearance(
     | 'terminalCustomThemes'
     | 'terminalPluginPalettes'
     | 'terminalDividerColorLight'
-  >,
+  > &
+    TerminalPaletteSettings,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
-  const {
-    mode: sourceTheme,
-    useLightVariant,
-    themeName
-  } = selectTerminalTheme(settings, systemPrefersDark)
+  const { mode, useLightVariant, themeName, theme } = resolveTerminalPalette(
+    settings,
+    systemPrefersDark
+  )
   const dividerColor = useLightVariant
     ? normalizeColor(settings.terminalDividerColorLight, DEFAULT_TERMINAL_DIVIDER_LIGHT)
     : normalizeColor(settings.terminalDividerColorDark, DEFAULT_TERMINAL_DIVIDER_DARK)
 
   return {
-    mode: sourceTheme,
+    mode,
     sourceTheme: settings.theme,
     themeName,
     dividerColor,
-    theme: getTerminalThemePreview(themeName, settings, useLightVariant ? 'light' : 'dark'),
+    theme,
     systemPrefersDark
   }
 }
@@ -167,8 +161,3 @@ export function resolvePaneStyleOptions(
     focusFollowsMouse: settings.terminalFocusFollowsMouse
   }
 }
-
-export {
-  isTerminalBackgroundLight,
-  resolveOpaqueTerminalBackground
-} from '../../../shared/terminal-title-contrast'

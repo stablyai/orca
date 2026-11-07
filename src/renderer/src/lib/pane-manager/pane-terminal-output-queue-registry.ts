@@ -4,11 +4,11 @@ import {
 } from './pane-terminal-foreground-render-settle'
 import { discardInFlightTerminalOutputAckCredits } from './pane-terminal-output-ack-credit'
 import { cancelTerminalWriteStallWatch } from './terminal-write-pipeline-health'
-import { isDocumentVisibilityProvenStale } from '@/components/terminal-pane/stale-document-visibility-latch'
+import { isDocumentVisibilityProvenStale } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility-latch'
 import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
-} from '../../../../shared/terminal-scrollback-policy'
+} from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import {
   exposeTerminalOutputSchedulerDebugApi as exposeDebugApi,
   recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,
@@ -31,6 +31,8 @@ export type WriteTerminalOutputOptions = {
   /** Fire delivery ACK once on parse OR discard; duplicate calls are safe, omission permanently shrinks main’s in-flight window. */
   ackCredit?: () => void
   onBackgroundBacklogDropped?: () => void
+  /** Every backlog replacement: queued bytes vanished behind the warning, leaving a gap in the pane's stream. */
+  onBacklogReplaced?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
   followupForegroundRefresh?: boolean
@@ -72,6 +74,7 @@ export type QueueEntry = {
   chunkIndex: number
   queuedChars: number
   onBackgroundBacklogDropped?: () => void
+  onBacklogReplaced?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean

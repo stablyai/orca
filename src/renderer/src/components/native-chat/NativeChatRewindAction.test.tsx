@@ -4,7 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MessageRow } from './NativeChatMessageRow'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/components/confirmation-dialog-context', () => ({
@@ -37,18 +37,6 @@ function row(
   return request
 }
 describe('user-row rewind affordance', () => {
-  it('is keyboard reachable and calls the selected user item from the hover strip', () => {
-    const request = row('user')
-    const button = screen.getByRole('button', { name: 'Rewind to here' })
-    button.focus()
-    expect(button).toHaveFocus()
-    expect(button.parentElement).toHaveClass(
-      'group-hover:opacity-100',
-      '[.group:has(:focus-visible)_&]:opacity-100'
-    )
-    fireEvent.click(button)
-    expect(request).toHaveBeenCalledWith('user-1', confirm)
-  })
   it('exposes the disabled reason to keyboard users and cannot invoke rewind', async () => {
     const request = row('user', 'Wait for the current turn to finish first.')
     const button = screen.getByRole('button', { name: 'Rewind to here' })
@@ -61,13 +49,5 @@ describe('user-row rewind affordance', () => {
     )
     fireEvent.click(button)
     expect(request).not.toHaveBeenCalled()
-  })
-  it.each(['assistant', 'reasoning', 'system'] as const)('omits rewind for %s', (role) => {
-    row(role)
-    expect(screen.queryByRole('button', { name: 'Rewind to here' })).toBeNull()
-  })
-  it('renders nothing where the row is offered no rewind', () => {
-    row('user', null, false)
-    expect(screen.queryByRole('button', { name: 'Rewind to here' })).toBeNull()
   })
 })

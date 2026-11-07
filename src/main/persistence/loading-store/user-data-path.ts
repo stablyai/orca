@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:
 import { dirname, join, resolve } from 'node:path'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { hardenExistingSecureFile } from '../../../shared/secure-file'
-import { MOBILE_PAIRING_USERDATA_FILES } from '../../runtime/mobile-pairing-files'
+import { MOBILE_PAIRING_USERDATA_FILES } from '../../runtime/rpc/server/pairing/mobile-pairing-files'
 
 // Capture after dev redirection but before app.setName changes path casing and loses case-sensitive data.
 let _dataFile: string | null = null

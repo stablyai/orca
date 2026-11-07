@@ -1,5 +1,10 @@
+import {
+  hasModernAutomationLaunchSetup,
+  automationCanonicalLaunchSetup
+} from '../../shared/automation-launch-setup'
+import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
 import { z } from 'zod'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   parseOrcadMigrationCatalogAbortResult,
   parseOrcadMigrationCatalogState
@@ -22,14 +27,15 @@ import {
   type OrcadMigrationBlobChunkResult,
   type OrcadMigrationBlobDescriptor
 } from '../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { parsePairingCode } from '../../shared/pairing'
+import { orcadMigrationManifestBlobs } from '../../shared/orcad-migration/orcad-migration-automation-run-history'
+import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
 import { ORCAD_MIGRATION_CATALOG_RUNTIME_CAPABILITY } from '../../shared/orcad-runtime-capabilities'
 import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../shared/remote-runtime/remote-runtime-client'
 import { assertOrcadMigrationRequestFits } from './orcad-migration-manifest-export'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import { AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import { hasExtraAgentArgs } from '../../shared/automation-extra-agent-args'
+import { hasExtraAgentArgs } from '../../shared/agent-launch/startup/automation-extra-agent-args'
 import { requiredOrcadMigrationSourceCapability } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import type { OrcadServerRepository } from './orcad-migration-repository-link'
 
@@ -221,11 +227,16 @@ async function request(
   const params = expectedBlobs.length > 0 ? { manifest, expectedBlobs } : { manifest }
   // Validation-size limits can exceed sealed-frame capacity; reject before the host closes the socket.
   assertOrcadMigrationRequestFits(params)
+  const imports = operation === 'stage' || operation === 'commit'
   const carriesExtraAgentArgs =
-    (operation === 'stage' || operation === 'commit') &&
+    imports &&
     (manifest.payload.dormantState?.automations ?? []).some((automation) =>
       hasExtraAgentArgs(automation.extraAgentArgs)
     )
+  // An older host would drop the blob a manifest names and import without its rows.
+  const requiredBlobs = imports
+    ? [...expectedBlobs, ...orcadMigrationManifestBlobs(manifest)]
+    : expectedBlobs
   const response = await sendSupportedMigrationRequest(
     pairing,
     METHOD_BY_OPERATION[operation],
@@ -236,7 +247,18 @@ async function request(
     requiredOrcadMigrationSourceCapability(manifest.source),
     // Hosts without blob capability would strip expectedBlobs and commit unchecked.
     (capabilities) => {
-      const unsupported = findUnsupportedMigrationBlobKind(expectedBlobs, capabilities)
+      if (
+        imports &&
+        (manifest.payload.dormantState?.automations ?? []).some((automation) =>
+          hasModernAutomationLaunchSetup(automationCanonicalLaunchSetup(automation))
+        ) &&
+        !capabilities.includes(AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error(
+          'Update Orca on the destination host to keep automation agent launch settings.'
+        )
+      }
+      const unsupported = findUnsupportedMigrationBlobKind(requiredBlobs, capabilities)
       if (unsupported) {
         throw new Error(orcadMigrationBlobKindUnsupportedBlocker(unsupported))
       }

@@ -70,6 +70,8 @@ export function writeTerminalOutputImpl(
         inheritRecentForegroundSafetyFlush(queued)
       }
       queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+      // Sticky: writers that don't track the stream position (notices, idle resets) leave it in place.
+      queued.onBacklogReplaced = options.onBacklogReplaced ?? queued.onBacklogReplaced
       queued.highPriority = true
       queuedByTerminal.set(terminal, queued)
       enqueueChunk(queued, data, {
@@ -139,6 +141,10 @@ export function writeTerminalOutputImpl(
       return
     }
     if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
+      entry.onBackgroundBacklogDropped =
+        options.onBackgroundBacklogDropped ?? entry.onBackgroundBacklogDropped
+      // Sticky: writers that don't track the stream position (notices, idle resets) leave it in place.
+      entry.onBacklogReplaced = options.onBacklogReplaced ?? entry.onBacklogReplaced
       entry.highPriority = true
       enqueueChunk(entry, data, {
         foreground: true,
@@ -168,6 +174,8 @@ export function writeTerminalOutputImpl(
         queuedByTerminal.set(terminal, queued)
       } else {
         queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+        // Sticky: writers that don't track the stream position (notices, idle resets) leave it in place.
+        queued.onBacklogReplaced = options.onBacklogReplaced ?? queued.onBacklogReplaced
         queued.highPriority = true
       }
       enqueueChunk(queued, data, {
@@ -232,6 +240,8 @@ export function writeTerminalOutputImpl(
     queuedByTerminal.set(terminal, entry)
   } else {
     entry.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+    // Sticky: writers that don't track the stream position (notices, idle resets) leave it in place.
+    entry.onBacklogReplaced = options.onBacklogReplaced ?? entry.onBacklogReplaced
   }
   enqueueChunk(entry, data, {
     beforeWrite: options.beforeWrite,
