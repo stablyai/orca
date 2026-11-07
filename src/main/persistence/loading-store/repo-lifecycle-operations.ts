@@ -184,6 +184,7 @@ export class RepoLifecycleOperations {
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
         | 'kind'
+        | 'path'
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
