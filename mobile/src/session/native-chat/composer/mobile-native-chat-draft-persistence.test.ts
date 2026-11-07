@@ -474,7 +474,7 @@ describe('mobile native-chat draft persistence', () => {
       }
       drafts?.clearDraftForSend(origin, 'look')
       const id = beginMobileNativeChatInFlightSend(origin, 'terminal', 'look', {
-        carried: { images: readMobileNativeChatDraftInputs(TAB_A).images, files: [] }
+        intent: { carried: { images: readMobileNativeChatDraftInputs(TAB_A).images, files: [] } }
       })
       settleMobileNativeChatInFlightSend(id, 'sent')
       await settle()
