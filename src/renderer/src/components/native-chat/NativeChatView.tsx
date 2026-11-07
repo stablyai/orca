@@ -8,8 +8,6 @@ import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visua
 import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
 
-export type { NativeChatViewProps } from './native-chat-view-types'
-
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">

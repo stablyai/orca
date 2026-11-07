@@ -28,7 +28,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-s
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
-} from '../native-chat-orca-stop-context'
+} from '../messages/notices/native-chat-orca-stop-context'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatFileLinkContext } from '../links/actions/native-chat-file-link-context'

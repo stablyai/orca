@@ -20,7 +20,7 @@ import {
   supportsStructuredAgentSessionQuietRepeatedStop
 } from '@/runtime/structured-agent-session-client'
 import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
-import { agentSessionWriteFailureText } from '../../../agent-session-write-notice-text'
+import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable

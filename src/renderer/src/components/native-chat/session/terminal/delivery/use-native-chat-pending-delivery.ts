@@ -17,7 +17,7 @@ import {
   readPendingSendCache,
   writePendingSendCache
 } from './native-chat-pending'
-import type { NativeChatDeliveryNotice } from '../../../NativeChatMessageRow'
+import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { ReadState } from '../read/native-chat-live-session-contract'
 
 /** Wait for transcript evidence after lost write acknowledgment; mobile uses the same hold. */

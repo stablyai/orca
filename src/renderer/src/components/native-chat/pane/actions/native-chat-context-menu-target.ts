@@ -3,7 +3,7 @@ import type { NativeChatComposerHandle } from '../../composer/native-chat-compos
 import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-file-link-context'
 import { nativeChatLinkActions } from '../../links/actions/native-chat-link-target-actions'
 import { readNativeChatQuotableSelection } from '../../selection-quotes/native-chat-quote-selection'
-import type { NativeChatMessageListHandle } from '../../use-native-chat-reveal-latest'
+import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 
 export type NativeChatContextMenuTarget = {
   /** The selection the "Add to chat" offer would quote. */

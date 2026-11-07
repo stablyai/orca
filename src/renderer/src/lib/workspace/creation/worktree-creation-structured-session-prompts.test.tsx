@@ -33,7 +33,7 @@ import {
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (
-    await import('../../../components/native-chat/NativeChatStructuredSession.test-harness')
+    await import('../../../components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness')
   ).createStructuredSessionMocks()
 )
 const host = vi.hoisted(() => ({

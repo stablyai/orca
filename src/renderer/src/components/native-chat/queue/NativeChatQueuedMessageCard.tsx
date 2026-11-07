@@ -22,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import { agentSessionWriteNoticeText } from '../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '../messages/notices/agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
 import {
@@ -32,7 +32,7 @@ import {
   queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import { NativeChatAgentMessageSenders } from '../NativeChatAgentMessageSenders'
+import { NativeChatAgentMessageSenders } from '../messages/agent-senders/NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
 import { useNativeChatClippedLine } from './use-native-chat-clipped-line'

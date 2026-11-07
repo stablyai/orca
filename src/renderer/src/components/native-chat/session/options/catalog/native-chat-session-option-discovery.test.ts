@@ -6,7 +6,7 @@ import {
   repoFixture,
   terminalTabFixture,
   worktreeFixture
-} from '../../../native-chat-workspace-test-fixtures'
+} from '../../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 const initialState = useAppStore.getInitialState()
 

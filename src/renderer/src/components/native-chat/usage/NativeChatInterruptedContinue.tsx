@@ -34,7 +34,7 @@ import {
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted
 } from '../../../../../shared/native-chat/native-chat-interrupted-continue'
-import type { NativeChatOrcaStopView } from '../native-chat-orca-stop-context'
+import type { NativeChatOrcaStopView } from '../messages/notices/native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from '../pane/ownership/use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '../../native-chat-restart-runtimes'
 import { useNativeChatLaunchResumePending } from '../../native-chat-launch-resume-decision'

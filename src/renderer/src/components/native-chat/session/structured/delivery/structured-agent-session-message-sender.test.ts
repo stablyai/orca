@@ -1,4 +1,4 @@
-import { projectStructuredAgentSessionMessages } from '../../../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '../../../conversation/projection/structured-agent-session-message-projection'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

@@ -8,7 +8,7 @@ import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-d
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import { createNativeChatFileHref } from '../../../../../../shared/native-chat/native-chat-href-routing'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
-import type { NativeChatRewindSurface } from '../../use-native-chat-rewind-host'
+import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,

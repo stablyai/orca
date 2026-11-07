@@ -39,7 +39,7 @@ import {
   repoFixture,
   terminalTabFixture,
   worktreeFixture
-} from '../../src/renderer/src/components/native-chat/native-chat-workspace-test-fixtures'
+} from '../../src/renderer/src/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 
 const originalState = useAppStore.getState()
 afterEach(() => {

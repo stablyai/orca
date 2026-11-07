@@ -6,7 +6,7 @@ import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
-import type { NativeChatRewindSurface } from '../../use-native-chat-rewind-host'
+import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
 function copyText(text: string): void {
   // Best-effort, as the hover copy buttons are: the clipboard can reject when unfocused.

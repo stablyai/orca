@@ -6,8 +6,8 @@ import {
   NATIVE_CHAT_ASK_ROW_COPY,
   type NativeChatAskRowSubject
 } from '../../../../../shared/native-chat/input/native-chat-ask-row'
-import { useNativeChatDisclosure } from '../native-chat-disclosure-store'
-import { NativeChatToolRunIcon } from '../NativeChatToolIcon'
+import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disclosure-store'
+import { NativeChatToolRunIcon } from '../tools/lines/NativeChatToolIcon'
 
 const ROW_CLASS_NAME =
   'flex min-h-6 w-full items-center gap-1.5 py-0.5 text-left text-sm leading-relaxed text-chat-foreground-faint'

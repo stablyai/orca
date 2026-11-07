@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { boundNativeChatWindow } from '../../../../../../../shared/native-chat/native-chat-merge'
-import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../native-chat-pagination'
+import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'
 import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity

@@ -49,8 +49,8 @@ import {
   NativeChatFindMenuItem
 } from './NativeChatContextMenuItems'
 import type { NativeChatFileLinkContext } from '../../links/actions/native-chat-file-link-context'
-import type { NativeChatMessageListHandle } from '../../use-native-chat-reveal-latest'
-import type { NativeChatRewindSurface } from '../../use-native-chat-rewind-host'
+import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
+import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 import { useNativeChatStandaloneMenu } from './use-native-chat-standalone-menu'
 import type { NativeChatSessionMenuSource } from './use-native-chat-session-context-actions'
 

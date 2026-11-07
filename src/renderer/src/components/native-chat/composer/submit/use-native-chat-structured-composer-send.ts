@@ -28,7 +28,7 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-struct
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import { nativeChatAttachImagesAgainReason } from '../../attachments/chips/native-chat-image-reattach'
 import { nativeChatNoticeFromError } from '../controls/native-chat-composer-notice'
-import { agentSessionWriteNoticeText } from '../../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
   captureNativeChatComposerSubmission,

@@ -61,7 +61,7 @@ vi.mock('@/components/native-chat/composer/NativeChatComposer', async (importOri
 vi.mock('@/components/native-chat/host-access/NativeChatEmptyState', () => ({
   NativeChatEmptyState: () => null
 }))
-vi.mock('@/components/native-chat/NativeChatUserMessageRow', () => ({
+vi.mock('@/components/native-chat/messages/rows/NativeChatUserMessageRow', () => ({
   NativeChatUserMessageRow: () => null
 }))
 vi.mock('./WorktreeSetupSteps', () => ({ WorktreeSetupSteps: () => null }))

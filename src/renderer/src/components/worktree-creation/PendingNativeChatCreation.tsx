@@ -17,7 +17,7 @@ import type { NativeChatStructuredComposerTransport } from '@/components/native-
 import { useNativeChatComposerError } from '@/components/native-chat/composer/controls/use-native-chat-composer-notice'
 import type { NativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
 import { NativeChatEmptyState } from '@/components/native-chat/host-access/NativeChatEmptyState'
-import { NativeChatUserMessageRow } from '@/components/native-chat/NativeChatUserMessageRow'
+import { NativeChatUserMessageRow } from '@/components/native-chat/messages/rows/NativeChatUserMessageRow'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,

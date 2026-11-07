@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react'
 import {
   useNativeChatRevealLatest,
   type NativeChatMessageListHandle
-} from '../../use-native-chat-reveal-latest'
+} from '../../messages/actions/use-native-chat-reveal-latest'
 import type { useStructuredAgentSession } from '../../session/structured/use-structured-agent-session'
 import type { StructuredAgentSessionQueuedMessagesController } from '../../queue/use-structured-agent-session-queued-messages'
 

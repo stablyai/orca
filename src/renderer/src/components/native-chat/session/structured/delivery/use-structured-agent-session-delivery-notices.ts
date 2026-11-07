@@ -7,8 +7,8 @@ import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/
 import { structuredAgentSessionCommandItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import { useStructuredAgentSessionStartFailureFacts } from '../../../use-structured-agent-session-start-failure-facts'
-import type { NativeChatDeliveryNotice } from '../../../NativeChatMessageRow'
+import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
+import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 
 /** The structured chat's delivery notices, by the message id each row renders under. */

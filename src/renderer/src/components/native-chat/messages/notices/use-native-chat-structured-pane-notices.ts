@@ -7,7 +7,7 @@ import type { useStructuredNativeChatSubmitReveal } from '../../pane/actions/use
 import type { useStructuredAgentSession } from '../../session/structured/use-structured-agent-session'
 import type { NativeChatInterruptedContinuation } from '../../usage/NativeChatInterruptedContinue'
 import type { NativeChatViewState } from '../../session/status/native-chat-view-state'
-import type { StructuredAgentSessionReadFailureNotice } from '../../structured-agent-session-read-failure-notice'
+import type { StructuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 import type { useNativeChatInstallSlot } from '../../host-access/NativeChatInstallSlot'
 import type { useNativeChatHostSendGate } from '../../host-access/use-native-chat-host-send-gate'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'

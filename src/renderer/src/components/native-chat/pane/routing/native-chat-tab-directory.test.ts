@@ -4,7 +4,7 @@ import {
   resolveNativeChatTabDirectoryResolution,
   type NativeChatTabDirectoryState
 } from './native-chat-tab-directory'
-import { worktreeFixture } from '../../native-chat-workspace-test-fixtures'
+import { worktreeFixture } from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 const FLOATING_TAB = {
   id: 'floating-chat-1',

@@ -21,7 +21,7 @@ import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/
 import {
   detectedListingFixture,
   terminalTabFixture
-} from '@/components/native-chat/native-chat-workspace-test-fixtures'
+} from '@/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn(), mint: vi.fn(), revoke: vi.fn() }))

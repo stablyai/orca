@@ -1,4 +1,4 @@
-import { useNativeChatOlderHistory } from '../../../use-native-chat-older-history'
+import { useNativeChatOlderHistory } from '../../../viewport/history/use-native-chat-older-history'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
@@ -14,7 +14,7 @@ import { mergeNativeChatLiveSession } from '../../../../../../../shared/native-c
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT
-} from '../../../native-chat-pagination'
+} from '../../../viewport/history/native-chat-pagination'
 import type {
   NativeChatLiveSession,
   ReadState,
