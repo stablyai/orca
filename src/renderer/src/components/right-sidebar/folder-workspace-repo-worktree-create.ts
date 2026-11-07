@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { searchRuntimeRepoBaseRefs } from '@/runtime/runtime-repo-client'
 import { useAppStore } from '@/store'
@@ -96,22 +97,30 @@ async function createWhileStillInFolder(
   const name = folderWorkspace.name.trim()
   const hostId = getRepoExecutionHostId(repo)
   const folderHostId = useAppStore.getState().activeWorkspaceExecutionHostId
-  const taken = await mayHaveBranch(hostId, repo.id, branchLeafOf(name))
-  const store = useAppStore.getState()
   // The parent is the active folder at create time; a user who moved on keeps their new view.
-  if (
-    store.activeWorkspaceKey !== folderWorkspaceKey(folderWorkspace.id) ||
-    store.activeWorkspaceExecutionHostId !== folderHostId
-  ) {
+  const stillInFolder = (): boolean => {
+    const state = useAppStore.getState()
+    return (
+      state.activeWorkspaceKey === folderWorkspaceKey(folderWorkspace.id) &&
+      state.activeWorkspaceExecutionHostId === folderHostId
+    )
+  }
+  const taken = await mayHaveBranch(hostId, repo.id, branchLeafOf(name))
+  if (!stillInFolder()) {
     return
   }
-  const openComposer = (): void =>
+  const store = useAppStore.getState()
+  const openComposer = (): void => {
+    if (!stillInFolder()) {
+      return
+    }
     store.openModal('new-workspace-composer', {
       initialRepoId: repo.id,
       initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, store.projectHostSetups),
       prefilledName: name,
       telemetrySource: 'sidebar'
     })
+  }
   if (taken) {
     openComposer()
     return
@@ -154,7 +163,8 @@ async function createWhileStillInFolder(
     )
   } catch (error) {
     // Main refuses before creating anything; the composer is where the user picks run or skip.
-    if (error instanceof Error && error.message === SETUP_DECISION_REQUIRED) {
+    // Local IPC wraps the message ("Error invoking remote method …"); RPC delivers it bare.
+    if (readIpcErrorDetail(error) === SETUP_DECISION_REQUIRED) {
       openComposer()
       return
     }

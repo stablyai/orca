@@ -3,6 +3,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type * as SourceRepos from '../../../../shared/folder-workspaces/folder-workspace-source-repos'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   makeFolderWorkspace,
@@ -41,12 +42,12 @@ function catalog(size: number): Repo[] {
 const folderWorkspace = makeFolderWorkspace()
 
 /** Like the three panels: re-renders on worktree activity and passes the same folder record. */
-function Panel(): React.JSX.Element {
+function Panel({ folder = folderWorkspace }: { folder?: FolderWorkspace }): React.JSX.Element {
   useAppStore((s) => s.activeWorktreeId)
   useAppStore((s) => s.worktreesByRepo)
   return (
     <FolderWorkspaceEmptyState
-      folderWorkspace={folderWorkspace}
+      folderWorkspace={folder}
       title="No attached worktrees yet"
       copy="Worktrees created from this workspace will show up here."
     />
@@ -83,6 +84,8 @@ describe('folder empty-state repository rows at catalog scale', () => {
 
       act(() => useAppStore.setState({ activeWorktreeId: 'unrelated' }))
       act(() => useAppStore.setState({ worktreesByRepo: { 'repo-0': [] } }))
+      // Activity bumps replace the folder record without touching its group or host.
+      view.rerender(<Panel folder={{ ...folderWorkspace, lastActivityAt: 2 }} />)
       expect(counts.scans).toBe(0)
       expect(counts.scannedRepos).toBe(0)
 

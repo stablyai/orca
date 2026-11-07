@@ -74,10 +74,13 @@ describe('createFolderRepoWorktree', () => {
     )
   })
 
-  it('opens the composer when the repository asks before running setup', async () => {
-    storeState.createWorktree.mockRejectedValue(
-      new Error('Setup decision required for this repository')
-    )
+  it.each([
+    [
+      "Error invoking remote method 'worktrees:create': Error: Setup decision required for this repository"
+    ],
+    ['Setup decision required for this repository']
+  ])('opens the composer when the repository asks before running setup (%s)', async (message) => {
+    storeState.createWorktree.mockRejectedValue(new Error(message))
 
     await createFolderRepoWorktree(folder, repo)
 
@@ -86,6 +89,17 @@ describe('createFolderRepoWorktree', () => {
       expect.objectContaining({ initialRepoId: 'repo-api', prefilledName: 'Login fix' })
     )
     expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('opens nothing when the setup refusal arrives after the user left the folder', async () => {
+    storeState.createWorktree.mockImplementation(async () => {
+      storeState.activeWorkspaceKey = 'folder:other'
+      throw new Error('Setup decision required for this repository')
+    })
+
+    await createFolderRepoWorktree(folder, repo)
+
+    expect(storeState.openModal).not.toHaveBeenCalled()
   })
 
   it.each([

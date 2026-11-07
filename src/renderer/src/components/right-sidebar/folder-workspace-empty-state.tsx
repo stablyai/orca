@@ -2,6 +2,7 @@ import { memo, useMemo, useSyncExternalStore } from 'react'
 import { FolderGit2, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store'
 import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
@@ -32,25 +33,25 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
   copy,
   showRepoActions = true
 }: FolderWorkspaceEmptyStateProps): React.JSX.Element {
+  // memo would otherwise keep the button label in the previous language.
+  useUiLanguageRevision()
   const repos = useAppStore((s) => s.repos)
   const projectGroups = useAppStore((s) => s.projectGroups)
   useSyncExternalStore(subscribeFolderRepoCreates, getFolderRepoCreatesVersion)
 
   const folder = showRepoActions ? folderWorkspace : null
+  const projectGroupId = folder?.projectGroupId
+  const folderHostId = folder?.executionHostId ?? undefined
   // The panels re-render on every worktree catalog write; rescan only when the repo catalog moves.
   const folderRepos = useMemo(() => {
-    const projectGroup = folder
-      ? findIndexedProjectGroupOwner(
-          projectGroups,
-          folder.projectGroupId,
-          folder.executionHostId ?? undefined
-        )
+    const projectGroup = projectGroupId
+      ? findIndexedProjectGroupOwner(projectGroups, projectGroupId, folderHostId)
       : null
     // Direct SSH hosts can't create worktrees from this app (managed hosts route as runtimes).
     return getFolderSourceRepos(repos, projectGroups, projectGroup).filter(
       (repo) => !getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
     )
-  }, [folder, projectGroups, repos])
+  }, [projectGroupId, folderHostId, projectGroups, repos])
 
   return (
     <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-y-auto px-2 py-4 text-center">
