@@ -7,7 +7,10 @@ import type { Worktree } from '../worktree/types'
 import type { WorktreeWithInlineLineage } from '../worktree/workspace-lineage-graph'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { cloneDefaultWorkspaceStatuses } from '../workspace-statuses'
-import { getFolderWorkspaceWorktree } from '../folder-workspaces/folder-workspace-worktree'
+import {
+  folderWorkspaceToWorktree,
+  getFolderWorkspaceWorktree
+} from '../folder-workspaces/folder-workspace-worktree'
 import { planSidebarRows } from './sidebar-row-plan'
 import { resolveSidebarLineageParentIdentities } from './worktree-lineage-projection'
 import type { Row, WorktreeGroupBy } from './row-types'
@@ -85,7 +88,8 @@ function plan(
   worktrees: Worktree[] = [nested, other],
   hidden: Worktree[] = [],
   repos: Repo[] = [repo],
-  folders: FolderWorkspace[] = [folder]
+  folders: FolderWorkspace[] = [folder],
+  groups: ProjectGroup[] = [group]
 ): Row[] {
   const rows = new Map(
     [...worktrees, ...hidden, ...folders.map((entry) => getFolderWorkspaceWorktree(entry))].map(
@@ -106,7 +110,7 @@ function plan(
     ),
     worktreeMap: new Map([...worktrees, ...hidden].map((entry) => [entry.id, entry])),
     nestLineage: true,
-    projectGroups: [group],
+    projectGroups: groups,
     placeholderRepoIds: new Set(),
     importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
@@ -227,5 +231,17 @@ describe('folder workspaces as sidebar parents', () => {
       (entry) => entry.type === 'folder-workspace'
     )
     expect(folderRow?.type === 'folder-workspace' && folderRow.hostContextLabel).toBe('windows 2')
+  })
+
+  it('puts an unstamped folder card on its group machine, matching its label', () => {
+    const remoteGroup = { ...group, executionHostId: 'runtime:env-1' }
+    const folderRow = plan('none', undefined, [other], [], [repo], [folder], [remoteGroup]).find(
+      (entry) => entry.type === 'folder-workspace'
+    )
+    expect(folderRow?.type === 'folder-workspace' && folderRow.hostContextLabel).toBe('windows 2')
+    expect(
+      folderRow?.type === 'folder-workspace' &&
+        folderWorkspaceToWorktree(folderRow.folderWorkspace).hostId
+    ).toBe('runtime:env-1')
   })
 })
