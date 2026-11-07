@@ -32,6 +32,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     githubProjectSortOverride,
     githubProjectTable,
     githubRepoSlugCache,
+    githubRepoSources,
     linearStatusPickerItem,
     projectRowDetail,
     repoList,
@@ -77,15 +78,30 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
         : hostedRepos.filter((repo) => effectiveRepoIds.has(repo.id)),
     [effectiveRepoIds, hostedRepos]
   )
+  const projectRepoSlugs = useMemo(() => {
+    const merged: typeof githubRepoSlugCache = { ...githubRepoSlugCache }
+    for (const repo of hostedRepos) {
+      const discoveredIssues = githubRepoSources[repo.id]?.issues ?? null
+      const effectiveIssueRepo = repo.issueRepository ?? discoveredIssues
+      if (!effectiveIssueRepo) {
+        continue
+      }
+      const existing = merged[repo.id]
+      merged[repo.id] = existing
+        ? { ...existing, issueRepository: effectiveIssueRepo }
+        : { path: repo.path, repository: null, issueRepository: effectiveIssueRepo }
+    }
+    return merged
+  }, [githubRepoSlugCache, githubRepoSources, hostedRepos])
   const findProjectRowRepo = useCallback(
     (row: GitHubProjectRow): RepoSummary | null =>
       findRepoForGitHubProjectRepository(
         row.content.repository,
         hostedRepos,
-        githubRepoSlugCache,
+        projectRepoSlugs,
         activeGitHubProjectHost
       ) as RepoSummary | null,
-    [activeGitHubProjectHost, githubRepoSlugCache, hostedRepos]
+    [activeGitHubProjectHost, hostedRepos, projectRepoSlugs]
   )
   // Empty every() is true before repos load; consult resource readiness before claiming No project items.
   const githubProjectRepoSlugReady = useMemo(
@@ -103,11 +119,11 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
         ? (filterGitHubProjectRowsForRepos(
             githubProjectTable.rows,
             hostedRepos,
-            githubRepoSlugCache,
+            projectRepoSlugs,
             activeGitHubProjectHost
           ) as GitHubProjectRow[])
         : [],
-    [activeGitHubProjectHost, githubProjectTable, githubRepoSlugCache, hostedRepos]
+    [activeGitHubProjectHost, githubProjectTable, hostedRepos, projectRepoSlugs]
   )
   const visibleGitHubProjectGroups = useMemo<ProjectGroup[]>(() => {
     if (!githubProjectTable) {

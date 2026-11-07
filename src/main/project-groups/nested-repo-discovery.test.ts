@@ -89,6 +89,32 @@ describe('scanNestedRepos', () => {
     expect(result.repos.map((repo) => repo.path)).toEqual(['/workspace/api'])
   })
 
+  it('discovers direct child git repositories even when excluded by parent .gitignore and supports includeNestedInsideGitRepo', async () => {
+    const directories = new Map([
+      ['/workspace', ['.gitignore', 'bridgeroad-app', 'w0m-web', 'ignored-non-git']],
+      ['/workspace/ignored-non-git', ['deep-repo']]
+    ])
+    const files = new Map([['/workspace/.gitignore', '/*\n!/.w0m/\n']])
+    const gitRepos = new Set([
+      '/workspace',
+      '/workspace/bridgeroad-app',
+      '/workspace/w0m-web',
+      '/workspace/ignored-non-git/deep-repo'
+    ])
+
+    const result = await scanNestedRepos({
+      path: '/workspace',
+      options: { includeNestedInsideGitRepo: true },
+      filesystem: posixTestFilesystem({ directories, gitRepos, files })
+    })
+
+    expect(result.selectedPathKind).toBe('git_repo')
+    expect(result.repos.map((repo) => repo.path)).toEqual([
+      '/workspace/bridgeroad-app',
+      '/workspace/w0m-web'
+    ])
+  })
+
   it.skipIf(process.platform === 'win32')(
     'does not follow symlinked directories outside the selected folder',
     async () => {

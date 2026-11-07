@@ -8,6 +8,7 @@ import {
   getGitHubApiRepositoryForRemote,
   getOriginGitHubApiRepository
 } from '../../github-api-repository'
+import { resolveNestedPrRepositoryFallback } from '../../sdlc-issue-repository'
 import { WORK_ITEM_PR_LIST_JSON_FIELDS, type MainWorkItem } from './../map/work-item-field-coercion'
 import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-item-search-query'
 export type WorkItemListRequest = {
@@ -155,10 +156,26 @@ export async function resolvePrWorkItemSource(
       ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
       : null
   )
-  const [originCandidate, upstreamCandidate] = await Promise.all([
+  const [rawOriginCandidate, rawUpstreamCandidate] = await Promise.all([
     originCandidatePromise,
     upstreamCandidatePromise
   ])
+  const nestedFallback = await resolveNestedPrRepositoryFallback({
+    repoPath,
+    origin: rawOriginCandidate,
+    connectionId,
+    probeRemote: async (targetPath, remoteName) => {
+      if (
+        remoteName === 'upstream' &&
+        !(await shouldProbeGitRemote(targetPath, 'upstream', connectionId, localGitOptions))
+      ) {
+        return null
+      }
+      return getGitHubApiRepositoryForRemote(targetPath, remoteName, connectionId, localGitOptions)
+    }
+  })
+  const originCandidate = nestedFallback.originCandidate ?? rawOriginCandidate
+  const upstreamCandidate = rawUpstreamCandidate ?? nestedFallback.upstreamCandidate
   // Fork contribution PRs live upstream; explicit origin alone selects the fork namespace.
   const source = preference === 'origin' ? originCandidate : (upstreamCandidate ?? originCandidate)
   return { source, originCandidate, upstreamCandidate }

@@ -74,6 +74,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'editorFormatter'
       | 'repoIcon'
       | 'upstream'
+      | 'issueRepository'
       | 'gitRemoteIdentity'
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
@@ -122,6 +123,14 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.upstream
     } else {
       sanitized.upstream = upstream
+    }
+  }
+  if ('issueRepository' in sanitized) {
+    const issueRepository = sanitizeRepoUpstream(sanitized.issueRepository)
+    if (issueRepository === undefined) {
+      delete sanitized.issueRepository
+    } else {
+      sanitized.issueRepository = issueRepository
     }
   }
   if ('gitRemoteIdentity' in sanitized) {

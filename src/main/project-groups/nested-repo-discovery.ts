@@ -8,6 +8,7 @@ import {
   isIgnoredNestedRepoDirectory,
   normalizeNestedRepoScanOptions,
   readNestedRepoGitignoreRules,
+  shouldSkipDirectory,
   type NestedRepoDirectoryEntry,
   type NestedRepoScanFilesystem,
   type TraversalFolder
@@ -152,15 +153,19 @@ export async function scanNestedRepos(args: {
     stopped = true
     return true
   }
+  const selectedPathIsGitRepo = Boolean(await filesystem.isSelectedPathGitRepo(args.path))
+  const rootKind: NestedRepoScanResult['selectedPathKind'] = selectedPathIsGitRepo
+    ? 'git_repo'
+    : 'non_git_folder'
   const emitProgress = (): void => {
-    args.onProgress?.(buildResult('non_git_folder'))
+    args.onProgress?.(buildResult(rootKind))
   }
 
-  if (await filesystem.isSelectedPathGitRepo(args.path)) {
+  if (selectedPathIsGitRepo && !options.includeNestedInsideGitRepo) {
     return buildResult('git_repo')
   }
   if (noteAbort()) {
-    return buildResult('non_git_folder')
+    return buildResult(rootKind)
   }
 
   const foldersToTraverse: (TraversalFolder | undefined)[] = [
@@ -226,8 +231,12 @@ export async function scanNestedRepos(args: {
       if (noteAbort()) {
         break
       }
+      if (shouldSkipDirectory(name, currentFolder.depth)) {
+        continue
+      }
       const childSegments = [...currentFolder.segments, name]
-      if (isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules)) {
+      const ignoredByRules = isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules)
+      if (ignoredByRules && currentFolder.depth > 0) {
         continue
       }
       const childPath = filesystem.joinPath(currentFolder.path, name)
@@ -246,6 +255,9 @@ export async function scanNestedRepos(args: {
         // Hide submodule-style descendants until the group UI supports selecting them.
         continue
       }
+      if (ignoredByRules) {
+        continue
+      }
       // Breadth-first traversal spends the bounded scan on nearby siblings before deep branches.
       if (currentFolder.depth < options.maxDepth) {
         foldersToTraverse.push({
@@ -258,5 +270,5 @@ export async function scanNestedRepos(args: {
     }
   }
 
-  return buildResult('non_git_folder')
+  return buildResult(rootKind)
 }

@@ -3740,7 +3740,6 @@
       "pages": "Pages GitHub",
       "pullRequests": "Pull requests",
       "queryingSource": "Recherche dans {{source}}",
-      "repoDescription": "Choisissez les dépôts à interroger.",
       "repos": "Dépôts",
       "upstream": "Upstream"
     },

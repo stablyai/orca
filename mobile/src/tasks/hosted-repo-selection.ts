@@ -1,10 +1,11 @@
 export type HostedRepoCandidate = {
   id: string
   kind?: string | null
+  issueRepository?: { owner: string; repo: string; host?: string } | null
 }
 
 export function isHostedTaskRepo(repo: HostedRepoCandidate): boolean {
-  return repo.kind !== 'folder'
+  return repo.kind !== 'folder' || Boolean(repo.issueRepository?.owner && repo.issueRepository.repo)
 }
 
 // Empty selection means all repos; removing all stale selections must widen the filter rather than hide every row.

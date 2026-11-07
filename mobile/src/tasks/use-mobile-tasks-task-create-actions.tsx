@@ -189,7 +189,55 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     },
     [client, loadTasks, repoListReload, taskUiReady]
   )
-  return Object.assign(model, { createTask, setGitHubIssueSourcePreference })
+
+  const setGitHubIssueRepository = useCallback(
+    async (repo: RepoSummary, rawSlug: string | null): Promise<boolean> => {
+      if (!client || !taskUiReady) {
+        return false
+      }
+      setError('')
+      try {
+        let issueRepository: { owner: string; repo: string; host: string } | null = null
+        if (rawSlug !== null && rawSlug.trim().length > 0) {
+          const cleaned = rawSlug
+            .trim()
+            .replace(/^https?:\/\/github\.com\//i, '')
+            .replace(/^\/+|\/+$/g, '')
+            .replace(/\.git$/i, '')
+          const [owner, repoName, extra] = cleaned.split('/')
+          if (!owner?.trim() || !repoName?.trim() || extra) {
+            throw new Error('Enter a GitHub repository as owner/repo.')
+          }
+          issueRepository = {
+            owner: owner.trim(),
+            repo: repoName.trim(),
+            host: 'github.com'
+          }
+        }
+        const reply = await taskRepoPreferenceWrite.request(
+          client,
+          {
+            repo: `id:${repo.id}`,
+            updates: { issueRepository }
+          },
+          { timeoutMs: 15_000 }
+        )
+        taskRepoPreferenceWrite.interpret(reply)
+        await repoListReload().catch(() => {})
+        await loadTasks({ silent: true })
+        return true
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update ticket repository')
+        return false
+      }
+    },
+    [client, loadTasks, repoListReload, taskUiReady]
+  )
+  return Object.assign(model, {
+    createTask,
+    setGitHubIssueRepository,
+    setGitHubIssueSourcePreference
+  })
 }
 
 export type TaskCreateActionsModel = ReturnType<typeof useMobileTasksTaskCreateActions>
