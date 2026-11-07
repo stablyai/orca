@@ -1,6 +1,11 @@
 import { normalizeJiraQuickFilterState } from '../../../../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
+  RecordProjectOpenParams,
+  SetProjectPinnedParams
+} from '../../../../../shared/rpc-contract/personal-project-order-params'
+import { mutatePersonalProjectOrder } from '../../../../../shared/personal-project-order-writes'
+import {
   normalizeJiraSavedFilterState,
   mutateJiraSavedFilterState
 } from '../../../../../shared/jira/jira-saved-filters'
@@ -43,6 +48,24 @@ function uiForCaller(
 }
 
 export const CLIENT_UI_METHODS = [
+  defineMethod({
+    name: 'ui.recordProjectOpen',
+    permission: 'workspace',
+    params: RecordProjectOpenParams,
+    handler: (params, context) => {
+      const result = mutatePersonalProjectOrder(context.runtime, params)
+      return { ...result, ui: uiForCaller(result.ui, context) }
+    }
+  }),
+  defineMethod({
+    name: 'ui.setProjectPinned',
+    permission: 'workspace',
+    params: SetProjectPinnedParams,
+    handler: (params, context) => {
+      const result = mutatePersonalProjectOrder(context.runtime, params)
+      return { ...result, ui: uiForCaller(result.ui, context) }
+    }
+  }),
   defineMethod({
     name: 'ui.getJiraQuickFilters',
     permission: 'workspace',

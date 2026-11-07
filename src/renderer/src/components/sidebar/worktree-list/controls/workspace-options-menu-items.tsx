@@ -1,3 +1,4 @@
+import { usePersonalProjectOrderSupported } from '@/hooks/use-personal-project-order'
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -147,6 +148,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
 }
 
 function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
+  const supportsPersonalOrder = usePersonalProjectOrderSupported()
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
   const projectOrderLabel =
@@ -182,6 +184,7 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
               <TooltipTrigger asChild>
                 <DropdownMenuRadioItem
                   value={opt.id}
+                  disabled={!supportsPersonalOrder && (opt.id === 'name' || opt.id === 'frequent')}
                   // Keep the menu open so people can compare order modes.
                   onSelect={(e) => e.preventDefault()}
                 >
@@ -189,7 +192,12 @@ function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps)
                 </DropdownMenuRadioItem>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={6}>
-                {opt.description}
+                {!supportsPersonalOrder && opt.id === 'recent'
+                  ? translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
+                      'Most recent workspace activity'
+                    )
+                  : opt.description}
               </TooltipContent>
             </Tooltip>
           ))}

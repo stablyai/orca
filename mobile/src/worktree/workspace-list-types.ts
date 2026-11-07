@@ -1,6 +1,10 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../src/shared/runtime-types'
-import type { ProjectSectionRepo } from '../../../src/shared/project-section-grouping'
+import type {
+  ProjectSectionModel,
+  ProjectSectionRepo
+} from '../../../src/shared/project-section-grouping'
+import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import type { WorkspaceRowFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 
 /** Fields every host the phone pairs with sends; the rest are optional because older hosts omit them. */
@@ -82,4 +86,14 @@ export type Section = {
   count?: number
   pendingCreations?: SectionPendingCreation[]
   data: WorkspaceListItem[]
+}
+
+export type ProjectSectionCatalog = {
+  /** Catalog repos of the hosts the list shows; each without rows gets an empty section. */
+  repos: readonly SectionRepo[]
+  /** Null until the desktop's catalog answers; rows then group by repo, as the desktop's would. */
+  grouping: ProjectSectionModel | null
+  /** Manual header rank; undefined keeps first-row order. */
+  repoOrder: ReadonlyMap<string, number> | undefined
+  projectOrderBy: ProjectOrderBy
 }

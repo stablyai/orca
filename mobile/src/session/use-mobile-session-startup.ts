@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
+import { recordPersonalProjectRouteIntent } from '../worktree/personal-project-route-intent'
 import { translate } from '../i18n/mobile-i18n'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { hostQueryKey } from '../query/host-query-key'
@@ -14,6 +15,7 @@ import type { RpcResponse } from '../transport/types'
 const LAST_TABS_META = { streamBacked: true }
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
     worktreeId,
@@ -155,6 +157,14 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
       // Interpret only actual replies; preserve absent activation replies as null rather than inventing refusals.
       const reportActivationOutcome = (response: RpcResponse | null): void => {
         const activation = response === null ? null : worktreeActivate.interpret(response)
+        if (activation?.accepted) {
+          void recordPersonalProjectRouteIntent({
+            intent: scope.projectOpen,
+            viewClient: scope.uiViewClient,
+            activation: activation.value,
+            executionHost
+          }).catch(() => {})
+        }
         if (
           !disposed &&
           activation?.accepted === true &&

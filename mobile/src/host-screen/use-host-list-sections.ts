@@ -68,13 +68,15 @@ function useLegacyHostListSections({
         state.servedProjectSections,
         state.desktopRepos,
         state.view.filters.visibleHostIds,
-        state.view.projectOrderBy
+        state.view.projectOrderBy,
+        state.view.personalProjectOrder
       ),
     [
       state.servedProjectSections,
       state.desktopRepos,
       state.view.filters.visibleHostIds,
-      state.view.projectOrderBy
+      state.view.projectOrderBy,
+      state.view.personalProjectOrder
     ]
   )
   const collapsedGroups = useCollapsedGroups(state)

@@ -24,6 +24,7 @@ export function buildOrderedGroups(args: {
   groupBy: WorktreeGroupBy
   naturalWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
+  repoOfWorktree?: (worktree: Worktree) => Repo | undefined
   prGroupOf: SidebarPRGroupReader
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectIndex: ProjectGroupingIndex | null
@@ -57,6 +58,7 @@ export function buildOrderedGroups(args: {
     // Shared with paired-phone Project sections.
     return buildProjectSections({
       items: naturalWorktrees,
+      repoOfItem: args.repoOfWorktree,
       repoIdOf: (worktree) => worktree.repoId,
       displayRepoIdOf: (worktree) =>
         (displayRootByIdentity?.get(getWorktreeHostIdentity(worktree)) ?? worktree).repoId,

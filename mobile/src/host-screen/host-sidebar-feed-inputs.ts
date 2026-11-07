@@ -28,6 +28,7 @@ export function buildHostFeedView(args: {
     groupBy: view.groupBy,
     sortBy: view.sortBy,
     projectOrderBy: args.projectOrderBy,
+    personalProjectOrder: view.personalProjectOrder,
     collapsedGroups: new Set(view.collapsedGroups),
     filters: view.filters,
     workspaceHostScope: ALL_EXECUTION_HOSTS_SCOPE,

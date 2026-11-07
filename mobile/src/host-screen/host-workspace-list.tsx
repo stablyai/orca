@@ -1,4 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import {
   ActivityIndicator,
   Animated,
@@ -47,6 +50,7 @@ export function HostWorkspaceList({
   /** The host name at the top of the list, folding into the bar as it scrolls. */
   pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
 }) {
+  const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -108,6 +112,17 @@ export function HostWorkspaceList({
   const renderSectionHeader = useCallback(
     ({ section }: { section: Section }) => {
       const collapseKey = section.collapseKey ?? section.key
+      const projectKey =
+        section.repo && controller.projectCatalog
+          ? resolveProjectPreferenceKey(
+              section.repo.id,
+              controller.projectCatalog.setups,
+              getRepoExecutionHostId(section.repo)
+            )
+          : null
+      const pinned = projectKey
+        ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
+        : false
       return (
         <HostSectionHeader
           title={section.title}
@@ -122,10 +137,30 @@ export function HostWorkspaceList({
           groupByRepo={groupBy === 'repo'}
           repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
           onToggle={toggleCollapsed}
+          pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
+          pinLabel={
+            pinned
+              ? t('hostScreen.project.unpin', 'Unpin project')
+              : t('hostScreen.project.pin', 'Pin project')
+          }
+          projectPinned={pinned}
+          onToggleProjectPin={settings.toggleProjectPin}
         />
       )
     },
-    [collapsedGroups, sectionCounts, pendingCollapseKeys, groupBy, repoLookById, toggleCollapsed]
+    [
+      collapsedGroups,
+      sectionCounts,
+      pendingCollapseKeys,
+      groupBy,
+      repoLookById,
+      toggleCollapsed,
+      controller.projectCatalog,
+      state.view.personalProjectOrder,
+      settings.supportsPersonalProjectOrder,
+      settings.toggleProjectPin,
+      t
+    ]
   )
 
   const renderItem = useCallback(
@@ -300,6 +335,10 @@ const HostSectionHeader = memo(function HostSectionHeader(props: {
   groupByRepo: boolean
   repoLook: RepoLook | null | undefined
   onToggle: (collapseKey: string) => void
+  pinRepo?: Section['repo']
+  pinLabel: string
+  projectPinned: boolean
+  onToggleProjectPin: HostScreenController['settings']['toggleProjectPin']
 }) {
   useMobileColorScheme()
   const pendingCreations = props.pendingCreations?.map((creation) => (
@@ -345,6 +384,21 @@ const HostSectionHeader = memo(function HostSectionHeader(props: {
         ) : null}
         <Text style={styles.sectionTitle}>{props.title}</Text>
         <Text style={styles.sectionCount}>{props.count}</Text>
+        {props.pinRepo ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={props.pinLabel}
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation()
+              if (props.pinRepo) {
+                void props.onToggleProjectPin(props.pinRepo)
+              }
+            }}
+          >
+            <Pin size={14} color={props.projectPinned ? colors.textPrimary : colors.textMuted} />
+          </Pressable>
+        ) : null}
         {props.pending && (
           <ActivityIndicator
             size="small"

@@ -148,7 +148,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
     owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex, repoOf(worktree)),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const folderBound =
@@ -163,6 +163,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           : buildOrderedGroups({
               groupBy,
               naturalWorktrees,
+              repoOfWorktree: repoOf,
               repoMap,
               prGroupOf,
               workspaceStatuses,

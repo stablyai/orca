@@ -102,6 +102,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const personalProjectOrder = useAppStore((s) => s.personalProjectOrder)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -127,9 +128,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const projectGrouping = useMemo(
     () => ({
       projects: projectHostSetupProjection.projects,
-      projectHostSetups: projectHostSetupProjection.setups
+      projectHostSetups: projectHostSetupProjection.setups,
+      personalProjectOrder
     }),
-    [projectHostSetupProjection]
+    [projectHostSetupProjection, personalProjectOrder]
   )
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
