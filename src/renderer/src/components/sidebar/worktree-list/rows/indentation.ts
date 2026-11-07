@@ -14,6 +14,8 @@ export const LINEAGE_IMMEDIATE_PARENT_STEP =
 export const LINEAGE_NESTED_ROW_SURFACE_INSET = 0
 export const LINEAGE_CHILDREN_INLINE_OFFSET =
   LINEAGE_IMMEDIATE_PARENT_STEP - WORKTREE_CARD_SURFACE_MARGIN - FLUSH_CARD_MIN_CONTENT_INSET
+// 2.0 cards lead with a 22px tab icon, so their children shift to start on the parent's title column.
+export const SLOT_LINEAGE_TITLE_COLUMN_SHIFT = 7
 // Why: header icon+gap (22) vs. card margin+border+legacy lane+gap (23) minus pullback lands the title on the header label.
 const GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET = 3
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10

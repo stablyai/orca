@@ -7,6 +7,7 @@ import WorktreeCard from './workspace-card/surface/WorktreeCard'
 import * as agentExpansion from './workspace-card/activity/worktree-card-agents-expansion-state'
 import * as rows from './worktree-list/rows/indentation'
 import {
+  FIXTURE_REPO,
   MINUTE,
   makeWorktree,
   seedWorkspaces,
@@ -208,8 +209,10 @@ function Card({
   children,
   childCount = 0,
   collapsed = false,
-  descendantIds
+  descendantIds,
+  worktreesById = nestedWorktrees
 }: {
+  worktreesById?: Map<string, Worktree>
   worktree: Worktree
   nested?: boolean
   active?: boolean
@@ -219,13 +222,13 @@ function Card({
   descendantIds?: readonly string[]
 }): React.JSX.Element {
   const descendantIdentities = descendantIds?.map((id) =>
-    composeWorktreeHostIdentity(nestedWorktrees.get(id)?.hostId, id)
+    composeWorktreeHostIdentity(worktreesById.get(id)?.hostId, id)
   )
   return (
     <div className="relative" data-worktree-id={worktree.id}>
       <WorktreeCard
         worktree={worktree}
-        repo={undefined}
+        repo={FIXTURE_REPO}
         isActive={active}
         contentIndent={nested ? 0 : TOP_LEVEL_CONTENT_INDENT}
         flushSurface
@@ -319,6 +322,42 @@ export const nesting = defineFixture({
         collapsed
         descendantIds={['wt-collapsed-child']}
       />
+    </SidebarFrame>
+  )
+})
+
+const PR_FAMILY: WorkspaceSeed[] = [
+  {
+    id: 'wt-pr-parent',
+    name: 'release-train',
+    pr: { number: 2490, state: 'draft' },
+    agents: [{ agentType: 'claude', state: 'done', minutesAgo: 20, message: 'Cut the branch' }]
+  },
+  { id: 'wt-pr-cli', name: 'rt-cli', pr: { number: 2520, state: 'open' }, agents: [] },
+  { id: 'wt-pr-web', name: 'rt-web', pr: { number: 2521, state: 'open' }, agents: [] },
+  { id: 'wt-pr-sdk', name: 'rt-sdk', pr: { number: 2515, state: 'merged' }, agents: [] },
+  { id: 'wt-pr-old', name: 'rt-old', pr: { number: 2401, state: 'closed' }, agents: [] },
+  { id: 'wt-pr-api', name: 'api', pr: { number: 2511, state: 'open' }, agents: [] }
+]
+const prWorktrees = worktreesFor(PR_FAMILY, now)
+const PR_CHILD_IDS = ['wt-pr-cli', 'wt-pr-web', 'wt-pr-sdk', 'wt-pr-old']
+
+// A collapsed parent speaks for its children's PRs: one icon per state, counts on the corner.
+export const prRollup = defineFixture({
+  width: SIDEBAR_WIDTH,
+  setup: () => {
+    seedWorkspaces(PR_FAMILY, now)
+  },
+  render: () => (
+    <SidebarFrame>
+      <Card
+        worktree={prWorktrees.get('wt-pr-parent')!}
+        childCount={PR_CHILD_IDS.length}
+        collapsed
+        descendantIds={PR_CHILD_IDS}
+        worktreesById={prWorktrees}
+      />
+      <Card worktree={prWorktrees.get('wt-pr-api')!} />
     </SidebarFrame>
   )
 })

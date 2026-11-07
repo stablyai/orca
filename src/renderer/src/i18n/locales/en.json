@@ -247,7 +247,11 @@
       "childFailed": "{{count}} failed",
       "childUnread": "{{count}} unread",
       "childWorking": "{{count}} working",
-      "workspaceMarkedUnread": "Workspace marked unread"
+      "workspaceMarkedUnread": "Workspace marked unread",
+      "prOpen": "{{count}} open",
+      "prDraft": "{{count}} draft",
+      "prMerged": "{{count}} merged",
+      "prClosed": "{{count}} closed"
     }
   },
   "app": {

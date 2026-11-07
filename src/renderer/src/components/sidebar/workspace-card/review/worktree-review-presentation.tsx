@@ -55,7 +55,7 @@ function getCheckTone(
   )
 }
 
-function getStateTone(state: WorktreeCardPrDisplay['state']): string {
+export function getReviewStateTone(state: WorktreeCardPrDisplay['state']): string {
   if (state === 'merged') {
     return 'text-purple-600/70 dark:text-purple-400/70'
   }
@@ -89,7 +89,7 @@ export function ReviewIcon({
   return createElement(Icon, {
     className: cn(
       className,
-      (showChecks ? getCheckTone(review) : null) ?? getStateTone(review.state)
+      (showChecks ? getCheckTone(review) : null) ?? getReviewStateTone(review.state)
     )
   })
 }

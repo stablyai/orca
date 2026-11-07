@@ -61,20 +61,22 @@ function hostTooltip(host: WorktreeCardHost): string {
   )
 }
 
-/** Muted machine name after the title, so every remote card says which computer it's on. */
+/** A server glyph after the title marks a remote card; the machine name is in its tooltip so titles keep their width. */
 export function WorktreeCardHostName({ host }: { host: WorktreeCardHost }): React.JSX.Element {
   const Icon = host.down ? ServerOff : Server
+  const label = hostTooltip(host)
   return (
     <span
       className={cn(
-        'inline-flex max-w-24 shrink-0 items-center gap-0.5 text-3xs leading-none',
+        'inline-flex shrink-0 items-center',
         host.down ? 'text-destructive' : 'text-muted-foreground/70'
       )}
-      title={hostTooltip(host)}
+      title={label}
+      aria-label={label}
+      role="img"
       data-worktree-card-host=""
     >
       <Icon className="size-2.5 shrink-0" aria-hidden />
-      <span className="min-w-0 truncate">{host.label}</span>
     </span>
   )
 }
