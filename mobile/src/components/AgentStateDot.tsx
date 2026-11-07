@@ -1,15 +1,18 @@
 import { Activity } from 'lucide-react-native'
-import { Animated, View, type ViewStyle } from 'react-native'
+import { View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
-import { useWorkingRingRotation } from './use-working-motion'
 
-// Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.
-// Separate from AgentSpinner’s five-state worktree rollup.
+// Per-agent state indicator, 1:1 with desktop AgentStateDot
+// (src/renderer/src/components/AgentStateDot.tsx): static yellow ring for 'working'
+// on mobile to avoid continuous animation battery drain,
+// emerald for 'done', red for blocked/waiting/failed (attention), muted for a user's Stop
+// ('interrupted'), amber for 'unconfirmed' (desktop's missing-evidence tone), neutral for idle. Distinct from the
+// worktree-level AgentSpinner, which collapses the agent vocabulary into the 5-state
+// rollup the sidebar dot uses.
 const dotColors = (): Record<
   Exclude<AgentDotState, 'working' | 'monitoring' | 'unverifiable'>,
   string
@@ -26,19 +29,6 @@ export const AGENT_WORKING_COLOR = '#eab308'
 /** The dot's box, so rows can line text up past it. */
 export const AGENT_STATE_DOT_SIZE = 10
 
-/** Spins only while mounted, so idle rows hold no loop; Reduce Motion closes the gap, as desktop does. */
-export function WorkingRing({ color, style }: { color: string; style: ViewStyle }) {
-  // Unknown counts as reduced, the same as LoadingSpinner.
-  const still = useReducedMotionEnabled() !== false
-  const ring = useWorkingRingRotation(!still)
-  return (
-    <Animated.View
-      ref={ring.ref}
-      style={[style, { borderColor: color }, still ? { borderTopColor: color } : ring.style]}
-    />
-  )
-}
-
 /** `unverifiable` is a child row's lost contact: desktop's dashed amber ring, a missing-evidence
  *  mark rather than a state claim. */
 export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable' }) {
@@ -48,7 +38,7 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
   if (state === 'working') {
     return (
       <View style={styles.wrapper}>
-        <WorkingRing color={AGENT_WORKING_COLOR} style={styles.spinner} />
+        <View style={styles.spinner} />
       </View>
     )
   }
@@ -103,6 +93,8 @@ const styles = themedStyleSheet(() => ({
     height: 6,
     borderRadius: radii.pill,
     borderWidth: 1.5,
-    borderTopColor: 'transparent'
+    borderColor: AGENT_WORKING_COLOR,
+    borderTopColor: 'transparent',
+    transform: [{ rotate: '225deg' }]
   }
 }))
