@@ -7,10 +7,10 @@ import {
   RelayCellAdmissionSelector,
   encodeMembership,
   type CellAdmissionMembership
-} from './cell-admission-selector.js'
+} from './cell/admission/cell-admission-selector.js'
 import type { RelayCellConfig, RelayConfig } from './config.js'
-import type { CredentialReservation, RelayCredentialStore } from './credential-store.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
+import type { CredentialReservation, RelayCredentialStore } from './credentials/credential-store.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
 import {
   EDGE_CELL_ID,
   EdgeAssignments,
@@ -20,9 +20,9 @@ import {
   mapEpochFloor,
   type EdgeRelayConfig
 } from './edge-relay.js'
-import { HostSessionRegistry } from './host-session-registry.js'
-import type { RelayRuntimeObserver } from './relay-observability.js'
-import { ProcessQueuedByteBudget } from './splice-forwarder.js'
+import { HostSessionRegistry } from './connections/host-session-registry.js'
+import type { RelayRuntimeObserver } from './observability/relay-observability.js'
+import { ProcessQueuedByteBudget } from './connections/splice-forwarder.js'
 
 const EDGE_URL = 'https://edge.relay.example.com'
 const GCE_CELL: RelayCellConfig = { id: 'production-gce-c3', url: 'https://c3.relay.example.com', capacityRequests: 1_000 }

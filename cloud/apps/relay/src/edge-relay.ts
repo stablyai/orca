@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
 import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
-import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
-import type { RelayDatabase, SqlRow } from './database.js'
+import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell/admission/cell-admission-selector.js'
+import type { RelayDatabase, SqlRow } from './database/database.js'
 import { z } from 'zod'
 import {
   EdgeAdminUnavailableError,

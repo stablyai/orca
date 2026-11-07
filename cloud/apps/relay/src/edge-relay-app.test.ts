@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RelayConfig } from './config.js'
-import { openInMemoryRelayDatabase, type RelayDatabase } from './database.js'
+import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
 import { EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
 }))
 
-vi.mock('./relay-token-verifier.js', () => ({
+vi.mock('./authentication/relay-token-verifier.js', () => ({
   createRelayTokenVerifier: () => fakes.verifyRelayToken,
   readBearer: (value: string | undefined) => value?.replace(/^Bearer /, '') ?? null
 }))

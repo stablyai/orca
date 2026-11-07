@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
-import { RelayCellAdmissionSelector } from './cell-admission-selector.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { RelayCellAdmissionSelector } from './cell/admission/cell-admission-selector.js'
+import { openRelayDatabase, type RelayDatabase } from './database/database.js'
 import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveBusyError, EdgeMoveDeferredError } from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
 
