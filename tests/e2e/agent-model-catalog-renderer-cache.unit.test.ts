@@ -8,10 +8,10 @@ const mocks = vi.hoisted(() => ({ call: vi.fn(), cli: vi.fn() }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels: mocks.cli
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => [],
   readLocalRuntimeCapabilitiesOrUnknown: () => []

@@ -20,7 +20,7 @@ export async function stopLegacyRelayBridgedShellsForTab(
   }
   // Loaded lazily: the module subscribes to main's pane list on import.
   const { legacyRelayBridgedPanesListed, legacyRelayBridgedPtyIdsForClosingTab } =
-    await import('@/components/terminal-pane/legacy-relay-bridge-panes')
+    await import('@/components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes')
   await legacyRelayBridgedPanesListed()
   // Why: a pane moved to another tab keeps its shell, and main's lease list can lag the move.
   const keep = new Set(plan.sharedPtyIds)

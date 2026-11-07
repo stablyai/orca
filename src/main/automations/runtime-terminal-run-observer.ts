@@ -1,4 +1,4 @@
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -41,6 +41,8 @@ export type AutomationRunTerminalHost = {
     options?: { condition?: 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
   ): Promise<{ satisfied: boolean; blockedReason?: string }>
   readTerminal(handle: string, opts?: { limit?: number }): Promise<{ tail: string[] }>
+  /** False only once no window graph can hold the run's terminal; a reloading graph still can. */
+  canOpenRunTerminals(): boolean
 }
 
 async function readTail(runtime: AutomationRunTerminalHost, handle: string): Promise<string[]> {
@@ -52,7 +54,7 @@ async function readTail(runtime: AutomationRunTerminalHost, handle: string): Pro
 }
 
 function snapshotOf(tail: readonly string[]): AutomationRunOutputSnapshot | null {
-  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const snapshotBuffer = createAutomationOutputSnapshotBuffer()
   snapshotBuffer.append(tail.join('\n'))
   return snapshotBuffer.snapshot()
 }
@@ -118,6 +120,10 @@ async function settleIdlePane(
 
 function isTerminalWaitTimeout(error: unknown): boolean {
   return error instanceof Error && error.message === 'timeout'
+}
+
+function isGraphUnavailable(error: unknown): boolean {
+  return error instanceof Error && error.message === 'runtime_unavailable'
 }
 
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -186,7 +192,7 @@ async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
 ): Promise<AutomationRunOutputSnapshot | null> {
-  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const snapshotBuffer = createAutomationOutputSnapshotBuffer()
   try {
     const read = await runtime.readTerminal(handle, { limit: TERMINAL_SNAPSHOT_LIMIT })
     snapshotBuffer.append(read.tail.join('\n'))
@@ -298,6 +304,11 @@ async function observeTerminalRun(
       const exit = signal.aborted ? null : readProvenTerminalExit(error)
       if (exit) {
         return observationOf(judgeRunExit(exit, judged), await readTail(runtime, handle), judged)
+      }
+      // A window reload unpublishes the graph for a moment; the run's terminal survives it.
+      if (!signal.aborted && isGraphUnavailable(error) && runtime.canOpenRunTerminals()) {
+        await sleep(AGENT_EVIDENCE_POLL_INTERVAL_MS, signal)
+        continue
       }
       // Individual wait timeouts do not prove the agent stopped working.
       if (signal.aborted || !isTerminalWaitTimeout(error)) {

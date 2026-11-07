@@ -4,7 +4,7 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '../../../store/sel
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
-import { getHostedReviewCacheKey } from '../../../store/slices/hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from '../../../store/slices/hosted-review/hosted-review-cache-identity'
 import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
 
 // Derive input types and cache keys together so a newly read field must also invalidate the cache.

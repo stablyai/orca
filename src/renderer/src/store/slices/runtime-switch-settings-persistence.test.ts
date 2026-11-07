@@ -4,7 +4,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { createTestStore } from './store-test-helpers'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import '@/lib/work-items/github/github-work-item-target-request'
 import '@/components/github/github-work-item-comment-mutations'
 import '../../../../shared/task-source-runtime-capabilities'

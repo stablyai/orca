@@ -21,7 +21,7 @@ import { readStructuredAgentLaunchRecord } from './structured-agent-session-laun
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function registerCreateSelectionTests(): void {
   it('freezes the message and held options in create and publishes without another read or send', async () => {

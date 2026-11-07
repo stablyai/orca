@@ -1,13 +1,11 @@
+import type * as RuntimeRpcCallModule from '../../runtime/rpc/calls/runtime-rpc-call'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createUIStore } from './ui-slice-test-harness'
-import type * as RuntimeRpcClient from '../../runtime/runtime-rpc-client'
-
-type RuntimeRpcClientModule = typeof RuntimeRpcClient
 
 const { callRuntimeRpc } = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
-vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<RuntimeRpcClientModule>()),
+vi.mock('../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc
 }))
 

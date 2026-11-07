@@ -4,7 +4,7 @@ import { markTerminalFollowOutput } from '@/lib/pane-manager/terminal-scroll-int
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { DEFAULT_TERMINAL_COPY_MODE_CONFIG } from '../../../../../shared/terminal/input/terminal-copy-mode-config'
-import { paneIsCoveredByNativeChat } from '../native-chat-covered-pane'
+import { paneIsCoveredByNativeChat } from '../chat/native-chat-covered-pane'
 import { hasPendingTerminalImeComposition } from '../input/ime/terminal-ime-composition-route'
 import { createTerminalCopyModeView, type TerminalCopyModeView } from './terminal-copy-mode-view'
 

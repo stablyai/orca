@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import type { PtyConnectionDeps } from '../../pty-connection/pty-connection-deps'
 import { installTerminalPaneMountEvents } from '../../mounting/terminal-pane-mount-events'
 import { moveTerminalPaneToNewTabForClient } from './terminal-pane-move-request-routing'
 import {

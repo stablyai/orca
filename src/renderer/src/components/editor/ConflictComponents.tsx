@@ -12,7 +12,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
+import type { ConflictReviewEntry } from '../../../../shared/editor-tab-view-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type {
   GitConflictKind,
   GitStatusEntry

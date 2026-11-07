@@ -23,7 +23,7 @@ vi.mock('./workspace-layout-frame-sync', async (importOriginal) => ({
   showStartupLayoutFrames: () => {}
 }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

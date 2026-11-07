@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react'
 import { useTerminalPaneHibernationWake } from '../mounting/use-terminal-pane-hibernation-wake'
 import { useTerminalPaneProcessVisibility } from '../viewport/visibility/use-terminal-pane-process-visibility'
 import { useTerminalForegroundAgentSampling } from '../input/focus/use-terminal-foreground-agent-sampling'
@@ -17,8 +18,12 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     deps.settings?.terminalScrollbackRows
   )
-  const systemPrefersDarkRef = refs.systemPrefersDarkRef
-  systemPrefersDarkRef.current = deps.systemPrefersDark
+  const { systemPrefersDarkRef } = refs
+  const { systemPrefersDark } = deps
+  // Layout phase: the mount and appearance passive effects read it after this commit.
+  useLayoutEffect(() => {
+    systemPrefersDarkRef.current = systemPrefersDark
+  }, [systemPrefersDarkRef, systemPrefersDark])
 
   useTerminalPaneHibernationWake(deps)
 

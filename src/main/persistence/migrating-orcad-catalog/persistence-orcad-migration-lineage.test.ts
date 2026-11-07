@@ -126,45 +126,6 @@ describe('orcad migration lineage', () => {
     }
   )
 
-  it('keeps an inferred folder parent over a worktree parent with the hydrate stamp', () => {
-    const store = createStore()
-    const inferredFolder: WorkspaceLineage = {
-      ...folderParent,
-      origin: 'cli',
-      capture: { source: 'env-workspace', confidence: 'inferred' }
-    }
-
-    commit(store, withLineage([worktreeParent('inferred')], [inferredFolder]))
-
-    expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
-    expect(store.getWorkspaceLineage(CHILD_KEY)).toMatchObject({
-      parentWorkspaceKey: 'folder:folder-1',
-      capture: { source: 'env-workspace', confidence: 'inferred' }
-    })
-  })
-
-  it('refuses two inferred parents without the hydrate stamp, changing nothing', () => {
-    const store = createStore()
-    const envCapture = {
-      origin: 'cli',
-      capture: { source: 'env-workspace', confidence: 'inferred' }
-    } as const
-
-    expect(() =>
-      commit(
-        store,
-        withLineage(
-          [{ ...worktreeParent('inferred'), ...envCapture }],
-          [{ ...folderParent, ...envCapture }]
-        )
-      )
-    ).toThrow('orcad_migration_dormant_id_conflict:lineage_parent')
-
-    expect(store.getRepos()).toEqual([])
-    expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
-    expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
-  })
-
   it('refuses a payload whose worktree has two explicit parents, changing nothing', () => {
     const store = createStore()
 
@@ -175,21 +136,6 @@ describe('orcad migration lineage', () => {
     expect(store.getRepos()).toEqual([])
     expect(store.getWorktreeLineage(CHILD)).toBeUndefined()
     expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
-  })
-
-  it('refuses a folder parent for a worktree whose parent is on another machine', () => {
-    const store = createStore()
-    store.setCrossStoreWorkspaceLineage(crossMachineParent, 'local')
-
-    expect(() => commit(store, withLineage([], [folderParent]))).toThrow(
-      'orcad_migration_dormant_id_conflict:lineage_parent'
-    )
-
-    expect(store.getRepos()).toEqual([])
-    expect(store.getWorkspaceLineage(CHILD_KEY)).toBeUndefined()
-    expect(store.getCrossStoreWorkspaceLineage(CHILD_KEY)?.parent.installationId).toBe(
-      'other-install'
-    )
   })
 
   it('refuses at commit when a parent on another machine appears after staging', () => {

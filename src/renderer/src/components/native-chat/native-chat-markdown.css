@@ -1,7 +1,16 @@
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
-/* :where keeps this below the link-label rule, so bold link text takes the link color. */
-.native-chat-markdown :where(h1, h2, h3, h4, h5, h6, [role='heading'], strong) {
+/* :where keeps these below the link-label rule, so bold link text takes the link color. */
+.native-chat-markdown :where(h1, h2, h3, h4, h5, h6, [role='heading']) {
   color: var(--chat-foreground-strong);
+}
+
+.native-chat-markdown :where(strong) {
+  color: var(--chat-bold-foreground, var(--chat-foreground-strong));
+}
+
+/* Match chat headings' semibold; inherited `bolder` resolved to 700 and outweighed them. */
+.native-chat-markdown :is(strong, b) {
+  font-weight: 600;
 }
 
 .native-chat-markdown h1 {
@@ -38,7 +47,7 @@
   border-radius: var(--radius-sm, 0.375rem);
   background: var(--chat-inline-code-surface);
   padding: 0.0625rem 0.3125rem;
-  color: var(--chat-code-foreground);
+  color: var(--chat-inline-code-foreground, var(--chat-code-foreground));
   font-size: var(--chat-inline-code-ratio, 0.8571428571em);
 }
 

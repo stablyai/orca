@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   createTestStore,
   makeRuntimeOwnedWorktree,
@@ -9,7 +9,7 @@ import {
   makeWorktree,
   seedStore
 } from './store-test-helpers'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
   applySleepRuntimeRpcDefault,
   createStoreCascadesMockApi

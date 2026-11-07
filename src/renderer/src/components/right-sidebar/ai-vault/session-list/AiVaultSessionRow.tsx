@@ -62,6 +62,7 @@ export function VaultSessionRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHit,
   sourceHostLabel,
@@ -95,6 +96,7 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
   /** The host a search hit came from, set when hits span several hosts. */
@@ -220,6 +222,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onRequestDelete={requestDelete}
           actionsHidden={Boolean(onPick)}
@@ -299,6 +302,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onDelete={requestDelete}
         />

@@ -9,7 +9,7 @@ import {
   WT,
   makeSnapshot,
   makeState
-} from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const host = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
 vi.mock('../../src/shared/layout-owner-switch', () => ({

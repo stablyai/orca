@@ -38,6 +38,7 @@ function createPane(initial: {
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
+    canOpenRunTerminals: () => true,
     readTerminal: async () => {
       if (initial.clearRowsOnRead) {
         rows = []

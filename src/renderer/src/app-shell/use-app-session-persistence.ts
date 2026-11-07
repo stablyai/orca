@@ -22,7 +22,7 @@ import {
 import { showShutdownCheckpointFailureToast } from '../lib/shutdown-checkpoint-failure-toast'
 import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
-import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
-} from '../../src/renderer/src/runtime/runtime-compatibility-test-fixture'
+} from '../../src/renderer/src/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   TEST_REPO,
   makeWorktree

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { HOST_MACHINE_KINDS } from '../../../src/shared/host-machine-line'

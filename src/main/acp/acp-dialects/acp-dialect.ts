@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -165,6 +166,8 @@ export type AcpDialect = {
   }
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
+  signInAccount?: AgentSessionAccountKind
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
 }

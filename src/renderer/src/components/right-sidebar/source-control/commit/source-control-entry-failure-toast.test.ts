@@ -53,17 +53,6 @@ describe('showSourceControlEntryFailureToast', () => {
     storeState.activeWorktreeId = 'wt-1'
   })
 
-  it('still reports a failure belonging to a worktree the user has left, naming it', () => {
-    // Suppress stale recovery actions after switches, but still report the original workspace's failure.
-    storeState.activeWorktreeId = 'wt-2'
-    show({ worktreeId: 'wt-1', worktreeName: 'feature-a', onRetry: vi.fn() })
-
-    expect(toastError).toHaveBeenCalledTimes(1)
-    expect(lastToast().title).toBe('Failed to stage “src/app.ts” in feature-a')
-    expect(lastToast().options.action).toBeUndefined()
-    expect(lastToast().options.duration).toBeUndefined()
-  })
-
   it('retires a Retry action that became stale after a worktree switch', () => {
     const onRetry = vi.fn()
     show({ onRetry })

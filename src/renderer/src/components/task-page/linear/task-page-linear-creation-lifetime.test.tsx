@@ -27,7 +27,7 @@ import {
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor, render, screen, fireEvent } from '@testing-library/react'
-import { deferred } from '../../../store/slices/linear-slice-test-harness'
+import { deferred } from '../../../store/slices/linear/linear-slice-test-harness'
 import { Suspense, startTransition, useState, useLayoutEffect, type ComponentProps } from 'react'
 
 type LinearDialogModel = ComponentProps<typeof TaskPageLinearIssueDialog>['model']

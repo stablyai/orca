@@ -4,11 +4,11 @@ import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 
 import './store-session-test-harness'
-import { createEditorTabsStore } from './editor-slice-test-harness'
+import { createEditorTabsStore } from './editor/editor-slice-test-harness'
 import '@/runtime/layout-apply-test-transport.test-fixture'
 import '../../../../shared/layout-owner-switch'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

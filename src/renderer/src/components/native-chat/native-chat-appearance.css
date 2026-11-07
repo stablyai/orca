@@ -18,6 +18,12 @@
   font-size: var(--text-chat-code);
 }
 
+/* On the root only: descendants inherit it as highlight styles, which costs no per-element style work. */
+.native-chat-appearance::selection {
+  background-color: var(--chat-selection-surface);
+  color: var(--chat-selection-foreground, var(--chat-source-foreground));
+}
+
 .native-chat-appearance :is(.font-sans, textarea, [contenteditable='true']) {
   font-family: inherit;
 }
@@ -65,15 +71,17 @@
   [data-native-chat-root] {
   --chat-pane: transparent;
   /* Text-bearing surfaces keep an opaque base, as in the light scheme. */
-  --chat-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-code-mix),
-    var(--chat-canvas)
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-canvas))
   );
-  --chat-inline-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-mix),
-    var(--chat-canvas)
+  --chat-inline-code-surface: var(
+    --chat-inline-code,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-mix),
+      var(--chat-canvas)
+    )
   );
   --chat-composer-surface: color-mix(
     in srgb,

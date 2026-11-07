@@ -17,7 +17,9 @@ const mocks = vi.hoisted(
   })
 )
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId,

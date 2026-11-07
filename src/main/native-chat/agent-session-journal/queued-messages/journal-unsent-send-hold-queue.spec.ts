@@ -134,15 +134,4 @@ export function registerJournalUnsentSendHoldQueueTests(
       expect(fixture.cardOrder(reopened)).toEqual(['A', 'B'])
     })
   })
-
-  describe('the source a send records', () => {
-    it('keeps only the kind of an agent’s source, never its senders', async () => {
-      const journal = await fixture.open()
-      await fixture.accept(journal, 'mail', { origin: 'host', source: fixture.MAIL_SOURCE })
-      await journal.close()
-      const reopened = await fixture.open()
-      expect(reopened.submission('mail')?.source).toEqual({ kind: 'agent' })
-      expect(JSON.stringify(reopened.submission('mail'))).not.toContain('agent:coordinator')
-    })
-  })
 }

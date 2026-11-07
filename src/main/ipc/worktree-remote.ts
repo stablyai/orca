@@ -1768,7 +1768,7 @@ async function performLocalWorktreeCreate(
       repo,
       createdYamlHooks,
       args.setupDecision,
-      args.approvedSetupHash
+      args
     )
     // Only the approved content may run; the client re-prompts with the branch's.
     const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision

@@ -1,4 +1,4 @@
-import type { SessionRestoredBannerReason } from '../../session-restored-banner-pane-state'
+import type { SessionRestoredBannerReason } from '../../session-restore/session-restored-banner-pane-state'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindSessionRestoredBannerAdmission(session: ConnectPanePtySession): void {

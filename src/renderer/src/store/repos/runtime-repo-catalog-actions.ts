@@ -18,7 +18,7 @@ import {
   reconcileFetchedCatalogWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
-import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { basename } from '@/lib/path'
 import { canAutoSaveOpenFile } from '@/components/editor/autosave/editor-autosave'
 import { indexEditorExternalWatchBatchPaths } from '@/components/editor/external-changes/editor-external-watch-path-index'

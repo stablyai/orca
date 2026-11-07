@@ -1,13 +1,13 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { CrewFacet, CrewInvalidation } from './crew-changes'
-import { buildCrewSnapshot, type CrewReadDependencies } from './crew-party-snapshot'
+import { buildCrewSnapshot } from './crew-party-snapshot'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration-crew'
 import {
   createCrewHostDerivation,
   refreshCrewStatuses,
   type CrewHostDerivation
 } from './crew-host-derivation'
-export { buildCrewSnapshot, type CrewReadDependencies } from './crew-party-snapshot'
 
 /** One host derivation is shared by all mounted parties; the last subscriber releases its inputs. */
 export class CrewReadModel {

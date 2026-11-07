@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import '@/store/slices/editor'
+import '@/store/slices/editor/create-editor-slice'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'

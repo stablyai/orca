@@ -6,7 +6,7 @@ import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../shared/agent-launch
 import {
   compatibilityEntry,
   rememberRuntimeEnvironmentCompatibility
-} from '@/runtime/runtime-compatibility-cache'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import {

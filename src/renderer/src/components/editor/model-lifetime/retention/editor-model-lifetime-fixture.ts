@@ -1,7 +1,7 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { vi } from 'vitest'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { createStoreSessionMockApi } from '@/store/slices/store-session-test-harness'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'

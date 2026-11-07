@@ -1,13 +1,16 @@
-import { callHostRoute } from '@/runtime/host-route-call'
+import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { hostRouteForAuthority, runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import {
+  hostRouteForAuthority,
+  runtimeTargetEnvironmentId
+} from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
-import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import { userNamedFileAccess } from '@/lib/local-file-access'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import {
   toRuntimeExecutionHostId,
@@ -24,7 +27,7 @@ import {
   hostOpensGrantedFilesInPlace,
   hostSavesGrantedFiles,
   isSshWorkspaceGrantRefusal
-} from '@/runtime/runtime-terminal-artifact-grant'
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 
 export type HostWorkspaceFile = {
   kind: 'host'

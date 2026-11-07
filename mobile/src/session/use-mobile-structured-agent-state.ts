@@ -33,6 +33,8 @@ import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-sub
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 
 const MAX_RETAINED_SESSION_STATES = 32
+/** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
+const STREAMED_TEXT_COALESCE_MS = 16
 
 // Read alongside the hold, so the stream's first open knows whether to ask for appends: this
 // connection's probe, else the status the shell proved (direct hosts only), else one read.
@@ -157,6 +159,7 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
+      coalesceMs: STREAMED_TEXT_COALESCE_MS,
       textAppend: hostStreamsTextAppends(client),
       subscribeRetryNow: subscribeConnectionRevival
     })

@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
-import { useSessionRestoredBannerDismiss } from '../useSessionRestoredBannerDismiss'
+import { useSessionRestoredBannerDismiss } from './useSessionRestoredBannerDismiss'
 import {
   addSessionRestoredBannerPaneId,
   dismissSessionRestoredBannerPaneIds,
   removeSessionRestoredBannerPaneId,
   type SessionRestoredBannerDismissEvent,
   type SessionRestoredBannerReason
-} from '../session-restored-banner-pane-state'
+} from './session-restored-banner-pane-state'
 import type { TerminalPaneStoreController } from '../controller/use-terminal-pane-store-bindings'
 
 export function useRestoredSessionBannerActions({

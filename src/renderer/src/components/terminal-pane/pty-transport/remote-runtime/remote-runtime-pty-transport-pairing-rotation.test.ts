@@ -103,7 +103,7 @@ async function installRepairableMain(): Promise<{
   }
   publishCatalog()
   const { setRuntimeEnvironmentCatalogRefresher } =
-    await import('@/runtime/runtime-environment-pairing-refresh')
+    await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
   setRuntimeEnvironmentCatalogRefresher(async () => publishCatalog())
   const isStale = (request: RevisionedRequest): boolean =>
     request.expectedEnvironmentPairingRevision !== undefined &&
@@ -197,7 +197,7 @@ describe('remote runtime pane across a pairing rotation', () => {
 
   afterEach(async () => {
     const { setRuntimeEnvironmentCatalogRefresher } =
-      await import('@/runtime/runtime-environment-pairing-refresh')
+      await import('@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh')
     setRuntimeEnvironmentCatalogRefresher(null)
   })
 

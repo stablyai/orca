@@ -14,7 +14,7 @@ import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { getOrcadSshDeployment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 
 /**
  * `local`: no SSH target this client dials for the worktree — a local workspace, a

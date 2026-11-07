@@ -1,7 +1,7 @@
 // Main move responses/frames can arrive after intervening user actions; verify roll-forward outcomes matching window-side commit tests.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
 import { layoutApplyTestTransport as main } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
 import { LEAF_1, LEAF_2, splitLayout } from './terminal-pane-tab-detach-fixture'
@@ -19,7 +19,7 @@ import {
 } from './terminal-pane-tab-detach-main.test-fixture'
 
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -38,10 +38,13 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentStatusModule>()
-  return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
-})
+vi.mock(
+  '../../../../../../shared/agent-status/title/agent-title-status',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AgentStatusModule>()
+    return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
+  }
+)
 
 const closeTerminalSurface = vi.fn(async (_args: unknown) => {})
 const moveLeafToNewTab = vi.fn()

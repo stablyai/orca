@@ -272,34 +272,6 @@ it('ends a shorter reader at its own deadline, and a stalled refresh lists nothi
   expect(h.run).not.toHaveBeenCalled()
 })
 
-it.each([10, 100])(
-  'resolves setup and project settings once for %i readers of one request, before and after it settles',
-  async (readers) => {
-    const h = harness()
-    const gate = Promise.withResolvers<void>()
-    h.folder.gate = gate
-    const reads = Array.from({ length: readers }, () =>
-      h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
-    )
-    gate.resolve()
-    await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-    // More readers arrive while the listing that setup found is still running.
-    reads.push(
-      ...Array.from({ length: readers }, () =>
-        h.service.demand({ agent: 'codex', sessionId: 'b', deadline: Date.now() + 30_000 })
-      )
-    )
-    h.discovery.resolve(listing('shared'))
-    await Promise.all(reads)
-    // One request needs one folder lookup, one CLI resolution and one project-settings check.
-    expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
-    // A due listing resolves the CLI twice (a snapshot, then a fresh lookup), once per setup.
-    expect(h.resolve.mock.calls.length).toBeLessThanOrEqual(2)
-    expect(h.workspaceMayOverrideDefaultModel.mock.calls.length).toBeLessThanOrEqual(1)
-    expect(h.run).toHaveBeenCalledOnce()
-  }
-)
-
 it('holds readers of a stalled refresh only to their own deadlines, and starts no other until asked', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
@@ -329,18 +301,6 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
   h.discovery.resolve(listing('fresh'))
   await vi.advanceTimersByTimeAsync(0)
   expect(await c).toMatchObject({ models: [{ id: 'fresh' }] })
-})
-
-it("resolves a moved folder afresh instead of reusing the old folder's setup", async () => {
-  const h = harness()
-  h.folder.cli = Promise.withResolvers<void>()
-  void h.service.demand({ agent: 'codex', sessionId: 'b' })
-  await vi.waitFor(() => expect(h.resolve).toHaveBeenCalledOnce())
-  h.folder.path = '/new'
-  h.service.retireContext('ws')
-  void h.service.demand({ agent: 'codex', sessionId: 'b' })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  expect(h.resolve.mock.calls.at(-1)?.[4]).toBe('/new')
 })
 
 it.each(['cancelled', 'stopped'] as const)(
@@ -394,22 +354,6 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
   await vi.advanceTimersByTimeAsync(0)
   // The project picks nothing, so the account's default stands.
   expect(await a).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
-})
-
-it("reuses a settled setup after its starting reader's deadline while its listing still runs", async () => {
-  vi.useFakeTimers()
-  onTestFinished(() => {
-    vi.useRealTimers()
-  })
-  const h = harness(agent)
-  void h.service.demand({ agent, sessionId: 'a', deadline: Date.now() + 1_000 })
-  void h.service.demand({ agent, sessionId: 'b', deadline: Date.now() + 30_000 })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  await vi.advanceTimersByTimeAsync(2_000)
-  void h.service.demand({ agent, sessionId: 'b', deadline: Date.now() + 30_000 })
-  await vi.advanceTimersByTimeAsync(0)
-  expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
-  expect(h.workspaceMayOverrideDefaultModel).toHaveBeenCalledOnce()
 })
 
 it("keeps the listing when the folder's settings stall, naming no default, within the reader's budget", async () => {

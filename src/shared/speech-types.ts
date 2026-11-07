@@ -50,6 +50,11 @@ export type SpeechTranscriptEvent = {
   sessionId: string
 }
 
+/** Desktop audio posted from the preload straight to the speech process; 'end' follows the last frame. */
+export type SpeechAudioPortMessage =
+  | { type: 'feed'; samples: Float32Array; sampleRate: number }
+  | { type: 'end' }
+
 export type SpeechLifecycleEvent = {
   sessionId: string
 }
@@ -84,4 +89,6 @@ export type VoiceSettings = {
   microphoneDeviceId: string | null
   /** Cached label for display when the preferred device is unplugged */
   microphoneDeviceLabel: string | null
+  /** Minutes an idle on-device model stays loaded; 0 unloads after each dictation, null never unloads. */
+  unloadModelAfterMinutes: number | null
 }

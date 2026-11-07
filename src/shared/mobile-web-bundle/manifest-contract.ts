@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { sha256 } from '../sha256'
 
 /** A reader that sees another value must reject rather than guess at the shape. */
