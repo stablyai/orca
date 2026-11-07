@@ -9,7 +9,7 @@ import {
   makeWorktree,
   makeFolderWorkspace
 } from '../../../../store/slices/worktrees-slice-test-fixtures'
-import { resolveQueuedInitialCwd } from '@/components/terminal-pane/terminal-pane-lifecycle-primitives'
+import { resolveQueuedInitialCwd } from '@/components/terminal-pane/mounting/queued-initial-cwd'
 import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
