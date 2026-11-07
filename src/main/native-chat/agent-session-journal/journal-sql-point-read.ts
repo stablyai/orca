@@ -16,6 +16,11 @@ import { JournalSqlReadValues } from './journal-sql-read-values'
 import { readJournalSqlProjection } from './journal-sql-read-transaction'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
+import {
+  readJournalSqlItems,
+  type JournalSqlItemRead,
+  type JournalSqlItemReadResult
+} from './journal-sql-item-reads'
 
 export type JournalSqlPointRead = {
   sessionId: string
@@ -30,6 +35,7 @@ export type JournalSqlPointRead = {
     | { kind: 'presentation-removed'; itemId: string }
     | { kind: 'canonical-item-id'; itemId: string }
     | { kind: 'provider-activity'; fence: number }
+    | JournalSqlItemRead
 }
 
 export type JournalSqlPointReadResult =
@@ -54,6 +60,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'presentation-removed'; removed: boolean }
   | { kind: 'canonical-item-id'; itemId: string }
   | { kind: 'provider-activity'; at: number | undefined }
+  | JournalSqlItemReadResult
 
 /** Point procedures decode only the named entity and its captured incarnations. */
 export function readJournalSqlPoint(
@@ -80,6 +87,20 @@ function read(
     )
   }
   switch (operation.kind) {
+    case 'items-by-kind':
+    case 'context-floor':
+    case 'running-turn':
+    case 'context-usage':
+    case 'thread-goal-source':
+      return readJournalSqlItems(
+        {
+          scope,
+          item: (itemId) => values.get<AgentJournalRenderItem>('items', itemId),
+          visible,
+          epoch
+        },
+        operation
+      )
     case 'metadata': {
       const sequence = scalars.get('lastSequence', 0)
       return {
