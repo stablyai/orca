@@ -104,23 +104,59 @@ describe('PR conversation request reuse', () => {
   })
 
   it('retains the successful REST source when GraphQL and the other REST source fail', async () => {
-    ghExecFileAsyncMock
-      .mockResolvedValueOnce(response(null))
-      .mockRejectedValueOnce(new Error('Issue comments failed'))
-      .mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            id: 11,
-            user: null,
-            body: 'Recovered review',
-            submitted_at: '2026-04-01T00:01:00Z',
-            html_url: 'https://example.test/review'
-          }
-        ])
-      })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('graphql')) {
+        return response(null)
+      }
+      if (args.some((arg) => arg.includes('/issues/7/comments'))) {
+        throw new Error('Issue comments failed')
+      }
+      return {
+        stdout: args.includes('user')
+          ? 'me'
+          : JSON.stringify([
+              {
+                id: 11,
+                user: null,
+                body: 'Recovered review',
+                submitted_at: '2026-04-01T00:01:00Z',
+                html_url: 'https://example.test/review'
+              }
+            ])
+      }
+    })
     await expect(getPRComments('/repo', 7, options)).resolves.toMatchObject([
       { id: 11, body: 'Recovered review' }
     ])
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('marks only the REST conversation comments the reading account wrote', async () => {
+    const restComment = (id: number, login: string) => ({
+      id,
+      user: { login, avatar_url: '' },
+      body: 'LGTM',
+      created_at: `2026-04-01T00:0${id}:00Z`,
+      html_url: `https://example.test/comment-${id}`
+    })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('graphql')) {
+        return response(null)
+      }
+      if (args.includes('user')) {
+        return { stdout: 'Me\n' }
+      }
+      return {
+        stdout: JSON.stringify(
+          args.some((arg) => arg.includes('/issues/7/comments'))
+            ? [restComment(1, 'alice'), restComment(2, 'me')]
+            : []
+        )
+      }
+    })
+    const comments = await getPRComments('/repo', 7, { ...options, noCache: true })
+    expect(comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
+      ['alice', undefined],
+      ['me', true]
+    ])
   })
 })
