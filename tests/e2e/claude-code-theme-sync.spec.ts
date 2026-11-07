@@ -1,6 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { Page } from '@playwright/test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
@@ -8,8 +7,7 @@ import {
   discoverActivePtyId,
   execInTerminal,
   sendToTerminal,
-  waitForActiveTerminalManager,
-  waitForTerminalOutput
+  waitForActiveTerminalManager
 } from './helpers/terminal'
 
 const enabled = process.env.ORCA_REAL_CLAUDE_THEME_TEST === '1'
@@ -21,33 +19,13 @@ const TOKYO_NIGHT_LIGHT_ACCENT = 0x34548a
 // Covers Orca's first five reload attempts (to 120 s) when macOS drops file events.
 const LIVE_SWITCH_TIMEOUT_MS = 130_000
 
-// The config folder must exist before launch, so it is created at load, only when the test runs.
-const root = enabled ? realpathSync(mkdtempSync(join(tmpdir(), 'orca-claude-theme-'))) : ''
-const configDir = join(root, 'claude')
-const workDir = join(root, 'work')
-if (enabled) {
-  mkdirSync(configDir)
-  mkdirSync(workDir)
-  writeFileSync(join(configDir, 'settings.json'), `${JSON.stringify({ theme: 'light' })}\n`)
-  writeFileSync(
-    join(configDir, '.claude.json'),
-    JSON.stringify({
-      hasCompletedOnboarding: true,
-      projects: { [workDir]: { hasTrustDialogAccepted: true } }
-    })
-  )
-}
-test.afterAll(() => {
-  if (enabled) {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
 test.use({
   launchEnv: { ORCA_BACKGROUND_LAUNCH: '1' },
-  orcaAppExtraEnv: { CLAUDE_CONFIG_DIR: configDir, DISABLE_AUTOUPDATER: '1' }
+  orcaAppExtraEnv: { DISABLE_AUTOUPDATER: '1' }
 })
 test.skip(!enabled, 'Set ORCA_REAL_CLAUDE_THEME_TEST=1 to run the installed Claude Code')
+// The journey types POSIX shell commands.
+test.skip(process.platform === 'win32', 'Uses a POSIX shell command line')
 
 /** Claude's prompt border: the first cell of the first full-width rule it draws. */
 function promptBorderColor(page: Page): Promise<number | null> {
@@ -90,9 +68,23 @@ async function expectLiveSwitch(page: Page, previous: number, target: number): P
   return Date.now() - started
 }
 
-async function startClaude(page: Page, ptyId: string): Promise<void> {
+/** Plain text of the active pane; Claude styles words separately, so serialized output splits them. */
+function terminalText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const state = window.__store!.getState()
+    const buffer = window.__paneManagers?.get(state.activeTabId ?? '')?.getActivePane()?.terminal
+      .buffer.active
+    const lines: string[] = []
+    for (let y = 0; buffer && y < buffer.length; y += 1) {
+      lines.push(buffer.getLine(y)?.translateToString(true) ?? '')
+    }
+    return lines.join('\n')
+  })
+}
+
+async function startClaude(page: Page, ptyId: string, workDir: string): Promise<void> {
   await execInTerminal(page, ptyId, `cd '${workDir}' && clear && claude`)
-  await waitForTerminalOutput(page, 'Claude Code', 30_000)
+  await expect.poll(() => terminalText(page), { timeout: 30_000 }).toContain('Claude Code v')
   await expect.poll(() => promptBorderColor(page), { timeout: 15_000 }).not.toBeNull()
 }
 
@@ -100,13 +92,16 @@ async function exitClaude(page: Page, ptyId: string): Promise<void> {
   await sendToTerminal(page, ptyId, '/exit')
   await page.waitForTimeout(500)
   await sendToTerminal(page, ptyId, '\r')
-  await waitForTerminalOutput(page, 'Resume this session', 15_000)
+  // Back at the shell prompt.
+  await expect
+    .poll(async () => (await terminalText(page)).trimEnd().split('\n').at(-1)?.trimEnd(), {
+      timeout: 15_000
+    })
+    .toMatch(/[$%#]$/)
 }
 
-const readTheme = () =>
-  JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf-8')).theme as unknown
-
 test('Claude Code follows the Orca terminal theme live and restores its own theme', async ({
+  electronApp,
   orcaPage
 }, testInfo) => {
   test.setTimeout(6 * 60_000)
@@ -127,20 +122,54 @@ test('Claude Code follows the Orca terminal theme live and restores its own them
     terminalThemeLight: 'Tokyo Night Light',
     terminalUseSeparateLightTheme: true
   })
-  // Orca takes the theme over at launch (the default); turning it off must have restored it.
-  await expect.poll(readTheme, { timeout: 30_000 }).toBe('light')
+  // Claude Code reads the isolated home's config; give it a user-picked theme while the sync is off.
+  const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
+  const settingsPath = join(home, '.claude', 'settings.json')
+  const workDir = join(home, 'claude-theme-work')
+  mkdirSync(workDir, { recursive: true })
+  mkdirSync(dirname(settingsPath), { recursive: true })
+  writeFileSync(
+    join(home, '.claude.json'),
+    JSON.stringify({
+      hasCompletedOnboarding: true,
+      projects: { [workDir]: { hasTrustDialogAccepted: true } }
+    })
+  )
+  const readSettings = (): Record<string, unknown> => {
+    try {
+      return JSON.parse(readFileSync(settingsPath, 'utf-8'))
+    } catch {
+      return {}
+    }
+  }
+  const readTheme = () => readSettings().theme
+  // Let the launch-time pass and the restore that turning the sync off triggers finish first.
+  await orcaPage.waitForTimeout(3_000)
+  writeFileSync(settingsPath, `${JSON.stringify({ ...readSettings(), theme: 'light' }, null, 2)}\n`)
   const ptyId = await discoverActivePtyId(orcaPage)
 
   // Off matches main: Claude keeps its own light theme on the dark terminal.
-  await startClaude(orcaPage, ptyId)
-  expect(await promptBorderColor(orcaPage)).toBe(CLAUDE_LIGHT_BORDER)
+  await startClaude(orcaPage, ptyId, workDir)
+  await expect
+    .poll(() => promptBorderColor(orcaPage), { timeout: 15_000 })
+    .toBe(CLAUDE_LIGHT_BORDER)
   await shot('before-dark')
   await exitClaude(orcaPage, ptyId)
 
   await updateSettings({ claudeCodeThemeSync: true })
-  await expect.poll(readTheme, { timeout: 15_000 }).toBe('custom:orca')
-  await startClaude(orcaPage, ptyId)
-  expect(await promptBorderColor(orcaPage)).toBe(TOKYO_NIGHT_ACCENT)
+  await expect.poll(readTheme, { timeout: 30_000 }).toBe('custom:orca')
+  const themeFile = join(home, '.claude', 'themes', 'orca.json')
+  const readThemeFile = () => {
+    try {
+      return readFileSync(themeFile, 'utf-8')
+    } catch {
+      return ''
+    }
+  }
+  await expect.poll(readThemeFile, { timeout: 30_000 }).toContain('"promptBorder": "#7aa2f7"')
+  await startClaude(orcaPage, ptyId, workDir)
+  // The previous session's frames stay in scrollback; wait for the new session's border.
+  await expect.poll(() => promptBorderColor(orcaPage), { timeout: 15_000 }).toBe(TOKYO_NIGHT_ACCENT)
   await shot('after-dark')
 
   // The running session recolors without a restart.

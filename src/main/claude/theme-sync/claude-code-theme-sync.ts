@@ -109,8 +109,16 @@ async function applyToConfigDir(
       owner,
       previousTheme: typeof settings.theme === 'string' ? settings.theme : null
     })
+    // Reread: Claude Code or the hook installer may have saved settings.json while the record was written.
+    const current = readHooksJson(settingsPath)
+    if (!current || current.theme !== settings.theme) {
+      await save(undefined)
+      return
+    }
+    // Under the lock, so another Orca's restore cannot leave its look in the file Orca now selects.
+    replaced.push(...(await writeThemeFile(configDir, theme)))
     try {
-      writeHooksJson(settingsPath, { ...settings, theme: THEME_SETTING })
+      writeHooksJson(settingsPath, { ...current, theme: THEME_SETTING })
     } catch (error) {
       // Without this, the next pass would read the unchanged theme as the user's own pick.
       await save(undefined)
@@ -165,34 +173,30 @@ async function restoreConfigDir(
     (error: unknown) => (isDefinitiveAbsence(error) ? ('gone' as const) : ('unreadable' as const))
   )
   const settingsPath = join(configDir, 'settings.json')
-  const outcome = await withClaudeThemeOwnership(configDir, async ({ entry, save }) => {
+  return await withClaudeThemeOwnership(configDir, async ({ entry, save }) => {
     if (!entry || entry.owner !== recorded.owner) {
-      return { restored: true }
+      return { restored: true, replaced: [] }
     }
     const reverted = revertSettings(settingsPath, entry, dirState)
-    if (reverted.restored) {
-      await save(undefined)
+    if (!reverted.restored) {
+      return { restored: false, replaced: [] }
     }
-    return reverted
+    await save(undefined)
+    // Why: account homes can share the default's themes folder; the first restored look wins.
+    const themeFile = await realpath(themeFilePath(configDir)).catch(() => themeFilePath(configDir))
+    if (reverted.previousTheme === undefined || publishedThemeFiles.has(themeFile)) {
+      return { restored: true, replaced: [] }
+    }
+    publishedThemeFiles.add(themeFile)
+    return {
+      restored: true,
+      // Under the lock, so it cannot overwrite the theme another Orca selects right after.
+      replaced: await writeThemeFile(configDir, releasedTheme(reverted.previousTheme, terminalBase))
+    }
   }).catch((error: unknown) => {
-    // Turning the sync off must not wait on the lock; a later pass drops the record once it frees.
-    console.warn(`[claude-theme] Restoring ${settingsPath} without the record lock:`, error)
-    const reverted = revertSettings(settingsPath, recorded, dirState)
-    return { ...reverted, restored: false }
+    console.warn(`[claude-theme] Could not restore ${settingsPath} yet:`, error)
+    return { restored: false, replaced: [] }
   })
-  if (outcome.previousTheme === undefined) {
-    return { restored: outcome.restored, replaced: [] }
-  }
-  // Why: account homes can share the default's themes folder; the first restored look wins.
-  const themeFile = await realpath(themeFilePath(configDir)).catch(() => themeFilePath(configDir))
-  if (publishedThemeFiles.has(themeFile)) {
-    return { restored: outcome.restored, replaced: [] }
-  }
-  publishedThemeFiles.add(themeFile)
-  return {
-    restored: outcome.restored,
-    replaced: await writeThemeFile(configDir, releasedTheme(outcome.previousTheme, terminalBase))
-  }
 }
 
 /** Where Claude Code runs from Orca: the user's own folder, account homes, and folders hooks reported. */
