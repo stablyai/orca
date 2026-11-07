@@ -148,15 +148,22 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
   const loadBranchCompare = useCallback(
     // The compare base can be the branch's upstream, so it follows the status read that triggered it.
-    // Resolves true when this attempt should run again: it published a failure or could not start.
-    async (upstreamName: string | undefined): Promise<boolean> => {
+    async (read: string, upstreamName: string | undefined) => {
+      // Forget a compare that didn't land so coming back to Changes retries it before status is stale.
+      // Only this attempt's own exits forget: a superseded one may share its read with the newer compare.
+      const forgetRead = () => {
+        if (comparedReadRef.current === read) {
+          comparedReadRef.current = null
+        }
+      }
       // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
         if (mountedRef.current) {
           setBranchCompareState({ kind: 'idle' })
         }
-        return true
+        forgetRead()
+        return
       }
       // Scope by host and route identity as well as render-time retirement to fence loads that reach the owner first.
       const scope: RequestScope = [client, statusIdentityKey]
@@ -170,15 +177,17 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       )
       // Mount liveness belongs to the view; a current reply still cannot publish after detach.
       if (!loaded || !mountedRef.current) {
-        return false
+        return
       }
       if (branchCompare.commit(loaded.lease, loaded.value) !== 'committed') {
-        return false
+        return
       }
       const outcome = loaded.value
       setRebaseBaseRef(outcome.effectiveBaseRef)
       setBranchCompareState((prev) => nextBranchCompareState(outcome, prev))
-      return outcome.kind === 'failed'
+      if (outcome.kind === 'failed') {
+        forgetRead()
+      }
     },
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
@@ -196,13 +205,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       statusQuery.status === 'success'
     ) {
       comparedReadRef.current = read
-      void loadBranchCompare(statusRead.status.upstreamStatus?.upstreamName).then((retry) => {
-        // Forget a compare that didn't land so coming back to Changes retries it before status is stale.
-        // A superseded attempt leaves the marker alone: the same read may already have a newer compare out.
-        if (retry && comparedReadRef.current === read) {
-          comparedReadRef.current = null
-        }
-      })
+      void loadBranchCompare(read, statusRead.status.upstreamStatus?.upstreamName)
     }
   })
   useEffect(() => {
