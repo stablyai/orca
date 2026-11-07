@@ -24,7 +24,7 @@ export class SessionSearchPostings {
     private readonly acceptsSession: (id: number) => boolean = () => true
   ) {}
 
-  examinePosting(): boolean {
+  private examinePosting(): boolean {
     // The first row beyond the shared budget is the request's only exhaustion probe.
     if (this.remaining === 0) {
       this.exhausted = true

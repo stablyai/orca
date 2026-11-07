@@ -13,7 +13,10 @@ import {
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
 import type { SessionRowFilter } from './session-search-row-filter'
-import { SessionSearchTypoRepair } from './session-search-typo-repair'
+import {
+  SessionSearchTypoRepair,
+  SessionSearchVocabularyBudget
+} from './session-search-typo-repair'
 import { SessionSearchPostings, SESSION_SEARCH_MESSAGE_CANDIDATES } from './session-search-postings'
 
 const RECENT_PAGE_ROWS = 512
@@ -77,10 +80,9 @@ export class SessionSearchRetrieval {
     this.typoRepair = new SessionSearchTypoRepair(db)
   }
 
-  /** Try typo repair before OR so common words cannot mask a misspelled term. */
+  /** Preserve original OR hits before spending the remaining allowance on optional repair. */
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
     let incomplete = false
-    let sessions: SessionRow[] = []
     const sessionCache = new Map<number, SessionRow | null>()
     const postings = new SessionSearchPostings(this.db, scope.scope, (id) => {
       if (!sessionCache.has(id)) {
@@ -91,29 +93,39 @@ export class SessionSearchRetrieval {
     const match = (expression: string): MessageRow[] => {
       const rows = this.match(expression, scope, postings)
       incomplete ||= rows.length >= SESSION_SEARCH_MESSAGE_CANDIDATES
-      sessions = [...new Set(rows.map((row) => row.session_row_id))].flatMap(
-        (id) => sessionCache.get(id) ?? []
-      )
       return rows
     }
+    const sessionsFor = (rows: MessageRow[]): SessionRow[] =>
+      [...new Set(rows.map((row) => row.session_row_id))].flatMap(
+        (id) => sessionCache.get(id) ?? []
+      )
     const exact = this.phraseThenAnd(plan, match)
     if (exact) {
-      return { ...exact, plan, incomplete: incomplete || postings.exhausted, sessions }
+      return {
+        ...exact,
+        plan,
+        incomplete: incomplete || postings.exhausted,
+        sessions: sessionsFor(exact.rows)
+      }
     }
-    const repaired = this.repair(plan, scope.scope, postings)
-    const effective = repaired ?? plan
-    const literal = repaired ? this.phraseThenAnd(repaired, match) : null
-    const found = literal ?? {
-      rows: match(orExpression(effective.terms)),
-      route: 'or' as const
-    }
+    const original = { rows: match(orExpression(plan.terms)), route: 'or' as const }
+    const vocabulary = new SessionSearchVocabularyBudget()
+    const repaired = this.repair(plan, scope.scope, postings, vocabulary)
+    const attempted = repaired
+      ? (this.phraseThenAnd(repaired, match) ?? {
+          rows: match(orExpression(repaired.terms)),
+          route: 'or' as const
+        })
+      : null
+    const successfulRepair = attempted && attempted.rows.length > 0 ? repaired : null
+    const found = successfulRepair && attempted ? attempted : original
     return {
-      sessions,
+      sessions: sessionsFor(found.rows),
       rows: found.rows,
-      incomplete: incomplete || postings.exhausted,
-      route: repaired ? (`typo+${found.route}` as SessionSearchRoute) : found.route,
-      plan: effective,
-      ...(repaired ? { repairedTerms: repaired.body } : {})
+      incomplete: incomplete || postings.exhausted || vocabulary.exhausted,
+      route: successfulRepair ? `typo+${found.route}` : found.route,
+      plan: successfulRepair ?? plan,
+      ...(successfulRepair ? { repairedTerms: successfulRepair.body } : {})
     }
   }
 
@@ -206,7 +218,8 @@ export class SessionSearchRetrieval {
   private repair(
     plan: SessionSearchQueryPlan,
     scope: SessionSearchScope,
-    postings: SessionSearchPostings
+    postings: SessionSearchPostings,
+    vocabulary: SessionSearchVocabularyBudget
   ): SessionSearchQueryPlan | null {
     const typoRepair = this.typoRepair
     let changed = false
@@ -217,7 +230,7 @@ export class SessionSearchRetrieval {
         return token
       }
       // Tool-only vocabulary must neither suppress nor supply a conversation-scoped repair.
-      const fix = typoRepair.correct(token, scope, postings)
+      const fix = typoRepair.correct(token, scope, postings, vocabulary)
       if (fix && fix !== token.toLowerCase()) {
         changed = true
         return fix

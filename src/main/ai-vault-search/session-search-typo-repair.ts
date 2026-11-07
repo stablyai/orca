@@ -8,10 +8,26 @@ const MAX_TERM_LENGTH = 40
 const LENGTH_SLACK = 2
 const MIN_DOC_FREQUENCY = 2
 const MIN_SIMILARITY = 0.82
-const MAX_CANDIDATES = 4000
+const MAX_VOCABULARY_SEEKS = 4000
 const MAX_VISIBILITY_PROBES = 8
 // Cap frequency tie-break counts so common terms cannot make repair unbounded.
 const MAX_COUNTED_ROWS = 64
+
+export class SessionSearchVocabularyBudget {
+  private remaining = MAX_VOCABULARY_SEEKS
+
+  get exhausted(): boolean {
+    return this.remaining === 0
+  }
+
+  take(): boolean {
+    if (this.exhausted) {
+      return false
+    }
+    this.remaining--
+    return true
+  }
+}
 
 function commonSubsequenceLength(a: string, b: string): number {
   let previous = Array.from<number>({ length: b.length + 1 }).fill(0)
@@ -44,8 +60,7 @@ export class SessionSearchTypoRepair {
       "CREATE VIRTUAL TABLE IF NOT EXISTS temp.session_search_vocab USING fts5vocab(main,messages_fts,'instance')"
     )
     this.candidatesByPrefix = db.prepare(
-      `SELECT term, length(term) AS term_length FROM temp.session_search_vocab
-       WHERE term >= ? AND term < ? ORDER BY term`
+      `SELECT term FROM temp.session_search_vocab WHERE term >= ? ORDER BY term LIMIT 1`
     )
   }
 
@@ -62,7 +77,8 @@ export class SessionSearchTypoRepair {
   correct(
     term: string,
     scope: SessionSearchScope,
-    postings = new SessionSearchPostings(this.db, scope)
+    postings = new SessionSearchPostings(this.db, scope),
+    vocabulary = new SessionSearchVocabularyBudget()
   ): string | null {
     const lowered = term.toLowerCase()
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
@@ -77,7 +93,7 @@ export class SessionSearchTypoRepair {
     // Widen cautiously: common prefix, transposed pair, then first letter.
     const prefixes = [lowered.slice(0, 2), lowered[1] + lowered[0], lowered[0]]
     for (const prefix of prefixes) {
-      const best = this.bestVisible(lowered, prefix, postings)
+      const best = this.bestVisible(lowered, prefix, postings, vocabulary)
       if (best) {
         return best
       }
@@ -89,9 +105,10 @@ export class SessionSearchTypoRepair {
   private bestVisible(
     lowered: string,
     prefix: string,
-    postings: SessionSearchPostings
+    postings: SessionSearchPostings,
+    vocabulary: SessionSearchVocabularyBudget
   ): string | null {
-    const counted = this.ranked(lowered, prefix, postings)
+    const counted = this.ranked(lowered, prefix, vocabulary)
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({
         ...candidate,
@@ -109,9 +126,9 @@ export class SessionSearchTypoRepair {
   private ranked(
     lowered: string,
     prefix: string,
-    postings: SessionSearchPostings
+    vocabulary: SessionSearchVocabularyBudget
   ): { term: string; score: number }[] {
-    return this.candidates(prefix, lowered.length, postings)
+    return this.candidates(prefix, lowered.length, vocabulary)
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term) }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || (left.term < right.term ? -1 : 1))
@@ -120,30 +137,25 @@ export class SessionSearchTypoRepair {
   private candidates(
     prefix: string,
     length: number,
-    postings: SessionSearchPostings
+    vocabulary: SessionSearchVocabularyBudget
   ): { term: string }[] {
-    if (postings.exhausted) {
-      return []
-    }
-    const last = prefix.charCodeAt(prefix.length - 1)
-    const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
-    const terms = new Set<string>()
-    for (const row of this.candidatesByPrefix.iterate(prefix, upper)) {
-      if (!postings.examinePosting()) {
+    const terms: { term: string }[] = []
+    let next = prefix
+    while (vocabulary.take()) {
+      const term = this.candidatesByPrefix.get(next)?.term
+      if (typeof term !== 'string' || !term.startsWith(prefix)) {
         break
       }
-      const term = row.term
+      // Why: strict > filters occurrences; the TEXT successor seeks past the whole doclist.
+      next = `${term}\u0000`
+      const termLength = Array.from(term).length
       if (
-        typeof term === 'string' &&
-        Number(row.term_length) >= Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK) &&
-        Number(row.term_length) <= length + LENGTH_SLACK
+        termLength >= Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK) &&
+        termLength <= length + LENGTH_SLACK
       ) {
-        terms.add(term)
-        if (terms.size >= MAX_CANDIDATES) {
-          break
-        }
+        terms.push({ term })
       }
     }
-    return Array.from(terms, (term) => ({ term }))
+    return terms
   }
 }
