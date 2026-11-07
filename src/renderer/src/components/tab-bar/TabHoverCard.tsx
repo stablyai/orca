@@ -9,7 +9,7 @@ export function TabHoverCard({
   programName,
   description,
   alert,
-  showWhenTitleFits = false,
+  showWhenUnclipped = false,
   onOpenChange
 }: {
   children: ReactNode
@@ -20,7 +20,7 @@ export function TabHoverCard({
   /** Controls below the program row; the card then stays open under the pointer. */
   alert?: ReactNode | ((dismiss: () => void) => ReactNode)
   /** The card carries details beyond the title, so it opens even when the title is not clipped. */
-  showWhenTitleFits?: boolean
+  showWhenUnclipped?: boolean
   onOpenChange?: (open: boolean) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -28,7 +28,7 @@ export function TabHoverCard({
   // Remove the portal before navigation can start rendering a slower destination.
   const dismiss = () => flushSync(() => setOpen(false))
   const interactive = alert !== undefined && alert !== null
-  const opensUnclipped = interactive || showWhenTitleFits
+  const opensUnclipped = interactive || showWhenUnclipped
   const canOpen = (): boolean => {
     const label = triggerRef.current?.querySelector<HTMLElement>('.tab-label')
     return opensUnclipped || !!(label && label.scrollWidth > label.clientWidth)

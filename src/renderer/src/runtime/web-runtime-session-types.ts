@@ -58,6 +58,10 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   selectWorktree?: boolean
 }
 
+export type CreateWebRuntimeSessionTerminalOnHostArgs = CreateWebRuntimeSessionTerminalArgs & {
+  environmentId: string | null
+}
+
 export type CreatedWebRuntimeSessionTerminal = {
   outcome: WebRuntimeTerminalCreateOutcome
   hostTabId?: string

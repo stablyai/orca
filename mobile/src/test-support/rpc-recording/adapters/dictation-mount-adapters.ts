@@ -48,7 +48,7 @@ export function dictationMountAdapters(
       let started: unknown = 'unstarted'
       let idle = false
       return {
-        action(name, args) {
+        action(name) {
           if (name === 'supersede') {
             generation += 1
             return
@@ -71,7 +71,7 @@ export function dictationMountAdapters(
             setIdle: () => {
               idle = true
             },
-            commitRecordingStart: () => args.recording !== false,
+            commitRecordingStart: () => {},
             rollbackRecordingStart: () => effect('rollback-recording', {})
           }).then((value: unknown) => {
             started = value

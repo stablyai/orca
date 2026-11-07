@@ -1,3 +1,5 @@
+import { agentTabLaunchStore } from './launch-agent-execution-context'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -8,11 +10,12 @@ import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/c
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
+import {
+  pairedAgentLaunchInputs,
+  pairedAgentSessionCapabilities
+} from '../../../paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { toast } from 'sonner'
@@ -21,7 +24,7 @@ import {
   deliverCreatedWebRuntimeAgentSessionPrompt,
   type createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-terminal-creation'
-import type { CreateWebRuntimeSessionTerminalArgs } from '@/runtime/web-runtime-session-types'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/web-runtime-session-types'
 import { planLaunchAgentStartupPrompt } from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
@@ -38,6 +41,7 @@ import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
+  workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
   cwd?: string | null
@@ -84,19 +88,9 @@ export async function launchAgentInWebHostTab(args: {
     : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
-  let launch: CreateWebRuntimeSessionTerminalArgs
+  let launch: CreateWebRuntimeSessionTerminalOnHostArgs
   try {
-    const { capable, complete } = environmentId
-      ? await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {
-          if (
-            isRuntimeCompatBlockError(error) ||
-            (error instanceof Error && error.name === 'AbortError')
-          ) {
-            throw error
-          }
-          return { capable: false, complete: false }
-        })
-      : { capable: false, complete: false }
+    const { capable, complete } = await pairedAgentSessionCapabilities(environmentId)
     const inputs = environmentId
       ? await pairedAgentLaunchInputs({ ...args, environmentId, complete, capable })
       : { preparedAgentCommand: true }
@@ -212,10 +206,10 @@ export async function launchAgentInWebHostTab(args: {
             })
           } else {
             // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-              kind: 'git-worktree',
-              worktreeId
-            })
+            const preferences = await ensureAgentLaunchPreferences(
+              agentTabLaunchStore(useAppStore.getState(), args),
+              { kind: 'git-worktree', worktreeId }
+            )
             startup = args.buildStartup(preferences.agentLaunchChoices)
           }
         } catch (error) {

@@ -9,7 +9,7 @@ import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   hasTerminalPaneSplitMountLease,
   takeQueuedTerminalPaneSplitRequests
-} from './terminal-pane-split-request-routing'
+} from './layout/split/terminal-pane-split-request-routing'
 
 afterEach(() => {
   _resetTerminalPaneSplitRequestRoutingForTests()

@@ -1,4 +1,8 @@
-import { LEAF_1, LEAF_2, unboundSplitLayout } from '../../terminal-pane-tab-detach-fixture'
+import {
+  LEAF_1,
+  LEAF_2,
+  unboundSplitLayout
+} from '../../layout/detach/terminal-pane-tab-detach-fixture'
 import type { AppState } from '@/store/types'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
 import './recovery/remote-runtime-pty-recovery-state'
@@ -7,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn<() => AppState>(() => {
@@ -83,10 +87,12 @@ describe('remote runtime pane binding ownership', () => {
       }))
       const { createTestStore, makeTab, seedStore } =
         await import('@/store/slices/store-test-helpers')
-      const { installPanePtyVisibilityBind } =
-        await import('../../pty-connection/pane-pty-visibility-bind')
+      const { installActivePanePtyBinding } =
+        await import('../../pty-connection/lifecycle/active-pane-pty-binding')
+      const { installTerminalBellCompletionArbitration } =
+        await import('../../pty-connection/notifications/terminal-bell-completion-arbitration')
       const { bindReplacedProcessInputModes } =
-        await import('../../pty-connection/replaced-process-input-modes')
+        await import('../../pty-connection/output/replaced-process-input-modes')
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const store = createTestStore()
       const old = 'remote:env-1@@saved-predecessor'
@@ -169,7 +175,8 @@ describe('remote runtime pane binding ownership', () => {
         clearPaneMode2031State: vi.fn(),
         agentCompletionCoordinator: { startProcessTracking: vi.fn() }
       } as unknown as ConnectPanePtySession
-      installPanePtyVisibilityBind(session)
+      installActivePanePtyBinding(session)
+      installTerminalBellCompletionArbitration(session)
       bindReplacedProcessInputModes(session)
       const onError = vi.fn()
       try {

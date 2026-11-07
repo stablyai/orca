@@ -112,7 +112,8 @@
       "pastePairingCode": "Ou coller le code d'appairage",
       "scanCodeStep": "Scannez le QR code",
       "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer"
+      "tryAgain": "Réessayer",
+      "codeExpiredOrReplaced": "Ce code d'appairage a expiré ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
     },
     "terminalSettings": {
       "defaultText": "Par défaut (100 %)",
@@ -223,7 +224,9 @@
       "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée."
     },
     "message": {
-      "copyMessage": "Copier le message"
+      "copyMessage": "Copier le message",
+      "forkFromResponse": "Créer une branche à partir de cette réponse",
+      "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
@@ -305,7 +308,8 @@
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
-      "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat"
+      "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
+      "forkedFrom": "Branche créée à partir de"
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -660,6 +664,12 @@
       "outcomeUnknownReturned": "Orca n'a pas pu confirmer si la conversation est revenue à ce message. Votre message est de retour dans le composer, et Orca vérifie la conversation avant l'envoi de votre prochain message.",
       "timeout": "Le chat ne s'est pas actualisé après le retour à ce message. Rouvrez-le pour voir les derniers échanges.",
       "pending": "Attendez que la conversation revienne au message antérieur."
+    },
+    "fork": {
+      "busy": "Une autre conversation ou un terminal s’ouvre. Patientez, puis créez à nouveau une branche de la conversation {{agent}}.",
+      "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
+      "failed": "{{agent}} n’a pas pu créer de branche de cette conversation. {{detail}}",
+      "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez."
     }
   },
   "common": {
@@ -1111,6 +1121,12 @@
     "mermaidDiagram": {
       "expand": "Agrandir le diagramme",
       "label": "Diagramme Mermaid"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Planifier",
+        "exitPlanMode": "Quitter le mode plan"
+      }
     }
   },
   "connection": {
@@ -1540,7 +1556,8 @@
       "removeHost": "Supprimer l'hôte",
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
-      "unpin": "Désépingler"
+      "unpin": "Désépingler",
+      "rename": "Renommer"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -1622,6 +1639,12 @@
       "thisComputer": "Cet ordinateur",
       "waitingForDesktop": "Toujours en attente de l'ordinateur",
       "workspaceOptions": "Options des espaces de travail"
+    },
+    "workspaceRenameSheet": {
+      "title": "Renommer l’espace de travail",
+      "emptyUsesBranch": "Laissez vide pour utiliser le nom de la branche.",
+      "emptyUsesFolder": "Laissez vide pour utiliser le nom du dossier.",
+      "failed": "Impossible de renommer l’espace de travail. {{reason}}"
     }
   },
   "navigation": {
@@ -2398,7 +2421,8 @@
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
-      "allowAutoClose": "Autoriser la fermeture automatique"
+      "allowAutoClose": "Autoriser la fermeture automatique",
+      "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
@@ -4127,7 +4151,11 @@
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
       "task": "Tâche",
-      "review": "Vérifier"
+      "review": "Vérifier",
+      "discardChangesTitle": "Abandonner les modifications ?",
+      "discardChangesMessage": "Les modifications non enregistrées de cette automatisation seront perdues.",
+      "discard": "Abandonner",
+      "keepEditing": "Continuer la modification"
     },
     "orphanIssues": {
       "hostReselection": "Modifiez cette automatisation et sélectionnez à nouveau son hôte avant de l’exécuter.",

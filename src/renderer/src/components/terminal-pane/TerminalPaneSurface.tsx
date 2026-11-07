@@ -24,11 +24,12 @@ import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
   TerminalPaneProcessExitPortals,
-  TerminalPaneRecoveryPortals,
   TerminalPaneSshReconnectPortals
 } from './TerminalPaneRuntimePortals'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
-import { canCloseTerminalPane, terminalPaneCloseLabel } from './terminal-pane-close-affordance'
+import { TerminalPaneRecoveryPortals } from './TerminalPaneRecoveryPortals'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
+// oxfmt-ignore
+import { canCloseTerminalPane, terminalPaneCloseLabel } from './layout/close/terminal-pane-close-affordance'
 import { useAppStore } from '@/store'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'

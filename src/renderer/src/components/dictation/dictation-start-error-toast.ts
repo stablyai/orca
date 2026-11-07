@@ -4,13 +4,41 @@ import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
 
-function openVoiceSettings(): void {
-  useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
-  useAppStore.getState().openSettingsPage()
+function openVoiceSettingsAction(): { label: string; onClick: () => void } {
+  return {
+    label: translate('auto.components.dictation.DictationController.bb7f599ee7', 'Open Settings'),
+    onClick: () => {
+      useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
+      useAppStore.getState().openSettingsPage()
+    }
+  }
+}
+
+export function showDictationNoModelToast(): void {
+  toast(
+    translate(
+      'auto.components.dictation.DictationController.noModel',
+      'No speech model selected. Download one in Settings > Voice.'
+    ),
+    // Held keys and repeated presses replace this toast instead of stacking it.
+    { id: 'dictation-no-model', action: openVoiceSettingsAction() }
+  )
+}
+
+export function showDictationDisabledToast(): void {
+  toast(
+    translate(
+      'auto.components.dictation.DictationController.disabled',
+      'Voice dictation is disabled. Enable it in Settings > Voice.'
+    ),
+    { action: openVoiceSettingsAction() }
+  )
 }
 
 export function showDictationStartErrorToast(message: string): void {
-  const hostMessage = hostDictationErrorMessage(compactIpcErrorMessage(message) ?? '')
+  // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
+  const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
+  const hostMessage = hostDictationErrorMessage(detail)
   if (hostMessage) {
     toast.error(hostMessage)
   } else if (message.includes('Permission') || message.includes('NotAllowed')) {
@@ -20,18 +48,22 @@ export function showDictationStartErrorToast(message: string): void {
         'Microphone access denied. Grant access in system settings, then restart Orca.'
       )
     )
-  } else if (message.includes('not ready')) {
-    toast('Speech model not ready. Download it in Settings > Voice.')
+  } else if (message.includes('not ready') || detail.startsWith('voice_model_not_ready')) {
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.notReady',
+        'Speech model not ready. Download it in Settings > Voice.'
+      ),
+      { action: openVoiceSettingsAction() }
+    )
   } else if (message.includes('Unknown model')) {
-    toast('Selected model is no longer available. Please choose another in Settings > Voice.', {
-      action: {
-        label: translate(
-          'auto.components.dictation.DictationController.bb7f599ee7',
-          'Open Settings'
-        ),
-        onClick: openVoiceSettings
-      }
-    })
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.unknownModel',
+        'Selected model is no longer available. Please choose another in Settings > Voice.'
+      ),
+      { action: openVoiceSettingsAction() }
+    )
   } else {
     toast.error(
       translate(

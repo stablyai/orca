@@ -6,7 +6,7 @@ import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-t
 import {
   terminalPaneHasOtherOwner,
   type UnboundTerminalPaneRetirement
-} from './terminal-pane-retirement-ownership'
+} from './mounting/terminal-pane-retirement-ownership'
 
 /** Capture explicit split-close intent before the durable leaf binding is removed. */
 export function retireUnboundIpcTerminalPane(args: UnboundTerminalPaneRetirement): void {

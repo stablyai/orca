@@ -40,6 +40,8 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     name: buildHeadlessAutomationWorkspaceName(run.title, run.scheduledFor),
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
+    // Only the approved content runs; a branch that changed it skips setup.
+    ...(automation.setupTrustHash ? { approvedSetupHash: automation.setupTrustHash } : {}),
     activate: false,
     createdWithAgent: automation.agentId,
     startupAgent: automation.agentId,

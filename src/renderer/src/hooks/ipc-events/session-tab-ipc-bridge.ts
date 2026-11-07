@@ -13,14 +13,14 @@ import {
 } from '../../store/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'
 import {
   dropTabThroughLayoutOwner,
   type TabDrop
 } from '@/components/tab-group/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
-import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/terminal-pane-move-request-routing'
+import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(

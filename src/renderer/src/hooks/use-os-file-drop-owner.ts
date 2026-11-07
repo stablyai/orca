@@ -9,8 +9,8 @@ import {
   type DroppedPathConsumer,
   type PreparedDroppedPaths
 } from '../../../shared/native-file-drop-preparation'
-import { hasOsFileDragTypes } from '../lib/os-file-drop-cancellation-guard'
 import { prepareOsFileDropPaths } from '../lib/os-file-drop-preparation'
+import { hasOsFileDragTypes } from '../lib/os-file-drop-cancellation-guard'
 import {
   holdBrowserAttachmentFiles,
   releaseBrowserAttachmentFiles
@@ -29,19 +29,29 @@ type OsFileDropContext<Destination> = {
 }
 
 type OsFileDropOwnerOptions<Destination> = {
-  consumer: DroppedPathConsumer | ((destination: Destination | undefined) => DroppedPathConsumer)
-  sequence: OsFileDropSequence
   canAccept?: boolean | ((event: DragEvent) => boolean)
   captureDestination?: (event: DragEvent) => Destination
-  /** Web destinations that upload bytes receive held-file tokens because browser drops have no local paths. */
-  acceptsBrowserFiles?: boolean
-  /** Replaces root liveness for paths; preparation failures still reach onDrop. */
-  isDestinationLive?: (context: OsFileDropContext<Destination>) => boolean
-  onDrop: (
-    prepared: PreparedDroppedPaths,
-    context: OsFileDropContext<Destination>
-  ) => void | Promise<void>
-}
+} & (
+  | {
+      kind: 'files'
+      onFiles: (files: File[], context: OsFileDropContext<Destination>) => void
+    }
+  | {
+      kind?: 'paths'
+      consumer:
+        | DroppedPathConsumer
+        | ((destination: Destination | undefined) => DroppedPathConsumer)
+      sequence: OsFileDropSequence
+      /** Web destinations that upload bytes receive held-file tokens because browser drops have no local paths. */
+      acceptsBrowserFiles?: boolean
+      /** Replaces root liveness for paths; preparation failures still reach onDrop. */
+      isDestinationLive?: (context: OsFileDropContext<Destination>) => boolean
+      onDrop: (
+        prepared: PreparedDroppedPaths,
+        context: OsFileDropContext<Destination>
+      ) => void | Promise<void>
+    }
+)
 
 const registeredRoots = new WeakMap<HTMLElement, true>()
 
@@ -113,17 +123,17 @@ export function useOsFileDropOwner<Destination = undefined>(
           return
         }
 
-        const {
-          consumer,
-          sequence,
-          onDrop: deliver,
-          captureDestination,
-          isDestinationLive
-        } = optionsRef.current
+        const currentOptions = optionsRef.current
         const context: OsFileDropContext<Destination> = { target: event.target }
-        if (captureDestination) {
-          context.destination = captureDestination(event)
+        if (currentOptions.captureDestination) {
+          context.destination = currentOptions.captureDestination(event)
         }
+        const files = Array.from(event.dataTransfer?.files ?? [])
+        if (currentOptions.kind === 'files') {
+          currentOptions.onFiles(files, context)
+          return
+        }
+        const { consumer, sequence, onDrop: deliver, isDestinationLive } = currentOptions
         const preparationConsumer =
           typeof consumer === 'function' ? consumer(context.destination) : consumer
         const queueDelivery = (
@@ -143,7 +153,6 @@ export function useOsFileDropOwner<Destination = undefined>(
             })
             .catch((error: unknown) => console.error('OS file drop owner callback failed', error))
         }
-        const files = Array.from(event.dataTransfer?.files ?? [])
         if (files.length > NATIVE_FILE_DROP_MAX_PATHS) {
           queueDelivery({
             paths: [],
@@ -164,7 +173,7 @@ export function useOsFileDropOwner<Destination = undefined>(
         const getPathForFile = fs && 'getPathForFile' in fs ? fs.getPathForFile : undefined
         if (!getPathForFile) {
           queueDelivery(
-            optionsRef.current.acceptsBrowserFiles
+            currentOptions.acceptsBrowserFiles
               ? { paths: holdBrowserAttachmentFiles(files), failures: [] }
               : rejectedDrop('unresolved-paths', files.length)
           )
@@ -191,12 +200,11 @@ export function useOsFileDropOwner<Destination = undefined>(
         const resolutionFailures = unresolvedCount
           ? rejectedDrop('unresolved-paths', unresolvedCount).failures
           : []
-        queueDelivery(
-          prepareOsFileDropPaths(paths, preparationConsumer).then((prepared) => ({
-            paths: prepared.paths,
-            failures: [...resolutionFailures, ...prepared.failures]
-          }))
-        )
+        const preparation = prepareOsFileDropPaths(paths, preparationConsumer).then((prepared) => ({
+          paths: prepared.paths,
+          failures: [...resolutionFailures, ...prepared.failures]
+        }))
+        queueDelivery(preparation)
       }
 
       root.setAttribute(OS_FILE_DROP_OWNER_ATTRIBUTE, '')

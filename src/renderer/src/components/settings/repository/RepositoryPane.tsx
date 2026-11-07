@@ -26,6 +26,10 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryProjectSettingsSections } from './RepositoryProjectSettingsSections'
 import { RepositoryClaudeAccountSection } from './RepositoryClaudeAccountSection'
+import {
+  getRepositoryAgentTrustSearchEntry,
+  RepositoryAgentTrustSection
+} from './RepositoryAgentTrustSection'
 import { translate } from '@/i18n/i18n'
 import { matchesRepositoryIdentitySearch } from './identity/repository-identity-search'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
@@ -178,6 +182,7 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
     translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    getRepositoryAgentTrustSearchEntry().title,
     translate(
       'auto.components.settings.repository.search.keepForkUpToDate',
       'Keep Fork Up to Date'
@@ -306,6 +311,12 @@ export function RepositoryPane({
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryAgentTrustSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

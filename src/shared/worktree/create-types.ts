@@ -47,6 +47,18 @@ export type {
 
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
+/** The created worktree's shared setup commands, when they differ from what the client approved. */
+export type SetupTrustMismatch = { contentHash: string; scriptContent: string }
+
+/** Run a created worktree's setup and default-tab commands the user approved after its create skipped them. */
+export type RunApprovedWorktreeSetupArgs = { worktreeId: string; approvedSetupHash: string }
+
+export type RunApprovedWorktreeSetupResult =
+  // `unsupported`: the client's host predates the operation.
+  | { status: 'started' | 'not_configured' | 'unsupported' }
+  // The content changed again since the prompt; nothing ran.
+  | { status: 'mismatch'; setupTrustMismatch: SetupTrustMismatch }
+
 export type WorktreeCreateTimingPhase = {
   phase: string
   startedAtMs: number
@@ -106,6 +118,8 @@ export type CreateWorktreeArgs = {
   /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
   branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
   setupDecision?: SetupDecision
+  /** SHA-256 of the setup trust content the user approved; hosts run shared setup only if the created worktree's matches. Older clients omit it. */
+  approvedSetupHash?: string
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean
   sparseCheckout?: CreateSparseCheckoutRequest
@@ -127,6 +141,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** The workspace note; a task id in it names the parent the same way it does for a CLI create. */
+  comment?: string
   /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
   crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
@@ -189,6 +205,8 @@ export type CreateWorktreeResult = {
     terminalHandle?: string
   }
   defaultTabs?: WorktreeDefaultTabsLaunch
+  /** Setup and default-tab commands were skipped because the created branch's differ from the approved ones. */
+  setupTrustMismatch?: SetupTrustMismatch
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent

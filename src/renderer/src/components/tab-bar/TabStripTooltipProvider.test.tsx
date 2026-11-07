@@ -14,7 +14,7 @@ function renderTabs(): void {
             <span className="tab-label">first tab</span>
           </button>
         </TabHoverCard>
-        <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex" showWhenTitleFits>
+        <TabHoverCard title="Codex Chat" icon={<span />} programName="Codex" showWhenUnclipped>
           <button>
             <span className="tab-label">second tab</span>
           </button>

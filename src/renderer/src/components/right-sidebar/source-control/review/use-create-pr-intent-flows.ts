@@ -73,6 +73,7 @@ export function useSourceControlCreatePrIntentFlows(
     handlePullRequestCreated,
     hostedReviewCreateCopy,
     prBase,
+    prImageUploadPendingRef: reviewFlows.prImageUploadPendingRef,
     prBody,
     resolvedPrCreationDefaults,
     setCreatePrInFlightByWorktree,

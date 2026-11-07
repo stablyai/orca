@@ -10,7 +10,7 @@ import type {
   TerminalShortcutPolicy
 } from '../../../../../../shared/keybindings/types'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
-import { recordCreatedTerminalPaneSplit } from '../../terminal-pane-split-completion'
+import { recordCreatedTerminalPaneSplit } from '../../layout/split/terminal-pane-split-completion'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],

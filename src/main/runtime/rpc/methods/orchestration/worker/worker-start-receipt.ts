@@ -11,7 +11,6 @@ import {
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -70,7 +69,8 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
     await tearDownFailedWorkerStart({
       runtime: args.runtime,
       structuredSession: args.structuredSession,
-      dispatchId: args.dispatchId
+      dispatchId: args.dispatchId,
+      error: args.error
     })
   }
 }
@@ -85,10 +85,9 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
-  // Offer cleanup only for this start's created, still-owned terminal; structured teardown, user takeover and unsettled unknown outcomes need none here.
+  // Offer cleanup for this start's still-owned resource, including a chat retaining its refused task.
   const residual = unknown ? undefined : args.db.getWorkerTerminalResourceByOwner(args.dispatchId)
-  const releasable =
-    residual?.ownership_state === 'owned' && !isStructuredWorkerHandle(residual.terminal_handle)
+  const releasable = residual?.ownership_state === 'owned'
   return {
     runId: args.runId,
     taskId: args.taskId,
@@ -104,7 +103,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
     ...(releasable
       ? {
-          recovery: `This start created a terminal that never ran the Task. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
+          recovery: `This start left a worker session open. Close it with: orca orchestration worker-release --dispatch ${args.dispatchId}`
         }
       : {}),
     ...(unknown

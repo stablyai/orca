@@ -117,6 +117,8 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
+    // A malformed hash never matches, so the host skips setup rather than running unapproved content.
+    approvedSetupHash: z.string().max(128).optional(),
     // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),

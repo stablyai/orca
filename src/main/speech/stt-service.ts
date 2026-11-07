@@ -25,29 +25,30 @@ export class SttService {
     modelId: string,
     sink: SttEventSink,
     hotwordsFilePath?: string,
-    owner = 'desktop'
+    owner = 'desktop',
+    language?: string
   ): Promise<void> {
-    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner)
+    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner, language)
   }
 
-  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {
+  feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
     if (this.state.stopping) {
-      return
+      return false
     }
     const currentOwner = this.state.activeOwner ?? this.state.startingOwner
     if (!currentOwner) {
-      return
+      return false
     }
     if (currentOwner !== owner) {
       throw new Error('dictation_owner_mismatch')
     }
     if (this.state.cloudSession) {
-      this.state.cloudSession.feedAudio(samples, sampleRate)
-      return
+      return this.state.cloudSession.feedAudio(samples, sampleRate)
     }
     this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
       samples.buffer as ArrayBuffer
     ])
+    return false
   }
 
   stopDictation(

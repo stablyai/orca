@@ -2,7 +2,10 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../shared/protocol-version'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import { createDeferred, flushAsyncTicks } from './pty-connection-test-async'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
@@ -10,19 +13,19 @@ import {
   captureCallbackTerminalWrites,
   createManager,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { connectMockPanePty } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 /** Park reveal’s no-serializable-buffer answer is unverifiable, never empty; reuse the shared bounded restore budget and eventually recover or disclose loss instead of silently stopping after one probe. */
 const REMOTE_PTY_ID = 'remote:env-1@@pty-1'
@@ -76,7 +79,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 

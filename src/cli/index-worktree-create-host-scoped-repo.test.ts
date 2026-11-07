@@ -320,6 +320,45 @@ describe('worktree create from a worktree another host shares an id with', () =>
     }
   })
 
+  it.each(['folder:f1', 'active'])(
+    'lists the Git repositories of a folder parent when create has no repo (--parent-worktree %s)',
+    async (parent) => {
+      const path = resolve('/tmp/feature-folder')
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+      const lists: Record<string, unknown> = {
+        'worktree.list': worktreeListFixture([]).result,
+        'folderWorkspace.list': {
+          folderWorkspaces: [{ id: 'f1', projectGroupId: 'g1', folderPath: path, name: 'feature' }]
+        },
+        'projectGroup.list': { groups: [{ id: 'g1', name: 'feature', parentPath: path }] },
+        'repo.list': {
+          repos: [
+            { id: 'repo-api', path: join(path, 'api'), displayName: 'api' },
+            { id: 'elsewhere', path: resolve('/tmp/other'), displayName: 'other' }
+          ]
+        }
+      }
+      try {
+        callMock.mockImplementation(async (method: string) =>
+          okFixture(method, lists[method] ?? {})
+        )
+        await main(
+          ['worktree', 'create', '--name', 'fix-login', '--parent-worktree', parent],
+          join(path, 'api')
+        )
+        const output = [...errorSpy.mock.calls, ...logSpy.mock.calls].flat().join('\n')
+        expect(process.exitCode).toBe(1)
+        expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+        expect(output).toContain('--repo id:repo-api')
+        expect(output).not.toContain('id:elsewhere')
+      } finally {
+        process.exitCode = priorExitCode
+      }
+    }
+  )
+
   it.each([false, true])(
     'bounds inferred-create traversal and ambiguity sorting at catalog scale (distinct=%s)',
     async (distinct) => {

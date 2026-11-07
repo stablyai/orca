@@ -60,6 +60,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   runHooks?: boolean
   activate?: boolean
   setupDecision?: 'run' | 'skip' | 'inherit'
+  /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean

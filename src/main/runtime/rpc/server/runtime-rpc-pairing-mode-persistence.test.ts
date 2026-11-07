@@ -421,7 +421,7 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(endpointContext).toEqual({
         deviceId: offer.deviceId,
         connectionId: expect.any(String),
-        transport: { transport: 'direct' }
+        transport: { transport: 'direct', sourceClass: 'loopback' }
       })
       expect(endpointParams).toEqual({ installReqId: 'status-1' })
       expect(provisionRelay).toHaveBeenCalledWith(endpointContext, {

@@ -226,15 +226,15 @@ function installRestartHarness(
 import {
   createPane,
   createManager
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-deps'
-import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
 import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
-import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
+import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import type * as React from 'react'
 import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
 
@@ -269,7 +269,7 @@ const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => true)
 }))
 vi.mock(
-  '../../src/renderer/src/components/terminal-pane/terminal-pane-recovery',
+  '../../src/renderer/src/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     requestTerminalPaneRecovery
@@ -327,7 +327,7 @@ describe('account restart through renderer connection and host spawn', () => {
     const { createIpcPtyTransport } =
       await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport')
     const { useTerminalPaneProcessExitActions } =
-      await import('../../src/renderer/src/components/terminal-pane/use-terminal-pane-process-exit-actions')
+      await import('../../src/renderer/src/components/terminal-pane/controller/use-terminal-pane-process-exit-actions')
     const oldTransport = createIpcPtyTransport({ worktreeId, tabId, leafId })
     oldTransport.attach({ existingPtyId: 'pty-old', callbacks: {} })
     const pane = createPane(1)

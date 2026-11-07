@@ -1,3 +1,5 @@
+import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
+import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import { useAppStore } from '@/store'
 import {
   readHostAgentLaunchSettings,
@@ -27,6 +29,24 @@ import {
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+
+export async function pairedAgentSessionCapabilities(
+  environmentId: string | null | undefined
+): Promise<{ capable: boolean; complete: boolean }> {
+  const unsupported = { capable: false, complete: false }
+  if (!environmentId) {
+    return unsupported
+  }
+  return await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {
+    if (
+      isRuntimeCompatBlockError(error) ||
+      (error instanceof Error && error.name === 'AbortError')
+    ) {
+      throw error
+    }
+    return unsupported
+  })
+}
 
 export async function pairedAgentLaunchInputs(args: {
   environmentId: string

@@ -4,7 +4,7 @@ import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../../shared/claude/project-clau
 import { parseWorkspaceSession } from '../../../../../shared/workspace-session/workspace-session-schema'
 import { resolveProjectClaudeAccount } from '../../../../../main/claude-accounts/project-claude-account-resolution'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { bindBuildColdRestoreAgentResumeStartup } from './cold-restore-resume-startup'
+import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
 
 const PANE_KEY = 'tab1:pane-1'
 const store = {
