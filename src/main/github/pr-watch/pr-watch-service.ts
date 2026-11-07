@@ -19,17 +19,14 @@ import {
   setPRWatchJobHooks
 } from '../pr-refresh-coordinator'
 import { prChecksDone, prWatchNextDueAt, type PRWatchJob } from '../pr-refresh-watch-jobs'
-import {
-  deleteInactiveCurrentPRHeads,
-  deletePRMovedHeads,
-  endPRWatchState
-} from './pr-check-event-tables'
+import { deletePRMovedHeads, endPRWatchState } from './pr-check-event-tables'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
 import { PREventDeliveryTrigger } from './pr-event-delivery'
 import { isCommitInPRHead, resolvePRCommitSha } from './pr-head-check-read'
 import {
   activeSavedPRWatches,
   recordPRHeadObservation,
+  retireInactiveCurrentPRHeads,
   settlePRPendingObligations
 } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'
@@ -102,12 +99,20 @@ export class PRWatchService {
     for (const [prKey, action] of active) {
       await this.watchChatPR(prKey, action, this.now() + STARTUP_SPACING_MS * index++)
     }
+    // Stopped, or its database closed, while a workspace was resolving: nothing more to start.
+    if (this.deps.database.isClosed || !this.stopObserving) {
+      return
+    }
     for (const [prKey, watch] of this.chatWatches) {
       index = this.earlierHeads.scheduleMoved(prKey, watch.candidate, index)
     }
-    // Before any resumed action saves a head, so only heads no recent action holds retire.
-    const held = new Set(active.keys())
-    this.deps.database.transaction((db) => deleteInactiveCurrentPRHeads(db, held))
+    // Committed rows may have resumed and saved actions while startup waited; they hold their heads.
+    retireInactiveCurrentPRHeads(
+      this.deps.database,
+      this.now(),
+      ACTION_WINDOW_MS,
+      this.chatWatches.keys()
+    )
     this.resume.drain()
   }
 

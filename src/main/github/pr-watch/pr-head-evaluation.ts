@@ -2,6 +2,7 @@ import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-req
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { evaluatePRCheckOccurrence } from './pr-check-occurrence'
 import {
+  deleteInactiveCurrentPRHeads,
   deletePRPendingHead,
   insertPRCheckEvent,
   markPRPendingHeadsMoved,
@@ -18,15 +19,14 @@ import type Database from '../../sqlite/sync-database'
 /** How long a head the PR moved off keeps being read for its result. */
 export const MOVED_HEAD_TTL_MS = 2 * 60 * 60_000
 
-/** Startup: each PR's newest action, for the PRs a recent action keeps watched, after dropping
- *  moved heads past their deadline. Current heads wait for every reason (`deleteInactiveCurrentPRHeads`). */
-export function activeSavedPRWatches(
-  database: JournalHostDatabase,
+/** Each PR's newest action, for the PRs a recent action keeps watched. */
+export function recentPRChatActions(
+  db: Database.Database,
   now: number,
   windowMs: number
 ): Map<string, PRChatAction> {
   const newest = new Map<string, PRChatAction>()
-  for (const action of readPRChatActions(database.db)) {
+  for (const action of readPRChatActions(db)) {
     newest.set(pullRequestKey(action), action)
   }
   for (const [prKey, action] of newest) {
@@ -34,8 +34,31 @@ export function activeSavedPRWatches(
       newest.delete(prKey)
     }
   }
-  database.transaction((db) => deleteExpiredPRPendingHeads(db, now))
   return newest
+}
+
+/** Startup: the recent actions to watch, after dropping moved heads past their deadline. */
+export function activeSavedPRWatches(
+  database: JournalHostDatabase,
+  now: number,
+  windowMs: number
+): Map<string, PRChatAction> {
+  database.transaction((db) => deleteExpiredPRPendingHeads(db, now))
+  return recentPRChatActions(database.db, now, windowMs)
+}
+
+/** Retires current heads no recent action and no live watch holds, both read in the same
+ *  transaction as the delete, so an action saved while startup was waiting keeps its head. */
+export function retireInactiveCurrentPRHeads(
+  database: JournalHostDatabase,
+  now: number,
+  windowMs: number,
+  watchedPRKeys: Iterable<string>
+): void {
+  database.transaction((db) => {
+    const held = new Set([...recentPRChatActions(db, now, windowMs).keys(), ...watchedPRKeys])
+    deleteInactiveCurrentPRHeads(db, held)
+  })
 }
 
 function insertActionWithHead(db: Database.Database, action: PRChatAction, movedAt: number | null) {
