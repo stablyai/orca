@@ -10,8 +10,8 @@ import {
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
-import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
@@ -108,21 +108,34 @@ function PullRequestPageItem({
     onReviewRequestsChange
   })
 
-  // Why: reset lifted edit state on item switch or when the same item gets an optimistic cache patch from the table.
-  useEffect(() => {
-    if (workItemState && workItemLabels) {
+  const detailsState = details?.item.state
+  // Sync lifted edit state during render so each refresh commits once instead of twice.
+  const [syncedFrom, setSyncedFrom] = useState<{
+    workItemId: typeof workItemId
+    workItemState: typeof workItemState
+    workItemLabels: typeof workItemLabels
+    detailsState: typeof detailsState
+  } | null>(null)
+  const itemChanged = syncedFrom === null || syncedFrom.workItemId !== workItemId
+  const workItemChanged =
+    syncedFrom === null ||
+    itemChanged ||
+    syncedFrom.workItemState !== workItemState ||
+    syncedFrom.workItemLabels !== workItemLabels
+  const detailsChanged =
+    syncedFrom === null || itemChanged || syncedFrom.detailsState !== detailsState
+  if (workItemChanged || detailsChanged) {
+    setSyncedFrom({ workItemId, workItemState, workItemLabels, detailsState })
+    // Why: reset on item switch or when the same item gets an optimistic cache patch from the table.
+    if (workItemChanged && workItemState && workItemLabels) {
       setLocalState(workItemState)
       setLocalLabels(workItemLabels)
     }
-  }, [workItemId, workItemState, workItemLabels])
-
-  // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
-  const detailsState = details?.item.state
-  useEffect(() => {
-    if (detailsState) {
+    // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
+    if (detailsChanged && detailsState) {
       setLocalState(detailsState)
     }
-  }, [workItemId, detailsState])
+  }
 
   const handleUseWorkItem = useCallback((): void => {
     if (!workItem) {

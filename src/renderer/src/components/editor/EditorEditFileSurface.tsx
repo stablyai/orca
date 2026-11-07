@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ChangesModeView } from './ChangesModeView'

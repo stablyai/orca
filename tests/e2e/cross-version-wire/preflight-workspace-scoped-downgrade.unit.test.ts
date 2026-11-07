@@ -39,17 +39,29 @@ const wire = vi.hoisted(() => {
   return state
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
-      wire.host?.capabilities.includes(capability) ?? false,
+      wire.host?.capabilities.includes(capability) ?? false
+  }
+})
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
     // Why linux: an old Windows host is asked to update instead of answering its default list.
     getRuntimeEnvironmentStatus: async () => ({
       capabilities: wire.host?.capabilities ?? [],
       hostPlatform: 'linux'
-    }),
+    })
+  }
+})
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
     callRuntimeRpc: async (_target: unknown, method: string, params?: unknown) => {
       const hostSaw = wire.host?.parse(method, params)
       wire.sent.push({ method, params, hostSaw })

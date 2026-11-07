@@ -2,7 +2,7 @@ import React from 'react'
 import { ExternalLink, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function GitHubLabelsSettingsLink({
   url,

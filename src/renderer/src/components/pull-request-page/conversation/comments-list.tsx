@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import {
   getPRCommentGroupId,
   type PRCommentGroup
@@ -114,6 +114,7 @@ export function ConversationCommentsList({
               repoPath={repoPath}
               repoId={repoId}
               sourceContext={sourceContext}
+              itemType={itemType}
               prNumber={prNumber}
               prRepo={prRepo}
               files={files}

@@ -34,7 +34,7 @@ import {
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
-export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
+export { closeOtherTerminalTabs } from './terminal-tab-bulk-actions'
 
 type CloseTerminalTabOptions = {
   force?: boolean

@@ -74,7 +74,6 @@ type PluginManagerProps = {
   logsByPlugin: Readonly<Record<string, PluginLogsState>>
   onShowLogs: (pluginKey: string) => void
   onOpenShortcuts: () => void
-  /** Which plugin's page is open; owned by the pane, which hides its header and cards for it. */
   page: PluginPageNavigation
   sourcesOpen: boolean
   setSourcesOpen: (open: boolean) => void
@@ -272,8 +271,7 @@ export function PluginManager({
   )
 
   const openedEntry = openKey
-    ? ([...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey) ??
-      null)
+    ? [...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey)
     : null
   const dialogs = (
     <>
@@ -321,7 +319,10 @@ export function PluginManager({
           refreshing={catalog.refreshBusy}
           onConsent={onConsent}
           onBack={back}
+          hasPreviousPage={page.previousKey !== null}
           onOpenShortcuts={onOpenShortcuts}
+          entries={entries}
+          onOpenPlugin={openEntry}
         />
         {dialogs}
       </>

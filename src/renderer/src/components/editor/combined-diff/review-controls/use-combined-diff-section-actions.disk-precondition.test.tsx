@@ -4,7 +4,7 @@ import type React from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
 import { getStoredTextDiffResult } from '../../diff/large-files/large-diff-section-content'
 import { useAppStore } from '@/store'
@@ -17,13 +17,13 @@ import {
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn(), diff: vi.fn() }))
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitDiff: mocks.diff,
   getRuntimeGitBranchDiff: mocks.diff,
   getRuntimeGitCommitDiff: mocks.diff
 }))
 
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
   writeRuntimeFile: mocks.writeRuntimeFile
 }))
 beforeEach(() => {

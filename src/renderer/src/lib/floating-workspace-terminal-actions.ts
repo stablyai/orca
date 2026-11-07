@@ -16,7 +16,7 @@ import {
   selectFloatingVisibleTabCount,
   type EmptyFloatingWorkspacePanelState
 } from '@/store/floating-workspace-panel-selector'
-import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
+import { resolveBrowserWorkspaceOwner } from './browser/workspace/browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'

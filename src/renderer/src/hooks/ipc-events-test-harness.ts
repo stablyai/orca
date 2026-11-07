@@ -105,7 +105,7 @@ export async function loadIpcEventsHarness(
     useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
   }))
   vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     activateAndRevealWorkspace,
     ensureWorktreeHasInitialTerminal: vi.fn()
@@ -126,14 +126,14 @@ export async function loadIpcEventsHarness(
   vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
     createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
   }))
-  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({
+  vi.doMock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
     createWebRuntimeSessionTerminal: vi.fn().mockResolvedValue({ status: 'failed', message: '' })
   }))
   vi.doMock('@/runtime/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
+  vi.doMock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface: vi.fn(() => false)
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
@@ -216,6 +216,7 @@ export async function loadIpcEventsHarness(
           listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},

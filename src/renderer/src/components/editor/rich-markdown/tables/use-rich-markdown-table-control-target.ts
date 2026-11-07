@@ -97,7 +97,9 @@ export function useRichMarkdownTableControlTarget(
       if (cell && editorDom.contains(cell)) {
         activate(cell)
         pendingPointerRef.current = { cell, x: event.clientX, y: event.clientY }
-        pointerFrameRef.current ??= window.requestAnimationFrame(flushPointer)
+        if (pointerFrameRef.current == null) {
+          pointerFrameRef.current = window.requestAnimationFrame(flushPointer)
+        }
         return
       }
       if (
@@ -133,10 +135,12 @@ export function useRichMarkdownTableControlTarget(
     }
     let layoutFrame: number | null = null
     const update = (): void => {
-      layoutFrame ??= window.requestAnimationFrame(() => {
-        layoutFrame = null
-        setLayoutVersion((version) => version + 1)
-      })
+      if (layoutFrame == null) {
+        layoutFrame = window.requestAnimationFrame(() => {
+          layoutFrame = null
+          setLayoutVersion((version) => version + 1)
+        })
+      }
     }
     const observer = new ResizeObserver(update)
     observer.observe(table)

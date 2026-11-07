@@ -64,6 +64,9 @@ function ports() {
   return {
     resolveWorktree: vi.fn(async (selector: string) => resolved(selector.replace(/^id:/, ''))),
     validateParent: vi.fn(),
+    resolveFolderParent: vi.fn(async (selector: string) => ({
+      folderWorkspaceId: selector.replace(/^folder:/, '')
+    })),
     invalidateResolved: vi.fn(),
     invalidateScan: vi.fn(),
     notifyChanged: vi.fn(),
@@ -124,5 +127,35 @@ describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
     expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
+  })
+})
+
+describe('updateRuntimeManagedWorktreeMetadata with a folder workspace parent', () => {
+  it('replaces the worktree parent with the folder, in both lists', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { instanceId: `${STAYING}#instance` })
+    store.setWorktreeLineage(target, {
+      worktreeId: STAYING,
+      worktreeInstanceId: `${STAYING}#instance`,
+      parentWorktreeId: 'repo-2::/src/parent',
+      parentWorktreeInstanceId: 'parent#instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    })
+
+    await updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { lineage: { parentWorktree: 'id:folder:5b1c' } },
+      store,
+      ports: ports()
+    })
+
+    expect(store.getWorktreeLineage(STAYING)).toBeUndefined()
+    expect(store.getWorkspaceLineage(`worktree:${STAYING}`)).toMatchObject({
+      parentWorkspaceKey: 'folder:5b1c',
+      parentInstanceId: '5b1c',
+      childInstanceId: `${STAYING}#instance`
+    })
   })
 })

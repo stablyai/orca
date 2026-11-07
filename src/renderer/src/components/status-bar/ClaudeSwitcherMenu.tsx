@@ -5,7 +5,7 @@ import { useAppStore } from '../../store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
-import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null

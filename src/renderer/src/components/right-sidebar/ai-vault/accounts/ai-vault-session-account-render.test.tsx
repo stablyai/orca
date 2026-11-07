@@ -2,7 +2,7 @@
 import { act } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '../../../../store/index'
-import { emptyCodexAccountsState } from '@/runtime/runtime-provider-accounts-client'
+import { emptyCodexAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   accountSettings,
   recordedSession,

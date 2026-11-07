@@ -5,7 +5,7 @@ import type {
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ReadyEditorSurface, MirroredEditorTab } from './state'
 import type { WebSessionExistingTabIndex } from '../web-session-existing-tab-index'

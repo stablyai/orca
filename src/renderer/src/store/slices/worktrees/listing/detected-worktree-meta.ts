@@ -16,7 +16,7 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
-import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
+import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
@@ -106,12 +106,13 @@ export function findKnownWorktreeById(
       return getFolderWorkspaceWorktree(result.value.workspace, result.value)
     }
     // Preserve unqualified path access for narrow snapshots.
-    const rows = selectFolderWorkspaces(state).filter(
-      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-    )
-    return !executionHostId && (!state.projectGroups || !state.repos) && rows.length === 1
-      ? getFolderWorkspaceWorktree(rows[0])
-      : undefined
+    if (!executionHostId && (!state.projectGroups || !state.repos)) {
+      const rows = selectFolderWorkspaces(state).filter(
+        (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      )
+      return rows.length === 1 ? getFolderWorkspaceWorktree(rows[0]) : undefined
+    }
+    return undefined
   }
   const visible = executionHostId
     ? selectWorkspaceByHostTarget(

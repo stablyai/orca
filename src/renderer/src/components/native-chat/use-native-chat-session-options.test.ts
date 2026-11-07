@@ -9,7 +9,7 @@ import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-op
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
 const settingsRpc = vi.fn()
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => settingsRpc(...args)
 }))
 

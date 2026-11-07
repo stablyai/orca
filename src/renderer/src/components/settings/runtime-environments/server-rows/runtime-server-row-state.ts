@@ -7,7 +7,7 @@ import { resolveHostDisplay } from '../../../../../../shared/host-display-resolu
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState

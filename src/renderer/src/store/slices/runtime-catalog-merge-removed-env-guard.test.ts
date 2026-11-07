@@ -1,6 +1,7 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 /** Only tombstoned catalog.hostId values block late merges (#8881); an unhydrated saved list or serving-local runtime stamps cannot prove removal. */
 import { describe, it, expect, vi } from 'vitest'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
 import type { Repo } from '../../../../shared/repo-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
@@ -8,7 +9,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -16,9 +19,12 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // All RPCs share this fixture shape; compatibility probes read projects/setups while repo.list reads repos.
 const rpcResult = vi.hoisted(() => ({ current: { repos: [] as Repo[], projects: [], setups: [] } }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
-  return { ...actual, callRuntimeRpc: vi.fn(async () => rpcResult.current) }
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
+  return {
+    ...actual,
+    callRuntimeRpc: vi.fn(async () => rpcResult.current)
+  }
 })
 
 const localReposList = vi.fn<() => Promise<Repo[]>>()

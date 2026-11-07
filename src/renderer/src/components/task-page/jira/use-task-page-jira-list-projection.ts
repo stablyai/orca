@@ -6,7 +6,7 @@ import {
   getTaskPageJiraStatusOrderScopeKey,
   getTaskPageJiraStatusOrderRuntimeScopeKey
 } from '@/components/task-page/jira/task-page-jira-status-order'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,

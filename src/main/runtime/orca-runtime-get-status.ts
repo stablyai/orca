@@ -52,6 +52,8 @@ import { WORKTREE_CREATE_RESULT_TTL_MS } from './workspaces/creation/worktree-cr
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './hosts/platform-probe/runtime-machine-name'
 import { getManagedServerActions } from './managed-server-actions-registry'
+import { getRecipeVmWaker } from './recipe-vm-waker-registry'
+import { HOST_RECIPE_VM_WAKE_CAPABILITY } from '../../shared/remote-runtime/recipe-vm-wake'
 import { isDesktopBrowserBridgeHostEnabled } from './desktop-browser-bridge/desktop-browser-bridge-registry'
 import { DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY } from '../../shared/desktop-browser-bridge-protocol'
 import { darkSwitchRuntimeCapabilities } from './dark-switch-runtime-capabilities'
@@ -125,6 +127,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     }
     if (getManagedServerActions()) {
       capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
+    }
+    if (getRecipeVmWaker()) {
+      capabilities.push(HOST_RECIPE_VM_WAKE_CAPABILITY)
     }
     if (isDesktopBrowserBridgeHostEnabled()) {
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)

@@ -210,6 +210,7 @@ export function useMobileNativeChatController(args: {
     captureSendOrigin,
     clearDraftForSend,
     restoreRejectedDraft,
+    holdUnconfirmed: structuredNativeChat.holdUnconfirmed,
     onSendError
   })
 
@@ -303,6 +304,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
+    nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
     nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
   }
 }

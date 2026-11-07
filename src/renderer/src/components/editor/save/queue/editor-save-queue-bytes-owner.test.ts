@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { writeRuntimeFileBytes } from '@/runtime/runtime-file-bytes-write'
+import type { writeRuntimeFileBytes } from '@/runtime/files/mutations/runtime-file-bytes-write'
 import { createEditorSaveQueue } from './editor-save-queue'
 import type { EditorSaveQueue } from './editor-save-queue-contract'
 import {
@@ -17,7 +17,9 @@ const { writeBytes, replace } = vi.hoisted(() => ({
   writeBytes: vi.fn<typeof writeRuntimeFileBytes>(),
   replace: vi.fn(async () => ({ ok: true as const }))
 }))
-vi.mock('@/runtime/runtime-file-bytes-write', () => ({ writeRuntimeFileBytes: writeBytes }))
+vi.mock('@/runtime/files/mutations/runtime-file-bytes-write', () => ({
+  writeRuntimeFileBytes: writeBytes
+}))
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}

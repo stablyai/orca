@@ -4,8 +4,8 @@ import {
   cancelManagedRuntimeInstall,
   installManagedRuntime,
   removeManagedRuntime
-} from '@/runtime/managed-runtime-install-status'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/managed-runtime-install-status'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { Progress } from '../ui/progress'

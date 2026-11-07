@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { useChatSettingsOwnPermissions } from '@/runtime/structured-agent-session-host-capability'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
@@ -19,9 +20,9 @@ import { AgentLaunchSettingsLoading } from './AgentLaunchSettingsLoading'
 import { HostAgentLaunchSettings } from './HostAgentLaunchSettings'
 import { SettingsHostScopeUnavailableNotice } from '../../host-scope/SettingsHostScopePicker'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   useAgentPermissionOverrideNotice,
   type SelectPermissionOverrides
@@ -40,7 +41,7 @@ export function AgentLaunchSettingsSection({
   renderPermissions: AgentPermissionsRenderer
 }): React.JSX.Element {
   const environmentId = runtimeTargetEnvironmentId(hostScope.target)
-  const environment = useAppStore((state) =>
+  const environment = useAppStateValue((state) =>
     environmentId ? state.runtimeEnvironments.find((entry) => entry.id === environmentId) : null
   )
   return (

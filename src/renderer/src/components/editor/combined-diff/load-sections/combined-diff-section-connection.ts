@@ -2,7 +2,7 @@ import { getConnectionIdForFile } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 export function acquireCombinedDiffSectionOperation(file: OpenFile, sectionPath: string) {
   const operation = acquireEditorFileOperation(useAppStore.getState, file, {

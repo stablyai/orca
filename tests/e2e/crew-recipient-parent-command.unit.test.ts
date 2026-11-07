@@ -6,9 +6,12 @@ import { RuntimeClientError } from '../../src/cli/runtime-client'
 import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { createOrdinaryCrewCommandFixture } from './crew-recipient-public-command.test-fixture'
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../src/main/native-chat/agent-session-wire/structured-agent-session-registry', () => ({
-  getStructuredAgentSessionHost: () => hostRef.current
-}))
+vi.mock(
+  '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry',
+  () => ({
+    getStructuredAgentSessionHost: () => hostRef.current
+  })
+)
 afterEach(async () => {
   const remaining = await releaseAgentSessionRecordStore()
   remaining?.journalDatabase.close()

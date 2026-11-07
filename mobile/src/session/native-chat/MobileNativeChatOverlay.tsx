@@ -1,8 +1,8 @@
 import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { useMobileNativeChatProjection } from './transcript/use-mobile-native-chat-projection'
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -63,8 +63,27 @@ type Props = {
   hostOutage?: MobileNativeChatHostOutage | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
-export function MobileNativeChatOverlay({
+// Hide the last chat behind its terminal instead of unmounting it, so returning keeps its rows and parsed markdown.
+export function MobileNativeChatOverlay(props: Props): React.JSX.Element | null {
+  const shown = props.controller.showNativeChat
+  // While hidden, the live lane is starved to an empty chat; draw the last shown props so the hidden tree does no work.
+  const [lastShown, setLastShown] = useState<Props | null>(null)
+  if (shown && lastShown !== props) {
+    setLastShown(props)
+  }
+  const drawn = shown ? props : lastShown
+  // The same element while hidden lets React skip the hidden tree.
+  const content = useMemo(
+    () => (drawn ? <MobileNativeChatOverlayContent {...drawn} /> : null),
+    [drawn]
+  )
+  if (!content) {
+    return null
+  }
+  return <Activity mode={shown ? 'visible' : 'hidden'}>{content}</Activity>
+}
+
+function MobileNativeChatOverlayContent({
   controller,
   imageSource,
   worktreePath,
@@ -92,17 +111,19 @@ export function MobileNativeChatOverlay({
   onRunInTerminal,
   hostOutage = null,
   onOpenAccounts
-}: Props): React.JSX.Element | null {
+}: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMemo(
-    () => foldMobileNativeChatMessages(fullContent.messages, agent),
-    [fullContent.messages, agent]
-  )
+  const folded = useMobileNativeChatProjection(fullContent.messages, agent, [
+    sendSurfaceId,
+    sessionId,
+    controller.nativeChatItemSource?.client,
+    controller.nativeChatItemSource?.sessionId
+  ])
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
@@ -158,6 +179,9 @@ export function MobileNativeChatOverlay({
     () => ({
       agent,
       structured: structuredComposer ?? null,
+      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
+        (entry) => entry.id === 'interactionMode'
+      ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
       filePaths: controller.nativeChatFilePaths,
@@ -174,6 +198,7 @@ export function MobileNativeChatOverlay({
     [
       agent,
       structuredComposer,
+      controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
       controller.nativeChatFilePaths,
@@ -235,9 +260,6 @@ export function MobileNativeChatOverlay({
     isWorking: controller.nativeChatTurnActive
   })
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
-  if (!controller.showNativeChat) {
-    return null
-  }
   return (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}

@@ -2,18 +2,18 @@ import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/stru
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
-import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/codex-detached-pane-restart-scheduler'
+import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
 import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
-import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/codex-stale-pane-sweep'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace-session-host-hydration'
+import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace/persistence/workspace-session-host-hydration'
 import {
   collectFolderWorkspaceKeysFromSession,
   collectWorktreeHydrationRepoIdsFromSession
-} from '../lib/workspace-session-hydration-keys'
+} from '../lib/workspace/persistence/workspace-session-hydration-keys'
 import { hydratePersistedUIAfterStartupRead } from '../lib/startup-ui-hydration'
 import {
   logRendererStartupDiagnostic,
@@ -23,7 +23,7 @@ import {
 import { recoverFromDegradedStartup } from '../startup/startup-degraded-recovery'
 import { restoreSshConnectionsForStartup } from '../startup/startup-ssh-connection-restore'
 import { collectActiveWorkspaceSshTargetIds } from '../startup/active-workspace-ssh-targets'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
 import { getSystemPrefersDark } from '../lib/terminal-theme'
 import {
   collectTerminalProviderSnapshotPtyIds,
@@ -40,7 +40,7 @@ import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'
 import { wslMovedSessionReadApi } from '../store/repos/wsl-moved-local-session-rows'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { ensureLocalRuntimeCapabilities } from '../runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '../runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   finishStartupWorktreeHydration,
   refreshStartupWorktrees

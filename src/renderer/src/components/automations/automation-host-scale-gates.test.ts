@@ -26,11 +26,12 @@ import { resetAutomationCapabilityProbes } from './automation-scoped-list-client
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 // Use 10 authorities × 5 entries × 20 automations; half are legacy to exercise per-authority fan-out budgets.
 const AUTHORITY_COUNT = 10

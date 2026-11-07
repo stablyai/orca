@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type {
   NativeChatVisualsLaunch,
   PrepareNativeChatVisuals

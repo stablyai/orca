@@ -4,8 +4,8 @@ import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { defaultCreationHost } from '@/lib/default-creation-host'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
@@ -26,7 +26,7 @@ import {
   clearPendingRuntimeRepoRemoval,
   runExclusiveForRuntimeEnvironment
 } from './pending-runtime-repo-removals'
-import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
 import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import { showWslHostWindowsDriveRefusal } from '@/lib/wsl-host-windows-drive-refusal-toast'
 

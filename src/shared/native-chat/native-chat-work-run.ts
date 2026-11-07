@@ -11,6 +11,8 @@ import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
  *  never join one. */
 export type NativeChatWorkRunMember = 'lead' | 'tool' | 'thought' | 'notice'
 
+const memberFacts = new WeakMap<NativeChatMessage, NativeChatWorkRunMember | null>()
+
 /** Only prose/plain tool activity joins runs; rosters, tasks, questions and approval receipts keep separate rows. scopeIsWorking names the owning turn/subagent’s liveness. */
 export function nativeChatWorkRunMember(
   message: NativeChatMessage,
@@ -27,6 +29,15 @@ export function nativeChatWorkRunMember(
     // Live thinking stays separate; ended thoughts join runs, including textless thoughts that render nothing.
     return scopeIsWorking && message.state === 'running' ? null : 'thought'
   }
+  if (memberFacts.has(message)) {
+    return memberFacts.get(message)!
+  }
+  const member = deriveWorkRunMember(message)
+  memberFacts.set(message, member)
+  return member
+}
+
+function deriveWorkRunMember(message: NativeChatMessage): NativeChatWorkRunMember | null {
   const content = deriveNativeChatRowContent(message.blocks)
   if (
     message.role !== 'assistant' ||
@@ -40,7 +51,7 @@ export function nativeChatWorkRunMember(
   ) {
     return null
   }
-  return content.markdown.length > 0 || content.hasImages ? 'lead' : 'tool'
+  return content.hasText || content.hasImages ? 'lead' : 'tool'
 }
 
 /** One row of a transcript as the run boundaries read it. */

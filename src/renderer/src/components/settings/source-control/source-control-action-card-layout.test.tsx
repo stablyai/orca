@@ -18,7 +18,7 @@ import { TooltipProvider } from '../../ui/tooltip'
 
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async (_target, method) =>
     method === 'agentSession.modelCatalog'
       ? { origin: 'unknown' }
