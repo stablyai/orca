@@ -3,6 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMobileNativeChatTerminalStream } from './use-mobile-native-chat-terminal-stream'
 
+vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
+
 describe('useMobileNativeChatTerminalStream', () => {
   let renderer: ReactTestRenderer | null = null
   let harnessRenderCount = 0

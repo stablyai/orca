@@ -1,3 +1,4 @@
+import { useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { resolveMobileNativeChatTerminalStreamAction } from './mobile-native-chat-terminal-stream'
 
@@ -44,6 +45,15 @@ export function useMobileNativeChatTerminalStream(args: {
     rearmAttemptsRef.current.delete(handle)
     absentSinceExhaustionRef.current.delete(handle)
   }, [])
+  // Only the page in front reclaims a replaced stream; background pages keep their markers.
+  useFocusEffect(
+    useCallback(() => {
+      if (args.replacedRef.current.size > 0) {
+        args.replacedRef.current.clear()
+        setRearmBudgetRevision((revision) => revision + 1)
+      }
+    }, [args.replacedRef])
+  )
   const cancelHealthyStreamProof = useCallback(() => {
     if (healthyStreamProofRef.current) {
       clearTimeout(healthyStreamProofRef.current.timer)
