@@ -20,6 +20,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'element-index': '--element-index <n>   Element index from get-app-state',
   title: '--title <text>         Custom title for the terminal tab (omit to reset)',
   enter: '--enter                Append Enter after sending text',
+  'wait-submit':
+    '--wait-submit <seconds> Wait up to this long to see the prompt start a turn; never resends',
+  'retry-request':
+    '--retry-request <id>  Reissue an earlier request by its ID; replays its result instead of repeating it',
   force:
     '--force                Force worktree removal when supported; does not force branch deletion',
   focus: '--focus                Reveal the created terminal session in Orca',
