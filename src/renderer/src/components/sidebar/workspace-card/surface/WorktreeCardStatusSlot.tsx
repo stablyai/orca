@@ -163,14 +163,17 @@ export function WorktreeCardStatusSlot({
   const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
-  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
-  const canShowSleepingStatus =
-    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     (prDisplay !== null || Boolean(collectionChecks)) &&
-    !canShowSleepingStatus &&
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
+  // Review outranks sleep: the dimmed row already shows sleep, only the glyph can show the PR.
+  const canShowSleepingStatus =
+    newCardStyle &&
+    showStatus &&
+    isSleeping &&
+    !canShowReviewStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
@@ -193,10 +196,14 @@ export function WorktreeCardStatusSlot({
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${t('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
+  const laneLabel =
+    canShowReviewStatus && isSleeping
+      ? `${reviewLabel} · ${getSleepingStatusLabel(t)}`
+      : reviewLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread
-      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
-      : reviewLabel
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: laneLabel })
+      : laneLabel
   // The lane holds the card's only unread dot (agent rows and the folded pill draw none), so it
   // stays on over working/permission glyphs; the corner ring keeps it legible against them.
   const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
