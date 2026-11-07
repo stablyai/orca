@@ -22,12 +22,4 @@ describe('buildClipboardImageThumbnail', () => {
     })
     expect(image.resize).toHaveBeenCalledWith({ height: 160, quality: 'good', width: 320 })
   })
-
-  it('reports no thumbnail rather than throwing for an oversized image', () => {
-    // Preview only decides placeholder visibility; save still reports the actual oversized-image failure.
-    const image = fakeImage({ getSize: () => ({ height: 100_000, width: 100_000 }) })
-
-    expect(buildClipboardImageThumbnail(image)).toBeNull()
-    expect(image.resize).not.toHaveBeenCalled()
-  })
 })

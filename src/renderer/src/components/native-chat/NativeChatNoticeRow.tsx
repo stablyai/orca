@@ -28,12 +28,7 @@ import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedCont
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { NativeChatDetailsDisclosure, ProviderFrameRow } from './NativeChatTranscriptChrome'
-import { Button } from '@/components/ui/button'
-import {
-  isClaudeSignInFailureKind,
-  nativeChatClaudeSignInLabel,
-  useNativeChatClaudeSignInView
-} from './native-chat-claude-sign-in'
+import { NativeChatSignInButton } from './NativeChatSignInButton'
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
@@ -78,8 +73,8 @@ export function NativeChatNoticeRow({
 }): React.JSX.Element {
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
-  const claudeSignIn = useNativeChatClaudeSignInView()
   const openForkSource = useContext(NativeChatForkedFromContext)
+
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
     const label = translate(
@@ -311,17 +306,7 @@ export function NativeChatNoticeRow({
       {usageLimitContinue && orcaStopView.usageLimitAutoContinue ? (
         <NativeChatUsageLimitAutoContinue state={orcaStopView.usageLimitAutoContinue} />
       ) : null}
-      {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={claudeSignIn.signingIn}
-          onClick={claudeSignIn.signIn}
-        >
-          {nativeChatClaudeSignInLabel(claudeSignIn)}
-        </Button>
-      ) : null}
+      <NativeChatSignInButton failureKind={block.failure?.kind} />
       {block.providerFrame || detail ? (
         <ProviderFrameRow
           block={block}

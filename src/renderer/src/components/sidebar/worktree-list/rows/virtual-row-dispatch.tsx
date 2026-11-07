@@ -19,7 +19,12 @@ import type { ImportedWorktreeCardActionState } from '../listing/imported-worktr
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { useHostHeaderDrag } from '../drag/host-header-drag'
 import { HostSectionHeader } from './HostSectionHeader'
-import { renderFolderWorkspaceVirtualRow, type FolderWorkspaceRowContext } from './folder-row'
+import {
+  renderFolderWorkspaceOption,
+  renderFolderWorkspaceVirtualRow,
+  type FolderWorkspaceRowContext
+} from './folder-row'
+import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import {
   renderImportedWorktreesVirtualRow,
   renderNewExternalWorktreesInboxVirtualRow,
@@ -105,12 +110,20 @@ function renderHostHeaderVirtualRow(
   )
 }
 
+function folderLineageToggle(
+  ctx: WorktreeVirtualRowContext,
+  row: { lineageGroupKey?: string }
+): LineageToggleHandler | undefined {
+  return row.lineageGroupKey ? ctx.item.getLineageToggleHandler(row.lineageGroupKey) : undefined
+}
+
 function renderLineageGroupVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: Extract<RenderRow, { type: 'lineage-group' }>,
   vItem: VirtualItem
 ): React.JSX.Element {
-  const [parent, ...children] = row.rows
+  const parent = row.folder ? undefined : row.rows[0]
+  const children = row.folder ? row.rows : row.rows.slice(1)
   const childIsActive = children.some((child) => child.worktree.id === ctx.activeWorktreeId)
   const parentKey = parent ? getWorktreeHostIdentity(parent.worktree) : null
   const parentPreviewOffset = parentKey
@@ -136,15 +149,25 @@ function renderLineageGroupVirtualRow(
       style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
     >
       <div className="overflow-visible">
-        {parent
-          ? renderWorktreeItemRow(
-              ctx.item,
-              parent,
-              false,
-              renderWorktreeLineageDescendants(ctx.item, parent, children),
-              childIsActive
-            )
-          : null}
+        {row.folder
+          ? renderFolderWorkspaceOption({
+              ctx: ctx.folderWorkspace,
+              row: row.folder,
+              lineage: {
+                onToggle: folderLineageToggle(ctx, row.folder),
+                children: renderWorktreeLineageDescendants(ctx.item, row.folder, children),
+                childIsActive
+              }
+            })
+          : parent
+            ? renderWorktreeItemRow(
+                ctx.item,
+                parent,
+                false,
+                renderWorktreeLineageDescendants(ctx.item, parent, children),
+                childIsActive
+              )
+            : null}
       </div>
     </div>
   )
@@ -215,7 +238,8 @@ export function renderWorktreeVirtualRow(
       ctx: ctx.folderWorkspace,
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      lineage: { onToggle: folderLineageToggle(ctx, row) }
     })
   }
 

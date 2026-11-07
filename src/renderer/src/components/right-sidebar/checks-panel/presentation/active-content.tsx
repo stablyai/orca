@@ -1,3 +1,7 @@
+import {
+  forgeCredentialTarget,
+  forgeOwnerHostIdForWorkspace
+} from '@/runtime/forge-credential-target'
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
@@ -245,6 +249,37 @@ export function ChecksPanelActiveContent({
         />
       )}
       <PRCommentsList
+        imageUploadAddress={
+          pr && model.repo
+            ? () => ({
+                runtime: forgeCredentialTarget({
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(
+                    model.repo!,
+                    activeWorktree
+                  )
+                }),
+                target: {
+                  kind: 'repo',
+                  repo: model.repo!.id,
+                  source: 'origin',
+                  ownerRepo: pr.prRepo ?? undefined
+                }
+              })
+            : undefined
+        }
+        editImageUploadAddress={
+          pr?.prRepo && model.repo
+            ? () => ({
+                runtime: forgeCredentialTarget({
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(
+                    model.repo!,
+                    activeWorktree
+                  )
+                }),
+                target: { kind: 'slug', ...pr.prRepo!, wakeWslDistro: true }
+              })
+            : undefined
+        }
         comments={comments}
         commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}

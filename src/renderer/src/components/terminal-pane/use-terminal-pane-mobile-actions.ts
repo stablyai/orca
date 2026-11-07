@@ -3,7 +3,10 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { getMobileFitOverridePtyIds } from '@/lib/pane-manager/mobile-fit-overrides'
 import { getAllDrivers } from '@/lib/pane-manager/mobile-driver-state'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
-import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
+import {
+  restoreTerminalFitToDesktop,
+  restoreTerminalFitsToDesktop
+} from './viewport/terminal-fit-restore'
 import {
   armPrimarySelectionNativePasteSuppression,
   isPrimarySelectionEnabled,

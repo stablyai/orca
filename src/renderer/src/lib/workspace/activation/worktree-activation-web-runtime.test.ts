@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/setup-agent-sequencing'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorktreeWithOutcome } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 
 import {
@@ -268,11 +268,11 @@ it('accepts live paired startup through after-wake when initial seeding returns 
     _meta: { runtimeId: 'paired-runtime' }
   }))
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
-  const result = activateAndRevealWorktree(worktree.id, {
+  const result = activateAndRevealWorktreeWithOutcome(worktree.id, {
     runtimeEnvironmentId: 'paired',
     startup: { command: 'codex', launchAgent: 'codex', launchToken: 'launch-1' }
   })
-  expect(result).toEqual({ primaryTabId: null, startupAccepted: true })
+  expect(result).toEqual({ opened: { primaryTabId: null, startupAccepted: true } })
   await vi.waitFor(() =>
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'session.tabs.createTerminal' })

@@ -59,16 +59,16 @@ export async function launchWorkItemDirect(
     const { repo } = context
     const promptDelivery = args.promptDelivery ?? 'draft'
     const { itemType, itemNumber } = getDirectWorkItemIdentity(item)
-    const finalSetupDecision = await prepareDirectWorkItemSetup(
+    const confirmedSetup = await prepareDirectWorkItemSetup(
       repo,
       context.executionHostId,
       args.signal,
       args.onSetupRequired
     )
-    if (finalSetupDecision === 'review-request') {
+    if (confirmedSetup === 'review-request') {
       return false
     }
-    if (finalSetupDecision === 'cancelled') {
+    if (confirmedSetup === 'cancelled') {
       return 'cancelled'
     }
 
@@ -166,7 +166,7 @@ export async function launchWorkItemDirect(
       repoId,
       workspaceName,
       resolvedBaseBranch,
-      finalSetupDecision,
+      confirmedSetup.setupDecision,
       undefined,
       telemetrySource,
       workspaceIntentName?.displayName ?? item.title,
@@ -188,7 +188,12 @@ export async function launchWorkItemDirect(
       undefined,
       undefined,
       resolvedCompareBaseRef,
-      { executionHostId: context.executionHostId }
+      {
+        executionHostId: context.executionHostId,
+        ...(confirmedSetup.approvedSetupHash !== undefined
+          ? { approvedSetupHash: confirmedSetup.approvedSetupHash }
+          : {})
+      }
     )
     const worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
@@ -281,7 +286,6 @@ export async function launchWorkItemDirect(
       return true
     }
 
-    const primaryTabId = activation.primaryTabId
     if (context.target.kind === 'environment' && startupPlan && !startupPlanFailed) {
       // The seeded startup carries the prompt and token until the shared pane delivery owner attaches.
       return (
@@ -289,19 +293,16 @@ export async function launchWorkItemDirect(
         reportFailure(workspaceActivationErrorMessage())
       )
     }
-    const completed = finishDirectWorkItemPrompt({
-      primaryTabId,
+    return finishDirectWorkItemPrompt({
+      primaryTabId: activation.primaryTabId,
       effectiveAgent,
       promptDelivery,
       draftContent,
       startupPlan,
       draftLaunchedNatively,
-      startupPlanFailed
+      startupPlanFailed,
+      onFailureNotified: () => args.onFailureNotified?.()
     })
-    if (!completed) {
-      args.onFailureNotified?.()
-    }
-    return completed
   } catch (error) {
     if (!creationAccepted && args.signal?.aborted) {
       return 'cancelled'

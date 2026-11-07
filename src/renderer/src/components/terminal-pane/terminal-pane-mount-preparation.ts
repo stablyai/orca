@@ -28,7 +28,7 @@ import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-re
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
 import { normalizeTerminalLayoutSnapshot } from './layout-serialization'
-import { applyTerminalAppearance } from './terminal-appearance'
+import { applyTerminalAppearance } from './appearance/terminal-appearance'
 import { terminalLinkClickBehaviorFor } from './links/gestures/terminal-link-click-behavior'
 import { createTerminalPanePtyDeps } from './terminal-pane-pty-deps'
 import type { DeferredSplitPaneHandoffHandle } from './deferred-split-pane-handoff'

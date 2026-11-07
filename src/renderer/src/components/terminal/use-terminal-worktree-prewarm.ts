@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { hasRegisteredRuntimeTerminalTab } from '../../runtime/mounted-terminal-tab-registry'
-import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { canAdmitTerminalTabsForStartup } from './background-terminal-worktree-mount'
 import {
   type TerminalPrewarmStage,
@@ -15,7 +15,7 @@ import {
   createDeferredNarrowingUndo,
   type TerminalPrewarmNarrowing
 } from './terminal-worktree-prewarm'
-import { TERMINAL_TAB_COLD_PARK_DELAY_MS } from '../terminal-pane/terminal-hidden-view-parking'
+import { TERMINAL_TAB_COLD_PARK_DELAY_MS } from '../terminal-pane/parking/retention/terminal-hidden-view-parking'
 import type { TerminalColdActivationController } from '../terminal-cold-activation'
 import { hasRetainedWorkspaceTerminalFrames } from './terminal-worktree-retained-frames'
 import {

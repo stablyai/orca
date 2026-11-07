@@ -71,6 +71,8 @@ export type WorktreeCreationRequest = {
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
+  /** Hash of the setup content confirmed at submit; the host compares it with the created branch's. */
+  approvedSetupHash?: string
   /** Inspect and confirm scripts on the captured host after the composer closes. */
   hookPreparation?: {
     executionHostId?: ExecutionHostId

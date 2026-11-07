@@ -1,14 +1,18 @@
+import { useState } from 'react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import {
   ConfigureOnlyAction,
   DetectedSetupPreview,
+  DetectedSetupSummary,
   DismissButton,
   InspectionErrorActions,
   PackageManagerActions,
-  SaveLocalSetupAction,
+  ReviewSetupAction,
   SetupScriptPromptBody
 } from './SetupScriptPromptCardViews'
+import { SetupScriptReviewDialog } from './SetupScriptReviewDialog'
 import { translate } from '@/i18n/i18n'
+import type { DetectedSetupPreviewContent } from '@/lib/setup-script-prompt'
 
 type SetupScriptPromptCardShellProps = {
   repoBadgeColor: string
@@ -16,10 +20,9 @@ type SetupScriptPromptCardShellProps = {
   isInspectionError: boolean
   sharedSetupIgnored: boolean
   isPackageManagerSuggestion: boolean
-  hasCandidate: boolean
   candidateSource: string | null
   candidateProvenance: string | null
-  detectedSetupDraft: string
+  detectedSetupPreview: DetectedSetupPreviewContent | null
   isImporting: boolean
   renderedStateOk: boolean
   onDismiss: () => void
@@ -35,10 +38,9 @@ export function SetupScriptPromptCardShell({
   isInspectionError,
   sharedSetupIgnored,
   isPackageManagerSuggestion,
-  hasCandidate,
   candidateSource,
   candidateProvenance,
-  detectedSetupDraft,
+  detectedSetupPreview,
   isImporting,
   renderedStateOk,
   onDismiss,
@@ -47,6 +49,8 @@ export function SetupScriptPromptCardShell({
   onImport,
   onSetupDraftChange
 }: SetupScriptPromptCardShellProps): React.JSX.Element {
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const showDetected = !isInspectionError && !sharedSetupIgnored && detectedSetupPreview !== null
   return (
     <div
       data-setup-script-prompt-layer=""
@@ -77,10 +81,15 @@ export function SetupScriptPromptCardShell({
           />
         </p>
 
-        {!isInspectionError && !sharedSetupIgnored && hasCandidate && isPackageManagerSuggestion ? (
+        {showDetected && detectedSetupPreview.editable ? (
           <DetectedSetupPreview
-            setup={detectedSetupDraft}
+            setup={detectedSetupPreview.setup}
             onSetupChange={onSetupDraftChange}
+            provenance={candidateProvenance}
+          />
+        ) : showDetected ? (
+          <DetectedSetupSummary
+            setup={detectedSetupPreview.setup}
             provenance={candidateProvenance}
           />
         ) : null}
@@ -89,18 +98,31 @@ export function SetupScriptPromptCardShell({
           <InspectionErrorActions onRetry={onRetryInspection} onConfigure={onConfigure} />
         ) : sharedSetupIgnored ? (
           <ConfigureOnlyAction onConfigure={onConfigure} />
-        ) : hasCandidate && isPackageManagerSuggestion ? (
+        ) : detectedSetupPreview && isPackageManagerSuggestion ? (
           <PackageManagerActions
             isSaving={isImporting}
             onSave={onImport}
             onConfigure={onConfigure}
           />
-        ) : hasCandidate ? (
-          <SaveLocalSetupAction isSaving={isImporting} onSave={onImport} />
+        ) : detectedSetupPreview ? (
+          <ReviewSetupAction onReview={() => setReviewOpen(true)} />
         ) : renderedStateOk ? (
           <ConfigureOnlyAction onConfigure={onConfigure} />
         ) : null}
       </div>
+      {/* Imported scripts are saved verbatim, so saving only happens after the full text is on screen. */}
+      {showDetected && !detectedSetupPreview.editable ? (
+        <SetupScriptReviewDialog
+          open={reviewOpen}
+          onOpenChange={setReviewOpen}
+          repoDisplayName={repoDisplayName}
+          setup={detectedSetupPreview.setup}
+          archive={detectedSetupPreview.archive}
+          provenance={candidateProvenance}
+          isSaving={isImporting}
+          onSave={onImport}
+        />
+      ) : null}
     </div>
   )
 }

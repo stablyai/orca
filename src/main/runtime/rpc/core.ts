@@ -30,6 +30,10 @@ import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
 } from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import type {
+  PairingCreateOfferParams,
+  PairingCreateOfferResult
+} from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {
@@ -39,6 +43,11 @@ export type DeviceSelfRpcContext = {
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
+
+// Mints new pairing credentials, so only the host owner's local transport provides it.
+export type PairingOffersRpcContext = {
+  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -143,6 +152,7 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {

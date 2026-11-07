@@ -6,7 +6,10 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard-text'
 import '../input/pty-input-write-queue'
 import { PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES } from '../input/pty-input-write-queue-contract'
-import { createDeferred, flushAsyncTicks } from '../../pty-connection-test-async'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '../../pty-connection/test-fixtures/pty-connection-test-async'
 import {
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,
   PTY_PRECONNECT_INPUT_MAX_ENTRIES,

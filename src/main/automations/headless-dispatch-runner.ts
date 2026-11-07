@@ -99,6 +99,7 @@ export async function runHeadlessAutomationDispatch(
     ...launchRunTarget,
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
+    ...(launch.setupSkippedReason ? { setupSkippedReason: launch.setupSkippedReason } : {}),
     error: null
   })
   // Start observation without waiting for persistence acknowledgement.

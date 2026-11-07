@@ -32,7 +32,10 @@ import {
   refreshShellPathAndDetectAgents,
   type RefreshAgentsResult
 } from './agent-detection'
-import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import {
+  agentCommandOverrideDetectionOptions,
+  type InstalledAgentDetectionOptions
+} from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
 
 export type AgentDetectionHost =
@@ -193,7 +196,8 @@ export async function detectProjectLaunchContext(
     throw new Error('worktree_execution_host_unresolved')
   }
   const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
+    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   )
   return {
     agents: agents.filter(isTuiAgent),

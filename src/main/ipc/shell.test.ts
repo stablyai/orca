@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   getSpawnArgsForWindowsMock,
   handleMock,
+  inspectLinkedFileMock,
   openPathMock,
   resolveCliCommandMock,
   showItemInFolderMock,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   getSpawnArgsForWindowsMock: vi.fn(),
   handleMock: vi.fn(),
+  inspectLinkedFileMock: vi.fn(),
   openPathMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
   showItemInFolderMock: vi.fn(),
@@ -36,6 +38,10 @@ vi.mock('electron', () => ({
 
 vi.mock('node:fs/promises', () => ({
   stat: statMock
+}))
+
+vi.mock('./linked-file-inspection', () => ({
+  inspectLinkedFile: inspectLinkedFileMock
 }))
 
 vi.mock('node:child_process', () => ({
@@ -125,6 +131,8 @@ describe('registerShellHandlers', () => {
     }))
     spawnMock.mockReturnValue(createSpawnedProcess())
     statMock.mockResolvedValue({ isDirectory: () => true })
+    inspectLinkedFileMock.mockReset()
+    inspectLinkedFileMock.mockResolvedValue('open')
   })
 
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
@@ -184,15 +192,56 @@ describe('registerShellHandlers', () => {
 
       sshTargets.set(
         'ssh-1',
-        createSshTarget({ owner: { type: 'on-demand-runtime', runtimeId: 'runtime-1' } })
+        createSshTarget({
+          owner: { type: 'on-demand-runtime', runtimeId: 'runtime-1' }
+        })
       )
       await expect(
         handler(
           {},
-          { path: '/srv/project', command: 'code', connectionId: 'ssh-1', ownerHostId: 'ssh:ssh-1' }
+          {
+            path: '/srv/project',
+            command: 'code',
+            connectionId: 'ssh-1',
+            ownerHostId: 'ssh:ssh-1'
+          }
         )
       ).resolves.toEqual({ ok: false, reason: 'remote-runtime-unsupported' })
       expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('linked file opens', () => {
+    const scriptPath = process.platform === 'win32' ? 'C:\\x\\run.sh' : '/x/run.sh'
+    const scriptUri = process.platform === 'win32' ? 'file:///C:/x/run.sh' : 'file:///x/run.sh'
+
+    it.each([
+      ['open', 'opened', true],
+      ['reveal', 'revealed', true],
+      ['view-as-text', 'open-in-editor', true]
+    ] as const)('maps %s to %s for Markdown links', async (action, uriResult, pathResult) => {
+      inspectLinkedFileMock.mockResolvedValue(action)
+
+      await expect(getHandler('shell:openFileUri')({}, scriptUri, 'local')).resolves.toBe(uriResult)
+      await expect(getHandler('shell:openFilePath')({}, scriptPath, 'local')).resolves.toBe(
+        pathResult
+      )
+      // Only plain documents reach the OS default app; scripts never do.
+      expect(openPathMock).toHaveBeenCalledTimes(action === 'open' ? 2 : 0)
+      // A path open has no editor to fall back on, so scripts are revealed there.
+      expect(showItemInFolderMock).toHaveBeenCalledTimes(
+        action === 'reveal' ? 2 : action === 'view-as-text' ? 1 : 0
+      )
+    })
+
+    it('refuses non-local owners and remote file URIs before inspecting', async () => {
+      const handler = getHandler('shell:openFileUri')
+
+      await expect(handler({}, scriptUri, 'ssh:ssh-1')).resolves.toBe('failed')
+      await expect(handler({}, 'file://server/share/run.sh', 'local')).resolves.toBe('failed')
+      await expect(handler({}, 'https://example.com/run.sh', 'local')).resolves.toBe('failed')
+      expect(inspectLinkedFileMock).not.toHaveBeenCalled()
+      expect(openPathMock).not.toHaveBeenCalled()
     })
   })
 })

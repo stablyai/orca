@@ -1,3 +1,5 @@
+import { agentTabLaunchStore } from './launch-agent-execution-context'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -18,16 +20,16 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { completeWebHostAgentLaunch } from '@/lib/web-host-agent-launch-completion'
 import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
-import type { CreateWebRuntimeSessionTerminalArgs } from '@/runtime/web-runtime-session-types'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/web-runtime-session-types'
 import {
   planLaunchAgentStartupPrompt,
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
   hostedAgentPromptDelivery,
   hostedAgentPromptRequest
-} from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+} from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import type { LaunchAgentStartupPromptPlan } from '../prompt/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -38,6 +40,7 @@ import type { AgentTerminalLaunchCompletion } from '@/lib/agent-session/launch/s
 export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
+  workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
   cwd?: string | null
@@ -83,7 +86,7 @@ export async function launchAgentInWebHostTab(args: {
     : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
-  let launch: CreateWebRuntimeSessionTerminalArgs
+  let launch: CreateWebRuntimeSessionTerminalOnHostArgs
   try {
     const { capable, complete } = environmentId
       ? await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {
@@ -207,10 +210,10 @@ export async function launchAgentInWebHostTab(args: {
             })
           } else {
             // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-              kind: 'git-worktree',
-              worktreeId
-            })
+            const preferences = await ensureAgentLaunchPreferences(
+              agentTabLaunchStore(useAppStore.getState(), args),
+              { kind: 'git-worktree', worktreeId }
+            )
             startup = args.buildStartup(preferences.agentLaunchChoices)
           }
         } catch (error) {

@@ -15,7 +15,7 @@ import {
 } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
 import { focusActivePane } from './pane-helpers'
 import { useAppStore } from '@/store'
-import { auditPaneWeightParity } from './terminal-render-desync-weight-probe'
+import { auditPaneWeightParity } from './render-health/terminal-render-desync-weight-probe'
 import { flushDeferredPaneMetricOptionsIfMeasurable } from '@/lib/pane-manager/pane-fit'
 import { repairPaneWebglCanvasDprMismatch } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
 import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'

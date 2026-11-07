@@ -133,7 +133,7 @@ export function installedPluginControls(
         aria-label={translate(
           'auto.components.settings.PluginManagerRows.updateLabel',
           'Update {{value0}} to {{value1}}',
-          { value0: plugin.name, value1: entry.updateVersion }
+          { value0: entry.name, value1: entry.updateVersion }
         )}
         onClick={() => handlers.onCheckUpdate(entry)}
       >
@@ -180,14 +180,14 @@ export function installedPluginControls(
                   'auto.components.settings.PluginSettingsRow.disableLabel',
                   'Disable {{value0}}',
                   {
-                    value0: plugin.name
+                    value0: entry.name
                   }
                 )
               : translate(
                   'auto.components.settings.PluginSettingsRow.enableLabel',
                   'Enable {{value0}}',
                   {
-                    value0: plugin.name
+                    value0: entry.name
                   }
                 )
           }
@@ -202,7 +202,7 @@ export function installedPluginControls(
       </span>
     ),
     more: (
-      <MoreButton name={plugin.name}>
+      <MoreButton name={entry.name}>
         {inPage ? null : <DetailsItem onSelect={() => handlers.onOpen(plugin.pluginKey)} />}
         {plugin.hasWorker && !inPage ? (
           <DropdownMenuItem onSelect={() => handlers.onViewLogs(plugin.pluginKey)}>
