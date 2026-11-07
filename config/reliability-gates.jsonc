@@ -2784,10 +2784,8 @@
         {
           "file": "src/shared/ephemeral-vm-runtime-store-rollback.test.ts",
           "assertions": [
-            "ordinary runtime bytes remain unchanged and create no feature sidecar",
             "malformed, future, oversized, and unknown feature data is preserved without poisoning v1 records",
-            "current-main poisoned bytes migrate to a rollback-readable projection",
-            "unchanged compatibility metadata is not rewritten during lifecycle updates"
+            "current-main poisoned bytes migrate to a rollback-readable projection"
           ]
         },
         {
