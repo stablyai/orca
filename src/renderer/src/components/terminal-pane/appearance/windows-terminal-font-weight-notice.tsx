@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { isWindowsDesktopClient } from '@/lib/windows-path-access'
-import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { WINDOWS_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-platform-defaults'
 
 const TOAST_ID = 'windows-terminal-font-weight'
-const SAMPLE_TEXT = 'git status'
+const SAMPLE_TEXT = 'git status --short'
 const PROBE_TEXT = 'git status 0Oo1lI WMQ@#{}'
 const CHOICE_WEIGHTS: readonly number[] = [
   WINDOWS_TERMINAL_FONT_WEIGHT,
@@ -54,47 +54,38 @@ function finishNotice(): void {
 }
 
 function TerminalFontWeightChoice(): React.JSX.Element {
+  const switchId = useId()
   const weight = useAppStore((s) => s.settings?.terminalFontWeight ?? WINDOWS_TERMINAL_FONT_WEIGHT)
   const fontFamily = useAppStore((s) => buildFontFamily(s.settings?.terminalFontFamily ?? ''))
-  const choices = [
-    {
-      weight: WINDOWS_TERMINAL_FONT_WEIGHT,
-      label: translate('terminal.windowsFontWeight.choiceNew', 'New')
-    },
-    {
-      weight: DEFAULT_TERMINAL_FONT_WEIGHT,
-      label: translate('terminal.windowsFontWeight.choicePrevious', 'Previous')
-    }
-  ]
   return (
-    <div className="mt-2">
-      <SettingsSegmentedControl
-        value={weight}
-        equalWidth
-        ariaLabel={translate('terminal.windowsFontWeight.choiceLabel', 'Terminal font weight')}
-        onChange={(terminalFontWeight) =>
-          void useAppStore.getState().updateSettings({ terminalFontWeight }).catch(console.error)
-        }
-        options={choices.map((choice) => ({
-          value: choice.weight,
-          ariaLabel: `${choice.label}, ${choice.weight}`,
-          label: (
-            // The button must be the pointer target, or sonner reads a quick click as a swipe.
-            <span className="pointer-events-none flex flex-col items-center gap-0.5 py-0.5">
-              <span
-                aria-hidden
-                className="text-lg text-foreground"
-                style={{ fontFamily, fontWeight: choice.weight }}
-              >
-                {SAMPLE_TEXT}
-              </span>
-              <span className="text-xs">
-                {choice.label} · {choice.weight}
-              </span>
-            </span>
-          )
-        }))}
-      />
+    // Sonner treats a drag that starts outside a button as a swipe; keep it from dismissing mid-choice.
+    <div className="mt-2 space-y-2" onPointerDown={(event) => event.stopPropagation()}>
+      <div
+        aria-hidden
+        className="truncate rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-foreground"
+        style={{ fontFamily, fontWeight: weight }}
+      >
+        {SAMPLE_TEXT}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <label htmlFor={switchId} className="text-sm text-foreground">
+          {translate('terminal.windowsFontWeight.lighterText', 'Lighter terminal text')}
+        </label>
+        <Switch
+          id={switchId}
+          checked={weight === WINDOWS_TERMINAL_FONT_WEIGHT}
+          onCheckedChange={(lighter) =>
+            void useAppStore
+              .getState()
+              .updateSettings({
+                terminalFontWeight: lighter
+                  ? WINDOWS_TERMINAL_FONT_WEIGHT
+                  : DEFAULT_TERMINAL_FONT_WEIGHT
+              })
+              .catch(console.error)
+          }
+        />
+      </div>
     </div>
   )
 }
@@ -146,6 +137,8 @@ export function useWindowsTerminalFontWeightNotice(persistedUIReady: boolean): v
         id: TOAST_ID,
         description: <TerminalFontWeightChoice />,
         duration: Infinity,
+        // The global footer rule indents actions past a status icon; this toast has none and keeps Okay at the end.
+        classNames: { actionButton: '!ml-auto' },
         onDismiss: finishNotice,
         action: {
           label: translate('terminal.windowsFontWeight.okay', 'Okay'),
