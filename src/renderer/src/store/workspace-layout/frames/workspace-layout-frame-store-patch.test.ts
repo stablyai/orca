@@ -12,7 +12,10 @@ import { GIT_KEY } from '../../../../../shared/workspace-layout/workspace-layout
 import { bootWindowFromPartitions } from '../../../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
 import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
+import { makeUnifiedTab } from '../../slices/tabs/tab-group.test-fixture'
 import type { AppState } from '../../types'
+import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
@@ -82,6 +85,57 @@ function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWo
 }
 
 describe('laying frame slices over the store', () => {
+  it('retains editor content referenced by another workspace or a pending open and drops unreferenced content', async () => {
+    const { state, session, frame } = await restored()
+    const files = [
+      makeOpenFile({ id: 'shared-editor', worktreeId: GIT_KEY, mode: 'diff' }),
+      makeOpenFile({ id: 'pending-editor', worktreeId: GIT_KEY, mode: 'diff' }),
+      makeOpenFile({ id: 'unreferenced-editor', worktreeId: GIT_KEY, mode: 'diff' })
+    ]
+    const input = {
+      ...state,
+      openFiles: files,
+      unifiedTabsByWorktree: {
+        [GIT_KEY]: files.map((file) =>
+          makeUnifiedTab({
+            id: `local-${file.id}`,
+            entityId: file.id,
+            worktreeId: GIT_KEY,
+            groupId: 'local-group',
+            contentType: 'diff'
+          })
+        ),
+        'folder:other': [
+          makeUnifiedTab({
+            id: 'shared-tab',
+            entityId: 'shared-editor',
+            worktreeId: 'folder:other',
+            groupId: 'other-group',
+            contentType: 'diff'
+          })
+        ]
+      }
+    }
+    const finish = beginPendingTab('pending-tab', 'folder:pending', 'pending-editor', {
+      kind: 'open'
+    })
+    try {
+      const patch = patchFor(input, session, {
+        ...frame,
+        tabs: [],
+        groups: [],
+        editorFiles: [],
+        browserTabs: []
+      })
+      expect((patch.openFiles ?? input.openFiles).map((file) => file.id)).toEqual([
+        'shared-editor',
+        'pending-editor'
+      ])
+    } finally {
+      finish(null)
+    }
+  })
+
   it('keeps the pane layout of a tab the window’s own pane command holds, until main drops the tab', async () => {
     const { state, session, frame } = await restored()
     const newRatios: PublishedWorkspaceLayout = {
