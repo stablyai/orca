@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { OrchestrationDb } from '../../db'
+import { OrchestrationDb } from '../orchestration-db'
 
 describe('forgetRunCoordinatorHandlesExcept', () => {
   let db: OrchestrationDb

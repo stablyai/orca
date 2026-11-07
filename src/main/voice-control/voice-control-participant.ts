@@ -1,4 +1,4 @@
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 
 /**
  * The control's orchestration identity: one Run per voice session with a synthetic

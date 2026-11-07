@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   dispatchVoiceMessageToAgent,
   type VoiceAgentDispatchDeps

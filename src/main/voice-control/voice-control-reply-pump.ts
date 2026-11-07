@@ -1,4 +1,4 @@
-import type { MessageRow, MessageType } from '../runtime/orchestration/types'
+import type { MessageRow, MessageType } from '../runtime/orchestration/db/orchestration-records'
 import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
 
 /**

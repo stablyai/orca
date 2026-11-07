@@ -12,7 +12,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { getMainHttpClient } from '../network/http-client'
 import { hasOpenAiSpeechApiKey, readOpenAiSpeechApiKey } from '../speech/openai-api-key-store'
 import { getDefaultVoiceControlSettings } from '../../shared/constants'
-import { localOrchestrationCliCommand } from '../runtime/orchestration/cli-command'
+import { localOrchestrationCliCommand } from '../runtime/orchestration/workers/launch/orchestration-cli-command'
 import type {
   VoiceControlAgentActivityEvent,
   VoiceControlExchangeSdpResult,

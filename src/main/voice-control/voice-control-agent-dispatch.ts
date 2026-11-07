@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { isAgentPromptStalledError } from '../runtime/terminal/input/agent-prompt-submission-verification'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   buildDispatchPreamble,
   type DispatchPreambleSendOptions
-} from '../runtime/orchestration/preamble'
-import { sendAgentTurn } from '../runtime/orchestration/send-agent-turn'
+} from '../runtime/orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { VoiceRosterEntry } from './voice-control-roster'
 import { VOICE_CONTROL_HANDLE } from './voice-control-participant'
