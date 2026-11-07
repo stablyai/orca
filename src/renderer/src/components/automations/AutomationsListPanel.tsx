@@ -91,6 +91,7 @@ export type AutomationsListPanelProps = {
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   externalActionKey: string | null
   selectAutomationRow: (rowKey: string | null) => void
   selectExternalKey: (externalKey: string | null) => void
@@ -144,6 +145,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     hostTargetFor,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     externalActionKey,
     selectAutomationRow,
     selectExternalKey,
@@ -273,6 +275,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     hostTargetFor,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     onSelect: (rowKey: string) => {
       selectExternalKey(null)
       selectAutomationRow(rowKey)

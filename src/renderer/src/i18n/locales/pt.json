@@ -10718,6 +10718,7 @@
             "openLog": "Abrir Registro",
             "revealLog": "Mostrar Registro",
             "openWorkingDirectory": "Abrir Diretório de Trabalho",
+            "revealArtifactsFolder": "Mostrar Pasta de Artefatos",
             "copySessionId": "Copiar ID da Sessão",
             "copyLogPath": "Copiar Caminho do Registro",
             "messageCount": "{{value0}} msgs",
@@ -14393,7 +14394,10 @@
           "reuseLiveSession": "Reutilizar sessão ativa",
           "freshEachRun": "Nova a cada execução",
           "precheckEnabled": "Ativada, {{timeout}}",
-          "precheckNone": "Nenhuma"
+          "precheckNone": "Nenhuma",
+          "migrate": "Migrar",
+          "migrateNotice": "{{host}} foi atualizado para um novo host remoto. Migre esta automação para que ela continue em execução.",
+          "needsMigration": "Requer migração"
         },
         "ExternalAutomationManagers": {
           "e02f970595": "Nenhum gerenciador de automação externa encontrado.",
@@ -23427,6 +23431,7 @@
       "noRunnableHost": "Esta automação não tem host onde ser executada.",
       "wslMoveInProgress": "O projeto desta automação está sendo movido para seu host WSL, por isso o Orca ignorou esta execução. As execuções serão retomadas quando a movimentação terminar.",
       "wslMoveOwnedByHost": "O projeto desta automação agora é executado em seu host WSL, que também executa esta automação. O Orca não executa mais esta cópia local.",
+      "managedHostServer": "Requer migração para {{host}}",
       "missedGraceWindow": "Quando o Orca verificou novamente, o período de tolerância para recuperar esta execução perdida já havia expirado.",
       "targetMissing": "O host da automação não está mais registrado, então esta automação não tem onde ser executada.",
       "targetReplaced": "O host da automação foi removido e registrado novamente, então esta automação precisa ser vinculada novamente antes de poder ser executada.",

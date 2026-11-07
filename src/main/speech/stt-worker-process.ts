@@ -7,9 +7,9 @@ export const STT_WORKER_HUNG_ERROR = 'The speech engine stopped responding. Try 
 
 export type SttWorkerRequest =
   | ({ type: 'init'; sherpaModulePath: string } & RecognizerConfigInput)
-  | { type: 'feed'; samples: Float32Array; sampleRate: number }
-  | { type: 'stop' }
-  | { type: 'discard' }
+  | { type: 'feed'; streamId: string; samples: Float32Array; sampleRate: number }
+  | { type: 'stop'; streamId: string }
+  | { type: 'discard'; streamId: string }
 
 export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'>
 export type SpawnSttWorkerProcess = () => SttWorkerProcess

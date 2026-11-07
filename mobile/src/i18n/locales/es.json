@@ -1318,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "El dictado ya se está usando en el ordenador o en otro teléfono.",
+      "alreadyActive": "El dictado ya se está usando en el ordenador o en otro teléfono. Actualiza Orca en el ordenador para dictar desde varios dispositivos a la vez.",
       "cloudModelNeedsKey": "Requiere una clave de OpenAI",
       "deleteFailed": "No se pudo eliminar el modelo",
       "desktopUpdateRequired": "Actualiza la app de Orca en el escritorio emparejado para usar los ajustes de voz del móvil.",
       "downloadFailed": "No se pudo iniciar la descarga",
       "loadFailed": "No se pudieron cargar los modelos de dictado",
+      "modelBusy": "Otro dispositivo está dictando con un modelo de voz distinto. Inténtalo de nuevo cuando termine.",
       "repairRequired": "Vuelve a emparejar este teléfono con el ordenador para usar el dictado.",
       "serverUpdateRequired": "Actualiza Orca en este servidor para usar el dictado por voz.",
+      "sessionLimit": "Hay demasiados dispositivos dictando en este ordenador. Inténtalo de nuevo cuando termine uno.",
       "sessionLost": "El dictado perdió la conexión con el ordenador. Inténtalo de nuevo.",
       "updateFailed": "No se pudieron actualizar los ajustes de dictado"
     }
@@ -4171,6 +4173,7 @@
       "noRunnableHost": "Esta automatización no tiene host donde ejecutarse.",
       "wslMoveInProgress": "El proyecto de esta automatización se está moviendo a su host WSL, por lo que Orca omitió esta ejecución. Las ejecuciones se reanudarán cuando termine el traslado.",
       "wslMoveOwnedByHost": "El proyecto de esta automatización ahora se ejecuta en su host WSL, que ejecuta allí esta automatización. Orca ya no ejecuta esta copia local.",
+      "managedHostServer": "Requiere migración a {{host}}",
       "missedGraceWindow": "Cuando Orca volvió a comprobarlo, ya había vencido el período de gracia para recuperar esta ejecución omitida.",
       "targetMissing": "El host de la automatización ya no está registrado, por lo que esta automatización no tiene dónde ejecutarse.",
       "targetReplaced": "El host de la automatización se eliminó y se volvió a registrar, por lo que hay que volver a vincular esta automatización antes de poder ejecutarla.",
