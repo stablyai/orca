@@ -1,3 +1,4 @@
+import { createObserveTerminalGitHubPullRequestLink } from './worktrees/session/worktree-terminal-reference'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { WorktreeSlice } from './worktree-helpers'
@@ -6,6 +7,7 @@ import { createFetchDetectedWorktrees } from './worktrees/listing/fetch-detected
 import { createFetchWorktrees } from './worktrees/listing/fetch-worktrees'
 import { createFetchAllWorktrees } from './worktrees/listing/fetch-all-worktrees'
 import {
+  createAssignCrossStoreWorktreeParent,
   createAssignWorktreeParent,
   createFetchWorktreeLineage,
   createUpdateWorktreeLineage
@@ -33,13 +35,12 @@ import { createForceDeletePreservedBranch } from './worktrees/teardown/force-del
 import { createUpdateWorktreeMeta } from './worktrees/metadata/update-worktree-meta'
 import { createEnsureHostedReviewPushTarget } from './worktrees/metadata/hosted-review-push-target-ensure'
 import { createUpdateWorktreesMeta } from './worktrees/metadata/update-worktrees-meta'
-import { createSetWorktreesPinnedAndReveal } from './worktrees/session/worktree-pin-reveal'
 import {
-  createBumpWorktreeActivity,
-  createClearWorktreeUnread,
-  createMarkWorktreeUnread,
-  createObserveTerminalGitHubPullRequestLink
-} from './worktrees/session/worktree-unread-activity'
+  guardUpdateWorktreeMetaHostStatus,
+  guardUpdateWorktreesMetaHostStatus
+} from './worktrees/metadata/foreign-host-status-guard'
+import { createSetWorktreesPinnedAndReveal } from './worktrees/session/worktree-pin-reveal'
+import { createBumpWorktreeActivity } from './worktrees/session/worktree-activity-bump'
 import {
   createMarkWorktreeVisited,
   createPruneLastVisitedTimestamps,
@@ -71,8 +72,6 @@ export {
   setDetachedHeadAutoDerivedDisplayNameForTests
 } from './worktrees/metadata/detached-head-display-name'
 export { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './worktrees/listing/authoritative-worktree-removal-memory'
-export type { DirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
-export { acquireDirectSshDetectedWorktreeRefresh } from './worktrees/listing/known-ssh-worktree-fetch'
 
 export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
   ...worktreeSliceInitialState,
@@ -82,6 +81,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktreeLineage: createFetchWorktreeLineage(set, get),
   updateWorktreeLineage: createUpdateWorktreeLineage(set, get),
   assignWorktreeParent: createAssignWorktreeParent(set, get),
+  assignCrossStoreWorktreeParent: createAssignCrossStoreWorktreeParent(set, get),
   updateWorktreeGitIdentity: createUpdateWorktreeGitIdentity(set, get),
   updateWorktreeBaseStatus: createUpdateWorktreeBaseStatus(set, get),
   updateWorktreeRemoteBranchConflict: createUpdateWorktreeRemoteBranchConflict(set, get),
@@ -96,13 +96,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   markWorktreesQueuedForDeletion: createMarkWorktreesQueuedForDeletion(set, get),
   forceDeletePreservedBranch: createForceDeletePreservedBranch(set, get),
   clearWorktreeDeleteState: createClearWorktreeDeleteState(set, get),
-  updateWorktreeMeta: createUpdateWorktreeMeta(set, get),
+  updateWorktreeMeta: guardUpdateWorktreeMetaHostStatus(createUpdateWorktreeMeta(set, get), get),
   ensureHostedReviewPushTarget: createEnsureHostedReviewPushTarget(set, get),
-  updateWorktreesMeta: createUpdateWorktreesMeta(set, get),
+  updateWorktreesMeta: guardUpdateWorktreesMetaHostStatus(createUpdateWorktreesMeta(set, get), get),
   setWorktreesPinnedAndReveal: createSetWorktreesPinnedAndReveal(set, get),
-  markWorktreeUnread: createMarkWorktreeUnread(set, get),
-  observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(set, get),
-  clearWorktreeUnread: createClearWorktreeUnread(set, get),
+  observeTerminalGitHubPullRequestLink: createObserveTerminalGitHubPullRequestLink(get),
   bumpWorktreeActivity: createBumpWorktreeActivity(set, get),
   markWorktreeVisited: createMarkWorktreeVisited(set, get),
   pruneLastVisitedTimestamps: createPruneLastVisitedTimestamps(set, get),

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Cable, Loader2, Server, Trash2 } from 'lucide-react'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { Cable, Loader2, Server, ShieldAlert, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,23 +15,32 @@ import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { translate } from '@/i18n/i18n'
+import { readWebDeviceKeySupport } from './web-device-key-support'
+import { webSessionPairingGuidance } from './web-pairing-security-guidance'
 
 type WebConnectProps = {
   initialPairingInput: string | null
+  /** The link points at a different server than the saved one; wait for the user to connect. */
+  confirmReplacingSavedServer?: boolean
   onConnected: () => void
 }
 
 export default function WebConnect({
   initialPairingInput,
+  confirmReplacingSavedServer = false,
   onConnected
 }: WebConnectProps): React.JSX.Element {
   const existingEnvironment = readStoredWebRuntimeEnvironment()
-  const [name, setName] = useState(existingEnvironment?.name ?? 'Orca Server')
+  const [name, setName] = useState(
+    (!confirmReplacingSavedServer && existingEnvironment?.name) || 'Orca Server'
+  )
   const [pairingCode, setPairingCode] = useState(initialPairingInput ?? '')
   const [error, setError] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const parsedOffer = useMemo(() => parseWebPairingInput(pairingCode), [pairingCode])
   const autoConnectAttempted = useRef(false)
+  const sessionGuidance = webSessionPairingGuidance(readWebDeviceKeySupport())
+  const replacedEnvironment = confirmReplacingSavedServer ? existingEnvironment : null
 
   const connect = async (): Promise<void> => {
     setError(null)
@@ -59,7 +69,7 @@ export default function WebConnect({
       offer: parsedOffer,
       previousEnvironment: existingEnvironment
     })
-    const client = new WebRuntimeClient(parsedOffer)
+    const client = new WebRuntimeClient(pairedRuntimeConnectionFromOffer(parsedOffer))
     try {
       const response = await client.call('status.get', undefined, { timeoutMs: 15_000 })
       if (!response.ok) {
@@ -92,15 +102,19 @@ export default function WebConnect({
 
   // Why: a deep-linked offer that reaches this screen either has mobile scope
   // or unknown legacy scope; run the same connect path to reject/probe it.
+  const autoConnect = useEffectEvent(() => void connect())
   useEffect(() => {
-    if (autoConnectAttempted.current || !initialPairingInput || !parsedOffer) {
+    if (
+      autoConnectAttempted.current ||
+      confirmReplacingSavedServer ||
+      !initialPairingInput ||
+      !parsedOffer
+    ) {
       return
     }
     autoConnectAttempted.current = true
-    void connect()
-    // Why: run once for the deep-linked offer; connect() reads current refs/state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPairingInput, parsedOffer])
+    autoConnect()
+  }, [confirmReplacingSavedServer, initialPairingInput, parsedOffer])
 
   const clear = (): void => {
     clearStoredWebRuntimeEnvironment()
@@ -154,9 +168,32 @@ export default function WebConnect({
           />
         </div>
 
+        {replacedEnvironment && (
+          <div className="flex items-start gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs leading-5 text-foreground">
+            <ShieldAlert size={15} className="mt-0.5 shrink-0" aria-hidden />
+            <p className="min-w-0 break-words">
+              {translate(
+                'auto.web.WebConnect.replaceSavedServer',
+                'This link connects to a different server than "{{name}}" ({{endpoint}}). Connect only if you trust the endpoint below.',
+                {
+                  name: replacedEnvironment.name,
+                  endpoint: replacedEnvironment.endpoints[0]?.endpoint ?? ''
+                }
+              )}
+            </p>
+          </div>
+        )}
+
+        {sessionGuidance && (
+          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
+            {sessionGuidance}
+          </div>
+        )}
+
         {parsedOffer && (
           <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')} {parsedOffer.endpoint}
+            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')}{' '}
+            <span className="break-all font-mono text-foreground">{parsedOffer.endpoint}</span>
           </div>
         )}
 
@@ -167,10 +204,16 @@ export default function WebConnect({
         )}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" onClick={clear} className="gap-2">
-            <Trash2 size={15} aria-hidden />
-            {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
-          </Button>
+          {replacedEnvironment ? (
+            <Button type="button" variant="outline" onClick={onConnected}>
+              {translate('auto.web.WebConnect.keepSavedServer', 'Keep saved server')}
+            </Button>
+          ) : (
+            <Button type="button" variant="outline" onClick={clear} className="gap-2">
+              <Trash2 size={15} aria-hidden />
+              {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
+            </Button>
+          )}
           <Button
             type="button"
             onClick={() => void connect()}

@@ -1,26 +1,18 @@
 import { z } from 'zod'
-import {
-  isRelayCellConnectionHardCap,
-  RELAY_CELL_CONNECTION_HARD_CAP,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_DEFAULT_REGION,
-  RelayRegionSchema,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import { isRelayCellConnectionHardCap, RELAY_CELL_CONNECTION_HARD_CAP, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import {
   RELAY_MAX_READINESS_GRACE_MS,
   RELAY_READINESS_JWKS_GRACE_MS,
   RELAY_READINESS_SQL_GRACE_MS
-} from './relay-readiness.js'
+} from './process-lifecycle/relay-readiness.js'
 
 export const RELAY_MAX_CELL_CAPACITY_REQUESTS = 100_000
 export const RELAY_DATABASE_POOL_MAX = 10
 export const RELAY_DIRECTOR_DATABASE_POOL_MAX = 3
 export const RELAY_PUBLIC_RESOLVE_CONCURRENCY = 1
 export const RELAY_PUBLIC_RESOLVE_WAIT_MS = 5_000
-export { RELAY_CELL_CONNECTION_HARD_CAP }
+
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -36,8 +28,7 @@ const OptionalServiceAccountSchema = z.preprocess(
   z.string().email().optional()
 )
 
-// 0 disables the window and restores the fail-on-first-error readiness answer. An unset variable
-// arrives as '' from Cloud Run, which z.coerce would read as 0 rather than as the default.
+// Cloud Run unset values arrive as empty strings, which coerce to 0 (fail-first readiness) instead of the grace default.
 const readinessGraceSchema = (defaultMs: number) =>
   z.preprocess(
     (value) => (value === '' ? undefined : value),
@@ -99,6 +90,24 @@ const EnvSchema = z.object({
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 5 on directors: `off` (default) is today's path; `dry-run` asks the picked cell to
+  // check a booking without making it, and logs the answer; `on` places on switched-on cells.
+  ORCA_RELAY_RESERVE_PLACEMENT: z.enum(['off', 'dry-run', 'on']).default('off'),
+  // Step 1 C: this share of hosts (by hash) on a reserve cell outside their region is booked
+  // in it on reconnect; 0 (default) is off.
+  ORCA_RELAY_RESERVE_REHOME_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
+  // Step 3 shadow directory: unset or empty polls no cell; `all` or a comma list of cell ids.
+  ORCA_RELAY_SHADOW_SEAT_FEED_CELLS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value.trim() === 'all'
+        ? ('all' as const)
+        : value
+            .split(',')
+            .map((cellId) => cellId.trim())
+            .filter((cellId) => cellId.length > 0)
+    ),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -109,6 +118,17 @@ const EnvSchema = z.object({
     .positive()
     .max(60)
     .default(2),
+  // Borrowed from placement concurrency, which always keeps at least one permit.
+  ORCA_RELAY_DRAIN_RETURN_CONCURRENCY: z.coerce.number().int().positive().max(4).default(1),
+  ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX: z.coerce.number().int().positive().max(64).default(4),
+  ORCA_RELAY_DRAIN_RETURN_WAIT_MS: z.coerce.number().int().positive().max(10_000).default(3_000),
+  // The desktop parser caps a Retry-After at 5 minutes; a larger value is truncated there.
+  ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(2)
+    .max(300)
+    .default(300),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX: z.coerce
     .number()
     .int()
@@ -194,6 +214,9 @@ export type RelayConfig = {
   fenceBrokerServiceAccount?: string
   rehomeDirectorServiceAccount?: string
   rehomeAudience?: string
+  shadowSeatFeedCells?: 'all' | string[]
+  reservePlacement?: 'off' | 'dry-run' | 'on'
+  reserveRehomePercent?: number
   runtimeServiceAccount: string
   directorUrl?: string
   heartbeatAudience?: string
@@ -217,6 +240,10 @@ export type RelayConfig = {
   publicStickyQueueMax?: number
   publicStickyWaitMs?: number
   publicStickyRetryAfterSeconds?: number
+  drainReturnConcurrency?: number
+  drainReturnQueueMax?: number
+  drainReturnWaitMs?: number
+  drainReturnMaxRetryAfterSeconds?: number
   databaseUrl?: string
   dataDir: string
 }
@@ -339,6 +366,9 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     fenceBrokerServiceAccount: parsed.ORCA_RELAY_FENCE_BROKER_SERVICE_ACCOUNT,
     rehomeDirectorServiceAccount: parsed.ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT,
     rehomeAudience: parsed.ORCA_RELAY_REHOME_AUDIENCE,
+    shadowSeatFeedCells: parsed.ORCA_RELAY_SHADOW_SEAT_FEED_CELLS,
+    reservePlacement: parsed.ORCA_RELAY_RESERVE_PLACEMENT,
+    reserveRehomePercent: parsed.ORCA_RELAY_RESERVE_REHOME_PERCENT,
     runtimeServiceAccount:
       parsed.ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT ?? parsed.ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT,
     directorUrl,
@@ -367,6 +397,10 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     publicStickyQueueMax: parsed.ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX,
     publicStickyWaitMs: parsed.ORCA_RELAY_PUBLIC_STICKY_WAIT_MS,
     publicStickyRetryAfterSeconds: parsed.ORCA_RELAY_PUBLIC_STICKY_RETRY_AFTER_SECONDS,
+    drainReturnConcurrency: parsed.ORCA_RELAY_DRAIN_RETURN_CONCURRENCY,
+    drainReturnQueueMax: parsed.ORCA_RELAY_DRAIN_RETURN_QUEUE_MAX,
+    drainReturnWaitMs: parsed.ORCA_RELAY_DRAIN_RETURN_WAIT_MS,
+    drainReturnMaxRetryAfterSeconds: parsed.ORCA_RELAY_DRAIN_RETURN_MAX_RETRY_AFTER_SECONDS,
     databaseUrl: parsed.DATABASE_URL,
     dataDir: parsed.ORCA_RELAY_DATA_DIR
   }

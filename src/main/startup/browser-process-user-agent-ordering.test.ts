@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import { runMainProcessPreflight } from './main-process-preflight'
 
 const mocks = vi.hoisted(() => {
   const events: string[] = []
-  // Why a two-word app token: this file sets the dev app name to "Orca Development", and Electron
-  // builds the app token from that name. A single-token fixture could not exhibit the multi-word
-  // leak the cleaner exists to handle, so it disagreed with the scenario it set up.
-  // Why the engine comment: a real app.userAgentFallback always carries it, and the cleaner only
-  // touches identities that do — a fixture without it models a string Electron cannot produce.
+  // Use a two-word app token to expose partial removal; retain the engine identity required by the real cleaner.
   let userAgent =
     'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Orca Development/0.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
   const app = {
     isPackaged: false,
     exit: vi.fn(),
+    // Preflight reads commandLine to select the Linux keyring backend.
+    commandLine: { hasSwitch: vi.fn(() => false), appendSwitch: vi.fn() },
     getVersion: vi.fn(() => '1.0.0'),
     getPath: vi.fn(() => '/canonical-user-data'),
     get userAgentFallback(): string {
@@ -42,7 +41,8 @@ const mocks = vi.hoisted(() => {
     afterIdentity: vi.fn((): void => {
       throw new Error('preflight-test-stop')
     }),
-    recoverMoves: vi.fn()
+    recoverMoves: vi.fn(),
+    profileLock: vi.fn((): { state: string; message?: string } => ({ state: 'unavailable' }))
   }
 })
 
@@ -56,7 +56,6 @@ vi.mock('electron', () => ({
 vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: mocks.backgroundLaunch
 }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: true } }))
 vi.mock('./cli-launch-redirect', () => ({
   maybeRedirectCliLaunch: () => ({ redirected: false, status: 0 })
 }))
@@ -76,14 +75,16 @@ vi.mock('./configure-process', () => ({
   optOutOfHiddenPageWakeUpThrottling: vi.fn(),
   patchPackagedProcessPath: vi.fn()
 }))
-vi.mock('../serve-update-handoff', () => ({ installServeSupervisorDisconnectQuit: vi.fn() }))
+vi.mock('../updater/serve-update-handoff', () => ({
+  installServeSupervisorDisconnectQuit: vi.fn()
+}))
 vi.mock('./main-process-error-guards', () => ({
   installUncaughtPipeErrorGuard: vi.fn(),
   installUnhandledRejectionLogging: vi.fn()
 }))
 vi.mock('./hydrate-shell-path')
 vi.mock('../runtime/remote-server-updater', () => ({ configureRemoteServerUpdater: vi.fn() }))
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   getRemoteServerUpdaterSnapshot: vi.fn(),
   checkForRemoteServerUpdate: vi.fn(),
   downloadRemoteServerUpdate: vi.fn(),
@@ -112,6 +113,9 @@ vi.mock('../server/serve-stdout-boundary')
 vi.mock('./serve-desktop-activation', () => ({
   createServeDesktopActivationGate: () => ({})
 }))
+vi.mock('./desktop-profile-instance-lock', () => ({
+  acquireDesktopProfileInstanceLock: mocks.profileLock
+}))
 vi.mock('./single-instance-lock', () => ({
   shouldBypassSingleInstanceLock: () => false,
   shouldSkipSingleInstanceLock: () => false,
@@ -121,11 +125,11 @@ vi.mock('./single-instance-lock', () => ({
   },
   logSingleInstanceLockBypass: vi.fn(),
   logSingleInstanceLockFailure: vi.fn(),
-  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE: 1
+  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE: 3
 }))
 vi.mock('../../shared/app-environment', () => ({ setAppEnvironment: vi.fn() }))
 vi.mock('../host/electron-app-environment', () => ({ ElectronAppEnvironment: class {} }))
-vi.mock('../own-chromium-tree-kill-guard')
+vi.mock('../pty/process-retirement/own-chromium-tree-kill-guard')
 vi.mock('../../shared/secret-store', () => ({
   setSecretStore: () => {
     mocks.events.push('continued-after-browser-identity')
@@ -133,19 +137,25 @@ vi.mock('../../shared/secret-store', () => ({
   }
 }))
 vi.mock('../host/electron-secret-store')
-vi.mock('../ipc/pty-host-bindings')
+vi.mock('../ipc/pty/pty-host-bindings')
 vi.mock('../host/electron-runtime-desktop-surface')
 vi.mock('../runtime/runtime-desktop-surface')
 vi.mock('../host/electron-browser-commands')
-vi.mock('../runtime/runtime-browser-commands-factory')
+vi.mock('../runtime/browser/installation/runtime-browser-commands-factory')
 vi.mock('../host/electron-http-client')
 vi.mock('../network/http-client')
 vi.mock('../host/electron-speech-services')
 vi.mock('../speech/speech-runtime-service')
-vi.mock('../ipc/worktree-watcher-removal')
-vi.mock('../ipc/filesystem-watcher')
+vi.mock('../workspaces/removal/worktree-watcher-removal')
+vi.mock('../ipc/filesystem/watchers/filesystem-watcher', () => ({
+  desktopWorktreeWatcherRemoval: {
+    closeLocal: vi.fn(),
+    restoreLocal: vi.fn(),
+    forgetLocal: vi.fn()
+  }
+}))
 vi.mock('../network/proxy-settings')
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   initDataPath: () => mocks.events.push('init-data-path'),
   getCanonicalUserDataPath: () => '/canonical-user-data'
 }))
@@ -155,8 +165,8 @@ vi.mock('../persistence/profile-state/profile-state-access', () => ({
     return mocks.admission()
   }
 }))
-vi.mock('../macos-press-and-hold-default')
-vi.mock('../ai-vault/session-parse-cache-persistence')
+vi.mock('../window/desktop-integration/macos-press-and-hold-default')
+vi.mock('../ai-vault/parse-cache/session-parse-cache-persistence')
 vi.mock('../orca-profiles/profile-index-store', () => ({ initOrcaProfilePaths: vi.fn() }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/canonical-user-data'
@@ -171,7 +181,7 @@ vi.mock('../stats/collector')
 vi.mock('../claude-usage/store')
 vi.mock('../codex-usage/store')
 vi.mock('../opencode-usage/store')
-vi.mock('../browser/doc-preview-protocol')
+vi.mock('../browser/document-preview/doc-preview-protocol')
 vi.mock('../crash-reporting/crashpad-capture')
 vi.mock('../crash-reporting/crash-report-store')
 vi.mock('../crash-reporting/crash-breadcrumb-store')
@@ -181,12 +191,12 @@ vi.mock('../crash-reporting/main-process-lifecycle-identity')
 vi.mock('./ensure-virtual-display', () => ({
   ensureVirtualDisplayForHeadlessServe: vi.fn(),
   hasUsableLinuxDisplay: () => true,
-  MISSING_LINUX_DISPLAY_MESSAGE: 'missing display'
+  missingLinuxDisplayMessage: () => 'missing display'
 }))
 vi.mock('./gpu-lifecycle')
 vi.mock('./main-process-state', () => ({ mainProcessState: {} }))
 vi.mock('./synthetic-title-runtime')
-vi.mock('../browser/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/browser-identity-mode-store', () => ({
   initializeBrowserIdentityModeStore: (path: string) => {
     mocks.events.push(`read-mode:${path}`)
     return {
@@ -201,7 +211,6 @@ vi.mock('../browser/browser-identity-mode-store', () => ({
 
 describe('browser process user-agent startup ordering', () => {
   it('explains admission refusal before a desktop launch exits', async () => {
-    const { runMainProcessPreflight } = await import('./main-process-preflight')
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     mocks.backgroundLaunch.mockReturnValueOnce(false)
     mocks.admission.mockImplementationOnce(() => {
@@ -225,8 +234,33 @@ describe('browser process user-agent startup ordering', () => {
     }
   })
 
+  it('explains an orcad holding the profile instead of exiting silently', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    mocks.backgroundLaunch.mockReturnValueOnce(false)
+    mocks.profileLock.mockReturnValueOnce({ state: 'held', message: 'Another orcad (pid 7)' })
+    mocks.app.exit.mockClear()
+    mocks.events.length = 0
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      expect(
+        runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
+      ).toBe(false)
+      expect(mocks.showErrorBox).toHaveBeenCalledWith(
+        'Orca could not start',
+        'Another orcad (pid 7)'
+      )
+      expect(mocks.app.exit.mock.calls).toEqual([[3]])
+      expect(mocks.events).not.toContain('admission:/canonical-user-data')
+    } finally {
+      error.mockRestore()
+      platform.mockRestore()
+      mocks.showErrorBox.mockClear()
+      mocks.app.exit.mockClear()
+      mocks.events.length = 0
+    }
+  })
+
   it('does not acquire profile admission for a duplicate launch', async () => {
-    const { runMainProcessPreflight } = await import('./main-process-preflight')
     mocks.events.length = 0
     mocks.lock.mockReturnValueOnce(false)
     expect(
@@ -234,14 +268,13 @@ describe('browser process user-agent startup ordering', () => {
     ).toBe(false)
     expect(mocks.events).not.toContain('admission:/canonical-user-data')
     expect(mocks.events).not.toContain('read-mode:/canonical-user-data')
-    expect(mocks.app.exit).toHaveBeenCalledWith(1)
+    expect(mocks.app.exit).toHaveBeenCalledWith(3)
     mocks.events.length = 0
   })
 
   it('executes after the dev app name and before later preflight work', async () => {
     const { getBrowserProcessUserAgentIdentity } =
-      await import('../browser/browser-process-user-agent')
-    const { runMainProcessPreflight } = await import('./main-process-preflight')
+      await import('../browser/identity/browser-process-user-agent')
 
     expect(
       runMainProcessPreflight({
@@ -264,15 +297,15 @@ describe('browser process user-agent startup ordering', () => {
     expect(writeIndex).toBeLessThan(continuationIndex)
     expect(getBrowserProcessUserAgentIdentity()).toEqual({
       mode: 'clean',
-      userAgent: mocks.userAgent()
+      userAgent: mocks.userAgent(),
+      electronUserAgent:
+        'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Orca Development/0.0.0 Chrome/150.0.0.0 Electron/43.0.0 Safari/537.36'
     })
-    // Both app-name words must be gone, not just the last: a single \S+ would have left "Orca".
     expect(mocks.userAgent()).not.toMatch(/Electron/)
     expect(mocks.userAgent()).not.toMatch(/Orca|Development/)
   })
 
   it('exits without reading profile state or revealing a window when recovery holds admission', async () => {
-    const { runMainProcessPreflight } = await import('./main-process-preflight')
     mocks.events.length = 0
     mocks.admission.mockImplementationOnce(() => {
       throw new Error('Profile recovery is in progress')
@@ -300,7 +333,7 @@ describe('browser process user-agent startup ordering', () => {
 
 it('exits and releases admission after pending profile move recovery fails', async () => {
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   mocks.admission.mockReturnValueOnce({ release })
@@ -308,7 +341,6 @@ it('exits and releases admission after pending profile move recovery fails', asy
   mocks.recoverMoves.mockImplementationOnce(() => {
     throw new Error('unreadable move journal')
   })
-  const { runMainProcessPreflight } = await import('./main-process-preflight')
   expect(
     runMainProcessPreflight({ focusExistingWindow: vi.fn(), requestDesktopActivation: vi.fn() })
   ).toBe(false)
@@ -318,9 +350,8 @@ it('exits and releases admission after pending profile move recovery fails', asy
 })
 
 it('defers a Linux desktop startup failure until Electron is ready', async () => {
-  const { runMainProcessPreflight } = await import('./main-process-preflight')
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let resolveReady: (() => void) | undefined
@@ -348,7 +379,8 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 
     resolveReady?.()
     await ready
-    await Promise.resolve()
+    // The dialog waits for the async system-language catalog after ready.
+    await vi.waitFor(() => expect(mocks.app.exit).toHaveBeenCalled())
     expect(mocks.showErrorBox).toHaveBeenCalledWith(
       'Orca could not start',
       expect.stringContaining('Linux pre-ready failure')
@@ -362,9 +394,8 @@ it('defers a Linux desktop startup failure until Electron is ready', async () =>
 })
 
 it('exits after a Linux desktop readiness rejection without showing a dialog', async () => {
-  const { runMainProcessPreflight } = await import('./main-process-preflight')
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   let rejectReady!: (error: Error) => void
@@ -399,9 +430,8 @@ it('exits after a Linux desktop readiness rejection without showing a dialog', a
 })
 
 it('keeps Linux background startup failures console-only and immediate', async () => {
-  const { runMainProcessPreflight } = await import('./main-process-preflight')
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   mocks.admission.mockReturnValueOnce({ release })
@@ -429,9 +459,8 @@ it('keeps Linux background startup failures console-only and immediate', async (
 })
 
 it('keeps Linux serve startup failures console-only and immediate', async () => {
-  const { runMainProcessPreflight } = await import('./main-process-preflight')
   const { resetBrowserProcessUserAgentForTests } =
-    await import('../browser/browser-process-user-agent')
+    await import('../browser/identity/browser-process-user-agent')
   resetBrowserProcessUserAgentForTests()
   const release = vi.fn()
   const originalArgv = process.argv

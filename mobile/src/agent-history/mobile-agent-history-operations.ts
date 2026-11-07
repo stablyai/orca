@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentHistoryHostStatusSchema,
   agentHistorySessionScanSchema,
@@ -7,23 +8,21 @@ import {
   resumeRepoListSchema
 } from './agent-history-reply-schema'
 
-// The agent-history screen's own reads: the capability gate and session scan it runs on open, and
-// the workspace metadata the resume sheet loads once the user asks to resume a session.
+// History capability/scan reads run on open; resume workspace metadata waits for explicit user intent.
 
-/**
- * The capability gate. A second `status.get` family, alongside the Tasks screen's hydration read
- * in mobile-task-runtime-operations.ts: both raise the host's message, but this one is a screen's
- * own error state while that one fails a hydration barrier, so the two are not one family. The
- * reader is the same unchecked payload read, so the method still has one decoding.
- */
-export const agentHistoryHostStatusRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'status.agent-history',
-    method: 'status.get',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
-  })
+// Keep status capability family separate from Tasks hydration: both raise host message via same reader, but fail different screen/barrier states.
+// Live: resume quotes for the desktop's Windows shell setting, which can change while connected.
+export const agentHistoryHostStatusRead = connectionHostStatusRead(
+  bindDeferredRpcOperation(
+    defineRpcOperation({
+      name: 'status.agent-history',
+      method: 'status.get',
+      acceptance: 'require-result-or-throw-message',
+      barrier: 'after-caller-barrier',
+      read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
+    })
+  ),
+  'live'
 )
 
 export const agentHistorySessionScan = bindDeferredRpcOperation(
@@ -36,12 +35,7 @@ export const agentHistorySessionScan = bindDeferredRpcOperation(
   })
 )
 
-/**
- * Repo identities, the one resume read whose refusal fails the sheet. The member read stays at the
- * call site: main read `.repos` off the cast result at the return statement, so a null result threw
- * a raw TypeError there, and a reader throw would instead be caught by the refusal fallback below
- * and re-thrown as a plain Error.
- */
+// repo.list refusal fails resume sheet. Keep member read at caller: null must throw raw TypeError there, outside refusal fallback that rethrows plain Error.
 export const resumeRepoListRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'repo.resume-metadata',
@@ -52,9 +46,7 @@ export const resumeRepoListRead = bindDeferredRpcOperation(
   })
 )
 
-// The rest of the resume metadata is enrichment: each degrades to an empty list, so a refusal is a
-// skip and the member read stays at the call site, where main's optional chaining tolerated a null
-// result instead of throwing on it.
+// Other metadata is best-effort: skip refusal and keep optional member read at caller so null still degrades to empty.
 
 export const resumeFolderWorkspaceListRead = bindDeferredRpcOperation(
   defineRpcOperation({

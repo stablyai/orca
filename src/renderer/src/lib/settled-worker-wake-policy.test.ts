@@ -1,6 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
+  (
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
 
 const initialState = useAppStore.getState()
 
@@ -20,7 +27,7 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
     state: 'working' as const,
     capturedAt: Date.now(),
     updatedAt: Date.now(),
-    origin: 'worktree-sleep' as const,
+    origin: 'quit' as const,
     // Old clients can still publish the withdrawn policy field.
     ...(id === 'settled-worker' ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
   }))

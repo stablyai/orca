@@ -1,7 +1,10 @@
 import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../../shared/secure-file'
-import { durableWriteTempPath, publishFileDurableSync } from '../../../durable-file-write'
+import {
+  durableWriteTempPath,
+  publishFileDurableSync
+} from '../../../filesystem/durable-file-write'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths
@@ -10,7 +13,8 @@ import {
 /** An existing revision must never be replaced with different content. */
 export function writeVersionedProfileStateExport(
   dataFile: string,
-  writeExport: (targetPath: string) => number
+  writeExport: (targetPath: string) => number,
+  options: { retainAllExports?: boolean } = {}
 ): number | undefined {
   const stagingPath = durableWriteTempPath(`${dataFile}.sqlite-export.pending`)
   try {
@@ -31,7 +35,9 @@ export function writeVersionedProfileStateExport(
       fsyncFileSync(targetPath)
       bestEffortFsyncDirectorySync(dirname(targetPath))
     }
-    pruneProfileStateJsonExports(dataFile)
+    if (!options.retainAllExports) {
+      pruneProfileStateJsonExports(dataFile)
+    }
     return revision
   } finally {
     rmSync(stagingPath, { force: true })

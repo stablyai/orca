@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
-  getAllWindowsMock,
-  getDismissHandler,
-  getDispatchHandler,
-  notificationCloseMock,
-  resetNotificationDispatchMocks
-} from './notifications-test-harness'
+  RuntimeMobileNotificationController,
+  type MobileNotificationDispatchEvent,
+  type MobileNotificationEvent
+} from '../runtime/push/notifications/runtime-mobile-notification-controller'
+import type { StructuredAttentionState } from '../../shared/agent-session/agent-session-attention'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDismissHandler, resetNotificationDispatchMocks } from './notifications-test-harness'
 
 vi.mock('electron', async () =>
   (await import('./notifications-test-harness')).createElectronModuleMock()
@@ -28,12 +30,19 @@ import { registerNotificationHandlers } from './notifications'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 
-function register(options: { suppressWhenFocused: boolean }): {
+function register(
+  options: { suppressWhenFocused: boolean },
+  controller?: RuntimeMobileNotificationController
+): {
   dispatchMobileNotification: ReturnType<typeof vi.fn>
   dismissMobileNotification: ReturnType<typeof vi.fn>
 } {
-  const dispatchMobileNotification = vi.fn()
-  const dismissMobileNotification = vi.fn()
+  const dispatchMobileNotification = vi.fn((event: MobileNotificationDispatchEvent) =>
+    controller?.dispatch(event)
+  )
+  const dismissMobileNotification = vi.fn((id: string) => controller?.dismiss(id))
+  const reconcileStructuredPromptAttention = (state: StructuredAttentionState) =>
+    controller?.reconcileStructuredPromptAttention(state)
   registerNotificationHandlers(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these paths read only getSettings; Store is a class, so a structural double needs the cast.
     {
@@ -41,13 +50,19 @@ function register(options: { suppressWhenFocused: boolean }): {
         notifications: {
           enabled: true,
           agentTaskComplete: true,
+          agentNeedsInput: true,
           terminalBell: true,
           suppressWhenFocused: options.suppressWhenFocused
         }
       })
     } as never,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch and dismiss call only these two runtime methods.
-    { dispatchMobileNotification, dismissMobileNotification } as never
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notification handlers call only these four runtime methods.
+    {
+      dispatchMobileNotification,
+      dismissMobileNotification,
+      retireNotificationAttention: controller?.acknowledgeAttention.bind(controller),
+      reconcileStructuredPromptAttention
+    } as never
   )
   return { dispatchMobileNotification, dismissMobileNotification }
 }
@@ -59,84 +74,35 @@ describe('notifications:dismiss by acknowledged subject', () => {
     resetNotificationDispatchMocks()
   })
 
-  it('retires a shown banner by its subject alone, then forgets the subject', async () => {
-    const { dismissMobileNotification } = register({ suppressWhenFocused: false })
-    expect(
-      await getDispatchHandler()(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          paneKey: PANE,
-          notificationId: 'agent:minted'
-        }
-      )
-    ).toEqual({ delivered: true })
-
-    // The renderer's rebuilt id no longer matches (the row's start moved); the subject still does.
-    expect(getDismissHandler()({}, ['agent:rebuilt'], [PANE])).toEqual({ dismissed: 1 })
-    expect(notificationCloseMock).toHaveBeenCalledTimes(1)
-    expect(dismissMobileNotification.mock.calls.map(([id]) => id).sort()).toEqual([
-      'agent:minted',
-      'agent:rebuilt'
-    ])
-
-    dismissMobileNotification.mockClear()
-    expect(getDismissHandler()({}, [], [PANE])).toEqual({ dismissed: 0 })
-    expect(dismissMobileNotification).not.toHaveBeenCalled()
-  })
-
-  it('retires a phone alert whose desktop banner focus suppressed', async () => {
-    const focusedWindow = { isDestroyed: () => false, isFocused: () => true }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the focus gate reads only these two window methods.
-    getAllWindowsMock.mockReturnValue([focusedWindow] as never)
-    const { dispatchMobileNotification, dismissMobileNotification } = register({
-      suppressWhenFocused: true
-    })
-    expect(
-      await getDispatchHandler()(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          paneKey: PANE,
-          notificationId: 'agent:phone-only',
-          isActiveWorktree: true
-        }
-      )
-    ).toEqual({ delivered: false, reason: 'suppressed-focus' })
-    expect(dispatchMobileNotification).toHaveBeenCalledOnce()
-
-    getDismissHandler()({}, [], [PANE])
-    expect(dismissMobileNotification).toHaveBeenCalledWith('agent:phone-only')
-  })
-
-  it('records nothing for a request neither the desktop nor the phone announced', async () => {
-    const { dismissMobileNotification } = register({ suppressWhenFocused: false })
-    const dispatch = getDispatchHandler()
-    await dispatch(
-      {},
-      {
+  // Reads rebuild ids for turns that never alerted; each forwarded one was a silent push and a store slot.
+  it('clears on the phone only alerts that reached it, including ones sent before a restart', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-clear-delivered-'))
+    const original = new RuntimeMobileNotificationController()
+    const restarted = new RuntimeMobileNotificationController()
+    try {
+      original.configureDismissalStore(directory)
+      original.dispatch({
+        type: 'notification',
         source: 'agent-task-complete',
-        worktreeId: 'repo::wt1',
-        paneKey: 'tab-0:first',
-        notificationId: 'agent:first'
-      }
-    )
-    // Inside the first one's per-workspace cooldown: turned away on both paths.
-    expect(
-      await dispatch(
-        {},
-        {
-          source: 'agent-task-complete',
-          worktreeId: 'repo::wt1',
-          paneKey: PANE,
-          notificationId: 'agent:quiet'
-        }
-      )
-    ).toEqual({ delivered: false, reason: 'cooldown' })
-
-    getDismissHandler()({}, [], [PANE])
-    expect(dismissMobileNotification).not.toHaveBeenCalled()
+        title: 'Done',
+        body: '',
+        notificationId: 'agent:sent'
+      })
+      await original.closeDismissals()
+      restarted.configureDismissalStore(directory)
+      const events: MobileNotificationEvent[] = []
+      restarted.onDispatched((event) => events.push(event))
+      register({ suppressWhenFocused: false }, restarted)
+      getDismissHandler()({}, ['agent:never-sent', 'agent:sent'], [PANE])
+      getDismissHandler()({}, ['agent:sent'], [PANE])
+      expect(events.map((event) => [event.type, event.notificationId])).toEqual([
+        ['dismiss', 'agent:sent']
+      ])
+    } finally {
+      await restarted.closeDismissals()
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
+
+  // Positioned alerts survive reads before their journal boundary; pane-wide views cannot retire them.
 })

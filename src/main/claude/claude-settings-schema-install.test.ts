@@ -19,7 +19,6 @@ const strictReleases = Object.keys(topLevelSettings).filter(
   (version) => topLevelSettings[version].strict
 )
 
-// Why: checks the whole written file, so any new key Orca writes must pass each strict schema.
 describe('Claude settings written for a strict settings schema', () => {
   let tmpHome: string
   let settingsPath: string

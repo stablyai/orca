@@ -1,22 +1,41 @@
-import type { PairingOffer } from '../../shared/pairing'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type {
+  RuntimeRequestSelection,
+  RuntimeOrchestrationEnvelope
+} from '../../shared/runtime-rpc-envelope'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
+import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../shared/agent-session/structured-agent-session-surface-capabilities'
 import {
-  RemoteRuntimeClientError,
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
-} from '../../shared/remote-runtime-client'
+} from '../../shared/remote-runtime/remote-runtime-client'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
+// Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
+const CLI_CLIENT_CAPABILITIES = [
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+] as const
+
 export async function sendWebSocketRequest<TResult>(
-  pairing: PairingOffer,
+  connection: PairedRuntimeConnection,
   method: string,
   params: unknown,
   timeoutMs: number,
   envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
-    return await sendRemoteRuntimeRequest<TResult>(pairing, method, params, timeoutMs, envelope)
+    return await sendRemoteRuntimeRequest<TResult>(
+      connection,
+      method,
+      params,
+      timeoutMs,
+      envelope,
+      undefined,
+      CLI_CLIENT_CAPABILITIES
+    )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message, error.data)
@@ -26,21 +45,25 @@ export async function sendWebSocketRequest<TResult>(
 }
 
 export async function sendWebSocketRequestWithStatusPreflight<TResult>(
-  pairing: PairingOffer,
+  connection: PairedRuntimeConnection,
   method: string,
   params: unknown,
   timeoutMs: number,
   validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  requestSelection?: RuntimeRequestSelection
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     return await sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
-      pairing,
+      connection,
       method,
       params,
       timeoutMs,
       validateStatus,
-      envelope
+      envelope,
+      CLI_CLIENT_CAPABILITIES,
+      undefined,
+      requestSelection
     )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {

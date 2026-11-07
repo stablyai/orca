@@ -6,12 +6,11 @@ import type { MuseUsageParsedEvent } from './types'
 export type MuseUsageParseContext = {
   sessionId: string
   cwd: string | null
-  /** Latest configured model; `model_completed` omits `model` on some turns. */
+  /** Some model_completed records omit the configured model. */
   currentModel: string | null
 }
 
-// Why: most lines are large tool/model payloads; skip JSON.parse for lines that
-// cannot carry a usage event or the cwd/model context those events need.
+// Skip large tool/model payloads that cannot contain usage or attribution context.
 const LINE_MARKERS = [
   'model_completed',
   'runtime.session.metadata',
@@ -24,7 +23,7 @@ function lineMayMatter(line: string): boolean {
   return LINE_MARKERS.some((marker) => line.includes(marker))
 }
 
-// Why: `recorded_at` is microseconds since epoch.
+// recorded_at is microseconds since epoch.
 function recordedAtIso(value: unknown): string | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return null
@@ -40,7 +39,6 @@ function applyContextRecord(entry: JsonRecord, context: MuseUsageParseContext): 
   }
   switch (entry.payload_type) {
     case 'runtime.session.metadata':
-      // Why: the session's start directory, matching AI Vault's grouping.
       context.cwd = extractString(inner.workspace_root) ?? context.cwd
       context.currentModel ??= extractString(inner.model_id)
       break
@@ -77,8 +75,7 @@ function toUsageEvent(
   }
   const inputTokens = ensureNumber(usage.input_tokens)
   const outputTokens = ensureNumber(usage.output_tokens)
-  // Why: Muse reports cached/reasoning as subsets of input/output (OpenAI style);
-  // clamp so a malformed record cannot push derived "new input" negative.
+  // Cached/reasoning tokens are subsets; clamp malformed records to avoid negative derived counts.
   const cachedInputTokens = Math.min(
     ensureNumber(usage.cached_tokens) || ensureNumber(usage.cache_read_tokens),
     inputTokens
@@ -91,7 +88,7 @@ function toUsageEvent(
   return {
     sessionId: context.sessionId,
     timestamp,
-    // Why: keyed on content, not record id, so a copy re-stamped by a fork still dedupes.
+    // Content keys deduplicate fork copies even when record IDs change.
     eventKey: [
       String(entry.recorded_at),
       inputTokens,
@@ -109,7 +106,6 @@ function toUsageEvent(
   }
 }
 
-/** Parses one session.jsonl line, which may be a `retained_frame` batching several records. */
 export function parseMuseUsageLine(
   line: string,
   context: MuseUsageParseContext

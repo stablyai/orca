@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, makePaneKey } from '../orca-runtime-test-mocks.spec'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
   expectStablePaneKeyEnv,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('preserves OSC 9999 parser state for rendererless background PTYs', async () => {
@@ -16,7 +20,7 @@ describe('OrcaRuntimeService', () => {
       onTerminalAgentStatus: (event) => statuses.push(event)
     })
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null
@@ -26,8 +30,7 @@ describe('OrcaRuntimeService', () => {
       command: 'codex',
       title: 'worker'
     })
-    const spawnedEnv =
-      (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+    const spawnedEnv = spawnedPtyEnv(spawn.mock.calls[0]?.[0])
     const paneKey = expectStablePaneKeyEnv(spawnedEnv)
 
     runtime.onPtyData('pty-bg', 'before\x1b]999', 123)
@@ -41,7 +44,6 @@ describe('OrcaRuntimeService', () => {
         tabId: spawnedEnv.ORCA_TAB_ID,
         worktreeId: TEST_WORKTREE_ID,
         connectionId: null,
-        // The pane's handle rides the event so the store's row can rejoin its terminal.
         terminalHandle: expect.stringMatching(/^term_/),
         payload: {
           state: 'done',
@@ -150,19 +152,28 @@ describe('OrcaRuntimeService', () => {
       nextCursor: expect.any(String)
     })
 
-    const send = await runtime.sendTerminal(
-      terminal.handle,
-      {
-        text: 'continue',
-        enter: true
-      },
-      { inputKind: 'driving' }
-    )
-    expect(send).toMatchObject({
-      handle: terminal.handle,
-      accepted: true
-    })
-    expect(writes).toEqual(['continue', '\r'])
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
+    try {
+      const [send] = await Promise.all([
+        runtime.sendTerminal(
+          terminal.handle,
+          {
+            text: 'continue',
+            enter: true
+          },
+          { inputKind: 'driving' }
+        ),
+        vi.runAllTimersAsync()
+      ])
+      expect(send).toMatchObject({
+        handle: terminal.handle,
+        accepted: true
+      })
+      expect(writes).toEqual(['continue', '\r'])
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
   })
 
   it('reports permission from blocked terminal wait text', async () => {
@@ -395,6 +406,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  // A restored permission wait is the exception; agent-prompt-restored-permission.test.ts covers it (#35962).
   it('does not treat a restored-unconfirmed hook row as live terminal status', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const paneKey = makePaneKey('tab-1', leafId)
@@ -402,7 +414,7 @@ describe('OrcaRuntimeService', () => {
       getAgentStatusSnapshot: () => [
         {
           paneKey,
-          state: 'waiting',
+          state: 'working',
           prompt: '',
           agentType: 'codex',
           connectionId: null,

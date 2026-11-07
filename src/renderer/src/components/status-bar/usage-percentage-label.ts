@@ -17,3 +17,12 @@ export function formatUsagePercentageLabel(
         value0: String(percentage)
       })
 }
+
+export function formatBareUsagePercentage(
+  usedPercent: number,
+  display: UsagePercentageDisplay
+): string {
+  return translate('auto.components.status.bar.usagePercentageLabel.bare', '{{value0}}%', {
+    value0: String(getDisplayedUsagePercentage(usedPercent, display))
+  })
+}

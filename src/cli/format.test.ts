@@ -1,8 +1,7 @@
-import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { quoteCliCommandArgument } from './shell-command-quote'
 import { RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
@@ -169,10 +168,13 @@ describe('formatWorktreeList', () => {
       truncated: false
     })
 
-    expect(output).toContain('parentWorktreeId: null')
-    expect(output).toContain('childWorktreeIds: repo::/tmp/repo/child')
-    expect(output).toContain('parentWorktreeId: repo::/tmp/repo/parent')
-    expect(output).toContain('childWorktreeIds: []')
+    const [parent, child] = output.split('\n\n')
+    expect(parent).toContain('repo::/tmp/repo/parent  feature/parent')
+    expect(parent).toContain('parentWorktreeId: null')
+    expect(parent).toContain('childWorktreeIds: repo::/tmp/repo/child')
+    expect(child).toContain('repo::/tmp/repo/child  feature/child')
+    expect(child).toContain('parentWorktreeId: repo::/tmp/repo/parent')
+    expect(child).toContain('childWorktreeIds: []')
   })
 })
 
@@ -468,8 +470,9 @@ describe('formatComputerAction', () => {
       windowId: 99
     })
 
+    const app = process.platform === 'win32' ? '"Text Editor"' : "'Text Editor'"
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
+      `Use \`orca computer get-app-state --app ${app} --worktree id:repo::/tmp/repo --window-id 99\``
     )
     expect(output).toContain('5 visible elements in current window')
     expect(output).toContain(
@@ -654,9 +657,8 @@ describe('formatComputerAction', () => {
 
     const output = formatComputerAction('click', result)
 
-    expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
-    )
+    const app = process.platform === 'win32' ? '"Linux Browser"' : "'Linux Browser'"
+    expect(output).toContain(`Use \`orca computer get-app-state --app ${app} --window-index 2\``)
     expect(output).not.toContain('--window-id')
   })
 
@@ -682,9 +684,8 @@ describe('formatComputerAction', () => {
 
     const output = formatComputerAction('click', result)
 
-    expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
-    )
+    const app = process.platform === 'win32' ? '"Linux Browser"' : "'Linux Browser'"
+    expect(output).toContain(`Use \`orca computer get-app-state --app ${app} --window-index 2\``)
     expect(output).not.toContain('--window-index 4')
     expect(output).not.toContain('--window-id')
   })
@@ -786,11 +787,12 @@ describe('printResult computer screenshots', () => {
     )
 
     expect(existsSync(expiredPath)).toBe(true)
-    const output = JSON.parse(logSpy.mock.calls[0][0]) as {
+    const output: {
       result: { screenshot: { dataOmitted: boolean; path: string } }
-    }
+    } = JSON.parse(logSpy.mock.calls[0][0])
     expect(output.result.screenshot.dataOmitted).toBe(true)
     expect(output.result.screenshot.path).toContain('req_1-screenshot.png')
+    expect(readFileSync(output.result.screenshot.path, 'utf8')).toBe('png-data')
   })
 
   it('keeps inline screenshot data when temp export fails', () => {

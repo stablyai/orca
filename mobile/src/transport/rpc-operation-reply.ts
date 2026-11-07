@@ -17,7 +17,6 @@ type AdmittedPayload =
   | { readonly admitted: true; readonly value: unknown }
   | { readonly admitted: false; readonly issues: readonly RpcDecodeIssue[] }
 
-// The payload the operation's own acceptance policy admits from a fulfilled success.
 function admitPayload(operation: AnyRpcOperation, response: RpcResponse): AdmittedPayload {
   switch (operation.acceptance) {
     case 'object-result-or-null': {
@@ -31,7 +30,7 @@ function admitPayload(operation: AnyRpcOperation, response: RpcResponse): Admitt
         ? { admitted: true, value: response }
         : { admitted: false, issues: [{ path: 'streaming', message: 'reply opened no stream' }] }
     default:
-      // Reuses the policy rather than reading `.result` again; a success never throws here.
+      // Use the same acceptance policy to prevent result handling from drifting.
       return { admitted: true, value: requireRpcResultOrThrowCodedError(response) }
   }
 }
@@ -66,7 +65,7 @@ export function classifyRpcReply(
   try {
     result = read(payload.value)
   } catch (error) {
-    // These legacy policies preserve property-read exceptions at the caller's barrier.
+    // Preserve property-read exceptions at the caller’s declared barrier.
     if (
       operation.acceptance === 'success-result-or-skip' ||
       operation.acceptance === 'require-result-or-throw-message'

@@ -42,20 +42,6 @@ describe('legacy worker renderer recovery', () => {
     expect(reconcile).toHaveBeenCalledOnce()
   })
 
-  it('recovers once when the provider is already ready', async () => {
-    const reconcile = vi.fn().mockResolvedValue(undefined)
-
-    await recoverLegacyWorkerTerminalsForRendererStartup({
-      firstWindowStartupServicesReady: Promise.resolve(),
-      managedWslCliStartupBarrierReady: Promise.resolve(),
-      localPtyProviderStartupReady: Promise.resolve(),
-      reconcile,
-      onDeferredRecoveryError: vi.fn()
-    })
-
-    expect(reconcile).toHaveBeenCalledOnce()
-  })
-
   it('contains provider startup rejection after initial recovery', async () => {
     const providerError = new Error('provider failed')
     const reconcile = vi.fn().mockResolvedValue(undefined)

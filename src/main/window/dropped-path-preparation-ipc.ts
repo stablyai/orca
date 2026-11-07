@@ -1,0 +1,84 @@
+import { app, ipcMain, type BrowserWindow } from 'electron'
+import {
+  createRejectedNativeFileDropPayload,
+  validateNativeFileDropPaths
+} from '../../shared/native-file-drop'
+import type {
+  PrepareDroppedPathsRequest,
+  PreparedDroppedPaths
+} from '../../shared/native-file-drop-preparation'
+import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
+import { getDragTempCopyRoot } from './dragged-temp-file-copy'
+import {
+  createDroppedPathPreparationQueue,
+  windowDragTempCopyLane,
+  type DroppedPathPreparationDeps
+} from './dropped-path-preparation'
+import { getDarwinUserTempDir } from './darwin-user-temp-dir'
+
+export function registerDroppedPathPreparation(
+  mainWindow: BrowserWindow,
+  localChatAttachmentStore?: DroppedPathPreparationDeps['localChatAttachmentStore']
+): void {
+  const prepareChannel = 'fs:prepareDroppedPaths'
+  const mainWebContents = mainWindow.webContents
+  const isWindowGone = (): boolean => mainWindow.isDestroyed() || mainWebContents.isDestroyed()
+  ipcMain.removeHandler(prepareChannel)
+  const prepare = createDroppedPathPreparationQueue(
+    {
+      platform: process.platform,
+      localChatAttachmentStore,
+      getCopyEnvironment: async () => ({
+        platform: process.platform,
+        sourceTempRoot: await getDarwinUserTempDir(),
+        copyRoot: getDragTempCopyRoot(app.getPath('temp'))
+      }),
+      watchRenderer: () => abortWhenRendererGone(mainWebContents)
+    },
+    windowDragTempCopyLane
+  )
+  const prepareHandler = (
+    event: Electron.IpcMainInvokeEvent,
+    args: unknown
+  ): Promise<PreparedDroppedPaths> => {
+    if (isWindowGone() || event.sender !== mainWebContents) {
+      throw new Error('Dropped paths must come from the owning window')
+    }
+    if (!isPrepareDroppedPathsRequest(args)) {
+      throw new Error('Invalid dropped paths request')
+    }
+    const validation = validateNativeFileDropPaths(args.paths)
+    if (validation.status === 'rejected') {
+      return Promise.resolve({
+        paths: [],
+        failures: [createRejectedNativeFileDropPayload(validation)]
+      })
+    }
+    return Promise.resolve(prepare(args))
+  }
+  ipcMain.handle(prepareChannel, prepareHandler)
+  activePrepareHandler = prepareHandler
+  mainWindow.on('closed', () => {
+    // Late old-window close must not remove the replacement handler.
+    if (activePrepareHandler === prepareHandler) {
+      ipcMain.removeHandler(prepareChannel)
+      activePrepareHandler = undefined
+    }
+  })
+}
+
+let activePrepareHandler: unknown
+
+function isPrepareDroppedPathsRequest(value: unknown): value is PrepareDroppedPathsRequest {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'consumer' in value &&
+    (value.consumer === 'agent' ||
+      value.consumer === 'main-reader' ||
+      value.consumer === 'local-chat') &&
+    'paths' in value &&
+    Array.isArray(value.paths) &&
+    value.paths.every((path: unknown) => typeof path === 'string')
+  )
+}

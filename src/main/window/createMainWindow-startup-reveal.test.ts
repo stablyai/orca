@@ -3,13 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -48,6 +47,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()

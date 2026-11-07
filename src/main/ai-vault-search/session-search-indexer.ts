@@ -14,83 +14,28 @@ import { SessionSearchStore, type SessionSearchStateCounts } from './session-sea
 import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
 
-/**
- * Database paths a live indexer already owns.
- *
- * One process, one writer, one consumer registration per index. Two indexers on
- * one path both register with the reader, so every transcript is read and
- * written twice and the second write is fenced by the first at random. The
- * recipe for every configuration change is close-then-construct, so the
- * ordering that causes this is the one the recipe already rules out; this is
- * what says so rather than letting it corrupt quietly.
- */
+// Duplicate indexers would register competing consumers and fence each other’s writes.
 const liveIndexerPaths = new Set<string>()
 
 export type SessionSearchIndexPhase = 'idle' | 'indexing' | 'current' | 'degraded' | 'closed'
 
 export type SessionSearchIndexStatus = {
   phase: SessionSearchIndexPhase
-  /** Rows whose content matches the file at the stat the row records. */
+  /** Rows indexed through the file stat they record. */
   filesIndexed: number
-  /**
-   * Files owed a read: rows the index holds and must re-read (a declined
-   * append, a window that widened), plus candidates the last pass ran out of
-   * time for, which have no row to be counted by.
-   */
+  /** Due rows plus unread candidates deferred by the last pass, which may have no row yet. */
   filesDue: number
   /** Rows whose last read did not commit. */
   filesFailed: number
-  /** Messages the index holds across every indexed row. */
   messagesIndexed: number
   degradedRoots: SessionSearchDegradedRoot[]
   lastReconcileAt: number | null
-  /** When a whole-machine sweep last finished; null until one has. */
+  /** Last full sweep with no deferred reads; null until one completes. */
   lastSweepCompletedAt: number | null
-  /** Indexed sessions per agent; an agent with files and none is unsearchable. */
   sessionsByAgent: Record<string, number>
 }
 
-/**
- * Owns freshness for the index store: a whole-machine sweep, then a timer that
- * keeps the newest N transcripts per agent reconciled and sweeps again every
- * `fullSweepEveryCycles`.
- *
- * A library, not a service. It knows nothing about Electron, the app lifecycle,
- * settings storage, IPC or the panel, and nothing here reads a setting or
- * registers itself anywhere. Whoever constructs it decides all of that.
- *
- * **The store is the only memory.** Every question a pass asks between passes —
- * what is owed a read, what has failed and how often, what the index holds and
- * therefore what may have been deleted, what to report — is answered by a row
- * in the `files` table. There is no queue, no watch set, no hold-out map and no
- * counter with a reset rule.
- *
- * What is left here, and why none of it can be a row:
- * - `roots`, the latest full-sweep snapshot reused by recent cycles.
- * - `previousRootsWithFiles`, the one bit per root the retirement walk's grace
- *   needs. Deliberately not durable: see the mountpoint trade in
- *   `session-search-deleted-sources.ts`.
- * - `cyclesSinceSweep` and `sweepNext`, which are about the timer rather than
- *   about any file, and mean nothing to a second process.
- * - `degradedRoots`, `lastReconcileAt`, `lastSweepCompletedAt` and `left`: what
- *   the last pass observed, held so `status()` can answer between passes.
- *   `left` cannot be a row: a candidate the deadline never reached has no row
- *   yet, which is exactly why no query can see the backlog.
- * - `lastCounts`, the one cached query result, read only after `close()` so that
- *   describing what happened does not reopen a handle the owner has finished
- *   with. While the indexer is open every call re-queries.
- *
- * **Immutable after construction.** There is no `pause`, `resume`, `clear` or
- * `setHistoryDays`. A configuration change is `close()` and a new instance;
- * throwing the index away is
- * `close(); removeSessionSearchDatabase(databasePath);` and a new instance.
- * Widening retention is a new instance whose opening sweep admits the older
- * files; narrowing is the purge that opens every full sweep.
- *
- * The guarantee it makes: while started, a transcript among the newest N per
- * agent that grows, is replaced or is deleted is reflected in the index within
- * one reconcile interval. Everything else is reached by the periodic sweep.
- */
+/** Reconfigure by closing and constructing anew; persisted file rows determine which reads are owed. */
 export class SessionSearchIndexer {
   private roots: SessionSearchIndexerOptions['roots']
   private readonly ownershipPath: string
@@ -104,12 +49,12 @@ export class SessionSearchIndexer {
   private readonly loop: SessionSearchWorkLoop
   private readonly store: SessionSearchStore
   private readonly unregister: () => void
-  /** Null until a pass has recorded one; an empty set is a real observation. */
+  /** Null means unobserved; an empty set records a real pass. */
   private previousRootsWithFiles: ReadonlySet<string> | null = null
   private degradedRoots: SessionSearchDegradedRoot[] = []
   private lastReconcileAt: number | null = null
   private lastSweepCompletedAt: number | null = null
-  /** Candidates the last completed pass was owed and did not read. */
+  /** Deferred candidates outside the database’s due-row count. */
   private left = 0
   private lastCounts: SessionSearchStateCounts | null = null
   private cyclesSinceSweep = 0
@@ -142,20 +87,14 @@ export class SessionSearchIndexer {
         `SessionSearchIndexer: ${options.databasePath} already has a live indexer; close it first`
       )
     }
-    // Store, registration and indexer share one lifetime, which is what makes
-    // the object immutable: there is no second open to get out of step with.
-    // Claimed only once the store is open, because a construction that throws
-    // has no `close()` to release the claim: registering first would leave the
-    // path owned by an object that does not exist, and every later attempt at
-    // it -- including the one that fixes whatever broke the open -- would be
-    // refused for the life of the process.
+    // Claim ownership only after opening succeeds; a failed constructor cannot release a claim.
     this.store = new SessionSearchStore(options.databasePath, onError)
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
     this.unregister = registerSessionSearchIndexConsumer(this.store)
   }
 
-  /** Runs a full sweep, then reconciles on the interval until closed. */
+  /** Begin with a full sweep; subsequent ticks reconcile recent files and sweep periodically. */
   start(): Promise<void> {
     if (this.closed || this.started) {
       return this.loop.settled
@@ -165,15 +104,7 @@ export class SessionSearchIndexer {
     return this.tick()
   }
 
-  /**
-   * Runs one pass now, off the timer. A full pass sweeps every root.
-   *
-   * Refused before `start()` and after `close()`: a pass against an indexer
-   * nobody started writes the index once and leaves it to go stale with no
-   * timer armed to notice the next change, and a pass against a closed one has
-   * no store to write to. Both are caller bugs, so both throw rather than
-   * resolving as though a pass had run.
-   */
+  /** Queue a pass now; requires a started, open indexer. */
   reconcile(options: { full?: boolean } = {}): Promise<void> {
     if (this.closed) {
       throw new Error('SessionSearchIndexer.reconcile: the indexer is closed')
@@ -185,17 +116,8 @@ export class SessionSearchIndexer {
     return this.tick()
   }
 
-  /**
-   * What the index holds, read from the rows rather than tallied.
-   *
-   * A second connection can compute every number here with one `GROUP BY`,
-   * which is the point: nothing is counted as it happens, so nothing can drift
-   * from what the database actually holds or need a rule about when to reset.
-   */
   status(): SessionSearchIndexStatus {
-    // A closed indexer reports what it last knew: opening a shut handle to
-    // answer a call whose whole job is to describe what happened is how a close
-    // came to report a database error to the owner who asked for it.
+    // Use cached counts after close to avoid reading a shut database.
     const settled = (this.closed ? this.lastCounts : this.readCounts()) ?? {
       current: 0,
       due: 0,
@@ -216,24 +138,20 @@ export class SessionSearchIndexer {
     }
   }
 
-  /** Stops everything. Nothing queued before this call may run afterwards. */
   close(): void {
     if (this.closed) {
       return
     }
-    // Read before the handle goes, so a status call afterwards reports what the
-    // index last held rather than opening a database its owner has finished with.
+    // Preserve final counts for status calls after the store closes.
     this.lastCounts = this.readCounts() ?? this.lastCounts
     this.closed = true
-    // The loop, not just its timer: a task queued before this call would
-    // otherwise still run against a store this line is about to close.
+    // Cancel queued and in-flight passes before closing their store.
     this.loop.close()
     this.unregister()
     this.store.close()
     liveIndexerPaths.delete(this.ownershipPath)
   }
 
-  /** Tests only: everything else drives this through the timer. */
   settled(): Promise<void> {
     return this.loop.settled
   }
@@ -249,13 +167,6 @@ export class SessionSearchIndexer {
     }
   }
 
-  /**
-   * `current` is a claim, so it takes all of it: nothing owed a read by a row,
-   * nothing owed a read that has no row yet, no row whose last read failed,
-   * and a whole sweep that finished. `idle` is the other end of it
-   * — an indexer nobody started has not promised to index anything, and calling
-   * that `current` would claim an index nobody built is up to date.
-   */
   private phase(counts: SessionSearchStateCounts): SessionSearchIndexPhase {
     if (this.closed) {
       return 'closed'
@@ -263,12 +174,10 @@ export class SessionSearchIndexer {
     if (!this.started) {
       return 'idle'
     }
-    // A root the pass could not read, or a file it could not read: both are gaps
-    // the index knows about and cannot close on its own.
     if (this.degradedRoots.length > 0 || counts.failed > 0) {
       return 'degraded'
     }
-    // Work the rows cannot show: a candidate the deadline cut off has no row.
+    // Deferred candidates may have no rows, so due-row counts alone cannot prove completion.
     if (this.left > 0) {
       return 'indexing'
     }
@@ -283,17 +192,11 @@ export class SessionSearchIndexer {
   }
 
   private async pass(signal: AbortSignal): Promise<void> {
-    // The window moves with the clock, and the decide step reads it from the
-    // store. Setting it once at construction leaves a sweep purging rows that
-    // the very next candidate check happily re-indexes.
+    // Refresh the cutoff each pass so purged transcripts cannot immediately be re-indexed.
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    // The one bound on a pass: wall time. What it does not reach is still owed,
-    // because a row says so and nothing had to be written down.
     const startedAt = this.clock.now()
     const full = this.sweepNext
-    // Taken on entry, not cleared on the way out: a `reconcile({ full: true })`
-    // raised while this pass is running sets it again, and clearing it at the
-    // end would erase that request along with this pass's own.
+    // Consume the flag before awaiting so requests arriving during this pass survive.
     this.sweepNext = false
     try {
       if (full && this.options.resolveRoots) {
@@ -310,47 +213,34 @@ export class SessionSearchIndexer {
         recentPerAgent: this.recentPerAgent,
         previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
         overdue: () => this.clock.now() - startedAt >= this.passDeadlineMs,
-        // One readdir per directory for the whole pass, shared by every step.
         listings: new SessionSearchDirectoryListings(),
         signal
       })
       if (!result.completed) {
-        // A pass cut short learned nothing about root health, and publishing its
-        // empty findings would clear a live alarm. A sweep stays owed.
+        // Preserve previous health findings and retry the sweep after an incomplete pass.
         this.sweepNext ||= full
         return
       }
       this.degradedRoots = result.degradedRoots
       this.previousRootsWithFiles = result.rootsWithFiles
       this.lastReconcileAt = this.clock.now()
-      // Replaced, not accumulated: it is this pass's measure of the backlog, and
-      // a pass that read everything it was owed measures zero.
       this.left = result.left
-      // A backlog outside the recency window is only visible to a sweep, so a
-      // pass that ran out of time asks for one. It is self-limiting: the first
-      // pass that finishes its reads hands the interval back to cycles.
+      // Repeat full discovery while backlogged so reads outside the recency window can progress.
       this.sweepNext ||= result.outOfTime
       if (full) {
-        // A sweep the deadline stopped with candidates still unread did not
-        // sweep the machine, and stamping it would let `current` be claimed
-        // over a backlog no row can account for.
+        // Deferred reads prevent a sweep from establishing that the index is current.
         if (!result.outOfTime) {
           this.lastSweepCompletedAt = this.lastReconcileAt
         }
         this.cyclesSinceSweep = 0
         return
       }
-      // A root that came back, a tree restored from a backup, an old transcript
-      // deleted: only a sweep sees any of it, and the count of cycles is the
-      // whole rule for when one is owed.
       this.cyclesSinceSweep += 1
       if (this.cyclesSinceSweep >= this.fullSweepEveryCycles) {
         this.sweepNext = true
       }
     } catch (error) {
-      // The flag is this method's to hold, so it is this method's to give back:
-      // a pass that threw part way learned nothing, and losing it here would
-      // leave nothing armed to try again.
+      // Retry a failed sweep rather than waiting for the periodic cadence.
       this.sweepNext ||= full
       throw error
     }

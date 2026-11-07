@@ -1,0 +1,31 @@
+{
+  "capturedAt": "2026-10-13T07:19:49.742Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--no-alt-screen",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-c",
+    "model=\"gpt-5\"",
+    "-c",
+    "model_provider=\"capacity_fixture\"",
+    "-c",
+    "model_providers.capacity_fixture.name=\"Capacity fixture\"",
+    "-c",
+    "model_providers.capacity_fixture.base_url=\"http://127.0.0.1:18791/v1\"",
+    "-c",
+    "model_providers.capacity_fixture.wire_api=\"responses\"",
+    "-c",
+    "model_providers.capacity_fixture.request_max_retries=0",
+    "-c",
+    "model_providers.capacity_fixture.stream_max_retries=0",
+    "-c",
+    "model_providers.capacity_fixture.supports_websockets=false",
+    "-c",
+    "check_for_update_on_startup=false"
+  ],
+  "cols": 80,
+  "rows": 24,
+  "note": "Real codex-cli 0.162.1 with a temporary CODEX_HOME, local HTTP 503 server_is_overloaded; no production request.",
+  "exitCode": 0
+}

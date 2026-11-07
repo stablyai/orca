@@ -1,18 +1,23 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
-import { useRepoAssignees } from '@/hooks/useIssueMetadata'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import {
+  canUseGitHubRepoContext,
+  getGitHubRepoRoutingTarget
+} from '@/lib/github-source-runtime-context'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import {
@@ -23,7 +28,6 @@ import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
 } from '@/components/github-body-draft-state'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type {
   GitHubAssignableUser,
@@ -93,7 +97,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel = item.author ?? 'unknown'
+  const authorLabel =
+    item.author ?? translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)
@@ -102,20 +107,10 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
-  )
-  const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
+  const repoAssignees = useRepoAssignees(repoPath, item.repoId, { target: ownerTarget })
   const botAuthorOverrides = usePRBotAuthorOverrides()
   const commentCounts = useMemo(
     () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
@@ -266,6 +261,7 @@ export function ConversationTab({
           sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
+          onMutated={onMutated}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
           <ChecksTab
@@ -292,6 +288,24 @@ export function ConversationTab({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationDescription
+          imageUploadAddress={() => {
+            const slug = item.type === 'pr' ? (prRepo ?? bodySlug) : markdownGitHubRepo
+            return (item.type === 'pr' || projectOrigin) && slug
+              ? {
+                  runtime:
+                    sourceContext?.provider === 'github'
+                      ? taskSourceRuntimeTarget(sourceContext)
+                      : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  target: { kind: 'slug', ...slug, wakeWslDistro: true }
+                }
+              : githubCommentImageUploadAddress({
+                  repoPath: repoPath ?? '',
+                  repoId: item.repoId,
+                  sourceContext,
+                  type: item.type,
+                  prRepo: bodySlug
+                })
+          }}
           authorLabel={authorLabel}
           updatedAt={item.updatedAt}
           canEditBody={canEditBody}
@@ -356,6 +370,7 @@ export function ConversationTab({
             itemType={item.type}
             prRepo={prRepo}
             mentionOptions={mentionOptions}
+            mentionError={repoAssignees.error}
             onCommentAdded={onCommentAdded}
           />
         )}

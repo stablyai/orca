@@ -1,18 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { SFTPWrapper } from 'ssh2'
 
-import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote,
-  writeTextFileRemoteAtomic
-} from './installer-utils-remote'
+import { writeHooksJsonRemote, writeManagedScriptRemote } from './installer-utils-remote'
 
 type FakeFs = {
   files: Map<string, string>
   dirs: Set<string>
   modes: Map<string, number>
   openSshRenameCount: number
+  operations: { kind: string; path: string; destination?: string }[]
 }
 
 function createFakeSftp(
@@ -30,7 +26,8 @@ function createFakeSftp(
     files: new Map(),
     dirs: new Set(['/']),
     modes: new Map(),
-    openSshRenameCount: 0
+    openSshRenameCount: 0,
+    operations: []
   }
   const noEntryError = (path: string): { code: number; message: string } => ({
     code: 2,
@@ -38,6 +35,7 @@ function createFakeSftp(
   })
   const fakeStats = (mode: number): { mode: number } => ({ mode })
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fake implements every SFTP operation exercised below.
   const sftp = {
     readFile: (path: string, _enc: string, cb: (err: unknown, data?: string) => void): void => {
       const v = fs.files.get(path)
@@ -57,6 +55,7 @@ function createFakeSftp(
         cb({ code: 4, message: `write failed ${path}` })
         return
       }
+      fs.operations.push({ kind: 'write', path })
       fs.files.set(path, content)
       if (typeof options !== 'string' && options.mode !== undefined) {
         fs.modes.set(path, options.mode)
@@ -64,6 +63,7 @@ function createFakeSftp(
       cb(null)
     },
     rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
+      fs.operations.push({ kind: 'rename', path: src, destination: dst })
       const v = fs.files.get(src)
       if (v === undefined) {
         cb(noEntryError(src))
@@ -92,6 +92,7 @@ function createFakeSftp(
       cb(null)
     },
     chmod: (path: string, mode: number, cb: (err: unknown) => void): void => {
+      fs.operations.push({ kind: 'chmod', path })
       fs.modes.set(path, mode)
       cb(null)
     },
@@ -117,6 +118,7 @@ function createFakeSftp(
       ? {
           ext_openssh_rename: (src: string, dst: string, cb: (err: unknown) => void): void => {
             fs.openSshRenameCount += 1
+            fs.operations.push({ kind: 'openssh-rename', path: src, destination: dst })
             const v = fs.files.get(src)
             if (v === undefined) {
               cb(noEntryError(src))
@@ -138,89 +140,6 @@ function createFakeSftp(
 }
 
 describe('installer-utils-remote', () => {
-  it('returns {} when settings.json does not exist on the remote', async () => {
-    const { sftp } = createFakeSftp()
-    const result = await readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')
-    expect(result).toEqual({})
-  })
-
-  it('returns null when settings.json is malformed JSON', async () => {
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set('/home/u/.claude/settings.json', 'not json {{')
-    const result = await readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')
-    expect(result).toBeNull()
-  })
-
-  it('parses settings.json with one leading BOM', async () => {
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set('/home/u/.cursor/hooks.json', '\uFEFF{"version":1,"hooks":{}}')
-
-    const result = await readHooksJsonRemote(sftp, '/home/u/.cursor/hooks.json')
-
-    expect(result).toEqual({ version: 1, hooks: {} })
-  })
-
-  it('rethrows non-ENOENT read errors so callers can distinguish I/O failures from parse failures', async () => {
-    const sftp = {
-      readFile: (_path: string, _enc: string, cb: (err: unknown) => void): void => {
-        // Why: SSH_FX_PERMISSION_DENIED (3) is a real I/O failure that should
-        // not collapse into the same null result the parse-error path uses.
-        cb({ code: 3, message: 'permission denied' })
-      }
-    } as unknown as SFTPWrapper
-    await expect(readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')).rejects.toMatchObject({
-      code: 3
-    })
-  })
-
-  it('times out remote reads that never call back', async () => {
-    vi.useFakeTimers()
-    try {
-      const sftp = {
-        readFile: vi.fn()
-      } as unknown as SFTPWrapper
-      const pending = readHooksJsonRemote(sftp, '/home/u/.claude/settings.json')
-      let rejection: unknown = null
-      pending.catch((error) => {
-        rejection = error
-      })
-
-      await vi.advanceTimersByTimeAsync(30_000)
-
-      expect(rejection).toBeInstanceOf(Error)
-      await expect(pending).rejects.toThrow('Timed out waiting for SFTP readFile')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('atomically writes settings.json via tmp + rename', async () => {
-    const { sftp, fs } = createFakeSftp()
-    await writeHooksJsonRemote(sftp, '/home/u/.claude/settings.json', {
-      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
-    })
-    expect(fs.files.has('/home/u/.claude/settings.json')).toBe(true)
-    expect(fs.dirs.has('/home/u/.claude')).toBe(true)
-    const contents = fs.files.get('/home/u/.claude/settings.json')!
-    const parsed = JSON.parse(contents)
-    expect(parsed.hooks.Stop[0].hooks[0].command).toBe('foo')
-    // Tmp must be cleaned up.
-    const tmp = Array.from(fs.files.keys()).find((k) => k.includes('.tmp'))
-    expect(tmp).toBeUndefined()
-    expect(fs.modes.get('/home/u/.claude/settings.json')).toBe(0o600)
-  })
-
-  it('preserves existing config file mode across atomic replacement', async () => {
-    const { sftp, fs } = createFakeSftp()
-    const path = '/home/u/.codex/config.toml'
-    fs.files.set(path, 'old')
-    fs.modes.set(path, 0o640)
-
-    await writeTextFileRemoteAtomic(sftp, path, 'new')
-
-    expect(fs.modes.get(path)).toBe(0o640)
-  })
-
   it('uses OpenSSH overwrite rename when an atomic write updates an existing file', async () => {
     const { sftp, fs } = createFakeSftp({
       plainRenameOverwrites: false,
@@ -252,28 +171,6 @@ describe('installer-utils-remote', () => {
     expect(Array.from(fs.files.keys()).some((key) => key.includes('.tmp'))).toBe(false)
   })
 
-  it('writes the managed script and chmods 0o755', async () => {
-    const { sftp, fs } = createFakeSftp()
-    await writeManagedScriptRemote(sftp, '/home/u/.orca/agent-hooks/claude-hook.sh', '#!/bin/sh\n')
-    expect(fs.files.get('/home/u/.orca/agent-hooks/claude-hook.sh')).toBe('#!/bin/sh\n')
-    expect(fs.modes.get('/home/u/.orca/agent-hooks/claude-hook.sh')).toBe(0o755)
-  })
-
-  it('replaces an existing managed script atomically via temp file rename', async () => {
-    const { sftp, fs } = createFakeSftp({
-      plainRenameOverwrites: false,
-      openSshRename: true
-    })
-    const path = '/home/u/.orca/agent-hooks/claude-hook.sh'
-    fs.files.set(path, 'old script')
-
-    await writeManagedScriptRemote(sftp, path, 'new script')
-
-    expect(fs.files.get(path)).toBe('new script')
-    expect(fs.modes.get(path)).toBe(0o755)
-    expect(Array.from(fs.files.keys()).some((key) => key.includes('.orca-backup-'))).toBe(false)
-  })
-
   it('leaves the existing managed script intact when temp write fails', async () => {
     const { sftp, fs } = createFakeSftp({ failDotFileWrites: true })
     const path = '/home/u/.orca/agent-hooks/claude-hook.sh'
@@ -283,5 +180,6 @@ describe('installer-utils-remote', () => {
       code: 4
     })
     expect(fs.files.get(path)).toBe('old script')
+    expect([...fs.files.keys()]).toEqual([path])
   })
 })

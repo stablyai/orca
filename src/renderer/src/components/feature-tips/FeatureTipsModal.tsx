@@ -7,12 +7,18 @@ import {
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import { useAppStore } from '@/store'
+import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
+import {
+  setAgentDefaultSurfaceFromFeatureTip,
+  openChatUiFeatureTipSettings
+} from './chat-ui-here-actions'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackChatUiFeatureTipAction,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
@@ -33,6 +39,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettings = useAppStore((s) => s.updateSettings)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant) ?? 'none'
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
@@ -47,6 +54,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
+    chatUiLaunchTipVariant,
     settings,
     webClient: isWebClientLocation()
   })
@@ -66,6 +74,9 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
+      if (currentTip?.id === 'chat-ui-here') {
+        trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+      }
       setupRequestIdRef.current += 1
       markCurrentTipSeen()
       setSkillTerminalOpen(false)
@@ -88,9 +99,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   }
 
   const openShortcutsSettings = (): void => {
-    // Why: dismiss the tip when navigating away — the tip's job is done once
-    // the user clicks through to rebind, and leaving it mounted behind the
-    // settings page would re-appear on close.
+    // Dismiss before opening Settings so closing Settings cannot resurrect the tip.
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
@@ -111,6 +120,23 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const handleTerminalChoice = async (): Promise<void> => {
+    if (chatUiLaunchTipVariant === 'chat-ui-on') {
+      handleSkip()
+      await setAgentDefaultSurfaceFromFeatureTip('terminal')
+      return
+    }
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
+    handleSkip()
+  }
+
+  const openAgentSettings = (): void => {
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
+    markCurrentTipSeen()
+    closeModal()
+    openChatUiFeatureTipSettings()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -124,9 +150,16 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'use-chat-ui': {
+        closeModal()
+        if (chatUiLaunchTipVariant !== 'chat-ui-off') {
+          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+          break
+        }
+        await setAgentDefaultSurfaceFromFeatureTip('chat')
+        break
+      }
       case 'learn-cmd-j-palette': {
-        // Why: passive education tip — acknowledging just dismisses; the rebind
-        // path lives in Settings and is reachable from the palette itself.
         trackCmdJPaletteFeatureTipAcknowledged(
           getOrcaCliFeatureTipTelemetrySource(modalData.source)
         )
@@ -163,8 +196,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
       case 'setup-cli': {
         const setupRequestId = setupRequestIdRef.current + 1
         setupRequestIdRef.current = setupRequestId
-        // Why: this modal is lazily mounted; closing it does not unmount the
-        // component, so async install results must not reopen UI after dismissal.
+        // Closing this lazily mounted modal does not unmount it; ignore dismissed installs’ async results.
         const canApplySetupResult = (): boolean =>
           mountedRef.current &&
           activeModalRef.current === 'feature-tips' &&
@@ -211,7 +243,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
           closeModal()
           openCliSettings()
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Failed to install Orca CLI.'
+          const message =
+            error instanceof Error
+              ? error.message
+              : translate(
+                  'auto.components.feature.tips.FeatureTipsModal.cliInstallFailed',
+                  'Failed to install Orca CLI.'
+                )
           if (
             import.meta.env.DEV &&
             message.includes('Development mode uses a generated launcher for validation only')
@@ -258,6 +296,27 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onOpenChange={handleOpenChange}
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={handleSkip}
+      />
+    )
+  }
+
+  if (currentTip.action === 'use-chat-ui') {
+    if (chatUiLaunchTipVariant === 'none') {
+      return null
+    }
+    return (
+      <ChatUiHereTipDialog
+        open={isOpen}
+        tip={currentTip}
+        variant={chatUiLaunchTipVariant}
+        swapButtons={
+          settings?.telemetry?.chatUiLaunchTipButtonEmphasis === 'swapped' ||
+          settings?.telemetry?.chatUiLaunchTipCohort === 'treatment-swapped-buttons'
+        }
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={() => void handleTerminalChoice()}
+        onSettingsClick={openAgentSettings}
       />
     )
   }

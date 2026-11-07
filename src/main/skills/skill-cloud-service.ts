@@ -15,6 +15,7 @@ import { resolveArtifactCloudApiUrl } from '../artifacts/artifact-cloud-config'
 import { runSkillCloudOperation } from './skill-cloud-auth'
 import { uploadSkillPackageToSignedPolicy } from './skill-cloud-direct-upload'
 import { skillCloudRequest } from './skill-cloud-request'
+import { SkillCloudRequestError } from './skill-cloud-request-error'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
@@ -229,6 +230,24 @@ export class SkillCloudService {
     })
   }
 
+  /** Id of the caller's live package with this name; null when the name is free. */
+  findOwnedPackageId(name: string, options: SkillCloudOptions) {
+    return this.withAuth(options, async (token, apiUrl) => {
+      const found = await skillCloudRequest<{ package: { id: string } }>({
+        apiUrl,
+        authToken: token,
+        path: `/v1/skill-packages/by-name/${encodeURIComponent(name)}`
+      }).catch((error: unknown) => {
+        // Why: any 404, so an API without this route still publishes the first share.
+        if (error instanceof SkillCloudRequestError && error.statusCode === 404) {
+          return null
+        }
+        throw error
+      })
+      return found?.package.id ?? null
+    })
+  }
+
   listOwnedShares(
     options: SkillCloudOptions
   ): Promise<SkillCloudOperation<SkillCloudOwnedShare[]>> {
@@ -248,21 +267,6 @@ export class SkillCloudService {
         apiUrl,
         authToken: token,
         path: `/v1/skill-shares/${id(shareId)}`,
-        method: 'DELETE'
-      })
-    )
-  }
-
-  deleteVersion(
-    packageId: string,
-    versionId: string,
-    options: SkillCloudOptions
-  ): Promise<SkillCloudOperation<void>> {
-    return this.withAuth(options, (token, apiUrl) =>
-      skillCloudRequest<void>({
-        apiUrl,
-        authToken: token,
-        path: `/v1/skill-packages/${id(packageId)}/versions/${id(versionId)}`,
         method: 'DELETE'
       })
     )

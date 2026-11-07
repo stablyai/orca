@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ArtifactCloudOperation, ArtifactListItem } from '../../../../shared/artifacts'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { ArtifactCollection } from './ArtifactCollection'
@@ -20,15 +20,13 @@ const LOCAL_RUNTIME = { kind: 'local' } as const
 export default function ArtifactsPage(): React.JSX.Element {
   const closePage = useAppStore((state) => state.closeArtifactsPage)
   const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
   const refreshAuth = useAppStore((state) => state.refreshCurrentOrcaProfileAuth)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const confirm = useConfirmationDialog()
-  // Why: publishing is off by default, so "ask your agent to share" is a dead end until the
-  // capability is granted. Only claim that once settings have actually loaded.
+  // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
   const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
@@ -56,11 +54,10 @@ export default function ArtifactsPage(): React.JSX.Element {
       ? null
       : (artifacts.find(({ artifact }) => artifact.slug === selectedSlug) ?? null)
 
-  useEffect(() => {
-    if (selectedSlug && !artifacts.some(({ artifact }) => artifact.slug === selectedSlug)) {
-      setSelectedSlug(null)
-    }
-  }, [selectedSlug, artifacts])
+  if (selectedSlug !== null && selectedArtifact === null) {
+    // Drop a vanished selection during render so a later reload cannot reopen it.
+    setSelectedSlug(null)
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {
@@ -193,7 +190,6 @@ export default function ArtifactsPage(): React.JSX.Element {
         <ArtifactsPageAuthState
           needsReconnect={needsReconnect}
           configured={authStatus?.configured === true}
-          onConnect={() => void connect()}
           onOpenAccountSettings={openAccountSettings}
         />
       ) : loading && artifacts.length === 0 ? (

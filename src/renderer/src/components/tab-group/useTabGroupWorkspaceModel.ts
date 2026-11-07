@@ -1,7 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { useTabGroupItemProjections } from './useTabGroupItemProjections'
 import { useTabGroupTabCloseCommands } from './useTabGroupTabCloseCommands'
@@ -56,20 +56,14 @@ export function useTabGroupWorkspaceModel({
     tabBarOrder
   } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
 
-  const { closeItem, closeMany, leaveWorktreeIfEmpty } = useTabGroupTabCloseCommands({
-    worktreeId,
-    groupTabs
-  })
+  const { closeItem, closeMany } = useTabGroupTabCloseCommands({ worktreeId })
 
   const { closeGroup, closeAllEditorTabsInGroup, closeOthers, closeToRight, closeToLeft } =
     useTabGroupCloseScopeCommands({
       groupId,
       worktreeId,
-      group,
-      groupTabs,
       closeItem,
-      closeMany,
-      leaveWorktreeIfEmpty
+      closeMany
     })
 
   const {

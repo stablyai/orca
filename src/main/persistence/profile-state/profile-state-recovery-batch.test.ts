@@ -17,7 +17,7 @@ import type * as FileSystem from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as processes from '../../../shared/child-process/run-process'
+import * as processes from '@orca/process-host'
 import { copyProfileStateRecoveryFiles } from './profile-state-recovery-copy'
 import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
 

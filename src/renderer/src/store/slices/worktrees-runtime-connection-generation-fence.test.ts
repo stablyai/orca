@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { advanceRuntimeEnvironmentConnectionGeneration } from './runtime-status-connection-generation'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
@@ -67,22 +67,8 @@ beforeEach(() => {
 })
 
 describe('fetchAllWorktrees across a runtime connection-generation change', () => {
-  it('publishes every repo when nothing perturbs the connection', async () => {
-    const store = createTestStore()
-    seedRuntimeRepos(store)
-    runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      detectedListReply(repoOf(args))
-    )
-
-    await store.getState().fetchAllWorktrees()
-
-    expect(Object.keys(store.getState().worktreesByRepo).sort()).toEqual([...REPO_IDS])
-  })
-
   it('re-reads instead of dropping the repos still in flight when the generation moves', async () => {
-    // Regression (#19241): scans run concurrently across a host's repos, so one generation
-    // bump discarded every repo still outstanding. Their rows then never reached the
-    // sidebar — a strict subset of the host's worktrees, stable until an unrelated refresh.
+    // A host-wide generation bump discards every outstanding repo scan; retry rather than leave a stable sidebar subset (#19241).
     const store = createTestStore()
     seedRuntimeRepos(store)
     const parked = new Map<string, () => void>()

@@ -1,7 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { splitTmuxCommand } from '../../shared/claude-agent-teams-tmux-compat'
+import {
+  CLAUDE_AGENT_TEAMS_TMUX_DIR,
+  splitTmuxCommand
+} from '../../shared/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
-import { resolvePathEnvKey } from '../pty/windows-environment-path'
+import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -9,13 +12,6 @@ import type {
   AgentTeamsTmuxCompatRequest,
   AgentTeamsTmuxCompatResponse,
   TeamPane
-} from './claude-agent-teams-types'
-
-export type {
-  AgentTeamsLaunchEnv,
-  AgentTeamsTerminalApi,
-  AgentTeamsTmuxCompatRequest,
-  AgentTeamsTmuxCompatResponse
 } from './claude-agent-teams-types'
 
 export class ClaudeAgentTeamsService {
@@ -32,12 +28,12 @@ export class ClaudeAgentTeamsService {
     const teamId = `team-${randomUUID()}`
     const token = randomBytes(32).toString('base64url')
     const leaderPane = '%1'
-    // Why: Windows callers pass an env spelt `Path`; reading `PATH` there truncated the launch PATH to just the shim dir.
+    // Preserve Windows Path casing or the shim would replace the launch PATH.
     const pathKey = resolvePathEnvKey(args.baseEnv, process.platform)
     const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
       .join(process.platform === 'win32' ? ';' : ':')
-    const tmuxValue = `/tmp/orca-claude-agent-teams/${teamId},0,1`
+    const tmuxValue = `${CLAUDE_AGENT_TEAMS_TMUX_DIR}${teamId},0,1`
     const env: Record<string, string> = {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       [pathKey]: pathValue,
@@ -77,6 +73,10 @@ export class ClaudeAgentTeamsService {
       previouslyFocusedPane: null
     })
     return { teamId, token, leaderPane, env }
+  }
+
+  releaseTeam(teamId: string): void {
+    this.teams.delete(teamId)
   }
 
   removeTeamForLeaderHandle(handle: string): void {

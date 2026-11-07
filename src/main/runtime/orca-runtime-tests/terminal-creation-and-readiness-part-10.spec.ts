@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  RpcDispatcher,
-  TERMINAL_METHODS
-} from '../orca-runtime-test-mocks.spec'
-import { makeRpcRequest, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
+import { makeRpcRequest, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('rejects a provider visible frame after live non-mode-switch output advances', async () => {

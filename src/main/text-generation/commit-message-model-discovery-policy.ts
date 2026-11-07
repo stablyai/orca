@@ -1,6 +1,7 @@
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { planAgentBinary } from '../../shared/commit-message-plan'
+import { buildClaudeModelListArgs } from '../../shared/claude-model-list-probe'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
+import { planAgentBinary } from '../../shared/agent-launch/startup/agent-command-plan'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from './source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
@@ -57,8 +58,13 @@ export function finalizeModelDiscoveryOutput(
     }
     return { success: false, error: `${spec.label} returned no available models.` }
   }
-  // A sentinel model in the static spec (for example `default`) means the CLI
-  // should keep its configured provider even when discovery lists concrete models.
+  if (spec.id === 'opencode' || spec.id === 'opencode2') {
+    const configuredDefault = spec.models.find((model) => model.id === 'default')
+    if (configuredDefault && !models.some((model) => model.id === 'default')) {
+      models = [configuredDefault, ...models]
+    }
+  }
+  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
       ? spec.defaultModelId
@@ -69,7 +75,8 @@ export function finalizeModelDiscoveryOutput(
 export function planModelDiscovery(
   spec: AgentModelProbeSpec,
   agentCommandOverride?: string,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  strictMcp = true
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
@@ -79,11 +86,15 @@ export function planModelDiscovery(
   if (!command.ok) {
     return command
   }
+  const args =
+    spec.id === 'claude'
+      ? buildClaudeModelListArgs(strictMcp, command.prefixArgs)
+      : modelDiscovery.args
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...modelDiscovery.args],
+      args: [...command.prefixArgs, ...args],
       stdinPayload: modelDiscovery.stdinPayload ?? null,
       label: spec.label,
       ...(command.env ? { env: command.env } : {})

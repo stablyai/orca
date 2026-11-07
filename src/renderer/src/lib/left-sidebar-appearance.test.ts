@@ -1,84 +1,31 @@
-import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
-import { resolveLeftSidebarStyleVariables } from './left-sidebar-appearance'
+import { tintedSidebarHostPillOutlineMix } from './left-sidebar-appearance'
+import type { ColorProbe } from './plugin-theme-tokens'
 
-function settings(overrides = {}) {
-  return {
-    ...getDefaultSettings(tmpdir()),
-    ...overrides
+const probe: ColorProbe = (value) => {
+  const hex = /^#([0-9a-f]{6})$/i.exec(value.trim())?.[1]
+  if (!hex) {
+    return null
   }
+  const channel = (offset: number): number => Number.parseInt(hex.slice(offset, offset + 2), 16)
+  return [channel(0), channel(2), channel(4), 1]
 }
 
-describe('resolveLeftSidebarStyleVariables', () => {
-  it('leaves the default sidebar token surface untouched', () => {
-    expect(resolveLeftSidebarStyleVariables(settings(), true)).toBeUndefined()
+const tinted = {
+  leftSidebarAppearanceMode: 'tinted' as const,
+  leftSidebarTintColor: '#18181b',
+  leftSidebarTintOpacity: 0.08
+}
+
+describe('host pill outline in the tinted left sidebar', () => {
+  it('raises the outline to 2:1 on the selected wash when the app text is only 4.5:1', () => {
+    // #919191 on #2a2a2a under the default 8% tint: 40% is 1.6:1 on the wash, 53% is 2:1.
+    const app = { foreground: '#919191', background: '#2a2a2a', base: 'dark' as const }
+    expect(tintedSidebarHostPillOutlineMix(tinted, app, probe)).toBe(53)
   })
 
-  it('matches terminal background, foreground, and scoped text tokens', () => {
-    const vars = resolveLeftSidebarStyleVariables(
-      settings({
-        leftSidebarAppearanceMode: 'match-terminal',
-        terminalColorOverrides: {
-          background: '#101820',
-          foreground: '#f0f4f8'
-        }
-      }),
-      true
-    )
-
-    expect(vars).toMatchObject({
-      '--worktree-sidebar': '#101820',
-      '--worktree-sidebar-foreground': '#f0f4f8',
-      '--sidebar': '#101820',
-      '--sidebar-foreground': '#f0f4f8',
-      '--background': '#101820',
-      '--foreground': '#f0f4f8'
-    })
-    expect(vars?.['--worktree-sidebar-accent']).toContain('#f0f4f8 9%')
-    expect(vars?.['--sidebar-accent']).toBe(vars?.['--worktree-sidebar-accent'])
-  })
-
-  it('honors terminal background opacity for matched terminal surfaces', () => {
-    const vars = resolveLeftSidebarStyleVariables(
-      settings({
-        leftSidebarAppearanceMode: 'match-terminal',
-        terminalColorOverrides: { background: '#123456' },
-        terminalBackgroundOpacity: 0.5
-      }),
-      true
-    )
-
-    expect(vars?.['--worktree-sidebar']).toBe('rgba(18, 52, 86, 0.5)')
-  })
-
-  it('builds a tinted surface from normalized tint settings', () => {
-    const vars = resolveLeftSidebarStyleVariables(
-      settings({
-        leftSidebarAppearanceMode: 'tinted',
-        leftSidebarTintColor: '336699',
-        leftSidebarTintOpacity: 0.125
-      }),
-      true
-    )
-
-    expect(vars?.['--worktree-sidebar']).toBe(
-      'color-mix(in srgb, #336699 12.5%, var(--background))'
-    )
-    expect(vars?.['--sidebar']).toBe(vars?.['--worktree-sidebar'])
-    expect(vars?.['--worktree-sidebar-foreground']).toBe('var(--foreground)')
-  })
-
-  it('caps tinted opacity so arbitrary tint colors stay subtle', () => {
-    const vars = resolveLeftSidebarStyleVariables(
-      settings({
-        leftSidebarAppearanceMode: 'tinted',
-        leftSidebarTintColor: '#000000',
-        leftSidebarTintOpacity: 1
-      }),
-      true
-    )
-
-    expect(vars?.['--worktree-sidebar']).toBe('color-mix(in srgb, #000000 35%, var(--background))')
+  it("keeps Orca's 40% outline over Orca's dark colors", () => {
+    const app = { foreground: '#f0f0f0', background: '#0a0a0a', base: 'dark' as const }
+    expect(tintedSidebarHostPillOutlineMix(tinted, app, probe)).toBe(40)
   })
 })

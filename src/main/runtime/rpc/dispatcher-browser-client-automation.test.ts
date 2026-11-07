@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -8,6 +9,7 @@ const handler = vi.fn(() => ({ source: 'server' }))
 const methods = [
   defineMethod({
     name: 'browser.click',
+    permission: 'workspace',
     params: z.object({ page: z.string(), x: z.number() }),
     handler
   })
@@ -37,7 +39,11 @@ describe('RpcDispatcher client-hosted browser automation', () => {
       ok: true,
       result: { source: 'client' }
     })
-    expect(route).toHaveBeenCalledWith('browser.click', { page: 'page-a', x: 10 })
+    expect(route).toHaveBeenCalledWith(
+      'browser.click',
+      { page: 'page-a', x: 10 },
+      { kind: 'local-cli' }
+    )
     expect(handler).not.toHaveBeenCalled()
   })
 

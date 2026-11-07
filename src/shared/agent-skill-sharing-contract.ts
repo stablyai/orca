@@ -8,6 +8,7 @@ export const AGENT_SKILL_SELECTOR_NOT_FOUND_CODE = 'agent_skill_selector_not_fou
 export const AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE = 'agent_skill_selector_ambiguous'
 export const AGENT_SKILL_SHARING_BUSY_CODE = 'agent_skill_sharing_busy'
 export const AGENT_SKILL_NOT_SHAREABLE_CODE = 'agent_skill_not_shareable'
+export const AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE = 'agent_skill_bundle_name_taken'
 
 export const AgentSkillShareRequestSchema = z
   .object({

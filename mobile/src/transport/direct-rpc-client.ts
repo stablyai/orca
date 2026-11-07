@@ -1,11 +1,12 @@
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
-import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
+import { AUTH_REJECTED, RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import { RpcClientConnectionState } from './rpc-client-connection-state'
 import {
   RpcClientReconnectSchedule,
   RPC_RECONNECT_ATTEMPT_LIMIT
 } from './rpc-client-reconnect-schedule'
+import { buildDirectRpcWireRequest, type RpcRequestFrame } from './rpc-envelope-fields'
 import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import { RpcClientSocketCloseController } from './rpc-client-socket-close-controller'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
@@ -15,12 +16,17 @@ import {
   type RpcStreamingListener,
   type RpcStreamSubscribeOptions
 } from './rpc-client-stream-registry'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
+import {
+  DECISIVE_PROBE_TIMEOUT_MS,
+  livenessProbeFrame,
+  LIVENESS_REQUEST_ID_PREFIX,
+  RpcSessionLivenessWatchdog
+} from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
-const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
+const DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 
 export class DirectRpcClient implements RpcClient {
   private socketSession: RpcClientSocketSession | null = null
@@ -59,20 +65,19 @@ export class DirectRpcClient implements RpcClient {
     })
     this.streams = new RpcClientStreamRegistry({
       nextId: () => this.nextId(),
-      deviceToken,
       getState: () => this.connectionState.get(),
-      sendEncrypted: (request) => this.sendEncrypted(request)
+      sendFrame: (frame) => this.sendFrame(frame)
     })
     this.requests = new RpcClientRequestTracker({
       nextId: () => this.nextId(),
-      deviceToken,
       getState: () => this.connectionState.get(),
       waitForConnected: (timeoutMs) => this.waitForConnected(timeoutMs),
-      sendEncrypted: (request) => this.sendEncrypted(request)
+      sendFrame: (frame) => this.sendFrame(frame)
     })
     this.liveness = new RpcSessionLivenessWatchdog({
       transport: 'direct',
-      sendProbe: (identity) => identity === this.livenessSession && this.sendLivenessProbe(),
+      voluntaryProbeMinIntervalMs: DIRECT_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+      sendProbe: (identity, id) => identity === this.livenessSession && this.sendLivenessProbe(id),
       terminate: (identity) => {
         if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
           this.socketClose.forceClose(this.livenessSession)
@@ -93,7 +98,7 @@ export class DirectRpcClient implements RpcClient {
       onHandshakeStarted: () => this.connectionState.publish('handshaking'),
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
-      onRpcResponse: (response) => this.handleRpcResponse(response),
+      onRpcResponse: (session, response) => this.handleRpcResponse(session, response),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
@@ -153,32 +158,36 @@ export class DirectRpcClient implements RpcClient {
     this.streams.updateTerminalViewport(terminal, viewport)
   }
 
-  getState(): ConnectionState {
-    return this.connectionState.get()
-  }
+  getState = (): ConnectionState => this.connectionState.get()
 
-  getReconnectAttempt(): number {
-    return this.reconnect.getAttempt()
-  }
+  getReconnectAttempt = (): number => this.reconnect.getAttempt()
 
-  getLastConnectedAt(): number | null {
-    return this.connectionState.getLastConnectedAt()
-  }
+  getLastConnectedAt = (): number | null => this.connectionState.getLastConnectedAt()
 
   getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
 
-  onStateChange(listener: (state: ConnectionState) => void): () => void {
-    return this.connectionState.addListener(listener)
-  }
+  onStateChange = (listener: (state: ConnectionState) => void): (() => void) =>
+    this.connectionState.addListener(listener)
 
-  notifyForeground(_reason?: ForegroundNudgeReason): void {
+  // The watchdog starts before capability negotiation, when a probe cannot be written yet.
+  readonly probeLivenessNow = (): void =>
+    void (this.getState() === 'connected' && this.liveness.probeCurrentDecisively())
+
+  notifyForeground(reason: ForegroundNudgeReason = 'focus'): void {
     if (this.intentionallyClosed) {
       return
     }
     if (this.getState() === 'connected') {
       console.log('[net] foreground — probing live connection')
       if (this.livenessSession) {
-        this.liveness.probeNow(this.livenessSession)
+        if (reason === 'app-resume') {
+          this.liveness.probeAfterBackground(this.livenessSession)
+        } else {
+          this.liveness.probeNow(
+            this.livenessSession,
+            reason === 'network-change' ? DECISIVE_PROBE_TIMEOUT_MS : null
+          )
+        }
       }
       return
     }
@@ -245,14 +254,15 @@ export class DirectRpcClient implements RpcClient {
     })
   }
 
-  private handleRpcResponse(response: RpcResponse): void {
+  private handleRpcResponse(session: RpcClientSocketSession, response: RpcResponse): void {
     if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
+      this.liveness.noteProbeReply(session, response.id)
       return
     }
     if (!response.ok && response.error.code === 'unauthorized') {
       // Settle this correlated refusal before marking other written requests unknown.
       this.requests.resolve(response)
-      return this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
+      return this.authenticationRetry.reject(AUTH_REJECTED)
     }
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)
@@ -285,9 +295,10 @@ export class DirectRpcClient implements RpcClient {
     this.requests.rejectAll(reason, { deliveryUnknown: true })
   }
 
-  private sendEncrypted(request: unknown): boolean {
+  // The one place a direct request gains its credential and its caller's envelope.
+  private sendFrame(frame: RpcRequestFrame): boolean {
     if (this.socketSession) {
-      return this.socketSession.sendEncrypted(request)
+      return this.socketSession.sendEncrypted(buildDirectRpcWireRequest(frame, this.deviceToken))
     }
     console.log('[net] sendEncrypted FAILED — channel not ready', {
       hasWs: false,
@@ -297,15 +308,9 @@ export class DirectRpcClient implements RpcClient {
     return false
   }
 
-  private sendLivenessProbe(): boolean {
-    if (this.getState() !== 'connected') {
-      return false
-    }
-    return this.sendEncrypted({
-      id: `${LIVENESS_REQUEST_ID_PREFIX}${this.nextId()}`,
-      deviceToken: this.deviceToken,
-      method: 'status.get'
-    })
+  private sendLivenessProbe(id: string): boolean {
+    const frame = livenessProbeFrame(id)
+    return this.getState() === 'connected' && this.sendFrame(frame)
   }
 
   private waitForConnected(timeoutMs?: number): Promise<void> {
@@ -318,7 +323,5 @@ export class DirectRpcClient implements RpcClient {
     return this.connectionState.waitForConnected(timeoutMs)
   }
 
-  private nextId(): string {
-    return `rpc-${++this.requestCounter}-${Date.now()}`
-  }
+  private nextId = (): string => `rpc-${++this.requestCounter}-${Date.now()}`
 }

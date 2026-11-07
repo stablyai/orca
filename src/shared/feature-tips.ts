@@ -4,11 +4,17 @@ import {
   type FeatureInteractionState
 } from './feature-interactions'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette' | 'agent-session-search'
+export type FeatureTipId =
+  | 'chat-ui-here'
+  | 'voice-dictation'
+  | 'orca-cli'
+  | 'cmd-j-palette'
+  | 'agent-session-search'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
 export type FeatureTipAction =
+  | 'use-chat-ui'
   | 'enable-voice'
   | 'setup-cli'
   | 'learn-cmd-j-palette'
@@ -22,7 +28,6 @@ export type FeatureTip = {
   description: string
   action: FeatureTipAction
   ctaLabel: string
-  /** Feature interactions that mean this tip is no longer useful to show. */
   completedByFeatureInteractions?: readonly FeatureInteractionId[]
 }
 
@@ -31,10 +36,23 @@ export type CompletedFeatureTipState = {
   voiceDictationEnabled: boolean
   /** Search is on, or this client cannot turn it on. */
   sessionSearchTipCompleted: boolean
+  /** Main's once-decided record leaves this profile out, or this client has no such profile. */
+  chatUiLaunchTipCompleted: boolean
   featureInteractions?: FeatureInteractionState
 }
 
 export const FEATURE_TIPS = [
+  {
+    // First, so upgraded profiles meet it on their first launch after Chat UI left Experimental.
+    id: 'chat-ui-here',
+    priority: 'new',
+    eyebrow: 'New',
+    title: 'Chat UI is here',
+    description: 'Agents can now open as a chat, with rich messages, visuals and images.',
+    action: 'use-chat-ui',
+    ctaLabel: 'Use Chat UI',
+    completedByFeatureInteractions: []
+  },
   {
     id: 'agent-session-search',
     priority: 'new',
@@ -60,8 +78,7 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
-    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    // The dialog replaces <shortcut> with a live platform-aware <kbd>.
     title: 'Jump to a worktree with <shortcut>',
     description:
       'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
@@ -111,6 +128,9 @@ export function getCompletedFeatureTipIds(state: CompletedFeatureTipState): Set<
   }
   if (state.sessionSearchTipCompleted) {
     completedIds.add('agent-session-search')
+  }
+  if (state.chatUiLaunchTipCompleted) {
+    completedIds.add('chat-ui-here')
   }
   for (const tip of FEATURE_TIPS) {
     if (

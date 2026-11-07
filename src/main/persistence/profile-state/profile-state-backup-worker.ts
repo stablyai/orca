@@ -3,11 +3,11 @@ import { rm } from 'node:fs/promises'
 import { profileStateBackupTemporaryPath } from './profile-state-backup-temporary-files'
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { dirname, join } from 'node:path'
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
-} from '../../worker-thread-entry-path'
+} from '../../worker-threads/worker-thread-entry-path'
 import { type ProfileStateBackupJob, writeProfileStateBackup } from './profile-state-backup-job'
 import { isRecord } from './profile-state-document-validation'
 
@@ -20,13 +20,14 @@ export function resolveProfileStateBackupWorkerPath(moduleDir = __dirname): stri
   return [entry, join(dirname(entry), '..', WORKER_FILENAME)].find(existsSync) ?? entry
 }
 
-/** Bun snapshot copying and desktop validation run off the owning runtime thread. */
 export function runProfileStateBackup(
   job: ProfileStateBackupJob,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  workerPath = resolveProfileStateBackupWorkerPath()
 ): Promise<void> {
-  return process.versions.electron || process.versions.bun
-    ? runProfileStateBackupWorker(job, { signal })
+  // Missing packaged entries must fail rather than block Electron's runtime thread.
+  return process.versions.electron || existsSync(workerPath)
+    ? runProfileStateBackupWorker(job, { workerPath, signal })
     : writeProfileStateBackup(job)
 }
 
@@ -39,7 +40,10 @@ export async function runProfileStateBackupWorker(
   try {
     await new Promise<void>((resolve, reject) => {
       const workerPath = options.workerPath ?? resolveProfileStateBackupWorkerPath()
-      const worker = new Worker(workerPath, { workerData: { ...job, temporaryPath }, execArgv: [] })
+      const worker = spawnWorkerThread(workerPath, {
+        workerData: { ...job, temporaryPath },
+        execArgv: []
+      })
       let completed = false
       let failure: Error | undefined
       const terminate = (reason: Error): void => {
@@ -66,7 +70,7 @@ export async function runProfileStateBackupWorker(
       worker.on('error', (error) => {
         failure = error instanceof Error ? error : new Error(String(error))
       })
-      // Even an error response leaves handles open until the worker actually exits.
+      // Error responses do not prove the worker has closed its handles.
       worker.once('exit', (code) => {
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', abort)

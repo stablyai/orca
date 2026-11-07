@@ -1,15 +1,16 @@
-import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
-import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
+import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
 
 type WebRuntimeConnectionWaiterOptions = {
   endpoint: string
   getState: () => WebRuntimeConnectionState
+  getAuthError: () => Error
   isIntentionallyClosed: () => boolean
+  getSetupFailure?: () => { error: unknown } | undefined
 }
 
 export class WebRuntimeConnectionWaiters {
-  private readonly waiters: { resolve: () => void; reject: (error: Error) => void }[] = []
+  private readonly waiters: { resolve: () => void; reject: (error: unknown) => void }[] = []
 
   constructor(private readonly options: WebRuntimeConnectionWaiterOptions) {}
 
@@ -17,11 +18,15 @@ export class WebRuntimeConnectionWaiters {
     if (signal?.aborted) {
       return Promise.reject(signal.reason)
     }
+    const failure = this.options.getSetupFailure?.()
+    if (failure) {
+      return Promise.reject(failure.error)
+    }
     if (this.options.getState() === 'connected') {
       return Promise.resolve()
     }
     if (this.options.getState() === 'auth-failed') {
-      return Promise.reject(createWebRuntimeUnauthorizedError())
+      return Promise.reject(this.options.getAuthError())
     }
     if (this.options.isIntentionallyClosed()) {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
@@ -55,7 +60,7 @@ export class WebRuntimeConnectionWaiters {
           cleanup()
           resolve()
         },
-        reject: (error: Error) => {
+        reject: (error: unknown) => {
           cleanup()
           reject(error)
         }
@@ -82,7 +87,7 @@ export class WebRuntimeConnectionWaiters {
     )
   }
 
-  rejectAll(error: Error): void {
+  rejectAll(error: unknown): void {
     for (const waiter of this.waiters.splice(0)) {
       waiter.reject(error)
     }

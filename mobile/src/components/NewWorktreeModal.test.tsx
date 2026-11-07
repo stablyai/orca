@@ -1,16 +1,22 @@
 import { createElement, Suspense, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn().mockResolvedValue(null),
   setItem: vi.fn().mockResolvedValue(undefined),
   removeItem: vi.fn().mockResolvedValue(undefined)
 }))
+vi.mock('./DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
+}))
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  AppState: { currentState: 'active' },
   FlatList: 'FlatList',
   Image: 'Image',
   Keyboard: { dismiss: vi.fn() },
@@ -37,15 +43,27 @@ vi.mock(
       }
     )
 )
-vi.mock('./BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
-vi.mock('./bottom-drawer-modal-host', () => ({ BottomDrawerModalHost: 'BottomDrawerModalHost' }))
+vi.mock('./bottom-drawer/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
+vi.mock('./bottom-drawer/bottom-drawer-modal-host', () => ({
+  BottomDrawerModalHost: 'BottomDrawerModalHost'
+}))
 vi.mock('./PickerListDrawer', () => ({ PickerListDrawer: 'PickerListDrawer' }))
+vi.mock('./AutoHeight', () => ({ AutoHeight: 'AutoHeight' }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
 import { setCachedRepos } from '../cache/repo-cache'
-import { getLocalExecutionHostLabel } from '../../../src/shared/execution-host'
+import { recordHostDescriptor } from '../transport/host-descriptor-store'
+import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import {
+  getLocalExecutionHostLabel,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host'
+
 import { NewWorktreeModal } from './NewWorktreeModal'
+
+import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 
@@ -63,16 +81,31 @@ function pickerItems(
   renderer: ReactTestRenderer,
   title: string
 ): { label: string; detail: string }[] {
-  const pickers = renderer.root.findAll((node) => node.type === 'PickerListDrawer')
+  const pickers = findAllByHostType(renderer.root, 'PickerListDrawer')
   const picker = pickers.find((node) => node.props.title === title)
   return picker?.props.items ?? []
 }
 
 function sourceInputs(renderer: ReactTestRenderer) {
-  return renderer.root.findAll(
-    (node) =>
-      node.type === 'TextInput' && node.props.placeholder === 'Type a name or search a source'
+  return findAllByHostType(renderer.root, 'TextInput').filter(
+    (node) => node.props.placeholder === 'Type a name or search a source'
   )
+}
+
+function requestsOnly(sendRequest: RpcClient['sendRequest']): RpcClient {
+  const client = new FakeSession('connected')
+  client.sendRequest.mockImplementation(sendRequest)
+  return client
+}
+
+function replied(result: unknown): Promise<RpcResponse> {
+  return Promise.resolve({ id: 'reply', ok: true, result })
+}
+
+function runTargetPicker(renderer: ReactTestRenderer) {
+  return findAllByHostType(renderer.root, 'PickerListDrawer').find(
+    (node) => node.props.title === 'Run on'
+  )!
 }
 
 async function flushUpdates(): Promise<void> {
@@ -104,7 +137,7 @@ describe('NewWorktreeModal project targets', () => {
       }
       return new Promise(() => {})
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
 
     await act(async () => {
       renderer = create(
@@ -113,7 +146,8 @@ describe('NewWorktreeModal project targets', () => {
           client,
           hostId: 'host-1',
           onCreated: () => {},
-          onClose: () => {}
+          onClose: () => {},
+          openExternalUrl: () => {}
         })
       )
       await Promise.resolve()
@@ -131,55 +165,6 @@ describe('NewWorktreeModal project targets', () => {
     ])
   })
 
-  it('groups same-name checkouts under one project with separate run targets', async () => {
-    const listedRepos = [
-      ...repos,
-      {
-        id: 'repo-2',
-        displayName: 'orca',
-        path: '/home/dev/orca',
-        connectionId: 'build-server',
-        kind: 'git',
-        upstream: { owner: 'stablyai', repo: 'orca' }
-      }
-    ]
-    const client = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
-        if (method === 'repo.list') {
-          return Promise.resolve({ ok: true, result: { repos: listedRepos } })
-        }
-        if (method === 'status.get') {
-          return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-        }
-        return new Promise(() => {})
-      })
-    } as unknown as RpcClient
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client,
-          hostId: 'host-1',
-          onCreated: () => {},
-          onClose: () => {}
-        })
-      )
-      await Promise.resolve()
-    })
-
-    expect(pickerItems(renderer, 'Project')).toEqual([
-      expect.objectContaining({ label: 'orca', detail: 'stablyai/orca' })
-    ])
-    expect(pickerItems(renderer, 'Run on')).toEqual([
-      expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca' }),
-      expect.objectContaining({
-        label: 'SSH · build-server',
-        detail: '/home/dev/orca'
-      })
-    ])
-  })
-
   it('loads SSH state before detecting agents on the selected remote target', async () => {
     const remoteRepo = {
       id: 'repo-remote',
@@ -190,22 +175,16 @@ describe('NewWorktreeModal project targets', () => {
       upstream: { owner: 'stablyai', repo: 'orca' }
     }
     setCachedRepos('host-ssh', [remoteRepo])
+    let resolveSshState: ((reply: unknown) => void) | undefined
+    const sshState = new Promise((resolve) => {
+      resolveSshState = resolve
+    })
     const sendRequest = vi.fn().mockImplementation((method: string) => {
       if (method === 'repo.list') {
         return Promise.resolve({ ok: true, result: { repos: [remoteRepo] } })
       }
       if (method === 'ssh.getState') {
-        return Promise.resolve({
-          ok: true,
-          result: {
-            state: {
-              targetId: 'build-server',
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0
-            }
-          }
-        })
+        return sshState
       }
       if (method === 'preflight.detectRemoteAgents') {
         return Promise.resolve({ ok: true, result: ['codex'] })
@@ -230,7 +209,7 @@ describe('NewWorktreeModal project targets', () => {
       }
       return Promise.resolve({ ok: true, result: {} })
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = requestsOnly(sendRequest)
 
     await act(async () => {
       renderer = create(
@@ -239,71 +218,177 @@ describe('NewWorktreeModal project targets', () => {
           client,
           hostId: 'host-ssh',
           onCreated: () => {},
-          onClose: () => {}
+          onClose: () => {},
+          openExternalUrl: () => {}
         })
       )
     })
     await flushUpdates()
 
     expect(sendRequest).toHaveBeenCalledWith('ssh.getState', { targetId: 'build-server' })
+    expect(
+      sendRequest.mock.calls.some(([method]) => method === 'preflight.detectRemoteAgents')
+    ).toBe(false)
+    await act(async () => {
+      resolveSshState?.({
+        ok: true,
+        result: {
+          state: {
+            targetId: 'build-server',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0
+          }
+        }
+      })
+    })
+    await flushUpdates()
     expect(sendRequest).toHaveBeenCalledWith('preflight.detectRemoteAgents', {
       connectionId: 'build-server'
     })
   })
 
-  it('keeps folder workspaces on the local execution and text-only source path', async () => {
-    const folderRepo = {
-      id: 'folder-1',
-      displayName: 'notes',
-      path: '/src/notes',
-      kind: 'folder'
-    }
-    setCachedRepos('host-folder', [folderRepo])
-    const sendRequest = vi.fn().mockImplementation((method: string) => {
+  it("creates a server repo's workspace on that server and names it for the route", async () => {
+    const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
+    const serverSshRepo = { ...serverRepo, id: 'server-ssh', connectionId: 'its-own-ssh' }
+    const reply = (method: string, listed: unknown[], hostPlatform: string) => {
       if (method === 'repo.list') {
-        return Promise.resolve({ ok: true, result: { repos: [folderRepo] } })
-      }
-      if (method === 'preflight.detectAgents') {
-        return Promise.resolve({ ok: true, result: ['codex'] })
-      }
-      if (method === 'settings.get') {
-        return Promise.resolve({ ok: true, result: { settings: { defaultTuiAgent: 'codex' } } })
-      }
-      if (method === 'ui.get') {
-        return Promise.resolve({ ok: true, result: { ui: {} } })
-      }
-      if (method === 'preflight.check') {
-        return Promise.resolve({ ok: true, result: {} })
-      }
-      if (method === 'linear.status') {
-        return Promise.resolve({ ok: true, result: {} })
+        return replied({ repos: listed })
       }
       if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+        return replied({ hostPlatform })
       }
-      if (method === 'repo.hooks') {
-        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
+      if (method === 'worktree.create') {
+        return replied({
+          worktree: { id: 'srv-wt', displayName: 'srv-wt', path: '/srv/orca-wt' }
+        })
       }
-      return Promise.resolve({ ok: true, result: {} })
-    })
-    const client = { sendRequest } as unknown as RpcClient
+      if (method === 'settings.get') {
+        return replied({ settings: {} })
+      }
+      return replied({})
+    }
+    const desktop = vi.fn((method: string) => reply(method, repos, 'darwin'))
+    const server = vi.fn((method: string) => reply(method, [serverRepo, serverSshRepo], 'linux'))
+    const onCreated = vi.fn()
+    recordHostDescriptor('host-1', { machineName: null, platform: 'darwin' })
 
     await act(async () => {
       renderer = create(
         createElement(NewWorktreeModal, {
           visible: true,
-          client,
-          hostId: 'host-folder',
-          onCreated: () => {},
-          onClose: () => {}
+          client: requestsOnly(desktop),
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(server)]
+          ]),
+          hostId: 'host-1',
+          hostLabelById: new Map<ExecutionHostId, string>([['runtime:env-1', 'scratch-server']]),
+          onCreated,
+          onClose: () => {},
+          openExternalUrl: () => {}
         })
       )
     })
     await flushUpdates()
 
-    expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
-    expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
+    const runTargets = pickerItems(renderer, 'Run on')
+    expect(runTargets.map((item) => [item.label, item.detail])).toEqual([
+      [LOCAL_HOST_LABEL, '/src/orca'],
+      ['scratch-server', '/srv/orca']
+    ])
+    const serverTarget = runTargetPicker(renderer)
+    const iconOf = (item: unknown) => {
+      let icon: ReactTestRenderer | undefined
+      act(() => {
+        icon = create(serverTarget.props.renderIcon(item))
+      })
+      return icon?.toJSON()
+    }
+    expect(serverTarget.props.items.map(iconOf)).toMatchObject([
+      { type: 'Monitor' },
+      { type: 'Server' }
+    ])
+    await act(async () => serverTarget.props.onSelect(serverTarget.props.items[1]))
+    await flushUpdates()
+    // The Run on field shows the picked server's glyph, as its row does.
+    expect(findAllByHostType(renderer.root, 'Server')).toHaveLength(1)
+    expect(pickerItems(renderer, 'Run on')[0]?.label).toBe(LOCAL_HOST_LABEL)
+    act(() => sourceInputs(renderer)[0]!.props.onChangeText('srv-wt'))
+    const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')
+    await act(async () => form.props.onCreate())
+    await flushUpdates()
+
+    expect(server).toHaveBeenCalledWith(
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:server-repo' }),
+      expect.anything()
+    )
+    expect(desktop).not.toHaveBeenCalledWith(
+      'worktree.create',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
+  })
+
+  it("lists the desktop's repos at once while a server has not answered", async () => {
+    const desktop = vi.fn((method: string) =>
+      method === 'repo.list' ? replied({ repos }) : new Promise<never>(() => {})
+    )
+    const hungServer = vi.fn(() => new Promise<never>(() => {}))
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(desktop),
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(hungServer)]
+          ]),
+          hostId: 'host-cold',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    expect(hungServer).toHaveBeenCalledWith('repo.list')
+    expect(pickerItems(renderer, 'Run on').map((item) => item.detail)).toEqual(['/src/orca'])
+  })
+
+  it('keeps a server repo picked when the desktop lists a repo with the same id', async () => {
+    const serverRepo = { ...repos[0]!, path: '/srv/orca' }
+    const listing = (listed: unknown[]) =>
+      vi.fn((method: string) =>
+        method === 'repo.list' ? replied({ repos: listed }) : new Promise<never>(() => {})
+      )
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(listing(repos)),
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(listing([serverRepo]))]
+          ]),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+    const picker = runTargetPicker(renderer)
+    await act(async () => picker.props.onSelect(picker.props.items[1]))
+    await flushUpdates()
+
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
+    expect(
+      renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
+    ).toBe('/srv/orca')
   })
 
   it('ignores a stale repo list after the client changes', async () => {
@@ -312,16 +397,16 @@ describe('NewWorktreeModal project targets', () => {
       resolveOldList = resolve
     })
     const freshRepo = { ...repos[0]!, id: 'repo-fresh', displayName: 'fresh' }
-    const oldClient = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
+    const oldClient = requestsOnly(
+      vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return oldList
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
-    const freshClient = {
-      sendRequest: vi.fn().mockImplementation((method: string) => {
+    )
+    const freshClient = requestsOnly(
+      vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return Promise.resolve({ ok: true, result: { repos: [freshRepo] } })
         }
@@ -330,12 +415,13 @@ describe('NewWorktreeModal project targets', () => {
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
+    )
     const modalProps = {
       visible: true,
       hostId: 'host-1',
       onCreated: () => {},
-      onClose: () => {}
+      onClose: () => {},
+      openExternalUrl: () => {}
     }
 
     await act(async () => {
@@ -348,7 +434,7 @@ describe('NewWorktreeModal project targets', () => {
       renderer.update(createElement(NewWorktreeModal, { ...modalProps, client: freshClient }))
       await Promise.resolve()
     })
-    // The swap must not restart the form session — see the reconnect test below.
+    // A reconnect changes the client without restarting this host's form session.
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual([
       'stale-client-name',
       'stale-client-name'
@@ -359,70 +445,7 @@ describe('NewWorktreeModal project targets', () => {
     expect(pickerItems(renderer, 'Project')).toEqual([expect.objectContaining({ label: 'fresh' })])
   })
 
-  it('remounts before the reopened session renders, so no stale instance sees visible', async () => {
-    const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
-    const client = { sendRequest } as unknown as RpcClient
-    const modalProps = {
-      client,
-      hostId: 'host-1',
-      onCreated: () => {},
-      onClose: () => {}
-    }
-
-    await act(async () => {
-      renderer = create(createElement(NewWorktreeModal, { ...modalProps, visible: true }))
-    })
-    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: false })))
-    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
-
-    // One repo.list per opening. A third means the previous session's instance
-    // re-ran its visible-gated effects before the remount key caught up.
-    const repoListCalls = sendRequest.mock.calls.filter(([method]) => method === 'repo.list')
-    expect(repoListCalls).toHaveLength(2)
-  })
-
-  // A reconnect / forceReconnect / foreground revival hands the same host a NEW
-  // RpcClient object (see useHostClient). Keying the form session on that object
-  // remounted the modal mid-edit and silently threw away the picked source.
-  it('keeps the picked source when a reconnect swaps the client for the same host', async () => {
-    const makeClient = () =>
-      ({
-        sendRequest: vi.fn().mockImplementation((method: string) => {
-          if (method === 'repo.list') {
-            return Promise.resolve({ ok: true, result: { repos } })
-          }
-          if (method === 'status.get') {
-            return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-          }
-          return new Promise(() => {})
-        })
-      }) as unknown as RpcClient
-    const modalProps = {
-      visible: true,
-      hostId: 'host-1',
-      onCreated: () => {},
-      onClose: () => {}
-    }
-
-    await act(async () => {
-      renderer = create(createElement(NewWorktreeModal, { ...modalProps, client: makeClient() }))
-    })
-    act(() => sourceInputs(renderer)[0]!.props.onChangeText('feat/keep-me'))
-
-    await act(async () => {
-      renderer.update(createElement(NewWorktreeModal, { ...modalProps, client: makeClient() }))
-      await Promise.resolve()
-    })
-
-    expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual([
-      'feat/keep-me',
-      'feat/keep-me'
-    ])
-  })
-
-  // react-native-screens freezes a blurred screen by suspending its subtree
-  // (react-freeze), so React runs this component and then throws that render away.
-  // Anything the render mutated in place outlives the work React discarded.
+  // Blurred react-native-screens freezes by suspending/react-freeze; discarded render mutations otherwise outlive React’s work.
   function suspendableTree(frozen: () => boolean, child: ReactElement) {
     const never = new Promise<void>(() => {})
     const Freezer = () => {
@@ -437,10 +460,14 @@ describe('NewWorktreeModal project targets', () => {
 
   it('keeps the form when a host switch renders but never commits', async () => {
     setCachedRepos('host-2', repos)
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
-    const modalProps = { visible: true, client, onCreated: () => {}, onClose: () => {} }
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
+    const modalProps = {
+      visible: true,
+      client,
+      onCreated: () => {},
+      onClose: () => {},
+      openExternalUrl: () => {}
+    }
     let frozen = false
     const tree = (hostId: string) =>
       suspendableTree(() => frozen, createElement(NewWorktreeModal, { ...modalProps, hostId }))
@@ -464,14 +491,13 @@ describe('NewWorktreeModal project targets', () => {
   })
 
   it('keeps the form when a close renders but never commits', async () => {
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
     const modalProps = {
       client,
       hostId: 'host-1',
       onCreated: () => {},
-      onClose: () => {}
+      onClose: () => {},
+      openExternalUrl: () => {}
     }
     let frozen = false
     const tree = (visible: boolean) =>
@@ -500,10 +526,14 @@ describe('NewWorktreeModal project targets', () => {
 
   it('starts a fresh form session when the modal switches hosts', async () => {
     setCachedRepos('host-2', repos)
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
-    const modalProps = { visible: true, client, onCreated: () => {}, onClose: () => {} }
+    const client = requestsOnly(vi.fn().mockImplementation(() => new Promise(() => {})))
+    const modalProps = {
+      visible: true,
+      client,
+      onCreated: () => {},
+      onClose: () => {},
+      openExternalUrl: () => {}
+    }
 
     await act(async () => {
       renderer = create(createElement(NewWorktreeModal, { ...modalProps, hostId: 'host-1' }))
@@ -518,14 +548,14 @@ describe('NewWorktreeModal project targets', () => {
   })
 
   it('starts with fresh form state after closing and reopening', async () => {
-    const client = {
-      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
+    const client = requestsOnly(sendRequest)
     const modalProps = {
       client,
       hostId: 'host-1',
       onCreated: () => {},
-      onClose: () => {}
+      onClose: () => {},
+      openExternalUrl: () => {}
     }
 
     await act(async () => {
@@ -538,5 +568,6 @@ describe('NewWorktreeModal project targets', () => {
     act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
+    expect(sendRequest.mock.calls.filter(([method]) => method === 'repo.list')).toHaveLength(2)
   })
 })

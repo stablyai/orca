@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PaneManager } from './pane-manager'
 import { createInitialManagedPane } from './pane-manager-pane-creation'
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { PaneManagerHost } from './pane-manager-host'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
@@ -30,23 +31,43 @@ function fixture() {
   const panes = new Map([[pane.id, pane]])
   const publishPaneCreated = vi.fn()
   const onActivePaneChange = vi.fn()
+  function unexpectedHostOperation(): never {
+    throw new Error('Unexpected host operation in overlay focus fixture')
+  }
+  const options = { onActivePaneChange, linkOpenHint: unexpectedHostOperation }
   const manager = Object.create(PaneManager.prototype) as PaneManager
   Object.assign(manager, {
     panes,
     activePaneId: null,
     styleOptions: {},
-    options: { onActivePaneChange }
+    options
   })
-  const host = {
-    options: {},
+  const host: PaneManagerHost = {
+    options,
     root,
     panes,
+    get identities() {
+      return unexpectedHostOperation()
+    },
+    get dragState() {
+      return unexpectedHostOperation()
+    },
+    isDestroyed: unexpectedHostOperation,
+    isRenderingSuspended: unexpectedHostOperation,
+    allocatePaneId: unexpectedHostOperation,
+    createDivider: unexpectedHostOperation,
+    getDragCallbacks: unexpectedHostOperation,
+    setActivePane: (paneId, opts) => manager.setActivePane(paneId, opts),
+    requestPaneReparentFrame: unexpectedHostOperation,
     createPaneInternal: () => pane,
-    setActivePaneId: vi.fn(),
-    getActivePaneId: () => pane.id,
+    setActivePaneId: vi.fn((activePaneId: number | null) => {
+      Object.assign(manager, { activePaneId })
+    }),
+    getActivePaneId: () => manager.getActivePane()?.id ?? null,
     getStyleOptions: () => ({}),
     publishPaneCreated
-  } as unknown as PaneManagerHost
+  }
+  Object.assign(manager, { host })
   return { root, container, textarea, pane, host, manager, publishPaneCreated, onActivePaneChange }
 }
 
@@ -59,11 +80,19 @@ function overlay(role: string) {
   return element
 }
 
+function coverPane(f: ReturnType<typeof fixture>): HTMLElement {
+  const cover = document.createElement('div')
+  cover.className = 'native-chat-pane-shell'
+  cover.tabIndex = -1
+  f.container.append(cover)
+  return cover
+}
+
 describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
   function focus(f: ReturnType<typeof fixture>, requested = true) {
     if (operation === 'initial') {
       createInitialManagedPane(f.host, { focus: requested })
-      expect(f.publishPaneCreated).toHaveBeenCalledWith(f.pane)
+      expect(f.publishPaneCreated).toHaveBeenCalledWith(f.pane, { placement: { kind: 'new-tab' } })
     } else {
       f.root.append(f.container)
       f.manager.setActivePane(f.pane.id, { focus: requested })
@@ -143,9 +172,23 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(document.activeElement).toBe(popup)
   })
 
-  it('honors an explicit no-focus request', () => {
+  it('lands on the chat covering the pane, never its hidden terminal', () => {
     const f = fixture()
-    focus(f, false)
+    f.root.append(f.container)
+    const cover = coverPane(f)
+    focus(f)
+    expect(document.activeElement).toBe(cover)
     expect(f.pane.terminal.focus).not.toHaveBeenCalled()
   })
+})
+
+it('keeps focus that is already inside the chat covering the pane', () => {
+  const f = fixture()
+  f.root.append(f.container)
+  const composer = document.createElement('button')
+  coverPane(f).append(composer)
+  composer.focus()
+  focusPanePreservingOverlays(f.pane)
+  expect(document.activeElement).toBe(composer)
+  expect(f.pane.terminal.focus).not.toHaveBeenCalled()
 })

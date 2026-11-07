@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -43,6 +44,7 @@ import type {
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 
 export type GitHubRepoSelectorArgs = {
+  repoOwnerExecutionHostId?: string
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
@@ -65,6 +67,7 @@ export type GithubWorkItemApi = {
   workItemByOwnerRepo: (args: {
     repoPath: string
     repoId?: string
+    sourceContext?: TaskSourceContext | null
     owner: string
     repo: string
     host?: string
@@ -73,8 +76,11 @@ export type GithubWorkItemApi = {
   }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
   workItemDetails: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       number: number
       type?: 'issue' | 'pr'
+      ownerRepo?: GitHubOwnerRepo
+      canonical?: boolean
     }
   ) => Promise<GitHubWorkItemDetails | null>
   notifyWorkItemMutated: (args: {
@@ -93,7 +99,12 @@ export type GithubWorkItemApi = {
     labels?: string[]
     assignees?: string[]
   }) => Promise<GitHubCreateIssueResult>
-  countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
+  countWorkItems: (args: {
+    repoPath: string
+    repoId?: string
+    query?: string
+    wakeWslDistro?: boolean
+  }) => Promise<number>
   listWorkItems: (args: {
     repoPath: string
     repoId?: string
@@ -101,33 +112,39 @@ export type GithubWorkItemApi = {
     query?: string
     page?: number
     noCache?: boolean
+    wakeWslDistro?: boolean
   }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
   updateIssue: (
     args: GitHubRepoSelectorArgs & {
       number: number
       updates: GitHubIssueUpdate
+      ownerRepo?: GitHubOwnerRepo
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   addIssueComment: (
     args: GitHubRepoSelectorArgs & {
       number: number
       body: string
-      /** Why: scopes the cross-window cache invalidation so a PR and issue sharing the same number don't evict each other. */
+      /** Keep PR and issue cache invalidation separate when their numbers match. */
       type?: 'issue' | 'pr'
       prRepo?: GitHubOwnerRepo | null
     }
   ) => Promise<GitHubCommentResult>
   listLabels: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null
+    ownerRepo?: GitHubOwnerRepo
   }) => Promise<string[]>
   listAssignableUsers: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null
+    ownerRepo?: GitHubOwnerRepo
   }) => Promise<GitHubAssignableUser[]>
-  /** Subscribe to local-mutation broadcasts so the work-item-drawer cache can invalidate across windows. Returns an unsubscribe. */
+  /** Invalidate work-item caches across windows after local mutations. */
   onWorkItemMutated: (
     callback: (payload: {
       repoPath: string
@@ -136,7 +153,6 @@ export type GithubWorkItemApi = {
       number: number
     }) => void
   ) => () => void
-  // ── ProjectV2 (GitHub Projects) ─────────────────────────────────
   listAccessibleProjects: (
     args?: ListAccessibleProjectsArgs
   ) => Promise<ListAccessibleProjectsResult>

@@ -1,3 +1,7 @@
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import { ImeTextarea } from '@/lib/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,6 +17,7 @@ import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 export type DiffCommentDraftCardProps = {
   lineNumber: number
   startLine?: number
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder?: string
   submitLabel?: string
   submittingLabel?: string
@@ -33,6 +38,7 @@ function resizeDraftTextarea(textarea: HTMLTextAreaElement): boolean {
 export function DiffCommentDraftCard({
   lineNumber,
   startLine,
+  imageUploadAddress,
   placeholder,
   submitLabel,
   submittingLabel,
@@ -45,8 +51,22 @@ export function DiffCommentDraftCard({
   const [body, setBody] = useState(initialBody)
   const bodyRef = useRef(body)
   const [submitting, setSubmitting] = useState(false)
+  const imagePending = useGitHubImagePending()
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const images = useGitHubTextareaImages(
+    textareaRef,
+    body,
+    (next) => {
+      setBody(next)
+      onBodyChange?.(next)
+    },
+    {
+      address: imageUploadAddress,
+      onPending: imagePending.onPending,
+      enabled: !!imageUploadAddress && !submitting
+    }
+  )
   const cardRef = useRef<HTMLDivElement | null>(null)
   const onContentResizeRef = useRef(onContentResize)
 
@@ -72,10 +92,19 @@ export function DiffCommentDraftCard({
           { value0: lineNumber }
         )
 
-  const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    textareaRef.current = textarea
-    textarea?.focus()
-  }, [])
+  const { attachDrop } = images
+  const hasImageUpload = !!imageUploadAddress
+  const focusTextareaRef = useCallback(
+    (textarea: HTMLTextAreaElement | null): void => {
+      if (hasImageUpload) {
+        attachDrop(textarea)
+      } else {
+        textareaRef.current = textarea
+      }
+      textarea?.focus()
+    },
+    [attachDrop, hasImageUpload]
+  )
 
   useEffect(() => {
     const focusTextarea = (): void => textareaRef.current?.focus()
@@ -133,7 +162,7 @@ export function DiffCommentDraftCard({
   }, [onCancel])
 
   const handleSubmit = async (): Promise<void> => {
-    if (submitting) {
+    if (submitting || imagePending.pendingRef.current) {
       return
     }
     const bodyState = getCommentBodySubmitState(body)
@@ -149,8 +178,7 @@ export function DiffCommentDraftCard({
       )
       return
     }
-    // Chromium drops focus to <body> when the pressed button turns disabled, and the zone only
-    // hands focus back to Monaco while the card still holds it. Park it on the textarea first.
+    // Park focus before disabling the button; the zone restores Monaco focus only while its card owns focus.
     textareaRef.current?.focus()
     setSubmitting(true)
     try {
@@ -194,7 +222,7 @@ export function DiffCommentDraftCard({
     }
   }
 
-  const canSubmit = !submitting && hasBoundedCommentBodyText(body)
+  const canSubmit = !imagePending.pending && !submitting && hasBoundedCommentBodyText(body)
 
   return (
     <div
@@ -211,7 +239,7 @@ export function DiffCommentDraftCard({
         </div>
 
         {/* Textarea */}
-        <textarea
+        <ImeTextarea
           ref={focusTextareaRef}
           className="orca-diff-comment-popover-textarea"
           placeholder={
@@ -221,11 +249,12 @@ export function DiffCommentDraftCard({
               'Add note for the AI'
             )
           }
-          value={body}
+          value={images.value}
+          onPaste={images.onPaste}
+          onBeforeInput={images.onBeforeInput}
           rows={3}
           onChange={(e) => {
-            setBody(e.target.value)
-            onBodyChange?.(e.target.value)
+            images.change(e.target.value)
             if (resizeDraftTextarea(e.currentTarget)) {
               onContentResizeRef.current?.()
             }

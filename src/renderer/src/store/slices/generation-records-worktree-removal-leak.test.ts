@@ -1,15 +1,4 @@
-/**
- * Memory-leak regression: PR-generation and commit-message-generation records
- * must be evicted when their worktree is removed.
- *
- * Both records are keyed by worktree (the PR map by a composite
- * [repoId, worktreeKey, branch] key, the commit map by worktreeKey) and each
- * retains generated title/body/message text. The slices ship tested
- * `prunePullRequestGenerationRecords` / `pruneCommitMessageGenerationRecords`
- * actions, but nothing in production called them on worktree removal, so the
- * records accumulated one entry per worktree for the renderer session.
- * `removeWorktree` now prunes both maps to the surviving worktree set.
- */
+/** Worktree removal must call both generation pruners; PR title/body and commit-message records otherwise leak text under ephemeral worktree/branch keys for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
@@ -17,7 +6,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -29,7 +20,6 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const mockApi = {
   worktrees: {
-    list: vi.fn().mockResolvedValue([]),
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
@@ -42,10 +32,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree } from './store-test-helpers'
-import {
-  getPullRequestGenerationRecordKey,
-  type PullRequestGenerationRecord
-} from './pull-request-generation'
+import { getPullRequestGenerationRecordKey } from './hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationRecord } from './hosted-review/generation/pull-request-generation-state'
 import {
   getCommitMessageGenerationRecordKey,
   type CommitMessageGenerationRecord
@@ -60,7 +48,14 @@ const BRANCH = 'refs/heads/feature'
 
 function prRecord(worktreeId: string, worktreePath: string): PullRequestGenerationRecord {
   return {
-    context: { worktreeId, worktreePath, requestId: 1, repoId: REPO, branch: BRANCH },
+    context: {
+      worktreeId,
+      worktreePath,
+      requestId: 1,
+      repoId: REPO,
+      branch: BRANCH,
+      runtimeTarget: { kind: 'local' }
+    },
     seed: { base: 'main', title: 'Title', body: 'Body', draft: false },
     seedFieldRevisions: { base: 0, title: 0, body: 0, draft: 0 },
     requiresPushBeforeCreate: false,
@@ -73,7 +68,7 @@ function prRecord(worktreeId: string, worktreePath: string): PullRequestGenerati
 
 function commitRecord(worktreeId: string, worktreePath: string): CommitMessageGenerationRecord {
   return {
-    context: { worktreeId, worktreePath, requestId: 1 },
+    context: { worktreeId, worktreePath, requestId: 1, runtimeTarget: { kind: 'local' } },
     status: 'succeeded',
     message: 'a generated commit message',
     error: null,
@@ -136,10 +131,8 @@ describe('worktree removal evicts generation records (leak regression)', () => {
     expect(result).toEqual({ ok: true })
 
     const s = store.getState()
-    // Removed worktree's records are gone (the leak).
     expect(s.pullRequestGenerationRecords[prKey(WT, WT_PATH)]).toBeUndefined()
     expect(s.commitMessageGenerationRecords[commitKey(WT, WT_PATH)]).toBeUndefined()
-    // Surviving worktree's records are preserved (no over-pruning).
     expect(s.pullRequestGenerationRecords[prKey(OTHER, OTHER_PATH)]).toBeDefined()
     expect(s.commitMessageGenerationRecords[commitKey(OTHER, OTHER_PATH)]).toBeDefined()
   })

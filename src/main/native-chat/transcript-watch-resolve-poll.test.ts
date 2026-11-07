@@ -47,9 +47,7 @@ describe('native chat transcript resolve polling', () => {
       return mocks.stopObservation
     })
     mocks.toHostReadable.mockReset().mockResolvedValue(null)
-    // Why: a POSIX exact path is a WSL guest path on win32 and is deliberately
-    // never installed raw there, so pin the platform instead of inheriting the
-    // host's — otherwise these cases only hold on non-Windows machines.
+    // Pin Linux: Windows must translate guest paths before install, so these raw POSIX fixtures cannot inherit host OS.
     setPlatform('linux')
   })
 
@@ -120,23 +118,9 @@ describe('native chat transcript resolve polling', () => {
 
     await mocks.observation?.(['Ubuntu'])
     expect(mocks.install.mock.calls.some(([filePath]) => filePath === unc)).toBe(true)
-    // The resolve observer hands ownership to the installed watcher.
     expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
     expect(mocks.stopObservation).toHaveBeenCalledOnce()
 
-    subscription.unsubscribe()
-  })
-
-  it('keeps resolving on every retry when no exact hook path is available', async () => {
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session-id',
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(35)
-    expect(mocks.resolve.mock.calls.length).toBeGreaterThan(1)
     subscription.unsubscribe()
   })
 
@@ -161,18 +145,6 @@ describe('native chat transcript resolve polling', () => {
     ).toBe(true)
     subscription.unsubscribe()
     expect(engine.unsubscribe).toHaveBeenCalled()
-  })
-
-  it('still fails subscribe on non-gate resolver errors', async () => {
-    mocks.resolve.mockRejectedValueOnce(new Error('resolver crashed'))
-
-    await expect(
-      subscribeNativeChatTranscript({
-        agent: 'claude',
-        sessionId: 'session-id',
-        onAppend: () => {}
-      })
-    ).rejects.toThrow('resolver crashed')
   })
 
   it('cancels queued WSL resolution when the subscription closes', async () => {

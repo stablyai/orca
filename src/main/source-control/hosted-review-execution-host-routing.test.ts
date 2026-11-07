@@ -1,17 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 
-/**
- * Routing cases for the hosted-review contract.
- *
- * Two SSH targets are registered at once in every case on purpose: routing that answers with
- * "some connected host" rather than *this row's* host only shows up once a second one exists,
- * and the `runtime:` cases reuse one of those names so a nested target cannot be told apart
- * from a client-dialable one by its spelling.
- */
+/** Register two SSH targets to expose wrong-host fallback; reuse a name under runtime: to expose nested-namespace confusion. */
 
 const {
-  getSshGitProviderMock,
   gitExecFileAsyncMock,
   ghExecFileAsyncMock,
   glabExecFileAsyncMock,
@@ -36,7 +28,6 @@ const {
   probeAnyExactRefMock,
   assertRemoteUrlReadableMock
 } = vi.hoisted(() => ({
-  getSshGitProviderMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
   ghExecFileAsyncMock: vi.fn(),
   glabExecFileAsyncMock: vi.fn(),
@@ -62,11 +53,6 @@ const {
   assertRemoteUrlReadableMock: vi.fn()
 }))
 
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH git provider unavailable'
-}))
-
 vi.mock('../github/gh-utils', () => ({
   gitExecFileAsync: gitExecFileAsyncMock,
   ghExecFileAsync: ghExecFileAsyncMock,
@@ -81,27 +67,31 @@ vi.mock('../gitlab/gl-utils', () => ({
   glabRepoExecOptions: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/command-runner/git-process-env', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitOptionalLocksDisabledEnv: vi.fn(() => ({}))
 }))
 
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
-vi.mock('../git/repo', () => ({
+vi.mock('../git/repo', () => ({}))
+
+vi.mock('../../shared/git/refs/git-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock
 }))
 
 vi.mock('../git/exact-ref-probe', () => ({
-  probeAnyExactRef: probeAnyExactRefMock,
-  isShowRefNoMatchError: vi.fn(() => false)
+  probeAnyExactRef: probeAnyExactRefMock
 }))
 
-vi.mock('../git/worktree-symlink-detection', () => ({
+vi.mock('../git/worktrees/content-paths/worktree-symlink-detection', () => ({
   findExistingWorktreeSymlinkPaths: vi.fn(async () => [])
 }))
 
-vi.mock('../git/remote-url-probe', () => ({
-  assertRemoteUrlReadable: assertRemoteUrlReadableMock
+vi.mock('../git/remotes/remote-url-probe', () => ({
+  assertRemoteUrlReadable: assertRemoteUrlReadableMock,
+  withSharedRemoteUrlReads: <T>(work: () => Promise<T>) => work()
 }))
 
 vi.mock('../gitlab/client', () => ({
@@ -112,6 +102,15 @@ vi.mock('../gitlab/client', () => ({
 
 vi.mock('../gitlab/merge-request-creation', () => ({
   createGitLabMergeRequest: createGitLabMergeRequestMock
+}))
+
+vi.mock('../github/client/fetch/repo-slug-upstream', () => ({
+  getRepoSlug: getRepoSlugMock,
+  getRepoUpstream: getRepoUpstreamMock
+}))
+
+vi.mock('../github/client/lookup/pr-for-branch-outcome', () => ({
+  getPRForBranchOutcome: getPRForBranchOutcomeMock
 }))
 
 vi.mock('../github/client', () => ({
@@ -160,11 +159,10 @@ vi.mock('../gitea/pull-request-creation', () => ({
 }))
 
 import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
-import {
-  getRepoHostedReviewExecutionHostId,
-  hostedReviewSshConnectionId
-} from './hosted-review-execution-host'
-import { RuntimeHostedReviewCommands } from '../runtime/runtime-hosted-review-commands'
+import { getStoredRepoExecutionHostId } from '../workspaces/execution-host/repo-execution-host'
+import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
+import { RuntimeHostedReviewCommands } from '../runtime/integrations/reviews/runtime-hosted-review-commands'
+import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 const REPO_PATH = '/remote/workspace/repo'
 
@@ -205,7 +203,6 @@ function makeCommands(repo: Repo): RuntimeHostedReviewCommands {
   })
 }
 
-/** Which SSH target the git-state layer actually ran the preflight on, or null for local. */
 function sshTargetThatRanGit(): string | null {
   for (const [id, provider] of sshProviders) {
     if (provider.exec.mock.calls.length > 0 || provider.getStatus.mock.calls.length > 0) {
@@ -229,7 +226,6 @@ beforeEach(() => {
   sshProviders.clear()
   sshProviders.set('ssh-a', makeSshProvider())
   sshProviders.set('ssh-b', makeSshProvider())
-  getSshGitProviderMock.mockImplementation((id: string) => sshProviders.get(id) ?? null)
 
   gitExecFileAsyncMock.mockImplementation(async (argv: string[]) => ({
     stdout: argv[0] === 'status' ? '' : 'feature\n',
@@ -247,7 +243,6 @@ beforeEach(() => {
   probeAnyExactRefMock.mockResolvedValue({ found: true, unknown: false })
   assertRemoteUrlReadableMock.mockResolvedValue(undefined)
 
-  // No forge claims the remote unless a case says so; each test opts its provider in.
   getProjectSlugMock.mockResolvedValue(null)
   getRepoSlugMock.mockResolvedValue(null)
   getRepoUpstreamMock.mockResolvedValue(null)
@@ -309,7 +304,6 @@ describe('hosted-review lookups route on the resolved execution host', () => {
     await commands.getHostedReviewForBranch({ repoSelector: 'repo-1', branch: 'feature' })
 
     expect(getBitbucketRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, null)
-    expect(getSshGitProviderMock).not.toHaveBeenCalledWith('ssh-b')
   })
 
   it('keeps a runtime row with no nested target on this process (self-addressed stamp)', async () => {
@@ -354,43 +348,17 @@ describe('hosted-review lookups route on the resolved execution host', () => {
 })
 
 describe('hosted-review creation routes on the resolved execution host', () => {
-  it('runs the GitLab preflight and create on the executionHostId-only SSH host', async () => {
+  it('refuses GitLab preflight on an executionHostId-only SSH host without running git here', async () => {
     getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'acme/widgets' })
     const commands = makeCommands(makeRepo({ executionHostId: 'ssh:ssh-a' }))
 
-    const result = await commands.createHostedReview({
-      repoSelector: 'repo-1',
-      provider: 'gitlab',
-      ...CREATE_INPUT
-    })
+    await expect(
+      commands.createHostedReview({ repoSelector: 'repo-1', provider: 'gitlab', ...CREATE_INPUT })
+    ).rejects.toThrow(SshHostNotServedError)
 
-    expect(result.ok).toBe(true)
-    expect(sshTargetThatRanGit()).toBe('ssh-a')
+    expect(sshTargetThatRanGit()).toBeNull()
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(createGitLabMergeRequestMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      expect.objectContaining({ provider: 'gitlab' }),
-      'ssh:ssh-a'
-    )
-  })
-
-  it('runs the GitHub preflight on the executionHostId host, not the connectionId one', async () => {
-    getRepoSlugMock.mockResolvedValue({ host: 'github.com', owner: 'a', repo: 'b' })
-    const commands = makeCommands(makeRepo({ connectionId: 'ssh-b', executionHostId: 'ssh:ssh-a' }))
-
-    const result = await commands.createHostedReview({
-      repoSelector: 'repo-1',
-      provider: 'github',
-      ...CREATE_INPUT
-    })
-
-    expect(result.ok).toBe(true)
-    expect(sshTargetThatRanGit()).toBe('ssh-a')
-    expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
-      REPO_PATH,
-      expect.objectContaining({ provider: 'github' }),
-      'ssh:ssh-a'
-    )
+    expect(createGitLabMergeRequestMock).not.toHaveBeenCalled()
   })
 
   it('creates a Bitbucket review locally for a runtime row rather than dialing its nested target', async () => {
@@ -428,7 +396,7 @@ describe('hosted-review creation routes on the resolved execution host', () => {
     })
 
     expect(getAzureDevOpsRepoSlugMock).toHaveBeenCalledWith(REPO_PATH, 'ssh-a')
-    expect(sshTargetThatRanGit()).toBe('ssh-a')
+    expect(sshTargetThatRanGit()).toBeNull()
   })
 
   it('resolves the GitHub slug for a repo listing on the row it is asked about', async () => {
@@ -451,16 +419,15 @@ describe('hosted-review host resolution', () => {
   it('answers with the SSH target for both spellings and local otherwise', () => {
     expect(hostedReviewSshConnectionId('ssh:ssh-a')).toBe('ssh-a')
     expect(hostedReviewSshConnectionId('local')).toBeNull()
-    expect(getRepoHostedReviewExecutionHostId({ executionHostId: 'ssh:ssh-a' })).toBe('ssh:ssh-a')
-    expect(getRepoHostedReviewExecutionHostId({ connectionId: 'ssh-b' })).toBe('ssh:ssh-b')
+    expect(getStoredRepoExecutionHostId({ executionHostId: 'ssh:ssh-a' })).toBe('ssh:ssh-a')
+    expect(getStoredRepoExecutionHostId({ connectionId: 'ssh-b' })).toBe('ssh:ssh-b')
   })
 
   it('reads a runtime stamp on a row in this store as self-addressing, not a second machine', () => {
-    // The registration controller only adopts `runtime:` onto a row with no connectionId, so the
-    // checkout is here; a nested target belongs to that server's namespace and is never dialed.
-    expect(getRepoHostedReviewExecutionHostId({ executionHostId: 'runtime:env-1' })).toBe('local')
+    // runtime: adopts only rows without connectionId; nested SSH targets belong to that server's namespace, never this client's.
+    expect(getStoredRepoExecutionHostId({ executionHostId: 'runtime:env-1' })).toBe('local')
     expect(
-      getRepoHostedReviewExecutionHostId({
+      getStoredRepoExecutionHostId({
         executionHostId: 'runtime:env-1',
         connectionId: 'ssh-b'
       })

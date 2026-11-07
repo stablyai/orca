@@ -3,6 +3,21 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
 
+export type AutomationRunsDashboardRun = Pick<
+  AutomationRun,
+  'id' | 'title' | 'scheduledFor' | 'status' | 'trigger'
+>
+
+export function projectAutomationRunsDashboardRun(run: AutomationRun): AutomationRunsDashboardRun {
+  return {
+    id: run.id,
+    title: run.title,
+    scheduledFor: run.scheduledFor,
+    status: run.status,
+    trigger: run.trigger
+  }
+}
+
 export type AutomationRunsScope = 'local' | 'remote'
 export type AutomationRunsStatusFilter = 'all' | 'successful' | 'failed' | 'active' | 'skipped'
 
@@ -11,7 +26,7 @@ export type AutomationRunsDashboardEntry = {
   hostKey: string
   searchText: string
   row: AutomationListRow
-  run: AutomationRun
+  run: AutomationRunsDashboardRun
   scope: AutomationRunsScope
 }
 
@@ -52,14 +67,14 @@ export function getAutomationRunsScope(row: AutomationListRow): AutomationRunsSc
 
 export function buildAutomationRunsDashboardEntries(
   rows: readonly AutomationListRow[],
-  runsByRowKey: ReadonlyMap<string, readonly AutomationRun[]>
+  runsByRowKey: ReadonlyMap<string, readonly AutomationRunsDashboardRun[]>
 ): AutomationRunsDashboardEntry[] {
   return rows
     .flatMap((row) =>
       (runsByRowKey.get(row.key) ?? []).map((run) => ({
         key: `${row.key}:${run.id}`,
         hostKey: getAutomationRunsHostKey(row),
-        searchText: [row.automation.name, run.title, row.hostLabel].join('\n').toLocaleLowerCase(),
+        searchText: [row.automation.name, run.title, row.hostLabel].join('\n').toLowerCase(),
         row,
         run,
         scope: getAutomationRunsScope(row)
@@ -95,7 +110,7 @@ export function filterAutomationRunsDashboardEntries({
   query: string
   hostKeys: readonly string[]
 }): AutomationRunsDashboardEntry[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
   const selectedHosts = new Set(hostKeys)
   return entries.filter((entry) => {
     if (

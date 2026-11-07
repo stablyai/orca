@@ -1,3 +1,6 @@
+import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
 import type { AppState } from '../types'
 
 export type RecentlyClosedTabPosition = {
@@ -6,11 +9,9 @@ export type RecentlyClosedTabPosition = {
   groupIndex?: number
 }
 
-/** Reusable position lookup for one worktree. Bulk closes resolve a position per
- *  closed tab; without a shared index every lookup rescans tab order and group
- *  membership, which makes close-all cubic in the tab count. */
+/** Share worktree position index across bulk closes; per-tab order/group rescans make close-all cubic. */
 export type RecentlyClosedTabPositionIndex = {
-  positionFor: (entityId: string) => RecentlyClosedTabPosition | undefined
+  positionFor: (entityId: string, tabId?: string) => RecentlyClosedTabPosition | undefined
 }
 
 export function createRecentlyClosedTabPositionIndex(
@@ -75,9 +76,13 @@ export function createRecentlyClosedTabPositionIndex(
   }
 
   return {
-    positionFor: (entityId) => {
-      const tabBarIndex = tabBarOrder ? (tabBarIndexByEntityId.get(entityId) ?? -1) : -1
-      const unifiedTab = tabByEntityId.get(entityId)
+    positionFor: (entityId, tabId) => {
+      const tabBarIndex = tabBarOrder
+        ? (tabBarIndexByEntityId.get(tabId ?? entityId) ??
+          tabBarIndexByEntityId.get(entityId) ??
+          -1)
+        : -1
+      const unifiedTab = tabId ? tabById.get(tabId) : tabByEntityId.get(entityId)
       const group = unifiedTab ? groupById.get(unifiedTab.groupId) : undefined
       const groupIndex =
         group && unifiedTab ? (tabOrderIndexByGroupId.get(group.id)?.get(unifiedTab.id) ?? -1) : -1
@@ -116,15 +121,18 @@ export function insertTabAtRecentlyClosedPosition(
   return nextOrder
 }
 
+type RestoreState = Pick<
+  AppState,
+  | 'tabBarOrderByWorktree'
+  | 'groupsByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'setTabBarOrder'
+  | 'reorderUnifiedTabs'
+> &
+  Parameters<typeof recordLayoutApply>[0]
+
 export function restoreRecentlyClosedTabPosition(
-  getState: () => Pick<
-    AppState,
-    | 'tabBarOrderByWorktree'
-    | 'groupsByWorktree'
-    | 'unifiedTabsByWorktree'
-    | 'setTabBarOrder'
-    | 'reorderUnifiedTabs'
-  >,
+  getState: () => RestoreState,
   worktreeId: string,
   entityId: string,
   position?: RecentlyClosedTabPosition
@@ -132,6 +140,19 @@ export function restoreRecentlyClosedTabPosition(
   if (!position) {
     return
   }
+  restoreHere(getState, worktreeId, entityId, position)
+  // Switch point: main moves the reopened tab to where the window shows it, wherever that came from.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+    recordReopenedTabPosition(getState(), worktreeId, entityId, position.groupId)
+  }
+}
+
+function restoreHere(
+  getState: () => RestoreState,
+  worktreeId: string,
+  entityId: string,
+  position: RecentlyClosedTabPosition
+): void {
   const state = getState()
   const order = state.tabBarOrderByWorktree?.[worktreeId]
   if (order && typeof state.setTabBarOrder === 'function') {
@@ -161,7 +182,36 @@ export function restoreRecentlyClosedTabPosition(
       insertTabAtRecentlyClosedPosition(group.tabOrder, unifiedTab.id, {
         tabBarIndex: position.groupIndex
       }),
-      { recordInteraction: false }
+      {
+        recordInteraction: false,
+        // Why: restoreRecentlyClosedTabPosition records the reopened tab's place as one move.
+        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { layoutOwnerHandled: true } : {})
+      }
     )
+  }
+}
+
+function recordReopenedTabPosition(
+  state: RestoreState,
+  worktreeId: string,
+  entityId: string,
+  groupId: string | undefined
+): void {
+  const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+    (candidate) =>
+      candidate.entityId === entityId && (groupId === undefined || candidate.groupId === groupId)
+  )
+  const group = tab
+    ? (state.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tab.groupId)
+    : undefined
+  const index = tab && group ? group.tabOrder.indexOf(tab.id) : -1
+  if (tab && group && index !== -1) {
+    recordLayoutApply(state, worktreeId, {
+      type: 'moveTab',
+      tabId: tab.id,
+      toGroupId: group.id,
+      index,
+      afterTabId: tabOrderAnchor(group.tabOrder, index)
+    })
   }
 }

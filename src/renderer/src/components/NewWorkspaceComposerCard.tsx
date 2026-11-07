@@ -10,19 +10,19 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
-} from '@/components/sidebar/AddRemoteHostDialog'
+} from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   filterEnabledTuiAgents
-} from '../../../shared/tui-agent-selection'
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/NewWorkspaceComposerAdvancedSection'
 import { NewWorkspaceComposerAgentSection } from './new-workspace/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/NewWorkspaceComposerFooter'
@@ -36,11 +36,11 @@ import {
   type NewWorkspaceComposerCardProps
 } from './new-workspace/new-workspace-composer-card-props'
 import { getSshStatusLabel } from './new-workspace/new-workspace-composer-ssh-status'
+import { useNewWorkspaceComposerFileDrop } from './new-workspace/use-new-workspace-composer-file-drop'
 import { useComposerFileDragOver } from './new-workspace/use-composer-file-drag-over'
+import { buildDefaultAgentSettingsUpdate } from '../../../shared/agent-launch/choices/default-agent-settings'
 
-// Why lazy: this pulls the ~41 KB project-location browser onto the boot graph, and nothing
-// reaches it without an explicit "Set location" click. Shared with the warm below so both hit
-// the same module-map entry.
+// Lazy-load the project-location browser outside boot; warming shares this module entry with the click.
 const loadSetProjectLocationDialog = (): Promise<typeof SetProjectLocationDialogModule> =>
   import('@/components/new-workspace/SetProjectLocationDialog')
 
@@ -83,6 +83,12 @@ export default function NewWorkspaceComposerCard(
   const projectHostSetupOptions = props.projectHostSetupOptions ?? EMPTY_PROJECT_HOST_SETUP_OPTIONS
   const ephemeralVmRecipes = props.ephemeralVmRecipes ?? EMPTY_EPHEMERAL_VM_RECIPES
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
+  const attachDropOwner = useNewWorkspaceComposerFileDrop({
+    projectPath: props.selectedRepoPath,
+    hostId: selectedRepoExecutionHostId,
+    connectionId: props.selectedRepoConnectionId,
+    applyDrop: props.onNativeFileDrop
+  })
   const openModal = useAppStore((state) => state.openModal)
   const activeModal = useAppStore((state) => state.activeModal)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
@@ -100,8 +106,7 @@ export default function NewWorkspaceComposerCard(
   const [setLocationOption, setSetLocationOption] = React.useState<NeedsProjectHostOption | null>(
     null
   )
-  // Why sticky: the dialog animates itself closed off its own `option` prop, so unmounting it
-  // when the option clears would cut that animation short.
+  // Retain the dialog while its cleared option drives the close animation.
   const [setLocationDialogMounted, setSetLocationDialogMounted] = React.useState(false)
 
   const selectedRepo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -116,8 +121,7 @@ export default function NewWorkspaceComposerCard(
   const needsSetupProjectHostSetupOptions = projectHostSetupOptions.filter(
     (option) => option.kind === 'needs-setup'
   )
-  // Warm on the precursor: the "Set location" row only renders for a needs-setup host that can
-  // still take one, so the chunk resolves while the picker is being read rather than on the click.
+  // Warm when a usable Set location row appears so reading the picker overlaps the chunk load.
   const hasSetLocationOption = needsSetupProjectHostSetupOptions.some(
     (option) => option.canSetLocation
   )
@@ -135,28 +139,8 @@ export default function NewWorkspaceComposerCard(
     : translate('auto.components.NewWorkspaceComposerCard.notConnected', 'Not connected')
   const connectButtonLabel =
     selectedRepoSshStatus === 'disconnected' || selectedRepoSshStatus === null
-      ? 'Connect'
-      : 'Reconnect'
-  const setupConfigLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Setup and default tab commands'
-        : 'Setup script'
-  const setupRunLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands'
-        : 'Run setup command'
-  const setupAskLabel =
-    setupConfig?.kind === 'default-tabs'
-      ? 'Run default tab commands now?'
-      : setupConfig?.kind === 'setup-and-default-tabs'
-        ? 'Run setup and default tab commands now?'
-        : 'Run setup now?'
-  const setupRunButtonLabel = setupConfig?.kind === 'setup' ? 'Run setup now' : 'Run commands now'
-  const setupSkipButtonLabel = setupConfig?.kind === 'setup' ? 'Skip for now' : 'Skip commands'
+      ? translate('auto.components.NewWorkspaceComposerCard.connect', 'Connect')
+      : translate('auto.components.NewWorkspaceComposerCard.reconnect', 'Reconnect')
   const showSetupAgentStartupPolicy =
     setupControlsEnabled && setupConfig !== null && setupConfig.kind !== 'default-tabs'
   const agentCatalog = getAgentCatalog()
@@ -184,12 +168,13 @@ export default function NewWorkspaceComposerCard(
       if (!node) {
         cancelNameInputFocusFrame()
       }
+      attachDropOwner(node)
       if (composerRef) {
         composerRef.current = node
       }
       onComposerNodeChange?.(node)
     },
-    [cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
+    [attachDropOwner, cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
   const focusNameInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
@@ -264,13 +249,13 @@ export default function NewWorkspaceComposerCard(
   )
   const handleSetDefaultAgent = React.useCallback(
     (next: TuiAgent | 'blank' | null): void => {
-      void updateSettings({ defaultTuiAgent: next })
+      void updateSettings(buildDefaultAgentSettingsUpdate(next))
     },
     [updateSettings]
   )
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
-      '[data-agent-combobox-root="true"][role="combobox"]'
+      '[data-agent-launch-picker-trigger="true"]'
     )
     agentTrigger?.focus()
   }, [composerRef])
@@ -289,12 +274,15 @@ export default function NewWorkspaceComposerCard(
       ref={setComposerNode}
       data-workspace-composer-root="true"
       data-sparse-preset-editing={sparseEditing ? 'true' : undefined}
-      data-native-file-drop-target="composer"
       onDragEnter={dragHandlers.onDragEnter}
       onDragLeave={dragHandlers.onDragLeave}
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
-        isFileDragOver && 'ring-2 ring-ring/30',
+        isFileDragOver &&
+          props.selectedRepoPath &&
+          selectedRepoExecutionHostId &&
+          props.onNativeFileDrop &&
+          'ring-2 ring-ring/30',
         containerClassName
       )}
     >
@@ -332,11 +320,6 @@ export default function NewWorkspaceComposerCard(
           onSparseEditingChange={setSparseEditing}
           sparseEditing={sparseEditing}
           branchNameInputId={branchNameInputId}
-          setupConfigLabel={setupConfigLabel}
-          setupRunLabel={setupRunLabel}
-          setupAskLabel={setupAskLabel}
-          setupRunButtonLabel={setupRunButtonLabel}
-          setupSkipButtonLabel={setupSkipButtonLabel}
           showSetupAgentStartupPolicy={showSetupAgentStartupPolicy}
           parentWorktreeId={parentWorktreeId}
           onParentWorktreeIdChange={onParentWorktreeIdChange}

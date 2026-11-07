@@ -1,8 +1,11 @@
+import { isCommittedChatAttachmentCandidate } from '../../../src/shared/native-chat-text-attachment-references'
+import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import { useRouteHandoff } from '../navigation/route-handoff'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
+import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { triggerSelection } from '../platform/haptics'
 import { openMobileFileTap, type FileTapSessionTab } from './mobile-file-tap-open'
-import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { openMobileNativeChatFileTap } from './native-chat/visual/mobile-native-chat-open-file'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
 type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
@@ -10,6 +13,7 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   hostId: string
   worktreeId: string
   worktreeName?: string
+  structuredAttachments?: boolean
   nativeChatSessionId: string | null
   activeHandleRef: MutableRefObject<string | null>
   terminalCwdRef: MutableRefObject<Map<string, string>>
@@ -21,24 +25,14 @@ type MobileFileTapHandlerOptions<T extends FileTapSessionTab> = {
   switchSessionTab: (tab: T) => void
   scheduleDelayedAction: (callback: () => void, delayMs: number) => unknown
   reportChatTapFailure: (message: string) => void
+  getSendCompletionGeneration: () => number
 }
 
-/**
- * Tap-to-open handlers for file references, shared by the terminal (link taps
- * with the terminal's cwd) and native chat (worktree-root-relative paths, with
- * failure feedback). Handlers are identity-stable and read the latest options at
- * dispatch time; the shared activation seq lets a newer tap on either surface
- * supersede an in-flight one.
- */
+// Share stable dispatch-time handlers and activation sequence so newer terminal/chat file taps supersede in-flight opens.
 export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   options: MobileFileTapHandlerOptions<T>
 ): {
-  handleFileTap: (
-    handle: string,
-    pathText: string,
-    line: number | null,
-    column: number | null
-  ) => void
+  handleFileTap: (handle: string, candidates: readonly ParsedFileLinkLocation[]) => void
   handleNativeChatFileTap: (pathText: string) => void
 } {
   const {
@@ -48,8 +42,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
+    getSendCompletionGeneration,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     scheduleDelayedAction,
     reportChatTapFailure,
@@ -58,7 +54,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     worktreeId,
     worktreeName
   } = options
-  const router = useRouteHandoff()
+  const router = useWorkspaceRouteHandoff()
   const routerRef = useRef(router)
   const optionsRef = useRef(options)
   const activationSeqRef = useRef(0)
@@ -72,8 +68,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       getActiveSessionTabId,
       getActiveSessionTabType,
       getSessionTabs,
+      getSendCompletionGeneration,
       hostId,
       nativeChatSessionId,
+      structuredAttachments,
       openBrowser,
       scheduleDelayedAction,
       reportChatTapFailure,
@@ -89,8 +87,10 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
     getActiveSessionTabId,
     getActiveSessionTabType,
     getSessionTabs,
+    getSendCompletionGeneration,
     hostId,
     nativeChatSessionId,
+    structuredAttachments,
     openBrowser,
     router,
     scheduleDelayedAction,
@@ -102,22 +102,25 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
   ])
 
   const handleFileTap = useCallback(
-    (handle: string, pathText: string, line: number | null, column: number | null) => {
+    (handle: string, candidates: readonly ParsedFileLinkLocation[]) => {
       const current = optionsRef.current
-      if (handle !== current.activeHandleRef.current || !current.client) {
+      if (
+        handle !== current.activeHandleRef.current ||
+        !current.client ||
+        candidates.length === 0
+      ) {
         return
       }
       const activationSeq = ++activationSeqRef.current
+      const sourceNavigationGeneration = current.getSendCompletionGeneration()
       openMobileFileTap<T>({
         client: current.client,
         hostId: current.hostId,
         worktreeId: current.worktreeId,
         worktreeName: current.worktreeName,
         terminalHandle: handle,
-        pathText,
         cwd: current.terminalCwdRef.current.get(handle) ?? null,
-        line,
-        column,
+        candidates,
         pushPreviewRoute: (href) => routerRef.current.push(href),
         openBrowser: current.openBrowser,
         triggerOpenFeedback: triggerSelection,
@@ -128,12 +131,19 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
           activated,
           activationSeq,
           latestActivationSeq: activationSeqRef.current,
+          sourceNavigationGeneration,
+          activeNavigationGeneration: current.getSendCompletionGeneration(),
           sourceTerminalHandle: handle,
           activeTerminalHandle: current.activeHandleRef.current,
           activeTabType: current.getActiveSessionTabType()
         }),
         switchSessionTab: current.switchSessionTab,
-        scheduleDelayedAction: current.scheduleDelayedAction
+        scheduleDelayedAction: current.scheduleDelayedAction,
+        onOpenFailed: ({ kind, message, pathText }) => {
+          if (kind === 'failed') {
+            current.reportChatTapFailure(message?.trim() || `Couldn't open ${pathText}`)
+          }
+        }
       })
     },
     []
@@ -141,6 +151,18 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
+    if (current.structuredAttachments && isCommittedChatAttachmentCandidate(pathText)) {
+      ++activationSeqRef.current
+      routerRef.current.push(
+        createMobileFilePreviewHref({
+          hostId: current.hostId,
+          worktreeId: current.worktreeId,
+          source: 'chatAttachment',
+          absolutePath: pathText
+        })
+      )
+      return
+    }
     const sourceTerminalHandle = current.activeHandleRef.current
     const nativeChatSessionId = current.nativeChatSessionId
     const nativeChatTabId = current.getActiveSessionTabId()
@@ -148,6 +170,7 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       return
     }
     const activationSeq = ++activationSeqRef.current
+    const sourceNavigationGeneration = current.getSendCompletionGeneration()
     openMobileNativeChatFileTap<T>({
       client: current.client,
       hostId: current.hostId,
@@ -168,6 +191,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         activated,
         activationSeq,
         latestActivationSeq: activationSeqRef.current,
+        sourceNavigationGeneration,
+        activeNavigationGeneration: current.getSendCompletionGeneration(),
         sourceTerminalHandle,
         activeTerminalHandle: current.activeHandleRef.current,
         sourceSessionTabId: nativeChatTabId,
@@ -176,7 +201,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
       }),
       switchSessionTab: current.switchSessionTab,
       scheduleDelayedAction: current.scheduleDelayedAction,
-      onOpenFailed: () => current.reportChatTapFailure(`Couldn't open ${pathText}`)
+      onOpenFailed: ({ message }) =>
+        current.reportChatTapFailure(message?.trim() || `Couldn't open ${pathText}`)
     })
   }, [])
 

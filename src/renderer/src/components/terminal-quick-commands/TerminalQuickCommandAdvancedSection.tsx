@@ -1,14 +1,15 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import type { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { getTerminalQuickCommandScope } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
+  disabled: boolean
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
@@ -43,6 +44,7 @@ function getScopeSummaryLabel({
 }
 
 export function TerminalQuickCommandAdvancedSection({
+  disabled,
   repos,
   advancedOpen,
   selectedScope,
@@ -98,6 +100,7 @@ export function TerminalQuickCommandAdvancedSection({
             )}
           >
             <TerminalQuickCommandScopeField
+              disabled={disabled}
               repos={repos}
               selectedScope={selectedScope}
               selectedRepoId={selectedRepoId}

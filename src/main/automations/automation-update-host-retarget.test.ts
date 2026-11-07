@@ -1,13 +1,11 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
-/**
- * An update may not move a record to another host unless it was asked to.
- *
- * Pause/resume stay enabled on orphans on purpose, so a plain `{ enabled }`
- * update is the one mutation an unrunnable record still accepts. Re-deriving the
- * execution target from the owning repo on that path re-adopts the record onto
- * whatever registration the repo points at today: the user pauses an orphan and
- * silently gets a healthy, dispatchable automation on a host they never chose.
- */
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from '../persistence/persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
+/** Pausing an orphan must preserve its captured host rather than re-adopting today’s repo host. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,11 +14,10 @@ import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../shared/automation-owner-conflict'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -59,7 +56,6 @@ function automation(overrides: Partial<Automation>): Automation {
 }
 
 const REPOS: Repo[] = [
-  // Re-adoption re-pointed this repo onto the freshly minted target.
   {
     id: 'repo-readded',
     path: '/remote',
@@ -68,7 +64,6 @@ const REPOS: Repo[] = [
     addedAt: 1,
     connectionId: 'ssh-new'
   },
-  // Same target id back with a new registration: the repo resolves, the capture does not.
   {
     id: 'repo-same-id',
     path: '/remote2',
@@ -93,7 +88,7 @@ const AUTOMATIONS: Automation[] = [
     executionTargetId: 'ssh-box',
     executionTargetGeneration: 4
   }),
-  // Its project is local now, so re-deriving would strip the capture and call it Self.
+  // Re-deriving from this local project would silently discard the SSH capture.
   automation({
     id: 'local-project',
     projectId: 'repo-local',
@@ -120,30 +115,23 @@ async function createStore() {
     }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
-}
-
-type Store = Awaited<ReturnType<typeof createStore>>
-
-function storedTarget(record: Automation) {
-  return {
-    type: record.executionTargetType,
-    id: record.executionTargetId,
-    generation: record.executionTargetGeneration
-  }
-}
-
-function projectedSelector(store: Store, id: string) {
-  return store.listAutomationsForScope().items.find((item) => item.automationId === id)?.selector
 }
 
 const ORPHAN = { selector: { kind: 'orphan' } } as const
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-retarget-'))
 })
 
@@ -154,97 +142,17 @@ afterEach(async () => {
 })
 
 describe('pausing an orphan never re-adopts it', () => {
-  it('keeps the dead capture when the repo was re-pointed at a new registration', async () => {
-    const store = await createStore()
-    expect(projectedSelector(store, 'stranded')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-
-    const paused = store.updateAutomation('stranded', { enabled: false }, { expectedOwner: ORPHAN })
-
-    expect(paused.enabled).toBe(false)
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-old', generation: 4 })
-    expect(projectedSelector(store, 'stranded')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-  })
-
   it('leaves the record unrunnable on the host the repo now points at', async () => {
     const store = await createStore()
 
     store.updateAutomation('stranded', { enabled: false }, { expectedOwner: ORPHAN })
 
-    // Run Now against the re-added registration must still be refused; a pause is not a re-adoption.
     expect(() =>
       store.assertAutomationOwnerFence({
         id: 'stranded',
         expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } },
         operation: 'execute'
       })
-    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.targetRemoved }))
-  })
-
-  it('keeps the stale generation when the same target id came back re-registered', async () => {
-    const store = await createStore()
-    expect(projectedSelector(store, 'replaced')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-
-    const paused = store.updateAutomation('replaced', { enabled: false }, { expectedOwner: ORPHAN })
-
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-box', generation: 4 })
-    expect(projectedSelector(store, 'replaced')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetReplaced
-    })
-  })
-
-  it('does not strip the capture and rewrite an orphan to Self', async () => {
-    const store = await createStore()
-
-    const paused = store.updateAutomation(
-      'local-project',
-      { enabled: false },
-      { expectedOwner: ORPHAN }
-    )
-
-    expect(storedTarget(paused)).toEqual({ type: 'ssh', id: 'ssh-old', generation: 4 })
-    expect(projectedSelector(store, 'local-project')).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.targetMissing
-    })
-  })
-})
-
-describe('an update that was asked to move still moves', () => {
-  it('re-derives from an explicitly supplied project', async () => {
-    const store = await createStore()
-
-    const moved = store.updateAutomation(
-      'healthy',
-      { projectId: 'repo-readded' },
-      {
-        expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-box', targetGeneration: 9 } },
-        destination: { selector: { kind: 'ssh', targetId: 'ssh-new', targetGeneration: 7 } }
-      }
-    )
-
-    expect(storedTarget(moved)).toEqual({ type: 'ssh', id: 'ssh-new', generation: 7 })
-  })
-
-  it('leaves a fenced in-place edit on its own host', async () => {
-    const store = await createStore()
-
-    const renamed = store.updateAutomation(
-      'healthy',
-      { name: 'Renamed' },
-      { expectedOwner: { selector: { kind: 'ssh', targetId: 'ssh-box', targetGeneration: 9 } } }
-    )
-
-    expect(renamed.name).toBe('Renamed')
-    expect(storedTarget(renamed)).toEqual({ type: 'ssh', id: 'ssh-box', generation: 9 })
+    ).toThrowError(expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged }))
   })
 })

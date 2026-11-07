@@ -101,12 +101,7 @@ describe('PendingTerminalHandleRecoveryBudget', () => {
   })
 })
 
-/**
- * STA-4256: the phone rendered its spinner forever because a `live` tabs stream
- * parks `poll()`, so a host that mints the handle without republishing was never
- * asked again. These drive the real controller to prove the predicate is what
- * keeps `session.tabs.list` flowing, and that it stops once the handle lands.
- */
+// Keep polling a live tabs stream while a selected tab lacks its handle; hosts can mint the PTY without republishing.
 describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => {
   function makeHarness() {
     const pending: Array<(response: RpcResponse) => void> = []
@@ -151,7 +146,6 @@ describe('pending-handle recovery through MobileSessionTabsStreamHealth', () => 
     await Promise.resolve()
   }
 
-  /** Subscribe, snapshot, updated — the sequence that certifies the stream `live`. */
   async function driveToLiveStream(
     harness: ReturnType<typeof makeHarness>,
     terminal: string | null

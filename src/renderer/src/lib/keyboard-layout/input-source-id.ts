@@ -1,17 +1,15 @@
-// The base-layer probe cannot distinguish US from layouts whose Option layer composes text.
-const META_INPUT_SOURCE_IDS: readonly string[] = ['com.apple.keylayout.us']
+// ABC and US share the standard layout; international variants retain Option composition.
+const META_INPUT_SOURCE_IDS: readonly string[] = [
+  'com.apple.keylayout.us',
+  'com.apple.keylayout.abc'
+]
 
 export type InputSourceOverride =
-  /** Option-as-Meta is safe on this input source. Resolves to `'us'`
-   *  for `effectiveMacOptionAsAlt`. */
+  /** Standard source permits Option-as-Meta (us). */
   | 'meta'
-  /** Option composes layout characters on this input source. Resolves
-   *  to `'non-us'` so `macOptionIsMeta` stays off and compositions like
-   *  Option+A → å / ą reach the shell. */
+  /** Composition source keeps Option text and maps to non-us. */
   | 'compose'
-  /** No macOS input source ID available (non-Darwin, IPC failure,
-   *  sandboxed defaults). The caller should fall back to the layout
-   *  fingerprint. */
+  /** Missing native identity stays conservative on macOS; other platforms may use browser fingerprints. */
   | 'unknown'
 
 export function classifyInputSourceId(id: string | null | undefined): InputSourceOverride {

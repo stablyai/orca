@@ -1,3 +1,4 @@
+
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PushNotification } from '@orca-cloud/push-contract'
 import { DurablePushStore } from './durable-push-store.js'
@@ -7,6 +8,8 @@ import { PushDeviceRegistryStore } from './device-registry-store.js'
 import { openInMemoryPushDatabase } from './push-database.js'
 import type { PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
+import { WORKER_DRAINS } from './push-worker-concurrency.js'
+import { pauseAfter, within } from './durable-push-store.test-fixture.js'
 
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
@@ -119,8 +122,9 @@ it('keeps untrackable bells and per-phone deliveries individually replaceable', 
   ).toMatchObject({ orca: { notificationId: 'note-2', notificationSeq: 2 } })
 })
 
-it('persists provider retry delay and resumes it through a new worker', async () => {
+it('preserves provider retry delay when waking a restarted worker', async () => {
   const h = await fixture()
+  vi.useFakeTimers()
   h.send.mockResolvedValueOnce({
     status: 'error',
     reason: 'busy',
@@ -132,10 +136,13 @@ it('persists provider retry delay and resumes it through a new worker', async ()
   expect(h.send).toHaveBeenCalledOnce()
   await h.worker.stop()
   const restarted = new DurablePushWorker(h.store, h.dispatcher, { now: h.now, onRetry: h.onRetry })
+  restarted.start()
   h.advance(9999)
+  restarted.wake()
   await restarted.runDue()
   expect(h.send).toHaveBeenCalledOnce()
   h.advance(1)
+  restarted.wake()
   await restarted.runDue()
   expect(h.send).toHaveBeenCalledTimes(2)
   expect(h.send.mock.calls.map(([delivery]) => delivery.expiresAt)).toEqual([1_300_000, 1_300_000])
@@ -175,6 +182,7 @@ it('rechecks the device before a persisted retry and does not send after unregis
 
 it('joins active work on shutdown and leaves unclaimed work for the next instance', async () => {
   const h = await fixture()
+  vi.useFakeTimers()
   let finish!: (outcome: PushProviderOutcome) => void
   let started!: () => void
   const entered = new Promise<void>((resolve) => {
@@ -187,9 +195,12 @@ it('joins active work on shutdown and leaves unclaimed work for the next instanc
     })
   })
   await h.accept(note(1))
+  h.worker.start()
+  h.worker.wake()
   const pending = h.worker.runDue()
   await entered
   await h.accept(note(2))
+  h.worker.wake()
   let stopped = false
   const stopping = h.worker.stop().then(() => {
     stopped = true
@@ -200,22 +211,153 @@ it('joins active work on shutdown and leaves unclaimed work for the next instanc
   await Promise.all([pending, stopping])
   expect(stopped).toBe(true)
   expect(h.send).toHaveBeenCalledOnce()
+  expect(vi.getTimerCount()).toBe(0)
   const resumed = new DurablePushWorker(h.store, h.dispatcher, { now: h.now })
+  resumed.start()
+  await vi.advanceTimersByTimeAsync(1000)
   await resumed.runDue()
   expect(h.send).toHaveBeenCalledTimes(2)
   await resumed.stop()
 })
 
-it('runs due work on its timer and releases the timer on stop', async () => {
+it('stops queued claim admissions without leasing the remaining device', async () => {
   const h = await fixture()
-  vi.useFakeTimers()
+  const other = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-queued',
+    platform: 'android',
+    token: 'queued-token'
+  })
+  if (!other.ok) throw new Error('registration failed')
+  await h.accept(note(1))
+  h.advance(1)
+  await h.store.accept('host', other.registrationId, note(2))
+  const paused = pauseAfter(h.db)
+  const store = new DurablePushStore(h.db, h.now, paused.wrapped)
+  const worker = new DurablePushWorker(store, h.dispatcher, { now: h.now })
+  const pending = worker.runDue()
+  try {
+    await paused.atCandidate
+    const stopping = worker.stop()
+    paused.release()
+    await within(Promise.all([pending, stopping]), 2_000)
+    expect(h.send).toHaveBeenCalledOnce()
+    expect(h.send.mock.calls[0]?.[0].orca.notificationSeq).toBe(1)
+    const [remaining] = await h.db.query(
+      'SELECT attempts, lease_until FROM push_delivery_batches WHERE registration_id = ?',
+      [other.registrationId]
+    )
+    expect(Number(remaining?.attempts)).toBe(0)
+    expect(Number(remaining?.lease_until)).toBe(0)
+  } finally {
+    paused.release()
+    await worker.stop()
+    await pending
+  }
+})
+
+it('claims new devices while an earlier provider response is still pending', async () => {
+  const h = await fixture()
+  const second = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-second',
+    platform: 'android',
+    token: 'second-token'
+  })
+  const third = await h.devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone-third',
+    platform: 'android',
+    token: 'third-token'
+  })
+  if (!second.ok || !third.ok) throw new Error('registration failed')
+  const held = Promise.withResolvers<PushProviderOutcome>()
+  const entered = Promise.withResolvers<void>()
+  const secondSent = Promise.withResolvers<void>()
+  const thirdSent = Promise.withResolvers<void>()
+  h.send.mockImplementation(async (delivery) => {
+    if (delivery.orca.notificationSeq === 1) {
+      entered.resolve()
+      return await held.promise
+    }
+    if (delivery.orca.notificationSeq === 2) secondSent.resolve()
+    if (delivery.orca.notificationSeq === 3) thirdSent.resolve()
+    return { status: 'sent' }
+  })
   await h.accept(note(1))
   h.worker.start()
+  h.worker.wake()
+  try {
+    await within(entered.promise, 2_000)
+    await h.store.accept('host', second.registrationId, note(2))
+    h.worker.wake()
+    await within(secondSent.promise, 2_000)
+    await h.store.accept('host', third.registrationId, note(3))
+    h.worker.wake()
+    await within(thirdSent.promise, 2_000)
+    expect(await h.store.pendingCount(h.registrationId)).toBe(1)
+    expect(h.send).toHaveBeenCalledTimes(3)
+  } finally {
+    held.resolve({ status: 'sent' })
+    await h.worker.stop()
+  }
+})
+
+
+
+
+
+it('coalesces wakes arriving after every active drain found an empty queue', async () => {
+  const h = await fixture()
+  vi.useFakeTimers()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const claim = h.store.claim.bind(h.store)
+  let empty = 0
+  let holding = true
+  vi.spyOn(h.store, 'claim').mockImplementation(async () => {
+    const delivery = await claim()
+    if (!delivery && holding) {
+      if (++empty === WORKER_DRAINS) entered.resolve()
+      await release.promise
+    }
+    return delivery
+  })
   h.worker.start()
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersByTimeAsync(1000)
-  await h.worker.runDue()
-  expect(h.send).toHaveBeenCalledOnce()
+  const startedAt = Date.now()
+  const pending = h.worker.runDue()
+  try {
+    await entered.promise
+    await h.accept(note(1))
+    for (let count = 0; count < 10; count++) h.worker.wake()
+    expect(h.store.claim).toHaveBeenCalledTimes(WORKER_DRAINS)
+    holding = false
+    release.resolve()
+    await pending
+    await vi.waitFor(() => expect(h.send).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(h.store.claim).toHaveBeenCalledTimes(WORKER_DRAINS + 2))
+    expect(Date.now() - startedAt).toBeLessThan(1000)
+    expect(h.send.mock.calls[0]?.[0].orca.notificationSeq).toBe(1)
+  } finally {
+    holding = false
+    release.resolve()
+  }
+})
+
+
+
+it('recovers from a failed automatic wake without leaving another timer', async () => {
+  const h = await fixture()
+  vi.useFakeTimers()
+  vi.spyOn(h.store, 'claim').mockRejectedValueOnce(new Error('database unavailable'))
+  h.worker.start()
+  h.worker.wake()
+  await vi.waitFor(() =>
+    expect(console.warn).toHaveBeenCalledWith(JSON.stringify({ event: 'orca_push_worker_failed' }))
+  )
+  await h.accept(note(1))
+  h.worker.wake()
+  await vi.waitFor(() => expect(h.send).toHaveBeenCalledOnce())
   await h.worker.stop()
   expect(vi.getTimerCount()).toBe(0)
 })

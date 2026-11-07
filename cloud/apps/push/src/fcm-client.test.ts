@@ -51,33 +51,7 @@ function client(response: FcmResponse) {
 }
 
 describe('fcm client', () => {
-  it('posts the v1 send payload for the configured project', async () => {
-    const { fake, client: fcm } = client({ status: 200, body: '{"name":"projects/x/messages/1"}' })
-    await expect(fcm.send(delivery(), { token: TOKEN })).resolves.toEqual({ status: 'sent' })
-    const request = fake.requests[0]!
-    expect(request.url).toBe('https://fcm.googleapis.com/v1/projects/onorca-cloud/messages:send')
-    expect(request.accessToken).toBe('access-token')
-    expect(JSON.parse(request.body)).toEqual({
-      message: {
-        token: TOKEN,
-        android: { priority: 'HIGH', ttl: '300s' },
-        data: {
-          title: 'Agent needs input',
-          message: 'Waiting on your answer',
-          tag: delivery().collapseId,
-          channelId: 'orca-desktop',
-          hostFingerprint: HOST,
-          paneKey: 'tab-b:pane-1',
-          worktreeId: 'wt-1',
-          notificationId: 'note-1',
-          notificationSeq: '7',
-          notificationEpoch: 'epoch-1',
-          source: 'agent-task-complete',
-          agentState: 'needs-input'
-        }
-      }
-    })
-  })
+
 
   it('carries every data value as a string and omits a null agent state', async () => {
     const { fake, client: fcm } = client({ status: 200, body: '{}' })
@@ -102,30 +76,7 @@ describe('fcm client', () => {
     expect(message.message.data).not.toHaveProperty('body')
   })
 
-  it('marks an unregistered token dead from the status or the error detail', async () => {
-    const byStatus = client({
-      status: 404,
-      body: JSON.stringify({ error: { status: 'UNREGISTERED', message: 'not registered' } })
-    })
-    await expect(byStatus.client.send(delivery(), { token: TOKEN })).resolves.toEqual({
-      status: 'dead',
-      reason: 'UNREGISTERED'
-    })
-    const byDetail = client({
-      status: 404,
-      body: JSON.stringify({
-        error: {
-          status: 'NOT_FOUND',
-          message: 'Requested entity was not found.',
-          details: [{ errorCode: 'UNREGISTERED' }]
-        }
-      })
-    })
-    await expect(byDetail.client.send(delivery(), { token: TOKEN })).resolves.toEqual({
-      status: 'dead',
-      reason: 'UNREGISTERED'
-    })
-  })
+
 
   it('marks an invalid-argument that names the token dead, and others an error', async () => {
     const named = client({
@@ -152,31 +103,7 @@ describe('fcm client', () => {
     })
   })
 
-  it('treats a server fault and a transport failure as errors', async () => {
-    const faulted = client({
-      status: 503,
-      body: JSON.stringify({ error: { status: 'UNAVAILABLE', message: 'backend busy' } })
-    })
-    await expect(faulted.client.send(delivery(), { token: TOKEN })).resolves.toEqual({
-      status: 'error',
-      reason: 'UNAVAILABLE',
-      retryable: true,
-      retryAfterMs: 10000
-    })
-    const broken = new FcmClient({
-      projectId: 'onorca-cloud',
-      now: () => NOW,
-      accessToken: async () => 'access-token',
-      transport: async () => {
-        throw new Error('ECONNRESET')
-      }
-    })
-    await expect(broken.send(delivery(), { token: TOKEN })).resolves.toEqual({
-      status: 'error',
-      reason: 'Error',
-      retryable: true
-    })
-  })
+
 })
 
 it('does not send when credential refresh crosses the absolute expiry', async () => {

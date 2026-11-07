@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { translate } from '@/i18n/i18n'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
 import { getAutomationAuthorityTarget } from './automation-host-client'
-import type { AutomationListRow } from './automation-list-row-identity'
+import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
@@ -31,26 +32,17 @@ export function AutomationsPageSurface({
     draftEffects,
     editorActions,
     saveAutomation,
+    migrateAction,
     managementActions,
     runActions,
     externalActions,
     openRunWorkspace
   } = controller
-  const {
-    projectHostSetups,
-    repoMap,
-    worktreeMap,
-    settings,
-    repoForRow,
-    worktreeForRow,
-    setPendingAutomationRunNavigation
-  } = store
+  const { projectHostSetups, repoMap, settings, setPendingAutomationRunNavigation } = store
   const {
     createOpen,
     editingAutomationId,
     isSaving,
-    editingExternalTarget,
-    createTarget,
     automationYamlHooksByRepoKey,
     draft,
     setCreateOpen,
@@ -66,8 +58,6 @@ export function AutomationsPageSurface({
     externalActionKey,
     activePaneTab,
     setActivePaneTab,
-    selectedExternalRunPage,
-    setSelectedExternalRunPage,
     setSelectedAutomationRunPageId,
     setSelectedAutomationRuns,
     setRunHistoryReloadToken,
@@ -87,18 +77,12 @@ export function AutomationsPageSurface({
   } = local
   const { hostCatalog, hasListItems, selected, selectedRow, selectedExternal } = list
   const selectedAutomationRunPage = setup.selectedAutomationRunPage
-  const selectedRunWorktreeMap = useMemo(() => {
-    if (!selectedRow) {
-      return worktreeMap
-    }
-    const repo = repoForRow(selectedRow)
-    return new Map(
-      setup.selectedRuns.flatMap((run) => {
-        const worktree = worktreeForRow(selectedRow, repo, run.workspaceId)
-        return worktree ? [[worktree.id, worktree] as const] : []
-      })
-    )
-  }, [repoForRow, selectedRow, setup.selectedRuns, worktreeForRow, worktreeMap])
+  const selectedRunWorktreeMap = new Map(
+    setup.selectedRuns.flatMap((run) => {
+      const worktree = list.runTargetFor(run).worktree
+      return worktree ? [[run.id, worktree] as const] : []
+    })
+  )
   const runSelectedRowAction = (action: (row: AutomationListRow) => void): void => {
     if (selectedRow) {
       action(selectedRow)
@@ -120,18 +104,21 @@ export function AutomationsPageSurface({
     setPageView('run')
   }
   const showAutomationsList = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showRunsDashboard = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('runs')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(false)
     setActivePaneTab('overview')
   }
   const showAutomationDetails = (): void => {
+    setPendingAutomationRunNavigation(null)
     setPageView('automations')
     setSelectedAutomationRunPageId(null)
     setIsDetailOpen(true)
@@ -156,12 +143,9 @@ export function AutomationsPageSurface({
         isEditing={editingAutomationId !== null}
         isSaving={isSaving}
         canSave={presentation.canSaveDraft}
-        isEditingExternal={editingExternalTarget !== null}
-        createTarget={createTarget}
         createDestination={destination.createDestination.control}
-        editDestination={
-          destinationForm.isOrcaForm ? destinationForm.editDestinationControl : undefined
-        }
+        editDestination={destinationForm.editDestinationControl}
+        launchAuthority={destinationForm.editorSaveAuthority}
         notice={editorNotice}
         onNoticeRecover={(action) => {
           const host = editorNoticeHost ?? destination.editorRecoveryHost
@@ -187,15 +171,13 @@ export function AutomationsPageSurface({
         onProjectChange={editorActions.handleProjectChange}
         getRepoHostLabel={presentation.getAutomationRepoHostLabel}
         allowAddProject={
-          !destinationForm.isOrcaForm ||
-          (editingAutomationId !== null
+          editingAutomationId !== null
             ? destinationForm.editHostResolution.status === 'ready'
               ? getAutomationAuthorityTarget(destinationForm.editHostResolution.authority).kind ===
                 'local'
               : destinationForm.automationDialogTarget.kind === 'local'
-            : destinationForm.automationDialogTarget.kind === 'local')
+            : destinationForm.automationDialogTarget.kind === 'local'
         }
-        onCreateTargetChange={draftEffects.handleCreateTargetChange}
         onOpenChange={(open) => {
           setCreateOpen(open)
           if (!open) {
@@ -238,10 +220,22 @@ export function AutomationsPageSurface({
           setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
           setIsDetailOpen={setIsDetailOpen}
         />
+      ) : pageView === 'run' && store.pendingAutomationRunNavigation?.runId ? (
+        <div
+          role="status"
+          className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+        >
+          <LoadingSpinner className="size-4" />
+          {translate(
+            'auto.components.automations.AutomationRunsDashboard.loading',
+            'Loading runs…'
+          )}
+        </div>
       ) : pageView === 'run' && selectedAutomationRunPage ? (
         <AutomationRunDetailsPage
           automation={selected}
           run={selectedAutomationRunPage}
+          history={local.selectedAutomationRuns}
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
           viewState={runPage.selectedAutomationRunPageViewState}
@@ -253,6 +247,9 @@ export function AutomationsPageSurface({
             )
           }
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+          onReviewSetup={(content) =>
+            runSelectedRowAction((row) => managementActions.reviewSkippedSetup(row, content))
+          }
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
       ) : pageView === 'run' ? (
@@ -263,7 +260,6 @@ export function AutomationsPageSurface({
         <AutomationsDetailPane
           selected={selected}
           selectedExternal={selectedExternal}
-          selectedExternalRunPage={selectedExternalRunPage}
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
@@ -276,7 +272,13 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            presentation.selectedRepo?.displayName ??
+            (selected &&
+              automationProjectName(
+                selected,
+                presentation.selectedRepo,
+                repoMap,
+                !!destination.rowRecoveryHost(selectedRow?.key ?? null)?.servedBy
+              )) ??
             translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
@@ -295,14 +297,12 @@ export function AutomationsPageSurface({
           hostLabelById={presentation.hostLabelById}
           selectedRunNowAvailability={presentation.selectedRunNowAvailability}
           worktreeMap={selectedRunWorktreeMap}
-          fetchExternalAutomationRuns={externalActions.fetchExternalAutomationRuns}
           onActivePaneTabChange={setActivePaneTab}
-          onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
           requestExternalAction={externalActions.requestExternalAction}
-          openExternalRunPage={externalActions.openExternalRunPage}
-          openEditExternalDialog={editorActions.openEditExternalDialog}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
+          migrateAutomation={() => runSelectedRowAction(migrateAction.migrateAutomation)}
+          isMigrating={!!selectedRow && migrateAction.migratingRowKey === selectedRow.key}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
           requestDeleteAutomation={() =>
             runSelectedRowAction(managementActions.requestDeleteAutomation)
@@ -311,7 +311,6 @@ export function AutomationsPageSurface({
           onBackToList={() => {
             setIsDetailOpen(false)
             setSelectedAutomationRunPageId(null)
-            setSelectedExternalRunPage(null)
             setActivePaneTab('overview')
           }}
         />

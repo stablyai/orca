@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -195,7 +196,9 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
       }
     }
 
-    const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+    const xterm = pane.terminal as XtermWithRenderDimensions
+    const cellWidth = xterm._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
       .map((span) => {

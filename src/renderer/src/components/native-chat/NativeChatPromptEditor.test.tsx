@@ -1,11 +1,12 @@
 import { readNativeChatDraftDocument } from './native-chat-draft-cache'
 // @vitest-environment happy-dom
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
+import { updateNativeChatComposerDraft } from './native-chat-composer-draft-store'
 
 afterEach(cleanup)
 
@@ -25,35 +26,60 @@ function setup(value = '') {
   return {
     ...view,
     input: inputRef.current!,
-    editor: promptEditor(screen.getByRole('textbox')),
+    editor: promptEditor(within(view.container).getByRole('textbox')),
     onChange
   }
 }
 
 describe('native chat skill editor', () => {
-  it('renders only picker insertions as pills and serializes the exact invocation', async () => {
-    const { input, container } = setup('Please $rev')
-    await act(async () => input.insertSkill!(7, 11, '$review'))
-    const pill = container.querySelector('[data-native-chat-skill]')
-    expect(pill?.textContent).toBe('Review')
-    expect(pill?.classList.contains('text-xs')).toBe(true)
-    expect(pill?.classList.contains('text-sm')).toBe(false)
-    expect(input.value).toBe('Please $review ')
-    expect(input.selectionStart).toBe(15)
-    act(() => {
-      input.value += '$review typed manually'
+  it('continues replacing the selected text after a composer handoff', () => {
+    const inputRef = createRef<NativeChatComposerInput>()
+    const text = 'Hello\nworld'
+    updateNativeChatComposerDraft('handoff-selection', { text }, 'immediate', undefined, {
+      at: 'selection',
+      from: 6,
+      to: 11,
+      target: 'chat-tab',
+      pending: true
     })
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(1)
-    expect(input.value).toBe('Please $review $review typed manually')
+    render(
+      <NativeChatPromptEditor
+        scopeKey="handoff-selection"
+        positionTarget="chat-tab"
+        inputRef={inputRef}
+        initialValue={text}
+        disabled={false}
+        placeholder="Message"
+        onChange={vi.fn()}
+        onSelect={vi.fn()}
+      />
+    )
+
+    expect(inputRef.current?.selectionStart).toBe(6)
+    expect(inputRef.current?.selectionEnd).toBe(11)
+    act(() => inputRef.current?.insertText?.('there'))
+    expect(inputRef.current?.value).toBe('Hello\nthere')
   })
 
-  it('keeps typed and restored invocations plain', () => {
-    const { container, input } = setup('$review /review')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
+  it('shows attached files as filename pills that serialize to the reference the agent reads', async () => {
+    const { input, container, onChange } = setup('See  please')
+    act(() => input.setSelectionRange(4, 4))
+    await act(async () =>
+      input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
+    )
+    const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
+    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
+    const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
+    expect(input.value).toBe(`See ${references} please`)
+    expect(input.selectionStart).toBe(4 + references.length)
+    expect(onChange).toHaveBeenCalled()
+    const edited = input.value.replace('letter.pdf', 'letter.pd')
     act(() => {
-      input.value = '$review restored'
+      input.value = edited
     })
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
+    expect(container.querySelectorAll('[data-native-chat-file-reference]')).toHaveLength(1)
+    expect(input.value).toBe(edited)
   })
 
   it('deletes a skill atomically and restores it with undo', async () => {
@@ -72,20 +98,20 @@ describe('native chat skill editor', () => {
     expect(container.querySelector('[data-native-chat-skill]')).not.toBeNull()
   })
 
-  it('preserves multiple selected skills through multiline edits and clears them on send', async () => {
-    const { input, container } = setup('$one')
-    act(() => input.insertSkill!(0, 4, '$one'))
-    act(() => {
-      input.value += '\nthen $two'
+  it('reads the current text and caret after edits and undo, separately per editor', async () => {
+    const first = setup('one')
+    const second = setup('second')
+    act(() => first.input.setSelectionRange(3, 3))
+    act(() => first.input.insertText!('!'))
+    expect(first.input.value).toBe('one!')
+    expect(first.input.selectionStart).toBe(4)
+    expect(second.input.value).toBe('second')
+    await act(async () => {
+      first.editor.commands.undo()
     })
-    await act(async () => input.insertSkill!(11, 15, '$two'))
-    expect(input.value).toBe('$one \nthen $two ')
-    expect(container.querySelectorAll('[data-native-chat-skill]')).toHaveLength(2)
-    act(() => {
-      input.value = ''
-    })
-    expect(input.value).toBe('')
-    expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
+    expect(first.input.value).toBe('one')
+    expect(first.input.selectionStart).toBe(3)
+    expect(second.input.value).toBe('second')
   })
 
   it('restores selected nodes only in their owning pane draft', async () => {
@@ -142,4 +168,15 @@ describe('native chat skill editor', () => {
     expect(input.value).toBe('$review\nhello')
     expect(container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
+})
+
+it('replaces the selection with literal pasted text as one undoable edit', async () => {
+  const { input, editor } = setup('hello world')
+  act(() => input.setSelectionRange(6, 11))
+  await act(async () => input.insertText?.('안녕\n$literal'))
+  expect(input.value).toBe('hello 안녕\n$literal')
+  await act(async () => {
+    editor.commands.undo()
+  })
+  expect(input.value).toBe('hello world')
 })

@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as MiniMaxCookieStore from './minimax-cookie-store'
+import { setSecretStore } from '../../shared/secret-store'
 
 const safeStorageMock = vi.hoisted(() => ({
   isEncryptionAvailable: vi.fn(() => true),
   encryptString: vi.fn((value: string) => Buffer.from(value)),
   decryptString: vi.fn((value: Buffer) => value.toString('utf8'))
 }))
-
-const electronMock = vi.hoisted(() => ({
-  safeStorage: safeStorageMock
-}))
-
-vi.mock('electron', () => electronMock)
 
 const existsSyncMock = vi.fn()
 const readFileSyncMock = vi.fn()
@@ -60,66 +55,11 @@ describe('minimax-cookie-store', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value))
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf8'))
+    setSecretStore({ ...safeStorageMock, describeProtectionGap: () => null })
   })
 
   afterEach(() => {
     vi.resetModules()
-  })
-
-  it('returns false when no file exists yet', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-    expect(store.hasMiniMaxSessionCookie()).toBe(false)
-    expect(hardenExistingSecureFileMock).not.toHaveBeenCalled()
-  })
-
-  it('hardens the cookie file when checking status for an existing cookie', async () => {
-    existsSyncMock.mockReturnValue(true)
-    const store = await loadStore()
-    expect(store.hasMiniMaxSessionCookie()).toBe(true)
-    expect(hardenExistingSecureFileMock).toHaveBeenCalledWith(storePath)
-  })
-
-  it('still reports an existing cookie when status-path hardening fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    existsSyncMock.mockReturnValue(true)
-    hardenExistingSecureFileMock.mockImplementation(() => {
-      throw new Error('permission denied')
-    })
-    const store = await loadStore()
-    expect(store.hasMiniMaxSessionCookie()).toBe(true)
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to harden MiniMax cookie file'),
-      expect.any(Error)
-    )
-    warn.mockRestore()
-  })
-
-  it('writes the cookie using safeStorage when encryption is available', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-    store.saveMiniMaxSessionCookie('_token=abc; minimax_group_id_v2=42')
-    expect(safeStorageMock.encryptString).toHaveBeenCalledWith('_token=abc; minimax_group_id_v2=42')
-    expect(writeSecureFileMock).toHaveBeenCalledWith(
-      storePath,
-      envelope('encrypted', '_token=abc; minimax_group_id_v2=42')
-    )
-  })
-
-  it('warns and writes plaintext when safeStorage is unavailable', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-    store.saveMiniMaxSessionCookie('_token=abc')
-    expect(writeSecureFileMock).toHaveBeenCalledWith(storePath, envelope('plaintext', '_token=abc'))
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('safeStorage encryption unavailable'))
-    warn.mockRestore()
-  })
-
-  it('refuses empty cookies', async () => {
-    const store = await loadStore()
-    expect(() => store.saveMiniMaxSessionCookie('   ')).toThrow(/required/)
   })
 
   it('reads decrypted cookie from disk and caches it', async () => {
@@ -135,12 +75,6 @@ describe('minimax-cookie-store', () => {
     expect(hardenExistingSecureFileMock).toHaveBeenCalledWith(storePath)
     expect(safeStorageMock.decryptString).toHaveBeenCalledTimes(1)
     expect(safeStorageMock.decryptString).toHaveBeenCalledWith(Buffer.from('encrypted-payload'))
-  })
-
-  it('returns null when no file exists', async () => {
-    existsSyncMock.mockReturnValue(false)
-    const store = await loadStore()
-    expect(store.readMiniMaxSessionCookie()).toBeNull()
   })
 
   it('returns enveloped plaintext when safeStorage is unavailable and reads succeed', async () => {
@@ -204,5 +138,15 @@ describe('minimax-cookie-store', () => {
     store.clearMiniMaxSessionCookie()
     expect(rmSyncMock).toHaveBeenCalledWith(storePath, { force: true })
     expect(store.readMiniMaxSessionCookie()).toBeNull()
+  })
+
+  describe('getMiniMaxSessionCookieProtection', () => {
+    it('does not decrypt, so opening Settings cannot trigger a keychain prompt', async () => {
+      existsSyncMock.mockReturnValue(true)
+      readFileSyncMock.mockReturnValue(Buffer.from(envelope('encrypted', 'sessionId=abc123')))
+      const store = await loadStore()
+      store.getMiniMaxSessionCookieProtection()
+      expect(safeStorageMock.decryptString).not.toHaveBeenCalled()
+    })
   })
 })

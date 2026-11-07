@@ -6,8 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
-import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+import {
+  AutomationRunErrorNotice,
+  formatAutomationDateTimeWithRelative
+} from './automation-page-parts'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 import {
   formatAutomationCost,
   formatAutomationTokens,
@@ -19,6 +23,7 @@ import { getAutomationHostDetailDisplay } from './automation-host-detail-display
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
+import { automationRunErrorText } from './automation-run-error-copy'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -33,6 +38,9 @@ type AutomationDetailProps = {
   now: number
   onRunNow: (automation: Automation) => void
   onEdit: (automation: Automation) => void
+  /** Moves a row its host's Orca server now serves onto that server. */
+  onMigrate?: (automation: Automation) => void
+  isMigrating?: boolean
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
 }
@@ -58,13 +66,20 @@ function DetailMetric({
 
 function formatGrace(minutes: number): string {
   if (minutes <= 0) {
-    return 'No grace'
+    return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
   }
   if (minutes < 60) {
-    return `${minutes} minutes`
+    return translate(
+      'auto.components.automations.AutomationDetail.graceMinutes',
+      '{{count}} minutes',
+      { count: minutes, defaultValue_one: '{{count}} minute' }
+    )
   }
   const hours = minutes / 60
-  return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  return translate('auto.components.automations.AutomationDetail.graceHours', '{{count}} hours', {
+    count: hours,
+    defaultValue_one: '{{count}} hour'
+  })
 }
 
 function ToolbarIconButton({
@@ -111,6 +126,8 @@ export function AutomationDetail({
   now,
   onRunNow,
   onEdit,
+  onMigrate,
+  isMigrating,
   onToggle,
   onDelete
 }: AutomationDetailProps): React.JSX.Element {
@@ -127,15 +144,25 @@ export function AutomationDetail({
   const usageSummary = summarizeAutomationRunUsage(runs)
   const usageCoverage =
     usageSummary.knownRuns > 0
-      ? `${usageSummary.knownRuns}/${runs.length} runs`
+      ? translate(
+          'auto.components.automations.AutomationDetail.usageCoverageRuns',
+          '{{known}}/{{count}} runs',
+          {
+            known: usageSummary.knownRuns,
+            count: runs.length,
+            defaultValue_one: '{{known}}/{{count}} run'
+          }
+        )
       : usageSummary.unavailableRuns > 0
-        ? 'Unavailable'
-        : 'No runs'
+        ? translate('auto.components.automations.AutomationDetail.usageUnavailable', 'Unavailable')
+        : translate('auto.components.automations.AutomationDetail.noRuns', 'No runs')
   const agentLabel =
     getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
-      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+      ? (automation.baseBranch ??
+        projectDefaultBaseRef ??
+        translate('auto.components.automations.AutomationDetail.projectDefault', 'Project default'))
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
   const hostDisplay = getAutomationHostDetailDisplay({
@@ -144,6 +171,9 @@ export function AutomationDetail({
     hostLabelById
   })
   const runNowDisabled = runNowAvailability?.canRunNow === false
+  const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
+  const latestRunError =
+    latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -152,9 +182,14 @@ export function AutomationDetail({
           <div className="flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold">{automation.name}</h2>
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
-              {automation.enabled
-                ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
-                : translate('auto.components.automations.enablement.paused', 'Paused')}
+              {!automation.enabled
+                ? translate('auto.components.automations.enablement.paused', 'Paused')
+                : hostEntry?.servedBy
+                  ? translate(
+                      'auto.components.automations.AutomationDetail.needsMigration',
+                      'Needs migration'
+                    )
+                  : translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -220,7 +255,26 @@ export function AutomationDetail({
         </div>
       </div>
 
-      {automation.executionTargetType === 'ssh' ? (
+      {hostEntry?.servedBy ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
+          <span className="min-w-0">
+            {translate(
+              'auto.components.automations.AutomationDetail.migrateNotice',
+              '{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.',
+              { host: hostEntry.label }
+            )}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={isMigrating}
+            onClick={() => onMigrate?.(automation)}
+          >
+            {translate('auto.components.automations.AutomationDetail.migrate', 'Migrate')}
+          </Button>
+        </div>
+      ) : automation.executionTargetType === 'ssh' ? (
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
           {translate(
             'auto.components.automations.AutomationDetail.dbef8dc110',
@@ -229,10 +283,20 @@ export function AutomationDetail({
         </div>
       ) : null}
 
-      {runNowAvailability?.canRunNow === false ? (
+      {runNowAvailability?.canRunNow === false && !hostEntry?.servedBy ? (
         <div className="rounded-md border border-border/50 bg-muted/40 p-3 text-sm text-muted-foreground shadow-sm">
           {runNowAvailability.message}
         </div>
+      ) : null}
+
+      {latestRunError ? (
+        <AutomationRunErrorNotice
+          label={translate(
+            'auto.components.automations.AutomationDetail.lastRunFailed',
+            'Last run failed.'
+          )}
+          error={latestRunError}
+        />
       ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
@@ -245,7 +309,7 @@ export function AutomationDetail({
           value={
             automation.enabled
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
-              : 'Paused'
+              : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
           }
         />
         <DetailMetric
@@ -263,7 +327,17 @@ export function AutomationDetail({
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
-          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          value={
+            automation.reuseSession
+              ? translate(
+                  'auto.components.automations.AutomationDetail.reuseLiveSession',
+                  'Reuse live session'
+                )
+              : translate(
+                  'auto.components.automations.AutomationDetail.freshEachRun',
+                  'Fresh each run'
+                )
+          }
         />
         {sourceDisplay ? (
           <DetailMetric
@@ -280,8 +354,12 @@ export function AutomationDetail({
           label={translate('auto.components.automations.AutomationDetail.e353ab9516', 'Precheck')}
           value={
             automation.precheck
-              ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
-              : 'None'
+              ? translate(
+                  'auto.components.automations.AutomationDetail.precheckEnabled',
+                  'Enabled, {{timeout}}',
+                  { timeout: formatUiNarrowDuration(automation.precheck.timeoutSeconds, 'second') }
+                )
+              : translate('auto.components.automations.AutomationDetail.precheckNone', 'None')
           }
         />
         <div className="min-w-0">
@@ -293,6 +371,16 @@ export function AutomationDetail({
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>
+        {automation.extraAgentArgs ? (
+          <DetailMetric
+            label={translate(
+              'auto.components.automations.extraAgentArgs.detailLabel',
+              'Extra arguments'
+            )}
+            value={automation.extraAgentArgs}
+            title={automation.extraAgentArgs}
+          />
+        ) : null}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">

@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import {
   BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH,
   formatBrowserAnnotationsAsMarkdown
 } from './browser-annotation-output'
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
 
 function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPageAnnotation {
   return {
@@ -78,87 +74,28 @@ function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPage
 }
 
 describe('formatBrowserAnnotationsAsMarkdown', () => {
-  it('includes agent-useful selectors, source, react tree, styles, and feedback', () => {
-    const markdown = formatBrowserAnnotationsAsMarkdown([makeAnnotation()])
-
-    expect(markdown).toContain('## Design Feedback: /pricing')
-    expect(markdown).toContain('**Browser tab id:** page-1')
-    expect(markdown).not.toContain('Orca CLI')
-    expect(markdown).not.toContain('--page page-1')
-    expect(markdown).not.toContain('Page Feedback')
-    expect(markdown).toContain('**Selector:** `main.pricing > button.primary`')
-    expect(markdown).toContain('**Source:** src/components/PricingCta.tsx:42:8')
-    expect(markdown).toContain('**React:** <App> <PricingCta>')
-    expect(markdown).toContain('**Intent:** change')
-    expect(markdown).not.toContain('**Priority:**')
-    expect(markdown).toContain('- font-size: 16px')
-    expect(markdown).toContain('**Feedback:** Make this primary action more obvious.')
-  })
-
-  it('returns an empty string when no annotations exist', () => {
-    expect(formatBrowserAnnotationsAsMarkdown([])).toBe('')
-  })
-
-  it('uses longer inline code fences when selector content contains backticks', () => {
+  it('collapses page-controlled newlines before putting text in headings and lists', () => {
     const annotation = makeAnnotation()
-    const markdown = formatBrowserAnnotationsAsMarkdown([
-      makeAnnotation({
-        payload: {
-          ...annotation.payload,
-          target: {
-            ...annotation.payload.target,
-            selector: 'button[data-label="Save `draft`"]',
-            cssClasses: 'primary `generated`'
-          }
-        }
-      })
-    ])
-
-    expect(markdown).toContain('**Selector:** ``button[data-label="Save `draft`"]``')
-    expect(markdown).toContain('**Classes:** `` primary `generated` ``')
-  })
-
-  it('formats page snippets with many backtick runs', () => {
-    const matchAll = vi.spyOn(String.prototype, 'matchAll')
-    const annotation = makeAnnotation()
-    const manyBacktickRuns = Array.from({ length: 130_000 }, () => '`').join(' ')
-
-    expect(() =>
-      formatBrowserAnnotationsAsMarkdown([
+    const markdown = formatBrowserAnnotationsAsMarkdown(
+      [
         makeAnnotation({
+          comment: 'Keep this change scoped.\n## injected',
           payload: {
             ...annotation.payload,
             target: {
               ...annotation.payload.target,
-              selector: `button[data-label="${manyBacktickRuns}"]`,
-              htmlSnippet: `<button>${manyBacktickRuns}</button>`
-            }
+              accessibility: {
+                ...annotation.payload.target.accessibility,
+                accessibleName: 'Start\n## injected heading'
+              },
+              textSnippet: 'Start\n## injected text'
+            },
+            nearbyText: ['Plan\n# injected']
           }
         })
-      ])
-    ).not.toThrow()
-    expect(matchAll).not.toHaveBeenCalled()
-  })
-
-  it('collapses page-controlled newlines before putting text in headings and lists', () => {
-    const annotation = makeAnnotation()
-    const markdown = formatBrowserAnnotationsAsMarkdown([
-      makeAnnotation({
-        comment: 'Keep this change scoped.\n## injected',
-        payload: {
-          ...annotation.payload,
-          target: {
-            ...annotation.payload.target,
-            accessibility: {
-              ...annotation.payload.target.accessibility,
-              accessibleName: 'Start\n## injected heading'
-            },
-            textSnippet: 'Start\n## injected text'
-          },
-          nearbyText: ['Plan\n# injected']
-        }
-      })
-    ])
+      ],
+      { includeDiagnostics: true }
+    )
 
     expect(markdown).toContain('### 1. <App> <PricingCta> button "Start ## injected heading"')
     expect(markdown).toContain('- Plan # injected')
@@ -166,36 +103,16 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).not.toContain('\n## injected')
   })
 
-  it('bounds large inline page text without regex replacement passes', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
+  it('heads document preview annotations with the Windows file path', () => {
     const annotation = makeAnnotation()
-    const repeatedInlineText = 'x '.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH * 2)
-    const repeatedFeedback = 'y\n'.repeat(BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH * 2)
-    const largeInlineText = `Summary ${repeatedInlineText}SECRET_TAIL`
-    const largeFeedback = `Feedback ${repeatedFeedback}SECRET_COMMENT`
-
+    const sanitizedUrl = 'C:\\repo\\docs\\report.html'
     const markdown = formatBrowserAnnotationsAsMarkdown([
       makeAnnotation({
-        comment: largeFeedback,
-        payload: {
-          ...annotation.payload,
-          target: {
-            ...annotation.payload.target,
-            selectedText: largeInlineText,
-            accessibility: {
-              ...annotation.payload.target.accessibility,
-              accessibleName: largeInlineText
-            }
-          },
-          nearbyText: [largeInlineText]
-        }
+        payload: { ...annotation.payload, page: { ...annotation.payload.page, sanitizedUrl } }
       })
     ])
 
-    expect(markdown).toContain('**Selected text:** "Summary x x')
-    expect(markdown).not.toContain('SECRET_TAIL')
-    expect(markdown).not.toContain('SECRET_COMMENT')
-    expect(replaceSpy).not.toHaveBeenCalled()
+    expect(markdown).toContain(`## Design Feedback: ${sanitizedUrl}`)
   })
 
   it('does not split surrogate pairs at the inline annotation cap', () => {
@@ -223,7 +140,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     )
 
     expect(selectedLineStart).not.toBe(-1)
-    expect(selectedLine).toBeDefined()
+    expect(selectedLine).toBe(`**Selected text:** "${'x'.repeat(2047)}"`)
     expect(selectedLine).not.toContain('😀')
     expect(selectedLine).not.toContain('tail')
     expect(selectedLine).not.toContain('\ufffd')

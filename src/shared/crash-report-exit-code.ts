@@ -1,10 +1,6 @@
 import { decodePosixWaitStatus, describePosixWaitStatus } from './posix-wait-status'
 
-/**
- * Renders the exit code with its POSIX wait-status meaning ("61696 (exit status
- * 241)", "9 (SIGKILL)"). The raw value always stays first. Windows codes and
- * launch-failed codes are not wait statuses and render unchanged.
- */
+/** Show raw POSIX wait status before decoded exit/signal meaning; preserve Windows and launch-failed codes unchanged. */
 export function formatCrashReportExitCode(report: {
   exitCode: number | null
   platform: NodeJS.Platform

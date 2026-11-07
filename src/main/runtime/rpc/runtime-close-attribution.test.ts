@@ -1,10 +1,11 @@
+import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../../observability/tracer'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
-import { SESSION_TAB_METHODS } from './methods/session-tabs'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { SESSION_TAB_METHODS } from './methods/session-tabs/session-tabs'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 
 const BEARER_CLIENT_ID = 'secret-bearer-client-id'
 

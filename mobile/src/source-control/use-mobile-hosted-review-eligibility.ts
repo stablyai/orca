@@ -177,10 +177,7 @@ export function useMobileHostedReviewEligibility(
     worktreeId
   ])
 
-  // Why: gate on shouldFetch so a disconnect/client-loss hides a stale `ready`
-  // snapshot in the same render, before the effect posts `idle` — otherwise the
-  // Create PR button could stay enabled for one paint after the worktree is
-  // no longer fetchable.
+  // Hide stale eligibility on disconnect in this render; an effect would leave Create enabled for one paint.
   return renderedMobileHostedReviewEligibilityState({
     snapshot,
     key,

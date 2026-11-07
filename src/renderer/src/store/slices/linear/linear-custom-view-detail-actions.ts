@@ -9,7 +9,7 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearGetCustomView } from '@/runtime/runtime-linear-project-client'
+import { linearGetCustomView } from '@/runtime/linear/runtime-linear-project-client'
 import {
   evictStaleEntries,
   isFresh,
@@ -56,7 +56,7 @@ export function createLinearCustomViewDetailActions(
         inflight &&
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
+        !options?.force
       ) {
         return inflight.promise
       }
@@ -130,7 +130,6 @@ export function createLinearCustomViewDetailActions(
 
       entry = {
         promise,
-        force: Boolean(options?.force),
         contextKey,
         mutationGeneration: requestMutationGeneration
       }

@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react'
 import type {
   ChangelogData,
   LinuxPackageInstallRecovery,
@@ -59,10 +60,19 @@ export function UpdateCardStateContent({
     )
   }
   if (status.state === 'not-available') {
+    const unsupported = status.unsupportedSystemUpdate
     return (
       <UpdateCheckFeedback
         icon="check"
-        text={translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")}
+        text={
+          unsupported
+            ? translate(
+                'macosUpdateRequirement.settingsStatus',
+                'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
+                { version: unsupported.version, macos: unsupported.minimumMacosVersion }
+              )
+            : translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")
+        }
       />
     )
   }
@@ -85,6 +95,24 @@ export function UpdateCardStateContent({
     return <UpdateErrorCardContent {...errorCard} onClose={onCollapse} />
   }
   if (status.state === 'downloaded') {
+    if (status.installing) {
+      return (
+        <div className="flex flex-col gap-3 p-4" aria-busy="true">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <h3 className="text-sm font-semibold">
+              {translate('updates.installBlock.preparingTitle', 'Preparing your update')}
+            </h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {translate(
+              'updates.installBlock.preparingSummary',
+              'Checking running Orca instances before restarting.'
+            )}
+          </p>
+        </div>
+      )
+    }
     return hasStartedDownload ? (
       <div className="p-4">
         <p className="text-sm">

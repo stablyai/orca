@@ -3,6 +3,14 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
 import { getStartupErrorFallbackUI } from '../lib/startup-ui-hydration'
 import {
+  announceWebHostUnreachableAtStartup,
+  isWebHostUnreachableAtStartup
+} from './startup-web-host-unreachable'
+import {
+  announceWebPairingRefusedAtStartup,
+  isWebPairingRefusedAtStartup
+} from './startup-web-pairing-refused'
+import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
@@ -19,26 +27,37 @@ type DegradedStartupRecoveryArgs = {
   abortSignal: AbortSignal
 }
 
-// Why (issue #1158): reconnect flips workspaceSessionReady so the UI mounts, but pending* maps
-// are normally drained by reconnect — clear them so a failure can't leave phantom dead PTYs.
+// Reconnect normally drains pending maps; clear on failure so ready UI cannot retain phantom dead PTYs (#1158).
 function forceWorkspaceSessionReady(): void {
   useAppStore.setState({
     workspaceSessionReady: true,
     pendingReconnectWorktreeIds: [],
     pendingReconnectTabByWorktree: {},
     pendingReconnectPtyIdByTabId: {},
-    // Why: the activation gate waits on this flag; a degraded boot must still release it
-    // or no worktree ever gets its fallback terminal.
+    // Release activation gate even on degraded boot or fallback terminals never seed.
     terminalStartupRestorationReady: true
   })
 }
 
-/**
- * Boots the app in degraded "no-save" mode after the startup hydration chain threw.
- *
- * Why (issue #1158): in-memory state is left untouched and hydrationSucceeded stays false
- * (default-hydrating here once erased saved tabs); only the ready flags flip so the UI mounts.
- */
+function announceDegradedStartup(): void {
+  // Keep no-save warning sticky until restart recovers hydration (#1158).
+  toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
+    description: translate(
+      'auto.App.0a9e810705',
+      "Changes won't be saved until restart. Your previous tabs are safe on disk."
+    ),
+    duration: Infinity,
+    dismissible: true,
+    action: {
+      label: translate('auto.App.caea5b51b9', 'Restart now'),
+      onClick: () => {
+        void window.api.app.relaunch()
+      }
+    }
+  })
+}
+
+/** Enter interactive no-save mode without touching in-memory state/hydrationSucceeded; default hydration here once erased saved tabs (#1158). */
 export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryArgs): Promise<void> {
   const {
     error,
@@ -60,28 +79,25 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
   }
   // Why: degraded mode stays interactive; later repo/runtime changes must not remain gated forever.
   useAppStore.setState({ startupWorktreeRefreshCompleted: true })
-  // Why (issue #1158): only apply default UI if ui.get() never hydrated; otherwise defaults would clobber ui.json via the debounced writer.
+  // Apply defaults only if ui.get never hydrated or debounced writes clobber ui.json (#1158).
   const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
   if (fallbackUI) {
     hydratePersistedUI(fallbackUI, 'startup')
   }
-  // Why (issue #1158): sticky toast so the user knows they're in degraded "no-save" mode (hydrationSucceeded stays false); "Restart now" calls app.relaunch to recover.
-  toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
-    description: translate(
-      'auto.App.0a9e810705',
-      "Changes won't be saved until restart. Your previous tabs are safe on disk."
-    ),
-    duration: Infinity,
-    dismissible: true,
-    action: {
-      label: translate('auto.App.caea5b51b9', 'Restart now'),
-      onClick: () => {
-        void window.api.app.relaunch()
-      }
-    }
-  })
+  const hostUnreachable = await isWebHostUnreachableAtStartup(error)
+  if (isCancelled()) {
+    return
+  }
+  if (hostUnreachable) {
+    // Still no-save until the reload: the host's catalog never loaded, so saving now would prune it.
+    announceWebHostUnreachableAtStartup(abortSignal)
+  } else if (isWebPairingRefusedAtStartup(error)) {
+    announceWebPairingRefusedAtStartup(error)
+  } else {
+    announceDegradedStartup()
+  }
   if (reconnectStarted) {
-    // Why (issue #1158): re-running reconnect over its partially-mutated state would double-set ptyIds and drain pending* twice — force the flag, clear pending*.
+    // Do not rerun partially applied reconnect: force readiness/clear pending maps to avoid duplicate PTY assignment/drain (#1158).
     forceWorkspaceSessionReady()
     return
   }
@@ -93,16 +109,15 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     )
     await reconnectPersistedTerminals(abortSignal)
     await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
-    // Why: reconnect set workspaceSessionReady but not this flag, which the success chain sets
-    // last; without it a degraded boot keeps every restoration reader waiting for good.
+    // Reconnect does not set the success chain’s final flag; release restoration readers on degraded boot too.
     if (!isCancelled()) {
       useAppStore.setState({ terminalStartupRestorationReady: true })
     }
   } catch (reconnectErr) {
     console.error('[startup] reconnectPersistedTerminals failed in error path:', reconnectErr)
-    // Why (issue #1158): the await may have run during StrictMode teardown; re-check cancellation so a cancelled pass 1 doesn't stomp pass 2's hydration.
+    // Recheck cancellation after await so torn-down StrictMode pass cannot overwrite the next hydration (#1158).
     if (!isCancelled()) {
-      // Why (issue #1158): recovery threw too; force the flag so the shell still mounts.
+      // Recovery failed too; force shell readiness (#1158).
       forceWorkspaceSessionReady()
     }
   }

@@ -1,7 +1,9 @@
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
@@ -41,6 +43,8 @@ export async function sendNotesToActiveAgentSession(args: {
   prompt: string
   noteTarget?: ActiveTerminalNoteTarget
   timeoutMs?: number
+  /** False pastes the prompt into the agent's input and leaves it there unsent. */
+  submit?: boolean
 }): Promise<ActiveAgentNotesSendResult> {
   try {
     return await sendNotesToActiveAgentSessionInternal(args)
@@ -55,12 +59,14 @@ async function sendNotesToActiveAgentSessionInternal({
   worktreeId,
   prompt,
   noteTarget: explicitNoteTarget,
-  timeoutMs
+  timeoutMs,
+  submit = true
 }: {
   worktreeId: string
   prompt: string
   noteTarget?: ActiveTerminalNoteTarget
   timeoutMs?: number
+  submit?: boolean
 }): Promise<ActiveAgentNotesSendResult> {
   const trimmedPrompt = prompt.trim()
   if (!trimmedPrompt) {
@@ -71,8 +77,8 @@ async function sendNotesToActiveAgentSessionInternal({
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
   }
-  const runtimeTarget = getActiveRuntimeTarget(
-    getSettingsForWorktreeRuntimeOwner(state, worktreeId)
+  const runtimeTarget = runtimeTargetForOwnerEnvironment(
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
   const terminal = await findActiveRuntimeTerminal(
     runtimeTarget,
@@ -88,7 +94,7 @@ async function sendNotesToActiveAgentSessionInternal({
   }
   if (explicitNoteTarget) {
     return reportNoteSendFailure(
-      await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt),
+      await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt, submit),
       noteTarget
     )
   }
@@ -161,24 +167,27 @@ async function sendNotesToActiveAgentSessionInternal({
   if (finalAgentStatus.supportsGuardedSend) {
     return reportNoteSendFailure(
       await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
-        allowLegacyFallback: false
+        allowLegacyFallback: false,
+        submit
       }),
       noteTarget
     )
   }
 
   return reportNoteSendFailure(
-    await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, trimmedPrompt),
+    await sendPromptWithLegacyCombinedSend(runtimeTarget, terminal.handle, trimmedPrompt, submit),
     noteTarget
   )
 }
 
 async function sendPromptToExplicitAgentTarget(
-  runtimeTarget: ReturnType<typeof getActiveRuntimeTarget>,
+  runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
-  prompt: string
+  prompt: string,
+  submit: boolean
 ): Promise<ActiveAgentNotesSendResult> {
   return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminalHandle, prompt, {
-    allowLegacyFallback: false
+    allowLegacyFallback: false,
+    submit
   })
 }

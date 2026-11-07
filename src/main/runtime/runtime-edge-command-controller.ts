@@ -1,9 +1,12 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
-import type { RuntimeBrowserCommands, RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import { runWithRequestedPageUrl } from '../browser/cdp/input/browser-expected-page-url'
+import type { RuntimeBrowserCommandHost } from './browser/commands/browser-command-contracts'
+import type { RuntimeBrowserCommands } from './browser/commands/browser-commands'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
-import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
-import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
-import { RuntimeJiraCommands } from './runtime-jira-commands'
+import { RuntimeBrowserScreencastController } from './browser/screencast/runtime-browser-screencast-controller'
+import { createRuntimeBrowserCommands } from './browser/installation/runtime-browser-commands-factory'
+import { RuntimeJiraCommands } from './integrations/jira/runtime-jira-commands'
+import type { RpcBinarySender } from './rpc/rpc-binary-sender'
 
 type PublicMethods<T> = Pick<T, keyof T>
 type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreencast'> & {
@@ -13,7 +16,7 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
       connectionId?: string
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
-      sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+      sendBinary?: RpcBinarySender
       signal?: AbortSignal
       emit: (result: BrowserScreencastResult) => void
     }
@@ -108,6 +111,7 @@ const BROWSER_COMMAND_NAMES = [
   'browserProfileDelete',
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
+  'browserProfileClearGoogleCookies',
   'browserProfileClearDefaultCookies',
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
@@ -125,17 +129,22 @@ function bindPrefixedMethods<T extends object>(
   return bound as Partial<PublicMethods<T>>
 }
 
-function bindNamedMethods<T extends object>(
+function bindBrowserMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
 ): Partial<PublicMethods<T>> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fromEntries loses the key type of the names it was built from.
   return Object.fromEntries(
-    names.map((name) => [name, (instance[name] as (...args: unknown[]) => unknown).bind(instance)])
+    names.map((name) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every name in BROWSER_COMMAND_NAMES is checked against RuntimeBrowserCommands, whose members are all methods.
+      const method = (instance[name] as (...args: unknown[]) => unknown).bind(instance)
+      return [name, (...args: unknown[]) => runWithRequestedPageUrl(args[0], () => method(...args))]
+    })
   ) as Partial<PublicMethods<T>>
 }
 
 export class RuntimeEdgeCommandController {
-  private readonly jira = new RuntimeJiraCommands()
+  private readonly jira: RuntimeJiraCommands
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
   private readonly emulator: RuntimeEmulatorCommands
@@ -143,19 +152,22 @@ export class RuntimeEdgeCommandController {
 
   constructor(args: {
     browserHost: RuntimeBrowserCommandHost
+    jiraHost: ConstructorParameters<typeof RuntimeJiraCommands>[0]
     screencast: Omit<ScreencastDependencies, 'getCommands'>
     emulatorHost: EmulatorHost
     getBrowserCommands?: () => RuntimeBrowserCommands
   }) {
+    this.jira = new RuntimeJiraCommands(args.jiraHost)
     this.browser = createRuntimeBrowserCommands(args.browserHost)
     this.screencasts = new RuntimeBrowserScreencastController({
       ...args.screencast,
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
-      ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
+      ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface

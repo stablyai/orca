@@ -113,10 +113,7 @@ export function AgentRow(props: {
         {icon}
       </span>
       <span
-        // Why: re-keying on flashKey forces React to remount the span so the
-        // CSS `feature-wall-msg-received` animation actually replays each
-        // time a new message lands. Without the remount, the same DOM node
-        // keeps its already-finished animation and only the text changes.
+        // Remount on each message so the completed CSS animation replays.
         key={flashKey}
         className={cn(
           'truncate leading-[1.3] text-foreground',

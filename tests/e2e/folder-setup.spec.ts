@@ -30,10 +30,7 @@ async function createNestedRepoFixture(): Promise<{
   projectPaths: string[]
   groupName: string
 }> {
-  // Why: realpathSync so the projectPaths the test asserts on match the store's
-  // canonicalized repo.path / projectGroup.parentPath on macOS, where
-  // os.tmpdir() (/var/...) symlinks to /private/var/... and the app canonicalizes
-  // imported paths via `git rev-parse --show-toplevel`.
+  // Resolve macOS /var symlinks like git does when registering imported projects.
   const parentPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-folder-setup-')))
   tempRoots.push(parentPath)
   const repoNames = ['api-service', 'web-client']
@@ -56,9 +53,7 @@ async function createLargeNestedRepoFixture(): Promise<{
   groupName: string
   selectedProjectPaths: string[]
 }> {
-  // Why: realpathSync so the projectPaths the test asserts on match the store's
-  // canonicalized repo.path on macOS (os.tmpdir() /var/... symlinks to
-  // /private/var/...).
+  // Resolve macOS /var symlinks like git does when registering imported projects.
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-large-folder-setup-'))
   )
@@ -106,8 +101,7 @@ async function chooseFolderInNativeDialog(
 }
 
 function getImportAsGroupButton(importDialog: Locator): Locator {
-  // Why: the current accessible action is intentional; accepting retired
-  // labels would hide deterministic dialog copy drift.
+  // Require the current accessible action so retired labels cannot hide copy drift.
   return importDialog.getByRole('button', {
     name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true

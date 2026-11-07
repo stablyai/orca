@@ -1,6 +1,8 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { createFallbackProxy } from './web-fallback-api'
 import { callRuntimeResult } from './web-runtime-calls'
+import { mapRepoPathArg } from '@/runtime/runtime-repo-selector-params'
+import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
 
 export function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
@@ -11,28 +13,25 @@ export function createRuntimeNamespaceApi(prefix: string): never {
 
 export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
-    check: async ({ repoId }) => callRuntimeResult('repo.hooksCheck', { repo: repoId }),
+    check: async ({ repoId, background }) =>
+      callRuntimeResult('repo.hooksCheck', {
+        repo: repoId,
+        ...repoHooksCheckWakeParams(background)
+      }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),
-    createIssueCommandRunner: async () => ({ launched: false }) as never,
-    readIssueCommand: async ({ repoId }) =>
-      callRuntimeResult('repo.issueCommandRead', { repo: repoId }),
-    writeIssueCommand: async ({ repoId, content }) => {
-      await callRuntimeResult('repo.issueCommandWrite', { repo: repoId, content })
+    readIssueCommand: async ({ repoId, wakeWslDistro }) =>
+      callRuntimeResult('repo.issueCommandRead', {
+        repo: repoId,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
+      }),
+    writeIssueCommand: async ({ repoId, content, wakeWslDistro }) => {
+      await callRuntimeResult('repo.issueCommandWrite', {
+        repo: repoId,
+        content,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
+      })
     }
-  }
-}
-
-export function mapRepoPathArg(args: unknown): unknown {
-  if (!args || typeof args !== 'object' || !('repoPath' in args)) {
-    return args
-  }
-  const record = args as Record<string, unknown>
-  const repoId = typeof record.repoId === 'string' && record.repoId.trim() ? record.repoId : null
-  return {
-    ...record,
-    // Why: duplicate checked-out repos make path/name selectors ambiguous; prefer the explicit repo id the renderer passes.
-    repo: repoId ? `id:${repoId}` : record.repoPath
   }
 }
 

@@ -1,9 +1,12 @@
-import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
+import { parseWorkspaceSession } from '../../src/shared/workspace-session/workspace-session-schema'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { DaemonClient } from '../../src/main/daemon/client'
-import { getDaemonSocketPath, getDaemonTokenPath } from '../../src/main/daemon/daemon-spawner'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
+import {
+  getDaemonSocketPath,
+  getDaemonTokenPath
+} from '../../src/main/daemon/launch/daemon-spawner'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -20,7 +23,7 @@ import {
   completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
-  readCompletedWorkerDispatchCapability,
+  hasCompletedWorkerReceivedPreamble,
   readCompletedWorkerLedger,
   seedCurrentCodexTranscript
 } from './helpers/completed-worker-retirement-fixture'
@@ -208,16 +211,7 @@ for (const daemonSessionGone of [false, true]) {
       const workerTabId = worker.tabId
       const workerPaneKey = `${worker.tabId}:${worker.leafId}`
       await backgroundMountTab(first.page, targetWorktreeId, workerTabId)
-      let dispatchCapability: string | null = null
-      await expect
-        .poll(() => {
-          dispatchCapability = readCompletedWorkerDispatchCapability()
-          return dispatchCapability
-        })
-        .not.toBeNull()
-      if (!dispatchCapability) {
-        throw new Error('Background worker did not receive its dispatch capability')
-      }
+      await expect.poll(() => hasCompletedWorkerReceivedPreamble()).toBe(true)
       const transcriptPath = seedCurrentCodexTranscript(
         isolatedHome,
         PROVIDER_SESSION_ID,
@@ -267,21 +261,17 @@ for (const daemonSessionGone of [false, true]) {
           worktreeId: targetWorktreeId
         }
       )
-      const completed = await client.call<{ message: { type: string } }>(
-        'orchestration.send',
-        {
-          from: workerHandle,
-          subject: 'Completed',
-          body: 'The fixture completed and stays open for inspection.',
-          type: 'worker_done',
-          payload: JSON.stringify({
-            taskId: task.result.task.id,
-            dispatchId: started.result.dispatchId,
-            outcome: 'succeeded'
-          })
-        },
-        { orchestrationCapability: dispatchCapability }
-      )
+      const completed = await client.call<{ message: { type: string } }>('orchestration.send', {
+        from: workerHandle,
+        subject: 'Completed',
+        body: 'The fixture completed and stays open for inspection.',
+        type: 'worker_done',
+        payload: JSON.stringify({
+          taskId: task.result.task.id,
+          dispatchId: started.result.dispatchId,
+          outcome: 'succeeded'
+        })
+      })
       expect(completed.result.message.type).toBe('worker_done')
       const taskBeforeRestart = (
         await client.call('orchestration.taskList', { run: run.result.run.id })
@@ -349,17 +339,21 @@ for (const daemonSessionGone of [false, true]) {
 
       // Hidden mount, then click to reveal: reveal runs the missing-session reconciler.
       await backgroundMountTab(second.page, targetWorktreeId, workerTabId)
-      // Poll, don't sample: main's cache learns the session when the pane's deferred reattach lands,
-      // and backgroundMountTab only waits for the pane manager to exist. A restarted main that never
-      // attaches stays false for the whole window, which is the regression this guards.
+      // Poll the pane’s binding after hidden mount: backgroundMountTab waits only for its manager, while hasPty proves host liveness without proving reattach.
       if (!daemonSessionGone) {
         await expect
           .configure({ soft: true })
-          .poll(() => second.page.evaluate((ptyId) => window.api.pty.hasPty(ptyId), workerPtyId), {
-            timeout: 20_000,
-            message: 'liveness before reveal'
-          })
-          .toBe(true)
+          .poll(
+            () =>
+              second.page.evaluate(
+                (tabId) =>
+                  window.__paneManagers?.get(tabId)?.getPanes?.()[0]?.container?.dataset?.ptyId ??
+                  null,
+                workerTabId
+              ),
+            { timeout: 20_000, message: 'liveness before reveal' }
+          )
+          .toBe(workerPtyId)
       }
       await second.page.evaluate(
         ({ tabId, worktreeId }) => {

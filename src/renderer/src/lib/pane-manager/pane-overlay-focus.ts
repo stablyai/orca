@@ -1,4 +1,5 @@
-import { hasVisibleOverlay } from '../visible-overlay'
+import { focusNativeChatCover } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import { getOverlayFocusOwners } from '../overlay-focus-ownership'
 import type { ManagedPane } from './pane-manager-types'
 
 export function focusPanePreservingOverlays(
@@ -7,12 +8,11 @@ export function focusPanePreservingOverlays(
   if (
     typeof document !== 'undefined' &&
     (document.activeElement?.matches('[data-worktree-sidebar][data-keyboard-navigation]') ||
-      hasVisibleOverlay({
-        ignoreMatches: '[role="listbox"][data-worktree-sidebar]',
-        ignoreContaining: pane.container,
-        ignoreDismissed: true
-      }))
+      getOverlayFocusOwners(pane.container).length > 0)
   ) {
+    return
+  }
+  if (focusNativeChatCover(pane)) {
     return
   }
   pane.terminal.focus()

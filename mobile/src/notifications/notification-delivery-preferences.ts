@@ -4,12 +4,14 @@ import type { MobilePushFilter } from '../../../src/shared/mobile-push-contract'
 const KEY = 'orca:notificationDeliveryPreferences'
 export type NotificationDeliveryPreferences = {
   onlyWhenDesktopAway: boolean
+  onlyWhenAgentNeedsInput: boolean
   sound: boolean
   suppressWhileViewing: boolean
 }
 
 export const DEFAULT_NOTIFICATION_DELIVERY: NotificationDeliveryPreferences = {
   onlyWhenDesktopAway: true,
+  onlyWhenAgentNeedsInput: false,
   sound: true,
   suppressWhileViewing: true
 }
@@ -44,6 +46,7 @@ export function notificationPreferencesFilter(
 ): MobilePushFilter {
   return {
     onlyWhenDesktopAway: value.onlyWhenDesktopAway,
+    onlyWhenAgentNeedsInput: value.onlyWhenAgentNeedsInput,
     sound: value.sound
   }
 }

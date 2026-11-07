@@ -21,8 +21,7 @@ export async function waitForTerminalPtyDataInjector(
         }, paneKey),
       {
         timeout: timeoutMs,
-        // Why: pane routing can settle before TerminalPane's e2e-only data
-        // injector effect has registered the renderer callback.
+        // Pane routing can settle before TerminalPane registers its E2E data injector.
         message: `terminal PTY data injector did not register for ${paneKey}`
       }
     )

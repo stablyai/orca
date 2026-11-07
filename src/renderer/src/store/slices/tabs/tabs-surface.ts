@@ -1,6 +1,8 @@
+import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type { AppState } from '../../types'
 import { toVisibleTabType } from '../../../../../shared/tab-types'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 
 export type ActiveSurfaceSourceState = Pick<
   AppState,
@@ -46,7 +48,9 @@ export function deriveActiveSurfaceForWorktree(
   const browserTabs = state.browserTabsByWorktree[worktreeId] ?? []
   const terminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const fileStillOpen = restoredFileId
-    ? state.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === worktreeId)
+    ? workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId]).some(
+        (file) => file.id === restoredFileId
+      )
     : false
   const browserTabStillOpen = restoredBrowserTabId
     ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
@@ -60,8 +64,7 @@ export function deriveActiveSurfaceForWorktree(
   const restoredTabType = restoreLegacyType
     ? (state.activeTabTypeByWorktree[worktreeId] ?? 'terminal')
     : null
-  // Why: only a remembered browser type — or group focus, which remembers no type at all — may keep
-  // the remembered file selected under the browser surface; a stale agent-session/simulator clears it.
+  // Browser/group focus may retain a remembered file; stale chat/simulator fallback must clear it.
   const keepRememberedFileUnderBrowser = restoredTabType === null || restoredTabType === 'browser'
 
   let activeFileId: string | null
@@ -69,15 +72,11 @@ export function deriveActiveSurfaceForWorktree(
   let activeTabType: WorkspaceVisibleTabType
 
   if (activeUnifiedTab) {
-    activeFileId =
-      activeUnifiedTab.contentType === 'editor' ||
-      activeUnifiedTab.contentType === 'diff' ||
-      activeUnifiedTab.contentType === 'conflict-review' ||
-      activeUnifiedTab.contentType === 'check-details'
-        ? activeUnifiedTab.entityId
-        : fileStillOpen
-          ? restoredFileId
-          : null
+    activeFileId = isEditorTabContentType(activeUnifiedTab.contentType)
+      ? activeUnifiedTab.entityId
+      : fileStillOpen
+        ? restoredFileId
+        : null
     activeBrowserTabId =
       activeUnifiedTab.contentType === 'browser'
         ? activeUnifiedTab.entityId
@@ -107,7 +106,8 @@ export function deriveActiveSurfaceForWorktree(
     activeBrowserTabId = browserTabs[0]?.id ?? null
     activeTabType = 'editor'
   } else {
-    const fallbackFile = state.openFiles.find((file) => file.worktreeId === worktreeId) ?? null
+    const fallbackFile =
+      workspaceEditorFiles(state.openFiles, state.unifiedTabsByWorktree[worktreeId])[0] ?? null
     const fallbackBrowserTab = browserTabs[0] ?? null
     activeFileId = fallbackFile?.id ?? null
     activeBrowserTabId = fallbackBrowserTab?.id ?? null

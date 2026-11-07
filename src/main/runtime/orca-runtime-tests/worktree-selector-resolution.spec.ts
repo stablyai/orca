@@ -1,27 +1,21 @@
+import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
-  FLOATING_TERMINAL_WORKTREE_ID,
   MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  RpcDispatcher,
-  TERMINAL_METHODS,
-  addSparseWorktree,
-  addWorktree,
   computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
-  getSshGitProviderMock,
-  join,
-  listWorktrees,
-  mkdir,
-  mkdtemp,
-  registerSshFilesystemProvider,
-  registerSshGitProvider,
-  tmpdir,
-  unregisterSshFilesystemProvider,
-  unregisterSshGitProvider,
-  writeFile
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+  ensurePathWithinWorkspaceMock
+} from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
+import { addWorktree } from '../../git/worktrees/creation/worktree-add'
+import { join } from 'node:path'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
@@ -34,7 +28,17 @@ import {
   makeRpcRequest,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
+import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+
+const LOCAL_CHILD_REPO = {
+  id: 'child-repo',
+  path: '/child',
+  displayName: 'child',
+  badgeColor: '#000',
+  addedAt: 0
+}
+const SSH_CHILD_REPO = { ...LOCAL_CHILD_REPO, connectionId: 'other-host' }
 
 describe('OrcaRuntimeService', () => {
   it('resolves branch selectors when worktrees store refs/heads-prefixed branches', async () => {
@@ -77,7 +81,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('routes SSH-backed forward-slash UNC file and git paths without collapsing the root', async () => {
+  it('resolves SSH-backed forward-slash UNC paths without collapsing the root, then refuses the work', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(listWorktrees).mockRejectedValue(new Error('local git should not run for SSH repos'))
     const remoteStore = {
@@ -99,46 +103,26 @@ describe('OrcaRuntimeService', () => {
         badgeColor: 'blue',
         addedAt: 1,
         connectionId: 'ssh-1'
-      })
+      }),
+      // No SSH Git provider is installed, so the fixture uses stored rows.
+      getAllWorktreeMeta: () => ({
+        [`${TEST_REPO_ID}:://Server/Share/Repo`]: makeWorktreeMeta()
+      }),
+      getWorktreeMeta: () => makeWorktreeMeta()
     }
-    const fsProvider = { readDir: vi.fn().mockResolvedValue([]) }
-    const gitProvider = {
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '//Server/Share/Repo',
-          head: 'abc',
-          branch: 'feature/foo',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]),
-      getStatus: vi.fn().mockResolvedValue({
-        branch: 'feature/foo',
-        files: [],
-        ahead: 0,
-        behind: 0,
-        hasConflicts: false
-      })
-    }
-    registerSshFilesystemProvider('ssh-1', fsProvider as never)
-    registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
-    try {
-      await runtime.readFileExplorerDir('path://server/share/repo', 'src')
-      await runtime.getRuntimeGitStatus('path://server/share/repo')
-      await expect(runtime.showRepo('path://server/share/repo')).resolves.toMatchObject({
-        path: '//Server/Share/Repo'
-      })
-    } finally {
-      unregisterSshFilesystemProvider('ssh-1')
-      unregisterSshGitProvider('ssh-1')
-    }
+    await expect(runtime.readFileExplorerDir('path://server/share/repo', 'src')).rejects.toThrow(
+      SshHostNotServedError
+    )
+    await expect(runtime.getRuntimeGitStatus('path://server/share/repo')).rejects.toThrow(
+      SshHostNotServedError
+    )
+    await expect(runtime.showRepo('path://server/share/repo')).resolves.toMatchObject({
+      path: '//Server/Share/Repo'
+    })
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(gitProvider.listWorktrees).toHaveBeenCalledWith('//Server/Share/Repo')
-    expect(fsProvider.readDir).toHaveBeenCalledWith('\\\\Server\\Share\\Repo\\src')
-    expect(gitProvider.getStatus).toHaveBeenCalledWith('//Server/Share/Repo')
   })
 
   it.each([
@@ -165,54 +149,27 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('routes SSH folder workspace file explorer paths through the filesystem provider', async () => {
+  it('refuses SSH folder workspace file explorer reads instead of reading this machine', async () => {
     const folderPath = '/srv/platform'
-    const fsProvider = {
-      stat: vi.fn(async (pathValue: string) => ({
-        size: pathValue.endsWith('/app.ts') ? 8 : 0,
-        type: pathValue.endsWith('/app.ts') ? 'file' : 'directory',
-        mtime: 1
-      })),
-      readDir: vi.fn().mockResolvedValue([
-        {
-          name: 'app.ts',
-          isDirectory: false,
-          isSymlink: false
-        }
-      ]),
-      readFile: vi.fn().mockResolvedValue({ content: 'remote\n', isBinary: false })
-    }
-    const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId: 'ssh-folder' })
+    const folderWorkspace = makeFolderWorkspace({
+      folderPath,
+      connectionId: 'ssh-folder'
+    })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
-    registerSshFilesystemProvider('ssh-folder', fsProvider as never)
 
-    try {
-      await expect(
-        runtime.readFileExplorerDir(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src')
-      ).resolves.toHaveLength(1)
-      await expect(
-        runtime.readFileExplorerPreview(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src/app.ts')
-      ).resolves.toMatchObject({
-        content: 'remote\n',
-        isBinary: false
-      })
-    } finally {
-      unregisterSshFilesystemProvider('ssh-folder')
-    }
-
-    expect(fsProvider.stat).toHaveBeenCalledWith(folderPath)
-    expect(fsProvider.readDir).toHaveBeenCalledWith('/srv/platform/src')
-    expect(fsProvider.stat).toHaveBeenCalledWith('/srv/platform/src/app.ts')
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/srv/platform/src/app.ts', {
-      maxBinaryBytes: 10 * 1024 * 1024,
-      maxTextBytes: 512 * 1024
-    })
+    // No SSH filesystem provider is installed, so the folder path is unavailable.
+    await expect(
+      runtime.readFileExplorerDir(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src')
+    ).rejects.toThrow('folder_workspace_path_unavailable:/srv/platform')
+    await expect(
+      runtime.readFileExplorerPreview(`id:${TEST_FOLDER_WORKSPACE_KEY}`, 'src/app.ts')
+    ).rejects.toThrow('folder_workspace_path_unavailable:/srv/platform')
   })
 
-  it('lists persisted SSH worktrees while the git provider is unavailable', async () => {
+  it('lists persisted SSH worktrees from stored rows', async () => {
     vi.mocked(listWorktrees).mockClear()
     const remoteRepo = {
       id: 'remote-repo',
@@ -234,7 +191,7 @@ describe('OrcaRuntimeService', () => {
       getRepo: () => remoteRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
         return metaById[worktreeId]
       }
@@ -244,7 +201,6 @@ describe('OrcaRuntimeService', () => {
     const listed = await runtime.listManagedWorktrees('id:remote-repo')
 
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).toHaveBeenCalledWith('ssh-missing')
     expect(listed).toMatchObject({
       totalCount: 2,
       truncated: false,
@@ -268,6 +224,227 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+  })
+
+  it('resolves the active workspace when the focus is on a stored SSH worktree', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:ssh-missing' ? metaById[worktreeId] : undefined,
+      getWorkspaceSession: () => ({
+        activeWorktreeId: mainId,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-missing'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    // The local catalog cannot resolve a remote worktree; the stored row is the only source.
+    vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: mainId,
+      displayName: 'Remote main'
+    })
+  })
+
+  it('resolves the active workspace when only the scoped workspace key names it', async () => {
+    const remoteRepo = {
+      id: 'remote-repo',
+      path: '/home/user/repo',
+      displayName: 'remote',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-missing'
+    }
+    const mainId = `${remoteRepo.id}::/home/user/repo`
+    const metaById: Record<string, WorktreeMeta> = {
+      [mainId]: makeWorktreeMeta({ displayName: 'Remote main' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: () => remoteRepo,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:ssh-missing' ? metaById[worktreeId] : undefined,
+      getWorkspaceSession: () => ({
+        activeWorktreeId: null,
+        activeWorkspaceKey: `worktree:${mainId}`,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-missing'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: mainId,
+      displayName: 'Remote main'
+    })
+  })
+
+  it('uses the selected host copy for twin worktree ids', async () => {
+    const hostA = {
+      id: 'twin-repo',
+      path: '/srv/repo',
+      displayName: 'A repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'host-a'
+    }
+    const hostB = { ...hostA, path: '/srv/repo-b', connectionId: 'host-b' }
+    const id = 'twin-repo::/srv/repo'
+    const metaA: Record<string, WorktreeMeta> = {
+      [id]: makeWorktreeMeta({ displayName: 'Host A' })
+    }
+    const metaB: Record<string, WorktreeMeta> = {
+      [id]: makeWorktreeMeta({ displayName: 'Host B' })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [hostA, hostB],
+      getAllWorktreeMeta: () => metaA,
+      // The unscoped read names the other host on purpose; the host-qualified read must win.
+      getWorktreeMeta: (worktreeId: string) => metaB[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string, hostId: string) =>
+        hostId === 'ssh:host-a' ? metaA[worktreeId] : metaB[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: id,
+        activeWorkspaceExecutionHostId: 'ssh:host-a'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: id,
+      displayName: 'Host A'
+    })
+  })
+
+  it('falls back to a nonempty name when stored metadata is blank', async () => {
+    const remoteRepo = {
+      id: 'blank-repo',
+      path: '/srv/blank',
+      displayName: '',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-blank'
+    }
+    const id = `${remoteRepo.id}::/srv/blank`
+    const meta: Record<string, WorktreeMeta> = { [id]: makeWorktreeMeta({ displayName: '' }) }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getAllWorktreeMeta: () => meta,
+      getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
+      getWorktreeMetaForHost: (worktreeId: string) => meta[worktreeId],
+      getWorkspaceSession: () => ({
+        activeWorktreeId: id,
+        activeWorkspaceExecutionHostId: 'ssh:ssh-blank'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toMatchObject({
+      worktreeId: id,
+      displayName: '/srv/blank'
+    })
+  })
+
+  it("resolves a focused paired-server workspace from the server's rows the desktop holds", async () => {
+    const serverWorktreeId = 'server-repo::/srv/app'
+    const runtimeStore = {
+      ...store,
+      // The paired server's workspace lives in its own store, not the desktop's.
+      getRepos: () => [],
+      getRepo: () => undefined,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getWorktreeMetaForHost: () => undefined,
+      getWorkspaceSession: () => ({
+        activeWorktreeId: serverWorktreeId,
+        activeWorkspaceExecutionHostId: 'runtime:env-1'
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
+
+    const workspaceContext = vi.fn(async (hostId: string, worktreeId: string) =>
+      hostId === 'runtime:env-1' && worktreeId === serverWorktreeId
+        ? { worktreeId, path: '/srv/app', branch: 'refs/heads/feature', displayName: 'App' }
+        : null
+    )
+    runtime.setPairedWorkspaceContextSource({ workspaceContext })
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toEqual({
+      worktreeId: serverWorktreeId,
+      path: '/srv/app',
+      branch: 'refs/heads/feature',
+      displayName: 'App'
+    })
+    workspaceContext.mockRejectedValueOnce(new Error('host_unreachable'))
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
+  })
+
+  it('keeps a stale focus on a removed local worktree null', async () => {
+    const localRepo = {
+      id: 'local-repo',
+      path: '/src/local',
+      displayName: 'local',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+    const goneId = `${localRepo.id}::/src/local-gone`
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [localRepo],
+      getRepo: () => localRepo,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined,
+      getWorktreeMetaForHost: () => undefined,
+      getWorkspaceSession: () => ({ activeWorktreeId: goneId })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
+      runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
+      'resolveWorkspaceSelector'
+    ).mockRejectedValue(new Error('selector_not_found'))
+
+    await expect(runtime.resolveActiveWorktreeContext()).resolves.toBeNull()
   })
 
   it('does not interpret active as a runtime-global worktree selector', async () => {
@@ -298,7 +475,7 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).not.toHaveBeenCalled()
   })
 
-  it('guides registered SSH repo ids without probing the provider', async () => {
+  it('guides registered SSH repo ids to the full id shape', async () => {
     const remoteRepo = { ...store.getRepos()[0], connectionId: 'ssh-1' }
     const remoteStore = {
       ...store,
@@ -306,14 +483,12 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
     vi.mocked(listWorktrees).mockClear()
-    getSshGitProviderMock.mockClear()
     const runtime = new OrcaRuntimeService(remoteStore)
 
     await expect(runtime.showManagedWorktree(`id:${TEST_REPO_ID}`)).rejects.toMatchObject({
       code: 'worktree_id_requires_full_path'
     })
     expect(listWorktrees).not.toHaveBeenCalled()
-    expect(getSshGitProviderMock).not.toHaveBeenCalled()
   })
 
   it('rejects bare repo ids through terminal list RPC with the structured code', async () => {
@@ -380,6 +555,31 @@ describe('OrcaRuntimeService', () => {
     await expect(resolveLineage({ parentWorktree: `id:${TEST_REPO_ID}` })).rejects.toThrow(
       'Worktree id selectors must use the full <repo-id>::<path> value.'
     )
+  })
+
+  // Create must enforce the same parent-host fence as update and renderer projection (#12757).
+  it('refuses an explicit parent worktree on another execution host before creating', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(
+      resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
+    ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })
+    await expect(
+      resolveLineage({ parentWorktree: `id:${TEST_WORKTREE_ID}` }, LOCAL_CHILD_REPO)
+    ).resolves.toMatchObject({ kind: 'lineage' })
+  })
+
+  it('drops an inferred parent on another execution host with a warning', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const resolveLineage = runtime['resolveLineageForWorktreeCreate'].bind(runtime)
+
+    await expect(
+      resolveLineage({ cwdParentWorktree: `id:${TEST_WORKTREE_ID}` }, SSH_CHILD_REPO)
+    ).resolves.toEqual({
+      kind: 'none',
+      warnings: [expect.objectContaining({ code: 'LINEAGE_PARENT_CONTEXT_CONFLICT' })]
+    })
   })
 
   it('does not reuse stale in-flight worktree scans after creating a worktree', async () => {
@@ -473,7 +673,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('neither skips nor retires a name the user typed', async () => {
-    // Why: the pool contains ordinary words. Retirement only ever applies to generated names.
+    // Only generated names may be retired; the pool also contains ordinary words.
     const addRetiredWorktreeName = vi.fn()
     const runtime = new OrcaRuntimeService({
       ...store,
@@ -489,8 +689,7 @@ describe('OrcaRuntimeService', () => {
     }
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
-    // Not `...Once`: the shared beforeEach re-stubs the resolved value but cannot drain a queue,
-    // so leftover one-shots would poison later tests in this file.
+    // Avoid queued one-shot stubs: shared beforeEach resets defaults but cannot drain leftovers.
     vi.mocked(listWorktrees).mockResolvedValue([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const result = await runtime.createManagedWorktree({

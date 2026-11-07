@@ -1,5 +1,4 @@
-import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
-import type { FileStat } from './types'
+import type { SFTPWrapper } from 'ssh2'
 
 const ABORTED_SFTP_OPERATION_GRACE_MS = 5_000
 
@@ -42,8 +41,7 @@ function waitForSftpCallback<T>(
       if (!signal || settled) {
         return
       }
-      // Why: the folder owner closes SFTP on abort; wait for its callback so
-      // Windows local handles quiesce before the temporary tree is removed.
+      // Abort closes SFTP; await its callback so Windows handles quiesce before temporary-tree removal.
       abortTimer = setTimeout(() => settle(abortReason(signal)), ABORTED_SFTP_OPERATION_GRACE_MS)
     }
     signal?.addEventListener('abort', onAbort, { once: true })
@@ -52,34 +50,6 @@ function waitForSftpCallback<T>(
     } catch (error) {
       settle(error instanceof Error ? error : new Error(String(error)))
     }
-  })
-}
-
-export function fileStatFromSftpStats(stats: Stats): FileStat {
-  let type: FileStat['type'] = 'file'
-  if (stats.isDirectory()) {
-    type = 'directory'
-  } else if (stats.isSymbolicLink()) {
-    type = 'symlink'
-  }
-  const maybeNlink = (stats as Stats & { nlink?: unknown }).nlink
-  return {
-    size: stats.size,
-    type,
-    mtime: stats.mtime * 1000,
-    ...(typeof maybeNlink === 'number' ? { nlink: maybeNlink } : {})
-  }
-}
-
-export function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
-  return new Promise((resolve, reject) => {
-    sftp.lstat(filePath, (err, stats) => {
-      if (err) {
-        reject(err)
-        return
-      }
-      resolve(fileStatFromSftpStats(stats))
-    })
   })
 }
 
@@ -93,23 +63,4 @@ export function fastGetViaSftp(
     (callback) => sftp.fastGet(sourcePath, destinationPath, callback),
     options
   )
-}
-
-export function readDirViaSftp(
-  sftp: SFTPWrapper,
-  dirPath: string,
-  options?: { signal?: AbortSignal }
-): Promise<FileEntryWithStats[]> {
-  return waitForSftpCallback<FileEntryWithStats[]>(
-    (callback) => sftp.readdir(dirPath, callback),
-    options
-  )
-}
-
-export function statViaSftp(
-  sftp: SFTPWrapper,
-  filePath: string,
-  options?: { signal?: AbortSignal }
-): Promise<Stats> {
-  return waitForSftpCallback<Stats>((callback) => sftp.stat(filePath, callback), options)
 }

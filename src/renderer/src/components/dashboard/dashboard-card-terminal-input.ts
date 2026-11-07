@@ -1,19 +1,18 @@
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
-import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/terminal-input-host-platform'
-import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
-import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/terminal-ctrl-enter'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/terminal-agent-paste-bracketing'
+import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/input/terminal-input-host-platform'
+import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/input/keyboard/terminal-windows-shift-enter'
+import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/input/keyboard/terminal-ctrl-enter'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
+import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/input/paste/terminal-agent-paste-bracketing'
 
-/** Store slices the pane's own input helpers read. */
 export type DashboardCardTerminalInputState = Pick<
   AppState,
   | 'repos'
@@ -36,8 +35,7 @@ export type DashboardCardTerminalInputState = Pick<
 
 const EMPTY_RECORD = {} as Record<string, never>
 
-/** Why: the snapshot builder must never throw on a partially hydrated store —
- *  a missing slice degrades one card to client-OS defaults, not a blank board. */
+/** Missing store slices fall back per card instead of throwing and blanking the whole board. */
 function withHydratedSlices(
   state: Partial<DashboardCardTerminalInputState>
 ): DashboardCardTerminalInputState {
@@ -62,12 +60,7 @@ function withHydratedSlices(
   }
 }
 
-/**
- * Resolve the host-dependent input facts a card's preview terminal needs to
- * encode keys like the agent's own pane. Store-derived only — the board holds no
- * live PtyTransport, so the shared pane helpers run their fallback path, the
- * same one a pane itself uses before its transport attaches.
- */
+/** Resolve host input facts through pane helpers’ pre-transport fallback; the board has no live PtyTransport. */
 export function resolveDashboardCardTerminalInput(
   partialState: Partial<DashboardCardTerminalInputState>,
   args: {
@@ -110,9 +103,7 @@ export function resolveDashboardCardTerminalInput(
       getConnectionId: () => connectionId,
       getPtyId: () => args.ptyId,
       getExecutionHostId: () => executionHostId,
-      // Why: gated exactly like the pane transport's own accessor — without
-      // it a WSL pty on a Windows client resolves to win32 and Shift+Enter
-      // would encode CSI-u where the pane sends alt-enter.
+      // Match the pane metadata gate so WSL resolves Linux protocols instead of inheriting Windows CSI-u behavior.
       getLocalSessionMetadata: () =>
         connectionId
           ? null
@@ -142,8 +133,7 @@ export function resolveDashboardCardTerminalInput(
     ctrlEnterCsiU: hasCtrlEnterCsiUAuthorityForPane(state, args.paneKey),
     kittyKeyboardAdvertised: !shouldDisableKittyKeyboardForTerminal({
       ...windowsPtyContext,
-      // Why: launch identity is the only agent signal the board holds; it opts
-      // Grok out of the ConPTY kitty withhold exactly as its pane does.
+      // Use launch identity for Grok’s ConPTY kitty exception, matching its pane.
       tuiAgent: args.launchAgent ?? null
     })
   }

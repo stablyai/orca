@@ -1,3 +1,4 @@
+import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,10 +7,14 @@ import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const Params = z.object({ subject: z.string() })
@@ -51,6 +56,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.send',
+          permission: 'workspace',
           params: Params,
           handler: ({ subject }) => ({ message: effect(subject) })
         })
@@ -58,6 +64,83 @@ describe('durable orchestration mutation ledger', () => {
     })
     return { db, runtime, dispatcher, effect }
   }
+
+  it('replays federation imports across old and new optional-report parsers without enriching the first acceptance', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const item = z.object({ dispatch_id: z.string(), sequence: z.number(), payload: z.string() })
+    const effects: unknown[] = []
+    const makeDispatcher = (newReader: boolean) =>
+      new RpcDispatcher({
+        runtime,
+        methods: [
+          defineMethod({
+            name: 'orchestration.federationImport',
+            permission: 'workspace',
+            params: z.object({
+              dispatchId: z.string(),
+              items: z.array(
+                newReader
+                  ? item.extend({
+                      answerSenderReport: z.unknown().optional()
+                    })
+                  : item
+              )
+            }),
+            handler: (params) => {
+              effects.push(params.items[0])
+              return { acknowledgedThrough: 1 }
+            }
+          })
+        ]
+      })
+    const wire = {
+      dispatchId: 'dispatch-one',
+      items: [
+        {
+          dispatch_id: 'dispatch-one',
+          sequence: 1,
+          payload: 'canonical',
+          answerSenderReport: { version: 1, name: 'Known A', agent: 'codex' }
+        }
+      ]
+    }
+    const req = (id: string, params: unknown) => ({
+      id,
+      authToken: 'caller-token',
+      method: 'orchestration.federationImport',
+      params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'relay_import_one_1'
+    })
+    expect(await makeDispatcher(false).dispatch(req('old', wire))).toMatchObject({
+      ok: true,
+      result: { mutation: { replayed: false } }
+    })
+    expect(await makeDispatcher(true).dispatch(req('new', wire))).toMatchObject({
+      ok: true,
+      result: { mutation: { replayed: true } }
+    })
+    expect(
+      await makeDispatcher(true).dispatch(
+        req('omitted', {
+          dispatchId: wire.dispatchId,
+          items: [{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }]
+        })
+      )
+    ).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
+    expect(
+      await makeDispatcher(true).dispatch(
+        req('changed', {
+          dispatchId: wire.dispatchId,
+          items: [{ ...wire.items[0], payload: 'different canonical body' }]
+        })
+      )
+    ).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+    expect(effects).toEqual([{ dispatch_id: 'dispatch-one', sequence: 1, payload: 'canonical' }])
+    db.close()
+  })
 
   it('replays one completed receipt without repeating the effect', async () => {
     const { db, dispatcher, effect } = createHarness()
@@ -155,6 +238,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.send',
+          permission: 'workspace',
           params: Params,
           handler: effect
         })
@@ -268,6 +352,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.workerRelease',
+          permission: 'workspace',
           params: z.object({ dispatch: z.string() }),
           handler: effect
         })
@@ -325,6 +410,7 @@ describe('durable orchestration mutation ledger', () => {
       methods: [
         defineMethod({
           name: 'orchestration.workerStart',
+          permission: 'workspace',
           params: z.object({ from: z.string(), task: z.string() }),
           handler: effect
         })
@@ -377,18 +463,19 @@ describe('durable orchestration mutation ledger', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'ask', runId: run.id })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
-    const capability = db.mintDispatchCapability({
-      dispatchId: dispatch.id,
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1'
-    })
+    createRootDispatch(
+      db,
+      task.id,
+      'term_worker',
+      'tab_worker:leaf_worker',
+      undefined,
+      'runtime:pty:1'
+    )
     const askRequest: RpcRequest = {
       id: 'rpc_ask_1',
       authToken: 'caller-token',
       method: 'orchestration.ask',
       params: { from: 'term_worker', question: 'Proceed?', timeoutMs: 60_000 },
-      orchestrationCapability: capability,
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'mutation_ask'
     }

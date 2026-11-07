@@ -1,3 +1,5 @@
+import { PaneReparentFrameTracker } from './pane-reparent-frame-tracker'
+
 export function attachDomRendererFocusClassSync(
   terminalElement: HTMLElement | undefined
 ): () => void {
@@ -5,19 +7,26 @@ export function attachDomRendererFocusClassSync(
     return () => undefined
   }
 
+  let disposed = false
+  const frames = new PaneReparentFrameTracker(() => disposed)
+
   const sync = (): void => {
     const rows = terminalElement.querySelector<HTMLElement>('.xterm-rows')
     if (!rows) {
       return
     }
-    // Why: xterm 6 can leave the root focused while the DOM renderer rows miss
-    // xterm-focus; its cursor blink CSS keys off the rows class.
+    // xterm 6 can focus the root without marking DOM rows; cursor-blink CSS needs their xterm-focus class too.
     rows.classList.toggle('xterm-focus', terminalElement.classList.contains('focus'))
   }
 
   const scheduleSync = (): void => {
+    if (disposed) {
+      return
+    }
     sync()
-    requestAnimationFrame(sync)
+    if (!disposed) {
+      frames.request(sync)
+    }
   }
 
   const observer = new MutationObserver(scheduleSync)
@@ -27,6 +36,8 @@ export function attachDomRendererFocusClassSync(
   scheduleSync()
 
   return () => {
+    disposed = true
+    frames.cancelPending()
     observer.disconnect()
     terminalElement.removeEventListener('focusin', scheduleSync)
     terminalElement.removeEventListener('focusout', scheduleSync)

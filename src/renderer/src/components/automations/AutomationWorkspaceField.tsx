@@ -12,23 +12,17 @@ import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationWorkspaceFieldProps = {
   draft: AutomationDraft
-  isHermesTarget: boolean
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
   pickerTriggerClassName: string
-  segmentedGroupClassName: string
-  segmentedItemClassName: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
 export function AutomationWorkspaceField({
   draft,
-  isHermesTarget,
   worktrees,
   repoMap,
   pickerTriggerClassName,
-  segmentedGroupClassName,
-  segmentedItemClassName,
   onDraftChange
 }: AutomationWorkspaceFieldProps): React.JSX.Element {
   return (
@@ -60,69 +54,51 @@ export function AutomationWorkspaceField({
         </span>
       }
     >
-      {isHermesTarget ? (
-        <WorkspaceCombobox
-          worktrees={worktrees}
-          value={draft.workspaceId}
-          triggerClassName={pickerTriggerClassName}
-          onValueChange={(workspaceId) => onDraftChange((current) => ({ ...current, workspaceId }))}
-        />
-      ) : (
-        <div className="grid gap-2">
-          <ToggleGroup
-            type="single"
-            spacing={1}
-            value={draft.workspaceMode}
-            onValueChange={(workspaceMode) =>
-              workspaceMode &&
-              onDraftChange((current) => ({
-                ...current,
-                workspaceMode: workspaceMode as AutomationWorkspaceMode,
-                reuseSession: workspaceMode === 'existing' ? current.reuseSession : false
-              }))
+      <div className="grid gap-2">
+        <ToggleGroup
+          type="single"
+          spacing={1}
+          value={draft.workspaceMode}
+          onValueChange={(workspaceMode) =>
+            workspaceMode &&
+            onDraftChange((current) => ({
+              ...current,
+              workspaceMode: workspaceMode as AutomationWorkspaceMode,
+              reuseSession: workspaceMode === 'existing' ? current.reuseSession : false
+            }))
+          }
+          size="sm"
+          variant="segmented-card"
+        >
+          <ToggleGroupItem value="existing">
+            {translate('auto.components.automations.AutomationEditorDialog.a2e688226d', 'Worktree')}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="new_per_run">
+            {translate('auto.components.automations.AutomationEditorDialog.6ff66f9012', 'New run')}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        {draft.workspaceMode === 'existing' ? (
+          <WorkspaceCombobox
+            worktrees={worktrees}
+            value={draft.workspaceId}
+            triggerClassName={`min-w-0 ${pickerTriggerClassName}`}
+            onValueChange={(workspaceId) =>
+              onDraftChange((current) => ({ ...current, workspaceId }))
             }
-            size="sm"
-            className={segmentedGroupClassName}
-          >
-            <ToggleGroupItem value="existing" className={segmentedItemClassName}>
-              {translate(
-                'auto.components.automations.AutomationEditorDialog.a2e688226d',
-                'Worktree'
-              )}
-            </ToggleGroupItem>
-            <ToggleGroupItem value="new_per_run" className={segmentedItemClassName}>
-              {translate(
-                'auto.components.automations.AutomationEditorDialog.6ff66f9012',
-                'New run'
-              )}
-            </ToggleGroupItem>
-          </ToggleGroup>
-          {draft.workspaceMode === 'existing' ? (
-            <WorkspaceCombobox
-              worktrees={worktrees}
-              value={draft.workspaceId}
-              triggerClassName={`min-w-0 ${pickerTriggerClassName}`}
-              onValueChange={(workspaceId) =>
-                onDraftChange((current) => ({ ...current, workspaceId }))
-              }
-            />
-          ) : (
-            <CreateFromPicker
-              // Why: branch search state belongs to the selected project,
-              // so repo switches should reset it before the next paint.
-              key={draft.projectId}
-              repoId={draft.projectId}
-              repoMap={repoMap}
-              worktrees={worktrees}
-              value={draft.baseBranch}
-              triggerClassName={`min-w-0 ${pickerTriggerClassName}`}
-              onValueChange={(baseBranch) =>
-                onDraftChange((current) => ({ ...current, baseBranch }))
-              }
-            />
-          )}
-        </div>
-      )}
+          />
+        ) : (
+          <CreateFromPicker
+            // Reset project-specific branch search before paint when the project changes.
+            key={draft.projectId}
+            repoId={draft.projectId}
+            repoMap={repoMap}
+            worktrees={worktrees}
+            value={draft.baseBranch}
+            triggerClassName={`min-w-0 ${pickerTriggerClassName}`}
+            onValueChange={(baseBranch) => onDraftChange((current) => ({ ...current, baseBranch }))}
+          />
+        )}
+      </div>
     </Field>
   )
 }

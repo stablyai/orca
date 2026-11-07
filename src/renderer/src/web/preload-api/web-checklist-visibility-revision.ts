@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { readJson, writeJson } from './web-storage'
 
 const CHECKLIST_VISIBILITY_REVISION_KEY = 'orca.web.checklistVisibilityRevision.v1'

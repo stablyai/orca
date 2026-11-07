@@ -1,9 +1,7 @@
 import type { AppState } from '../types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RuntimeAwareSshReadState = Pick<
   AppState,
@@ -15,17 +13,22 @@ type RuntimeAwareSshReadState = Pick<
 > &
   Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
 
-// Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
-// transport is still up, and blanking the mirrored SSH rows of a host that never went away
-// reads as "the targets vanished" (docs/reference/ssh-execution-boundary.md).
-function isEnvironmentReachable(state: RuntimeAwareSshReadState, environmentId: string): boolean {
+/** What a target's status reads; narrower so callers needn't carry the label maps. */
+export type RuntimeAwareSshStatusState = Pick<
+  AppState,
+  'sshConnectionStates' | 'sshStateByEnvironment'
+> &
+  Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
+
+// A null probe can leave transport connected; use shared reachability verdict or mirrored targets vanish (ssh-execution-boundary.md).
+function isEnvironmentReachable(state: RuntimeAwareSshStatusState, environmentId: string): boolean {
   return isConnectedRuntimeHostState(
     runtimeHostConnectionStateForEntry(state.runtimeStatusByEnvironmentId?.get(environmentId))
   )
 }
 
 export function selectRuntimeAwareSshStatus(
-  state: RuntimeAwareSshReadState,
+  state: RuntimeAwareSshStatusState,
   environmentId: string | null,
   targetId: string
 ): SshConnectionStatus | null {
@@ -43,7 +46,7 @@ export function selectRuntimeAwareSshStatus(
 }
 
 export function selectRuntimeAwareSshError(
-  state: RuntimeAwareSshReadState,
+  state: RuntimeAwareSshStatusState,
   environmentId: string | null,
   targetId: string
 ): string | null {

@@ -1,8 +1,9 @@
+import { taskProviderFailure } from '../../shared/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
 import type { LinearComment } from '../../shared/linear/issue-types'
 import { acquire, release } from './linear-request-concurrency'
 import { clearToken } from './linear-token-store'
-import { getClients, isAuthError } from './client'
+import { getClients, getPublicFileUrlClient, isAuthError } from './client'
 import {
   ATTACHMENT_BY_UUID_QUERY,
   COMMENT_BY_UUID_QUERY,
@@ -33,7 +34,7 @@ export async function addIssueComment(
 > {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
-    return { ok: false, error: 'Not connected to Linear' }
+    return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
 
   await acquire()
@@ -45,7 +46,7 @@ export async function addIssueComment(
       ...(options?.parentId ? { parentId: options.parentId } : {})
     })
     if (!result.success) {
-      return { ok: false, error: 'Failed to create comment' }
+      return taskProviderFailure('linear.commentFailed', 'Failed to create comment')
     }
     const comment = await result.comment
     return {
@@ -70,89 +71,164 @@ export async function addIssueCommentForAgent(
   issueId: string,
   body: string,
   workspaceId: string,
-  options: { id: string; parentId?: string | null; signal?: AbortSignal }
+  options: { id: string; parentId?: string | null; signal?: AbortSignal; beforeInvoke?: () => void }
 ): Promise<LinearCommentWriteRecord> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
 
-  return runLinearWrite(entry, options.signal, async (client) => {
-    const result = await client.createComment({
-      id: options.id,
-      issueId,
-      body,
-      ...(options.parentId ? { parentId: options.parentId } : {})
-    })
-    if (!result.success) {
-      throw new LinearWriteFailure('failed', 'Failed to create comment')
-    }
-    const comment = await confirmLinearWrite(
-      'Comment was created but could not be retrieved',
-      async () => result.comment
-    )
-    if (!comment?.id) {
-      throw new LinearWriteFailure('unconfirmed', 'Comment was created but could not be retrieved')
-    }
-    const record = await confirmLinearWrite('Comment was created but could not be retrieved', () =>
-      readCommentWriteRecord(client, comment.id)
-    )
-    if (!record) {
-      throw new LinearWriteFailure('unconfirmed', 'Comment was created but could not be retrieved')
-    }
-    return record
-  })
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.createComment({
+        id: options.id,
+        issueId,
+        body,
+        ...(options.parentId ? { parentId: options.parentId } : {})
+      })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to create comment')
+      }
+      options.signal?.throwIfAborted()
+      const comment = await confirmLinearWrite(
+        'Comment was created but could not be retrieved',
+        async () => result.comment
+      )
+      if (!comment?.id) {
+        throw new LinearWriteFailure(
+          'unconfirmed',
+          'Comment was created but could not be retrieved'
+        )
+      }
+      const record = await confirmLinearWrite(
+        'Comment was created but could not be retrieved',
+        () => readCommentWriteRecord(client, comment.id, options.signal)
+      )
+      if (!record) {
+        throw new LinearWriteFailure(
+          'unconfirmed',
+          'Comment was created but could not be retrieved'
+        )
+      }
+      return record
+    },
+    options.beforeInvoke
+  )
+}
+
+export async function updateIssueCommentForAgent(
+  commentId: string,
+  body: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<LinearCommentWriteRecord> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.updateComment(commentId, { body })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to edit comment')
+      }
+      const record = await confirmLinearWrite('Comment was edited but could not be retrieved', () =>
+        readCommentWriteRecord(client, commentId, options.signal)
+      )
+      if (!record) {
+        throw new LinearWriteFailure('unconfirmed', 'Comment was edited but could not be retrieved')
+      }
+      return record
+    },
+    options.beforeInvoke
+  )
+}
+
+export async function deleteIssueCommentForAgent(
+  commentId: string,
+  workspaceId: string,
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
+): Promise<void> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    throw new LinearWriteFailure('failed', 'Not connected to Linear')
+  }
+
+  await runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.deleteComment(commentId)
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to delete comment')
+      }
+    },
+    options.beforeInvoke
+  )
 }
 
 export async function createIssueAttachment(
   issueId: string,
   input: { id: string; title: string; url: string },
   workspaceId: string,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<LinearAttachmentWriteRecord> {
   const entry = getClients(workspaceId)[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
 
-  return runLinearWrite(entry, options.signal, async (client) => {
-    const result = await client.createAttachment({
-      id: input.id,
-      issueId,
-      title: input.title,
-      url: input.url
-    })
-    if (!result.success) {
-      throw new LinearWriteFailure('failed', 'Failed to create attachment')
-    }
-    const attachment = await confirmLinearWrite(
-      'Attachment was created but could not be retrieved',
-      async () => result.attachment
-    )
-    if (!attachment?.id) {
-      throw new LinearWriteFailure(
-        'unconfirmed',
-        'Attachment was created but could not be retrieved'
+  return runLinearWrite(
+    entry,
+    options.signal,
+    async (client) => {
+      const result = await client.createAttachment({
+        id: input.id,
+        issueId,
+        title: input.title,
+        url: input.url
+      })
+      if (!result.success) {
+        throw new LinearWriteFailure('failed', 'Failed to create attachment')
+      }
+      options.signal?.throwIfAborted()
+      const attachment = await confirmLinearWrite(
+        'Attachment was created but could not be retrieved',
+        async () => result.attachment
       )
-    }
-    const record = await confirmLinearWrite(
-      'Attachment was created but could not be retrieved',
-      () => readAttachmentWriteRecord(client, attachment.id)
-    )
-    if (!record) {
-      throw new LinearWriteFailure(
-        'unconfirmed',
-        'Attachment was created but could not be retrieved'
+      if (!attachment?.id) {
+        throw new LinearWriteFailure(
+          'unconfirmed',
+          'Attachment was created but could not be retrieved'
+        )
+      }
+      const record = await confirmLinearWrite(
+        'Attachment was created but could not be retrieved',
+        () => readAttachmentWriteRecord(client, attachment.id, options.signal)
       )
-    }
-    return record
-  })
+      if (!record) {
+        throw new LinearWriteFailure(
+          'unconfirmed',
+          'Attachment was created but could not be retrieved'
+        )
+      }
+      return record
+    },
+    options.beforeInvoke
+  )
 }
 
 async function readCommentWriteRecord(
   client: LinearClient,
-  id: string
+  id: string,
+  signal?: AbortSignal
 ): Promise<LinearCommentWriteRecord | null> {
+  signal?.throwIfAborted()
   const result = await client.client.rawRequest<LinearCommentByUuidResponse, LinearRawVariables>(
     COMMENT_BY_UUID_QUERY,
     { id }
@@ -163,8 +239,10 @@ async function readCommentWriteRecord(
 
 async function readAttachmentWriteRecord(
   client: LinearClient,
-  id: string
+  id: string,
+  signal?: AbortSignal
 ): Promise<LinearAttachmentWriteRecord | null> {
+  signal?.throwIfAborted()
   const result = await client.client.rawRequest<LinearAttachmentByUuidResponse, LinearRawVariables>(
     ATTACHMENT_BY_UUID_QUERY,
     { id }
@@ -184,16 +262,14 @@ export async function getIssueComments(
 
   await acquire()
   try {
-    const result = await entry.client.client.rawRequest<
+    const result = await getPublicFileUrlClient(entry).client.rawRequest<
       LinearIssueCommentsResponse,
       LinearRawVariables
     >(ISSUE_COMMENTS_QUERY, { id: issueId })
     const nodes = result.data?.issue?.comments?.nodes ?? []
-    return nodes.map((node) => ({
+    const comments = nodes.map((node) => ({
       id: node.id,
       body: node.body ?? '',
-      // Why: rawRequest returns createdAt as an ISO string already; do not
-      // re-serialize (the SDK model path used .toISOString() on a parsed Date).
       createdAt: node.createdAt ?? '',
       user: node.user
         ? {
@@ -202,6 +278,8 @@ export async function getIssueComments(
           }
         : undefined
     }))
+    // Why: Linear sends newest first; oldest-first matches linear.app and where new comments land.
+    return comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.workspace.id)

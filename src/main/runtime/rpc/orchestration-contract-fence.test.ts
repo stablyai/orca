@@ -1,8 +1,13 @@
+import './unused-default-rpc-methods.test-fixture'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import '../orchestration/db/contract-constants'
+import '../orchestration/db/messages/mailbox-routing-page'
+import '../orchestration/db/dispatch-row-writer'
+import '../orchestration/db/attempt-outcome-projection'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 
@@ -26,6 +31,7 @@ describe('orchestration contract fence', () => {
       methods: [
         defineMethod({
           name: method,
+          permission: 'workspace',
           params: z.object({ subject: z.string() }),
           handler: effect
         })

@@ -14,7 +14,7 @@ function makeRepo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
 }
 
 function makeOperations(repos: Repo[]) {
-  const state = { repos, projectGroups: [] }
+  const state = { repos, projectGroups: [], worktreeMeta: {} }
   const scheduleSave = vi.fn()
   const operations = new RepoUpdatePersistenceOperations({
     state,
@@ -37,12 +37,15 @@ describe('updateRepo host guard', () => {
   })
 
   it('reports a host mismatch instead of returning the same silent null as a missing row', () => {
-    // #22421's exact shape: the row exists under `runtime:env-1`, the caller addressed the probe host.
+    // Regression #22421: caller used the probed host instead of the stored runtime row's host.
     const { operations, scheduleSave } = makeOperations([
       makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
     ])
 
-    const result = operations.updateRepo('repo-1', { displayName: 'Renamed' }, 'local')
+    const result = operations.updateRepo(
+      { id: 'repo-1', executionHostId: 'local' },
+      { displayName: 'Renamed' }
+    )
 
     expect(result).toBeNull()
     expect(scheduleSave).not.toHaveBeenCalled()
@@ -57,7 +60,12 @@ describe('updateRepo host guard', () => {
       makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
     ])
 
-    expect(operations.updateRepo('repo-missing', { displayName: 'Renamed' }, 'local')).toBeNull()
+    expect(
+      operations.updateRepo(
+        { id: 'repo-missing', executionHostId: 'local' },
+        { displayName: 'Renamed' }
+      )
+    ).toBeNull()
     expect(errors).toEqual([])
   })
 
@@ -66,7 +74,10 @@ describe('updateRepo host guard', () => {
       makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
     ])
 
-    const result = operations.updateRepo('repo-1', { displayName: 'Renamed' }, 'runtime:env-1')
+    const result = operations.updateRepo(
+      { id: 'repo-1', executionHostId: 'runtime:env-1' },
+      { displayName: 'Renamed' }
+    )
 
     expect(result?.displayName).toBe('Renamed')
     expect(state.repos[0].displayName).toBe('Renamed')
@@ -79,20 +90,33 @@ describe('updateRepo host guard', () => {
     const peer = makeRepo({ id: 'repo-1', displayName: 'Peer', executionHostId: 'ssh:peer' })
     const { operations, state } = makeOperations([local, peer])
 
-    const result = operations.updateRepo('repo-1', { displayName: 'Local edit' }, 'local')
+    const result = operations.updateRepo(
+      { id: 'repo-1', executionHostId: 'local' },
+      { displayName: 'Local edit' }
+    )
 
     expect(result?.displayName).toBe('Local edit')
-    // The peer's row is untouched: a client-local write must never repair another host's metadata.
     expect(state.repos[1].displayName).toBe('Peer')
   })
 
-  it('writes without a host argument exactly as before', () => {
-    const { operations, state } = makeOperations([
-      makeRepo({ id: 'repo-1', executionHostId: 'runtime:env-1' })
-    ])
+  it('reads a target without host fields as the local row, never the first same-id row', () => {
+    const peer = makeRepo({ id: 'repo-1', displayName: 'Peer', connectionId: 'peer' })
+    const local = makeRepo({ id: 'repo-1', displayName: 'Local' })
+    const { operations, state } = makeOperations([peer, local])
 
-    expect(operations.updateRepo('repo-1', { displayName: 'Renamed' })?.displayName).toBe('Renamed')
-    expect(state.repos[0].displayName).toBe('Renamed')
+    operations.updateRepo({ id: 'repo-1' }, { displayName: 'Renamed' })
+
+    expect(state.repos.map((repo) => repo.displayName)).toEqual(['Peer', 'Renamed'])
+  })
+
+  it('addresses an SSH row through its connectionId alone', () => {
+    const local = makeRepo({ id: 'repo-1', displayName: 'Local' })
+    const peer = makeRepo({ id: 'repo-1', displayName: 'Peer', connectionId: 'peer' })
+    const { operations, state } = makeOperations([local, peer])
+
+    operations.updateRepo(peer, { displayName: 'Peer edit' })
+
+    expect(state.repos.map((repo) => repo.displayName)).toEqual(['Local', 'Peer edit'])
     expect(errors).toEqual([])
   })
 })

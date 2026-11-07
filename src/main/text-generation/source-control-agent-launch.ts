@@ -1,9 +1,11 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
+import { wslDistroForCommand } from '../../shared/wsl-paths'
+import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
 import { wslAwareSpawn } from '../git/runner'
-import { getSpawnArgsForWindows } from '../win32-utils'
+import { spawnSupervisedAgent } from './source-control-supervised-agent-spawn'
 import type {
+  SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
@@ -37,9 +39,12 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 }
 
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
+  const wslDistro = input.preparation
+    ? wslDistroForCommand(input.cwd, input.wslDistro)
+    : input.wslDistro
   const spawnEnv = input.env ?? process.env
-  if (process.platform === 'win32' && input.wslDistro) {
-    // Apply assignments in the guest after its login shell, not to the Windows launcher.
+  if (process.platform === 'win32' && wslDistro) {
+    // Apply command assignments after guest login-shell setup, never to the Windows launcher.
     const assignments = Object.entries(input.commandEnv ?? {}).map(
       ([key, value]) => `${key}=${value}`
     )
@@ -52,25 +57,35 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
         env: buildWslLauncherEnv(input.env),
         stdio: [input.stdinMode, 'pipe', 'pipe'],
         windowsHide: true,
-        wslDistro: input.wslDistro,
-        useWslLoginShell: true
+        wslDistro,
+        useWslLoginShell: true,
+        ...(input.preparation ? { preparation: input.preparation } : {})
       }
     ) as SpawnedSourceControlAgentProcess
   }
-  const resolvedBinary =
+  const child =
     process.platform === 'win32'
-      ? resolveCliCommand(input.binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
-      : input.binary
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args)
-  const child = spawnProcess({
-    program: spawnCmd,
-    args: spawnArgs,
-    env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
-    ...(input.useCwdForNative ? { cwd: input.cwd } : {})
-  })
+      ? spawnWindowsAgent(input, spawnEnv)
+      : spawnSupervisedAgent(input, spawnEnv)
   if (input.stdinMode === 'ignore') {
     child.stdin?.on?.('error', () => {})
     child.stdin?.end()
   }
   return child
+}
+
+function spawnWindowsAgent(
+  input: SourceControlAgentSpawnInput,
+  spawnEnv: NodeJS.ProcessEnv
+): SpawnedSourceControlAgentProcess {
+  const resolvedBinary = resolveCliCommand(input.binary, {
+    pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null
+  })
+  // #28768: let process-host resolve npm shims as node + script so multiline argv survives.
+  return spawnProcess({
+    program: resolvedBinary,
+    args: input.args,
+    env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
+    ...(input.useCwdForNative ? { cwd: input.cwd } : {})
+  })
 }

@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { Badge } from '../ui/badge'
 import { getWorkspaceSpaceStatusLabel } from './workspace-space-format'
 import { translate } from '@/i18n/i18n'
@@ -112,6 +112,13 @@ export function WorkspaceSpaceStatusBadge({
           'auto.components.status.bar.WorkspaceSpaceManagerPanel.720870a18e',
           'Keep: linked'
         )}
+      </Badge>
+    )
+  }
+  if (decisionDetails?.canOpenWorkspace === false) {
+    return (
+      <Badge variant="outline">
+        {translate('workspaceSpace.status.notManaged', 'Not managed')}
       </Badge>
     )
   }

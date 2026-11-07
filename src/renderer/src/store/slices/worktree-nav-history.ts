@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { findWorktreeById } from './worktree-helpers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import {
@@ -10,6 +10,7 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
 
 // Why: bound per-session history growth; 50 keeps goBack/goForward's linear scans cheap yet is never hit in normal use.
 const MAX_HISTORY = 50
@@ -93,7 +94,7 @@ function isSimpleViewEntry(
 }
 
 // Why: view entries count as live unconditionally — findWorktreeById can't resolve page sentinels.
-function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
+export function isViewEntry(entry: WorktreeNavHistoryEntry): entry is WorktreeNavHistoryViewEntry {
   return isSimpleViewEntry(entry) || typeof entry === 'object'
 }
 
@@ -139,14 +140,14 @@ function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   }
   const workspaceScope = parseWorkspaceKey(entry)
   if (workspaceScope?.type === 'folder') {
-    return state.folderWorkspaces.some(
+    return selectFolderWorkspaces(state).some(
       (workspace) => workspace.id === workspaceScope.folderWorkspaceId
     )
   }
-  return findWorktreeById(state.worktreesByRepo, entry) !== undefined
+  return findWorktreeById(selectWorktreesByRepo(state), entry) !== undefined
 }
 
-function appendHistoryEntry(
+export function appendHistoryEntry(
   s: { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number },
   entry: WorktreeNavHistoryEntry
 ): { worktreeNavHistory: WorktreeNavHistoryEntry[]; worktreeNavHistoryIndex: number } {

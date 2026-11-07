@@ -1,12 +1,11 @@
 import React from 'react'
-import { AlertCircle, CheckCircle2, Download } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock3, Download, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
+import { getUpdateInstallBlockGuidance } from '../maintenance/update-card/update-install-block-guidance'
 
-// Why: always rendered (not gated by `statusBarItems`). When the update card
-// is collapsed, this segment is the only way back to it — hiding it would
-// strand the user with an orphaned download or install.
+// Always expose the collapsed update card so pending downloads and installs remain reachable.
 export function UpdateStatusSegment({
   iconOnly
 }: {
@@ -40,6 +39,31 @@ export function UpdateStatusSegment({
           'auto.components.status.bar.UpdateStatusSegment.fd1d3b3a1d',
           'Update downloading, {{value0}} percent. Click to expand.',
           { value0: pct }
+        )
+      }
+    }
+    if (status.state === 'error' && status.installBlock) {
+      return {
+        icon: <Clock3 className="size-3 text-muted-foreground" />,
+        label: translate('updates.installBlock.waitingLabel', 'Update waiting'),
+        tooltip: getUpdateInstallBlockGuidance(status.installBlock).explainer,
+        ariaLabel: translate(
+          'updates.installBlock.waitingAriaLabel',
+          'Update waiting for other Orca instances. Click to expand.'
+        )
+      }
+    }
+    if (status.state === 'downloaded' && status.installing) {
+      return {
+        icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
+        label: translate('updates.installBlock.preparingLabel', 'Preparing update'),
+        tooltip: translate(
+          'updates.installBlock.preparingSummary',
+          'Checking running Orca instances before restarting.'
+        ),
+        ariaLabel: translate(
+          'updates.installBlock.preparingAriaLabel',
+          'Preparing update. Click to expand.'
         )
       }
     }

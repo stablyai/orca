@@ -20,11 +20,13 @@ import {
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import Database from '../../src/main/sqlite/sync-database'
-import {
-  CURRENT_CONTRACT_VERSION,
-  LEGACY_CONTRACT_VERSION,
-  LEGACY_RUN_ID
-} from '../../src/main/runtime/orchestration/db'
+import '../../src/main/runtime/orchestration/db/orchestration-db'
+import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db/contract-constants'
+import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../src/shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../src/shared/orchestration-rpc-contract'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
 import {
@@ -32,6 +34,7 @@ import {
   FAKE_AGENT_WINDOWS_SHELL
 } from './helpers/fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
+import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -89,10 +92,7 @@ async function emitAuthorityHook(hookEventName) {
     })
   }
 }
-if (process.argv.slice(2).includes('app-server')) {
-  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
-  process.exit(2)
-}
+${FAKE_CODEX_LAUNCH_PROBES_SOURCE}
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', argv: process.argv.slice(2) })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 const sessionStartHook = emitAuthorityHook('SessionStart')
@@ -328,7 +328,7 @@ function assertDispatchRemainsCurrent(
     const authority = db
       .prepare(
         `SELECT dc.status AS dispatch_status, dc.assignee_handle, dc.assignee_pane_key,
-                dc.process_incarnation, dc.contract_version, dc.capability_hash,
+                dc.process_incarnation, dc.contract_version,
                 wd.state AS worker_state, wd.worktree_id, wd.agent_terminal_handle
          FROM dispatch_contexts dc
          INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
@@ -341,7 +341,6 @@ function assertDispatchRemainsCurrent(
       assignee_pane_key: input.paneKey,
       process_incarnation: input.processIncarnation,
       contract_version: CURRENT_CONTRACT_VERSION,
-      capability_hash: expect.any(String),
       worker_state: 'ready',
       worktree_id: input.worktreeId,
       agent_terminal_handle: input.terminalHandle
@@ -583,9 +582,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
                 transcriptPath: transcript
               },
               launchConfig: {
-                // Why not bare 'codex': resume prefers the captured command over
-                // agentCmdOverrides, so a bare name would resolve the machine's real
-                // Codex off PATH and unpin the adoption leg this spec exercises.
+                // Resume prefers the captured command over overrides; pin its path so bare codex cannot launch the user’s installation.
                 agentCommand,
                 agentArgs: '--dangerously-bypass-approvals-and-sandbox',
                 agentEnv: {}

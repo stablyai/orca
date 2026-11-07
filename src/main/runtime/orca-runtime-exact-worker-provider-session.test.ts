@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
-import { OrcaRuntimeWithGetTerminalInteractiveWait } from './orca-runtime-get-terminal-interactive-wait'
+import { OrcaRuntimeWithGetTerminalInteractiveWait } from './terminal/wait/terminal-interactive-wait'
 
 const PANE_KEY = 'tab:worker'
 const PTY_ID = 'pty-wsl'
@@ -9,7 +9,7 @@ type ExactWorkerProviderSessionHost = {
   getExactWorkerProviderSession: (handle: string, observedAfter: number) => unknown
 }
 
-/** Drives the shipping method, not the selector helper: the wiring is what regressed. */
+// Exercise shipping-method wiring: that was the regression, not selector logic.
 function selectThroughRuntime(statusConnectionId: string | null): unknown {
   const runtime = {
     getTerminalPaneKey: () => PANE_KEY,

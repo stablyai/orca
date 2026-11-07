@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  OrcaRuntimeService,
   addGitLabIssueCommentMock,
   addGitLabMRCommentMock,
   addGitLabMRInlineCommentMock,
@@ -11,6 +12,7 @@ import {
   getGitLabWorkItemDetailsMock,
   listGitLabIssuesMock,
   listGitLabLabelsMock,
+  listGitLabAssignableUsersMock,
   listGitLabMergeRequestsMock,
   listGitLabTodosMock,
   listGitLabWorkItemsMock,
@@ -22,8 +24,8 @@ import {
   updateGitLabIssueMock,
   updateGitLabMRMock,
   updateGitLabMRReviewersMock
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_REPO_PATH, store } from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-test-mocks/setup.spec'
+import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('passes SSH connection ids through GitLab task operations', async () => {
@@ -45,6 +47,7 @@ describe('OrcaRuntimeService', () => {
     })
     listGitLabTodosMock.mockResolvedValue([])
     listGitLabLabelsMock.mockResolvedValue(['bug', 'frontend'])
+    listGitLabAssignableUsersMock.mockResolvedValue([])
     getGitLabWorkItemByProjectRefMock.mockResolvedValue({
       id: 'gitlab-issue-7',
       type: 'issue',
@@ -84,11 +87,12 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
-    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
+    await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector', 'authored')
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
     const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50, 3)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
     await runtime.listGitLabRepoLabels(TEST_REPO_ID)
+    await runtime.listGitLabRepoAssignableUsers(TEST_REPO_ID)
     await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'New issue', 'Body')
     await runtime.updateGitLabRepoIssue(TEST_REPO_ID, 7, { state: 'closed' })
     await runtime.addGitLabRepoIssueComment(TEST_REPO_ID, 7, 'Looks good')
@@ -124,7 +128,9 @@ describe('OrcaRuntimeService', () => {
       25,
       'origin',
       'ambiguous selector',
-      'ssh-1'
+      'ssh-1',
+      {},
+      { involvement: 'authored' }
     )
     expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -162,6 +168,7 @@ describe('OrcaRuntimeService', () => {
     expect(issues).toMatchObject({ totalPages: 3 })
     expect(listGitLabTodosMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
     expect(listGitLabLabelsMock).toHaveBeenCalledWith('/remote/repo', 'origin', 'ssh-1')
+    expect(listGitLabAssignableUsersMock).toHaveBeenCalledWith('/remote/repo', 'origin', 'ssh-1')
     expect(createGitLabIssueMock).toHaveBeenCalledWith(
       '/remote/repo',
       'New issue',
@@ -240,7 +247,20 @@ describe('OrcaRuntimeService', () => {
       'mr',
       'origin',
       'ssh-1',
-      undefined
+      undefined,
+      {},
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      '/remote/repo',
+      8,
+      'mr',
+      'origin',
+      'ssh-1',
+      undefined,
+      {},
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRReviewersMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -311,7 +331,8 @@ describe('OrcaRuntimeService', () => {
       undefined,
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      { involvement: undefined }
     )
     expect(listGitLabWorkItemsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -436,7 +457,19 @@ describe('OrcaRuntimeService', () => {
       undefined,
       null,
       undefined,
-      localGitOptions
+      localGitOptions,
+      { includeReviewDetails: undefined }
+    )
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
+      TEST_REPO_PATH,
+      8,
+      'mr',
+      undefined,
+      null,
+      undefined,
+      localGitOptions,
+      { includeReviewDetails: false }
     )
     expect(updateGitLabMRMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,

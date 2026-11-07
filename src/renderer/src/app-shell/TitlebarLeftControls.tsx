@@ -15,14 +15,10 @@ import {
 } from '@/store/slices/worktree-nav-history'
 import { useShortcutLabel } from '../hooks/useShortcutLabel'
 import { useAppStore } from '../store'
-import { hasCustomTitleBar, isMac } from './app-window-chrome'
+import { hasCustomTitleBar, hasMacTrafficLights } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
-/**
- * The titlebar's left cluster: window chrome padding, app name, sidebar toggle, and the
- * worktree back/forward pair. Shared by the full-width titlebar and the sidebar-width left
- * header so the agent badge popover isn't duplicated.
- */
+/** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -33,8 +29,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
 
   return (
-    // Why: measure the ENTIRE row so TabGroupPanel's collapse spacer reserves enough width; measuring only the inner cluster left back/forward over the first tab.
-    // Why: collapsed mode floats in a w-0 wrapper; w-max stops Windows Chromium from shrinking the app name to one glyph.
+    // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
     <div
       ref={layout.titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
@@ -42,10 +37,10 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
       }`}
     >
       <div className="flex h-full items-center">
-        {isMac && !layout.isFullScreen ? (
+        {hasMacTrafficLights && !layout.isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
-          /* Why: Windows/Linux remove the native title bar, so render the logo plus a ··· button that pops the application menu (as Alt does). */
+          /* Replace native Windows/Linux chrome with logo and application-menu access. */
           <>
             <img src={logo} alt="" aria-hidden className="titlebar-logo" />
             <Tooltip>
@@ -108,9 +103,9 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
           </Tooltip>
         )}
       </div>
-      {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
+      {/* Show shared workspace/page history wherever its shortcut is available. */}
       {shouldShowWorktreeHistoryControls(layout.activeView) && (
-        // With the sidebar collapsed the header shrink-wraps and ml-auto has no spare width, so keep a fixed gutter before Back.
+        // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.
         <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>
             <TooltipTrigger asChild>

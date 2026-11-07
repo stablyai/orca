@@ -11,7 +11,6 @@ import { COMMAND_SPECS } from './specs'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
-/** The real registry pipeline, so these assertions cover the shipped spec too. */
 function parseCli(argv: string[]): ParsedArgs {
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
@@ -34,7 +33,7 @@ function request(argv: string[]) {
 }
 
 describe('orca search argument parsing', () => {
-  it('takes the query positionally', () => {
+  it('takes the query positionally without adding optional fields', () => {
     expect(parseCli(['search', 'resize race']).commandPath).toEqual(['search'])
     expect(request(['search', 'resize race'])).toEqual({ query: 'resize race' })
   })
@@ -95,10 +94,6 @@ describe('orca search argument parsing', () => {
     })
   })
 
-  it('omits every optional field the caller did not name', () => {
-    expect(Object.keys(request(['search', 'q']))).toEqual(['query'])
-  })
-
   it('reads --scope all and --sort relevance', () => {
     expect(request(['search', 'q', '--scope', 'all', '--sort', 'relevance'])).toMatchObject({
       scope: 'all',
@@ -126,8 +121,14 @@ describe('orca search argument parsing', () => {
 
   it('rejects an unknown --agent and names the known ones', () => {
     expect(() => parseSearch(['search', 'q', '--agent', 'claude', '--agent', 'bogus'])).toThrow(
-      /Unknown --agent "bogus"\. Known agents: claude, codebuddy, codex, /
+      /Unknown --agent "bogus"\. Known agents: claude, codebuddy, qoder, codex, /
     )
+  })
+
+  it('accepts Qoder without changing another agent filter', () => {
+    expect(
+      request(['search', 'q', '--agent', 'qoder', '--agent', 'codex']).filters?.agents
+    ).toEqual(['qoder', 'codex'])
   })
 
   it('rejects more --path values than the contract accepts', () => {

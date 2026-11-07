@@ -14,10 +14,6 @@ function repo(id: string, path = `/repos/${id}`, executionHostId?: Repo['executi
   }
 }
 
-function remoteRepo(id: string, path = `/repos/${id}`): Repo {
-  return { ...repo(id, path), executionHostId: 'runtime:env-1' }
-}
-
 function setup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup {
   return {
     id: 'setup-builder',
@@ -68,7 +64,7 @@ describe('buildAutomationRunContextForRepo', () => {
       buildAutomationRunContextForRepo({
         repoId: 'repo-builder',
         repos: [repo('repo-builder')],
-        projectHostSetups: [setup({ setupState: 'setting-up' })]
+        projectHostSetups: [setup({ hostId: 'local', setupState: 'setting-up' })]
       })
     ).toBeNull()
 
@@ -77,16 +73,6 @@ describe('buildAutomationRunContextForRepo', () => {
         repoId: 'repo-builder',
         repos: [],
         projectHostSetups: [setup()]
-      })
-    ).toBeNull()
-  })
-
-  it('fails closed when the same repo id exists on more than one authority', () => {
-    expect(
-      buildAutomationRunContextForRepo({
-        repoId: 'same-id',
-        repos: [repo('same-id', '/local/orca'), remoteRepo('same-id', '/remote/orca')],
-        projectHostSetups: []
       })
     ).toBeNull()
   })

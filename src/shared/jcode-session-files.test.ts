@@ -1,0 +1,128 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const { homedirMock } = vi.hoisted(() => ({
+  homedirMock: vi.fn<() => string>()
+}))
+
+vi.mock(import('node:os'), async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, homedir: homedirMock }
+})
+
+import { readLastJcodeUserPromptFromHookPayload } from './jcode-session-files'
+
+describe('shared jcode-session-files', () => {
+  let homeDir: string
+  let sessionsDir: string
+
+  beforeEach(() => {
+    homeDir = mkdtempSync(join(tmpdir(), 'orca-jcode-sessions-'))
+    homedirMock.mockReturnValue(homeDir)
+    sessionsDir = join(homeDir, '.jcode', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.clearAllMocks()
+    rmSync(homeDir, { recursive: true, force: true })
+  })
+
+  it('returns the last real user prompt from the live journal', () => {
+    writeFileSync(
+      join(sessionsDir, 'session_a_1.journal.jsonl'),
+      [
+        JSON.stringify({
+          meta: { id: 'session_a_1' },
+          append_messages: [
+            {
+              id: 'm1',
+              role: 'user',
+              display_role: 'system',
+              content: [{ type: 'text', text: '<system-reminder>injected</system-reminder>' }]
+            },
+            { id: 'm2', role: 'user', content: [{ type: 'text', text: 'fix the flaky test' }] }
+          ]
+        })
+      ].join('\n')
+    )
+    const found = readLastJcodeUserPromptFromHookPayload({ session_id: 'session_a_1' })
+    expect(found?.text).toBe('fix the flaky test')
+    expect(found?.interactionKey).toContain('jcode-transcript')
+  })
+
+  it('falls back to the consolidated session doc when the journal is missing', () => {
+    writeFileSync(
+      join(sessionsDir, 'session_b_2.json'),
+      JSON.stringify({
+        id: 'session_b_2',
+        messages: [
+          { id: 'm1', role: 'user', display_role: 'system', content: 'injected context' },
+          { id: 'm2', role: 'user', content: [{ type: 'text', text: 'hello jcode' }] },
+          { id: 'm3', role: 'assistant', content: 'hi' }
+        ]
+      })
+    )
+    const found = readLastJcodeUserPromptFromHookPayload({ session_id: 'session_b_2' })
+    expect(found?.text).toBe('hello jcode')
+  })
+
+  it('skips injected context and returns null when only system content exists', () => {
+    writeFileSync(
+      join(sessionsDir, 'session_c_3.journal.jsonl'),
+      JSON.stringify({
+        meta: { id: 'session_c_3' },
+        append_messages: [
+          {
+            id: 'm1',
+            role: 'user',
+            display_role: 'system',
+            content: [{ type: 'text', text: '<system-reminder>context</system-reminder>' }]
+          }
+        ]
+      })
+    )
+    expect(readLastJcodeUserPromptFromHookPayload({ session_id: 'session_c_3' })).toBeNull()
+  })
+
+  it('keys a prompt by its place in the file, so appends do not remint the key', () => {
+    // EOF-relative windows shift on append; region-local keys reminted unchanged prompts and bypassed turn_end dedupe, duplicating prompt telemetry.
+    const journalPath = join(sessionsDir, 'session_d_4.journal.jsonl')
+    const filler = (index: number) =>
+      JSON.stringify({
+        meta: { id: 'session_d_4' },
+        append_messages: [],
+        index,
+        pad: 'x'.repeat(400)
+      })
+    const prompt = JSON.stringify({
+      meta: { id: 'session_d_4' },
+      append_messages: [{ id: 'm1', role: 'user', content: [{ type: 'text', text: 'keep me' }] }]
+    })
+    // Place the prompt deep in the second 64 KiB window so appends change its region-local line index.
+    const before = Array.from({ length: 200 }, (_, index) => filler(index))
+    const after = Array.from({ length: 100 }, (_, index) => filler(1000 + index))
+
+    writeFileSync(journalPath, [...before, prompt, ...after].join('\n'))
+    const firstRead = readLastJcodeUserPromptFromHookPayload({ session_id: 'session_d_4' })
+
+    writeFileSync(journalPath, [...before, prompt, ...after, filler(9999)].join('\n'))
+    const afterAppend = readLastJcodeUserPromptFromHookPayload({ session_id: 'session_d_4' })
+
+    expect(firstRead?.text).toBe('keep me')
+    expect(afterAppend?.text).toBe('keep me')
+    expect(afterAppend?.interactionKey).toBe(firstRead?.interactionKey)
+  })
+
+  it('rejects traversal to a file containing a user prompt', () => {
+    writeFileSync(
+      join(homeDir, 'escaped.json'),
+      JSON.stringify({ messages: [{ role: 'user', content: 'outside the sessions directory' }] })
+    )
+    expect(readLastJcodeUserPromptFromHookPayload({ session_id: '../../escaped' })).toBeNull()
+    expect(readLastJcodeUserPromptFromHookPayload({})).toBeNull()
+  })
+})

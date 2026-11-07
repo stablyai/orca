@@ -1,14 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
-/**
- * What the user can do about a chat Orca could not resume, decided from the host's reason.
- *
- * One sentence saying what to do and why, and the button that does it. Retry is the primary action
- * only where a second attempt can actually succeed — an ownership clash or a reconnect that never
- * happened. A refusal that stands (newer work in the chat, the provider saying no) sends the user to
- * the chat itself, because that is the only place it can be continued.
- */
+/** Offer retry only for recoverable refusals; newer chat work or a standing provider refusal requires continuing in the chat. */
 
 export type ResumeFailureAction = 'open' | 'retry' | 'dismiss'
 
@@ -28,8 +21,7 @@ const NOT_RESUMABLE = new Set([
   'agent_session_identity_required'
 ])
 
-/** Whether Resume may name this chat at all. The host already knows a retry would not run; an
- *  older host omits the flag and the row stays selectable. */
+/** Respect host retryability; older hosts omit it and retain selectable rows. */
 export function resumeFailureSelectable(failure: Pick<ResumeFailure, 'retryable'>): boolean {
   return failure.retryable !== false
 }
@@ -78,7 +70,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
     return {
       text: translate(
         'auto.components.NativeChatResumeFailureGuidance.conflict',
-        'Another Orca window or terminal still owns this session. Close it, then retry.'
+        'This chat is open in another Orca window or terminal. Close it there, then retry.'
       ),
       primary: 'retry',
       secondary: 'open'
@@ -88,7 +80,7 @@ function reasonGuidance(failure: Pick<ResumeFailure, 'outcome' | 'reason'>): Res
     return {
       text: translate(
         'auto.components.NativeChatResumeFailureGuidance.ownershipUnknown',
-        'Orca is still working out which process owns this session. Wait a moment, then retry.'
+        'This chat isn’t ready to resume yet. Wait a moment, then retry.'
       ),
       primary: 'retry',
       secondary: 'open'

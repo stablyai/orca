@@ -1,8 +1,9 @@
+import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
@@ -11,14 +12,13 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: subscribe streams register as remote view subscribers for Phase-5
-    // query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
@@ -349,6 +349,7 @@ describe('terminal output batching', () => {
         { text: 'ls\r', enter: false, interrupt: false },
         {
           inputKind: 'driving',
+          inputSource: 'mobile',
           reserveWrite: expect.any(Function),
           afterWrite: expect.any(Function)
         }
@@ -377,9 +378,7 @@ describe('terminal output batching', () => {
     await vi.waitFor(() => expect(rollback).toHaveBeenCalledOnce())
     expect(commit).toHaveBeenCalledOnce()
 
-    // Post-unsubscribe: capture the still-registered handler, tear down the
-    // subscription, then replay a frame. The closed guard must drop it, so no
-    // further sendTerminal dispatch and no write reach the PTY.
+    // Replay a retained callback after unsubscribe: the closed guard must prevent dispatch and PTY writes.
     const staleHandler = handlers.get(streamId)!
     runtime.cleanupSubscription('terminal-1:mobile-1')
     staleHandler(

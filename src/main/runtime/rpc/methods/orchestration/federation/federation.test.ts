@@ -1,18 +1,23 @@
+import { registerFederationAnswerAtomicityTest } from './federation-answer-atomicity.test-support'
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 import { syncFederationBarrier } from './federation-sync-barrier.test-support'
-import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -55,15 +60,14 @@ describe('orchestration federation', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
-        const response = (await workerDispatcher.dispatch({
+        const response = await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
           params,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
-          orchestrationRequestId: envelope?.orchestrationRequestId,
-          orchestrationCapability: envelope?.orchestrationCapability
-        })) as RuntimeRpcResponse<unknown>
+          orchestrationRequestId: envelope?.orchestrationRequestId
+        })
         if (method === 'orchestration.federationAck' && loseNextAckResponse) {
           loseNextAckResponse = false
           throw new Error('connection lost after acknowledgment')
@@ -173,7 +177,7 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
 
     const response = await homeDispatcher.dispatch(
-      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+      startRequest(task.id, { agent: 'gemini', model: 'unsupported-model' })
     )
 
     expect(response).toMatchObject({
@@ -181,7 +185,7 @@ describe('orchestration federation', () => {
       result: {
         state: 'failed',
         launch: {
-          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          requested: { agent: 'gemini', model: 'unsupported-model', effort: null },
           effective: null
         }
       }
@@ -281,16 +285,12 @@ describe('orchestration federation', () => {
     const started = await homeDispatcher.dispatch(startRequest(task.id))
     expect(started.ok).toBe(true)
     const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
-    expect(capability).toBeTruthy()
 
     const sent = await workerDispatcher.dispatch({
       id: 'rpc_worker_done',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'worker_done_request',
-      orchestrationCapability: capability,
       method: 'orchestration.send',
       params: {
         from: 'term_windows_worker',
@@ -334,14 +334,11 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const ask = workerDispatcher.dispatch({
       id: 'rpc_remote_ask',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_request',
-      orchestrationCapability: capability,
       method: 'orchestration.ask',
       params: {
         from: 'term_windows_worker',
@@ -368,6 +365,9 @@ describe('orchestration federation', () => {
       body: 'Should I include slow integration tests?'
     })
 
+    const snapshot = vi
+      .spyOn(homeRuntime.orchestrationSenderNames, 'snapshotOf')
+      .mockReturnValue({ name: 'Known coordinator A', agent: 'codex' })
     const reply = await homeDispatcher.dispatch({
       id: 'rpc_home_reply',
       authToken: 'coordinator-token',
@@ -381,7 +381,19 @@ describe('orchestration federation', () => {
       }
     })
     expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
+    snapshot.mockReturnValue({ name: 'Later coordinator B', agent: 'claude' })
     await syncFederationBarrier(homeRuntime, homeDb)
+    const acceptedAnswer = workerDb.getMessageById(
+      workerDb.getRemoteQuestion(question!.id)!.answer_message_id!
+    )!
+    expect(JSON.parse(acceptedAnswer.answer_sender_snapshot!)).toMatchObject({
+      version: 1,
+      sender: {
+        name: 'Known coordinator A',
+        agent: 'codex',
+        party: { terminalHandle: null, orcaSessionId: null }
+      }
+    })
 
     await expect(ask).resolves.toMatchObject({
       ok: true,
@@ -400,17 +412,22 @@ describe('orchestration federation', () => {
     ).toMatchObject({ acked_at: expect.any(String) })
   })
 
+  registerFederationAnswerAtomicityTest(() => ({
+    homeDb,
+    workerDb,
+    homeRuntime,
+    homeDispatcher,
+    createHomeTask
+  }))
+
   it('keeps a timed-out remote question resumable', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     const timedOut = await workerDispatcher.dispatch({
       id: 'rpc_remote_ask_timeout',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_timeout_request',
-      orchestrationCapability: capability,
       method: 'orchestration.ask',
       params: {
         from: 'term_windows_worker',
@@ -441,7 +458,6 @@ describe('orchestration federation', () => {
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_question_resume_request',
-      orchestrationCapability: capability,
       method: 'orchestration.ask',
       params: { from: 'term_windows_worker', resume: questionId, timeoutMs: 5_000 }
     })
@@ -457,14 +473,11 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     homeRuntime.stopOrchestrationFederationRelay()
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     await workerDispatcher.dispatch({
       id: 'rpc_remote_status',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'remote_status_request',
-      orchestrationCapability: capability,
       method: 'orchestration.send',
       params: {
         from: 'term_windows_worker',
@@ -575,15 +588,12 @@ describe('orchestration federation', () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
     const dispatch = homeDb.getDispatchContext(task.id)!
-    const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     homeRuntime.stopOrchestrationFederationRelay()
     await workerDispatcher.dispatch({
       id: 'rpc_restart_status',
       authToken: 'worker-local-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'restart_status_request',
-      orchestrationCapability: capability,
       method: 'orchestration.send',
       params: {
         from: 'term_windows_worker',
@@ -629,8 +639,7 @@ describe('orchestration federation', () => {
       ok: true,
       result: {
         observation: { status: 'live', exactWorker: true },
-        // The execution host answered; the push-fed status snapshot only covers local panes,
-        // so this projection used to contradict the observation printed beside it.
+        // Host evidence must drive projection; local-only push snapshots previously contradicted the adjacent remote observation.
         projection: {
           host: { kind: 'remote', id: 'environment_windows' },
           liveness: { verdict: 'live', source: 'execution_host' },
@@ -775,6 +784,9 @@ describe('orchestration federation', () => {
       async (_selector, method) => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
+        }
+        if (method === 'orchestration.federationShow') {
+          return {}
         }
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')

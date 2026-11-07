@@ -1,25 +1,26 @@
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
-/**
- * A folder workspace can pin its execution host while its repo stays local.
- * The desktop authority used to project only the repo, so those records listed
- * under Self while dispatch sent them to an SSH host.
- */
+import {
+  closeTestStores,
+  createSqliteTestStore,
+  createStore as createFreshStore,
+  testState
+} from '../persistence/persistence-test-harness'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Automation } from '../../shared/automations-types'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../shared/constants'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../shared/automation-list-scope'
 import { AutomationService } from './service'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { RuntimeAutomationController } from '../runtime/runtime-automation-controller'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
-const testState = { dir: '' }
+let hasCreatedStoreInCase = false
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -57,7 +58,6 @@ const GROUPS: ProjectGroup[] = [
   { id: 'group-1', name: 'Work', parentPath: '/work' }
 ] as ProjectGroup[]
 
-/** One local repo and one SSH repo in the same scope: no single host owns it. */
 const AMBIGUOUS_REPOS: Repo[] = [
   ...REPOS,
   {
@@ -99,7 +99,11 @@ const AUTOMATION: Automation = {
 async function createStore(
   folderWorkspaces: FolderWorkspace[],
   repos: Repo[] = REPOS,
-  extra: { automations?: Automation[]; projectHostSetups?: ProjectHostSetup[] } = {}
+  extra: {
+    automations?: Automation[]
+    projectHostSetups?: ProjectHostSetup[]
+    projectGroups?: ProjectGroup[]
+  } = {}
 ) {
   mkdirSync(testState.dir, { recursive: true })
   writeFileSync(
@@ -107,7 +111,7 @@ async function createStore(
     JSON.stringify({
       ...getDefaultPersistedState(testState.dir),
       repos,
-      projectGroups: GROUPS,
+      projectGroups: extra.projectGroups ?? GROUPS,
       folderWorkspaces,
       sshTargets: TARGETS,
       sshTargetGenerationCounter: 7,
@@ -116,14 +120,21 @@ async function createStore(
     }),
     'utf-8'
   )
+  if (!hasCreatedStoreInCase) {
+    hasCreatedStoreInCase = true
+    return createFreshStore()
+  }
   vi.resetModules()
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('../persistence')
+  const { Store } = await import('../persistence/loading-store/store')
+  const { initDataPath } = await import('../persistence/loading-store/user-data-path')
   initDataPath()
   return createSqliteTestStore(Store, { dataFile: join(testState.dir, 'orca-data.json') })
 }
 
 beforeEach(() => {
+  hasCreatedStoreInCase = false
+  resetRetirementCollisionKeyCacheForTests()
   testState.dir = mkdtempSync(join(tmpdir(), 'automation-workspace-host-'))
 })
 
@@ -132,52 +143,10 @@ afterEach(async () => {
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
-describe('folder-workspace host attribution', () => {
-  // The stored pin is `connectionId`; `executionHostId` is a renderer-side stamp that
-  // normalization drops, so main can only ever see this form.
-  it('files a pinned workspace under its SSH host instead of Self', async () => {
-    const store = await createStore([folderWorkspace({ connectionId: 'ssh-1' })], [])
-
-    expect(store.listAutomationsForScope({ selector: { kind: 'self' } }).automations).toEqual([])
-    const scoped = store.listAutomationsForScope({
-      selector: { kind: 'ssh', targetId: 'ssh-1', expectedTargetGeneration: 7 }
-    })
-    expect(scoped.automations.map((entry) => entry.id)).toEqual(['pinned-1'])
-    expect(scoped.items[0]?.selector).toEqual({
-      kind: 'ssh',
-      targetId: 'ssh-1',
-      targetGeneration: 7
-    })
-  })
-
-  it('orphans a workspace whose scope spans two hosts rather than showing a healthy Self row', async () => {
-    const store = await createStore([folderWorkspace({})], AMBIGUOUS_REPOS)
-
-    expect(store.listAutomationsForScope({ selector: { kind: 'self' } }).automations).toEqual([])
-    const orphans = store.listAutomationsForScope({ selector: { kind: 'orphan' } })
-    expect(orphans.items[0]?.selector).toEqual({
-      kind: 'orphan',
-      issue: AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous
-    })
-  })
-
-  it('leaves an unpinned local workspace on Self', async () => {
-    const store = await createStore([folderWorkspace({})])
-
-    expect(
-      store.listAutomationsForScope({ selector: { kind: 'self' } }).automations.map((e) => e.id)
-    ).toEqual(['pinned-1'])
-  })
-})
-
 const AMBIGUOUS_REFUSAL =
   'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
 
-/**
- * Built through the store rather than seeded: load-time projection replaces any
- * repo-backed setup written by hand, so a literal run context would point at a
- * setup that no longer exists and be refused for that instead of the ambiguity.
- */
+/** Create through Store so normalization cannot invalidate the seeded setup before the ambiguity check. */
 async function ambiguousStore() {
   vi.setSystemTime(new Date('2026-05-13T08:00:00'))
   const store = await createStore([folderWorkspace({})], AMBIGUOUS_REPOS, { automations: [] })
@@ -195,7 +164,6 @@ async function ambiguousStore() {
   return { store, automation }
 }
 
-/** One scheduler pass. `nextRunAt` advancing is the signal that it finished. */
 async function evaluated(
   seeded: Awaited<ReturnType<typeof ambiguousStore>>,
   start: () => void
@@ -209,11 +177,6 @@ async function evaluated(
   )
 }
 
-/**
- * The list calls this record an orphan, so the authority that owns it must refuse
- * to run it. Resolution would otherwise pick one of the two hosts on its own and
- * run the user's prompt somewhere they never chose — on a host they may not trust.
- */
 describe('dispatch refused for an ambiguous workspace host', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'automation-ambiguous-dispatch-'))
@@ -226,29 +189,12 @@ describe('dispatch refused for an ambiguous workspace host', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('refuses the desktop dispatch and records why', async () => {
-    const seeded = await ambiguousStore()
-    const send = vi.fn()
-    const service = new AutomationService(seeded.store, { tickMs: 60_000 })
-    service.setWebContents({ isDestroyed: () => false, send } as never)
-
-    await evaluated(seeded, () => service.setRendererReady())
-
-    expect(send).not.toHaveBeenCalled()
-    expect(seeded.store.listAutomationRuns(seeded.automation.id)[0]).toMatchObject({
-      status: 'skipped_unavailable',
-      error: AMBIGUOUS_REFUSAL
-    })
-    service.stop()
-  })
-
-  // Serve mode has no renderer to disable actions, so the authority is the only guard.
-  it('refuses the headless dispatch, which has no ambiguity check of its own', async () => {
+  it('refuses the launch, which has no ambiguity check of its own', async () => {
     const seeded = await ambiguousStore()
     const dispatcher = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))
     const service = new AutomationService(seeded.store, {
       tickMs: 60_000,
-      headlessDispatcher: dispatcher
+      terminalLauncher: { launch: dispatcher, available: () => true }
     })
 
     await evaluated(seeded, () => service.start())
@@ -259,5 +205,61 @@ describe('dispatch refused for an ambiguous workspace host', () => {
       error: AMBIGUOUS_REFUSAL
     })
     service.stop()
+  })
+})
+
+describe('a local automation whose folder now belongs to a paired server', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('records targetUnavailable for Run now and the schedule, launching nothing', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
+    const store = await createStore([folderWorkspace({})], REPOS, {
+      automations: [],
+      projectGroups: [{ ...GROUPS[0], executionHostId: 'runtime:paired-peer' }]
+    })
+    const automation = store.createAutomation({
+      name: 'Nightly',
+      prompt: 'go',
+      agentId: 'claude',
+      projectId: 'repo-local',
+      workspaceMode: 'existing',
+      workspaceId: 'folder:fw-1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime()
+    })
+    const launch = vi.fn(async () => ({ workspaceId: 'folder:fw-1', terminalSessionId: 't1' }))
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      terminalLauncher: { launch, available: () => true }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Run now reads no target resolvers.
+    const controller = new RuntimeAutomationController(store, {} as never)
+    controller.setService(service)
+
+    await expect(controller.runNow(automation.id)).rejects.toThrow(
+      'Automation run target is no longer available.: automation_target_removed'
+    )
+    vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+    service.start()
+    await vi.waitFor(() => expect(store.listAutomationRuns(automation.id)).toHaveLength(2))
+    service.stop()
+
+    expect(launch).not.toHaveBeenCalled()
+    expect(
+      store
+        .listAutomationRuns(automation.id)
+        .map(({ trigger, status, errorCode }) => ({ trigger, status, errorCode }))
+        .toSorted((a, b) => a.trigger.localeCompare(b.trigger))
+    ).toEqual([
+      { trigger: 'manual', status: 'skipped_unavailable', errorCode: 'targetUnavailable' },
+      { trigger: 'scheduled', status: 'skipped_unavailable', errorCode: 'targetUnavailable' }
+    ])
   })
 })

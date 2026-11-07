@@ -5,11 +5,7 @@ import { operationModuleLoader } from './operation-module-loader'
 
 const root = resolve(import.meta.dirname, '../../../..')
 
-/**
- * The observation fires on no golden in the corpus — every checked read in all 727 decodes its
- * reply whole — so this is what pins it. Without it a refactor could stop reporting salvaged reads
- * and every golden would still compare clean, the same reason `unhandled-recording.test.ts` exists.
- */
+// The corpus has no salvaged reads; pin reporting directly so a dropped hook cannot pass every golden.
 describe('salvaged reads', () => {
   it('records what a real reply schema dropped, and nothing when it dropped nothing', () => {
     const modules = operationModuleLoader(root)
@@ -22,8 +18,7 @@ describe('salvaged reads', () => {
     const observed: { name: string; value: unknown }[] = []
     bindSalvageObserver((name, value) => observed.push({ name, value }))
     try {
-      // `branch` is a salvaged optional and the second entry has no `path`: one member and one row
-      // leave the payload, and the reply still decodes.
+      // Drop one malformed optional and one row while keeping the enclosing reply readable.
       classifyRpcReply(gitStatusHostPayloadRead.operation, {
         ok: true,
         result: {

@@ -1,6 +1,5 @@
 import { useCallback, type KeyboardEvent, type RefObject } from 'react'
 
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { isSelectAllShortcut } from '@/lib/editable-target'
 
 type SearchInputOptions<TCommand> = {
@@ -22,18 +21,10 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
   onRun,
   selectedCommand
 }: SearchInputOptions<TCommand>): {
-  onBlur: () => void
-  onCompositionEnd: () => void
-  onCompositionStart: () => void
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
-  onKeyUp: ReturnType<typeof useImeEnterGestureOwnership>['onKeyUp']
 } {
-  const imeEnter = useImeEnterGestureOwnership()
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (imeEnter.ownsKeyDown(event)) {
-        return
-      }
       if (isSelectAllShortcut(event)) {
         event.stopPropagation()
         return
@@ -44,20 +35,30 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
         onRun(selectedCommand)
         return
       }
-      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && filteredCommands.length > 0) {
+      const moveDown =
+        event.key === 'ArrowDown' || (event.ctrlKey && ['n', 'j'].includes(event.key))
+      const moveUp = event.key === 'ArrowUp' || (event.ctrlKey && ['p', 'k'].includes(event.key))
+      if (
+        (moveDown || moveUp || event.key === 'Home' || event.key === 'End') &&
+        filteredCommands.length > 0
+      ) {
         event.preventDefault()
         event.stopPropagation()
         const currentIndex = filteredCommands.findIndex(
           (command) => getCommandId(command) === commandValue
         )
         const startIndex = Math.max(currentIndex, 0)
-        const direction = event.key === 'ArrowDown' ? 1 : -1
+        const direction = moveDown ? 1 : -1
         const nextIndex =
-          (startIndex + direction + filteredCommands.length) % filteredCommands.length
+          event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? filteredCommands.length - 1
+              : (startIndex + direction + filteredCommands.length) % filteredCommands.length
         onCommandValueChange(getCommandId(filteredCommands[nextIndex]))
         requestAnimationFrame(() => {
           commandListRef.current
-            ?.querySelector('[cmdk-item][data-selected="true"]')
+            ?.querySelector('[role="option"][aria-selected="true"]')
             ?.scrollIntoView({ block: 'nearest' })
         })
         return
@@ -71,7 +72,6 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
       commandValue,
       filteredCommands,
       getCommandId,
-      imeEnter,
       onCommandValueChange,
       onRun,
       selectedCommand
@@ -79,10 +79,6 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
   )
 
   return {
-    onBlur: imeEnter.reset,
-    onCompositionEnd: () => imeEnter.setComposing(false),
-    onCompositionStart: () => imeEnter.setComposing(true),
-    onKeyDown,
-    onKeyUp: imeEnter.onKeyUp
+    onKeyDown
   }
 }

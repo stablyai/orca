@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import type * as ReactModule from 'react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
@@ -33,130 +33,37 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => {
-  const React = require('react') as typeof ReactModule
-  return {
-    DropdownMenu: ({
-      children,
-      defaultOpen
-    }: {
-      children: React.ReactNode
-      defaultOpen?: boolean
-    }) => (
-      <div data-testid="dropdown-root" data-open={defaultOpen ? 'true' : 'false'}>
-        {children}
-      </div>
-    ),
-    DropdownMenuTrigger: ({
-      children,
-      disabled
-    }: {
-      children: React.ReactNode
-      disabled?: boolean
-    }) => <div data-disabled={disabled || undefined}>{children}</div>,
-    DropdownMenuContent: ({
-      children,
-      side,
-      collisionPadding
-    }: {
-      children: React.ReactNode
-      side?: string
-      collisionPadding?: number
-    }) => (
-      <div
-        data-testid="session-option-menu"
-        data-side={side}
-        data-collision-padding={collisionPadding}
-      >
-        {children}
-      </div>
-    ),
-    DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    DropdownMenuSeparator: () => <hr />,
-    // Forwards role/aria-* and hands onSelect an event: the switch rows set both,
-    // and preventDefault is how a toggle keeps the menu open.
-    DropdownMenuItem: ({
-      children,
-      disabled,
-      onSelect,
-      ...rest
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-      onSelect?: (event: { preventDefault: () => void }) => void
-    }) => (
-      <button
-        {...rest}
-        disabled={disabled}
-        onClick={() => onSelect?.({ preventDefault: () => {} })}
-      >
-        {children}
-      </button>
-    ),
-    // Why: exercises value binding + onValueChange contract the real Radix
-    // group provides; selected value is exposed via data-radio-value.
-    DropdownMenuRadioGroup: ({
-      children,
-      value,
-      onValueChange,
-      'aria-label': ariaLabel
-    }: {
-      children: React.ReactNode
-      value?: string
-      onValueChange?: (value: string) => void
-      'aria-label'?: string
-    }) => (
-      <div
-        role="radiogroup"
-        aria-label={ariaLabel}
-        data-radio-value={value ?? ''}
-        data-on-value-change={onValueChange ? '1' : '0'}
-      >
-        {React.Children.map(children, (child) => {
-          if (!React.isValidElement(child)) {
-            return child
-          }
-          const props = child.props as {
-            value?: string
-            disabled?: boolean
-            children?: React.ReactNode
-          }
-          const selected = props.value !== undefined && props.value === value
-          return (
-            <button
-              key={props.value}
-              role="radio"
-              aria-checked={selected}
-              disabled={props.disabled}
-              data-value={props.value}
-              data-state={selected ? 'checked' : 'unchecked'}
-              onClick={() => {
-                if (props.value !== undefined) {
-                  onValueChange?.(props.value)
-                }
-              }}
-            >
-              {props.children}
-            </button>
-          )
-        })}
-      </div>
-    ),
-    DropdownMenuRadioItem: ({
-      children,
-      disabled,
-      value
-    }: React.ButtonHTMLAttributes<HTMLButtonElement> & { value: string }) => (
-      // Why: parent RadioGroup mock reads `value` via Children.map — keep it on
-      // props even though native span has no value attribute.
-      <span
-        data-radio-item
-        data-disabled={disabled || undefined}
-        {...({ value } as Record<string, string>)}
-      >
-        {children}
-      </span>
-    )
-  }
-})
+// Keep mocked rows mounted for assertions.
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ children, open }: { children: React.ReactNode; open?: boolean }) => (
+    <div data-testid="picker-root" data-open={open ? 'true' : 'false'}>
+      {children}
+    </div>
+  ),
+  PopoverTrigger: ({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) => (
+    <div data-disabled={disabled || undefined}>{children}</div>
+  ),
+  PopoverContent: ({
+    children,
+    side,
+    align,
+    collisionPadding
+  }: {
+    children: React.ReactNode
+    side?: string
+    align?: string
+    collisionPadding?: number
+  }) => (
+    <div
+      data-testid="picker-content"
+      data-side={side}
+      data-align={align}
+      data-collision-padding={collisionPadding}
+    >
+      {children}
+    </div>
+  )
+}))
 
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 
@@ -202,458 +109,62 @@ const effort: SessionOptionDescriptor = {
   settable: true
 }
 
-/** A select with nothing picked. Only a select can be in this shape: it renders
- *  "nothing selected" truthfully, which is why the boolean kind requires a value. */
-const unknownEffort: SessionOptionDescriptor = {
-  ...effort,
-  kind: { type: 'select', choices: EFFORT_CHOICES },
-  valueSource: 'unknown'
-}
+/** Only selects can truthfully have no current value; booleans require a baseline. */
 
-const fast: SessionOptionDescriptor = {
-  id: 'fastMode',
-  label: 'Fast mode',
-  category: 'mode',
-  kind: { type: 'boolean', currentValue: true },
-  valueSource: 'applied',
-  transport: 'catalog',
-  settable: true
-}
+const pill = (name: string): HTMLElement => screen.getByRole('button', { name })
 
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
-  it('opens the native picker requested by a structured slash command', async () => {
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={null}
-      />
-    )
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'model', sequence: 1 }}
-      />
-    )
-    await waitFor(() =>
-      expect(
-        screen
-          .getByRole('button', { name: 'Model Opus 4.8' })
-          .closest('[data-testid="dropdown-root"]')
-          ?.getAttribute('data-open')
-      ).toBe('true')
-    )
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-        pickerRequest={{ id: 'effort', sequence: 2 }}
-      />
-    )
-    await waitFor(() =>
-      expect(
-        screen
-          .getByRole('button', { name: 'Effort High' })
-          .closest('[data-testid="dropdown-root"]')
-          ?.getAttribute('data-open')
-      ).toBe('true')
-    )
-  })
-
-  it('prefers collision-aware upward placement for model and option menus', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort]}
-        isWorking={false}
-      />
-    )
-
-    const menus = screen.getAllByTestId('session-option-menu')
-    expect(menus).toHaveLength(2)
-    for (const menu of menus) {
-      expect(menu.getAttribute('data-side')).toBe('top')
-      expect(menu.getAttribute('data-collision-padding')).toBe('8')
-    }
-  })
-
-  it('renders model and joined option labels, and hides an empty options pill', () => {
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), effort, fast]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).toContain('Opus 4.8')
-    expect(screen.getByRole('button', { name: 'Model Opus 4.8' }).textContent).not.toContain(
-      'Model:'
-    )
-    expect(screen.getByRole('button', { name: 'Effort High · Fast' }).textContent).toContain(
-      'High · Fast'
-    )
-    expect(
-      screen
-        .getByRole('button', { name: 'Model Opus 4.8' })
-        .compareDocumentPosition(screen.getByRole('button', { name: 'Effort High · Fast' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).not.toBe(0)
-
-    rerender(
-      <NativeChatSessionOptionPickers surface={surface} snapshot={[model()]} isWorking={false} />
-    )
-    expect(screen.queryByRole('button', { name: /Effort/ })).toBeNull()
-  })
-
-  it('names a lone unknown effort control explicitly', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), unknownEffort]}
-        isWorking={false}
-      />
-    )
-
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).toContain('Effort')
-  })
-
-  it('disables both picker triggers while the agent is working', () => {
-    render(
-      <NativeChatSessionOptionPickers surface={surface} snapshot={[model(), effort]} isWorking />
-    )
-    expect(
-      screen
-        .getByRole('button', { name: 'Model Opus 4.8' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBe('true')
-    expect(
-      screen
-        .getByRole('button', { name: 'Effort High' })
-        .parentElement?.getAttribute('data-disabled')
-    ).toBe('true')
-  })
-
-  it('does not duplicate titles for unknown values or misname generic controls', () => {
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[
-          model({
-            kind: { type: 'select', choices: [] },
-            valueSource: 'unknown'
-          }),
-          unknownEffort
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('Model')
-    expect(screen.getByRole('button', { name: 'Model' }).textContent).not.toContain('Model: Model')
-    expect(screen.getByRole('button', { name: 'Effort' }).textContent).not.toContain(
-      'Effort: Effort'
-    )
-
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), fast]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Session options Fast' }).textContent).toContain(
-      'Fast'
-    )
-    expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull()
-  })
-
-  // The terminal transport typed the value at the agent and has not read it back,
-  // so the pill says so; the structured transport's own per-turn report is the
-  // confirmation, which makes the same hedge transient noise there.
-  it('hedges a dispatched value the terminal transport produced', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model({ valueSource: 'dispatched', transport: 'catalog' })]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByText('Model')).not.toBeNull()
-    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
-  })
-
-  it('does not hedge a dispatched value the structured transport produced', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model({ valueSource: 'dispatched', transport: 'agent-session' })]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByText('Model')).not.toBeNull()
-    expect(screen.queryByText(/not confirmed/)).toBeNull()
-  })
-
-  it.each(['catalog'] as const)(
-    'does not hedge a reported value on the %s transport',
-    (transport) => {
-      render(
-        <NativeChatSessionOptionPickers
-          surface={surface}
-          snapshot={[model({ valueSource: 'reported', transport })]}
-          isWorking={false}
-        />
-      )
-      expect(screen.getByText('Model')).not.toBeNull()
-      expect(screen.queryByText(/not confirmed/)).toBeNull()
-    }
-  )
-
-  it('renders agent-picker routes as one action instead of radio choices', async () => {
-    const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
-    const liveSurface = { ...surface, invokeAction }
-    render(
-      <NativeChatSessionOptionPickers
-        surface={liveSurface}
-        snapshot={[
-          model({
-            kind: {
-              type: 'select',
-              choices: [
-                { value: 'gpt-5.5', label: 'GPT-5.5' },
-                { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' }
-              ]
-            },
-            valueSource: 'unknown',
-            action: { type: 'agent-picker' }
-          })
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByRole('button', { name: 'Choose in agent picker…' })).not.toBeNull()
-    expect(screen.queryByText('GPT-5.5')).toBeNull()
-    expect(screen.queryByText('GPT-5.2 Codex')).toBeNull()
-    screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
-    await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
-  })
-
-  it.each([
-    [
-      "the table's words for a host's refusal, not its message",
-      new RuntimeRpcCallError({
-        id: 'request-1',
-        ok: false,
-        error: {
-          code: 'runtime_error',
-          message: 'agent_session_journal_unreadable',
-          data: {
-            refusal: {
-              code: 'agent_session_journal_unreadable',
-              details: { reason: 'journalCorrupt' }
-            }
+  it('shows concurrent model and effort picks and releases only the settled descriptor', async () => {
+    let settleWrite: () => void = () => {}
+    let settleModel: () => void = () => {}
+    const setOption = vi.fn(
+      (id: string) =>
+        new Promise<{ snapshot: SessionOptionDescriptor[] }>((resolve) => {
+          if (id === 'model') {
+            settleModel = () => resolve({ snapshot: [] })
+          } else {
+            settleWrite = () => resolve({ snapshot: [] })
           }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      }),
-      "Unable to load this chat. The setting wasn't changed."
-    ],
-    [
-      "a local surface's own sentence",
-      new Error('The terminal did not accept the command.'),
-      'The terminal did not accept the command.'
+        })
+    )
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model(), effort]}
+        isWorking={false}
+      />
+    )
+    const held = (): (string | null | undefined)[] => [
+      screen.getByRole('listbox').getAttribute('aria-busy'),
+      screen
+        .getByRole('radiogroup', { name: 'Effort' })
+        .closest('[data-busy]')
+        ?.getAttribute('aria-disabled')
     ]
-  ])('describes a failed option change with %s', async (_label, error, description) => {
-    toastError.mockClear()
-    const invokeAction = vi.fn().mockRejectedValue(error)
-    render(
-      <NativeChatSessionOptionPickers
-        surface={{ ...surface, invokeAction }}
-        snapshot={[
-          model({
-            kind: { type: 'select', choices: [{ value: 'gpt-5.5', label: 'GPT-5.5' }] },
-            valueSource: 'unknown',
-            action: { type: 'agent-picker' }
-          })
-        ]}
-        isWorking={false}
-      />
-    )
-    screen.getByRole('button', { name: 'Choose in agent picker…' }).click()
+    expect(held()).toEqual(['false', 'false'])
+
+    screen.getByRole('radio', { name: 'Low' }).click()
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledExactlyOnceWith('Could not update option', {
-        description
-      })
+      expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
     )
-  })
+    expect(pill('Model Opus 4.8, Effort Low')).not.toBeNull()
+    expect(held()).toEqual(['false', 'true'])
+    screen.getByRole('option', { name: 'Sonnet 5' }).click()
+    expect(setOption.mock.calls).toEqual([
+      ['effort', 'low'],
+      ['model', 'sonnet']
+    ])
+    await waitFor(() => expect(held()).toEqual(['true', 'true']))
+    screen.getByRole('radio', { name: 'High' }).click()
+    expect(setOption).toHaveBeenCalledTimes(2)
 
-  it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
-    const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
-    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
-    const liveSurface = { ...surface, setOption, invokeAction }
-    render(
-      <NativeChatSessionOptionPickers
-        surface={liveSurface}
-        snapshot={[
-          model(),
-          {
-            ...fast,
-            kind: { type: 'boolean', currentValue: false },
-            valueSource: 'unknown',
-            action: { type: 'toggle-command' }
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getByText('Toggle fast mode')).not.toBeNull()
-    expect(screen.queryByText('On')).toBeNull()
-    expect(screen.queryByText('Off')).toBeNull()
-    screen.getByText('Toggle fast mode').click()
-    await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('fastMode'))
-    expect(setOption).not.toHaveBeenCalled()
-  })
-
-  it('uses one switch row for a boolean option without inventing a selection', async () => {
-    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
-    const liveSurface = { ...surface, setOption }
-    const { rerender } = render(
-      <NativeChatSessionOptionPickers
-        surface={liveSurface}
-        snapshot={[
-          model(),
-          {
-            ...fast,
-            kind: { type: 'boolean', currentValue: true },
-            valueSource: 'applied',
-            action: undefined
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Toggle fast mode')).toBeNull()
-    // One control, not an On/Off pair, and the row carries the label itself.
-    expect(screen.queryByRole('radio', { name: 'On' })).toBeNull()
-    expect(screen.queryByRole('radio', { name: 'Off' })).toBeNull()
-    const fastSwitch = screen.getByRole('switch', { name: 'Fast mode' })
-    expect(fastSwitch.getAttribute('aria-checked')).toBe('true')
-    expect(
-      fastSwitch.querySelector('[data-slot="switch-indicator"]')?.getAttribute('data-state')
-    ).toBe('checked')
-    // The label is not duplicated by a separate group header.
-    expect(screen.getAllByText('Fast mode')).toHaveLength(1)
-    fastSwitch.click()
-    await waitFor(() => expect(setOption).toHaveBeenCalledWith('fastMode', false))
-
-    setOption.mockClear()
-    rerender(
-      <NativeChatSessionOptionPickers
-        surface={liveSurface}
-        snapshot={[
-          model(),
-          {
-            id: 'thinking',
-            label: 'Thinking',
-            category: 'mode',
-            // What the producer now emits for an unreported `thinking`: the
-            // catalog default, with provenance still saying nothing confirmed it.
-            kind: { type: 'boolean', currentValue: true },
-            valueSource: 'unknown',
-            transport: 'catalog',
-            settable: true
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    // The producer resolves the value, so the row renders it instead of a caption
-    // apologising for a switch that had already collapsed to off.
-    expect(screen.queryByText('Current value unknown')).toBeNull()
-    const thinkingSwitch = screen.getByRole('switch', { name: 'Thinking' })
-    expect(thinkingSwitch.getAttribute('aria-checked')).toBe('true')
-    thinkingSwitch.click()
-    await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
-  })
-
-  // Both arms: `default` and `unreported` make opposite claims, and only
-  // `unreported` is reachable in the structured lane, so one arm proves nothing.
-  it.each([
-    {
-      name: 'a live unreported boolean is never labelled a default',
-      valueSource: 'unknown',
-      transport: 'agent-session',
-      shown: 'Not reported',
-      hidden: 'Default'
-    },
-    {
-      name: 'a draft catalog default says so',
-      valueSource: 'default',
-      transport: 'catalog',
-      shown: 'Default',
-      hidden: 'Not reported'
-    }
-  ] as const)('$name', ({ valueSource, transport, shown, hidden }) => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[
-          model(),
-          { ...fast, kind: { type: 'boolean', currentValue: false }, valueSource, transport }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getAllByText(shown).length).toBeGreaterThan(0)
-    expect(screen.queryByText(hidden)).toBeNull()
-    // The marker qualifies the value; it must not become part of the control's name.
-    const control = screen.getByRole('switch', { name: 'Fast mode' })
-    // ...but it must still reach assistive tech: hiding it would leave screen
-    // reader users unable to tell a default from an unreported value at all.
-    const describedBy = control.getAttribute('aria-describedby') ?? ''
-    expect(describedBy).not.toBe('')
-    expect(document.getElementById(describedBy)?.textContent).toBe(shown)
-  })
-
-  it('drops the marker once something has picked the value', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[model(), { ...fast, valueSource: 'reported' }]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Default')).toBeNull()
-    expect(screen.queryByText('Not reported')).toBeNull()
-  })
-
-  it('tooltips a dispatched option pill with the category alone', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[
-          model(),
-          {
-            id: 'thinking',
-            label: 'Thinking',
-            category: 'mode',
-            kind: { type: 'boolean', currentValue: true },
-            valueSource: 'dispatched',
-            transport: 'catalog',
-            settable: true
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.getAllByText('Thinking').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
+    // The snapshot is the truth once the write settles; here it still says High.
+    await act(async () => settleWrite())
+    await waitFor(() => expect(held()).toEqual(['true', 'false']))
+    expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
+    await act(async () => settleModel())
+    await waitFor(() => expect(held()).toEqual(['false', 'false']))
   })
 })

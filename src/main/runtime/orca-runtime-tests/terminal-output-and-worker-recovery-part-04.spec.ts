@@ -1,11 +1,12 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { CrewChanges } from '../orchestration/crew/crew-changes'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  OrchestrationDb,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -15,8 +16,8 @@ import {
   deferred,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { publishLegacyWorkerReveal } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   it('requeues an active Task before clearing recovery for an authoritatively missing worker', async () => {
@@ -277,7 +278,11 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This isolated recovery path reaches only the supplied planner and missing-terminal settlement methods.
     runtime.setOrchestrationDb({
+      crewChanges: new CrewChanges(),
+      listSessionDispatchesForPresentation: () => [],
+      reconcileMissingWorkerTerminal: vi.fn(),
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
           dispatch_id: 'dispatch-exited',
@@ -305,8 +310,8 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
-    const listProcesses = vi.fn(async (connectionId?: string | null) => {
-      if (connectionId !== null) {
+    const listProcesses = vi.fn(async (hostId?: string) => {
+      if (hostId !== 'local') {
         throw new Error('unrelated SSH inventory must not run')
       }
       return [
@@ -345,7 +350,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
     expect(getSession().sleepingAgentSessionsByPaneKey?.[secondWorkerPaneKey]).toBeUndefined()
     expect(listProcesses).toHaveBeenCalledTimes(3)
-    expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+    expect(listProcesses).toHaveBeenCalledWith('local', LIST_PROVIDER_DEADLINE)
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
       expect.objectContaining({ id: 'legacy-worker-two', ptyId: 'pty-exited-two' })
     ])
@@ -388,22 +393,23 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
-    runtime.setOrchestrationDb({
-      listLegacyWorkerTerminalRecoveryRows: () => [
-        {
-          dispatch_id: 'dispatch-inventory-unavailable',
-          task_id: 'task-inventory-unavailable',
-          dispatch_status: 'completed',
-          contract_version: 0,
-          assignee_handle: 'term_inventory_unavailable',
-          assignee_pane_key: workerPaneKey,
-          process_incarnation: `pty-inventory-unavailable:${incarnationId}`,
-          worker_state: 'ready',
-          worktree_id: TEST_WORKTREE_ID,
-          agent_terminal_handle: 'term_inventory_unavailable'
-        }
-      ]
-    } as unknown as OrchestrationDb)
+    const orchestrationDb = makeRuntimeOrchestrationDb()
+    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
+    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
+      {
+        dispatch_id: 'dispatch-inventory-unavailable',
+        task_id: 'task-inventory-unavailable',
+        dispatch_status: 'completed',
+        contract_version: 0,
+        assignee_handle: 'term_inventory_unavailable',
+        assignee_pane_key: workerPaneKey,
+        process_incarnation: `pty-inventory-unavailable:${incarnationId}`,
+        worker_state: 'ready',
+        worktree_id: TEST_WORKTREE_ID,
+        agent_terminal_handle: 'term_inventory_unavailable'
+      }
+    ])
+    runtime.setOrchestrationDb(orchestrationDb)
     const listProcesses = vi
       .fn()
       .mockRejectedValueOnce(new Error('local provider unavailable'))
@@ -458,7 +464,12 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(1_000)
 
       expect(listProcesses).toHaveBeenCalledTimes(4)
-      expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([null, null, null, null])
+      expect(listProcesses.mock.calls.map((call) => call[0])).toEqual([
+        'local',
+        'local',
+        'local',
+        'local'
+      ])
       expect(hasPty).not.toHaveBeenCalled()
       expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([
         expect.objectContaining({ id: 'legacy-worker', ptyId: 'pty-inventory-unavailable' })

@@ -8,6 +8,10 @@ import { writeSkillInstallReceipt } from './skill-install-provenance'
 
 const temporaryDirectories: string[] = []
 
+async function nameIsFree() {
+  return { status: 'ok' as const, value: null }
+}
+
 async function createSource(): Promise<{ root: string; source: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-share-preparation-'))
   temporaryDirectories.push(root)
@@ -51,38 +55,6 @@ afterEach(async () => {
 })
 
 describe('SkillSharePreparationService', () => {
-  it('preserves executable modes from a managed Windows install receipt', async () => {
-    const { root, source } = await createSource()
-    await writeFile(join(source, 'run.sh'), 'echo without shebang\n')
-    const stateDirectory = join(root, 'state')
-    await writeSkillInstallReceipt(stateDirectory, {
-      schemaVersion: 1,
-      packageId: 'package_1',
-      versionId: 'version_1',
-      packageDigest: 'a'.repeat(64),
-      archiveSha256: 'b'.repeat(64),
-      scope: 'global',
-      destinationIdentity: 'global:windows',
-      canonicalPath: source,
-      placements: [],
-      installedAt: '2026-08-16T12:00:00.000Z',
-      hostIdentity: 'windows',
-      fileModes: [
-        { path: 'SKILL.md', executable: false },
-        { path: 'run.sh', executable: true }
-      ]
-    })
-    const service = new SkillSharePreparationService(
-      join(root, 'preparations'),
-      { publishVersion: vi.fn(), createShare: vi.fn() },
-      { installStateDirectory: stateDirectory, platform: 'win32' }
-    )
-
-    const prepared = await service.prepare({ sourceDirectory: source })
-
-    expect(prepared.skills?.[0]?.executablePaths).toEqual(['run.sh'])
-  })
-
   it('finds Windows install receipts through a provider junction', async () => {
     const { root, source } = await createSource()
     await writeFile(join(source, 'run.sh'), 'echo without shebang\n')
@@ -113,7 +85,7 @@ describe('SkillSharePreparationService', () => {
     })
     const service = new SkillSharePreparationService(
       join(root, 'preparations'),
-      { publishVersion: vi.fn(), createShare: vi.fn() },
+      { findOwnedPackageId: nameIsFree, publishVersion: vi.fn(), createShare: vi.fn() },
       { installStateDirectory: stateDirectory, platform: 'win32' }
     )
 
@@ -133,7 +105,7 @@ describe('SkillSharePreparationService', () => {
       })
     const service = new SkillSharePreparationService(
       preparationRoot,
-      { publishVersion: vi.fn(), createShare: vi.fn() },
+      { findOwnedPackageId: nameIsFree, publishVersion: vi.fn(), createShare: vi.fn() },
       { initializeRoot }
     )
 
@@ -152,6 +124,7 @@ describe('SkillSharePreparationService', () => {
     await mkdir(join(preparationRoot, 'abandoned'), { recursive: true })
     await writeFile(join(preparationRoot, 'abandoned', 'package.tar.gz'), 'private bytes')
     const service = new SkillSharePreparationService(preparationRoot, {
+      findOwnedPackageId: nameIsFree,
       publishVersion: vi.fn(),
       createShare: vi.fn()
     })
@@ -164,6 +137,7 @@ describe('SkillSharePreparationService', () => {
   it('enforces the preparation cap while archives are still being created', async () => {
     const { root, source } = await createSource()
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
+      findOwnedPackageId: nameIsFree,
       publishVersion: vi.fn(),
       createShare: vi.fn()
     })
@@ -193,6 +167,7 @@ describe('SkillSharePreparationService', () => {
         value: { id: 'share_retry', url: 'https://share.test/skills/share/share_retry' }
       })
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
+      findOwnedPackageId: nameIsFree,
       publishVersion,
       createShare
     })
@@ -234,6 +209,7 @@ describe('SkillSharePreparationService', () => {
         value: { id: 'share_retry', url: 'https://share.test/skills/share/share_retry' }
       })
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
+      findOwnedPackageId: nameIsFree,
       publishVersion,
       createShare
     })

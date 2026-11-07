@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
-vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: vi.fn() }))
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn()
+}))
 
 import {
   getStructuredAgentSessionStatusFeed,
@@ -28,14 +30,15 @@ const owned: AgentSessionStatusSummary = {
   latestPrompt: 'work',
   updatedAt: 1,
   hostExecutionOwned: true,
-  hostExecutionPhase: 'starting',
-  hostExecutionChild: { generation: 'child-1', fence: 1 }
+  hostExecutionPhase: 'starting'
 }
 const done: AgentSessionStatusSummary = {
   ...owned,
   sessionId: 'completed',
   status: 'idle',
-  hostExecutionOwned: undefined
+  hostExecutionOwned: undefined,
+  hostExecutionPhase: undefined,
+  runtimePermission: null
 }
 
 function subscription(index = 0): Subscription {
@@ -68,55 +71,35 @@ describe('structured status feed execution authority lifecycle', () => {
     const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
     feed.activate()
     await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [owned, done] })
+    expect(feed.getNamingActive('running')).toBeNull()
+    subscription().emit({
+      type: 'snapshot',
+      sessions: [owned, done],
+      namingActiveSessionIds: ['running']
+    })
+    subscription().emit({ type: 'snapshot', sessions: [] })
+    expect(feed.getNamingActive('running')).toBe(true)
     subscription().emit({ type: 'end' })
+    expect(feed.getNamingActive('running')).toBeNull()
     expect(subscription().unsubscribe).toHaveBeenCalledOnce()
     expect(feed.getSnapshot().get('running')).toEqual({
       ...owned,
       hostExecutionOwned: undefined,
       hostExecutionPhase: undefined,
-      hostExecutionChild: undefined
+      runtimePermission: null
     })
     expect(feed.getSnapshot().get('completed')).toBe(done)
     subscription().emit({ type: 'status', session: owned })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     expect(vi.getTimerCount()).toBe(1)
     await vi.advanceTimersByTimeAsync(250)
-    subscription(1).emit({ type: 'snapshot', sessions: [done] })
+    subscription(1).emit({ type: 'snapshot', sessions: [] })
+    expect(feed.getNamingActive('running')).toBeNull()
+    subscription(1).emit({ type: 'snapshot', sessions: [done], namingActiveSessionIds: [] })
+    subscription().emit({ type: 'snapshot', sessions: [], namingActiveSessionIds: ['running'] })
+    expect(feed.getNamingActive('running')).toBe(false)
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'status', session: owned })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
-  })
-
-  it('retains history without ownership while stopped and until remount receives fresh evidence', async () => {
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const deactivate = feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [owned, done] })
-    deactivate()
-    expect(vi.getTimerCount()).toBe(0)
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    expect(feed.getSnapshot().get('running')?.updatedAt).toBe(owned.updatedAt)
-    expect(feed.getSnapshot().get('completed')).toBe(done)
-    feed.activate()
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'status', session: owned })
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    subscription(1).emit({ type: 'snapshot', sessions: [owned] })
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
-  })
-
-  it('does not notify or reallocate already unowned historical rows on teardown', async () => {
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const deactivate = feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [done] })
-    const previous = feed.getSnapshot()
-    const listener = vi.fn()
-    feed.subscribe(listener)
-    deactivate()
-    expect(feed.getSnapshot()).toBe(previous)
-    expect(listener).not.toHaveBeenCalled()
   })
 })

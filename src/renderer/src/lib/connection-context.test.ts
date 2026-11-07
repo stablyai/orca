@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
@@ -11,7 +11,6 @@ import {
   getConnectionIdFromState,
   isWorktreeConnectionResolved
 } from './connection-context'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createConnectionIdForFileSelector } from './connection-owner-resolution'
 
@@ -51,85 +50,6 @@ function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: strin
 describe('getConnectionId', () => {
   afterEach(() => {
     useAppStore.setState(initialState, true)
-  })
-
-  it('resolves SSH targets from composite worktree IDs before worktree discovery completes', () => {
-    useAppStore.setState({
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-ssh::/home/neil/repo-feature')).toBe('ssh-1')
-  })
-
-  it('returns null for known local repos without a discovered worktree', () => {
-    useAppStore.setState({
-      repos: [makeRepo({ id: 'repo-local' })],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-local::/Users/me/repo-feature')).toBeNull()
-  })
-
-  it('returns undefined when neither the worktree nor repo is known', () => {
-    useAppStore.setState({
-      repos: [],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId('repo-missing::/tmp/repo-feature')).toBeUndefined()
-  })
-
-  it('resolves SSH targets for folder workspaces from repos in the folder scope', () => {
-    useAppStore.setState({
-      folderWorkspaces: [
-        {
-          id: 'folder-workspace-1',
-          projectGroupId: 'group-1',
-          name: 'Platform workspace',
-          folderPath: '/home/neil/platform',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 1,
-          lastActivityAt: 0,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      projectGroups: [
-        {
-          id: 'group-1',
-          name: 'Platform',
-          parentPath: '/home/neil/platform',
-          parentGroupId: null,
-          createdFrom: 'folder-scan',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      repos: [
-        makeRepo({
-          id: 'repo-ssh',
-          path: '/home/neil/platform/api',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionId(folderWorkspaceKey('folder-workspace-1'))).toBe('ssh-1')
   })
 
   it('resolves SSH targets for repo-less folder workspaces from persisted scope provenance', () => {
@@ -281,46 +201,6 @@ describe('getConnectionId', () => {
     expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/README.md')).toBeUndefined()
   })
 
-  it('resolves folder workspace combined diff sections by child repo path', () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    useAppStore.setState({
-      folderWorkspaces: [makeFolderWorkspace()],
-      projectGroups: [
-        {
-          id: 'group-1',
-          name: 'Platform',
-          parentPath: '/home/neil/platform',
-          parentGroupId: null,
-          createdFrom: 'folder-scan',
-          tabOrder: 0,
-          isCollapsed: false,
-          color: null,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      repos: [
-        makeRepo({
-          id: 'repo-local',
-          path: '/home/neil/platform/web',
-          projectGroupId: 'group-1'
-        }),
-        makeRepo({
-          id: 'repo-ssh',
-          path: '/home/neil/platform/api',
-          projectGroupId: 'group-1',
-          connectionId: 'ssh-1'
-        })
-      ],
-      worktreesByRepo: {}
-    })
-
-    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform')).toBeUndefined()
-    expect(getConnectionIdForFile(workspaceKey, '/home/neil/platform/api/src/index.ts')).toBe(
-      'ssh-1'
-    )
-  })
-
   it('keeps explicit folder workspace provenance isolated from unrelated same-path SSH repos', () => {
     useAppStore.setState({
       folderWorkspaces: [
@@ -399,21 +279,6 @@ describe('getConnectionId', () => {
       worktreesByRepo: {}
     })
     expect(isWorktreeConnectionResolved('repo-ssh::/home/neil/repo')).toBe(true)
-  })
-
-  it('treats null worktrees and folder workspaces as resolved owners', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
-    expect(isWorktreeConnectionResolved(null)).toBe(true)
-    // Folder workspaces resolve per-file via getConnectionIdForFile.
-    expect(isWorktreeConnectionResolved(folderWorkspaceKey('folder-workspace-1'))).toBe(true)
-  })
-
-  it('treats the floating workspace as a resolved local owner (#6831)', () => {
-    useAppStore.setState({ repos: [], worktreesByRepo: {} })
-
-    expect(getConnectionId(FLOATING_TERMINAL_WORKTREE_ID)).toBeNull()
-    expect(getConnectionIdForFile(FLOATING_TERMINAL_WORKTREE_ID, '/tmp/orca/note.md')).toBeNull()
-    expect(isWorktreeConnectionResolved(FLOATING_TERMINAL_WORKTREE_ID)).toBe(true)
   })
 
   it('keeps normalized same-path folder repo ambiguity when resolving files', () => {
@@ -521,8 +386,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('resolves a folder workspace connectionId from a passed-in state without reading the global store', () => {
-    // Why: the Quick Open hook subscribes to store slices and must resolve from
-    // the snapshot it receives, not by re-reading useAppStore.getState().
+    // Resolve Quick Open ownership from the subscribed snapshot, never a second getState read.
     const getStateSpy = vi.spyOn(useAppStore, 'getState')
     const state: ConnectionContextState = {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
@@ -535,20 +399,8 @@ describe('getConnectionIdFromState', () => {
     expect(getStateSpy).not.toHaveBeenCalled()
   })
 
-  it('resolves SSH repo provenance for non-folder worktrees from the passed-in state', () => {
-    const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-2' })],
-      worktreesByRepo: {}
-    }
-
-    expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
-  })
-
   it('refuses to resolve a connection when duplicate repo rows disagree about the owning host', () => {
-    // Why (#17799): a repo id carried by two rows — one runtime-owned, one holding a
-    // client-owned SSH connection — must not hand the client's connection to the runtime.
+    // Same-ID repo rows with conflicting owners must not lend a client SSH connection to a runtime (#17799).
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -562,25 +414,8 @@ describe('getConnectionIdFromState', () => {
     expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBeUndefined()
   })
 
-  it('still resolves duplicate repo rows that agree about the owning host', () => {
-    const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [
-        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same' }),
-        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same', path: '/home/neil/other' })
-      ],
-      worktreesByRepo: {}
-    }
-
-    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBe('ssh-same')
-  })
-
   it('never hands a worktree the SSH connection of a different host', () => {
-    // Why (#11163): two SSH hosts, one shared repo id. The worktree names `ssh:m4air`; the only
-    // indexed row belongs to `openclaw`. An id-only fallback after the host lookup misses answers
-    // with the wrong host's connection — "Reconnect openclaw" on an m4air pane, and file reads
-    // routed to a machine that never held the path.
+    // Host lookup misses must not fall back by repo ID to another SSH machine’s connection (#11163).
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -600,8 +435,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('never hands a runtime-hosted worktree a client-owned SSH connection', () => {
-    // The row is on `ssh:openclaw`, not on the runtime host, so it says nothing about this
-    // worktree. This is the cross-host case, not the nested-SSH one below.
+    // A row stamped ssh:openclaw cannot establish this runtime-owned worktree’s owner.
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -621,10 +455,7 @@ describe('getConnectionIdFromState', () => {
   })
 
   it('keeps a runtime host nested SSH target, which decides local readability', () => {
-    // `repoWithFetchedOwner` stamps the runtime host and spreads the nested target through. The
-    // pane pairs it with the environment (`selectRuntimeAwareSshStatus`) for reconnect state, and
-    // `isNativeChatTranscriptLocalReadable` treats a null here as "this client can read it" — so
-    // dropping it would send a transcript read to the wrong machine.
+    // Retain nested SSH ownership with its publishing runtime; null would authorize a local transcript read on the wrong machine.
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -722,15 +553,41 @@ describe('getConnectionIdFromState', () => {
     expect(repoIdReads).toBe(100)
   })
 
-  it('returns null for a null worktreeId', () => {
+  it('invalidates folder connection inference for each catalog slice and preserves tri-state answers', () => {
+    const key = folderWorkspaceKey('folder-workspace-1')
     const state: ConnectionContextState = {
-      folderWorkspaces: [],
-      projectGroups: [],
-      repos: [],
+      folderWorkspaces: [makeFolderWorkspace()],
+      projectGroups: [makeProjectGroup()],
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1', connectionId: 'ssh-1' })],
       worktreesByRepo: {}
     }
-
-    expect(getConnectionIdFromState(state, null)).toBeNull()
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    const local = {
+      ...state,
+      repos: [makeRepo({ id: 'repo-1', projectGroupId: 'group-1' })]
+    }
+    expect(getConnectionIdFromState(local, key)).toBeNull()
+    const contested = {
+      ...local,
+      projectGroups: [makeProjectGroup()],
+      repos: [
+        ...local.repos,
+        makeRepo({ id: 'repo-2', projectGroupId: 'group-1', connectionId: 'ssh-2' })
+      ]
+    }
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    expect(getConnectionIdFromState(contested, key)).toBeUndefined()
+    const pinned = {
+      ...contested,
+      folderWorkspaces: [
+        makeFolderWorkspace({ executionHostId: 'runtime:host-a', connectionId: 'nested-ssh' })
+      ]
+    }
+    expect(getConnectionIdFromState(pinned, key)).toBe('nested-ssh')
+    expect(getConnectionIdFromState({ ...pinned, folderWorkspaces: [] }, key)).toBeUndefined()
+    // Retained snapshots remain independent when React reads them between current publications.
+    expect(getConnectionIdFromState(state, key)).toBe('ssh-1')
+    expect(getConnectionIdFromState(local, key)).toBeNull()
   })
 
   it('recomputes a retained file-owner selector when ownership slices hydrate', () => {

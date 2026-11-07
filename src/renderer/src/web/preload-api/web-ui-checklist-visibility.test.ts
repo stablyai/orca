@@ -2,7 +2,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { beginChecklistVisibilityWrite } from './web-checklist-visibility-revision'
-import { readLocalWebUIState } from './web-preferences-store'
+import { readLocalWebUIState } from './web-local-ui-state'
 import { UI_STORAGE_KEY } from './web-storage'
 import { createWebUiApi } from './web-ui-api'
 

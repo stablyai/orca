@@ -1,9 +1,6 @@
 import type { DedicatedRepoChannel, ReleaseBuild, ReleaseChannel } from './release-channel'
 
-// ─── Updater ─────────────────────────────────────────────────────────
-
-// Why: the release object sent to the renderer omits `version` (redundant
-// with the top-level UpdateStatus.version) to keep one source of truth.
+// Keep version only on UpdateStatus so release payloads cannot disagree.
 export type ChangelogRelease = {
   title: string
   description: string
@@ -23,10 +20,19 @@ export type UpdateCheckOptions = {
   /** Dev channel switching; `targetTag` pins an exact build, including older ones. */
   channel?: ReleaseChannel
   targetTag?: string
+  /** One-off "install now" that skips the user's update delay. */
+  ignoreUpdateDelay?: boolean
 }
 
-/** Non-release origins for an update. Derived from the dev-channel list so a new
- *  channel with its own repo cannot be reported as an ordinary release. */
+/** A newer release withheld by the user's update delay; ISO timestamps survive IPC/RPC. */
+export type DelayedUpdate = {
+  version: string
+  releasedAt: string
+  availableAt: string
+  delayDays: number
+}
+
+/** Derive nonrelease origins from dev channels so new dedicated repos cannot be mislabeled ordinary releases. */
 export type UpdateSource = 'local' | DedicatedRepoChannel
 
 /** Root-package Linux install formats whose update installs need privilege escalation. */
@@ -56,6 +62,23 @@ export type LinuxPackageInstallInstructions =
   | { ok: true; command: string; packageFileName: string }
   | { ok: false; reason: LinuxPackageCommandUnavailableReason; message: string }
 
+/** A newer release this Mac's macOS is too old to run; the updater keeps the current build. */
+export type UnsupportedSystemUpdate = {
+  version: string
+  /** Major macOS release the update needs, e.g. "13". */
+  minimumMacosVersion: string
+}
+
+export type UpdateInstallBlocker = {
+  pid: number
+  kind: 'window' | 'server' | 'browser' | 'unknown'
+}
+
+export type UpdateInstallBlock = {
+  reason: 'running-instances' | 'busy' | 'unresponsive'
+  instances: UpdateInstallBlocker[]
+}
+
 export type UpdateStatus = (
   | { state: 'idle' }
   | { state: 'checking'; userInitiated?: boolean }
@@ -63,37 +86,57 @@ export type UpdateStatus = (
       state: 'available'
       version: string
       activeNudgeId?: string
-      // Why: releaseUrl is not currently populated by the update-available handler
-      // (it always sends undefined). Kept on the type for the Settings page's
-      // release-notes link fallback and for potential future use if the main
-      // process starts extracting release URLs from electron-updater metadata.
+      // Kept for Settings release-link fallback; the current update-available handler does not populate it.
       releaseUrl?: string
-      // Why: changelog is always explicitly set by the main process — null means
-      // the fetch failed or the version wasn't in the JSON (simple mode), and a
-      // populated object means rich mode. Using `| null` (not `?`) avoids a
-      // three-state ambiguity (undefined vs null vs present) and makes exhaustive
-      // checks straightforward.
+      // Main always sets this: null means fetch failure/missing version, object enables rich mode. Avoid an undefined third state.
       changelog: ChangelogData | null
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean
     }
-  | { state: 'not-available'; userInitiated?: boolean }
+  | {
+      state: 'not-available'
+      userInitiated?: boolean
+      /** Optional so older paired clients keep rendering "up to date". */
+      delayedUpdate?: DelayedUpdate
+      /** Optional so older paired clients keep rendering "up to date". */
+      unsupportedSystemUpdate?: UnsupportedSystemUpdate
+    }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
-  | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
+  | {
+      state: 'downloaded'
+      version: string
+      releaseUrl?: string
+      activeNudgeId?: string
+      /** Install preparation is in progress; older clients can still render downloaded. */
+      installing?: boolean
+    }
   | {
       state: 'error'
       message: string
+      /** Translation code for `message`; older hosts omit it and newer ones may send unknown codes. */
+      messageCode?: string
+      messageParams?: Record<string, string | number>
       /** Known download/install target; absent for check-time failures and older hosts. */
       version?: string
       /** Omitted by older hosts and for failures whose retryability is unknown. */
       retryable?: boolean
+      /** A staged update can retry installation without downloading again; older hosts omit this. */
+      retryAction?: 'install'
       userInitiated?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery
+      /** Optional so older paired clients retain the diagnostic and install retry. */
+      installBlock?: UpdateInstallBlock
     }
 ) & { source?: UpdateSource }
 
 export type ReleaseBuildListResult =
   | { ok: true; channel: ReleaseChannel; builds: ReleaseBuild[] }
-  | { ok: false; channel: ReleaseChannel; message: string }
+  | {
+      ok: false
+      channel: ReleaseChannel
+      message: string
+      messageCode?: string
+      messageParams?: Record<string, string | number>
+    }

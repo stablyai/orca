@@ -22,22 +22,12 @@ function toProcessRow(row: NativeWindowsProcessRow): WindowsProcessRow {
     pid: row.pid,
     ppid: row.ppid,
     name: row.name,
-    // Why fall back to the image name: a process that denied a query handle has
-    // no command line, and callers match on `command` first.
+    // Query denial can hide command lines; preserve image-name recognition as fallback.
     command: row.command || row.name
   }
 }
 
-/**
- * One projection per snapshot identity, mirroring `getProcessTableIndex`.
- *
- * The TTL cache already gives every pane the same native rows array; without
- * this each of them still rebuilt ~1050 row objects, which also handed
- * `getProcessTableIndex` a new array each time and defeated its memo by
- * construction. Keyed weakly, so a projection dies with its snapshot. Rows are
- * shared, never mutated: descendants are copied with their depth, and
- * `anchorRow` is read-only to every caller.
- */
+/** Share projection identity so per-pane reads also reuse the process-table index; rows remain immutable. */
 const projectedRows = new WeakMap<readonly NativeWindowsProcessRow[], WindowsProcessRow[]>()
 
 function projectProcessRows(native: readonly NativeWindowsProcessRow[]): WindowsProcessRow[] {
@@ -50,12 +40,7 @@ function projectProcessRows(native: readonly NativeWindowsProcessRow[]): Windows
   return rows
 }
 
-/**
- * A fresh scan for an ancestry walk, which reads only pid/ppid.
- *
- * Returns identity rows so the command line is not merely unused but absent:
- * asking for it costs an `OpenProcess` per process on the box.
- */
+/** Ancestry only needs identity rows; requesting unused command lines costs one OpenProcess per row. */
 export async function queryWindowsProcessLinksFresh(): Promise<WindowsProcessIdentityRow[]> {
   return readWindowsProcessIdentityTableFresh()
 }
@@ -69,11 +54,7 @@ export async function queryWindowsProcessDescendants(
 
 export type WindowsPaneProcessInventory = {
   candidates: WindowsProcessCandidate[]
-  /**
-   * Full-table row for `anchorPid`. From the whole snapshot, not the ppid
-   * projection: a pane-job member whose creator exited is orphaned out of the
-   * descendant walk yet can still hold a recycled anchor pid.
-   */
+  /** Full-table anchor catches recycled job-member PIDs orphaned outside the descendant walk. */
   anchorRow: WindowsProcessRow | null
 }
 
@@ -91,12 +72,9 @@ export async function queryWindowsPaneProcessInventory(
   } catch {
     return null
   }
-  // One index per snapshot, shared by every pane inspecting inside the TTL
-  // window: `byPid` answers both lookups that used to be linear scans, and
-  // `childrenByPpid` replaces a per-call Map rebuild over the whole table.
+  // Snapshot-shared index avoids per-pane whole-table map builds and linear PID lookups.
   const index = getProcessTableIndex(rows)
-  // Why: a snapshot that omitted the PTY root may be stale or permission-
-  // filtered; only an observed root can authoritatively have no descendants.
+  // Missing roots may indicate stale/filtered snapshots, never observed absence of children.
   if (!index.byPid.has(rootPid)) {
     return null
   }
@@ -106,27 +84,6 @@ export async function queryWindowsPaneProcessInventory(
   }
 }
 
-/**
- * The descendant walk over rows the caller already read.
- *
- * Why exported: a caller that needs a field this module's projection drops —
- * process creation time, for a PID-reuse-safe teardown snapshot — would
- * otherwise read the whole table a second time to get it.
- * Null when the root is absent, which is a stale or filtered snapshot rather
- * than a root with no descendants.
- */
-export function windowsDescendantsFromRows<Row extends { pid: number; ppid: number }>(
-  rows: Row[],
-  rootPid: number
-): (Row & { depth: number })[] | null {
-  const index = getProcessTableIndex(rows)
-  if (!index.byPid.has(rootPid)) {
-    return null
-  }
-  return collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth)
-}
-
-/** Test-only: clear the shared snapshot so one case's rows never serve the next. */
 export function resetWindowsProcessRowsSnapshotForTests(): void {
   resetWindowsProcessTableForTests()
 }

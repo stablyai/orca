@@ -115,6 +115,35 @@ describe('hydrateShellPath', () => {
     expect(successfulSpawner).toHaveBeenCalledWith('/bin/bash')
   })
 
+  it('re-probes after a rejected hydration instead of serving the cached rejection', async () => {
+    const spawner = vi.fn<HydrationSpawner>()
+    spawner
+      .mockRejectedValueOnce(new Error('profile failed'))
+      .mockResolvedValueOnce({ segments: ['/retried'], ok: true, failureReason: 'none' })
+
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', spawner })).rejects.toThrow(
+      'profile failed'
+    )
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', spawner })).resolves.toEqual({
+      segments: ['/retried'],
+      ok: true,
+      failureReason: 'none'
+    })
+    expect(spawner).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports spawn_error instead of rejecting when spawn throws synchronously', async () => {
+    spawnMock.mockImplementation(() => {
+      throw Object.assign(new Error('spawn EACCES'), { code: 'EACCES' })
+    })
+
+    await expect(hydrateShellPath({ shellOverride: '/bin/zsh', force: true })).resolves.toEqual({
+      segments: [],
+      ok: false,
+      failureReason: 'spawn_error'
+    })
+  })
+
   it('returns failureReason:no_shell when no shell is available (Windows path)', async () => {
     const result = await hydrateShellPath({
       shellOverride: null,
@@ -126,11 +155,7 @@ describe('hydrateShellPath', () => {
     expect(result).toEqual({ segments: [], ok: false, failureReason: 'no_shell' })
   })
 
-  // Why: each failure mode tagged independently so dashboards can pick the
-  // right fix (lengthen timeout vs investigate shell-invocation strategy vs
-  // surface a UX error). Spawner override stands in for the four resolve
-  // sites — the actual classification happens inside `spawnShellAndReadPath`,
-  // covered by the existing real-shell smoke surface.
+  // Keep failure classifications distinct; the spawner override isolates propagation from real-shell classification.
   it('propagates failureReason:timeout from the spawner', async () => {
     const result = await hydrateShellPath({
       shellOverride: '/bin/zsh',
@@ -198,8 +223,7 @@ describe('hydrateShellPath', () => {
   })
 
   it('uses the PATH captured at module load, not a later mutation of process.env', async () => {
-    // Why: this is the anti-regression guard. patchPackagedProcessPath mutates
-    // process.env.PATH after this module is evaluated; the probe must not see it.
+    // The probe must retain launch PATH even after packaged seeding mutates process.env.
     const seeded = `/seeded/newest-nvm/bin${delimiter}/usr/bin`
     process.env.PATH = seeded
 
@@ -209,6 +233,51 @@ describe('hydrateShellPath', () => {
   it('sets a probe marker so rc files can take a fast path', async () => {
     expect((await captureProbeEnv()).ORCA_SHELL_PATH_PROBE).toBe('1')
   })
+
+  it.skipIf(process.platform === 'win32').each(['/bin/bash', '/bin/zsh'])(
+    'keeps the POSIX login probe for %s',
+    async (shell) => {
+      await captureProbeEnv(shell)
+
+      expect(spawnMock.mock.calls[0][1]).toEqual([
+        '-ilc',
+        `printf '%s' '__ORCA_SHELL_PATH__'; printf '%s' "$PATH"; printf '%s' '__ORCA_SHELL_PATH__'`
+      ])
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'reads Nushell PATH while preserving interactive login configuration',
+    async () => {
+      const proc = createMockShellProcess()
+      spawnMock.mockReturnValue(proc)
+      const resultPromise = hydrateShellPath({
+        shellOverride: '/run/current-system/sw/bin/nu',
+        force: true
+      })
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+
+      expect(spawnMock.mock.calls[0][1]).toEqual([
+        '-ilc',
+        [
+          "print -n '__ORCA_SHELL_PATH__';",
+          'print -n ($env.PATH | str join (char esep));',
+          "print -n '__ORCA_SHELL_PATH__'"
+        ].join(' ')
+      ])
+      proc.stdout.emit(
+        'data',
+        Buffer.from('__ORCA_SHELL_PATH__/etc/profiles/per-user/me/bin:/usr/bin__ORCA_SHELL_PATH__')
+      )
+      proc.emit('close', 0)
+
+      await expect(resultPromise).resolves.toEqual({
+        segments: ['/etc/profiles/per-user/me/bin', '/usr/bin'],
+        ok: true,
+        failureReason: 'none'
+      })
+    }
+  )
 
   it('overwrites the captured key in place so Windows never carries both Path and PATH', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
@@ -247,9 +316,7 @@ describe('mergePathSegments', () => {
     }
   })
 
-  // Why: mergePathSegments joins with the platform PATH delimiter, so the
-  // expectations must too — hardcoding ':' made this suite fail on Windows
-  // dev machines even though the code under test was correct.
+  // Use the host delimiter so this suite also runs on Windows.
   const joinPath = (...segments: string[]): string => segments.join(delimiter)
 
   it('prepends new segments ahead of existing PATH entries', () => {

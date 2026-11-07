@@ -12,9 +12,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Why: these are the exact envelopes the RPC dispatcher test proved the runtime emits. This
-// checkout's formatter never enumerates codes (verified below with a code no build has defined),
-// which is what lets a client that predates a new code still print its message and nextSteps.
+// Runtime envelopes may contain codes introduced after this client; formatting must preserve them.
 describe('orchestration dispatch refusals through the CLI error boundary', () => {
   it.each([
     {
@@ -49,8 +47,6 @@ describe('orchestration dispatch refusals through the CLI error boundary', () =>
   })
 })
 
-// Why: a code this build has never defined stands in for a future host's new code; if the
-// formatter ever starts gating on known codes, this is the assertion that catches it.
 it('prints an unknown code with its message and nextSteps unchanged', () => {
   const failure: RuntimeRpcFailure = {
     id: 'rpc_1',

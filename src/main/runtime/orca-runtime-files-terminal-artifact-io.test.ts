@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { link, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, open, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { renameMock, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 import {
@@ -11,8 +11,10 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './orca-runtime-files'
+import {
+  LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
+  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
+} from './files/file-preview-budget'
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
@@ -23,7 +25,7 @@ vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
-vi.mock('../ipc/filesystem-auth', async () =>
+vi.mock('../ipc/filesystem/access/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
 vi.mock('../git/runner', async () =>
@@ -33,52 +35,12 @@ vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
-vi.mock(
-  '../providers/ssh-filesystem-dispatch',
-  async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
-)
 
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
   describe('resolveTerminalPath', () => {
     const { tempFile } = useTerminalArtifactTempFiles()
-
-    function createRemoteTerminalArtifactGrantFixture(
-      artifactPath = '/tmp/result.json',
-      nativeChat = false
-    ) {
-      const { commands, store } = createRuntimeFileCommands({
-        path: '/repo',
-        ...(nativeChat ? { hasRecentNativeChatOutputPath: vi.fn(() => true) } : {})
-      })
-      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      let realArtifactPath = artifactPath
-      let artifactStat = { type: 'file', size: 11, mtime: 3 }
-      const stat = vi.fn(async () => artifactStat)
-      const readTerminalArtifact = vi
-        .fn()
-        .mockResolvedValue({ content: '{"ok":true}', isBinary: false })
-      const writeTerminalArtifact = vi.fn().mockResolvedValue({ type: 'file', size: 12, mtime: 4 })
-      const realpath = vi.fn(async (p: string) => (p === artifactPath ? realArtifactPath : p))
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat,
-        readTerminalArtifact,
-        realpath,
-        writeTerminalArtifact
-      } as never)
-      return {
-        commands,
-        readTerminalArtifact,
-        writeTerminalArtifact,
-        moveArtifactTarget: (nextPath: string) => {
-          realArtifactPath = nextPath
-        },
-        replaceArtifact: () => {
-          artifactStat = { type: 'file', size: 12, mtime: 4 }
-        }
-      }
-    }
 
     function resolveRemoteNativeChatArtifact(commands: RuntimeFileCommands, artifactPath: string) {
       return commands.resolveTerminalPath('id:wt-1', artifactPath, null, 'client-a', null, true, {
@@ -116,6 +78,20 @@ describe('RuntimeFileCommands', () => {
           'client-b'
         )
       ).rejects.toThrow('terminal_file_grant_mismatch')
+    })
+
+    it('reports the granted file size and whether it can serve the file as text', async () => {
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const textPath = await tempFile('notes.md', '# hi')
+      const binaryPath = await tempFile('blob.dat', 'a\0b')
+
+      const text = await resolveTerminalArtifactPath(commands, textPath)
+      const binary = await resolveTerminalArtifactPath(commands, binaryPath)
+
+      expect(text.openTarget).toMatchObject({ byteLength: 4 })
+      expect(text.openTarget).not.toHaveProperty('binary')
+      expect(binary.openTarget).toMatchObject({ byteLength: 3, binary: true })
     })
 
     it('revokes absolute terminal artifact grants when the owning client disconnects', async () => {
@@ -183,6 +159,45 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":"ext"}')
     })
 
+    it('lets only one of two concurrent writes from different clients land', async () => {
+      const artifactPath = await tempFile('result.json', '{"ok":true}')
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      // The registry stubs rename; commit for real so the second writer sees the first one's bytes.
+      renameMock.mockImplementation(async (from, to) => writeFile(to, await readFile(from)))
+
+      const first = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const second = absoluteFileTarget(
+        await resolveTerminalArtifactPath(commands, artifactPath, null, 'client-b')
+      )
+
+      const results = await Promise.allSettled([
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          first.grantId,
+          first.absolutePath,
+          '{"from":"a"}',
+          'client-a'
+        ),
+        commands.writeTerminalArtifactFile(
+          'id:wt-1',
+          second.grantId,
+          second.absolutePath,
+          '{"from":"b"}',
+          'client-b'
+        )
+      ])
+
+      const winner = results.findIndex((result) => result.status === 'fulfilled')
+      expect(results[1 - winner]).toMatchObject({
+        status: 'rejected',
+        reason: new Error('terminal_file_grant_stale')
+      })
+      await expect(readFile(artifactPath, 'utf8')).resolves.toBe(
+        winner === 0 ? '{"from":"a"}' : '{"from":"b"}'
+      )
+    })
+
     it('keeps the original terminal artifact when atomic commit fails', async () => {
       const artifactPath = await tempFile('result.json', '{"ok":true}')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
@@ -224,6 +239,82 @@ describe('RuntimeFileCommands', () => {
         )
       ).rejects.toThrow('terminal_file_grant_stale')
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":true}')
+    })
+
+    it('pages a granted binary file whole, beyond the text read cap, for its client only', async () => {
+      const bytes = Buffer.alloc(3 * 1024 * 1024 + 7, 0xab)
+      bytes[0] = 0
+      const artifactPath = await tempFile('teste.mp4', '')
+      await writeFile(artifactPath, bytes)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const readPage = (offset: number, clientId = 'client-a') =>
+        commands.readTerminalArtifactChunk(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          offset,
+          512 * 1024,
+          clientId
+        )
+
+      const pages: Buffer[] = []
+      for (let offset = 0, eof = false; !eof;) {
+        const page = await readPage(offset)
+        pages.push(Buffer.from(page.contentBase64, 'base64'))
+        offset += page.bytesRead
+        eof = page.eof
+      }
+
+      expect(Buffer.concat(pages).equals(bytes)).toBe(true)
+      await expect(readPage(0, 'client-b')).rejects.toThrow()
+    })
+
+    it('stats a granted file for its reader until the file changes', async () => {
+      const artifactPath = await tempFile('clip.mp4', '')
+      await writeFile(artifactPath, Buffer.alloc(4096, 0xab))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const stat = () =>
+        commands.statTerminalArtifact('id:wt-1', target.grantId, target.absolutePath, 'client-a')
+
+      await expect(stat()).resolves.toMatchObject({ size: 4096, isDirectory: false })
+      await writeFile(artifactPath, Buffer.alloc(8192, 0xcd))
+      await expect(stat()).rejects.toThrow('terminal_file_grant_stale')
+    })
+
+    // Why: files above the digest cap are pinned by stat alone; utimes can restore mtime but never ctime.
+    it('rejects a page of a large granted file rewritten in place with its mtime restored', async () => {
+      const artifactPath = await tempFile('render.mp4', '')
+      await writeFile(artifactPath, Buffer.alloc(LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1, 0xab))
+      // Whole seconds, so restoring them reproduces the granted mtime exactly.
+      const pinnedSeconds = 1_700_000_000
+      await utimes(artifactPath, pinnedSeconds, pinnedSeconds)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+
+      const handle = await open(artifactPath, 'r+')
+      const grantedCtimeMs = (await handle.stat()).ctimeMs
+      // Why: coarse-tick filesystems can stamp a quick rewrite with the granted ctime; rewrite until it moves.
+      do {
+        await handle.write(Buffer.alloc(16, 0xcd), 0, 16, 0)
+        await handle.utimes(pinnedSeconds, pinnedSeconds)
+      } while ((await handle.stat()).ctimeMs === grantedCtimeMs)
+      await handle.close()
+
+      await expect(
+        commands.readTerminalArtifactChunk(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          0,
+          512 * 1024,
+          'client-a'
+        )
+      ).rejects.toThrow('terminal_file_grant_stale')
     })
 
     it('rejects stale absolute terminal artifact reads before returning changed content', async () => {
@@ -369,6 +460,33 @@ describe('RuntimeFileCommands', () => {
       })
     })
 
+    it.each([
+      ['woff', 'font/woff'],
+      ['woff2', 'font/woff2'],
+      ['ttf', 'font/ttf'],
+      ['otf', 'font/otf']
+    ])('reads granted %s font bytes for document previews', async (extension, mimeType) => {
+      const content = 'font\0binary\0bytes'
+      const artifactPath = await tempFile(`report.${extension}`, content)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+
+      await expect(
+        commands.readTerminalArtifactPreview(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      ).resolves.toMatchObject({
+        content: Buffer.from(content).toString('base64'),
+        isBinary: true,
+        isImage: false,
+        mimeType
+      })
+    })
+
     it('rejects binary-extension terminal artifacts from the editable text path', async () => {
       const artifactPath = await tempFile('report.pdf', '%PDF text-looking bytes')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
@@ -404,180 +522,37 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('%PDF text-looking bytes')
     })
 
-    it('rejects remote binary terminal artifact writes before changing the file', async () => {
+    // Why: a reader pages a too-large file as text, so a binary must be named before its size.
+    it('names a large unlisted binary as binary, and large text as too large', async () => {
+      const binary = Buffer.alloc(600 * 1024, 0x41)
+      binary[10] = 0
+      const binaryPath = await tempFile('capture.raw', '')
+      const textPath = await tempFile('build.log', '')
+      await writeFile(binaryPath, binary)
+      await writeFile(textPath, Buffer.alloc(600 * 1024, 0x41))
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const read = async (path: string) => {
+        const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, path))
+        return commands.readTerminalArtifactFile(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          'client-a'
+        )
+      }
+
+      await expect(read(binaryPath)).rejects.toThrow('binary_file')
+      await expect(read(textPath)).rejects.toThrow('file_too_large')
+    })
+
+    it('never reads this machine for a native-chat path outside an SSH workspace', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
-      const stat = vi
-        .fn()
-        .mockResolvedValue({ type: 'file', size: 4, mtimeMs: 3, isDirectory: () => false })
-      const writeTerminalArtifact = vi.fn().mockRejectedValue(new Error('binary_file'))
-      const realpath = vi.fn(async (p: string) => p)
-      const writeFile = vi.fn()
-      vi.mocked(getSshFilesystemProvider).mockReturnValue({
-        stat,
-        realpath,
-        writeFile,
-        writeTerminalArtifact
-      } as never)
-
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.txt')
-      const grantId = result.openTarget?.kind === 'absolute-file' ? result.openTarget.grantId : ''
 
       await expect(
-        commands.writeTerminalArtifactFile(
-          'id:wt-1',
-          grantId,
-          '/tmp/result.txt',
-          'not binary anymore',
-          'client-a'
-        )
-      ).rejects.toThrow('binary_file')
-      expect(writeFile).not.toHaveBeenCalled()
-      expect(writeTerminalArtifact).toHaveBeenCalled()
-    })
-
-    it('reads a remote non-temp artifact cited by native chat', async () => {
-      const artifactPath = '/home/me/report.json'
-      const { commands, readTerminalArtifact } = createRemoteTerminalArtifactGrantFixture(
-        artifactPath,
-        true
-      )
-      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
-      const target = absoluteFileTarget(result)
-
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).resolves.toMatchObject({ content: '{"ok":true}' })
-      expect(readTerminalArtifact).toHaveBeenCalledWith(
-        artifactPath,
-        expect.objectContaining({ expectedRealPath: artifactPath })
-      )
-    })
-
-    it('rejects a retargeted remote native-chat artifact grant', async () => {
-      const artifactPath = '/home/me/report.json'
-      const { commands, readTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
-      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/home/me/private.json')
-
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects a replaced remote native-chat artifact grant', async () => {
-      const artifactPath = '/home/me/report.json'
-      const { commands, readTerminalArtifact, replaceArtifact } =
-        createRemoteTerminalArtifactGrantFixture(artifactPath, true)
-      const result = await resolveRemoteNativeChatArtifact(commands, artifactPath)
-      const target = absoluteFileTarget(result)
-
-      replaceArtifact()
-
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects remote terminal artifact reads when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture()
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/home/me/.ssh/config')
-
-      await expect(
-        commands.readTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects remote terminal artifact previews when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/tmp/other.png')
-
-      await expect(
-        commands.readTerminalArtifactPreview(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-    })
-
-    it('rejects additive remote terminal preview fields beyond the request budget', async () => {
-      const { commands, readTerminalArtifact } =
-        createRemoteTerminalArtifactGrantFixture('/tmp/result.png')
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.png')
-      const target = absoluteFileTarget(result)
-      readTerminalArtifact.mockResolvedValue({
-        content: 'a',
-        isBinary: true,
-        futureMetadata: 'x'.repeat(128)
-      })
-
-      await expect(
-        commands.readTerminalArtifactPreview(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          'client-a',
-          128
-        )
-      ).rejects.toThrow('file_too_large')
-    })
-
-    it('rejects remote terminal artifact writes when a grant no longer resolves to the granted path', async () => {
-      const { commands, readTerminalArtifact, writeTerminalArtifact, moveArtifactTarget } =
-        createRemoteTerminalArtifactGrantFixture()
-      const result = await resolveTerminalArtifactPath(commands, '/tmp/result.json')
-      const target = absoluteFileTarget(result)
-
-      moveArtifactTarget('/home/me/.ssh/config')
-
-      await expect(
-        commands.writeTerminalArtifactFile(
-          'id:wt-1',
-          target.grantId,
-          target.absolutePath,
-          '{"ok":false}',
-          'client-a'
-        )
-      ).rejects.toThrow('terminal_file_grant_stale')
-      expect(readTerminalArtifact).not.toHaveBeenCalled()
-      expect(writeTerminalArtifact).not.toHaveBeenCalled()
+        resolveRemoteNativeChatArtifact(commands, '/home/me/report.json')
+      ).rejects.toThrow('outside an SSH workspace')
     })
   })
 })

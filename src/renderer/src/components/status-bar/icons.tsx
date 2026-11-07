@@ -1,9 +1,16 @@
 import React from 'react'
 import minimaxIconUrl from '../../../../../resources/minimax-icon.svg?url'
 
-export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+export function OpenAIIcon({
+  size = 14,
+  className
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
   return (
     <svg
+      className={className}
       fill="currentColor"
       fillRule="evenodd"
       height={size}
@@ -17,10 +24,7 @@ export function OpenAIIcon({ size = 14 }: { size?: number }): React.JSX.Element 
 }
 
 export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: ship the official MiniMax wordmark mark so the icon is recognizable
-  // in both light and dark themes. The SVG carries its own pink→orange gradient
-  // that reads on muted backgrounds, so we keep the asset monochrome-agnostic
-  // and let CSS theme tokens drive the surrounding chrome instead.
+  // Keep the official MiniMax asset’s gradient intact across themes.
   return (
     <img
       src={minimaxIconUrl}
@@ -34,13 +38,10 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   )
 }
 
-// Why: each instance needs unique filter/mask IDs — reusing the same ID across
-// multiple SVGs on the same page causes the browser to resolve to the first one,
-// breaking all subsequent instances.
+// SVG filter/mask IDs must be unique per instance because document-wide lookup otherwise resolves to the first icon.
 let _geminiIconCount = 0
 
 export function GeminiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: use a stable per-instance ID generated once at mount, not on every render.
   const [uid] = React.useState(() => `gi-${++_geminiIconCount}`)
   const star =
     'M32.447 0c.68 0 1.273.465 1.439 1.125a38.904 38.904 0 001.999 5.905c2.152 5 5.105 9.376 8.854 13.125 3.751 3.75 8.126 6.703 13.125 8.855a38.98 38.98 0 005.906 1.999c.66.166 1.124.758 1.124 1.438 0 .68-.464 1.273-1.125 1.439a38.902 38.902 0 00-5.905 1.999c-5 2.152-9.375 5.105-13.125 8.854-3.749 3.751-6.702 8.126-8.854 13.125a38.973 38.973 0 00-2 5.906 1.485 1.485 0 01-1.438 1.124c-.68 0-1.272-.464-1.438-1.125a38.913 38.913 0 00-2-5.905c-2.151-5-5.103-9.375-8.854-13.125-3.75-3.749-8.125-6.702-13.125-8.854a38.973 38.973 0 00-5.905-2A1.485 1.485 0 010 32.448c0-.68.465-1.272 1.125-1.438a38.903 38.903 0 005.905-2c5-2.151 9.376-5.104 13.125-8.854 3.75-3.749 6.703-8.125 8.855-13.125a38.972 38.972 0 001.999-5.905A1.485 1.485 0 0132.447 0z'
@@ -315,9 +316,21 @@ export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Elem
   )
 }
 
-export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+export function ClaudeIcon({
+  size = 14,
+  className
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
   return (
-    <svg height={size} width={size} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className={className}
+      height={size}
+      width={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <path
         d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"
         fill="#D97757"
@@ -327,12 +340,22 @@ export function ClaudeIcon({ size = 14 }: { size?: number }): React.JSX.Element 
   )
 }
 
-export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {
-  // Why: Factory.ai's favicon is a white glyph on transparent bg — unreadable on
-  // light surfaces (README kbd pills, light-mode UI). Bake in a black rounded
-  // square backdrop so the icon is self-contained across themes.
+export function DroidIcon({
+  size = 14,
+  className
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
+  // Factory’s white glyph needs a black backdrop to remain visible on light surfaces.
   return (
-    <svg height={size} width={size} viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className={className}
+      height={size}
+      width={size}
+      viewBox="0 0 20 20"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <rect width="20" height="20" rx="4" fill="#000" />
       <g transform="translate(0.4 0.75)">
         <path

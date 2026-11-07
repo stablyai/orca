@@ -12,17 +12,11 @@ export type MarkupDrawButtonProps = {
   onClick: () => void
   disabled?: boolean
   active?: boolean
-  /**
-   * The browser pane's isActive. Required (no default) so every caller must
-   * decide explicitly — inactive/hidden tabs cannot force-open a portaled
-   * layer against a zero-size trigger (which lands at the viewport origin).
-   */
+  /** Explicitly gate on pane activity: a hidden trigger anchors portaled content at the viewport origin. */
   surfaceActive: boolean
   className?: string
 }
 
-// Toolbar toggle that enters screenshot-markup mode. Shared by the local and
-// remote browser panes so both expose the same affordance.
 export function MarkupDrawButton({
   onClick,
   disabled,
@@ -31,18 +25,12 @@ export function MarkupDrawButton({
   className
 }: MarkupDrawButtonProps): React.JSX.Element {
   const label = translate('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')
-  // Why: nudge the button the first time it's usable on a visible surface so
-  // users discover the tool without pinning a tooltip to a hidden pane.
+  // Offer discovery only while visible and usable, so a hidden pane cannot consume the one-time hint.
   const { hintOpen, dismissHint } = useMarkupDrawHint(surfaceActive && !disabled && !active)
-  // Why: close synchronously off the same `surfaceActive` render instead of
-  // waiting on the hook's effect — BrowserPane sets inert/hidden on the pane
-  // in the same commit isActive flips, so a one-tick delay would let the
-  // popover anchor briefly against an already-hidden trigger.
+  // Gate synchronously: BrowserPane becomes inert/hidden in this commit, before the hint hook’s effect.
   const showHint = hintOpen && surfaceActive
 
-  // Why: Electron <webview> clicks never reach the renderer document, so
-  // Radix outside-click dismiss misses them. Window blur covers focus leaving
-  // the renderer into the guest (same pattern as BrowserImportHintButton).
+  // Guest clicks bypass renderer outside-click detection; window blur dismisses when focus enters the guest.
   useEffect(() => {
     if (!showHint) {
       return
@@ -63,8 +51,6 @@ export function MarkupDrawButton({
       className={cn(
         className ?? 'h-8 w-8',
         active && 'bg-foreground/80 text-background hover:bg-foreground/90',
-        // Why: soft ring while the discovery callout is open — points at the
-        // control without the harsh solid highlight of a force-open tooltip.
         showHint && 'ring-2 ring-ring/45 ring-offset-1 ring-offset-background'
       )}
       onClick={startMarkup}
@@ -76,16 +62,7 @@ export function MarkupDrawButton({
     </Button>
   )
 
-  // Discovery uses a dismissable popover (outside click / Escape / blur / act)
-  // instead of a force-open tooltip — tooltips stay stuck when controlled open
-  // and mis-position against hidden triggers. Styled like BrowserImportHint
-  // (surface + title + body + actions), not an inverted tooltip chip.
-  //
-  // Why: Popover and Tooltip stay mounted as one persistent tree (matching
-  // WorkspaceStatusAppearancePopover's Tooltip-wrapping-Popover pattern)
-  // instead of switching root element types on `hintOpen` — swapping roots
-  // would unmount/remount the trigger button at the exact moments the hint
-  // is meant to draw the user's attention to it.
+  // Keep Popover/Tooltip roots mounted to preserve the trigger; the popover provides dismissal that a forced-open tooltip lacks.
   return (
     <Popover
       modal={false}

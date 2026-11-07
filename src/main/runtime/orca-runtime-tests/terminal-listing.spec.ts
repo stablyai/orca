@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  listWorktrees
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import {
   TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
@@ -13,7 +12,7 @@ import {
   createRuntime,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
@@ -29,7 +28,7 @@ describe('OrcaRuntimeService', () => {
         tabs: { type: string; terminal?: string | null }[]
       }
     }
-    // Two unclaimed live PTYs on the worktree; the worktree-only fallback binds either to a leafless tab that references it.
+    // Unclaimed PTYs can bind through the worktree-only fallback.
     internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
     internals.recordPtyWorktree('pty-other', TEST_WORKTREE_ID, { connected: true })
 
@@ -43,7 +42,7 @@ describe('OrcaRuntimeService', () => {
       isActive: leafId === 'leaf-new'
     })
 
-    // Two records (stale headless leaf + live leaf) both resolve to the SAME live PTY — the renderer-graph origin the leaf fix can't reach.
+    // A stale headless leaf and live renderer leaf can resolve to the same PTY.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:1',
@@ -58,7 +57,6 @@ describe('OrcaRuntimeService', () => {
     expect(dedupedTerminals).toHaveLength(1)
     expect(dedupedTerminals[0].terminal).toBeTruthy()
 
-    // Split siblings own DISTINCT PTYs, so they must never be collapsed.
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:test:2',
@@ -77,6 +75,7 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'projected-parent-tab'
     const leafId = 'projected-leaf'
     const ptyId = 'projected-pty'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads two protected runtime members this test seeds and calls; their shapes match these declarations.
     const internals = runtime as unknown as {
       mobileSessionTabsByWorktree: Map<string, unknown>
       resolveTerminalSplitSourceAuthority: (
@@ -84,7 +83,7 @@ describe('OrcaRuntimeService', () => {
         tabId: string,
         leafId: string,
         ptyId: string
-      ) => { persisted: boolean; rendererMounted: boolean } | null
+      ) => { persisted: boolean } | null
     }
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       tabs: [
@@ -100,7 +99,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(
       internals.resolveTerminalSplitSourceAuthority(TEST_WORKTREE_ID, tabId, leafId, ptyId)
-    ).toMatchObject({ persisted: false, rendererMounted: false })
+    ).toMatchObject({ persisted: false })
   })
 
   it('keeps targeted terminal lists from adopting controller PTYs for other worktrees', async () => {
@@ -423,26 +422,23 @@ describe('OrcaRuntimeService', () => {
       leaves: Map<string, unknown>
       leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
     }
-    const originalLeaves = runtimePrivate.leaves
-    runtimePrivate.leaves = new Proxy(originalLeaves, {
-      get(target, prop) {
-        if (
-          prop === 'values' ||
-          prop === 'entries' ||
-          prop === 'keys' ||
-          prop === Symbol.iterator
-        ) {
-          return () => {
-            throw new Error('onPtyData should use the PTY leaf index')
-          }
-        }
-        // oxlint-disable-next-line anti-slop/no-reflect-get -- Proxy get trap default forward.
-        const value = Reflect.get(target, prop, target)
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
+    const rejectTraversal = () => {
+      throw new Error('onPtyData should use the PTY leaf index')
+    }
+    const traversalSpies = [
+      vi.spyOn(runtimePrivate.leaves, 'values').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'entries').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, 'keys').mockImplementation(rejectTraversal),
+      vi.spyOn(runtimePrivate.leaves, Symbol.iterator).mockImplementation(rejectTraversal)
+    ]
 
-    runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    try {
+      runtime.onPtyData(`pty-${targetIndex}`, 'hello indexed\n', 123)
+    } finally {
+      for (const spy of traversalSpies) {
+        spy.mockRestore()
+      }
+    }
 
     const [targetLeaf] = runtimePrivate.leavesByPtyId.get(`pty-${targetIndex}`) ?? []
     expect(targetLeaf).toMatchObject({

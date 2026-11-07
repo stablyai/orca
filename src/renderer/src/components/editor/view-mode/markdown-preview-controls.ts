@@ -1,0 +1,108 @@
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import '../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
+import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
+import type { EditorToggleValue } from './EditorViewToggle'
+import { isSvgFilePath } from '../../../../../shared/svg-document'
+import {
+  normalizeMarkdownDefaultViewMode,
+  type MarkdownDefaultViewMode
+} from '../../../../../shared/markdown-default-view-mode'
+
+type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
+  language: string
+}
+
+const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const SVG_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
+
+// Expose Changes alongside language modes in one control; diff/conflict tabs already provide review surfaces.
+const CODE_EDIT_TOGGLE_MODES = ['edit', 'changes'] as const satisfies readonly EditorToggleValue[]
+
+export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly EditorToggleValue[] {
+  if (target.mode !== 'edit') {
+    return getMarkdownViewModes(target)
+  }
+  if (target.language === 'notebook') {
+    // Notebook source/Changes would expose raw JSON and fails for restored external notebooks.
+    return NOTEBOOK_VIEW_MODES
+  }
+  const languageModes = getMarkdownViewModes(target)
+  if (languageModes.length > 0) {
+    return [...languageModes, 'changes']
+  }
+  return CODE_EDIT_TOGGLE_MODES
+}
+
+export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly MarkdownViewMode[] {
+  if (target.language === 'markdown') {
+    if (target.mode === 'edit') {
+      return MARKDOWN_EDIT_VIEW_MODES
+    }
+    if (
+      target.mode === 'diff' &&
+      target.diffSource !== 'combined-all' &&
+      target.diffSource !== 'combined-uncommitted' &&
+      target.diffSource !== 'combined-branch' &&
+      target.diffSource !== 'combined-commit'
+    ) {
+      return MARKDOWN_DIFF_VIEW_MODES
+    }
+  }
+
+  if (target.language === 'mermaid' && target.mode === 'edit') {
+    return MERMAID_VIEW_MODES
+  }
+
+  if (target.language === 'svg' && target.mode === 'edit') {
+    return SVG_VIEW_MODES
+  }
+
+  if ((target.language === 'csv' || target.language === 'tsv') && target.mode === 'edit') {
+    return CSV_VIEW_MODES
+  }
+
+  if (target.language === 'notebook' && target.mode === 'edit') {
+    return NOTEBOOK_VIEW_MODES
+  }
+
+  return NO_VIEW_MODES
+}
+
+/** The language that picks a file's views; SVG keeps XML highlighting but gains a Preview. */
+export function getEditorViewLanguage(filePath: string, language: string): string {
+  return isSvgFilePath(filePath) ? 'svg' : language
+}
+
+/** The view a tab shows before its own toggle is used; only Markdown edit tabs honor the user preference. */
+export function getDefaultMarkdownViewMode(
+  target: MarkdownPreviewTarget,
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
+): MarkdownViewMode {
+  if (target.language === 'markdown' && target.mode === 'diff') {
+    return 'source'
+  }
+  // Why: Mermaid/SVG/CSV/notebook "rich" slots are viewers unrelated to how the user reads Markdown.
+  if (target.language === 'markdown' && target.mode === 'edit') {
+    return normalizeMarkdownDefaultViewMode(markdownDefaultViewMode)
+  }
+  const modes = getMarkdownViewModes(target)
+  return modes.includes('rich') ? 'rich' : 'source'
+}
+
+export function canOpenMarkdownPreview(target: MarkdownPreviewTarget): boolean {
+  return target.language === 'markdown' && target.mode === 'edit'
+}
+
+export function isMarkdownPreviewShortcut(
+  event: KeyboardEvent,
+  platform: NodeJS.Platform,
+  keybindings?: KeybindingOverrides
+): boolean {
+  return keybindingMatchesAction('editor.markdownPreview', event, platform, keybindings)
+}

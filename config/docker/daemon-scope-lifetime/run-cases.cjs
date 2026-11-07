@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const { join } = require('node:path')
 const { spawn, execFileSync } = require('node:child_process')
+const { runTerminalScopeCases } = require('./terminal-scope-cases.cjs')
 
 const [bundlePath, mode] = process.argv.slice(2)
 assert.ok(['baseline', 'candidate'].includes(mode))
@@ -184,8 +185,10 @@ async function main() {
         })
       )
     }
+    await runTerminalScopeCases(bundlePath, prefix, mode)
+    assert.ok(stat(canary.pid), 'unrelated canary was killed')
   } finally {
-    for (const unit of scopes) {
+    for (const unit of [...scopes, `orca-daemon-${prefix}-*`, 'orca_ptys_*']) {
       try {
         execFileSync('systemctl', ['--user', '--signal=SIGKILL', 'kill', unit], { stdio: 'ignore' })
       } catch {}

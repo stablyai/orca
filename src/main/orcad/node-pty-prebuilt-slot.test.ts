@@ -1,12 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  installPrebuiltSlot,
-  readPrebuiltSlotManifest,
-  resolveOrcadPrebuildsDir
-} from './node-pty-prebuilt-slot'
+import { installPrebuiltSlot, type PrebuiltSlotEntry } from './node-pty-prebuilt-slot'
 import type { NativeHostAbi } from './native-host-abi'
 
 const LINUX_GLIBC: NativeHostAbi = {
@@ -14,14 +11,6 @@ const LINUX_GLIBC: NativeHostAbi = {
   arch: 'x64',
   libc: 'glibc',
   glibcVersion: '2.31',
-  nodeAbi: '127'
-}
-
-const DARWIN_ARM64: NativeHostAbi = {
-  platform: 'darwin',
-  arch: 'arm64',
-  libc: 'none',
-  glibcVersion: null,
   nodeAbi: '127'
 }
 
@@ -38,104 +27,137 @@ afterEach(() => {
   delete process.env.ORCA_ORCAD_PREBUILDS_DIR
 })
 
-const stageSlot = (prebuilds: string, slot: string): void => {
-  mkdirSync(join(prebuilds, slot), { recursive: true })
-  writeFileSync(join(prebuilds, slot, 'pty.node'), 'binary')
-  writeFileSync(join(prebuilds, slot, 'spawn-helper'), 'helper')
+const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
+
+const stageSlot = (
+  prebuilds: string,
+  slot: string,
+  entry: Omit<PrebuiltSlotEntry, 'files'>,
+  files: Record<string, string>
+): void => {
+  for (const [file, contents] of Object.entries(files)) {
+    const path = join(prebuilds, slot, ...file.split('/'))
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, contents)
+  }
+  writeFileSync(
+    join(prebuilds, 'manifest.json'),
+    JSON.stringify({
+      schemaVersion: 2,
+      module: 'node-pty',
+      version: '1.1.0',
+      napi: 8,
+      slots: {
+        [slot]: {
+          ...entry,
+          files: Object.fromEntries(
+            Object.entries(files).map(([file, contents]) => [file, sha256(contents)])
+          )
+        }
+      }
+    })
+  )
 }
 
-describe('resolveOrcadPrebuildsDir', () => {
-  it('looks beside the running bundle', () => {
-    expect(resolveOrcadPrebuildsDir('/opt/orcad/orcad.js')).toBe(join('/opt/orcad', 'prebuilds'))
-  })
-
-  it('honours an explicit override', () => {
-    process.env.ORCA_ORCAD_PREBUILDS_DIR = '/custom/prebuilds'
-    expect(resolveOrcadPrebuildsDir('/opt/orcad/orcad.js')).toBe('/custom/prebuilds')
-  })
-})
+const LINUX_GLIBC_ENTRY = {
+  platform: 'linux',
+  arch: 'x64',
+  libc: 'glibc',
+  glibc: '2.17',
+  napi: 8
+} as const
 
 describe('installPrebuiltSlot', () => {
-  it('installs the slot binary and spawn-helper into build/Release on macOS', () => {
+  it('refuses a glibc build filed under the musl slot name', () => {
     const prebuilds = temp()
     const nodePtyDir = temp()
-    stageSlot(prebuilds, 'darwin-arm64')
-
-    const outcome = installPrebuiltSlot({ abi: DARWIN_ARM64, nodePtyDir, prebuildsDir: prebuilds })
-
-    expect(outcome).toEqual({ installed: true, slot: 'darwin-arm64', spawnHelper: true })
-    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(true)
-    // Without the executable bit every spawn fails EACCES at the moment a user opens a terminal.
-    const helper = statSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-    expect(helper.mode & 0o111).not.toBe(0)
-  })
-
-  it('installs a Linux slot without claiming a spawn-helper it never execs', () => {
-    // node-pty builds spawn-helper only under binding.gyp's OS=="mac"; reporting one off
-    // macOS is what made every Linux orcad boot degraded on spawn_helper_missing (#17844).
-    const prebuilds = temp()
-    const nodePtyDir = temp()
-    stageSlot(prebuilds, 'linux-x64-glibc')
-
-    const outcome = installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds })
-
-    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc', spawnHelper: false })
-    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(true)
-    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))).toBe(false)
-  })
-
-  it('will not load a glibc slot on a musl host', () => {
-    // node-pty's own loader cannot tell these apart; the slot name is the only thing that can.
-    const prebuilds = temp()
-    const nodePtyDir = temp()
-    stageSlot(prebuilds, 'linux-x64-glibc')
+    stageSlot(prebuilds, 'linux-x64-musl', LINUX_GLIBC_ENTRY, { 'pty.node': 'binary' })
 
     const outcome = installPrebuiltSlot({
-      abi: { ...LINUX_GLIBC, libc: 'musl' },
+      abi: { ...LINUX_GLIBC, libc: 'musl', glibcVersion: null },
       nodePtyDir,
-      prebuildsDir: prebuilds
+      prebuildsDir: prebuilds,
+      hostNapi: 10
     })
 
-    expect(outcome).toEqual({ installed: false, slot: 'linux-x64-musl', why: 'no-slot' })
+    expect(outcome).toMatchObject({
+      installed: false,
+      slot: 'linux-x64-musl',
+      why: 'libc-mismatch'
+    })
     expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(false)
   })
 
-  it('refuses an ABI-mismatched matrix instead of installing a binary that cannot load', () => {
-    // Installing it would turn "no prebuilt for this host" into a loader failure that
-    // reads as a corrupt install.
+  it('refuses a slot built for another architecture', () => {
     const prebuilds = temp()
     const nodePtyDir = temp()
-    stageSlot(prebuilds, 'linux-x64-glibc')
-    writeFileSync(
-      join(prebuilds, 'manifest.json'),
-      JSON.stringify({ module: 'node-pty', version: '1.1.0', nodeAbi: '115', slots: [] })
+    stageSlot(
+      prebuilds,
+      'linux-x64-glibc',
+      { ...LINUX_GLIBC_ENTRY, arch: 'arm64' },
+      { 'pty.node': 'binary' }
     )
 
-    const outcome = installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds })
-
-    expect(outcome).toMatchObject({ installed: false, why: 'abi-mismatch' })
-    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(false)
+    expect(
+      installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds, hostNapi: 10 })
+    ).toMatchObject({ installed: false, why: 'arch-mismatch' })
   })
 
-  it('reports a missing prebuilds directory distinctly from a missing slot', () => {
-    // They mean different things: no matrix shipped at all, versus a matrix with a hole.
+  it('refuses a slot whose files do not match the manifest hashes', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlot(prebuilds, 'linux-x64-glibc', LINUX_GLIBC_ENTRY, { 'pty.node': 'binary' })
+    writeFileSync(join(prebuilds, 'linux-x64-glibc', 'pty.node'), 'torn')
+
     expect(
-      installPrebuiltSlot({
-        abi: LINUX_GLIBC,
-        nodePtyDir: temp(),
-        prebuildsDir: join(temp(), 'absent')
-      })
-    ).toEqual({ installed: false, slot: 'linux-x64-glibc', why: 'no-prebuilds-dir' })
+      installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds, hostNapi: 10 })
+    ).toMatchObject({ installed: false, why: 'hash-mismatch' })
+    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(false)
   })
 })
 
-describe('readPrebuiltSlotManifest', () => {
-  it('returns null for absent or malformed manifests rather than a half-built object', () => {
+describe('installPrebuiltSlot compat slot (design D6 rung B)', () => {
+  const stageSlots = (
+    prebuilds: string,
+    slots: Record<string, { glibc: string; bytes: string }>
+  ) => {
+    const manifestSlots: Record<string, PrebuiltSlotEntry> = {}
+    for (const [slot, { glibc, bytes }] of Object.entries(slots)) {
+      const path = join(prebuilds, slot, 'pty.node')
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(path, bytes)
+      manifestSlots[slot] = { ...LINUX_GLIBC_ENTRY, glibc, files: { 'pty.node': sha256(bytes) } }
+    }
+    writeFileSync(
+      join(prebuilds, 'manifest.json'),
+      JSON.stringify({
+        schemaVersion: 2,
+        module: 'node-pty',
+        version: '1.1.0',
+        napi: 8,
+        slots: manifestSlots
+      })
+    )
+  }
+  const installed = (nodePtyDir: string): string =>
+    readFileSync(join(nodePtyDir, 'build', 'Release', 'pty.node'), 'utf8')
+
+  it('takes the compat slot when the host glibc is below the default slot floor', () => {
     const prebuilds = temp()
-    expect(readPrebuiltSlotManifest(prebuilds)).toBeNull()
-    writeFileSync(join(prebuilds, 'manifest.json'), '{ not json')
-    expect(readPrebuiltSlotManifest(prebuilds)).toBeNull()
-    writeFileSync(join(prebuilds, 'manifest.json'), JSON.stringify({ version: '1.1.0' }))
-    expect(readPrebuiltSlotManifest(prebuilds)).toBeNull()
+    const nodePtyDir = temp()
+    stageSlots(prebuilds, {
+      'linux-x64-glibc': { glibc: '2.28', bytes: 'default' },
+      'linux-x64-glibc217': { glibc: '2.17', bytes: 'compat' }
+    })
+
+    const outcome = installPrebuiltSlot({
+      abi: { ...LINUX_GLIBC, glibcVersion: '2.17' },
+      nodePtyDir,
+      prebuildsDir: prebuilds,
+      hostNapi: 10
+    })
+
+    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc217', spawnHelper: false })
+    expect(installed(nodePtyDir)).toBe('compat')
   })
 })

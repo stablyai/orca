@@ -1,6 +1,6 @@
 import { build } from 'esbuild'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../../agent-hooks/server'
@@ -8,6 +8,7 @@ import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixtur
 import type { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
+import type { ProfileStateStoreFactoryOptions } from './profile-state-store-factory'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths
@@ -17,7 +18,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -65,7 +66,7 @@ function options() {
   }
 }
 
-async function open(input: ReturnType<typeof options>) {
+async function open(input: ProfileStateStoreFactoryOptions) {
   const result = await createLiveProfileStateStore(input, workerOptions)
   stores.push(result.store)
   return result
@@ -81,6 +82,19 @@ function readState(input: ReturnType<typeof options>) {
 }
 
 describe('live profile authority admission', () => {
+  it('persists initial Home through the desktop writer before restart', async () => {
+    const input = { ...options(), initializeHomeWorkspace: true }
+    const { store } = await open(input)
+    const [home] = store.getRepos()
+    expect(home).toMatchObject({ path: homedir(), kind: 'folder' })
+    await store.flushPendingOrThrowAsync()
+    await store.freezeWritesAsync()
+
+    const reopened = await open(input)
+    expect(reopened.store.getRepos()).toEqual([home])
+    expect(reopened.store.getWorkspaceSession().activeRepoId).toBe(home.id)
+  })
+
   it.each([false, true])(
     'hands unbound aliases to admitted startup only (worker refused=%s)',
     async (refused) => {
@@ -144,10 +158,8 @@ describe('live profile authority admission', () => {
 
   it('migrates once, loads admitted state and reopens worker-acknowledged writes', async () => {
     const input = options()
-    writeFileSync(
-      input.dataFile,
-      JSON.stringify(buildProfileStateCutoverFixture(join(input.dataFile, '..')))
-    )
+    const source = buildProfileStateCutoverFixture(join(input.dataFile, '..'))
+    writeFileSync(input.dataFile, JSON.stringify(source))
     const { store, migrated, backend } = await open(input)
     expect({ migrated, backend }).toEqual({ migrated: true, backend: 'sqlite' })
     store.updateSettings({ theme: 'dark' })
@@ -156,7 +168,7 @@ describe('live profile authority admission', () => {
     const reopened = await open(input)
     expect(reopened.migrated).toBe(false)
     expect(reopened.store.getSettings().theme).toBe('dark')
-    expect(readState(input).automationRuns).toHaveLength(1)
+    expect(readState(input).automationRuns).toMatchObject(source.automationRuns)
   })
 
   it('never adopts a competing revision between bootstrap and worker readiness', async () => {
@@ -203,9 +215,11 @@ describe('live profile authority admission', () => {
       JSON.parse(readFileSync(profileStateJsonExportPath(input.dataFile, revision), 'utf8'))
         .workspaceSession.activeTabId
     ).toBe('getter-export')
+    const retainedExports = profileStateJsonExportPaths(input.dataFile)
     store.updateSettings({ theme: 'light' })
-    await store.flushFinalOrThrowAsync({ exportJsonCompatibility: true })
-    expect(JSON.parse(readFileSync(input.dataFile, 'utf8')).settings.theme).toBe('light')
+    await store.flushFinalOrThrowAsync()
+    expect(existsSync(input.dataFile)).toBe(false)
+    expect(profileStateJsonExportPaths(input.dataFile)).toEqual(retainedExports)
     expect(profileStateJsonExportPaths(input.dataFile).length).toBeGreaterThan(0)
     expect(readState(input).settings.theme).toBe('light')
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')

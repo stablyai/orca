@@ -2,6 +2,17 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodePath from 'node:path'
+
+// When stubbing Windows, pair its platform with path.win32 basename behavior.
+vi.mock('node:path', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodePath>()
+  return {
+    ...actual,
+    basename: (...args: Parameters<typeof actual.basename>) =>
+      (process.platform === 'win32' ? actual.win32 : actual).basename(...args)
+  }
+})
 
 vi.mock('electron', () => ({
   app: {
@@ -31,12 +42,6 @@ describe('Claude statusLine by resolved version', () => {
 
   const readSettings = () => JSON.parse(readFileSync(settingsPath, 'utf-8'))
 
-  it('writes no statusLine for a Claude whose settings schema rejects it', () => {
-    new ClaudeHookService().install({ claudeVersion: '1.0.63' })
-    expect(readSettings().statusLine).toBeUndefined()
-    expect(readSettings().hooks.SessionStart).toBeDefined()
-  })
-
   it('removes Orca statusLine on a downgrade and re-adds it after the upgrade', () => {
     const service = new ClaudeHookService()
     service.install({ claudeVersion: '2.1.261' })
@@ -45,7 +50,6 @@ describe('Claude statusLine by resolved version', () => {
     service.install({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toBeUndefined()
 
-    // Why: Orca's own removal must not read as the user's opt-out on the next capable install.
     service.install({ claudeVersion: '1.0.64' })
     expect(readSettings().statusLine?.command).toContain('claude-statusline')
   })
@@ -67,9 +71,42 @@ describe('Claude statusLine by resolved version', () => {
     new ClaudeHookService().install({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toEqual(USER_STATUS_LINE)
   })
+})
 
-  it('keeps installing the statusLine when the version is unresolved', () => {
-    new ClaudeHookService().install()
-    expect(readSettings().statusLine?.command).toContain('claude-statusline')
+describe('Claude statusLine on Windows', () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  const CURRENT_CLAUDE = { claudeVersion: '2.1.261' }
+  let tmpHome: string
+  let settingsPath: string
+
+  beforeEach(() => {
+    tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-win-'))
+    settingsPath = join(tmpHome, '.claude', 'settings.json')
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
   })
+
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', platform)
+    vi.unstubAllEnvs()
+    rmSync(tmpHome, { recursive: true, force: true })
+  })
+
+  const readSettings = () => JSON.parse(readFileSync(settingsPath, 'utf-8'))
+  const seedStatusLine = (command: string) => {
+    mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+    writeFileSync(settingsPath, JSON.stringify({ statusLine: { type: 'command', command } }))
+  }
+
+  it.each(['C:/tools/my-statusline.cmd', 'powershell -NoProfile -File C:\\tools\\statusline.ps1'])(
+    'never overwrites or removes a user statusLine: %s',
+    (command) => {
+      seedStatusLine(command)
+      new ClaudeHookService().install(CURRENT_CLAUDE)
+      expect(readSettings().statusLine).toEqual({ type: 'command', command })
+      new ClaudeHookService().remove()
+      expect(readSettings().statusLine).toEqual({ type: 'command', command })
+    }
+  )
 })

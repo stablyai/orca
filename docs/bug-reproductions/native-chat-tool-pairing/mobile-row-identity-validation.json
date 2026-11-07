@@ -1,0 +1,98 @@
+{
+  "recordedAt": "2026-10-10T03:38:12.628Z",
+  "root": "/Users/nwparker/orca/workspaces/orca/perf-2",
+  "baselineRef": "224cae59a671b67ecffdda2a4fa2795b4086ca11",
+  "overlaidFile": "mobile/src/session/MobileNativeChatToolRun.tsx",
+  "harnessSha256": "cebf78e4d1730b87a8586edfddfabd63d993d875401bd7408535324bf0f3f7f8",
+  "entrySha256": "4b69a2f3afc942789b0728dd00b759cbf683dbce0444934adac5a20deb29105b",
+  "arms": {
+    "before": {
+      "sourceSha256": {
+        "mobile/src/theme/mobile-theme.ts": "0b622538ae68934110fb9c8c283c05d125a97358d7a715ff172f3bf2591a3fdd",
+        "mobile/src/session/MobileNativeChatToolRun.tsx": "a6690578f1fbd89ff2874bc80a069deed5807dd445a21fdaa7f285eee31f59cd",
+        "src/shared/native-chat-diff.ts": "a78c7a4cd31c3293e288021aabfa86a0871b571f460a9912489d8a83bf4cb227",
+        "src/shared/native-chat-tool-activity.ts": "54102040afefeb4437b36965fe3ef1190eef3e8c4bdf857cad4b6dbbac4ae975",
+        "src/shared/native-chat-tool-fold.ts": "97b6a7e7bad809827178fd72a3343be9e6d9956c4eb30631de081f35d8126253",
+        "src/shared/native-chat-tool-summary.ts": "501f748758c37eefce9b28b5d65db87111d768a98addbbef652757beb12317bf",
+        "src/shared/native-chat-tool-icon.ts": "ca408c2a609fbfcfa866da8a1933a17817d583b6f527858ba5b6d597397d95c8",
+        "mobile/src/session/mobile-native-chat-message-styles.ts": "689369f350d20813a98f2acaec289e17831f3b15d7b851d15da32b0dc5277faf",
+        "src/shared/native-chat-types.ts": "449b3ed60a5e75de48584d9d4e33ad431342834d6c7a8951571304a21f7f5ded",
+        "src/shared/native-chat-tool-preview-prefix.ts": "42c2d527b81f8868b22c991da27fc326e2a219c92167d9bcb4850e3b32a63fda",
+        "src/shared/native-chat-tool-identity.ts": "8c98eec1a53b26a67ed48a0859c5863f5accbe67e013c4eb5a0f8b32441ee925",
+        "src/shared/native-chat-turn-status.ts": "227270f57d7916bb2eaf8bd474ced57de8d7b8aa9ca2c32582c3c0794f577778",
+        "src/shared/harness-injected-user-turns.ts": "c4ddb96ca6fc15fb9ff8012ef883ca8fdd152ab0bff18dac70e12beec89e0c5b",
+        "src/shared/native-chat-provider-frame-summary.ts": "594241490db5a6bd39983280969ce5129eaca2b28c101afe9627906de5669a80",
+        "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+        "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881",
+        "src/shared/native-chat-noise.ts": "052e9ee8883fcac5b38e032670e325a5797d89a5edb0dd747612eb84b6bc680e"
+      },
+      "compiledOutputSha256": {
+        "before/mobile-tool-availability.js": "c108f292cae09b5736886aa5f2b59a5d139049e0c775be7e66d26db88ee4e67d",
+        "before/index.html": "f1f04bc442384e86c6bd7687fd5a2df146b9b0d45fb1539a6e79483cd2975fac"
+      }
+    },
+    "after": {
+      "sourceSha256": {
+        "mobile/src/theme/mobile-theme.ts": "0b622538ae68934110fb9c8c283c05d125a97358d7a715ff172f3bf2591a3fdd",
+        "mobile/src/session/MobileNativeChatToolRun.tsx": "b1f9f5871d4dce1880a94bd709a46840672da3460b5be6dccf19fc401a51e425",
+        "src/shared/native-chat-diff.ts": "a78c7a4cd31c3293e288021aabfa86a0871b571f460a9912489d8a83bf4cb227",
+        "src/shared/native-chat-tool-summary.ts": "501f748758c37eefce9b28b5d65db87111d768a98addbbef652757beb12317bf",
+        "src/shared/native-chat-tool-line-identity.ts": "cfc8e3e592a5691699219d385d2123543c901ea254500ac8d1afca82cf1dcb2c",
+        "src/shared/native-chat-tool-activity.ts": "54102040afefeb4437b36965fe3ef1190eef3e8c4bdf857cad4b6dbbac4ae975",
+        "mobile/src/session/mobile-native-chat-message-styles.ts": "689369f350d20813a98f2acaec289e17831f3b15d7b851d15da32b0dc5277faf",
+        "src/shared/native-chat-tool-fold.ts": "97b6a7e7bad809827178fd72a3343be9e6d9956c4eb30631de081f35d8126253",
+        "src/shared/native-chat-tool-icon.ts": "ca408c2a609fbfcfa866da8a1933a17817d583b6f527858ba5b6d597397d95c8",
+        "src/shared/native-chat-types.ts": "449b3ed60a5e75de48584d9d4e33ad431342834d6c7a8951571304a21f7f5ded",
+        "src/shared/native-chat-tool-preview-prefix.ts": "42c2d527b81f8868b22c991da27fc326e2a219c92167d9bcb4850e3b32a63fda",
+        "src/shared/native-chat-tool-identity.ts": "8c98eec1a53b26a67ed48a0859c5863f5accbe67e013c4eb5a0f8b32441ee925",
+        "src/shared/native-chat-turn-status.ts": "227270f57d7916bb2eaf8bd474ced57de8d7b8aa9ca2c32582c3c0794f577778",
+        "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+        "src/shared/native-chat-noise.ts": "052e9ee8883fcac5b38e032670e325a5797d89a5edb0dd747612eb84b6bc680e",
+        "src/shared/harness-injected-user-turns.ts": "c4ddb96ca6fc15fb9ff8012ef883ca8fdd152ab0bff18dac70e12beec89e0c5b",
+        "src/shared/native-chat-provider-frame-summary.ts": "594241490db5a6bd39983280969ce5129eaca2b28c101afe9627906de5669a80",
+        "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881"
+      },
+      "compiledOutputSha256": {
+        "after/mobile-tool-availability.js": "485e166ac3ac68d567067b1eedd7b728b5a0567471b5b94704e555f0959ab597",
+        "after/index.html": "f1f04bc442384e86c6bd7687fd5a2df146b9b0d45fb1539a6e79483cd2975fac"
+      }
+    }
+  },
+  "results": [
+    {
+      "arm": "before",
+      "scenario": "unique",
+      "expectedBehaviorVerified": true,
+      "screenshot": "/tmp/orca-perf-2-pr-proof/mobile-tool-identity/before-unique.png",
+      "sha256": "2df2e972df1ab85efc95f4401fe72f8884b3c9fe96e9c02397eb561142bec839"
+    },
+    {
+      "arm": "before",
+      "scenario": "duplicates",
+      "expectedBehaviorVerified": true,
+      "screenshot": "/tmp/orca-perf-2-pr-proof/mobile-tool-identity/before-duplicates.png",
+      "sha256": "2df2e972df1ab85efc95f4401fe72f8884b3c9fe96e9c02397eb561142bec839"
+    },
+    {
+      "arm": "after",
+      "scenario": "unique",
+      "expectedBehaviorVerified": true,
+      "screenshot": "/tmp/orca-perf-2-pr-proof/mobile-tool-identity/after-unique.png",
+      "sha256": "38835af78fbece545bf396d2cb42bc4cfa0ea577720c1c6bef4fc00d8a7a07d2"
+    },
+    {
+      "arm": "after",
+      "scenario": "duplicates",
+      "expectedBehaviorVerified": true,
+      "screenshot": "/tmp/orca-perf-2-pr-proof/mobile-tool-identity/after-duplicates.png",
+      "sha256": "38835af78fbece545bf396d2cb42bc4cfa0ea577720c1c6bef4fc00d8a7a07d2"
+    }
+  ],
+  "ownedBrowserPid": 84492,
+  "ownedBrowserAbsent": true,
+  "scope": "Production mobile ToolRun under shipped React Native Web build and shell CSP. No native-phone or SSH latency claim.",
+  "screenshots": {
+    "before": "https://github.com/user-attachments/assets/966c9d20-650e-4651-96da-1e51f121b95c",
+    "after": "https://github.com/user-attachments/assets/358669cd-7a49-4750-a76b-9897d3eb6323"
+  }
+}

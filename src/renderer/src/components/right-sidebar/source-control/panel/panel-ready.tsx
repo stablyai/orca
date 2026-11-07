@@ -5,7 +5,6 @@ import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
-/** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
   const {
@@ -59,7 +58,11 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     <>
       <div
         ref={setSourceControlRoot}
-        className="relative flex h-full flex-col overflow-hidden"
+        className={
+          model.scope
+            ? 'relative flex flex-col overflow-hidden'
+            : 'relative flex h-full flex-col overflow-hidden'
+        }
         onKeyDown={handleSourceControlKeyDown}
       >
         <SourceControlHeaderToolbar
@@ -92,7 +95,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           manualReviewUrl={manualReviewUrl}
         />
 
-        {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
             activeWorktreeId={activeWorktreeId}

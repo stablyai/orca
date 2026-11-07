@@ -52,16 +52,27 @@ describe('connection diagnostics screen data', () => {
   })
 
   it('waits for hydration and then reads the refreshed log', async () => {
-    const entries: ConnectionLogEntry[] = []
+    let entries: ConnectionLogEntry[] = []
+    let finishHydration: (() => void) | undefined
     const store = {
-      hydrate: vi.fn(async () => {
-        entries.push({ id: 'stored', ts: 1, level: 'info', message: 'stored event' })
-      }),
+      hydrate: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishHydration = resolve
+          })
+      ),
       get: vi.fn(() => entries)
     }
 
-    await expect(readHydratedConnectionLog(store, 'host-a')).resolves.toEqual(entries)
-    expect(store.get).toHaveBeenCalledAfter(store.hydrate)
+    const read = readHydratedConnectionLog(store, 'host-a')
+    await Promise.resolve()
+    expect(store.get).not.toHaveBeenCalled()
+    entries = [{ id: 'stored', ts: 1, level: 'info', message: 'stored event' }]
+    finishHydration?.()
+    await expect(read).resolves.toEqual([
+      { id: 'stored', ts: 1, level: 'info', message: 'stored event' }
+    ])
+    expect(store.get).toHaveBeenCalledWith('host-a')
   })
 
   it('retries one transient hydration failure before reading', async () => {
@@ -80,10 +91,14 @@ describe('connection diagnostics screen data', () => {
 
   it('reads connection metadata after hydration completes', async () => {
     let state: 'connecting' | 'reconnecting' = 'connecting'
+    let finishHydration: (() => void) | undefined
     const store = {
-      hydrate: vi.fn(async () => {
-        state = 'reconnecting'
-      }),
+      hydrate: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishHydration = resolve
+          })
+      ),
       get: vi.fn(() => [{ id: 'new', ts: 2, level: 'warn' as const, message: 'new event' }])
     }
     const context = {
@@ -94,7 +109,12 @@ describe('connection diagnostics screen data', () => {
       getPendingPath: vi.fn(() => null)
     }
 
-    await expect(readConnectionDiagnosticsSnapshot(context, store, 'host-a')).resolves.toEqual({
+    const snapshot = readConnectionDiagnosticsSnapshot(context, store, 'host-a')
+    await Promise.resolve()
+    expect(context.getState).not.toHaveBeenCalled()
+    state = 'reconnecting'
+    finishHydration?.()
+    await expect(snapshot).resolves.toEqual({
       state: 'reconnecting',
       reconnectAttempts: 2,
       lastConnectedAt: 1,

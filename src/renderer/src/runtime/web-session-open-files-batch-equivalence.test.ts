@@ -3,17 +3,17 @@
  * indistinguishable from repeated single-snapshot reconciliation. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
 import { resetWebSessionReorderIntentForTests } from './web-session-reorder-intent'
 import { resetWebAgentSessionHandoffsForTests } from './web-agent-session-handoff'
 import {
   applyWebSessionTabsSnapshot,
-  applyWebSessionTabsSnapshots,
-  resetWebSessionTabsSnapshotFreshnessForTests,
-  type WebSessionTabsSyncState
-} from './web-session-tabs-sync'
+  applyWebSessionTabsSnapshots
+} from './web-session-tabs-sync/snapshot-api'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
+import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
@@ -60,6 +60,7 @@ function baseState(overrides: Partial<WebSessionTabsSyncState>): WebSessionTabsS
     groupsByWorktree: {},
     layoutByWorktree: {},
     openFiles: [],
+    editorBuffers: {},
     ptyIdsByTabId: {},
     remoteBrowserPageHandlesByPageId: {},
     tabBarOrderByWorktree: {},

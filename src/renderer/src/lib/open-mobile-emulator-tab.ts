@@ -1,8 +1,12 @@
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../shared/emulator-runtime-capabilities'
+import { supportsEmulatorOpeningPreferences } from './emulator-opening-preferences-capability'
 import { toast } from 'sonner'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { emulatorErrorText } from './emulator-error-copy'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from './ensure-simulator-tab'
 import {
   beginManualSimulatorLaunch,
@@ -43,12 +47,12 @@ function dispatchPrelaunchedSession(worktreeId: string, info: EmulatorStreamInfo
 }
 
 function getLaunchErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return translate(
-    'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',
-    'Could not start the emulator. Check iOS or Android emulator setup and try another device.'
+  return emulatorErrorText(
+    error,
+    translate(
+      'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',
+      'Could not start the emulator. Check iOS or Android emulator setup and try another device.'
+    )
   )
 }
 
@@ -74,6 +78,18 @@ export async function openMobileEmulatorTab(
   }
 
   cancelPendingSimulatorPaneShutdown(worktreeId)
+  const capabilities = readLocalRuntimeCapabilitiesOrUnknown()
+  if (
+    capabilities?.includes(EMULATOR_OPENING_PREFERENCES_CAPABILITY) ||
+    (capabilities === null && (await supportsEmulatorOpeningPreferences()))
+  ) {
+    return ensureSimulatorTab(worktreeId, {
+      placement: options.placement ?? 'rightSplit',
+      targetGroupId,
+      surfacePane: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+  }
   const alreadyLaunching = isManualSimulatorLaunchPending(worktreeId)
   if (alreadyLaunching) {
     return ensureSimulatorTab(worktreeId, {
@@ -85,8 +101,7 @@ export async function openMobileEmulatorTab(
   }
   beginManualSimulatorLaunch(worktreeId)
   try {
-    // Why: this scope owns the guard from before tab creation through attach;
-    // every early return or error must release it so a retry can proceed.
+    // Own the guard through create/attach; release on every error/early return so retries remain possible.
     const tabId = ensureSimulatorTab(worktreeId, {
       placement: options.placement ?? 'rightSplit',
       targetGroupId,
@@ -98,8 +113,7 @@ export async function openMobileEmulatorTab(
     }
     dispatchManualSimulatorLaunchStarted(worktreeId)
     try {
-      // Why: the pane is visible but inert while serve-sim settles; the actual
-      // stream is handed to it only after attach returns ready info.
+      // Keep the pane inert during serve-sim startup; expose its stream only after attach confirms readiness.
       const result = await callRuntimeRpc<EmulatorAttachResult>(
         { kind: 'local' },
         'emulator.attach',
@@ -111,8 +125,7 @@ export async function openMobileEmulatorTab(
       if (!result.attached || !result.info) {
         throw new Error('Could not start the emulator.')
       }
-      // Why: users can close the tab while serve-sim is still starting; after
-      // attach registers the managed session, clean it up if no pane remains.
+      // If users close during startup, clean the managed session once attach registers it.
       if (await shutdownManagedSimulatorIfNoPane(worktreeId, tabId)) {
         return tabId
       }

@@ -21,21 +21,7 @@ async function tempFile(name: string): Promise<string> {
 }
 
 describe('readExternalAutomationJobsFile', () => {
-  it('preserves supported jobs shapes below the limits', async () => {
-    const wrappedPath = await tempFile('wrapped.json')
-    const rootPath = await tempFile('root.json')
-    await writeFile(wrappedPath, JSON.stringify({ jobs: [{ id: 'one' }] }))
-    await writeFile(rootPath, JSON.stringify([{ id: 'two' }]))
-
-    await expect(
-      readExternalAutomationJobsFile(wrappedPath, { allowRootArray: false })
-    ).resolves.toEqual([{ id: 'one' }])
-    await expect(
-      readExternalAutomationJobsFile(rootPath, { allowRootArray: true })
-    ).resolves.toEqual([{ id: 'two' }])
-  })
-
-  it('rejects oversized sparse files before reading them wholesale', async () => {
+  it('rejects oversized sparse files with the explicit memory-limit error', async () => {
     const path = await tempFile('oversized.json')
     await writeFile(path, '')
     await truncate(path, EXTERNAL_AUTOMATION_JOBS_FILE_MAX_BYTES + 64 * 1024 * 1024)

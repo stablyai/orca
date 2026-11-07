@@ -129,104 +129,72 @@ describe('Codex hook normalization', () => {
     expect(stopped?.payload.state).toBe('done')
     expect(stopped?.payload.subagents).toBeUndefined()
   })
+})
 
-  it('Stop carries last_assistant_message into lastAssistantMessage', () => {
+describe.each(['opencode', 'opencode2'] as const)('%s hook normalization', (source) => {
+  it.each([
+    ['UnknownError', 'failure', undefined],
+    ['MessageAbortedError', 'cancellation', true]
+  ])('retains the reported root outcome for %s', (errorName, outcome, interrupted) => {
     const result = _internals.normalizeHookPayload(
-      'codex',
+      source,
       buildBody({
-        hook_event_name: 'Stop',
-        last_assistant_message: 'Summary of what I did.'
+        hook_event_name: 'SessionIdle',
+        root_state: 'done',
+        root_turn_error_name: errorName
       }),
       'production'
     )
-    expect(result?.payload.state).toBe('done')
-    expect(result?.payload.lastAssistantMessage).toBe('Summary of what I did.')
+    expect(result?.payload.mainAgent).toMatchObject({ state: 'done', outcome })
+    expect(result?.payload.interrupted).toBe(interrupted)
   })
 
-  it('PreToolUse surfaces tool name + input preview and stays in working state', () => {
-    // Why: Codex's PreToolUse fires for every tool call (not an approval), so map it to `working` not `waiting`; approvals flow through PermissionRequest.
+  it('does not infer an outcome for an older plugin', () => {
     const result = _internals.normalizeHookPayload(
-      'codex',
+      source,
+      buildBody({ hook_event_name: 'SessionIdle' }),
+      'production'
+    )
+    expect(result?.payload.mainAgent).toBeUndefined()
+  })
+
+  it('keeps a root failure beside still-working child work', () => {
+    const result = _internals.normalizeHookPayload(
+      source,
       buildBody({
-        hook_event_name: 'PreToolUse',
-        tool_name: 'exec_command',
-        tool_input: { cmd: 'git status', workdir: '/tmp' }
+        hook_event_name: 'SessionBusy',
+        root_state: 'done',
+        root_turn_error_name: 'api'
       }),
       'production'
     )
     expect(result?.payload.state).toBe('working')
-    expect(result?.payload.toolName).toBe('exec_command')
-    expect(result?.payload.toolInput).toBe('git status')
+    expect(result?.payload.mainAgent).toMatchObject({ state: 'done', outcome: 'failure' })
   })
 
-  it('PermissionRequest maps to waiting and surfaces the pending tool input', () => {
-    // Why: PermissionRequest must map to `waiting` (sidebar red dot); treating it like PreToolUse would leave the pane looking busy while blocked on the user.
-    const result = _internals.normalizeHookPayload(
-      'codex',
+  it('caps oversized MessagePart text from stale (pre-throttle) plugin builds', () => {
+    // Older plugins resend full replies on each update; cap per-event work.
+    const assistant = _internals.normalizeHookPayload(
+      source,
       buildBody({
-        hook_event_name: 'PermissionRequest',
-        tool_name: 'exec_command',
-        tool_input: { cmd: 'rm -rf build', workdir: '/tmp' }
+        hook_event_name: 'MessagePart',
+        role: 'assistant',
+        text: 'a'.repeat(500_000)
       }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
-    expect(result?.payload.agentType).toBe('codex')
-    expect(result?.payload.toolName).toBe('exec_command')
-    expect(result?.payload.toolInput).toBe('rm -rf build')
-  })
+    expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
 
-  it('UserPromptSubmit does not extract tool fields even when the payload carries them', () => {
-    // Why: UserPromptSubmit is a turn boundary; tool extraction is gated to Pre/PostToolUse so stray tool_name can't leak into the preview.
-    const result = _internals.normalizeHookPayload(
-      'codex',
+    const user = _internals.normalizeHookPayload(
+      source,
       buildBody({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: 'Hello',
-        tool_name: 'Edit',
-        tool_input: { file_path: '/ignored.ts' }
+        hook_event_name: 'MessagePart',
+        role: 'user',
+        text: 'u'.repeat(500_000),
+        messageID: 'msg-cap'
       }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.toolName).toBeUndefined()
-    expect(result?.payload.toolInput).toBeUndefined()
-  })
-
-  it('SessionStart clears cached tool state from a prior session', () => {
-    // Seed a Stop snapshot with an assistant message.
-    _internals.normalizeHookPayload(
-      'codex',
-      buildBody({
-        hook_event_name: 'Stop',
-        last_assistant_message: 'Previous run finished'
-      }),
-      'production'
-    )
-    const result = _internals.normalizeHookPayload(
-      'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
-      'production'
-    )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.lastAssistantMessage).toBeUndefined()
-  })
-
-  it('SessionStart clears the cached prompt from a prior session until a new prompt arrives', () => {
-    _internals.normalizeHookPayload(
-      'codex',
-      buildBody({
-        hook_event_name: 'UserPromptSubmit',
-        prompt: 'stale prompt'
-      }),
-      'production'
-    )
-    const result = _internals.normalizeHookPayload(
-      'codex',
-      buildBody({ hook_event_name: 'SessionStart' }),
-      'production'
-    )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.prompt).toBe('')
+    expect(user?.payload.prompt?.length).toBe(200)
   })
 })

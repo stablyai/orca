@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 
 const MobileAccessEndpointSchema = z
@@ -13,10 +13,7 @@ const MobileAccessEndpointSchema = z
   })
   .strict()
 
-/**
- * The stored record, which shipped builds also read and write. Only `relay` is authoritative here:
- * `endpoints` and `relayHostId` are derived copies kept so an older build still parses the record.
- */
+// Only relay is authoritative; keep derived endpoints/relayHostId copies so shipped older builds can still parse the record.
 export const MobileRelayHostOverlaySchema = z
   .object({
     v: z.literal(2),

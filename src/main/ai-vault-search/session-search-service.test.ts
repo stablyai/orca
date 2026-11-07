@@ -8,8 +8,8 @@ import { createSessionSearchService } from './session-search-service'
 import {
   AiVaultSearchResponseSchema,
   AiVaultSearchStatusSchema
-} from '../../shared/ai-vault-search-contract'
-import { unavailableSessionSearchStatus } from '../../shared/ai-vault-search-client'
+} from '../../shared/ai-vault/search/ai-vault-search-contract'
+import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
 
 let harness: SessionSearchHarness | undefined
 
@@ -21,10 +21,8 @@ afterEach(async () => {
 async function fixture() {
   harness = await openSessionSearchHarness('public-contract')
   const { enabled: _enabled, generation: _generation, ...status } = unavailableSessionSearchStatus()
-  // degradedRoots is re-stated because the contract type leaves `root` optional
-  // for relay redaction, while the indexer always names the root it degraded.
+  // Indexer status requires root paths and message counts that are optional on the wire.
   const indexer = {
-    // messagesIndexed is optional on the wire and required of an indexer, which has read the rows.
     status: () => ({ ...status, messagesIndexed: 0, degradedRoots: [], sessionsByAgent: {} }),
     reconcile: vi.fn(async () => {})
   }

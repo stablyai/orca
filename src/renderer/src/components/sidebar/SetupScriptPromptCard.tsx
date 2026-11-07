@@ -7,31 +7,38 @@ import {
   buildImportedHookSettings,
   formatCandidateProvenance,
   formatCandidateSource,
+  getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
-  ignoresSharedSetupScripts,
-  inspectSetupScriptPromptState
+  inspectSetupScriptPromptState,
+  isSilentSetupScriptPromptState
 } from '@/lib/setup-script-prompt'
-import { checkRuntimeHooks, inspectRuntimeSetupScriptImports } from '@/runtime/runtime-hooks-client'
+import {
+  checkRuntimeHooks,
+  inspectRuntimeSetupScriptImports
+} from '@/runtime/repo-hooks/runtime-hooks-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { SetupScriptImportCandidate } from '../../../../shared/setup-script-imports'
-import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/setup-script-telemetry'
+import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
+import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'
 import { SetupScriptPromptCardShell } from './SetupScriptPromptCardShell'
 import { showSavedInProjectSettingsToast } from './SetupScriptPromptToast'
 import { openSetupScriptSettings } from './open-setup-script-settings'
 import { trackSetupScriptPromptExposure } from './setup-script-prompt-exposure-telemetry'
 import {
   findSetupScriptPromptRepo,
+  isSharedSetupIgnored,
   markSetupScriptPromptSaved,
   type SetupScriptPromptState
 } from './setup-script-prompt-render-state'
 import { useSetupScriptPromptRevalidation } from './useSetupScriptPromptRevalidation'
 import { useRenderedSetupScriptPromptState } from './useRenderedSetupScriptPromptState'
 import { translate } from '@/i18n/i18n'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useWorktreeById } from '@/store/selectors'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
+  useUiLanguageRevision()
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -75,8 +82,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       const hostId = getRepoExecutionHostId(repo)
       const inspection = await inspectSetupScriptPromptState({
         repo,
-        checkHooks: () => checkRuntimeHooks(settings, repo.id, hostId),
-        inspectImports: () => inspectRuntimeSetupScriptImports(settings, repo.id, hostId)
+        checkHooks: () => checkRuntimeHooks(hostId, repo.id, { background: true }),
+        inspectImports: () => inspectRuntimeSetupScriptImports(hostId, repo.id)
       })
       if (!cancelled) {
         const nextState = {
@@ -267,8 +274,19 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId, importedHostId),
             description:
               skippedCount > 0
-                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
-                : 'Saved the setup command.'
+                ? translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.savedWithSkippedFields',
+                    '{{count}} unsupported fields skipped. Saved the setup command.',
+                    {
+                      count: skippedCount,
+                      defaultValue_one:
+                        '{{count}} unsupported field skipped. Saved the setup command.'
+                    }
+                  )
+                : translate(
+                    'auto.components.sidebar.SetupScriptPromptCard.savedSetupCommand',
+                    'Saved the setup command.'
+                  )
           })
         }
       } catch (error) {
@@ -363,27 +381,21 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     promptTargetHidden ||
     !activeRepo ||
     !renderedPromptState ||
-    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup)
+    (renderedPromptState.status === 'ok' && renderedPromptState.hasEffectiveSetup) ||
+    isSilentSetupScriptPromptState(renderedPromptState)
   ) {
-    return null
-  }
-
-  // Why: a forbidden (mobile-scope) inspection is permanent, so suppress the
-  // retry-able card entirely — the global scope-mismatch banner explains it and
-  // a retry would just re-fire repo.hooksCheck on every repo focus.
-  if (renderedPromptState.status === 'forbidden') {
     return null
   }
 
   const isInspectionError = renderedPromptState.status === 'error'
   const candidate = renderedPromptState.status === 'ok' ? renderedPromptState.candidate : null
   const isPackageManagerSuggestion = candidate?.provider === 'package-manager'
-  const sharedSetupIgnored =
-    renderedPromptState.status === 'ok' &&
-    candidate === null &&
-    ignoresSharedSetupScripts(activeRepo)
+  const sharedSetupIgnored = isSharedSetupIgnored(renderedPromptState, activeRepo)
   const candidateSource = candidate ? formatCandidateSource(candidate) : null
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
+  const detectedSetupPreview = candidate
+    ? getDetectedSetupPreviewContent(candidate, detectedSetupDraft)
+    : null
 
   return (
     <SetupScriptPromptCardShell
@@ -392,10 +404,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       isInspectionError={isInspectionError}
       sharedSetupIgnored={sharedSetupIgnored}
       isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
-      hasCandidate={Boolean(candidate)}
       candidateSource={candidateSource}
       candidateProvenance={candidateProvenance}
-      detectedSetupDraft={detectedSetupDraft}
+      detectedSetupPreview={detectedSetupPreview}
       isImporting={importingRepoHostIdentity === activeRepoHostIdentity}
       renderedStateOk={renderedPromptState.status === 'ok'}
       onDismiss={handleDismiss}

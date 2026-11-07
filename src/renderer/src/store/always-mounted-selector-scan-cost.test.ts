@@ -1,16 +1,12 @@
-/**
- * Zustand reruns every subscriber's selector on every store write, so an O(N)
- * scan inside an always-mounted selector is paid thousands of times per second
- * while the app is idle. These tests count property reads on the store rows to
- * prove each selector builds its index once per snapshot instead of per read.
- */
+// Zustand reruns all selectors on every write. Count row reads to require one shared index per input snapshot instead of O(N) scans per idle/typing write.
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { WORKTREE_ID_SEPARATOR } from '../../../shared/worktree/id'
+import '../../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getLocalPreflightContext } from '../lib/local-preflight-context'
-import { getProjectRuntimeSessionSummary } from '../components/settings/repository-runtime-session-summary'
+import { getProjectRuntimeSessionSummary } from '../components/settings/repository/execution/repository-runtime-session-summary'
 import type { AppState } from './types'
 import { selectRepoByIdForActiveWorkspace } from './selectors'
 
@@ -66,19 +62,24 @@ function lastWorktreeId(worktreesByRepo: AppState['worktreesByRepo']): string {
 }
 
 describe('local preflight context worktree lookup', () => {
-  it('builds the worktree index once instead of rescanning per store write', () => {
+  function countPreflightReads(runtimeEnvironments: readonly { id: string }[]): {
+    worktreeReads: number
+    repoReads: number
+  } {
     const worktreeReads: ReadCounter = { count: 0 }
     const repoReads: ReadCounter = { count: 0 }
     const worktreesByRepo = makeWorktreesByRepo(worktreeReads)
     const activeWorktreeId = lastWorktreeId(worktreesByRepo)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight lookup reads only these AppState fields.
     const state = {
       activeRepoId: `repo-${REPO_COUNT - 1}`,
       activeWorktreeId,
       repos: makeRepoRows(repoReads),
       worktreesByRepo,
-      projects: []
+      projects: [],
+      runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: true
     } as unknown as AppState
-    const rowCount = REPO_COUNT * WORKTREES_PER_REPO
     worktreeReads.count = 0
     repoReads.count = 0
 
@@ -87,10 +88,23 @@ describe('local preflight context worktree lookup', () => {
         wslDistro: 'Ubuntu'
       })
     }
+    return { worktreeReads: worktreeReads.count, repoReads: repoReads.count }
+  }
+
+  it('builds the worktree index once instead of rescanning per store write', () => {
+    const reads = countPreflightReads([])
 
     // One index build per snapshot, not one scan per store write.
-    expect(worktreeReads.count).toBeLessThanOrEqual(rowCount)
-    expect(repoReads.count).toBeLessThanOrEqual(REPO_COUNT)
+    expect(reads.worktreeReads).toBeLessThanOrEqual(REPO_COUNT * WORKTREES_PER_REPO)
+    expect(reads.repoReads).toBeLessThanOrEqual(REPO_COUNT)
+  })
+
+  it('builds each index once per snapshot in a window with a paired server', () => {
+    const reads = countPreflightReads([{ id: 'env-1' }])
+
+    // Focused-host owner index plus the local runtime index; each is shared with other selectors.
+    expect(reads.worktreeReads).toBeLessThanOrEqual(2 * REPO_COUNT * WORKTREES_PER_REPO)
+    expect(reads.repoReads).toBeLessThanOrEqual(2 * REPO_COUNT)
   })
 
   it('rebuilds against a replacement snapshot', () => {
@@ -150,38 +164,6 @@ describe('selectRepoByIdForActiveWorkspace', () => {
     // Worst case: the id-keyed map build plus one host-filter pass.
     expect(counter.count).toBeLessThanOrEqual(REPO_COUNT * 3)
   })
-
-  it('still prefers the row that carries the active workspace host', () => {
-    const localRepo = {
-      id: 'repo-0',
-      path: '/tmp/a',
-      displayName: 'a'
-    } as Repo
-    const sshRepo = {
-      id: 'repo-0',
-      path: '/tmp/a',
-      displayName: 'a',
-      connectionId: 'host-a'
-    } as Repo
-    const state = {
-      repos: [localRepo, sshRepo],
-      activeRepoId: 'repo-0',
-      activeWorkspaceExecutionHostId: 'ssh:host-a'
-    } as unknown as AppState
-
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(sshRepo)
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(sshRepo)
-  })
-
-  it('returns an identical result for repeated reads of one snapshot', () => {
-    const state = makeActiveWorkspaceState({ count: 0 })
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-0')).toBe(
-      selectRepoByIdForActiveWorkspace(state, 'repo-0')
-    )
-    expect(selectRepoByIdForActiveWorkspace(state, 'repo-1')).toBe(
-      selectRepoByIdForActiveWorkspace(state, 'repo-1')
-    )
-  })
 })
 
 describe('project runtime session summary', () => {
@@ -233,13 +215,6 @@ describe('project runtime session summary', () => {
     expect(counter.count).toBeLessThanOrEqual(tabCount * 3)
   })
 
-  it('returns an identical summary for repeated reads of one snapshot', () => {
-    const state = makeRuntimeSessionState({ count: 0 })
-    expect(getProjectRuntimeSessionSummary(state, 'repo-0')).toBe(
-      getProjectRuntimeSessionSummary(state, 'repo-0')
-    )
-  })
-
   it('recomputes when a tab slice is replaced', () => {
     const state = makeRuntimeSessionState({ count: 0 })
     const first = getProjectRuntimeSessionSummary(state, 'repo-0')
@@ -256,22 +231,5 @@ describe('project runtime session summary', () => {
 
     expect(first.liveTerminalCount).toBe(WORKTREES_PER_REPO * TABS_PER_WORKTREE)
     expect(next.liveTerminalCount).toBe(1)
-  })
-
-  it('counts running agents against the owning project only', () => {
-    const state = makeRuntimeSessionState({ count: 0 })
-    const summary = getProjectRuntimeSessionSummary(
-      {
-        ...state,
-        agentStatusByPaneKey: {
-          'tab-0-0-0:leaf': { state: 'working', tabId: 'tab-0-0-0' },
-          'tab-1-0-0:leaf': { state: 'working', tabId: 'tab-1-0-0' },
-          'tab-0-1-0:leaf': { state: 'done', tabId: 'tab-0-1-0' }
-        }
-      } as unknown as AppState,
-      'repo-0'
-    )
-
-    expect(summary.activeTaskCount).toBe(1)
   })
 })

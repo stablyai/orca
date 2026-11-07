@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -43,6 +46,9 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { HeadlessEmulator } from '../main/daemon/emulation/headless-emulator'
+import { projectTerminalVisibleLines } from '../main/runtime/terminal/view/orca-runtime-terminal-projection'
+import { readRuntimeFixture } from '../main/runtime/agent-transcript-replay-test-harness'
 
 function readFixture(overrides: Record<string, unknown> = {}) {
   return okFixture('req_terminal_read', {
@@ -67,41 +73,31 @@ describe('orca terminal read --screen', () => {
     spawnMock
   })
 
-  it('does not ask for a screen unless requested', async () => {
-    queueFixtures(callMock, readFixture({ source: 'stream' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+  it('reports a recorded default-caret labelled draft separately from screen output', async () => {
+    const emulator = new HeadlessEmulator({ cols: 100, rows: 30 })
+    try {
+      await emulator.write(readRuntimeFixture('claude-2-1-316-default-labelled-middle'))
+      const projection = projectTerminalVisibleLines(emulator)
+      queueFixtures(
+        callMock,
+        readFixture({ source: 'screen', tail: projection.lines, draft: projection.draft })
+      )
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--json'], '/tmp/repo')
+      await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.read',
-      expect.not.objectContaining({ screen: true })
-    )
+      const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+      expect(printed.result.terminal.draft).toBe(
+        'Refactor the login page so that it preserves the existing authentication behavior and includes\nthe coverage report'
+      )
+      expect(printed.result.terminal.tail).toContain('❯')
+      expect(printed.result.terminal.tail.join('\n')).not.toContain('Refactor the login page')
+      expect(printed.result.terminal.tail.join('\n')).not.toContain('coverage report')
+    } finally {
+      emulator.dispose()
+    }
   })
 
-  it('requests the rendered screen with --screen', async () => {
-    queueFixtures(callMock, readFixture({ source: 'screen' }))
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--screen', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'terminal.read',
-      expect.objectContaining({ terminal: 'term_abc', screen: true })
-    )
-  })
-
-  it('reports which question was answered in human output', async () => {
-    queueFixtures(callMock, readFixture({ source: 'screen' }))
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'read', '--terminal', 'term_abc', '--screen'], '/tmp/repo')
-
-    expect(String(logSpy.mock.calls[0]?.[0])).toContain('source: screen')
-  })
-
-  // Why: the whole defect is a stream being read as if it were the screen. A fallback has to
-  // announce itself rather than look like a successful screen read.
   it('warns when a screen was asked for but only the stream was available', async () => {
     queueFixtures(
       callMock,
@@ -116,8 +112,7 @@ describe('orca terminal read --screen', () => {
     expect(printed).toContain('stacked fragments')
   })
 
-  // Why: zod strips the unknown `screen` key on an older host, so it answers with an ordinary
-  // stream read. Handing that back would be the original defect wearing the new flag's name.
+  // Older hosts strip the unknown screen key and return a stream read.
   it("refuses to pass an older host's stream off as a screen read", async () => {
     queueFixtures(callMock, readFixture({ tail: ['cclclecleaclear'] }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

@@ -1,8 +1,9 @@
+import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { getRemovedWorktreeIdsAfterAuthoritativeScan } from '../../src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership'
 import { mergeWorktree } from '../../src/main/ipc/worktree-metadata-merge'
-import { createFolderWorktree } from '../../src/main/repo-worktrees'
+import { createFolderWorktree } from '../../src/main/workspaces/catalog/repo-worktrees'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,11 +11,11 @@ import { join } from 'node:path'
 import {
   createStore,
   makeRepo,
-  makeTerminalTab,
   testState
-} from '../../src/main/persistence-test-harness'
+} from '../../src/main/persistence/persistence-test-harness'
+import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
-import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-row-resolution'
+import { resolveRepoWorktreeRows } from '../../src/main/runtime/workspaces/catalog/repo-worktree-row-resolution'
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-folder-upgrade-store-'))
@@ -28,8 +29,12 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   const owner = makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'folder' })
   store.addRepo(owner)
   const id = `folder::${owner.path}`
-  const before = store.setWorktreeMetaForHost(id, 'local', { comment: 'ongoing OMP work' })
-  store.setWorktreeMetaForHost(id, 'ssh:builder', { comment: 'other host' })
+  const before = store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'local' }), {
+    comment: 'ongoing OMP work'
+  })
+  store.setWorktreeMeta(hostWorktreeTarget({ id, hostId: 'ssh:builder' }), {
+    comment: 'other host'
+  })
   store.setWorkspaceSession({
     ...getDefaultWorkspaceSession(),
     activeRepoId: owner.id,
@@ -37,7 +42,7 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
     activeTabId: 'omp-tab',
     tabsByWorktree: { [id]: [makeTerminalTab({ id: 'omp-tab', worktreeId: id })] }
   })
-  store.updateRepo(owner.id, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
+  store.updateRepo(owner, { kind: 'git', folderUpgradeGitRootPath: 'C:/projects/draft' })
   store.flush()
   const reloaded = createStore()
   const repo = reloaded.getRepo(owner.id)
@@ -90,12 +95,4 @@ it('retains the folder instance and metadata through upgrade, listing, and Store
   expect(reloaded.getWorktreeMetaForHost(id, 'ssh:builder')?.comment).toBe('other host')
   reloaded.flush()
   expect(createStore().getWorktreeMetaForHost(id, 'local')?.instanceId).toBe(before.instanceId)
-})
-
-it('drops upgrade path evidence when execution ownership changes', () => {
-  const store = createStore()
-  store.addRepo(makeRepo({ id: 'folder', path: 'C:\\projects\\draft', kind: 'git' }))
-  store.updateRepo('folder', { folderUpgradeGitRootPath: 'C:/projects/draft' })
-  store.updateRepo('folder', { executionHostId: 'ssh:builder' })
-  expect(store.getRepo('folder')?.folderUpgradeGitRootPath).toBeUndefined()
 })

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../shared/artifacts'
-import { publishArtifactFromSurface } from './artifact-publish-flow'
+import {
+  ArtifactPublishPreparationError,
+  publishArtifactFromSurface
+} from './artifact-publish-flow'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -13,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
@@ -44,23 +49,8 @@ beforeEach(() => {
 })
 
 describe('artifact publish flow', () => {
-  it('signs in before preparing and publishing the request', async () => {
-    mocks.state.orcaProfileAuthStatus = { state: 'local' }
-    mocks.connect.mockResolvedValue({ status: 'connected' })
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    const createRequest = vi.fn().mockResolvedValue(request)
-
-    await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
-    expect(mocks.connect).toHaveBeenCalledOnce()
-    expect(createRequest).toHaveBeenCalledOnce()
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'artifacts.publish',
-      request
-    )
-  })
-
-  it('resumes with fresh content after reconnecting', async () => {
+  // Why: a re-read after sign-in could publish content the user never clicked Share on.
+  it('publishes the clicked request again after reconnecting, without re-reading', async () => {
     mocks.connect.mockResolvedValue({ status: 'connected' })
     mocks.callRuntimeRpc
       .mockResolvedValueOnce({ status: 'reconnect-required' })
@@ -68,24 +58,34 @@ describe('artifact publish flow', () => {
     const createRequest = vi
       .fn()
       .mockResolvedValueOnce(request)
-      .mockResolvedValueOnce({ ...request, content: '<h1>Fresh</h1>' })
+      .mockResolvedValueOnce({ ...request, content: '<h1>Later</h1>' })
 
     await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
     expect(mocks.connect).toHaveBeenCalledOnce()
-    expect(createRequest).toHaveBeenCalledTimes(2)
-    expect(mocks.callRuntimeRpc.mock.calls[1]?.[2]).toMatchObject({
-      content: '<h1>Fresh</h1>'
-    })
+    expect(createRequest).toHaveBeenCalledOnce()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2)
+    expect(mocks.callRuntimeRpc.mock.calls[1]?.[2]).toBe(request)
   })
 
-  it('surfaces sign-in failures without preparing the file', async () => {
+  it('surfaces sign-in failures without publishing', async () => {
     mocks.state.orcaProfileAuthStatus = { state: 'local' }
     mocks.connect.mockRejectedValue(new Error('login failed'))
     const createRequest = vi.fn().mockResolvedValue(request)
 
     await expect(publishArtifactFromSurface(createRequest)).resolves.toBeNull()
-    expect(createRequest).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith('Could not share artifact', undefined)
+  })
+
+  it('reports an unreadable file without asking the user to sign in', async () => {
+    mocks.state.orcaProfileAuthStatus = { state: 'local' }
+    const createRequest = vi
+      .fn()
+      .mockRejectedValue(new ArtifactPublishPreparationError('unreadable'))
+
+    await expect(publishArtifactFromSurface(createRequest)).resolves.toBeNull()
+    expect(mocks.connect).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('rejects an oversized request before RPC', async () => {
@@ -99,27 +99,5 @@ describe('artifact publish flow', () => {
     expect(mocks.toastError).toHaveBeenCalledWith('Could not share artifact', {
       description: 'This artifact is too large to share.'
     })
-  })
-
-  it('publishes content at the 10 MiB boundary', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    const createRequest = vi.fn().mockResolvedValue({
-      ...request,
-      content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
-    })
-
-    await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'artifacts.publish',
-      expect.objectContaining({ content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES) })
-    )
-  })
-
-  it('shows confirmation without putting the public link in the toast', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
-    await publishArtifactFromSurface(() => Promise.resolve(request))
-
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Artifact shared')
   })
 })

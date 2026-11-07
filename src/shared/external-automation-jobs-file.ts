@@ -47,7 +47,7 @@ export async function readExternalAutomationJobsFile(
         : []
   if (jobs.length > EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES) {
     throw new Error(
-      `External automation jobs file contains more than ${EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES.toLocaleString()} jobs and cannot be loaded safely: ${filePath}`
+      `External automation jobs file contains more than ${EXTERNAL_AUTOMATION_JOBS_MAX_ENTRIES.toLocaleString('en-US')} jobs and cannot be loaded safely: ${filePath}`
     )
   }
   return jobs

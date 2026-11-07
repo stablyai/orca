@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NativeChatTaskList } from './NativeChatTaskList'
-import type { NativeChatTaskList as TaskList } from '../../../../shared/native-chat-task-list'
+import type { NativeChatTaskList as TaskList } from '../../../../shared/native-chat/input/native-chat-task-list'
 
 afterEach(cleanup)
 const previous: TaskList = {
@@ -25,7 +25,7 @@ describe('NativeChatTaskList', () => {
   it('shows tri-state glyphs, progress, and activeForm in the first checklist', () => {
     const { container } = render(<NativeChatTaskList list={current} />)
     expect(screen.getByText('Read')).toHaveClass('line-through')
-    expect(screen.getByText('Writing').closest('li')).toHaveClass('text-foreground')
+    expect(screen.getByText('Writing').closest('li')).toHaveClass('text-chat-foreground-strong')
     expect(screen.getByText('Test')).toBeInTheDocument()
     expect(screen.getByLabelText('1 of 3 tasks completed')).toHaveTextContent('1/3')
     for (const glyph of ['circle', 'circle-dot', 'circle-check']) {

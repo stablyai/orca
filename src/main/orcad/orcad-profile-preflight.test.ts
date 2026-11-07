@@ -1,29 +1,52 @@
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessResult, ProcessSpec } from '../../shared/child-process/run-process'
-import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
-import { ORCAD_STARTUP_PREFLIGHT_FLAG } from '../../shared/orcad-profile-preflight'
+
+import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
+import { NODE_RUNTIME_PIN } from '../../shared/node-runtime-pin'
 import { OrcadBundledRuntimeError } from './orcad-bundled-runtime'
+import type * as BundledRuntime from './orcad-bundled-runtime'
 import { resolveOrcadExitCode } from './orcad-exit-code'
-import { preflightBundledOrcadStartup, runOrcadProfilePreflight } from './orcad-profile-preflight'
+import {
+  confirmBundledOrcadStartupQualified,
+  discardBundledOrcadStartupQualification,
+  forgetBundledOrcadStartupQualification,
+  preflightBundledOrcadStartup,
+  runOrcadProfilePreflight
+} from './orcad-profile-preflight'
 
 const fixture = vi.hoisted(() => ({
   identity: vi.fn(),
   readVersion: vi.fn(),
   sql: vi.fn(),
   native: vi.fn(),
-  run: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>()
+  bundled: vi.fn<(directory: string) => boolean>(),
+  run: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),
+  qualificationKey: vi.fn<(directory: string, version: string) => Promise<string>>(),
+  consumeQualification: vi.fn<(directory: string, key: string) => Promise<boolean>>(),
+  recordQualification: vi.fn<(directory: string, key: string) => Promise<void>>(),
+  discardQualification: vi.fn<(directory: string) => Promise<void>>(),
+  qualifiable: vi.fn<(directory: string) => boolean>()
+}))
+vi.mock('./orcad-startup-qualification', () => ({
+  orcadStartupQualificationKey: fixture.qualificationKey,
+  consumeOrcadStartupQualification: fixture.consumeQualification,
+  recordOrcadStartupQualification: fixture.recordQualification,
+  discardOrcadStartupQualification: fixture.discardQualification,
+  isQualifiableOrcadSlot: fixture.qualifiable
+}))
+vi.mock('./orcad-bundled-runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof BundledRuntime>()),
+  isRunningAsBundledOrcadRuntime: fixture.bundled,
+  resolveBundledOrcadSlot: () => '/slot'
 }))
 vi.mock('./orcad-artifact-identity', () => ({ readOrcadArtifactIdentity: fixture.identity }))
-vi.mock('./orcad-app-paths', () => ({ resolveOrcadInstallRoot: () => '/slot' }))
 vi.mock('node:fs/promises', () => ({ readFile: fixture.readVersion }))
 vi.mock('../persistence/profile-state/profile-state-runtime-preflight', () => ({
   preflightProfileStateRuntime: fixture.sql
 }))
-vi.mock('./orcad-bun-native-preflight', () => ({
-  preflightOrcadBunNativeRuntime: fixture.native
+vi.mock('./orcad-runtime-native-preflight', () => ({
+  preflightOrcadNativeRuntime: fixture.native
 }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: fixture.run }))
+vi.mock('@orca/process-host', () => ({ runProcess: fixture.run }))
 
 const identity = '0.1.0+aaaaaaaaaaaa'
 const nonce = '743bf9c8-2e58-4c79-a0ac-52c8d3e8e103'
@@ -37,8 +60,8 @@ function readyResult(challenge: string | undefined): ProcessResult {
     stdout: JSON.stringify({
       type: 'orca_profile_state_ready',
       nonce: challenge,
-      runtime: 'bun',
-      runtimeVersion: ORCAD_BUN_VERSION,
+      runtime: 'node',
+      runtimeVersion: NODE_RUNTIME_PIN.version,
       artifactVersion: identity,
       sqliteVersion: '3.53.2',
       revision: 1
@@ -49,13 +72,19 @@ function readyResult(challenge: string | undefined): ProcessResult {
 beforeEach(() => {
   vi.spyOn(process, 'versions', 'get').mockReturnValue({
     ...process.versions,
-    bun: ORCAD_BUN_VERSION
+    node: NODE_RUNTIME_PIN.version
   })
+  fixture.bundled.mockReturnValue(true)
   fixture.identity.mockResolvedValue(identity)
   fixture.readVersion.mockResolvedValue(`${identity}\n`)
   fixture.sql.mockResolvedValue({ sqliteVersion: '3.53.2', revision: 1 })
   fixture.native.mockResolvedValue(undefined)
   fixture.run.mockImplementation(async (spec) => readyResult(spec.args?.[2]))
+  fixture.qualificationKey.mockResolvedValue('key-1')
+  fixture.consumeQualification.mockResolvedValue(false)
+  fixture.recordQualification.mockResolvedValue(undefined)
+  fixture.discardQualification.mockResolvedValue(undefined)
+  fixture.qualifiable.mockReturnValue(true)
 })
 
 afterEach(() => {
@@ -64,41 +93,6 @@ afterEach(() => {
 })
 
 describe('bundled Orca startup readiness', () => {
-  it.each(['win32', 'darwin', 'linux'] as const)(
-    'isolates native process state in the exact bundled %s executable',
-    async (platform) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      await preflightBundledOrcadStartup()
-      expect(fixture.run).toHaveBeenCalledOnce()
-      expect(fixture.run).toHaveBeenCalledWith({
-        program: join('/slot', platform === 'win32' ? 'bun-runtime.exe' : 'bun-runtime'),
-        args: [join('/slot', 'orcad.js'), ORCAD_STARTUP_PREFLIGHT_FLAG, expect.any(String)],
-        env: expect.objectContaining({ ORCA_BACKGROUND_LAUNCH: '1' }),
-        timeoutMs: 90_000,
-        maxOutputBytes: 64 * 1024,
-        terminationBarrier: true
-      })
-      expect(fixture.sql).not.toHaveBeenCalled()
-      expect(fixture.native).not.toHaveBeenCalled()
-    }
-  )
-
-  it('leaves legacy Node startup on its existing readiness path', async () => {
-    const { bun: _bun, ...versions } = process.versions
-    vi.spyOn(process, 'versions', 'get').mockReturnValue(versions)
-    await preflightBundledOrcadStartup()
-    expect(fixture.identity).not.toHaveBeenCalled()
-    expect(fixture.run).not.toHaveBeenCalled()
-  })
-
-  it('hashes installed bytes only in the isolated child', async () => {
-    await preflightBundledOrcadStartup()
-    expect(fixture.identity).not.toHaveBeenCalled()
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    await runOrcadProfilePreflight(nonce, { nativeFeatures: false })
-    expect(fixture.identity).toHaveBeenCalledOnce()
-  })
-
   it.each(['missing artifact', 'corrupt build target'])(
     'classifies %s as a configuration fault before testing SQLite',
     async (message) => {
@@ -109,11 +103,6 @@ describe('bundled Orca startup readiness', () => {
       expect(fixture.sql).not.toHaveBeenCalled()
     }
   )
-
-  it('classifies changed artifact bytes as configuration faults on normal startup', async () => {
-    fixture.readVersion.mockResolvedValue('0.1.0+bbbbbbbbbbbb')
-    await expect(preflightBundledOrcadStartup()).rejects.toThrow(OrcadBundledRuntimeError)
-  })
 
   it.each([undefined, 'broken-version'])(
     'classifies an unreadable or malformed version marker as configuration: %s',
@@ -166,13 +155,6 @@ describe('bundled Orca startup readiness', () => {
     expect(resolveOrcadExitCode(failure)).toBe(1)
   })
 
-  it('leaves optional native probes to runtime health on normal startup', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    await runOrcadProfilePreflight(nonce, { nativeFeatures: false })
-    expect(fixture.sql).toHaveBeenCalledOnce()
-    expect(fixture.native).toHaveBeenCalledWith({ nativeFeatures: false })
-  })
-
   it('rejects stale output from a different challenge', async () => {
     fixture.run.mockResolvedValue(readyResult(nonce))
     await expect(preflightBundledOrcadStartup()).rejects.toThrow('invalid readiness identity')
@@ -185,13 +167,130 @@ describe('bundled Orca startup readiness', () => {
     })
     await expect(preflightBundledOrcadStartup()).rejects.toThrow('invalid readiness identity')
   })
+})
 
-  it('runs disposable probes directly in the command child without recursive spawning', async () => {
-    const output = vi.spyOn(console, 'log').mockImplementation(() => {})
-    await runOrcadProfilePreflight(nonce)
-    expect(fixture.sql).toHaveBeenCalledOnce()
-    expect(fixture.native).toHaveBeenCalledOnce()
+describe('startup qualification on an unchanged host', () => {
+  beforeEach(async () => {
+    // Drop qualification left pending by an earlier case.
+    await confirmBundledOrcadStartupQualified()
+    fixture.recordQualification.mockClear()
+  })
+
+  it('skips the preflight child when the last launch with this key reached readiness', async () => {
+    fixture.consumeQualification.mockResolvedValue(true)
+
+    await preflightBundledOrcadStartup()
+
+    expect(fixture.qualificationKey).toHaveBeenCalledWith('/slot', identity)
+    expect(fixture.consumeQualification).toHaveBeenCalledWith('/slot', 'key-1')
     expect(fixture.run).not.toHaveBeenCalled()
-    expect(output).toHaveBeenCalledWith(readyResult(nonce).stdout)
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+    await confirmBundledOrcadStartupQualified()
+    expect(fixture.recordQualification).toHaveBeenCalledExactlyOnceWith('/slot', 'key-1')
+  })
+
+  it('records nothing once a launch forgot its qualification (node-pty probe not ok)', async () => {
+    await preflightBundledOrcadStartup()
+    forgetBundledOrcadStartupQualification()
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+  })
+
+  it('runs the preflight child without a matching marker, and records only after readiness', async () => {
+    await preflightBundledOrcadStartup()
+
+    expect(fixture.run).toHaveBeenCalledOnce()
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+    await confirmBundledOrcadStartupQualified()
+    expect(fixture.recordQualification).toHaveBeenCalledExactlyOnceWith('/slot', 'key-1')
+  })
+
+  it('records nothing after a failed preflight, and voids any marker already there', async () => {
+    fixture.run.mockImplementation(async (spec) => ({ ...readyResult(spec.args?.[2]), code: 1 }))
+
+    await expect(preflightBundledOrcadStartup()).rejects.toThrow('failed readiness')
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+    expect(fixture.discardQualification).toHaveBeenCalledExactlyOnceWith('/slot')
+  })
+
+  it('never reads or writes a marker outside a managed slot', async () => {
+    fixture.qualifiable.mockReturnValue(false)
+    fixture.consumeQualification.mockResolvedValue(true)
+
+    await preflightBundledOrcadStartup()
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.qualifiable).toHaveBeenCalledWith('/slot')
+    expect(fixture.qualificationKey).not.toHaveBeenCalled()
+    expect(fixture.consumeQualification).not.toHaveBeenCalled()
+    expect(fixture.run).toHaveBeenCalledOnce()
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the preflight child, and records nothing, when the key cannot be computed', async () => {
+    fixture.qualificationKey.mockRejectedValue(new Error('EACCES'))
+
+    await preflightBundledOrcadStartup()
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.consumeQualification).not.toHaveBeenCalled()
+    expect(fixture.run).toHaveBeenCalledOnce()
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+  })
+
+  it('always runs the preflight child on Windows', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    fixture.consumeQualification.mockResolvedValue(true)
+
+    // A matching marker never qualifies a Windows slot, so its node-pty probe runs too.
+    await expect(preflightBundledOrcadStartup()).resolves.toBe(false)
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.run).toHaveBeenCalledOnce()
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+  })
+
+  it('discards the slot marker after node-pty fails to load, and records nothing for this launch', async () => {
+    fixture.consumeQualification.mockResolvedValue(true)
+    await preflightBundledOrcadStartup()
+
+    await discardBundledOrcadStartupQualification()
+    await confirmBundledOrcadStartupQualified()
+
+    expect(fixture.discardQualification).toHaveBeenCalledExactlyOnceWith('/slot')
+    expect(fixture.recordQualification).not.toHaveBeenCalled()
+  })
+
+  it('unlinks the marker only after an in-flight record has renamed it into place', async () => {
+    const order: string[] = []
+    const record = Promise.withResolvers<void>()
+    fixture.recordQualification.mockImplementation(async () => {
+      await record.promise
+      order.push('recorded')
+    })
+    fixture.discardQualification.mockImplementation(async () => {
+      order.push('discarded')
+    })
+    await preflightBundledOrcadStartup()
+
+    const confirming = confirmBundledOrcadStartupQualified()
+    const discarding = discardBundledOrcadStartupQualification()
+    await Promise.resolve()
+    expect(order).toEqual([])
+    record.resolve()
+    await Promise.all([confirming, discarding])
+
+    expect(order).toEqual(['recorded', 'discarded'])
+  })
+
+  it('never skips the version check, which runs before any marker is read', async () => {
+    fixture.readVersion.mockRejectedValue(new Error('ENOENT'))
+    fixture.consumeQualification.mockResolvedValue(true)
+
+    await expect(preflightBundledOrcadStartup()).rejects.toThrow(OrcadBundledRuntimeError)
+    expect(fixture.consumeQualification).not.toHaveBeenCalled()
   })
 })

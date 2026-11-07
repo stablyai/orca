@@ -1,29 +1,28 @@
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { useAppStore } from '../../store'
-import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
 
-/** Why: an unanswered ssh.getState burns the full 30s runtime-RPC timeout, so a serial walk
- * makes the last target wait (N-1) timeouts; a small pool keeps a wedged target from blocking
- * the rest without bursting the IPC/runtime-RPC queue on a large imported target list. */
+// Bound parallel probes so one 30s SSH timeout cannot serialize the target list or flood IPC with an unbounded burst.
 const HYDRATION_FANOUT = 4
 
 export async function hydrateDirectSshInitialState(
-  runtime: DirectSshBridgeRuntime,
+  isStopped: () => boolean,
   watermarkByTargetId: ReadonlyMap<string, number>,
-  applySshConnectionStateChange: (targetId: string, state: SshConnectionState) => void
+  applySshConnectionStateChange: (targetId: string, state: SshConnectionState) => void,
+  /** Every saved target, including ones that never publish a state. */
+  onTargetsListed?: (targetIds: string[]) => void
 ): Promise<void> {
   try {
     const targets = await window.api.ssh.listTargets()
-    if (runtime.isStopped()) {
+    if (isStopped()) {
       return
     }
-    // Why: the loaded list is the hydration evidence (#9911) — never gate it behind the
-    // best-effort tombstone RPC, whose await also lets concurrent target writes land.
+    // Keep loaded target evidence independent of best-effort tombstone RPC; merge concurrent writes after its await (#9911).
     useAppStore.getState().setSshTargetsMetadata(targets)
+    onTargetsListed?.(targets.map((target) => target.id))
     const hydrateRemovedLabels = async (): Promise<void> => {
       try {
         const removedLabels = await window.api.ssh.listRemovedTargetLabels()
-        if (!runtime.isStopped()) {
+        if (!isStopped()) {
           useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
         }
       } catch (error) {
@@ -34,22 +33,21 @@ export async function hydrateDirectSshInitialState(
     void hydrateRemovedLabels()
     let nextIndex = 0
     const drainTargets = async (): Promise<void> => {
-      while (nextIndex < targets.length && !runtime.isStopped()) {
+      while (nextIndex < targets.length && !isStopped()) {
         const target = targets[nextIndex]
         nextIndex += 1
         const hydrationWatermark = watermarkByTargetId.get(target.id) ?? 0
         try {
           const state = await window.api.ssh.getState({ targetId: target.id })
           if (
-            !runtime.isStopped() &&
+            !isStopped() &&
             state &&
             (watermarkByTargetId.get(target.id) ?? 0) === hydrationWatermark
           ) {
             applySshConnectionStateChange(target.id, state as SshConnectionState)
           }
         } catch (error) {
-          // Why: a lookup that threw observed nothing, so this target stays unverifiable —
-          // never synthesize a status, and never abandon the targets queued behind it.
+          // Thrown lookups prove no status; keep that target unverifiable and continue queued targets.
           console.warn(`[direct-ssh] failed to hydrate SSH state for ${target.id}:`, error)
         }
       }

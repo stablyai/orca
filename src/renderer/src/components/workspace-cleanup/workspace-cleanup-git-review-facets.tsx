@@ -9,7 +9,7 @@ import {
   WORKSPACE_CLEANUP_REVIEW_STATE_VALUES,
   WORKSPACE_CLEANUP_TICKET_SOURCE_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import { getWorkspaceCleanupBlockerLabel } from './workspace-cleanup-candidate-labels'
 import {
   FacetChoice,
@@ -29,7 +29,6 @@ import {
 } from './workspace-cleanup-facet-labels'
 import type { WorkspaceCleanupFacetGroupProps } from './workspace-cleanup-facet-panel-model'
 
-/** Git, review/PR, tickets, location/host, and safety blockers. */
 export function WorkspaceCleanupGitReviewFacets({
   filters,
   counts,

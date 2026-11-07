@@ -4,7 +4,6 @@ import { observableModel } from '../observable-model'
 import { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 
-/** Task-model mounts: GitHub project metadata, Linear issue detail and task client settings. */
 export function taskMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>,
   options: MountOptions
@@ -81,7 +80,14 @@ export function taskMountAdapters(
         detailPayload: null,
         items: []
       })
-      Object.assign(model, { client: context.client, tasksSupported: true, detailRefreshSeq: 0 })
+      Object.assign(model, {
+        client: context.client,
+        tasksSupported: true,
+        detailRefreshSeq: 0,
+        detailRefreshRequested: { current: false },
+        detailRequestItem: model.actionItem,
+        hydrateActionItem: model.setActionItem
+      })
       if (options.reference) {
         model.taskOperations = {
           detail: modules
@@ -131,8 +137,6 @@ export function taskMountAdapters(
       Object.assign(model, {
         client: context.client,
         clientRef: { current: context.client },
-        repoSelectionHydratedRef: { current: false },
-        defaultRepoSelectionRef: { current: null },
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },

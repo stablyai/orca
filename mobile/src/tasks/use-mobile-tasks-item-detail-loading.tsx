@@ -1,9 +1,16 @@
-import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { withGitHubTargetOperation } from './github-work-item-operation'
+import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
 import {
-  type HostedReviewDecision,
-  buildGitLabCheckSummary,
-  useEffect
-} from './mobile-tasks-dependencies'
+  matchesGitHubWorkItemTarget,
+  GitHubWorkItemTargetError
+} from '../../../src/shared/github/work-item-target'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
+import type { GitLabWorkItem } from './mobile-tasks-provider-detail-types'
+import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { createJiraTask } from './mobile-tasks-item-mapping'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import { buildGitLabCheckSummary, useEffect } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import {
   githubItemDetailRead,
@@ -12,12 +19,52 @@ import {
   linearIssueRead
 } from './mobile-task-item-detail-operations'
 
-export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
+type GitLabHydratedStatus = Pick<GitLabWorkItem, 'mergeable' | 'reviewDecision' | 'reviewerCount'>
+
+function gitLabHydrationUnchanged(
+  source: GitLabWorkItem,
+  summary: ProviderCheckSummary,
+  status: GitLabHydratedStatus
+): boolean {
+  const current = source.checksSummary
+  return (
+    current?.state === summary.state &&
+    current.total === summary.total &&
+    current.passed === summary.passed &&
+    current.failed === summary.failed &&
+    current.cancelled === summary.cancelled &&
+    current.pending === summary.pending &&
+    current.neutral === summary.neutral &&
+    current.scope === summary.scope &&
+    (status.mergeable === undefined || source.mergeable === status.mergeable) &&
+    (status.reviewDecision === undefined || source.reviewDecision === status.reviewDecision) &&
+    (status.reviewerCount === undefined || source.reviewerCount === status.reviewerCount)
+  )
+}
+
+export type ItemDetailLoadingInput = Pick<
+  ItemDetailMetadataEffectsModel,
+  | 'detailRequestItem'
+  | 'client'
+  | 'detailRefreshSeq'
+  | 'detailRefreshRequested'
+  | 'hydrateActionItem'
+  | 'setDetailError'
+  | 'setDetailLoading'
+  | 'setDetailPayload'
+  | 'setItems'
+  | 'tasksSupported'
+>
+
+export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingInput>(
+  model: Model
+) {
   const {
-    actionItem,
+    detailRequestItem: actionItem,
     client,
     detailRefreshSeq,
-    setActionItem,
+    detailRefreshRequested,
+    hydrateActionItem,
     setDetailError,
     setDetailLoading,
     setDetailPayload,
@@ -33,28 +80,37 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
     }
 
     let stale = false
+    const canonical = detailRefreshRequested.current
+    detailRefreshRequested.current = false
     setDetailPayload(null)
     setDetailError('')
     setDetailLoading(true)
 
     const loadDetails = async (): Promise<void> => {
       if (actionItem.provider === 'github') {
-        const reply = await githubItemDetailRead.request(
+        const target = requireGitHubTaskTarget(actionItem.source)
+        const params = {
+          repo: `id:${actionItem.source.repoId}`,
+          number: target.number,
+          type: target.type
+        }
+        const reply = await withGitHubTargetOperation({
           client,
-          {
-            repo: `id:${actionItem.source.repoId}`,
-            number: actionItem.source.number,
-            type: actionItem.source.type
-          },
-          { timeoutMs: 30_000 }
-        )
+          params,
+          ownerRepo: target.repository,
+          read: true,
+          canonical,
+          send: (selected, exact, options) =>
+            githubItemDetailRead.request(selected, { ...params, ...exact }, options)
+        })
         const details = githubItemDetailRead.interpret(reply)
-        if (!details) {
-          throw new Error('Details not found')
+        if (!details?.item || !matchesGitHubWorkItemTarget(details.item, target)) {
+          throw new GitHubWorkItemTargetError(target)
         }
         if (!stale) {
           setDetailPayload({
             provider: 'github',
+            targetKey: githubTaskKey(actionItem.source),
             body: details.body ?? '',
             comments: details.comments ?? [],
             labels: details.item?.labels ?? actionItem.source.labels,
@@ -96,7 +152,10 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             assignees: details.assignees ?? [],
             pipelineJobs: details.pipelineJobs ?? []
           })
-          const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
+          const checksSummary = buildGitLabCheckSummary(
+            details.pipelineJobs ?? [],
+            details.pipeline
+          )
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
             details.approvalState?.approvalsRequired && details.approvalState.approvalsLeft === 0
               ? 'approved'
@@ -108,8 +167,10 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
             ...(reviewDecision !== undefined ? { reviewDecision } : {}),
             ...(details.reviewers !== undefined ? { reviewerCount: details.reviewers.length } : {})
           }
-          setActionItem((current) =>
-            current?.provider === 'gitlab' && current.source.id === actionItem.source.id
+          hydrateActionItem((current) =>
+            current?.provider === 'gitlab' &&
+            current.source.id === actionItem.source.id &&
+            !gitLabHydrationUnchanged(current.source, checksSummary, hydratedStatus)
               ? {
                   ...current,
                   source: {
@@ -120,27 +181,65 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
                 }
               : current
           )
-          setItems((current) =>
-            current.map((candidate) =>
-              candidate.provider === 'gitlab' && candidate.source.id === actionItem.source.id
-                ? {
-                    ...candidate,
-                    source: {
-                      ...candidate.source,
-                      checksSummary,
-                      ...hydratedStatus
-                    }
-                  }
-                : candidate
-            )
-          )
+          setItems((current) => {
+            let changed = false
+            const next = current.map((candidate) => {
+              if (
+                candidate.provider !== 'gitlab' ||
+                candidate.source.id !== actionItem.source.id ||
+                gitLabHydrationUnchanged(candidate.source, checksSummary, hydratedStatus)
+              ) {
+                return candidate
+              }
+              changed = true
+              return {
+                ...candidate,
+                source: { ...candidate.source, checksSummary, ...hydratedStatus }
+              }
+            })
+            return changed ? next : current
+          })
         }
         return
       }
 
-      // Interpretation is deferred past the group on purpose: this Promise.all rejects as soon as
-      // one leg's transport does, and interpreting only after both settled is what makes the issue
-      // error win over the comments error. startRpcOperation would wait for the slower peer.
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          hydrateActionItem((current) => {
+            if (
+              current?.provider !== 'jira' ||
+              current.source.key !== issue.key ||
+              current.source.siteId !== issue.siteId
+            ) {
+              return current
+            }
+            const alreadyHydrated =
+              current.title === issue.title &&
+              current.status === issue.status.name &&
+              current.source.description === issue.description &&
+              (current.source.labels ?? []).length === (issue.labels ?? []).length &&
+              current.source.assignee?.accountId === issue.assignee?.accountId
+            return alreadyHydrated ? current : createJiraTask(issue)
+          })
+        }
+        return
+      }
+
+      // Interpret after Promise.all to preserve fail-fast transport and issue-before-comment policy precedence; startRpcOperation would await slower peers.
       const [issueReply, commentsReply] = await Promise.all([
         linearIssueRead.request(
           client,
@@ -175,7 +274,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           project: issue.project,
           children: issue.subIssues ?? []
         })
-        setActionItem((current) => {
+        hydrateActionItem((current) => {
           if (current?.provider !== 'linear' || current.source.id !== issue.id) {
             return current
           }
@@ -211,4 +310,4 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
   return model
 }
 
-export type ItemDetailLoadingModel = ReturnType<typeof useMobileTasksItemDetailLoading>
+export type ItemDetailLoadingModel = ItemDetailMetadataEffectsModel

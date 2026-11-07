@@ -3,22 +3,24 @@ import {
   bufferPreHandlerPtyData,
   clearPreHandlerPtyState,
   drainPreHandlerPtyData
-} from '@/components/terminal-pane/pty-pre-handler-buffer'
+} from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import type * as RemoteRuntimePtyIdModule from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
 const testState = vi.hoisted(() => ({
   observer: null as ((data: string) => void) | null,
   unsubscribe: vi.fn()
 }))
 
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (_ptyId: string, observer: (data: string) => void) => {
     testState.observer = observer
     return testState.unsubscribe
   }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
+  ...(await importOriginal<typeof RemoteRuntimePtyIdModule>()),
   isRemoteRuntimePtyId: () => false
 }))
 
@@ -31,6 +33,7 @@ describe('waitForAgentDraftInputReady', () => {
     clearPreHandlerPtyState(PTY_ID)
     testState.observer = null
     testState.unsubscribe.mockReset()
+    vi.unstubAllGlobals()
     vi.useRealTimers()
   })
 
@@ -41,7 +44,7 @@ describe('waitForAgentDraftInputReady', () => {
     const primary = vi.fn()
 
     await expect(
-      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt', {})
+      waitForAgentDraftInputReady(PTY_ID, 20_000, 'codex-composer-prompt')
     ).resolves.toBe(true)
     drainPreHandlerPtyData(PTY_ID, primary)
 

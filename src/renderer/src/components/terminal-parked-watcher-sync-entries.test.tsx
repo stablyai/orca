@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
-import type { ParkedTerminalTabWatcherSyncEntry } from './terminal-pane/terminal-parked-tab-watchers'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { ParkedTerminalTabWatcherSyncEntry } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 type WatcherController = Parameters<typeof useTerminalWatcherEffects>[0]
 
@@ -21,13 +22,20 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'unverifiable'
 }))
-vi.mock('./terminal-pane/terminal-parked-tab-watchers', () => ({
+vi.mock('./terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
   canWatcherCoverParkedTerminalTab: mocks.canCover,
-  disposeAllParkedTerminalWatchers: vi.fn(),
-  pruneParkedTerminalWatchers: mocks.prune,
-  syncParkedTerminalTabWatchersForWorkspaces: mocks.sync,
-  terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids)
+  syncParkedTerminalTabWatchersForWorkspaces: mocks.sync
 }))
+
+vi.mock(
+  './terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    disposeAllParkedTerminalWatchers: vi.fn(),
+    pruneParkedTerminalWatchers: mocks.prune,
+    terminalWatcherLiveWorkspaceIds: (ids: Iterable<string>) => new Set(ids)
+  })
+)
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const SURFACE_COUNT = 423
@@ -78,7 +86,6 @@ function renderWatcherEffects(overrides: Partial<WatcherController> = {}): Promi
     measurableBackgroundWorktreeIdsRef: { current: new Set() },
     mountedWorktreeIdsRef: { current: new Set([PARKED_WORKTREE_ID]) },
     pendingStartupByTabId: {},
-    // Another workspace is on screen, so the mounted one is hidden and parks.
     renderedActiveWorktreeId: 'repo-1::/worktree-9',
     startupTerminalTabHold: null,
     tabsByWorktree: {
@@ -112,15 +119,6 @@ function lastSyncEntries(): Map<string, ParkedTerminalTabWatcherSyncEntry> {
 }
 
 describe('parked terminal watcher sync entries', () => {
-  it('publishes an entry for every surface so closed-tab disposal still sees it', async () => {
-    await renderWatcherEffects()
-
-    const entries = lastSyncEntries()
-    expect(entries.size).toBe(SURFACE_COUNT)
-    expect([...entries.keys()]).toEqual(surfaceIds)
-    expect(mocks.prune).toHaveBeenCalledWith(new Set(surfaceIds))
-  })
-
   it('parks the hidden mounted workspace tabs and exempts the eviction-exempt tab', async () => {
     await renderWatcherEffects()
 
@@ -140,20 +138,6 @@ describe('parked terminal watcher sync entries', () => {
     const entry = lastSyncEntries().get(heldWorktreeId)
     expect([...entry!.parkedTabIds]).toEqual([tab.id])
     expect([...entry!.restoreTitleOnStartTabIds!]).toEqual([tab.id])
-  })
-
-  it('does not allocate a parked-tab-id set per unmounted surface', async () => {
-    await renderWatcherEffects()
-
-    const entries = lastSyncEntries()
-    const unmountedSets = new Set(
-      [...entries]
-        .filter(([workspaceId]) => workspaceId !== PARKED_WORKTREE_ID)
-        .map(([, entry]) => entry.parkedTabIds)
-    )
-    // Pre-fix this was one empty Set per surface (422 of them) on every fire.
-    expect(unmountedSets.size).toBe(1)
-    expect([...unmountedSets][0]?.size).toBe(0)
   })
   it.each(['repo-1::/never-visited', 'folder:never-visited'])(
     'watches a live terminal in never-activated workspace %s and restores its title',

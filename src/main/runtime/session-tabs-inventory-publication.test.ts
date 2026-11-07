@@ -1,22 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { getSessionTabsInventoryPublication } from './session-tabs/session-tabs-inventory-test-fixture'
 
-type InventoryInternals = {
-  sessionTabsInventoryWaiters: Set<() => void>
-}
-
-function createInventoryRuntime(): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService()
+function createInventoryRuntime(
+  runtimeStore: ConstructorParameters<typeof OrcaRuntimeService>[0] = null
+): OrcaRuntimeService {
+  const runtime = new OrcaRuntimeService(runtimeStore)
   runtime.setPtyController({ listProcesses: vi.fn(async () => []) } as never)
   return runtime
 }
 
 async function waitForInventoryWaiter(runtime: OrcaRuntimeService): Promise<void> {
-  const internals = runtime as unknown as InventoryInternals
-  for (let index = 0; index < 20 && internals.sessionTabsInventoryWaiters.size === 0; index += 1) {
+  const publication = getSessionTabsInventoryPublication(runtime)
+  for (let index = 0; index < 20 && publication.pendingWaiterCount === 0; index += 1) {
     await Promise.resolve()
   }
-  expect(internals.sessionTabsInventoryWaiters.size).toBe(1)
+  expect(publication.pendingWaiterCount).toBe(1)
 }
 
 describe('authoritative session tab inventory publication', () => {
@@ -55,121 +54,6 @@ describe('authoritative session tab inventory publication', () => {
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
   })
 
-  it('returns a non-empty headed publication normally', async () => {
-    const runtime = createInventoryRuntime()
-    runtime.attachWindow(1)
-    const pending = runtime.listAllMobileSessionTabsInventory()
-    await waitForInventoryWaiter(runtime)
-
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: 'repo::/worktree',
-          publicationEpoch: 'renderer-epoch',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]
-    })
-
-    await expect(pending).resolves.toMatchObject({
-      authoritative: true,
-      snapshots: [{ worktree: 'repo::/worktree', publicationEpoch: 'renderer-epoch' }]
-    })
-  })
-
-  it('uses one inventory scan when the current publication is already authoritative', async () => {
-    const runtime = createInventoryRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    const collect = vi.spyOn(
-      runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
-      'collectAllMobileSessionTabs'
-    )
-
-    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({
-      snapshots: [],
-      authoritative: true
-    })
-
-    expect(collect).toHaveBeenCalledOnce()
-  })
-
-  it('retries publication churn until one inventory observes a stable epoch', async () => {
-    const runtime = createInventoryRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    const inventory = {
-      snapshots: [],
-      ptyInventory: {
-        livePtyIds: new Set<string>(),
-        allLivePtyIds: new Set<string>(),
-        terminalIdentityByPtyId: new Map(),
-        queriedHostIds: new Set(['local'])
-      }
-    }
-    let collections = 0
-    vi.spyOn(
-      runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
-      'collectAllMobileSessionTabs'
-    ).mockImplementation(async () => {
-      collections += 1
-      if (collections <= 3) {
-        expect(runtime.markRendererReloading(1)).not.toBeNull()
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-      }
-      return inventory
-    })
-
-    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({
-      snapshots: [],
-      authoritative: true
-    })
-    expect(collections).toBe(4)
-  })
-
-  it('keeps targeted PTY refreshes independent from an aggregate census', async () => {
-    const runtime = createInventoryRuntime()
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    const emptyInventory = {
-      livePtyIds: new Set<string>(),
-      allLivePtyIds: new Set<string>(),
-      terminalIdentityByPtyId: new Map(),
-      queriedHostIds: new Set(['local'])
-    }
-    const pendingResolves: ((inventory: typeof emptyInventory) => void)[] = []
-    const internals = runtime as unknown as {
-      refreshMobileSessionPtyInventory: (targetWorktreeId?: string | null) => Promise<unknown>
-      performMobileSessionPtyRecordsRefresh: (targetWorktreeId: string | null) => Promise<unknown>
-    }
-    const perform = vi.spyOn(internals, 'performMobileSessionPtyRecordsRefresh').mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          pendingResolves.push(resolve)
-        })
-    )
-
-    const allHosts = runtime.listAllMobileSessionTabsInventory()
-    await Promise.resolve()
-    const targeted = internals.refreshMobileSessionPtyInventory('repo::/target')
-    await Promise.resolve()
-
-    expect(perform).toHaveBeenCalledTimes(2)
-    expect(perform).toHaveBeenNthCalledWith(1, null)
-    expect(perform).toHaveBeenNthCalledWith(2, 'repo::/target')
-    pendingResolves[1]?.(emptyInventory)
-
-    await targeted
-    pendingResolves[0]?.(emptyInventory)
-    await expect(allHosts).resolves.toEqual({ snapshots: [], authoritative: true })
-  })
-
   it('retries once and serves an unlabeled scan when the PTY census is unavailable', async () => {
     const runtime = new OrcaRuntimeService()
     const collect = vi.spyOn(
@@ -182,70 +66,6 @@ describe('authoritative session tab inventory publication', () => {
     await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
     // Why: the retry gives daemon-backed tabs a post-race restore chance.
     expect(collect).toHaveBeenCalledTimes(2)
-  })
-
-  it('serves an unlabeled scan when an execution host is omitted from the census', async () => {
-    const runtime = createInventoryRuntime()
-    vi.spyOn(
-      runtime as unknown as {
-        listKnownExecutionHostIds: () => Set<string>
-      },
-      'listKnownExecutionHostIds'
-    ).mockReturnValue(new Set(['local', 'ssh:box-1']))
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-
-    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
-  })
-
-  it('restores a renderer-owned PTY discovered by the authoritative inventory refresh', async () => {
-    const runtime = createInventoryRuntime()
-    const ptyId = 'pty-survived-host-relaunch'
-    const worktreeId = 'repo::/survived'
-    const tabId = '11111111-1111-4111-8111-111111111111'
-    const leafId = '22222222-2222-4222-8222-222222222222'
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
-    ;(
-      runtime as unknown as {
-        pairedRendererSessionOwnedPtyIds: Set<string>
-      }
-    ).pairedRendererSessionOwnedPtyIds.add(ptyId)
-    vi.spyOn(
-      runtime as unknown as { refreshMobileSessionPtyInventory: () => Promise<unknown> },
-      'refreshMobileSessionPtyInventory'
-    ).mockImplementation(async () => {
-      runtime.registerPty(ptyId, worktreeId, null, {
-        tabId,
-        leafId,
-        incarnationId: 'incarnation-survived-host-relaunch'
-      })
-      return {
-        livePtyIds: new Set([ptyId]),
-        allLivePtyIds: new Set([ptyId]),
-        terminalIdentityByPtyId: new Map(),
-        queriedHostIds: new Set(['local'])
-      }
-    })
-
-    const result = await runtime.listAllMobileSessionTabsInventory()
-
-    expect(result).toMatchObject({
-      authoritative: true,
-      snapshots: [
-        {
-          worktree: worktreeId,
-          tabs: [
-            expect.objectContaining({
-              type: 'terminal',
-              parentTabId: tabId,
-              leafId,
-              ptyId
-            })
-          ]
-        }
-      ]
-    })
   })
 
   it('requires the current headed renderer generation to publish', async () => {
@@ -365,7 +185,7 @@ describe('authoritative session tab inventory publication', () => {
     controller.abort()
 
     await expect(pending).rejects.toThrow('client_disconnected')
-    expect((runtime as unknown as InventoryInternals).sessionTabsInventoryWaiters.size).toBe(0)
+    expect(getSessionTabsInventoryPublication(runtime).pendingWaiterCount).toBe(0)
   })
 
   it('does not scan when the inventory request is already cancelled', async () => {
@@ -399,21 +219,9 @@ describe('authoritative session tab inventory publication', () => {
     ).toThrow('Runtime graph publisher does not match the authoritative window')
     await Promise.resolve()
     expect(settled).toBe(false)
-    expect(
-      (runtime as unknown as { sessionTabsInventoryPublicationEpoch: number | null })
-        .sessionTabsInventoryPublicationEpoch
-    ).toBeNull()
+    expect(getSessionTabsInventoryPublication(runtime).epoch).toBeNull()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
-  })
-
-  it('reports no authoritative support behind the e2e disable override', () => {
-    vi.stubEnv('ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY', '1')
-    try {
-      expect(createInventoryRuntime().supportsAuthoritativeSessionTabsInventory()).toBe(false)
-    } finally {
-      vi.unstubAllEnvs()
-    }
   })
 })

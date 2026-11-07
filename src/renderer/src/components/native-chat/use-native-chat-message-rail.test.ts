@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import * as rowContent from '../../../../shared/native-chat-row-content'
-import { describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
-import type { NativeChatTurnDiff } from './native-chat-turn-diffs'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatResolvedPrompt } from '../../../../shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatTurnDiff } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
 
@@ -19,7 +19,7 @@ function message(id: string, role: NativeChatMessage['role']): NativeChatMessage
   }
 }
 
-/** A fresh slot array each call, the way the list rebuilds it every render. */
+/** Rebuild slots each call as the transcript does on every render. */
 function slotsOf(messages: NativeChatMessage[]) {
   let turn: string | undefined
   const turnKeys = messages.map((entry) => {
@@ -41,6 +41,9 @@ function slotsOf(messages: NativeChatMessage[]) {
   })
 }
 
+/** Only preview tests need the rows backing these slots. */
+const NO_ROWS = { messages: [], turnKeys: [] }
+
 const CONVERSATION = [
   message('u1', 'user'),
   message('a1', 'assistant'),
@@ -50,111 +53,88 @@ const CONVERSATION = [
 ]
 
 describe('message rail hook', () => {
-  it('reuses previews and rail state during long-history streamed renders', () => {
-    const conversation = Array.from({ length: 2000 }, (_, index) =>
-      message(`history-${index}`, index % 2 === 0 ? 'user' : 'assistant')
-    )
-    const scrollRef = { current: document.createElement('div') }
-    const { result, rerender, unmount } = renderHook(
-      ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
-      { initialProps: { slots: slotsOf(conversation) } }
-    )
-    const initial = result.current
-    const derive = vi.spyOn(rowContent, 'deriveNativeChatRowContent')
-    for (let revision = 0; revision < 20; revision += 1) {
-      const slots = slotsOf([
-        ...conversation.slice(0, -1),
-        message(`tail-${revision}`, 'assistant')
-      ])
-      derive.mockClear()
-      rerender({ slots })
-      expect(derive.mock.calls.length).toBe(0)
-      expect(result.current).toBe(initial)
-    }
-    unmount()
-    derive.mockRestore()
-  })
-
-  it('removes its scroll listener and pending idle read on unmount', () => {
-    vi.useFakeTimers()
-    const element = document.createElement('div')
-    const remove = vi.spyOn(element, 'removeEventListener')
-    const { unmount } = renderHook(() =>
-      useNativeChatMessageRail({
-        scrollRef: { current: element },
-        slots: slotsOf(CONVERSATION),
-        virtualItems: []
-      })
-    )
-    act(() => element.dispatchEvent(new Event('scroll')))
-    expect(vi.getTimerCount()).toBe(1)
-    unmount()
-    expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function))
-    expect(vi.getTimerCount()).toBe(0)
+  afterEach(() => {
     vi.useRealTimers()
   })
 
-  // `slots` is rebuilt on every render, so a listener effect that depended on it
-  // would unsubscribe and cancel its pending idle timer on every frame of a
-  // streaming turn — and the highlight would never settle.
-  it('subscribes to scroll once across renders that rebuild the slots', () => {
-    const element = document.createElement('div')
-    const scrollRef = { current: element }
-    const addListener = vi.spyOn(element, 'addEventListener')
-
-    const { rerender } = renderHook(
-      ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
-      { initialProps: { slots: slotsOf(CONVERSATION) } }
-    )
-    // Same prompts, new array identity — exactly what a re-render produces.
-    rerender({ slots: slotsOf(CONVERSATION) })
-    rerender({ slots: slotsOf(CONVERSATION) })
-
-    const scrollSubscriptions = addListener.mock.calls.filter(([type]) => type === 'scroll')
-    expect(scrollSubscriptions).toHaveLength(1)
-  })
-
-  it('ticks every user message and hides below the minimum', () => {
-    const element = document.createElement('div')
-    const scrollRef = { current: element }
-
-    const { result } = renderHook(() =>
-      useNativeChatMessageRail({ scrollRef, slots: slotsOf(CONVERSATION), virtualItems: [] })
-    )
-    expect(result.current.items.map((item) => item.id)).toEqual(['u1', 'u2', 'u3'])
-    expect(result.current.visible).toBe(true)
-
-    const { result: short } = renderHook(() =>
-      useNativeChatMessageRail({
-        scrollRef,
-        slots: slotsOf([message('u1', 'user'), message('a1', 'assistant')]),
-        virtualItems: []
+  // A clamped jump leaves another row at the fold; keep the clicked tick lit.
+  describe('a clicked tick', () => {
+    /** Five 100px rows; `u2` (row 2) clamped 50px below the top at max scroll. */
+    function clampedJump() {
+      vi.useFakeTimers()
+      const view = { scrollTop: 150, clientHeight: 300, scrollHeight: 450, shift: 0 }
+      const element = document.createElement('div')
+      Object.defineProperties(element, {
+        scrollTop: { get: () => view.scrollTop },
+        clientHeight: { get: () => view.clientHeight },
+        scrollHeight: { get: () => view.scrollHeight }
       })
-    )
-    expect(short.current.visible).toBe(false)
-  })
+      const scrollRef = { current: element }
+      const hook = renderHook(
+        ({ slots }) =>
+          useNativeChatMessageRail({
+            scrollRef,
+            slots,
+            turnRows: NO_ROWS,
+            virtualItems: slots.map((_slot, index) => ({
+              key: index,
+              index,
+              start: view.shift + index * 100,
+              end: view.shift + index * 100 + 100,
+              size: 100,
+              lane: 0
+            }))
+          }),
+        { initialProps: { slots: slotsOf(CONVERSATION) } }
+      )
+      const settle = (): void =>
+        act(() => {
+          element.dispatchEvent(new Event('scroll'))
+          vi.runAllTimers()
+        })
+      settle()
+      expect(hook.result.current.activeId).toBe('u3')
+      act(() => hook.result.current.onActivate('u2'))
+      return { ...hook, view, settle }
+    }
 
-  it('maps user messages above the loaded window from the outline, before the loaded ones', () => {
-    const scrollRef = { current: document.createElement('div') }
-    const outline = Array.from({ length: 30 }, (_, index) => ({
-      id: `older-${index}`,
-      text: `older prompt ${index}`,
-      hasImages: false
-    }))
-    const loaded = [message('u1', 'user'), message('a1', 'assistant')]
-    const { result } = renderHook(() =>
-      useNativeChatMessageRail({ scrollRef, slots: slotsOf(loaded), virtualItems: [], outline })
-    )
-    // One loaded prompt alone would hide the rail; the outline is what makes it a map.
-    expect(result.current.visible).toBe(true)
-    expect(result.current.items.map((item) => item.id)).toEqual([
-      ...outline.map((entry) => entry.id),
-      'u1'
-    ])
-    expect(result.current.items.at(0)).toMatchObject({ slotIndex: null, text: 'older prompt 0' })
-    expect(result.current.items.at(-1)).toMatchObject({ id: 'u1', slotIndex: 0 })
-    // The sampled ticks keep both ends of the whole thread, not of the loaded page.
-    expect(result.current.ticks.at(0)?.id).toBe('older-0')
-    expect(result.current.ticks.at(-1)?.id).toBe('u1')
+    it('stays lit while its row stays where the jump settled it', () => {
+      const { result, rerender, view, settle, unmount } = clampedJump()
+      settle()
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      // Late measurement above the row shifts both content and offset.
+      view.shift = 30
+      view.scrollTop = 180
+      rerender({ slots: slotsOf(CONVERSATION) })
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      view.shift = 0
+      view.scrollTop = 50
+      rerender({ slots: slotsOf(CONVERSATION.slice(1)) })
+      expect(result.current.items.map((item) => item.id)).toEqual(['u2', 'u3'])
+      settle()
+      expect(result.current.activeId).toBe('u2')
+      unmount()
+    })
+
+    it('is let go once its row moves, whatever moved it', () => {
+      const { result, view, settle, unmount } = clampedJump()
+      // Even a jump that fires no scroll must settle.
+      act(() => vi.runAllTimers())
+      view.scrollTop = 100
+      settle()
+      expect(result.current.activeId).toBe('u1')
+      unmount()
+    })
+
+    it('is not held when the reader carried its row off screen before it settled', () => {
+      const { result, view, settle, unmount } = clampedJump()
+      view.scrollTop = 0
+      view.clientHeight = 150
+      settle()
+      expect(result.current.activeId).toBe('u1')
+      unmount()
+    })
   })
 })

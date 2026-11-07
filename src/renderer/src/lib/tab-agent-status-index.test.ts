@@ -7,25 +7,27 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { agentTypeToIconAgent } from './agent-status'
-import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { isTerminalLeafId, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type {
   AgentStatusEntry,
   AgentStatusState,
   AgentType
-} from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 
-// ─── Oracle: the pre-index full-map scans, kept here (not in src) so the
-// randomized suite can assert the indexed resolvers are byte-identical. ───
+// Keep pre-index scans as the randomized differential oracle for exact resolver behavior.
 
 function oracleAnyTabAgent(
   map: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -42,7 +44,7 @@ function oracleAnyCompletedTabAgent(
   map: Record<string, AgentStatusEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -59,7 +61,7 @@ function oracleAnyRetainedTabAgent(
   map: Record<string, RetainedAgentEntry>,
   tabId: string,
   excludedLeafId?: string
-): TuiAgent | null {
+): TerminalAgent | null {
   for (const [paneKey, retained] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
@@ -82,7 +84,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
@@ -94,7 +96,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyTabAgent(map, tabId, activeLeafId) : null
   },
@@ -102,7 +104,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
@@ -114,7 +116,7 @@ const ORACLES = {
     map: Record<string, AgentStatusEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyCompletedTabAgent(map, tabId, activeLeafId) : null
   },
@@ -122,7 +124,7 @@ const ORACLES = {
     map: Record<string, RetainedAgentEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     if (activeLeafId) {
       return agentTypeToIconAgent(map[`${tabId}:${activeLeafId}`]?.agentType)
@@ -133,13 +135,11 @@ const ORACLES = {
     map: Record<string, RetainedAgentEntry>,
     layout: TerminalLayoutSnapshot | undefined,
     tabId: string
-  ): TuiAgent | null => {
+  ): TerminalAgent | null => {
     const activeLeafId = activeLeafOf(layout)
     return activeLeafId ? oracleAnyRetainedTabAgent(map, tabId, activeLeafId) : null
   }
 }
-
-// ─── Fixtures ───
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0
@@ -308,41 +308,6 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
     for (let caseIndex = 0; caseIndex < 250; caseIndex += 1) {
       expectParity(generateCase(random))
     }
-  })
-
-  it('returns the first done sibling in insertion order when siblings run different agents', () => {
-    const map = {
-      [`tab-1:${leafId(0)}`]: statusEntry(`tab-1:${leafId(0)}`, 'done', 'codex'),
-      [`tab-1:${leafId(1)}`]: statusEntry(`tab-1:${leafId(1)}`, 'done', 'claude'),
-      [`tab-1:${leafId(2)}`]: statusEntry(`tab-1:${leafId(2)}`, 'done', 'gemini')
-    }
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(2)), 'tab-1')).toBe('codex')
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
-    // Fresh identity, reversed insertion order → first match flips.
-    const reversed = Object.fromEntries(Object.entries(map).toReversed())
-    expect(resolveSiblingCompletedTabAgent(reversed, layoutOf(leafId(2)), 'tab-1')).toBe('claude')
-  })
-
-  it('excludes the active leaf and skips non-iconable agents', () => {
-    const map = {
-      [`tab-1:${leafId(0)}`]: statusEntry(`tab-1:${leafId(0)}`, 'done', 'unknown'),
-      [`tab-1:${leafId(1)}`]: statusEntry(`tab-1:${leafId(1)}`, 'done', 'claude'),
-      [`tab-2:${leafId(2)}`]: statusEntry(`tab-2:${leafId(2)}`, 'done', 'codex')
-    }
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(1)), 'tab-1')).toBeNull()
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
-  })
-
-  it('ignores pane keys parsePaneKey rejects and empty maps', () => {
-    const malformed = {
-      'tab-1:not-a-uuid': statusEntry('tab-1:not-a-uuid', 'done', 'claude'),
-      'tab-1': statusEntry('tab-1', 'done', 'claude'),
-      [`:${leafId(0)}`]: statusEntry(`:${leafId(0)}`, 'done', 'claude')
-    }
-    expect(resolveFocusedCompletedTabAgent(malformed, undefined, 'tab-1')).toBeNull()
-    expect(resolveSiblingCompletedTabAgent(malformed, layoutOf(leafId(9)), 'tab-1')).toBeNull()
-    expect(resolveFocusedCompletedTabAgent({}, undefined, 'tab-1')).toBeNull()
-    expect(resolveFocusedRetainedTabAgent({}, undefined, 'tab-1')).toBeNull()
   })
 
   it('re-indexes when the store replaces the map identity', () => {

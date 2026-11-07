@@ -1,3 +1,4 @@
+import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
@@ -27,7 +28,7 @@ function bindCurrentCoordinatorRun(harness: LegacyCompatibilityDispatcherHarness
   }).id
 }
 
-// Why: the adopted Run's recovered task is the cross-Run target; its dispatch must stay live when a gate is refused.
+// Refusing a cross-Run gate must leave the adopted Run's recovered task dispatch live.
 function adoptedTaskState(harness: LegacyCompatibilityDispatcherHarness) {
   return {
     task: harness.db.getTask(harness.taskId)?.status,
@@ -194,7 +195,7 @@ describe('orchestration gate Run authorization', () => {
       ok: false,
       error: {
         code: 'consumer_fenced',
-        message: `This coordinator terminal is bound to ${runA}, not ${strangerRun.id}.`
+        message: `This caller is bound to Run ${runA}, not Run ${strangerRun.id}. Nothing changed.`
       }
     })
     expect(harness.db.getTask(strangerTask.id)?.status).toBe('ready')

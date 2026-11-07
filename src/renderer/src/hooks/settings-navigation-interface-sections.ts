@@ -1,17 +1,26 @@
-import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
-import { getInputPaneSearchEntries } from '@/components/settings/input-search'
-import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
-import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
+import { getAppearancePaneSearchEntries } from '@/components/settings/appearance/appearance-search'
+import { getChatAppearanceSearchEntries } from '@/components/settings/appearance/chat/chat-appearance-search'
+import { getChatBehaviorSearchEntries } from '@/components/settings/chat/chat-behavior-search'
+import { getChatTurnActivitySearchEntries } from '@/components/settings/chat/chat-turn-activity-search'
+import { getChatNamingSearchEntry } from '@/components/settings/chat/chat-naming-search'
+import { getChatInlineVisualsSearchEntry } from '@/components/settings/chat/chat-inline-visuals-search'
+import { getChatLaunchSearchEntries } from '@/components/settings/chat/chat-launch-search'
+import { getChatPermissionSearchEntry } from '@/components/settings/chat/chat-permission-search'
+import { getInputPaneSearchEntries } from '@/components/settings/input/input-search'
+import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications/notifications-search'
+import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts/shortcuts-search'
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { translate } from '@/i18n/i18n'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { BarChart3, Bell, Keyboard, Palette, TextCursorInput } from 'lucide-react'
+import { BarChart3, Bell, Keyboard, MessageSquare, Palette, TextCursorInput } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildInterfaceSettingsSections({
   isMac,
   isWindows,
   isWebClient,
+  hostQueuesMessages,
+  typedChatPermissions,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
@@ -30,6 +39,25 @@ export function buildInterfaceSettingsSections({
         showSystemTray: showDesktopOnlySettings && isWindows,
         showMenuBarIcon: showDesktopOnlySettings && isMac
       }),
+      group: 'interface'
+    },
+    {
+      id: 'chat',
+      title: translate('settings.appearance.chat.title', 'Chat UI'),
+      description: translate('settings.chat.description', 'Choose how chats look and behave.'),
+      icon: MessageSquare,
+      searchEntries: [
+        ...(showDesktopOnlySettings ? getChatLaunchSearchEntries() : []),
+        getChatPermissionSearchEntry(typedChatPermissions),
+        ...getChatAppearanceSearchEntries(),
+        ...getChatTurnActivitySearchEntries(),
+        ...getChatBehaviorSearchEntries().filter(
+          (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
+        ),
+        ...(showDesktopOnlySettings
+          ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
+          : [])
+      ],
       group: 'interface'
     },
     {

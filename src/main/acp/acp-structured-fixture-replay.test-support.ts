@@ -1,0 +1,124 @@
+// Replay recorded traffic with this run's session and prompt IDs, advancing on Orca's frames.
+
+import { expect } from 'vitest'
+import { z } from 'zod'
+import type { AcpFixtureFrame } from './acp-timeline-fixture.test-support'
+import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
+import { PROVIDER_SESSION } from './acp-structured-adapter.test-support'
+
+const RECORDED_SESSION = /"session-\d+"/g
+const promptMetaSchema = z.object({ _meta: z.object({ promptId: z.string() }) })
+const messageSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
+  method: z.string().optional(),
+  params: z.unknown().optional(),
+  result: z.unknown().optional(),
+  error: z
+    .object({ code: z.number(), message: z.string(), data: z.unknown().optional() })
+    .optional()
+})
+
+function promptIdOf(params: unknown): string | undefined {
+  return promptMetaSchema.safeParse(params).data?._meta.promptId
+}
+
+export class GrokFixtureReplay {
+  private cursor = 0
+  private responseFailure: unknown
+  private agent: AcpScriptedAgent | null = null
+  private readonly promptIds = new Map<string, string>()
+  private readonly requestIds = new Map<string | number, string | number | null | undefined>()
+
+  constructor(private readonly frames: AcpFixtureFrame[]) {}
+
+  attach(agent: AcpScriptedAgent): void {
+    this.agent = agent
+    agent.on('session/prompt', (frame) => this.orcaSent('session/prompt', frame))
+    agent.on('session/cancel', (frame) => this.orcaSent('session/cancel', frame))
+  }
+
+  get awaiting(): string | null {
+    if (this.responseFailure !== undefined) {
+      throw this.responseFailure
+    }
+    const next = this.frames[this.cursor]
+    if (!next) {
+      return null
+    }
+    return next.direction === 'out' ? (next.message.method ?? 'reply') : 'agent'
+  }
+
+  private orcaSent(method: string, frame: FakeFrame): void {
+    const recorded = this.frames[this.cursor]
+    expect(recorded?.direction).toBe('out')
+    expect(recorded?.message.method).toBe(method)
+    if (method === 'session/prompt' && recorded) {
+      const recordedId = promptIdOf(recorded.message.params)
+      const sentId = promptIdOf(frame.params)
+      if (recordedId && sentId) {
+        this.promptIds.set(recordedId, sentId)
+      }
+      this.requestIds.set(recorded.message.id ?? '', frame.id)
+    }
+    this.cursor += 1
+    this.play()
+  }
+
+  private play(): void {
+    const agent = this.agent
+    while (agent && this.frames[this.cursor]?.direction === 'in') {
+      const recorded = this.frames[this.cursor]!
+      this.cursor += 1
+      const message = this.rewrite(recorded.message)
+      if (message.method !== undefined && message.id !== undefined) {
+        // Resume only after Orca answers the agent's request.
+        void agent
+          .request(message.id, message.method, message.params)
+          .then((response) => {
+            const expected = this.frames[this.cursor]
+            expect(expected?.direction).toBe('out')
+            if (!expected) {
+              throw new Error('Recorded provider request has no response')
+            }
+            const reply = this.rewrite(expected.message)
+            expect(reply.method).toBeUndefined()
+            // The old capture used a different diagnostic for the same unsupported method.
+            if (
+              reply.error?.code === -32601 &&
+              reply.error.message === 'Method not found: fs/write_text_file' &&
+              message.method === 'fs/write_text_file'
+            ) {
+              reply.error.message = 'Unsupported ACP client method: fs/write_text_file'
+            }
+            expect(messageSchema.parse(response)).toEqual(reply)
+            this.cursor += 1
+            this.play()
+          })
+          .catch((error: unknown) => {
+            this.responseFailure = error
+          })
+        return
+      }
+      if (message.method !== undefined) {
+        agent.notify(message.method, message.params)
+      } else {
+        agent.send({
+          jsonrpc: '2.0',
+          id: this.requestIds.get(message.id ?? '') ?? message.id,
+          ...(message.error === undefined ? { result: message.result } : { error: message.error })
+        })
+      }
+    }
+  }
+
+  private rewrite(message: AcpFixtureFrame['message']): z.infer<typeof messageSchema> {
+    let text = JSON.stringify(message).replaceAll(
+      RECORDED_SESSION,
+      JSON.stringify(PROVIDER_SESSION)
+    )
+    for (const [recorded, sent] of this.promptIds) {
+      text = text.replaceAll(JSON.stringify(recorded), JSON.stringify(sent))
+    }
+    return messageSchema.parse(JSON.parse(text))
+  }
+}

@@ -1,26 +1,13 @@
-// Coordinates the single main->renderer window-close-request subscription (owned
-// by the always-mounted App root) with the rich close-confirmation handler in
-// Terminal, which only mounts once a workspace exists. Without this, quitting on
-// the no-workspace landing page — where Terminal (and its listener) is not
-// mounted — sends 'window:close-requested' to a renderer with no handler, so
-// confirmWindowClose() is never called and the window never closes (#5144).
-//
-// It also runs pre-close guards: surfaces with unsaved work (e.g. the Settings
-// Git AI Author prompt editors) register a guard so quitting prompts the user to
-// save/discard instead of being silently vetoed by a beforeunload handler.
+/** App owns the close subscription even without Terminal mounted (#5144); run unsaved-work guards, then rich confirmation or the landing-page fallback. */
 
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 
-/** Returns true to allow the close to proceed, false to cancel it (e.g. the user
- *  picked "Cancel" in an unsaved-changes prompt). */
 export type WindowCloseGuard = () => boolean | Promise<boolean>
 
 let activeHandler: WindowCloseRequestHandler | null = null
-// Why: lets the shutdown checkpoint tell an app-level quit/close (durable-session
-// degradation is acceptable — the alternative is a quit the user can only complete
-// with SIGKILL, #15352) from an arbitrary unload, where it must stay strict.
+// Explicit app quits may degrade durable-session checkpoints to avoid trapping the user (#15352); arbitrary unload remains strict.
 let windowCloseCheckpointInProgress = false
 
 export function isWindowCloseCheckpointInProgress(): boolean {
@@ -36,12 +23,10 @@ export function runWithWindowCloseCheckpointScope<T>(fn: () => T): T {
   }
 }
 const closeGuards = new Set<WindowCloseGuard>()
-// Why: a guard can await a dialog; ignore re-entrant close requests (main resends
-// 'window:close-requested' on each attempt) so we don't stack duplicate prompts.
+// Ignore repeated close requests while a guard’s dialog is pending.
 let closeInFlight = false
 
-/** Terminal registers its rich handler while mounted; passing null on unmount
- *  hands the decision back to the App-root fallback. */
+/** Unmounting Terminal hands rich close handling back to App’s fallback. */
 export function setWindowCloseRequestHandler(handler: WindowCloseRequestHandler | null): void {
   activeHandler = handler
 }
@@ -50,7 +35,6 @@ export function getWindowCloseRequestHandler(): WindowCloseRequestHandler | null
   return activeHandler
 }
 
-/** Register a pre-close guard. Returns an unregister function for effect cleanup. */
 export function registerWindowCloseGuard(guard: WindowCloseGuard): () => void {
   closeGuards.add(guard)
   return () => {
@@ -67,11 +51,7 @@ async function runWindowCloseGuards(): Promise<boolean> {
   return true
 }
 
-/** Route a main-process close request: run pre-close guards first (cancel if any
- *  vetoes), then delegate to Terminal's rich handler when mounted, else confirm
- *  directly. Why confirm directly: with no workbench mounted there are no
- *  terminals or editor tabs to protect, so blocking would just deadlock the
- *  window (#5144). */
+/** Run pre-close guards, then the mounted rich handler; with no workbench, confirm directly because no tabs need protection (#5144). */
 export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }): Promise<void> {
   if (closeInFlight) {
     return

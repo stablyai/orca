@@ -1,14 +1,13 @@
 import { z } from 'zod'
 import {
-  MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_ID_LENGTH,
   MAX_QUICK_COMMAND_LABEL_LENGTH,
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   normalizeTerminalQuickCommands,
   supportsTerminalAgentQuickCommand
-} from '../terminal-quick-commands'
-import type { TerminalQuickCommand } from '../terminal-quick-command-types'
+} from '../terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 
 export const TerminalQuickCommandScopeUpdate = z.discriminatedUnion('type', [
   z.object({ type: z.literal('global') }).strict(),
@@ -39,7 +38,8 @@ export const TerminalQuickCommandUpdateItem = z.union([
       agent: z.custom(supportsTerminalAgentQuickCommand, {
         message: 'Agent does not support prompt commands'
       }),
-      prompt: z.string().max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH),
+      // Bounded where every save lands (main's settings update), with the reason in its refusal.
+      prompt: z.string(),
       scope: TerminalQuickCommandScopeUpdate.optional()
     })
     .strict()
@@ -47,8 +47,7 @@ export const TerminalQuickCommandUpdateItem = z.union([
 
 export const TerminalQuickCommandsUpdate = z
   .object({
-    // Why: a single host-side mutation preserves unrelated desktop/mobile edits
-    // and avoids retransmitting the full ~240 KB list for every small change.
+    // Mutate host-side to preserve unrelated desktop/mobile edits and avoid resending multi-megabyte lists.
     mutation: z.union([
       z
         .object({

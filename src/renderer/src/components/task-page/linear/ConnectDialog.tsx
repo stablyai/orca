@@ -1,4 +1,5 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import { translate } from '@/i18n/i18n'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 export function TaskPageLinearConnectDialog({
   model
@@ -16,7 +17,11 @@ export function TaskPageLinearConnectDialog({
       open={linearConnectOpen}
       onOpenChange={setLinearConnectOpen}
       workspace={selectedLinearWorkspace}
-      connectLabel={selectedLinearWorkspace ? 'Update access' : 'Add Linear access'}
+      connectLabel={
+        selectedLinearWorkspace
+          ? translate('taskProviders.linear.updateAccess', 'Update access')
+          : translate('taskProviders.linear.addAccess', 'Add Linear access')
+      }
       onConnected={handleLinearAccessConnected}
     />
   )

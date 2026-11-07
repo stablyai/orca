@@ -4,12 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { getVersionManagerBinPaths, resolveCliCommand } from './node-cli-command-resolution'
 
-/**
- * The seed decides which node a CLI runs under whenever the login-shell probe
- * does not land (timeout, or a shell whose rc never initializes nvm). Picking
- * the newest install there is what broke #10932: the newest version is usually
- * the one the user just added and has installed nothing into.
- */
+/** Default Node seeds fallback when login probing times out or omits nvm. Newest-first hid CLIs installed under the default (#10932). */
 function makeNvmHome(options: {
   versions: string[]
   defaultAlias?: string
@@ -68,10 +63,7 @@ describe('nvm default alias decides the seeded runtime', () => {
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v24.18.0', 'bin'))
   })
 
-  // Why skipIf rather than renaming the fixture: `lts/*` is the real alias nvm
-  // ships, and `*` is a reserved Win32 filename character, so the fixture cannot
-  // be materialized there. Keeping the real name is worth more than the case
-  // running on a platform where seededNvmDir already pins platform: 'darwin'.
+  // Real lts/* aliases cannot be materialized on Win32 (* is reserved). Keep faithful names and skip there; the resolver test targets darwin.
   it.skipIf(process.platform === 'win32')(
     'follows an alias chain (default -> lts/* -> lts/krypton -> version)',
     () => {
@@ -109,10 +101,7 @@ describe('nvm default alias decides the seeded runtime', () => {
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
   })
 
-  // Why the digit-leading entries: parseInt stops at the first non-digit, so
-  // anchoring only the first character still let `0x18` and `00` parse to 0 and
-  // prefix-match a decade-old v0.x. nvm writes such a token to the alias file
-  // even while warning it does not exist, then answers N/A for it.
+  // Digit-leading 0x18/00 also coerce to zero with parseInt; nvm persists nonexistent aliases but resolves them as N/A.
   it.each([
     'garbage',
     'iojs',
@@ -126,9 +115,7 @@ describe('nvm default alias decides the seeded runtime', () => {
     'v24.18.0-nightly',
     'V24'
   ])('treats the unresolvable default %s as no preference, like nvm N/A', (token) => {
-    // Why v0.12.7 is in the fixture: parseVersionSegment coerces unparseable
-    // segments to 0, so before the shape guard these tokens became [0] and
-    // prefix-matched the 0.x install — seeding a decade-old node.
+    // Unparseable aliases previously coerced to [0], selecting this v0.12.7 sentinel.
     const home = makeNvmHome({
       versions: ['v0.12.7', 'v24.18.0', 'v26.7.0'],
       defaultAlias: token
@@ -137,15 +124,13 @@ describe('nvm default alias decides the seeded runtime', () => {
   })
 
   it('still treats a numeric default as a version prefix, matching nvm', () => {
-    // The guard must reject non-versions without rejecting legitimate prefixes:
-    // real nvm resolves `0` to an installed v0.x.
+    // Reject malformed aliases while retaining nvm’s valid numeric prefix 0 → installed v0.x.
     const home = makeNvmHome({ versions: ['v0.12.7', 'v24.18.0'], defaultAlias: '0' })
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v0.12.7', 'bin'))
   })
 
   it('still finds a CLI that lives outside the default version', () => {
-    // Ordering must be a preference, not a restriction: the other versions stay
-    // as fallbacks so a CLI installed elsewhere is still reachable.
+    // Default-first is preference only; retain other installed versions as CLI fallbacks.
     const home = makeNvmHome({
       versions: ['v24.18.0', 'v26.7.0'],
       defaultAlias: '24',

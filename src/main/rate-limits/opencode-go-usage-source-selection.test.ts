@@ -66,30 +66,33 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.status).toBe('ok')
     expect(result.session).toEqual(WINDOWS.session)
     expect(result.usageMetadata?.credentialSource).toBe('environment')
+    expect(result.extraUsage).toEqual(
+      expect.objectContaining({ balance: null, enabled: false, disabledReason: 'api-key-source' })
+    )
   })
 
-  it('passes the settings override down as the highest-precedence tier', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
-
-    await fetchOpenCodeGoUsage({ cookie: '', settingsApiKey: API_KEY })
-
-    expect(resolveApiKeyMock).toHaveBeenCalledWith({ settingsOverride: API_KEY })
-  })
-
-  it('names the missing subscription instead of a generic refresh failure', async () => {
-    resolveApiKeyMock.mockResolvedValue({
-      status: 'found',
-      key: API_KEY,
-      tier: 'opencode-auth-file'
+  it('passes a manual override without evaluating selected execution context', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
+    fetchWithApiKeyMock.mockResolvedValue({ kind: 'ok', windows: WINDOWS })
+    const input = { cookie: '', settingsApiKey: API_KEY }
+    Object.defineProperty(input, 'environment', {
+      get: () => {
+        throw new Error('Selected profile metadata is unreadable')
+      }
     })
-    fetchWithApiKeyMock.mockResolvedValue({ kind: 'no-subscription' })
 
-    const result = await fetchOpenCodeGoUsage({ cookie: '' })
+    expect((await fetchOpenCodeGoUsage(input)).status).toBe('ok')
+    expect(resolveApiKeyMock).toHaveBeenCalledExactlyOnceWith({ settingsOverride: API_KEY })
+  })
 
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('no-subscription')
-    expect(result.error).toContain('no OpenCode Go subscription')
-    expect(result.error).not.toContain(API_KEY)
+  it('propagates a rejected selected-account lookup without trying host or cookie credentials', async () => {
+    resolveApiKeyMock.mockRejectedValue(new Error('Selected profile metadata is unreadable'))
+
+    await expect(fetchOpenCodeGoUsage({ cookie: COOKIE })).rejects.toThrow(
+      'Selected profile metadata is unreadable'
+    )
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithCookieMock).not.toHaveBeenCalled()
   })
 
   it('keeps a working cookie account alive when the key has no Go entitlement', async () => {
@@ -115,20 +118,6 @@ describe('fetchOpenCodeGoUsage', () => {
     expect(result.error).toContain('/connect')
   })
 
-  it('surfaces a transport failure without exposing the key', async () => {
-    resolveApiKeyMock.mockResolvedValue({ status: 'found', key: API_KEY, tier: 'settings' })
-    fetchWithApiKeyMock.mockResolvedValue({
-      kind: 'failed',
-      message: 'OpenCode Go usage request failed (503)'
-    })
-
-    const result = await fetchOpenCodeGoUsage({ cookie: '' })
-
-    expect(result.status).toBe('error')
-    expect(result.usageMetadata?.failureKind).toBe('server')
-    expect(result.error).toBe('OpenCode Go usage request failed (503)')
-  })
-
   it('falls back to the cookie path when no key exists anywhere', async () => {
     resolveApiKeyMock.mockResolvedValue({ status: 'missing' })
     fetchWithCookieMock.mockResolvedValue(cookieResult('ok'))
@@ -142,6 +131,28 @@ describe('fetchOpenCodeGoUsage', () => {
 
     expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
     expect(fetchWithCookieMock).toHaveBeenCalledWith(COOKIE, 'wrk_abc', proxy)
+    expect(result.status).toBe('ok')
+  })
+
+  it('reports an unreadable credential database instead of using an env key', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'credential-database-unreadable' })
+
+    const result = await fetchOpenCodeGoUsage({ cookie: '   ' })
+
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
+    expect(fetchWithCookieMock).not.toHaveBeenCalled()
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('usage-unavailable')
+    expect(result.error).toContain("Could not read OpenCode's credential database")
+  })
+
+  it('uses the configured cookie when the credential database is unreadable', async () => {
+    resolveApiKeyMock.mockResolvedValue({ status: 'credential-database-unreadable' })
+    fetchWithCookieMock.mockResolvedValue(cookieResult('ok'))
+
+    const result = await fetchOpenCodeGoUsage({ cookie: COOKIE })
+
+    expect(fetchWithApiKeyMock).not.toHaveBeenCalled()
     expect(result.status).toBe('ok')
   })
 

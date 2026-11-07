@@ -1,3 +1,4 @@
+import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -9,7 +10,10 @@ import type {
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
-  getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
+  getOpenAiApiKeyStatus: () => Promise<{
+    configured: boolean
+    protection: SecretAtRestProtection | null
+  }>
   saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
   clearOpenAiApiKey: () => Promise<{ configured: boolean }>
   downloadModel: (modelId: string) => Promise<void>
@@ -20,7 +24,8 @@ export type SpeechApi = {
     hotwords: string[] | undefined,
     sessionId: string
   ) => Promise<void>
-  feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<void>
+  /** Resolves true when this chunk filled a cloud session's upload cap. */
+  feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<boolean>
   stopDictation: (sessionId?: string) => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void

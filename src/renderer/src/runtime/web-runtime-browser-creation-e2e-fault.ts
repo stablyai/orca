@@ -92,9 +92,7 @@ function exposeFaultApi(): void {
     armInventoryRpcFailure: () => {
       failNextInventoryRpc = true
     },
-    // Why its own barrier: the client-host preparation runs before the create RPC, and it is a
-    // separate remote round-trip. Holding only the post-create barrier leaves that whole window
-    // untestable, and it is the window where a user action races an unguarded create.
+    // Preparation is a separate pre-create round-trip; a post-create barrier cannot exercise user actions during it.
     armPreparation: () => {
       resetFault()
       preparationArmed = true
@@ -154,22 +152,6 @@ function exposeFaultApi(): void {
 
 exposeFaultApi()
 
-export function observeE2eWebRuntimeBrowserCreation(result: Promise<boolean>): void {
-  if (!e2eConfig.exposeStore || !settleCreation) {
-    return
-  }
-  const settle = settleCreation
-  settleCreation = null
-  void result.then(
-    (created) => settle({ status: 'fulfilled', created }),
-    (error) =>
-      settle({
-        status: 'rejected',
-        error: error instanceof Error ? error.message : String(error)
-      })
-  )
-}
-
 export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
   if (!e2eConfig.exposeStore || !capabilityRejectionArmed) {
     return
@@ -182,8 +164,7 @@ export async function pauseAfterE2eWebRuntimeBrowserCreate(remotePageId: string)
   if (!e2eConfig.exposeStore) {
     return
   }
-  // Recorded before the arm check so a journey that never arms the barrier can still prove no host
-  // page was created — a null id is only evidence if a real create would have set one.
+  // Record before checking the barrier arm so null proves no page was created even in unarmed journeys.
   createdPageId = remotePageId
   if (!armed || !createdPageBarrier) {
     return

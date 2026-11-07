@@ -3,10 +3,7 @@ import { cn } from '@/lib/utils'
 import { HUNKS, tokenize, type DiffLine } from './review-animated-visual-shared'
 import { translate } from '@/i18n/i18n'
 
-// Why: pre-flatten hunks into rows with computed line numbers so the
-// imperative animation loop only mutates classes/inline styles, never DOM
-// structure. Lives in its own module to keep ReviewNotesAnimatedVisual under
-// the per-file line-length lint cap.
+// Precompute row geometry so the animation mutates styles rather than DOM structure.
 
 type DiffRow = {
   key: string

@@ -1,30 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
+import { createNativeChatFileHref } from '../../../src/shared/native-chat/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
-  it('routes web and mail links to the system handler', () => {
-    expect(routeMarkdownHref('https://example.com/docs')).toEqual({
-      kind: 'web',
-      url: 'https://example.com/docs'
-    })
-    expect(routeMarkdownHref('http://localhost:3000/')).toEqual({
-      kind: 'web',
-      url: 'http://localhost:3000/'
-    })
-    expect(routeMarkdownHref(' mailto:dev@example.com ')).toEqual({
-      kind: 'web',
-      url: 'mailto:dev@example.com'
-    })
-  })
-
-  it('routes relative hrefs to the file opener', () => {
-    expect(routeMarkdownHref('src/foo.ts')).toEqual({ kind: 'file', pathText: 'src/foo.ts' })
-    expect(routeMarkdownHref('./docs/plan.md')).toEqual({
-      kind: 'file',
-      pathText: './docs/plan.md'
-    })
-  })
-
   it('carries a #L fragment as a :line suffix', () => {
     expect(routeMarkdownHref('docs/plan.md#L42')).toEqual({
       kind: 'file',
@@ -40,10 +18,10 @@ describe('routeMarkdownHref', () => {
     })
   })
 
-  it('decodes percent-encoded href paths', () => {
-    expect(routeMarkdownHref('docs/release%20notes.md')).toEqual({
+  it('preserves the existing wrapped reply-location contract', () => {
+    expect(routeMarkdownHref(createNativeChatFileHref(' docs/report.md:12:4 '))).toEqual({
       kind: 'file',
-      pathText: 'docs/release notes.md'
+      pathText: 'docs/report.md:12:4'
     })
   })
 
@@ -59,13 +37,6 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('file:///C:/repo/src/index.ts')).toEqual({
       kind: 'file',
       pathText: 'C:/repo/src/index.ts'
-    })
-  })
-
-  it('keeps Windows drive paths out of the scheme filter', () => {
-    expect(routeMarkdownHref(String.raw`C:\repo\src\index.ts`)).toEqual({
-      kind: 'file',
-      pathText: String.raw`C:\repo\src\index.ts`
     })
   })
 

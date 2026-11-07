@@ -1,3 +1,5 @@
+import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
+import { createDirectE2EEFramingPolicy } from './direct-e2ee-framing-policy'
 import { publicKeyFromBase64 } from './e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
 import { redactSocketEndpoint } from './socket-event-debug'
@@ -16,7 +18,7 @@ type SocketFactoryOptions = {
   onHandshakeStarted: () => void
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
-  onRpcResponse: (response: RpcResponse) => void
+  onRpcResponse: (session: RpcClientSocketSession, response: RpcResponse) => void
   onBinary: (bytes: Uint8Array) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
@@ -24,14 +26,16 @@ type SocketFactoryOptions = {
 }
 
 export class RpcClientSocketFactory {
-  private readonly serverPublicKey: Uint8Array
+  private readonly framingPolicy: PairedE2EEFramingPolicy
   private lastInboundAt: number | null = null
   private lastSocketClosedAt: number | null = null
   private constructionCount = 0
   private dialStartedAt = 0
 
   constructor(private readonly options: SocketFactoryOptions) {
-    this.serverPublicKey = publicKeyFromBase64(options.serverPublicKeyB64)
+    // Why: an invalid pairing key fails construction, not every dial.
+    publicKeyFromBase64(options.serverPublicKeyB64)
+    this.framingPolicy = createDirectE2EEFramingPolicy(options.serverPublicKeyB64)
   }
 
   open(): RpcClientSocketSession {
@@ -57,7 +61,8 @@ export class RpcClientSocketFactory {
     return new RpcClientSocketSession({
       endpoint: this.options.endpoint,
       deviceToken: this.options.deviceToken,
-      serverPublicKey: this.serverPublicKey,
+      serverPublicKeyB64: this.options.serverPublicKeyB64,
+      framingPolicy: this.framingPolicy,
       getCurrentSocket: this.options.getCurrentSocket,
       getState: this.options.getState,
       getReconnectAttempt: this.options.getReconnectAttempt,

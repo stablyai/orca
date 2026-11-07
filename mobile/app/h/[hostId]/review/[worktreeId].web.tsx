@@ -1,12 +1,7 @@
+import { withWorkspaceRoute } from '../../../../src/navigation/workspace-route'
 import { MobileDiffReviewRouteScreen } from '../../../../src/session/MobileDiffReviewRouteScreen'
 
-/**
- * Web sibling for diff review.
- *
- * The shell renders this page for this route, so there is no shell to mount here and no flag to
- * read. The screen reads its own params, so this file is the whole of the difference: its native
- * sibling reaches OrcaMobileWebShellView, whose module throws at import in a browser.
- */
-export default function MobileDiffReviewScreen() {
+// Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
+export default withWorkspaceRoute(function MobileDiffReviewScreen() {
   return <MobileDiffReviewRouteScreen />
-}
+})

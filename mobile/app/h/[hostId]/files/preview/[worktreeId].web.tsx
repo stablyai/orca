@@ -1,16 +1,10 @@
+import { withWorkspaceRoute } from '../../../../../src/navigation/workspace-route'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
 import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/mobile-file-preview-route'
 
-/**
- * Web sibling for the file preview.
- *
- * This page is what the shell renders for this route, so there is no shell to mount here and no
- * flag to read: the switch already happened natively. Its native file also reaches
- * OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a
- * browser, which is what the page opening this route would hit.
- */
-export default function MobileFilePreviewRoute() {
+// Render screen directly: native sibling imports a shell module that throws in browsers, and manifest imports every route.
+export default withWorkspaceRoute(function MobileFilePreviewRoute() {
   const params = useLocalSearchParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
@@ -29,4 +23,4 @@ export default function MobileFilePreviewRoute() {
     worktreeName?: string | string[]
   }>()
   return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params)} />
-}
+})

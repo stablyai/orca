@@ -1,6 +1,12 @@
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../src/shared/abort-signal-reason'
+import { sharedPromiseSettlementWaiters } from '../../../src/shared/promise-settlement-waiters'
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import type { SendRequestOptions } from './rpc-client'
+import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState, RpcResponse } from './types'
 
 const REQUEST_TIMEOUT_MS = 30_000
@@ -14,8 +20,7 @@ type RequestTrackerOptions = {
   nextId: () => string
   getState: () => ConnectionState
   waitForConnected: (timeoutMs?: number) => Promise<void>
-  sendEncrypted: (request: unknown) => boolean
-  deviceToken: string
+  sendFrame: (frame: RpcRequestFrame) => boolean
 }
 
 export class RpcClientRequestTracker {
@@ -28,13 +33,21 @@ export class RpcClientRequestTracker {
     params?: unknown,
     requestOptions?: SendRequestOptions
   ): Promise<RpcResponse> {
+    throwIfSignalAborted(requestOptions?.signal)
     const budget = openRpcRequestBudget(requestOptions)
     const waitStart = budget.startedAt
     const wasConnected = this.options.getState() === 'connected'
     if (requestOptions?.failWhenDisconnected && !wasConnected) {
       throw new Error(`Not connected: ${method}`)
     }
-    await this.options.waitForConnected(requestOptions?.timeoutMs)
+    await waitForPromiseWithSignal(
+      this.options.waitForConnected(requestOptions?.timeoutMs),
+      requestOptions?.signal
+    )
+    throwIfSignalAborted(requestOptions?.signal)
+    if (requestOptions?.signal && this.options.getState() !== 'connected') {
+      throw new Error(`Not connected: ${method}`)
+    }
     if (!wasConnected) {
       console.log('[net] sendRequest waited for connect', {
         method,
@@ -42,10 +55,13 @@ export class RpcClientRequestTracker {
       })
     }
 
+    requestOptions?.beforeSend?.()
     return this.sendConnectedRequest(
       method,
       params,
-      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS)
+      resolvePostConnectRequestTimeout(budget, REQUEST_TIMEOUT_MS),
+      requestOptions?.envelope,
+      requestOptions?.signal
     )
   }
 
@@ -60,11 +76,14 @@ export class RpcClientRequestTracker {
   private sendConnectedRequest(
     method: string,
     params: unknown,
-    timeoutMs: number
+    timeoutMs: number,
+    envelope?: RpcEnvelopeFields,
+    signal?: AbortSignal
   ): Promise<RpcResponse> {
-    return new Promise((resolve, reject) => {
-      const id = this.options.nextId()
-      const timeout = setTimeout(() => {
+    const id = this.options.nextId()
+    let timeout: ReturnType<typeof setTimeout>
+    const response = new Promise<RpcResponse>((resolve, reject) => {
+      timeout = setTimeout(() => {
         this.pending.delete(id)
         console.log('[net] sendRequest TIMEOUT', {
           method,
@@ -83,19 +102,21 @@ export class RpcClientRequestTracker {
           reject(error)
         }
       })
-      if (
-        !this.options.sendEncrypted({
-          id,
-          deviceToken: this.options.deviceToken,
-          method,
-          params
-        })
-      ) {
+      if (!this.options.sendFrame({ id, method, params, envelope })) {
         this.pending.delete(id)
         clearTimeout(timeout)
         reject(new Error('Connection interrupted'))
       }
     })
+    return signal
+      ? sharedPromiseSettlementWaiters(response).wait({
+          signal,
+          onAbandon: () => {
+            this.pending.delete(id)
+            clearTimeout(timeout)
+          }
+        })
+      : response
   }
 
   resolve(response: RpcResponse): boolean {

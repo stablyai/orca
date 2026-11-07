@@ -19,30 +19,15 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 
-/**
- * Worktree-switch first-paint budget.
- *
- * Why this exists: worktree-switch-responsiveness.spec.ts proves the click task
- * stays short, and the reveal-convergence spec proves the buffer eventually
- * matches. Neither covers the symptom users report — the revealed terminal is
- * BLANK for a beat after the switch. This measures the phase that owns that
- * beat: switch click -> revealed pane has painted its restored content.
- *
- * The scenario is the one that dominates at many-worktree scale: a switch to a
- * worktree whose tabs are in the persisted session but have never been mounted
- * in this renderer. Hot-retain only keeps 4 worktrees warm, so with hundreds of
- * worktrees essentially every switch is this one. Reloading the renderer between
- * rounds reproduces it exactly, at production parking timings.
- */
+// Measure cold persisted-tab reveal beyond click-task responsiveness and eventual buffer convergence.
+// Reload between rounds at production parking timings: tabs exist in session but never mounted, matching worktree counts beyond hot retention.
 
-// Why 3: the field profile that motivated this budget has 449 worktrees whose
-// median tab count is 2-3, so a 3-tab worktree is the switch users actually pay for.
+// Use three tabs to match the motivating 449-worktree profile’s median 2–3 tabs.
 const TABS_PER_WORKTREE = Number(process.env.ORCA_SWITCH_TABS ?? '3')
 const SCROLLBACK_LINES = 1_500
 // Budget: a switch has to look instant. Anything over this reads as a stall.
 const FIRST_PAINT_BUDGET_MS = Number(process.env.ORCA_SWITCH_BUDGET_MS ?? '250')
-// Why repeat: a single cold reveal on a loaded dev machine swings by tens of ms,
-// which is the same order as the effect under test.
+// Repeat because single cold-reveal noise is tens of milliseconds, the same scale as the change.
 const SWITCH_SAMPLE_COUNT = Number(process.env.ORCA_SWITCH_ROUNDS ?? '5')
 
 type SwitchSample = {
@@ -180,8 +165,7 @@ async function measureSwitch(
         const state = window.__store!.getState()
         if (probe.activationMs === null && state.activeWorktreeId === worktreeId) {
           probe.activationMs = now
-          // Why here and not at paint: this is the switch's own frame, before any
-          // idle admission can run, so it measures what the SWITCH mounted.
+          // Sample in the switch frame before idle admission to count panes mounted by the switch itself.
           probe.mountedAtActivation = tabIds.filter(
             (id) => window.__paneManagers?.has(id) === true
           ).length
@@ -193,10 +177,7 @@ async function measureSwitch(
           probe.paneMountedMs = now
         }
         if (probe.contentRestoredMs === null && pane) {
-          // Restored = the revealed viewport carries real text rather than an
-          // empty grid. Read on a frame callback, so this is the frame the
-          // content became renderable — one frame ahead of the pixels, and not
-          // a pixel assertion. Both arms are measured identically.
+          // Observe nonempty viewport in a frame callback: content is renderable one frame before pixels; this is not a pixel assertion.
           const buffer = pane.terminal.buffer.active
           let filledRows = 0
           for (let row = 0; row < pane.terminal.rows; row += 1) {
@@ -225,9 +206,7 @@ async function measureSwitch(
     { worktreeId: targetWorktreeId, tabIds: [...targetTabIds] }
   )
 
-  // Why poll rather than sample a fixed window: the measurement is "how long did
-  // the restore take", so the harness must outlast the slowest runner rather than
-  // give up at a deadline and report the reveal as never restoring.
+  // Poll until restore completes across slow runners instead of reporting a deadline as never-restored.
   await expect
     .poll(() => page.evaluate(() => globalThis.__switchPaintProbe?.contentRestoredMs ?? null), {
       timeout: 30_000,
@@ -251,8 +230,7 @@ async function measureSwitch(
     const managers = window.__paneManagers
     for (const manager of managers?.values() ?? []) {
       settledPanes += (manager.getPanes?.() ?? []).length
-      // Why diagnostics and not `pane.webglAddon`: getPanes() hands back a public
-      // projection that has no webglAddon field, so reading it is always falsy.
+      // Use diagnostics: the public getPanes projection has no webglAddon, so reading it always gives falsy.
       const diagnostics =
         (
           manager as { getRenderingDiagnostics?: () => { hasWebgl?: boolean }[] }
@@ -294,9 +272,7 @@ async function publish(testInfo: TestInfo, name: string, body: string): Promise<
   await testInfo.attach(name, { body, contentType: 'text/plain' })
 }
 
-// Why 8 extra: hot-retain keeps the 4 most recently hidden worktrees mounted and
-// exempts the last-active one, so a target only cold-parks once enough other
-// worktrees have been visited after it. That is the steady state at field scale.
+// Visit eight extras to outgrow four-worktree hot retention plus last-active exemption, forcing a cold target.
 const FILLER_WORKTREE_COUNT = Number(process.env.ORCA_SWITCH_FILLER_WORKTREES ?? '8')
 
 async function addFillerWorktrees(
@@ -320,8 +296,7 @@ async function addFillerWorktrees(
     }
     rmSync(parent, { recursive: true, force: true })
   }
-  // Why clean up before rethrowing: testRepoPath is worker-scoped and reused by
-  // later specs, so a half-built fixture would leak worktrees into them.
+  // Clean partial fixtures before rethrowing because later specs reuse the worker repo.
   try {
     for (const worktreePath of paths) {
       execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'HEAD'], {
@@ -397,9 +372,7 @@ test.describe('Worktree switch first paint @headful', () => {
     try {
       const targetTabIds = await ensureTabs(orcaPage, targetId, 'WTB')
 
-      // Give the filler worktrees persisted tabs without mounting them, so the
-      // store carries a field-scale tab population (the profile that motivated
-      // this budget has 846 tabs across 449 worktrees).
+      // Seed persisted tabs without mounting them, matching 846 tabs/449 worktrees.
       await orcaPage.evaluate(
         ({ ids, perWorktree }) => {
           const state = window.__store!.getState()
@@ -414,11 +387,7 @@ test.describe('Worktree switch first paint @headful', () => {
       )
 
       for (let round = 0; round < SWITCH_SAMPLE_COUNT; round += 1) {
-        // Leave the primary active and let the session persist before reloading:
-        // startup restores the persisted active worktree, so this is what makes
-        // the target come back with tabs in the session and no pane ever mounted
-        // — the state every switch lands in once the worktree count exceeds the
-        // hot-retain working set.
+        // Persist primary as active before reload so target returns session-only, never mounted in this renderer.
         await switchToWorktree(orcaPage, primaryId)
         await ensureTerminalVisible(orcaPage)
         await orcaPage.waitForTimeout(2_500)
@@ -434,9 +403,7 @@ test.describe('Worktree switch first paint @headful', () => {
         samples.push(sample)
         lines.push(report(`round ${round + 1} (target unmounted=${unmounted})`, sample))
 
-        // The half of the contract that keeps the speed-up free: the hidden tabs
-        // the switch skipped still end up mounted, so the next tab switch is as
-        // warm as it was before the reveal stopped mounting them up front.
+        // Require skipped hidden tabs to warm afterward so faster reveal does not make the next tab switch cold.
         const warmedTabIds = await waitForMountedTabs(orcaPage, targetTabIds)
         expect(warmedTabIds, 'deferred tabs never joined the warm working set').toEqual(
           [...targetTabIds].sort()
@@ -472,9 +439,7 @@ test.describe('Worktree switch first paint @headful', () => {
         'the switch mounted more than the pane the user is looking at'
       ).toBe(1)
     }
-    // Why CI is exempt from the budget and not from the invariants: shared
-    // runners cannot hold a latency threshold, but "the switch mounted one pane"
-    // and "the warm set came back" are exact and are the real regression guards.
+    // Exempt CI only from timing; exact one-pane admission and restored warm-set invariants still gate shared runners.
     if (process.env.CI) {
       console.log(
         `[switch-budget] CI run, latency budget not enforced (median ${median(restored).toFixed(1)}ms)`

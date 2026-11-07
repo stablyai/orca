@@ -4,6 +4,7 @@ import type { OpenInApplication } from '../../../shared/ui-chrome-types'
 import { cn } from './utils'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { BUILT_IN_EDITOR_COMMANDS } from '../../../shared/open-in-applications'
 
 export type OpenInAppPreset = {
   id: string
@@ -17,22 +18,34 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
   {
     id: 'vscode',
     label: translate('auto.lib.open.in.app.catalog.173553f73a', 'VS Code'),
-    command: 'code',
+    command: BUILT_IN_EDITOR_COMMANDS.vscode,
     faviconDomain: 'code.visualstudio.com'
   },
   {
     id: 'cursor',
     label: translate('auto.lib.open.in.app.catalog.d62b12e98a', 'Cursor'),
-    command: 'cursor',
+    command: BUILT_IN_EDITOR_COMMANDS.cursor,
     faviconDomain: 'cursor.com'
   },
   {
     id: 'zed',
     label: translate('auto.lib.open.in.app.catalog.f8b8ca2711', 'Zed'),
-    command: 'zed',
+    command: BUILT_IN_EDITOR_COMMANDS.zed,
     faviconDomain: 'zed.dev',
     // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
     iconClassName: 'dark:invert'
+  },
+  {
+    id: 'devin-desktop',
+    label: translate('settings.openInApp.preset.devinDesktop', 'Devin Desktop'),
+    command: BUILT_IN_EDITOR_COMMANDS['devin-desktop'],
+    faviconDomain: 'devin.ai'
+  },
+  {
+    id: 'antigravity-ide',
+    label: translate('settings.openInApp.preset.antigravityIde', 'Antigravity IDE'),
+    command: BUILT_IN_EDITOR_COMMANDS['antigravity-ide'],
+    faviconDomain: 'antigravity.google'
   }
 ])
 

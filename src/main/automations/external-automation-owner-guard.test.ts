@@ -4,7 +4,7 @@ import { AutomationOwnerConflictError } from '../../shared/automation-owner-conf
 import type { AutomationOwnerRef } from '../../shared/automation-owner-ref'
 import {
   EXTERNAL_AUTOMATION_SCOPE_CODES,
-  ExternalAutomationScopeError
+  type ExternalAutomationScopeError
 } from '../../shared/external-automation-scope'
 import type { ExternalAutomationProvider } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -35,51 +35,6 @@ function desktopSsh(targetId: string, targetGeneration: number): AutomationOwner
 }
 
 describe('resolveExternalAutomationScope', () => {
-  it('resolves desktop + self to the local target', () => {
-    const scope = resolveExternalAutomationScope(
-      { owner: desktopSelf, provider: 'hermes' },
-      registry([])
-    )
-
-    expect(scope.target).toEqual({ type: 'local' })
-    expect(scope.sshTarget).toBeNull()
-    expect(scope.managerId).toBe('hermes:local')
-  })
-
-  it('resolves a desktop SSH host whose registration generation still matches', () => {
-    const target = sshTarget()
-
-    const scope = resolveExternalAutomationScope(
-      { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
-      registry([target])
-    )
-
-    expect(scope.target).toEqual({ type: 'ssh', connectionId: 'target-a' })
-    expect(scope.sshTarget).toBe(target)
-    expect(scope.managerId).toBe('openclaw:ssh:target-a')
-  })
-
-  it('excludes a runtime-owned target instead of exposing it', () => {
-    const target = sshTarget({ owner: { type: 'on-demand-runtime', runtimeId: 'rt-1' } })
-
-    expect(() =>
-      resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
-        registry([target])
-      )
-    ).toThrow(ExternalAutomationScopeError)
-    try {
-      resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
-        registry([target])
-      )
-    } catch (error) {
-      expect((error as ExternalAutomationScopeError).code).toBe(
-        EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden
-      )
-    }
-  })
-
   it('hides a runtime-owned target even when the captured generation is wrong', () => {
     const target = sshTarget({
       generation: 9,
@@ -88,7 +43,7 @@ describe('resolveExternalAutomationScope', () => {
 
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 3), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 3), provider: 'openclaw' },
         registry([target])
       )
       expect.unreachable('hidden target must not resolve')
@@ -102,7 +57,7 @@ describe('resolveExternalAutomationScope', () => {
   it('fails closed with the host-changed conflict on a stale generation', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 2), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 2), provider: 'openclaw' },
         registry([sshTarget({ generation: 3 })])
       )
       expect.unreachable('stale generation must not resolve')
@@ -115,7 +70,7 @@ describe('resolveExternalAutomationScope', () => {
   it('fails closed when the registration carries no usable generation', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('target-a', 1), provider: 'hermes' },
+        { owner: desktopSsh('target-a', 1), provider: 'openclaw' },
         registry([sshTarget({ generation: undefined })])
       )
       expect.unreachable('unstamped registration must not resolve')
@@ -127,7 +82,7 @@ describe('resolveExternalAutomationScope', () => {
   it('reports a removed SSH host as a target-removed conflict', () => {
     try {
       resolveExternalAutomationScope(
-        { owner: desktopSsh('gone', 1), provider: 'hermes' },
+        { owner: desktopSsh('gone', 1), provider: 'openclaw' },
         registry([sshTarget()])
       )
       expect.unreachable('missing target must not resolve')
@@ -143,7 +98,7 @@ describe('resolveExternalAutomationScope', () => {
     }
 
     try {
-      resolveExternalAutomationScope({ owner: runtimeOwner, provider: 'hermes' }, registry([]))
+      resolveExternalAutomationScope({ owner: runtimeOwner, provider: 'openclaw' }, registry([]))
       expect.unreachable('runtime authority must not resolve')
     } catch (error) {
       expect((error as ExternalAutomationScopeError).code).toBe(

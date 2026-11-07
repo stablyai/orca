@@ -1,6 +1,6 @@
 import { loadRelayConfig } from './config.js'
-import { reconcileCellAdmissionAtStartup } from './cell-admission-startup.js'
-import { openRelayDatabase, type RelayDatabase } from './database.js'
+import { reconcileCellAdmissionAtStartup } from './cell/admission/cell-admission-startup.js'
+import { openRelayDatabase, type RelayDatabase } from './database/database.js'
 import { createRelayServer } from './relay-server.js'
 import { readFileSync } from 'node:fs'
 
@@ -53,7 +53,7 @@ server.listen(config.port, () => {
 
 const shutdown = (): void => {
   sessions.drain(0)
-  server.close(() => void realDatabase.close())
+  server.close(() => void realDatabase.close().catch(() => undefined))
 }
 process.once('SIGTERM', shutdown)
 process.once('SIGINT', shutdown)

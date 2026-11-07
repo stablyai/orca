@@ -1,19 +1,19 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-server-update'
-import { isUserManagedRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isListedRemoteServer } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   checkingRemoteServerUpdateEntry,
   inspectRemoteServerUpdate,
   runRemoteServerUpdate,
   type RemoteServerUpdateEntry,
   type RemoteServerUpdateTransport
-} from '@/runtime/remote-server-update-coordinator'
-import { runRemoteServerUpdateBatch } from '@/runtime/remote-server-update-batch'
+} from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { runRemoteServerUpdateBatch } from '@/runtime/hosts/updates/remote-server-update-batch'
 
 const MAX_CONCURRENT_REMOTE_SERVER_UPDATES = 2
 
@@ -95,7 +95,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
     })
     try {
       const listed = await window.api.runtimeEnvironments.list()
-      const environments = listed.filter(isUserManagedRuntimeEnvironment)
+      const environments = listed.filter(isListedRemoteServer)
       get().setRuntimeEnvironments(listed)
       const previous = get().remoteServerUpdates
       const initial = new Map(

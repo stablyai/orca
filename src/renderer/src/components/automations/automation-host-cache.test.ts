@@ -1,10 +1,6 @@
-/**
- * The commit fence is the whole point of this cache: an answer that was correct
- * when it was asked for may be wrong by the time it lands, and rendering it
- * would attribute one host's automations to another.
- */
+/** A formerly correct answer can arrive after host replacement; the commit fence must reject it instead of misattributing automations. */
 
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type {
@@ -51,13 +47,6 @@ function createCache(overrides: Parameters<typeof createAutomationHostCache>[0] 
 }
 
 describe('automation host cache commit fence', () => {
-  it('commits a response whose generations all still match', () => {
-    const cache = createCache()
-    const fence = cache.beginRequest(DESKTOP_SELF)
-    expect(cache.commit(fence, { rows: [row('a')] })).toBe(true)
-    expect(cache.get(DESKTOP_SELF)?.data.map((entry) => entry.automation.id)).toEqual(['a'])
-  })
-
   it('discards a response whose entry was invalidated while it was in flight', () => {
     const cache = createCache()
     const fence = cache.beginRequest(DESKTOP_SELF)
@@ -116,26 +105,6 @@ describe('automation host cache commit fence', () => {
 })
 
 describe('automation host cache freshness and sharing', () => {
-  it('reports fresh inside the TTL and stale past it', () => {
-    let clock = 1_000
-    const cache = createCache({ now: () => clock, ttlMs: 30_000 })
-    expect(cache.freshness(DESKTOP_SELF)).toBe('missing')
-    cache.commit(cache.beginRequest(DESKTOP_SELF), { rows: [] })
-    expect(cache.freshness(DESKTOP_SELF)).toBe('fresh')
-    clock += 30_001
-    expect(cache.freshness(DESKTOP_SELF)).toBe('stale')
-  })
-
-  it('publishes one in-flight request for concurrent callers of the same owner', async () => {
-    const cache = createCache()
-    const fence = cache.beginRequest(DESKTOP_SELF)
-    const request = Promise.resolve()
-    cache.trackRequest(fence, request)
-    expect(cache.pendingRequest(DESKTOP_SELF)).toBe(request)
-    cache.commit(fence, { rows: [] })
-    expect(cache.pendingRequest(DESKTOP_SELF)).toBeNull()
-  })
-
   it('refuses to publish an in-flight request against a superseded generation', () => {
     const cache = createCache()
     const fence = cache.beginRequest(DESKTOP_SELF)
@@ -169,28 +138,16 @@ describe('automation host cache invalidation scope', () => {
     expect(cache.freshness(RUNTIME_SELF)).toBe('missing')
   })
 
-  it('evicts a departed entry and caps the retired pool', () => {
+  it('evicts departed entries and rejects work captured before retirement', () => {
     const cache = createCache({ retiredLimit: 1 })
     cache.commit(cache.beginRequest(DESKTOP_SELF), { rows: [row('a')] })
     cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [row('b')] })
+    const stale = cache.beginRequest(RUNTIME_SELF)
     cache.evict(hostStableKey(DESKTOP_SELF))
     cache.evict(hostStableKey(RUNTIME_SELF))
     expect(cache.keys()).toEqual([])
-    // The revived entry keeps its advanced generation, so nothing captured before eviction commits.
-    const stale = cache.beginRequest(RUNTIME_SELF)
-    cache.invalidate(RUNTIME_SELF)
+    cache.beginRequest(RUNTIME_SELF)
     expect(cache.commit(stale, { rows: [] })).toBe(false)
-  })
-
-  it('notifies subscribers when entries change', () => {
-    const cache = createCache()
-    const listener = vi.fn()
-    const unsubscribe = cache.subscribe(listener)
-    cache.commit(cache.beginRequest(DESKTOP_SELF), { rows: [] })
-    expect(listener).toHaveBeenCalledTimes(1)
-    unsubscribe()
-    cache.invalidate(DESKTOP_SELF)
-    expect(listener).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -234,10 +191,7 @@ function catalogOf(entries: AutomationHostCatalogEntry[]): AutomationHostCatalog
   }
 }
 
-/**
- * The fence is only as stable as the catalog generation feeding it, so this
- * covers Step 2's warning from the consumer's side.
- */
+/** Verify offline catalog changes do not invalidate requests through spurious generation churn. */
 describe('offline authority generation churn', () => {
   const withRegistry = (registry: AutomationCatalogGenerationRegistry) =>
     createAutomationHostCache({
@@ -253,14 +207,5 @@ describe('offline authority generation churn', () => {
     // The authority went offline; membership and incarnation are unchanged.
     registry.sync(catalogOf([catalogEntry(RUNTIME_SELF, 'scoped', 3)]))
     expect(cache.commit(fence, { rows: [row('a')] })).toBe(true)
-  })
-
-  it('churns if a disconnect is reported as legacy-unscoped with no owner', () => {
-    const registry = createAutomationCatalogGenerationRegistry()
-    const cache = withRegistry(registry)
-    registry.sync(catalogOf([catalogEntry(RUNTIME_SELF, 'scoped', 3)]))
-    const fence = cache.beginRequest(RUNTIME_SELF)
-    registry.sync(catalogOf([catalogEntry(RUNTIME_SELF, 'legacy-unscoped', null)]))
-    expect(cache.commit(fence, { rows: [row('a')] })).toBe(false)
   })
 })

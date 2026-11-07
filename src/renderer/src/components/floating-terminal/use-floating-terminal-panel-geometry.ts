@@ -21,10 +21,9 @@ type FloatingTerminalPanelGeometryInput = Pick<
   | 'maximized'
   | 'stagedBoundsRef'
   | 'lastPersistedBoundsRef'
-  | 'setCwd'
   | 'setMarkdownCwd'
 > &
-  Pick<FloatingTerminalPanelStoreState, 'floatingTerminalCwd'>
+  Pick<FloatingTerminalPanelStoreState, 'floatingTerminalCwd' | 'setFloatingWorkspacePath'>
 
 export function useFloatingTerminalPanelGeometry({
   boundsSourceRef,
@@ -33,7 +32,7 @@ export function useFloatingTerminalPanelGeometry({
   maximized,
   stagedBoundsRef,
   lastPersistedBoundsRef,
-  setCwd,
+  setFloatingWorkspacePath,
   setMarkdownCwd,
   floatingTerminalCwd
 }: FloatingTerminalPanelGeometryInput) {
@@ -106,13 +105,14 @@ export function useFloatingTerminalPanelGeometry({
     let cancelled = false
     void window.api.app.getFloatingTerminalCwd({ path: floatingTerminalCwd }).then((nextCwd) => {
       if (!cancelled) {
-        setCwd(nextCwd)
+        // Publish the resolved directory once for every floating-workspace consumer, including row creation.
+        setFloatingWorkspacePath(nextCwd)
       }
     })
     return () => {
       cancelled = true
     }
-  }, [floatingTerminalCwd, setCwd])
+  }, [floatingTerminalCwd, setFloatingWorkspacePath])
 
   useEffect(() => {
     let cancelled = false

@@ -6,8 +6,7 @@ import {
 
 describe('normalizeOsc52ClipboardDefaultOn', () => {
   it('flips an unstamped profile on, because its `false` came from the old default', () => {
-    // Why: every profile saved before #10567 persisted `false`, which the settings
-    // merge then wins with — indistinguishable on disk from a deliberate opt-out.
+    // Old profiles persisted the false default, indistinguishable from deliberate opt-out (#10567).
     expect(normalizeOsc52ClipboardDefaultOn({ terminalAllowOsc52Clipboard: false })).toEqual({
       terminalAllowOsc52Clipboard: true,
       terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
@@ -59,7 +58,6 @@ describe('osc52ClipboardDefaultOnOverridesPersistedOff', () => {
   })
 
   it('is false for a fresh profile, which has no persisted value to override', () => {
-    // Why: a notice here would nag every new install about a setting they never touched.
     expect(osc52ClipboardDefaultOnOverridesPersistedOff(undefined)).toBe(false)
     expect(osc52ClipboardDefaultOnOverridesPersistedOff({})).toBe(false)
     expect(
