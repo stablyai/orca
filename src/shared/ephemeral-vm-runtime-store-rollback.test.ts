@@ -19,6 +19,7 @@ import {
 import {
   EphemeralVmRuntimeStoreError,
   getEphemeralVmRuntimeStorePath,
+  getEphemeralVmWriteAheadRuntimeStorePath,
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus,
   upsertEphemeralVmRuntime
@@ -28,6 +29,7 @@ import {
   RollbackEphemeralVmRuntimeStoreSchema,
   type EphemeralVmRuntimeRecord
 } from './ephemeral-vm-runtimes'
+import { findWorkspaceEphemeralVmRuntime } from './ephemeral-vm-workspace-runtime'
 
 function runtimeRecord(
   overrides: Partial<EphemeralVmRuntimeRecord> = {}
@@ -119,6 +121,80 @@ describe('ephemeral VM runtime store rollback projection', () => {
     expect(persisted.runtimes[0].recipe).not.toHaveProperty('checkoutMode')
     expect(persisted.runtimes[0].recipeResult).toMatchObject({ schemaVersion: 1 })
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([provisioned, ordinary])
+  })
+
+  it('keeps result-less write-ahead records out of the file older builds read', () => {
+    const userDataPath = makeUserDataPath()
+    const ordinary = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const { recipeResult: _recipeResult, ...writeAheadFields } = provisionedRootRecord()
+    const writeAhead = upsertEphemeralVmRuntime(userDataPath, {
+      ...writeAheadFields,
+      status: 'provisioning'
+    })
+
+    const persisted = JSON.parse(readFileSync(getEphemeralVmRuntimeStorePath(userDataPath), 'utf8'))
+    expect(RollbackEphemeralVmRuntimeStoreSchema.parse(persisted).runtimes).toEqual([
+      expect.objectContaining({ id: 'ordinary-runtime' })
+    ])
+    expect(
+      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
+        .runtimes
+    ).toEqual([expect.objectContaining({ id: 'provisioned-runtime', status: 'provisioning' })])
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([writeAhead, ordinary])
+
+    const running = updateEphemeralVmRuntimeStatus(userDataPath, 'provisioned-runtime', {
+      status: 'running',
+      recipeResult: provisionedRootRecord().recipeResult,
+      updatedAt: 2_000
+    })
+
+    const promoted = JSON.parse(readFileSync(getEphemeralVmRuntimeStorePath(userDataPath), 'utf8'))
+    expect(RollbackEphemeralVmRuntimeStoreSchema.parse(promoted).runtimes).toEqual([
+      expect.objectContaining({
+        id: 'provisioned-runtime',
+        recipe: expect.not.objectContaining({ checkoutMode: expect.anything() }),
+        recipeResult: expect.objectContaining({ schemaVersion: 1 })
+      }),
+      expect.objectContaining({ id: 'ordinary-runtime' })
+    ])
+    expect(
+      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
+        .runtimes
+    ).toEqual([])
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running, ordinary])
+    expect(running).toEqual(provisionedRootRecord())
+  })
+
+  it('prefers the main record when a crash leaves a stale write-ahead copy', () => {
+    const userDataPath = makeUserDataPath()
+    const running = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const { recipeResult: _recipeResult, ...stale } = running
+    writeFileSync(
+      getEphemeralVmWriteAheadRuntimeStorePath(userDataPath),
+      JSON.stringify({ version: 1, runtimes: [{ ...stale, status: 'provisioning' }] })
+    )
+
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running])
+  })
+
+  it('never offers a result-less write-ahead record to workspace suspend or resume', () => {
+    const userDataPath = makeUserDataPath()
+    const { recipeResult: _recipeResult, ...writeAhead } = runtimeRecord({
+      repoId: 'repo-1',
+      workspaceId: 'workspace-1'
+    })
+    upsertEphemeralVmRuntime(userDataPath, { ...writeAhead, status: 'provisioning' })
+
+    expect(findWorkspaceEphemeralVmRuntime(userDataPath, 'workspace-1')).toBeUndefined()
+
+    updateEphemeralVmRuntimeStatus(userDataPath, 'ordinary-runtime', {
+      status: 'running',
+      recipeResult: runtimeRecord().recipeResult
+    })
+    expect(findWorkspaceEphemeralVmRuntime(userDataPath, 'workspace-1')).toMatchObject({
+      id: 'ordinary-runtime',
+      repoId: 'repo-1'
+    })
   })
 
   it('keeps ordinary v1 bytes and sidecar behavior unchanged', () => {

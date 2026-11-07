@@ -1,9 +1,7 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import {
-  findWorkspaceEphemeralVmRuntime,
-  updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
@@ -39,12 +37,15 @@ export async function resumeEphemeralVmWorkspace(
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await resumeEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })
   if (!result.ok) {
     throw new Error(result.error)
+  }
+  if (!result.runtime.recipeResult) {
+    return result.runtime
   }
   const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
   // SSH servers use their target and have no pairing to refresh.

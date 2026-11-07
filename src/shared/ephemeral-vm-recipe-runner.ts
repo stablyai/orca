@@ -71,7 +71,7 @@ export type EphemeralVmRecipeCleanupArgs = {
   recipe: OrcaVmRecipe
   repoPath: string
   context: EphemeralVmRecipeContext
-  recipeResult: EphemeralVmRecipeResult
+  recipeResult?: EphemeralVmRecipeResult
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
   signal?: AbortSignal
