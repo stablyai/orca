@@ -9,6 +9,7 @@ import {
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-background-task-child-views-capability'
 import type { RpcContext } from '../../../core'
+import { AGENT_SESSION_FOREGROUND_TASK_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-foreground-task-capability'
 
 type BackgroundTaskReader = Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
 
@@ -57,6 +58,14 @@ function projectState(
   state: AgentSessionBackgroundTaskState | null | undefined,
   ctx: BackgroundTaskReader
 ): AgentSessionBackgroundTaskState | null | undefined {
+  if (
+    state?.foregroundTasks !== undefined &&
+    ctx.clientKind !== undefined &&
+    !ctx.clientCapabilities?.includes(AGENT_SESSION_FOREGROUND_TASK_CAPABILITY)
+  ) {
+    const { foregroundTasks: _targets, ...legacy } = state
+    state = !legacy.incomplete && !legacy.tasks?.length && !legacy.children?.length ? null : legacy
+  }
   const views = !state || readsChildViews(ctx) ? state : withoutChildViews(state)
   const rows = !views || honoursRowStop(ctx) ? views : withoutUnstoppableRows(views)
   // Legacy readers always offer a stop; retain their pre-producer empty strip.

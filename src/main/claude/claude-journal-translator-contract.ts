@@ -47,6 +47,7 @@ export type ClaudeJournalTranslator = {
   flush: () => void
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
+  foregroundToolIds?: ClaudeChildToolQueries['foregroundToolIds']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission
   retryPendingCancellations?: () => StructuredAgentSessionSinkAdmission
   /** Streamed blocks awaiting final frames; settlement clears them. */

@@ -271,6 +271,7 @@ export function createClaudeJournalTranslator(
     flush,
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,
+    foregroundToolIds: childQueries.foregroundToolIds,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),
     retryPendingCancellations: () => prompts.retryPendingCancellations(),
     get pendingStreamedBlocks() {

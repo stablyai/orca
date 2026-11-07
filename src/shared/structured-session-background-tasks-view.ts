@@ -6,8 +6,10 @@ import type {
 } from './agent-session/agent-session-background-task-wire'
 import { agentChildWorkLiveness } from './agent-status/child-work/agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
+import type { AgentSessionForegroundTask } from './agent-session/agent-session-foreground-task'
 
 export type StructuredSessionBackgroundTasksView = {
+  foregroundTasks?: AgentSessionForegroundTask[]
   /** Background rows remain visible during a foreground turn. */
   show: boolean
   /** Idle-only monitoring/command gate; a running turn owns the indicator, but background rows remain visible. */
@@ -60,12 +62,17 @@ export function structuredSessionBackgroundTasksView(
     !tasks.length &&
     Boolean(backgroundTasks?.children?.length || backgroundTasks?.tasks?.length)
   const incomplete = monitoring && backgroundTasks.incomplete === true
-  const show = monitoring && (incomplete || (!onlyFinished && !onlyForeground))
+  const onlyEarlyCalls =
+    Boolean(backgroundTasks?.foregroundTasks?.length) && children?.length === 0 && !tasks.length
+  const show = monitoring && (incomplete || (!onlyFinished && !onlyForeground && !onlyEarlyCalls))
   // Commands and rewind follow the listed records, as the host's own admission does.
   const liveWork = children ? agentChildWorkLiveness(children) !== null : show
   const supportsStop = backgroundTasks?.supportsTaskStop === true
   return {
     show,
+    ...(backgroundTasks?.foregroundTasks
+      ? { foregroundTasks: backgroundTasks.foregroundTasks }
+      : {}),
     isMonitoring: turnId === null && liveWork,
     tasks,
     // Running work only, from any host: an older host's finished rows are not shown either.
