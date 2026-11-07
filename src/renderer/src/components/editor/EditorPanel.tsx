@@ -253,7 +253,7 @@ function EditorPanelInner({
   )
   const handleOpenPreview = (): void => {
     if (isVisible) {
-      openEditorHtmlPreview(activeFile.id, activeViewStateId)
+      void openEditorHtmlPreview(activeFile.id, activeViewStateId)
     }
   }
   const handleEditorToggleChange = (next: EditorToggleValue): void => {

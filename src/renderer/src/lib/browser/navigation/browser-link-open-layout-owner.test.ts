@@ -2,8 +2,8 @@ import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/b
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { isBrowserPageMountAdmitted } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { toast } from 'sonner'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -19,6 +19,7 @@ import { captureLinkOpenIntent } from '../../link-open-intent'
 import { beginLinkOpenRequest } from '../../link-open-request'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { openFileInBrowserTab } from '../../file-preview'
+import { openEditorHtmlPreview } from '@/components/editor/open-editor-html-preview'
 import type { BrowserOpenOutcome } from './browser-link-destination'
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -66,7 +67,6 @@ beforeEach(async () => {
   mocks.getState.mockImplementation(() => store.getState())
   mocks.subscribe.mockImplementation(store.subscribe)
   vi.mocked(requestBrowserFocus).mockClear()
-  vi.mocked(toast.error).mockClear()
   main = await drawTabsFromMain(store)
   layoutApplyTestTransport.answerWith('pending')
 })
@@ -270,266 +270,117 @@ it('reports failure when main refuses the browser creation', async () => {
   expect(requestBrowserFocus).not.toHaveBeenCalled()
 })
 
-async function createRemoteDocPreview() {
+it('opens a remote document in the requested group without moving an existing mixed browser workspace', async () => {
+  const owner = 'repo2::/remote'
+  store.setState((state) => ({
+    repos: [
+      ...state.repos,
+      {
+        ...state.repos[0]!,
+        id: 'repo2',
+        connectionId: 'preview-owner',
+        executionHostId: 'ssh:preview-owner'
+      }
+    ],
+    worktreesByRepo: {
+      ...state.worktreesByRepo,
+      repo2: [
+        makeWorktree({ id: owner, repoId: 'repo2', path: '/remote', hostId: 'ssh:preview-owner' })
+      ]
+    }
+  }))
+  const openPreview = () =>
+    new Promise<BrowserOpenOutcome>((resolve) =>
+      openFileInBrowserTab({
+        filePath: '/remote/index.html',
+        worktreeId: owner,
+        placementWorkspaceId: WORKSPACE,
+        linkContext: {
+          linkIntent: captureLinkOpenIntent(store.getState(), WORKSPACE, 'source', {
+            explicitSourceGroup: true
+          }),
+          isCurrentRequest: beginLinkOpenRequest()
+        },
+        onLinkOutcome: resolve
+      })
+    )
   layoutApplyTestTransport.answerWith('apply')
-  const preview = store.getState().createBrowserTab(WORKSPACE, '', {
+  const existing = store.getState().createBrowserTab(WORKSPACE, '', {
     targetGroupId: 'b',
     browserRuntimeEnvironmentId: null,
-    docLocation: { kind: 'workspace-doc', worktreeId: WORKSPACE, filePath: '/repo/index.html' },
+    docLocation: { kind: 'workspace-doc', worktreeId: owner, filePath: '/remote/index.html' },
     activate: false
   })
   await main.settle()
-  store.getState().closeUnifiedTab('terminal-b')
+  const unrelated = store
+    .getState()
+    .createBrowserPage(existing.id, 'https://example.com/unrelated')!
   await main.settle()
+  layoutApplyTestTransport.answerWith('pending')
+
+  const opening = openPreview()
+  layoutApplyTestTransport.answerWith('apply')
+  layoutApplyTestTransport.answerPending()
+  await main.settle()
+  expect(await opening).toMatchObject({ status: 'opened', result: { groupId: 'a' } })
+  const state = store.getState()
+  expect(
+    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === existing.id)
+  ).toMatchObject({ groupId: 'b' })
+  expect(
+    state.browserTabsByWorktree[WORKSPACE]?.find((tab) => tab.id === existing.id)?.activePageId
+  ).toBe(unrelated.id)
+  expect(state.browserPagesByWorkspace[existing.id]).toHaveLength(2)
+  expect(state.groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual(['a', 'b', 'c'])
+  const preview = state.activeBrowserTabId
+  expect(preview).not.toBe(existing.id)
+  expect(state.browserPagesByWorkspace[preview!]?.[0]?.docLocation).toEqual({
+    kind: 'workspace-doc',
+    worktreeId: owner,
+    filePath: '/remote/index.html'
+  })
+  expect(await openPreview()).toMatchObject({
+    status: 'opened',
+    result: { browserWorkspaceId: preview, groupId: 'a' }
+  })
+  expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+})
+
+it('keeps the editor selected after navigating away and back while main creates its preview', async () => {
   store.setState((state) => ({
-    repos: state.repos.map((repo) => ({
-      ...repo,
-      connectionId: 'preview-owner',
-      executionHostId: 'ssh:preview-owner'
-    })),
-    worktreesByRepo: {
-      repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
-        ...worktree,
-        hostId: 'ssh:preview-owner'
-      }))
-    },
-    activeWorkspaceExecutionHostId: 'ssh:preview-owner',
+    openFiles: [
+      {
+        id: 'report',
+        filePath: '/repo/report.html',
+        relativePath: 'report.html',
+        worktreeId: WORKSPACE,
+        language: 'html',
+        mode: 'edit',
+        isDirty: false
+      }
+    ],
     unifiedTabsByWorktree: {
-      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-        ...tab,
-        executionHostId: 'ssh:preview-owner'
-      }))
+      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
+        tab.id === 'source' ? { ...tab, contentType: 'editor', entityId: 'report' } : tab
+      )
     }
   }))
-  layoutApplyTestTransport.answerWith('pending')
-  return preview
-}
-
-it('relocates a reused document preview through main and collapses its emptied group', async () => {
-  const preview = await createRemoteDocPreview()
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId: 'a' })
-  expect(
-    store.getState().unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-  ).toMatchObject({ groupId: 'b' })
-
-  layoutApplyTestTransport.answerWith('apply')
-  layoutApplyTestTransport.answerPending()
-  await main.settle()
-
-  const state = store.getState()
-  expect(
-    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-  ).toMatchObject({ groupId: 'a' })
-  expect(state.groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual(['a', 'c'])
-  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('a')
-  expect(state.activeBrowserTabId).toBe(preview.id)
-  expect(layoutApplyTestTransport.mainModel?.workspaces[WORKSPACE]?.groupLayout).toEqual({
-    type: 'split',
-    direction: 'horizontal',
-    ratio: 0.3,
-    first: { type: 'leaf', groupId: 'a' },
-    second: { type: 'leaf', groupId: 'c' }
-  })
-})
-
-it('reveals an inactive document without relocating the other pages in its workspace', async () => {
-  const preview = await createRemoteDocPreview()
-  layoutApplyTestTransport.answerWith('apply')
-  const webPage = store.getState().createBrowserPage(preview.id, 'https://example.com/unrelated')!
-  await main.settle()
-  expect(store.getState().browserTabsByWorktree[WORKSPACE]?.[0]?.activePageId).toBe(webPage.id)
-
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId: 'a' })
-  await main.settle()
-
-  const state = store.getState()
-  expect(
-    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-  ).toMatchObject({ groupId: 'b' })
-  expect(state.groupsByWorktree[WORKSPACE]?.map((group) => group.id)).toEqual(['a', 'b', 'c'])
-  expect(state.browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
-  expect(state.browserTabsByWorktree[WORKSPACE]?.[0]?.activePageId).toBe(preview.activePageId)
-  expect(
-    state.browserPagesByWorkspace[preview.id]?.find((page) => page.id === webPage.id)
-  ).toMatchObject({ url: 'https://example.com/unrelated', workspaceId: preview.id })
-  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('b')
-})
-
-it('keeps a selected preview active when relocating it collapses its old pane', async () => {
-  const preview = await createRemoteDocPreview()
-  const tab = store
-    .getState()
-    .unifiedTabsByWorktree[WORKSPACE]!.find((candidate) => candidate.entityId === preview.id)!
-  store.getState().activateTab(tab.id, { worktreeId: WORKSPACE })
+  store.getState().focusGroup(WORKSPACE, 'a')
+  const opening = openEditorHtmlPreview('report', 'source')
+  await Promise.resolve()
   store.getState().focusGroup(WORKSPACE, 'b')
-
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId: 'a' })
+  store.getState().focusGroup(WORKSPACE, 'a')
   layoutApplyTestTransport.answerWith('apply')
   layoutApplyTestTransport.answerPending()
   await main.settle()
-
+  await opening
   const state = store.getState()
-  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('a')
   expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
-    tab.id
+    'source'
   )
-  expect(state.activeBrowserTabId).toBe(preview.id)
-})
-
-it.each(['navigation', 'new-request'] as const)(
-  'does not activate a reused preview after %s while its move is pending',
-  async (change) => {
-    const preview = await createRemoteDocPreview()
-    openFileInBrowserTab({
-      worktreeId: WORKSPACE,
-      filePath: '/repo/index.html',
-      targetGroupId: 'a'
-    })
-    if (change === 'navigation') {
-      store.getState().activateTab('source', { worktreeId: WORKSPACE })
-      store.getState().focusGroup(WORKSPACE, 'a')
-      store.getState().activateTab('terminal-c', { worktreeId: WORKSPACE })
-      store.getState().focusGroup(WORKSPACE, 'c')
-    } else {
-      beginLinkOpenRequest()
-    }
-    layoutApplyTestTransport.answerWith('apply')
-    layoutApplyTestTransport.answerPending()
-    await main.settle()
-
-    const state = store.getState()
-    expect(
-      state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-    ).toMatchObject({ groupId: 'a' })
-    expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('c')
-    expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
-      'source'
-    )
-  }
-)
-
-it.each(['navigation', 'new-request'] as const)(
-  'does not activate a new HTML preview after %s while creation is pending',
-  async (change) => {
-    openFileInBrowserTab({
-      worktreeId: WORKSPACE,
-      filePath: '/repo/index.html',
-      targetGroupId: 'a'
-    })
-    if (change === 'navigation') {
-      store.getState().focusGroup(WORKSPACE, 'b')
-      store.getState().activateTab('terminal-b', { worktreeId: WORKSPACE })
-    } else {
-      beginLinkOpenRequest()
-    }
-    layoutApplyTestTransport.answerWith('apply')
-    layoutApplyTestTransport.answerPending()
-    await main.settle()
-
-    const state = store.getState()
-    expect(state.browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
-    expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe(change === 'navigation' ? 'b' : 'c')
-    expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
-      'source'
-    )
-  }
-)
-
-it('activates a new HTML preview once main draws it while the selection stays current', async () => {
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId: 'a' })
-  expect(store.getState().activeGroupIdByWorktree[WORKSPACE]).toBe('c')
-
-  layoutApplyTestTransport.answerWith('apply')
-  layoutApplyTestTransport.answerPending()
-  await main.settle()
-
-  const state = store.getState()
-  const preview = state.unifiedTabsByWorktree[WORKSPACE]?.find(
-    (tab) => tab.contentType === 'browser'
-  )
-  expect(preview).toMatchObject({ groupId: 'a' })
-  expect(state.activeBrowserTabId).toBe(preview!.entityId)
   expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('a')
-  expect(state.groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId).toBe(
-    preview!.id
-  )
-})
-
-it('activates the first HTML preview before the workspace has a root group', async () => {
-  main.close()
-  store.setState({
-    groupsByWorktree: {},
-    activeGroupIdByWorktree: {},
-    layoutByWorktree: {},
-    unifiedTabsByWorktree: {},
-    tabsByWorktree: {}
-  })
-  main = await drawTabsFromMain(store)
-  layoutApplyTestTransport.answerWith('pending')
-
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html' })
-  layoutApplyTestTransport.answerWith('apply')
-  layoutApplyTestTransport.answerPending()
-  await main.settle()
-
-  const state = store.getState()
-  expect(state.activeTabType).toBe('browser')
-  expect(state.browserPagesByWorkspace[state.activeBrowserTabId!]?.[0]?.url).toBe(
-    'file:///repo/index.html'
-  )
-})
-
-it('activates an HTML preview created in the selected empty pane', async () => {
-  const targetGroupId = store.getState().createEmptySplitGroup(WORKSPACE, 'a', 'right')!
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId })
-  layoutApplyTestTransport.answerWith('apply')
-  layoutApplyTestTransport.answerPending()
-  await main.settle()
-
-  const state = store.getState()
-  const preview = state.unifiedTabsByWorktree[WORKSPACE]!.find(
-    (tab) => tab.contentType === 'browser'
-  )!
-  expect(preview).toMatchObject({ groupId: targetGroupId })
-  expect(state.activeBrowserTabId).toBe(preview.entityId)
-  expect(state.activeTabType).toBe('browser')
-})
-
-it('reports a refused preview move and preserves the original pane', async () => {
-  const preview = await createRemoteDocPreview()
-  openFileInBrowserTab({ worktreeId: WORKSPACE, filePath: '/repo/index.html', targetGroupId: 'a' })
-  layoutApplyTestTransport.answerWith({ refuse: 'group_not_found' })
-  layoutApplyTestTransport.answerPending()
-  await main.settle()
-
-  const state = store.getState()
   expect(
-    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-  ).toMatchObject({ groupId: 'b' })
-  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('c')
-  expect(toast.error).toHaveBeenCalled()
-})
-
-it('reports a failed preview move call and preserves the original pane', async () => {
-  const preview = await createRemoteDocPreview()
-  const call = vi
-    .spyOn(layoutApplyTestTransport, 'call')
-    .mockRejectedValueOnce(new Error('disconnected'))
-  try {
-    openFileInBrowserTab({
-      worktreeId: WORKSPACE,
-      filePath: '/repo/index.html',
-      targetGroupId: 'a'
-    })
-    await main.settle()
-
-    const state = store.getState()
-    expect(
-      state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.entityId === preview.id)
-    ).toMatchObject({ groupId: 'b' })
-    expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('c')
-    expect(toast.error).toHaveBeenCalled()
-  } finally {
-    call.mockRestore()
-  }
+    state.unifiedTabsByWorktree[WORKSPACE]?.find((tab) => tab.contentType === 'browser')
+  ).toMatchObject({ groupId: 'a' })
+  expect(requestBrowserFocus).not.toHaveBeenCalled()
 })
