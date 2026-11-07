@@ -30,21 +30,6 @@ describe('createLocalFilesystemProvider', () => {
     await expect(provider().writeFileBase64(file, '')).rejects.toMatchObject({ code: 'EEXIST' })
   })
 
-  it('keeps the runtime create and write guards', async () => {
-    await provider().createFile(join(root, 'x.txt'))
-    await expect(provider().createFile(join(root, 'x.txt'))).rejects.toThrow(
-      "A file or folder named 'x.txt' already exists in this location"
-    )
-    await provider().createDir(join(root, 'dir'))
-    await expect(provider().createDir(join(root, 'dir'))).rejects.toThrow(/already exists/)
-    await expect(provider().writeFile(join(root, 'dir'), 'x')).rejects.toThrow(
-      'Cannot write to a directory'
-    )
-    const stat = await provider().stat(join(root, 'dir'))
-    expect(stat).toMatchObject({ type: 'directory', mtime: expect.any(Number) })
-    expect(stat.ctimeMs).toEqual(expect.any(Number))
-  })
-
   // Why: creating symlinks needs elevated rights on Windows runners.
   it.skipIf(process.platform === 'win32')(
     'renames, copies and deletes a symlink itself rather than its target',

@@ -14,6 +14,7 @@ import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { OrcaQueryProvider } from '../src/query/orca-query-provider'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
 import {
@@ -33,6 +34,7 @@ import { SideRailProvider } from '../src/layout/side-rail'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
+import { startDeviceStore } from '../src/device-store/device-store'
 
 export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
 
@@ -177,64 +179,67 @@ export default function RootLayout() {
     await Promise.all([appearanceReady, languageReady])
     // Let the language switch commit before revealing the first frame.
     await new Promise((resolve) => requestAnimationFrame(resolve))
-    await SplashScreen.hideAsync()
+    // The device store starts once the splash is gone, whether or not hiding it succeeded.
+    await SplashScreen.hideAsync().finally(startDeviceStore)
   }, [])
 
   return (
     <RpcClientProvider>
-      <View style={styles.root} onLayout={onNavigatorLayout}>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-        <SideRailProvider>
-          <SideSafeArea>
-            <Stack
-              screenOptions={{
-                headerStyle: { backgroundColor: colors.bgPanel },
-                headerTintColor: colors.textPrimary,
-                headerTitleStyle: { fontSize: 16, fontWeight: '600' },
-                contentStyle: { backgroundColor: colors.bgBase },
-                headerShadowVisible: false
-                // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
-              }}
-            >
-              <Stack.Screen
-                name="index"
-                options={{
-                  headerShown: false,
-                  headerTitle: () => <OrcaLogo size={22} />
+      <OrcaQueryProvider>
+        <View style={styles.root} onLayout={onNavigatorLayout}>
+          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <SideRailProvider>
+            <SideSafeArea>
+              <Stack
+                screenOptions={{
+                  headerStyle: { backgroundColor: colors.bgPanel },
+                  headerTintColor: colors.textPrimary,
+                  headerTitleStyle: { fontSize: 16, fontWeight: '600' },
+                  contentStyle: { backgroundColor: colors.bgBase },
+                  headerShadowVisible: false
+                  // Leave orientation unset: react-native-screens overrides rotation lock even for default; Android manifest fullUser honors the user’s setting.
                 }}
-              />
-              <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
-              <Stack.Screen name="pair" options={{ headerShown: false }} />
-              <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="mobile-onboarding"
-                options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
-              />
-              <Stack.Screen name="settings" options={{ headerShown: false }} />
-              <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
-              <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
-              <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
-              <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
-              <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
-              <Stack.Screen name="notifications" options={{ headerShown: false }} />
-              <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
-              <Stack.Screen name="connection-log" options={{ headerShown: false }} />
-              <Stack.Screen name="about" options={{ headerShown: false }} />
-              <Stack.Screen name="h" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="new-workspace"
-                options={{
-                  headerShown: false,
-                  // Draws nothing of its own: the drawer is the page's, over Home.
-                  presentation: 'transparentModal',
-                  animation: 'none',
-                  contentStyle: { backgroundColor: 'transparent' }
-                }}
-              />
-            </Stack>
-          </SideSafeArea>
-        </SideRailProvider>
-      </View>
+              >
+                <Stack.Screen
+                  name="index"
+                  options={{
+                    headerShown: false,
+                    headerTitle: () => <OrcaLogo size={22} />
+                  }}
+                />
+                <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
+                <Stack.Screen name="pair" options={{ headerShown: false }} />
+                <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="mobile-onboarding"
+                  options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+                />
+                <Stack.Screen name="settings" options={{ headerShown: false }} />
+                <Stack.Screen name="appearance-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="browser-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="voice-settings" options={{ headerShown: false }} />
+                <Stack.Screen name="notifications" options={{ headerShown: false }} />
+                <Stack.Screen name="troubleshoot" options={{ headerShown: false }} />
+                <Stack.Screen name="connection-log" options={{ headerShown: false }} />
+                <Stack.Screen name="about" options={{ headerShown: false }} />
+                <Stack.Screen name="h" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="new-workspace"
+                  options={{
+                    headerShown: false,
+                    // Draws nothing of its own: the drawer is the page's, over Home.
+                    presentation: 'transparentModal',
+                    animation: 'none',
+                    contentStyle: { backgroundColor: 'transparent' }
+                  }}
+                />
+              </Stack>
+            </SideSafeArea>
+          </SideRailProvider>
+        </View>
+      </OrcaQueryProvider>
     </RpcClientProvider>
   )
 }

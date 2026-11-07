@@ -24,6 +24,21 @@ class MobileWebShellLoadStateTest {
     }
   }
 
+  // A prop update on the dead view must not turn a low-memory kill into a crash that spends the JS remount budget.
+  @Test
+  fun `reports a dead renderer again with the facts of the original loss`() {
+    val machine = MobileWebShellLoadStateMachine()
+    val lost = mapOf(
+      "state" to "failed",
+      "reason" to "render-process-gone",
+      "background" to true,
+      "crashed" to false
+    )
+    assertEquals(lost, machine.rendererGone(background = true, crashed = false)?.toPayload())
+    machine.reset()
+    assertEquals(lost, machine.rendererStillGone()?.toPayload())
+  }
+
   @Test
   fun `hears a document only between its commit and the end of that load`() {
     val machine = MobileWebShellLoadStateMachine()

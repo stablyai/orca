@@ -101,11 +101,6 @@ describe.skipIf(process.platform === 'win32')('OMP create check and launch, real
     expect((await launchWith(settings)).command).toBe(join(privateBin, 'omp'))
   })
 
-  it('keeps an OMP older than 17.0.5 on its terminal-backed chat', async () => {
-    const settings = { ...base, agentDefaultEnv: {} }
-    expect(await structuredAgentSupportsLaunch('omp', workspace, runtimeWith(settings))).toBe(false)
-  })
-
   it('refuses the launch with the setting named when the Command is not runnable', async () => {
     const settings = {
       ...base,

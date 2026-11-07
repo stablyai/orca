@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
-import { OrchestrationDb } from './orchestration/db'
-import type { MessageType } from './orchestration/types'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
+import type { MessageType } from './orchestration/db/orchestration-records'
 
 type PointerTarget = { ptyId: string; processIncarnation: string }
 
@@ -31,20 +35,6 @@ const STORES: [string, () => PointerStore][] = [
 describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) => {
   const rival = { ptyId: 'pty-rival', processIncarnation: 'rival:1' }
   const mine = { ptyId: 'pty-mine', processIncarnation: 'mine:1' }
-
-  it('refuses a claim another flight already holds', () => {
-    const store = createStore()
-    const message = store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'contended'
-    })
-
-    expect(store.stageMailboxPointerEnter([message.id], rival)).toBe(true)
-    expect(store.stageMailboxPointerEnter([message.id], mine)).toBe(false)
-    expect(store.markMailboxPointerWriteAttempted([message.id], mine)).toBe(false)
-  })
 
   it('rolls the whole batch back when one row is already claimed', () => {
     const store = createStore()

@@ -4,7 +4,7 @@ import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-acti
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
-import { isXtermHelperTextarea } from '../terminal-pane/regular-terminal-focus-ownership'
+import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,

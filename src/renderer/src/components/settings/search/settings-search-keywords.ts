@@ -1,4 +1,5 @@
 import { i18n, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SearchKeywordSpec = {
   key: string
@@ -13,23 +14,24 @@ export type SearchKeywordSpec = {
 export function translateSearchKeyword(
   key: string,
   fallback: string,
-  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>
+  options?: Omit<SearchKeywordSpec, 'key' | 'fallback'>,
+  t: Translate = translate
 ): string[] {
   if (options?.englishOnly || i18n.language === 'en') {
     return uniqueKeywords([fallback, ...(options?.aliases ?? [])])
   }
 
-  const localized = translate(key, fallback)
+  const localized = t(key, fallback)
   return uniqueKeywords([localized, fallback, ...(options?.aliases ?? [])])
 }
 
-export function searchKeywords(terms: (string | SearchKeywordSpec)[]): string[] {
+export function searchKeywords(terms: (string | SearchKeywordSpec)[], t?: Translate): string[] {
   return uniqueKeywords(
     terms.flatMap((term) => {
       if (typeof term === 'string') {
         return [term]
       }
-      return translateSearchKeyword(term.key, term.fallback, term)
+      return translateSearchKeyword(term.key, term.fallback, term, t)
     })
   )
 }

@@ -8,8 +8,8 @@ import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layo
 import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
 import { WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { GIT, sweptAtStartup } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,
@@ -62,7 +62,7 @@ describe('the window shows the same session before and after the shared Loader r
     expect(view[`${GIT} active terminal`]).toBe('tab-a')
   })
 
-  it('restores the terminals of a session from before the tab bar, dropping its file tabs', async () => {
+  it('restores terminals and saved edit tabs from a session before the tab bar', async () => {
     const profile = PROFILES.find(
       (entry) => entry.name === 'session from before the tab bar, with an open file'
     )!
@@ -71,7 +71,7 @@ describe('the window shows the same session before and after the shared Loader r
         { hostId: profile.hostId, session: profile.build() }
       ])
     )
-    expect(view[`${GIT} group 0 tabs`]).toEqual(['tab-a', 'tab-b'])
-    expect(view).not.toHaveProperty([`${GIT} tab /Users/dev/orca/src/app.ts`])
+    expect(view[`${GIT} group 0 tabs`]).toEqual(['/Users/dev/orca/src/app.ts', 'tab-a', 'tab-b'])
+    expect(view).toHaveProperty([`${GIT} tab /Users/dev/orca/src/app.ts`])
   })
 })

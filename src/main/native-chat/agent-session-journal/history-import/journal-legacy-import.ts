@@ -1,4 +1,4 @@
-import { createImportedForkTip, observeOmpForkTip } from '../imported-fork-tip'
+import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   adoptedTranscriptSourceObserver,
@@ -14,15 +14,12 @@ import type { AgentJournalItemBody } from '../../../../shared/agent-session/jour
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from '../../session-file-resolver'
-import { decodeClaudeTranscriptLine } from '../../transcript-line-decoders-claude'
-import { decodeCodexTranscriptLine } from '../../transcript-line-decoders-codex'
-import { decodeGrokTranscriptLine } from '../../transcript-line-decoders-grok'
-import { decodeOmpTranscriptLine } from '../../transcript-line-decoders-omp'
-import { readLegacyImportTranscript } from './journal-legacy-transcript-stream'
+import { readLegacyImportTranscript, TRANSCRIPT_DECODERS } from './journal-legacy-transcript-stream'
 import { readOpenCodeNativeChatTranscriptFull } from '../../transcript-opencode'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { createNewestItemWindow } from './journal-newest-item-window'
+import { createCodexHistoryCollector } from './journal-codex-history'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import {
   boundLegacyImportBlock,
@@ -205,14 +202,6 @@ function replacementItem(
   }
 }
 
-const TRANSCRIPT_DECODERS = {
-  claude: decodeClaudeTranscriptLine,
-  codex: (line: string, fallbackId: string) =>
-    decodeCodexTranscriptLine(line, fallbackId, { historyImport: true }),
-  grok: decodeGrokTranscriptLine,
-  omp: decodeOmpTranscriptLine
-} as const
-
 /** Bound during decode so memory follows retained history rather than source-file size. */
 async function decodeReplacementItems(input: {
   filePath: string
@@ -241,7 +230,11 @@ async function decodeReplacementItems(input: {
   })
   const toItem = (message: NativeChatMessage, identity: AgentJournalItemIdentity) =>
     replacementItem(message, identity, input.limits)
-  const retained = createNewestItemWindow(MAX_LEGACY_IMPORT_RETAINED_BYTES)
+  const retained =
+    input.transcriptAgent === 'codex'
+      ? createCodexHistoryCollector(input.sessionId, input.limits, MAX_LEGACY_IMPORT_RETAINED_BYTES)
+      : createNewestItemWindow(MAX_LEGACY_IMPORT_RETAINED_BYTES)
+  let paginated = false
   const pi =
     input.agent === 'pi'
       ? createPiTranscriptCollector(toItem, (line, lineIndex) => tracker.identify(line, lineIndex))
@@ -258,6 +251,9 @@ async function decodeReplacementItems(input: {
       (line, fallbackId, recordId, selected = true) => {
         if (selected) {
           source?.observe(line)
+        }
+        if (paginated) {
+          return null
         }
         const currentLineIndex = lineIndex++
         if (pi) {
@@ -281,7 +277,13 @@ async function decodeReplacementItems(input: {
           observeOmpForkTip(forkTip, line, tracker.identify(line, currentLineIndex))
         }
         return null
-      }
+      },
+      'record' in retained
+        ? (descriptor) => {
+            paginated = descriptor.paginated
+            retained.record(descriptor)
+          }
+        : undefined
     )
     if (consumedBytes > 0) {
       await source?.validate()

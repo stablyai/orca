@@ -20,6 +20,7 @@ import {
 import { AGENT_DEFAULT_SURFACE_SECTION_ID, AGENTS_INSTALLED_SECTION_ID } from '../agents-search'
 import { Card, CardContent } from '../../../ui/card'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { Button } from '../../../ui/button'
 import {
   agentsKeepingOwnSurface,
@@ -240,55 +241,57 @@ export function AgentDefaultSurfaceSection({
     )
   }
   return (
-    <section id={AGENT_DEFAULT_SURFACE_SECTION_ID} className="@container scroll-mt-8">
-      <h3 className="text-lg font-semibold tracking-tight">{title}</h3>
-      <p className="mt-1 text-xs text-muted-foreground">
-        {translate(
+    <div id={AGENT_DEFAULT_SURFACE_SECTION_ID} className="@container scroll-mt-8">
+      <SettingsGroup
+        title={title}
+        description={translate(
           'settings.agents.defaultSurfaceDescription',
           'The default for agents on this computer.'
         )}
-      </p>
-      <div
-        role="radiogroup"
-        aria-label={title}
-        aria-busy={pending}
-        className="mt-3.5 grid gap-3.5 @3xl:grid-cols-2"
+        bodyClassName="py-4"
       >
-        <SurfaceTile
-          name={name}
-          pending={pending}
-          checked={surface === 'chat'}
-          title={translate('settings.agents.defaultOpensAsChat', 'Chat')}
-          description={translate(
-            'settings.agents.defaultSurfaceChatDescription',
-            'Rich messages, visuals and images.'
-          )}
-          preview={<ChatSurfacePreview />}
-          onSelect={() => choose('chat')}
-        />
-        <SurfaceTile
-          name={name}
-          pending={pending}
-          checked={surface === 'terminal'}
-          title={translate('settings.agents.defaultSurfaceTerminal', 'Terminal')}
-          description={translate(
-            'settings.agents.defaultSurfaceTerminalDescription',
-            'Each agent’s own CLI.'
-          )}
-          preview={<TerminalSurfacePreview settings={settings} />}
-          onSelect={() => choose('terminal')}
-        />
-      </div>
-      <div className="mt-3 flex justify-end">
-        <button
-          type="button"
-          onClick={showInstalledList}
-          className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        <div
+          role="radiogroup"
+          aria-label={title}
+          aria-busy={pending}
+          className="grid gap-3.5 @3xl:grid-cols-2"
         >
-          {translate('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
-          <ChevronRight className="size-3.5" />
-        </button>
-      </div>
-    </section>
+          <SurfaceTile
+            name={name}
+            pending={pending}
+            checked={surface === 'chat'}
+            title={translate('settings.agents.defaultOpensAsChat', 'Chat')}
+            description={translate(
+              'settings.agents.defaultSurfaceChatDescription',
+              'Rich messages, visuals and images.'
+            )}
+            preview={<ChatSurfacePreview />}
+            onSelect={() => choose('chat')}
+          />
+          <SurfaceTile
+            name={name}
+            pending={pending}
+            checked={surface === 'terminal'}
+            title={translate('settings.agents.defaultSurfaceTerminal', 'Terminal')}
+            description={translate(
+              'settings.agents.defaultSurfaceTerminalDescription',
+              'Each agent’s own CLI.'
+            )}
+            preview={<TerminalSurfacePreview settings={settings} />}
+            onSelect={() => choose('terminal')}
+          />
+        </div>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={showInstalledList}
+            className="inline-flex items-center gap-0.5 rounded-sm text-[13px] font-medium underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {translate('settings.agents.defaultSurfacePerAgent', 'Choose per agent')}
+            <ChevronRight className="size-3.5" />
+          </button>
+        </div>
+      </SettingsGroup>
+    </div>
   )
 }

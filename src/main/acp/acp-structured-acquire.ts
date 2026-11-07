@@ -23,6 +23,7 @@ import { acpLaneChildWorkDelivery } from './acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
+import { acpLaunchPermissionModes } from './acp-launch-permission-modes'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
 import { AcpLoadHistory } from './history/acp-history-replay'
 import { asReattachHistory, routeAcpSessionEvent } from './acp-structured-session'
@@ -50,15 +51,14 @@ export async function acquireAcpStructuredSession(input: {
   session: AcpStructuredChild
 }> {
   const { acquire, deps, generation } = input
-  const { spec } = deps
-  const agentName = acpAgentName(spec.agent)
+  const agentName = acpAgentName(deps.spec.agent)
   const logger = deps.logger ?? createStructuredAgentSessionLogger()
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const events = acquire.events
   const sink = events ? providerTimelineSink(events) : null
   if (!sink) {
-    throw new AgentSessionPreSpawnError(new Error(`${spec.agent} chats need a journal sink`))
+    throw new AgentSessionPreSpawnError(new Error(`${deps.spec.agent} chats need a journal sink`))
   }
   const closedBeforeSpawn = () => {
     if (input.abandoned()) {
@@ -67,6 +67,8 @@ export async function acquireAcpStructuredSession(input: {
   }
   closedBeforeSpawn()
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
+  // The chat's account home pins its backend.
+  const { spec } = launch
   let session: AcpStructuredChild | null = null
   // Use a slot so closure writes do not conflict with control-flow narrowing.
   const slot: {
@@ -74,7 +76,8 @@ export async function acquireAcpStructuredSession(input: {
     reattaching: boolean
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
-  const options = new AcpStructuredOptions(launch.spec.dialect)
+  const options = new AcpStructuredOptions(spec.dialect)
+  const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
     () => isAcpReadySession(session) && session.turns?.acceptsRequests === true
@@ -180,7 +183,7 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          reportedOptions: options.observedCurrent(permissionModes),
           catalogListing: { models: options.read().models }
         })
       }
@@ -248,6 +251,7 @@ export async function acquireAcpStructuredSession(input: {
     fence: acquire.fence,
     acquisitionGeneration: generation,
     spec,
+    permissionModes,
     connection,
     lane: null,
     turns: null,

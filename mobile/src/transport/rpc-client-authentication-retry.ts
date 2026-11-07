@@ -1,6 +1,8 @@
 import { redactSocketEndpoint } from './socket-event-debug'
 
 const AUTH_RETRY_BUDGET = 3
+// Pending requests reject with this once the host refuses the credential.
+export const AUTH_REJECTED = 'Unauthorized — pairing may be revoked'
 
 type AuthenticationRetryOptions = {
   endpoint: string

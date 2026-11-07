@@ -33,7 +33,10 @@ async function preparePairedClient(
   testInfo: TestInfo,
   testRepoPath: string
 ): Promise<PreparedPairedClient> {
-  const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence')
+  // The client-hosted intro tour opens beside the address bar and covers its suggestions.
+  const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence', {
+    seenContextualTourIds: ['client-hosted-browser']
+  })
   try {
     // Use workstation width so split-preview document chips retain clickable pixels under CI.
     await client.page.setViewportSize({ width: 1600, height: 900 })

@@ -1,6 +1,7 @@
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-health'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** The WSL liveness verdict decides health except once the server itself answered. */
 export function getWslHostRowHealth(
@@ -24,12 +25,12 @@ export function getWslHostRowHealth(
   }
 }
 
-export function getWslHostStatusLabel(status: WslHostStatus | undefined): string | null {
+export function getWslHostStatusLabel(
+  status: WslHostStatus | undefined,
+  t: Translate = translate
+): string | null {
   if (status?.removalPending) {
-    return translate(
-      'auto.components.sidebar.wslHostRowStatus.removalPending',
-      'Removal didn’t finish'
-    )
+    return t('auto.components.sidebar.wslHostRowStatus.removalPending', 'Removal didn’t finish')
   }
   switch (status?.state) {
     case undefined:
@@ -37,23 +38,26 @@ export function getWslHostStatusLabel(status: WslHostStatus | undefined): string
     case 'closed':
       return null
     case 'connecting':
-      return translate('auto.components.sidebar.wslHostRowStatus.connecting', 'Starting')
+      return t('auto.components.sidebar.wslHostRowStatus.connecting', 'Starting')
     case 'reconnecting':
-      return translate('auto.components.sidebar.wslHostRowStatus.reconnecting', 'Reconnecting')
+      return t('auto.components.sidebar.wslHostRowStatus.reconnecting', 'Reconnecting')
     case 'distro-stopped':
-      return translate('auto.components.sidebar.wslHostRowStatus.distroStopped', 'Distro stopped')
+      return t('auto.components.sidebar.wslHostRowStatus.distroStopped', 'Distro stopped')
     case 'unverifiable':
-      return translate('auto.components.sidebar.wslHostRowStatus.unverifiable', 'Can’t verify')
+      return t('auto.components.sidebar.wslHostRowStatus.unverifiable', 'Can’t verify')
     case 'idle':
-      return translate('auto.components.sidebar.wslHostRowStatus.idle', 'Idle')
+      return t('auto.components.sidebar.wslHostRowStatus.idle', 'Idle')
     case 'failed':
-      return translate('auto.components.sidebar.wslHostRowStatus.failed', 'Failed to start')
+      return t('auto.components.sidebar.wslHostRowStatus.failed', 'Failed to start')
   }
 }
 
-export function getWslHostRowDetail(status: WslHostStatus | undefined): string {
-  const kind = translate('auto.components.sidebar.wslHostRowStatus.kind', 'WSL distro')
-  const label = getWslHostStatusLabel(status)
+export function getWslHostRowDetail(
+  status: WslHostStatus | undefined,
+  t: Translate = translate
+): string {
+  const kind = t('auto.components.sidebar.wslHostRowStatus.kind', 'WSL distro')
+  const label = getWslHostStatusLabel(status, t)
   return label ? `${kind} · ${label}` : kind
 }
 
@@ -68,8 +72,8 @@ export function getWslHostsTurnOnLabel(): string {
   return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
-export function getWslHostRowTurnedOffDetail(): string {
-  return translate(
+export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.turnedOffShort',
     'Turned off in Settings → Experimental'
   )
@@ -97,8 +101,8 @@ export function getWslHostServerFilesMissingLabel(): string {
   )
 }
 
-export function getWslHostRowServerFilesMissingDetail(): string {
-  return translate(
+export function getWslHostRowServerFilesMissingDetail(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.serverFilesMissingShort',
     'This build can’t run WSL hosts'
   )

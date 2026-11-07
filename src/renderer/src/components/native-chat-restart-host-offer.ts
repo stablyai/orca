@@ -1,5 +1,5 @@
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'

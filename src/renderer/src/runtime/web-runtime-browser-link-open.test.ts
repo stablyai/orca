@@ -1,23 +1,28 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
-import '../store/slices/store-test-helpers'
+import '../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import '../../../shared/session-tabs-runtime-capabilities'
 import '../../../shared/protocol-version'
-import { canOfferHttpLinkGroupAction } from '../lib/http-link-in-group-availability'
+import { canOfferHttpLinkGroupAction } from '../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import { useAppStore } from '../store'
-import { openWorkspaceBrowserTabForLink } from '../lib/workspace-browser-tab-open'
-import * as workspaceBrowserTabOpen from '../lib/workspace-browser-tab-open'
-import { openHttpLink } from '../lib/http-link-routing'
+import { openWorkspaceBrowserTabForLink } from '../lib/browser/workspace/workspace-browser-tab-open'
+import * as workspaceBrowserTabOpen from '../lib/browser/workspace/workspace-browser-tab-open'
+import { openHttpLink } from '../lib/browser/navigation/http-link-routing'
 import { captureLinkOpenIntent } from '../lib/link-open-intent'
 import { beginLinkOpenRequest } from '../lib/link-open-request'
-import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
-import { resetWebSessionTabsSyncTestState, ENV, WT } from './web-session-tabs-sync-test-harness'
+import {
+  resetWebSessionTabsSyncTestState,
+  ENV,
+  WT
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   G1,
   G2,

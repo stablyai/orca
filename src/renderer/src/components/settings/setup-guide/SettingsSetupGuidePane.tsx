@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   getFeatureWallSetupSteps,
   getFirstIncompleteFeatureWallSetupStepId
@@ -9,7 +9,6 @@ import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progre
 
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
-  const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
   const progress = useSettingsSetupGuideFullProgress(
@@ -17,31 +16,14 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     orchestrationSkillInstalled,
     browserUseSkillInstalled
   )
-  const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
-    getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
-  )
+  const [userSelectedStepId, setUserSelectedStepId] = useState<FeatureWallSetupStepId | null>(null)
+  // Follow the first unfinished step until the user picks one.
+  const activeStepId =
+    userSelectedStepId ?? getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
-  useEffect(() => {
-    if (userSelectedStep) {
-      return
-    }
-    setActiveStepId(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone))
-  }, [progress.stepDone, userSelectedStep])
-
-  useEffect(() => {
-    if (!activeStep || userSelectedStep || !progress.stepDone[activeStep.id]) {
-      return
-    }
-    const nextUnfinishedStepId = getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
-    if (nextUnfinishedStepId !== activeStep.id) {
-      setActiveStepId(nextUnfinishedStepId)
-    }
-  }, [activeStep, progress.stepDone, userSelectedStep])
-
   const handleSelectStep = (id: FeatureWallSetupStepId): void => {
-    setUserSelectedStep(true)
-    setActiveStepId(id)
+    setUserSelectedStepId(id)
   }
 
   return (

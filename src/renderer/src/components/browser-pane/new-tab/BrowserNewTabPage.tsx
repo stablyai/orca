@@ -3,8 +3,12 @@ import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
-import { prepareBrowserHistoryEntries, rankBrowserTopSites } from '@/lib/browser-history-match'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import {
+  prepareBrowserHistoryEntries,
+  rankBrowserTopSites
+} from '@/lib/browser/history/browser-history-match'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
 import type { Repo } from '../../../../../shared/repo-types'

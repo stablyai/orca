@@ -188,3 +188,39 @@ export const PluginShotReplayParams = z.object({
   colorScheme: z.enum(['light', 'dark']).optional(),
   width: z.number().int().min(PLUGIN_SHOT_MIN_WIDTH).max(PLUGIN_SHOT_MAX_WIDTH).optional()
 })
+
+// Why raw strings: the host parses Git inputs and catalog names so every client reads them alike.
+const installInputParam = z.string().trim().min(1).max(4096)
+
+export const PluginInstallParams = z.object({
+  source: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('catalog'),
+      pluginKey: pluginKeyParam,
+      catalog: installInputParam.optional()
+    }),
+    z.object({ kind: z.literal('git'), input: installInputParam }),
+    z.object({ kind: z.literal('local-path'), path: devFolderPathParam })
+  ]),
+  approvalFingerprint: approvalFingerprintParam
+})
+
+export const PluginUpdateParams = z
+  .object({
+    pluginKey: pluginKeyParam.optional(),
+    all: z.literal(true).optional(),
+    approvalFingerprint: approvalFingerprintParam
+  })
+  .refine((params) => (params.pluginKey === undefined) !== (params.all === undefined), {
+    message: 'pass exactly one of pluginKey or all'
+  })
+
+export const PluginUninstallParams = z.object({ pluginKey: pluginKeyParam })
+
+export const PluginCatalogAddParams = z.object({
+  input: installInputParam,
+  ref: installInputParam.optional(),
+  approvalFingerprint: approvalFingerprintParam
+})
+
+export const PluginCatalogRemoveParams = z.object({ catalog: installInputParam })

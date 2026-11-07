@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListScopeSelector } from '../../../../shared/automation-list-scope'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 
@@ -21,12 +21,13 @@ vi.mock('@/store', () => {
 })
 
 // Route desktop scoped lists directly into the generation-aware local fake.
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: unknown) =>
-    listScoped(params as { selector: AutomationListScopeSelector }),
+    listScoped(params as { selector: AutomationListScopeSelector })
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 

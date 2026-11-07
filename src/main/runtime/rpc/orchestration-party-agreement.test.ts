@@ -30,7 +30,7 @@ const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
-vi.mock('../orchestration/canonical-orca-session-id', () => ({
+vi.mock('../orchestration/addressing/session-lineage/canonical-orca-session-id', () => ({
   canonicalOrcaSessionId: (id: string) =>
     id === '5c7e2a94-1d3b-4f68-b9a0-e4c2d6f81b37'
       ? '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'

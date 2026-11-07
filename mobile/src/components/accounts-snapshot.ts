@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { translate } from '../i18n/mobile-i18n'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)

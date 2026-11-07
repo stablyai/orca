@@ -84,6 +84,9 @@ export type BridgeRpcClient = RpcClient &
     notifyExternalLink: (url: string) => boolean
     // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
     callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+    // How many more native calls the page-side cap admits now; a caller that must keep call order checks it
+    // before posting, since a refusal arrives only as a rejected promise.
+    nativeRequestRoom: () => number
     // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
     notifyPagePainted: () => void
     // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
@@ -345,6 +348,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
+    nativeRequestRoom: () => bridgePendingRequestCap(true) - requests.size,
     clearRouteParam: (param, value) =>
       posted({
         v: BRIDGE_PROTOCOL_VERSION,

@@ -4,7 +4,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { type AgentCatalogEntry, AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 function DefaultAgentPill({
   active,
@@ -42,7 +42,8 @@ export function AgentDefaultSetting({
   catalog,
   description,
   onSetDefault,
-  defaultOpensAsChat = false
+  defaultOpensAsChat = false,
+  permissions
 }: {
   defaultAgent: TuiAgent | 'blank' | null
   detectedIds: Set<string> | null
@@ -52,6 +53,7 @@ export function AgentDefaultSetting({
   catalog: AgentCatalogEntry[]
   description: string
   onSetDefault: (agent: TuiAgent | 'blank' | null) => void
+  permissions: React.ReactNode
 }): React.JSX.Element {
   const storedDefaultAgent =
     defaultAgent !== null && defaultAgent !== 'blank'
@@ -63,12 +65,11 @@ export function AgentDefaultSetting({
       : enabledDetectedAgents
 
   return (
-    <section className="space-y-4">
-      <SettingsSubsectionHeader
-        title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
-        description={description}
-      />
-      <div className="flex flex-wrap gap-2">
+    <SettingsGroup
+      title={translate('auto.components.settings.AgentsPane.385212c7a1', 'Default Agent')}
+      description={description}
+    >
+      <div className="flex flex-wrap gap-2 py-4">
         <DefaultAgentPill
           active={defaultAgent === null}
           onClick={() => onSetDefault(defaultAgent === null ? 'blank' : null)}
@@ -101,6 +102,9 @@ export function AgentDefaultSetting({
           )
         })}
       </div>
-    </section>
+      <div data-settings-row="" className="py-3">
+        {permissions}
+      </div>
+    </SettingsGroup>
   )
 }

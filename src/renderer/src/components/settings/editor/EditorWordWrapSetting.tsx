@@ -24,7 +24,7 @@ export function EditorWordWrapSetting({
         'Wrap long lines in file editors instead of requiring horizontal scrolling.'
       )}
       keywords={['editor', 'code', 'word wrap', 'wrap', 'horizontal scroll', 'long lines']}
-      className="flex items-center justify-between gap-4 py-2"
+      className="flex items-center justify-between gap-4 py-3"
     >
       <div className="min-w-0 flex-1 space-y-0.5">
         <Label>

@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { filterTerminalThemeOptions } from './terminal-theme-option-filter'
 import { isSettingsFormOptionQueryTooLarge } from '../../form-controls/settings-form-option-filter'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
@@ -40,6 +40,7 @@ export function ThemePicker({
   onDeleteImportedTheme,
   importedHighlightSignal
 }: ThemePickerProps): React.JSX.Element {
+  const t = useTranslate()
   const importedGroupRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const [highlightImported, setHighlightImported] = useState(false)
@@ -66,19 +67,19 @@ export function ThemePicker({
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
     {
-      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
+      label: t('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
       themes: matchingThemes
         .filter((theme) => theme.group === 'built-in')
         .slice(0, MAX_THEME_RESULTS)
     },
     {
-      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
+      label: t('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
       themes: matchingThemes
         .filter((theme) => theme.group === 'imported')
         .slice(0, MAX_THEME_RESULTS)
     },
     {
-      label: translate('auto.components.settings.SettingsFormControls.plugin_themes', 'Plugins'),
+      label: t('auto.components.settings.SettingsFormControls.plugin_themes', 'Plugins'),
       themes: matchingThemes.filter((theme) => theme.group === 'plugin').slice(0, MAX_THEME_RESULTS)
     }
   ].filter((group) => group.themes.length > 0)
@@ -94,7 +95,7 @@ export function ThemePicker({
         ref={searchInputRef}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.SettingsFormControls.search_terminal_themes',
           'Search terminal themes'
         )}
@@ -102,23 +103,21 @@ export function ThemePicker({
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
           <span>
-            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
+            {t('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
             {selectedThemeLabel}
           </span>
           <span>
-            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
+            {t('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
             {visibleThemeCount}
             {shouldShowThemeQueryLabel
-              ? translate(
+              ? t(
                   'auto.components.settings.SettingsFormControls.c822571b2e',
                   ' matching "{{value0}}"',
                   { value0: themeQuery }
                 )
-              : translate(
-                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
-                  ' of {{value0}}',
-                  { value0: themeOptions.length }
-                )}
+              : t('auto.components.settings.SettingsFormControls.cb330ef7f8', ' of {{value0}}', {
+                  value0: themeOptions.length
+                })}
           </span>
         </div>
         <ScrollArea className="h-64">
@@ -126,10 +125,7 @@ export function ThemePicker({
             {groupedThemes.map((group) => {
               const isImported =
                 group.label ===
-                translate(
-                  'auto.components.settings.SettingsFormControls.imported_themes',
-                  'Imported'
-                )
+                t('auto.components.settings.SettingsFormControls.imported_themes', 'Imported')
               return (
                 <div
                   key={group.label}
@@ -161,12 +157,12 @@ export function ThemePicker({
                           {theme.sourceLabel ? (
                             <span className="block truncate text-[11px] font-normal text-muted-foreground">
                               {theme.group === 'plugin'
-                                ? translate(
+                                ? t(
                                     'auto.components.settings.SettingsFormControls.from_plugin',
                                     'From {{value0}}',
                                     { value0: theme.sourceLabel }
                                   )
-                                : translate(
+                                : t(
                                     'auto.components.settings.SettingsFormControls.imported_from',
                                     'Imported from {{value0}}',
                                     { value0: theme.sourceLabel }
@@ -201,7 +197,7 @@ export function ThemePicker({
                         ) : null}
                         {selectedTheme === theme.value ? (
                           <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                            {translate(
+                            {t(
                               'auto.components.settings.SettingsFormControls.9119fb2268',
                               'Current'
                             )}
@@ -220,7 +216,7 @@ export function ThemePicker({
                                   // The row unmounts with focus inside it; keep keyboard users in the picker.
                                   searchInputRef.current?.focus()
                                 }}
-                                aria-label={translate(
+                                aria-label={t(
                                   'auto.components.settings.SettingsFormControls.delete_imported_theme',
                                   'Delete {{value0}}',
                                   { value0: theme.label }
@@ -230,7 +226,7 @@ export function ThemePicker({
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent side="top" sideOffset={4}>
-                              {translate(
+                              {t(
                                 'auto.components.settings.SettingsFormControls.delete_theme',
                                 'Delete theme'
                               )}
@@ -245,10 +241,7 @@ export function ThemePicker({
             })}
             {visibleThemeCount === 0 ? (
               <div className="px-3 py-6 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
-                  'No themes found.'
-                )}
+                {t('auto.components.settings.SettingsFormControls.ceefb9d7f1', 'No themes found.')}
               </div>
             ) : null}
           </div>

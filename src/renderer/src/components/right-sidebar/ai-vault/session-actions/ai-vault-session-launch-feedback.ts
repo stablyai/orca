@@ -3,7 +3,7 @@ import {
   resolveAiVaultSessionLaunchTarget
 } from './ai-vault-session-launch-target'
 import { toast } from 'sonner'
-import { describeAiVaultResumeFailure } from '@/lib/ai-vault-resume-refusal'
+import { describeAiVaultResumeFailure } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { translate } from '@/i18n/i18n'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'

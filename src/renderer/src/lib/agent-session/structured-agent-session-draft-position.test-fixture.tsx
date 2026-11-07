@@ -4,35 +4,33 @@ import type { createRef } from 'react'
 import {
   NativeChatComposerField,
   type NativeChatComposerFieldProps
-} from '@/components/native-chat/NativeChatComposerField'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
+} from '@/components/native-chat/composer/editor/NativeChatComposerField'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type * as structuredSessionClient from '@/runtime/structured-agent-session-client'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-agent-session-launch-registry'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
-import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
 const rpcMock = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>()
 }))
 export const rpc = rpcMock
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

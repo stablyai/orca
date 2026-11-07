@@ -47,6 +47,12 @@ export function releaseModuleLocation(
   if (tree.exists(named) || !sourceRoot.startsWith('src/')) {
     return named
   }
+  if (named === 'src/main/runtime/rpc/methods/rpc-method-registry.ts') {
+    const legacyRegistry = 'src/main/runtime/rpc/methods/index.ts'
+    if (tree.exists(legacyRegistry)) {
+      return legacyRegistry
+    }
+  }
   const name = posix.basename(named)
   const moved = tree.list(sourceRoot).filter((path) => posix.basename(path) === name)
   return moved.length === 1 ? moved[0]! : named

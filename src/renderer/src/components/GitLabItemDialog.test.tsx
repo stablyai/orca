@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   updateMRReviewers: vi.fn(),
   listLabels: vi.fn()
 }))
-vi.mock('@/runtime/gitlab-owner-api', () => ({ gitLabApiFor: () => api }))
+vi.mock('@/runtime/repository-gitlab/gitlab-owner-api', () => ({ gitLabApiFor: () => api }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 
 function mr(number: number, state: GitLabWorkItem['state'] = 'opened'): GitLabWorkItem {

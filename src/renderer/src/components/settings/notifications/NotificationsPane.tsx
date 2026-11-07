@@ -17,6 +17,7 @@ import {
   sendNotificationSettingsTestNotification
 } from './notification-settings-copy'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type NotificationsPaneProps = {
   settings: GlobalSettings
@@ -28,6 +29,7 @@ export function NotificationsPane({
   settings,
   updateSettings
 }: NotificationsPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
@@ -125,8 +127,8 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<MessageCircleQuestion className="size-4" />}
-        label={translate('notifications.questionsOnly', 'Questions Only')}
-        description={translate(
+        label={t('notifications.questionsOnly', 'Questions Only')}
+        description={t(
           'notifications.questionsOnlyDescription',
           'Only notify when an agent asks a question. Mute permission requests, completed tasks, and terminal bells.'
         )}

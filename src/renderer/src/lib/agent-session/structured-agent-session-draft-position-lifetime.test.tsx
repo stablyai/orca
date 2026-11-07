@@ -9,8 +9,8 @@ import {
   positionInventory,
   startPositionMain
 } from './structured-agent-session-draft-position.test-fixture'
-import * as draftCache from '@/components/native-chat/native-chat-draft-cache'
-import * as draftMemory from '@/components/native-chat/native-chat-composer-draft-memory'
+import * as draftCache from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
+import * as draftMemory from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { seedStructuredAgentLaunchDraft } from './launch/structured-agent-session-launch-draft'
 import { publishedLayoutsOf } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
@@ -18,21 +18,21 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { render, within } from '@testing-library/react'
 import { createRef, StrictMode } from 'react'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
-import { promptEditor } from '@/components/native-chat/native-chat-prompt-editor.test-support'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
+import { promptEditor } from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 
 it

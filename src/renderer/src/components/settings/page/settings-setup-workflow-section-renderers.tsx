@@ -53,6 +53,7 @@ export function renderGeneralSettingsSection(context: SettingsRenderContext): Re
   return (
     <SettingsSection
       id="general"
+      grouped
       title={translate('auto.components.settings.Settings.7807c11c4d', 'General')}
       description={translate(
         'auto.components.settings.Settings.f9b77539fd',
@@ -84,6 +85,7 @@ export function renderIntegrationsSettingsSection(
   return (
     <SettingsSection
       id="integrations"
+      grouped
       title={translate('auto.components.settings.Settings.c9ca101a3b', 'Integrations')}
       description={translate(
         'auto.components.settings.Settings.b07041697f',
@@ -104,6 +106,7 @@ export function renderMobileSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile"
+      grouped
       title={translate('auto.components.settings.Settings.c40dadaac8', 'Mobile')}
       badge="Beta"
       description={translate(
@@ -124,6 +127,7 @@ export function renderAutomationsSettingsSection(
   return (
     <SettingsSection
       id="automations"
+      grouped
       title={translate('auto.components.settings.automations.title', 'Automations')}
       description={translate(
         'auto.components.settings.automations.description',
@@ -143,6 +147,7 @@ export function renderArtifactsSettingsSection(context: SettingsRenderContext): 
   return (
     <SettingsSection
       id="artifacts"
+      grouped
       title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
       badge="Beta"
       description={translate(
@@ -165,6 +170,7 @@ export function renderShareSkillsSettingsSection(
   return (
     <SettingsSection
       id="share-skills"
+      grouped
       title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
       badge="Beta"
       description={translate(
@@ -185,6 +191,7 @@ export function renderSessionHistorySettingsSection(
   return (
     <SettingsSection
       id="session-history"
+      grouped
       title={translate('sessionHistory.settings.title', 'Agent Session Search')}
       description={translate(
         'sessionHistory.settings.description',

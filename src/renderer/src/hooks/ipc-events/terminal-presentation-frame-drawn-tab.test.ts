@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -21,7 +18,9 @@ function testStore(): ReturnType<typeof createTestStore> {
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('../../store', () => ({
   useAppStore: {
     getState: () => testStore().getState(),

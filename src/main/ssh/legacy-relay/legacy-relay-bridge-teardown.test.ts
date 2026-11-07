@@ -59,7 +59,7 @@ vi.stubGlobal('window', {
 
 const registry = await import('./legacy-relay-bridge-registry')
 const { legacyRelayBridgePtyIdForPane } =
-  await import('../../../renderer/src/components/terminal-pane/legacy-relay-bridge-panes')
+  await import('../../../renderer/src/components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes')
 
 let leases: SshRemotePtyLease[]
 let report: Mock<LegacyRelayBridgeHost['report']>

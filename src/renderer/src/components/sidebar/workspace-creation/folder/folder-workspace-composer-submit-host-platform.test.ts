@@ -5,7 +5,7 @@ import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-compos
 
 const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn() }))
 
-vi.mock('@/lib/worktree-activation', async (importOriginal) => {
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })

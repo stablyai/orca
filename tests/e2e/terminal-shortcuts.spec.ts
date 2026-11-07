@@ -728,14 +728,20 @@ test.describe('Terminal Shortcuts', () => {
       await pressAndExpectWrite(orcaPage, electronApp, 'Meta+Delete', '\x0b')
     }
 
+    await orcaPage.evaluate(async () => {
+      await window.__store!.getState().setKeybindingOverride('terminal.clear', ['Mod+Shift+K'])
+    })
     await focusActiveTerminalInput(orcaPage)
-    await orcaPage.keyboard.press(`${mod}+k`)
+    await orcaPage.keyboard.press(`${mod}+Shift+k`)
     await expect
       .poll(async () => (await getTerminalContent(orcaPage)).includes(marker), {
         timeout: 5_000,
-        message: 'Cmd+K did not clear the terminal buffer'
+        message: 'The configured clear shortcut did not clear the terminal buffer'
       })
       .toBe(false)
+    await orcaPage.evaluate(async () => {
+      await window.__store!.getState().resetKeybindingOverride('terminal.clear')
+    })
 
     const panesBeforeSplit = await countVisibleTerminalPanes(orcaPage)
     await focusActiveTerminalInput(orcaPage)

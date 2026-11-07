@@ -11,7 +11,7 @@ import {
   useWslHostServerFilesMissing
 } from '../sidebar/use-wsl-hosts-enabled'
 import { openWslMoveDialog } from './wsl-move-dialog-store'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { wslMoveCatalogCandidates, wslMoveTargetForRepo } from './wsl-move-scope-rows'
 
 export function openWslMoveDialogFor(distro: string, only?: WslMoveRowRef): void {

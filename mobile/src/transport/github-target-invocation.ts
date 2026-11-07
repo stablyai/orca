@@ -1,8 +1,9 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import { rpcResultVariant } from './rpc-operation-result-reader'
 import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RpcResponse } from './types'
+import { readConnectionStatusProbe } from './runtime-status-probe'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../src/shared/github/work-item-target'
 
@@ -11,20 +12,18 @@ export const GITHUB_TARGET_CHECK_TIMED_OUT = 'Timed out confirming the executing
 // The paired desktop relays to the executing server; when only it lacks the check, it is the one to update.
 export const GITHUB_DESKTOP_UPDATE_REQUIRED =
   'Update Orca desktop to edit this item or load its repository options.'
+const authorityStatusSchema = z.looseObject({
+  runtimeId: z.string().optional(),
+  hostDescriptor: z.looseObject({ installationId: z.string() }).optional(),
+  capabilities: z.array(z.string()).optional()
+})
 const statusRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'status.github-target-authority',
     method: 'status.get',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant(
-      'github-authority',
-      z.looseObject({
-        runtimeId: z.string().optional(),
-        hostDescriptor: z.looseObject({ installationId: z.string() }).optional(),
-        capabilities: z.array(z.string()).optional()
-      })
-    )
+    read: rpcResultVariant('github-authority', authorityStatusSchema)
   })
 )
 
@@ -55,6 +54,11 @@ export function captureGitHubInvocation(client: RpcClient, isCurrent: () => bool
     // The check runs before the action is sent, so its failures say what the user can do, not which RPC failed.
     async status(options: SendRequestOptions) {
       assertCurrent()
+      // A direct connection's answering server can't change within one connection, so its proven status stands.
+      const probed = authorityStatusSchema.safeParse(readConnectionStatusProbe(client))
+      if (probed.success) {
+        return probed.data
+      }
       const startedAt = Date.now()
       let reply: RpcResponse
       try {

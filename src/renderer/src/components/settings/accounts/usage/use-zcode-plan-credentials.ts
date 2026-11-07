@@ -7,7 +7,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import {
   callZcodePlanCredentials,
   UsageCredentialsHostOutdatedError
-} from '@/runtime/runtime-usage-credentials-client'
+} from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 import {
   usageCredentialAccessAfterError,
   type UsageCredentialAccess

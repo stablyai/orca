@@ -29,6 +29,23 @@ describe('parseMobileWebShellLoadState', () => {
     expect(parseMobileWebShellLoadState({ state: 'failed' })).toBeNull()
   })
 
+  // Background jetsam and Android low-memory kills must not spend the remount budget a crashing page would.
+  it('marks a renderer loss reclaimed when Orca was off screen or the renderer did not crash', () => {
+    const gone = { state: 'failed', reason: 'render-process-gone' } as const
+    expect(parseMobileWebShellLoadState({ ...gone, background: true })).toEqual({
+      ...gone,
+      reclaimed: true
+    })
+    expect(parseMobileWebShellLoadState({ ...gone, background: false, crashed: false })).toEqual({
+      ...gone,
+      reclaimed: true
+    })
+    expect(parseMobileWebShellLoadState({ ...gone, background: false, crashed: true })).toEqual(
+      gone
+    )
+    expect(parseMobileWebShellLoadState({ ...gone, background: false })).toEqual(gone)
+  })
+
   it('rejects an unknown state, a non-string state, and a non-object payload', () => {
     expect(parseMobileWebShellLoadState({ state: 'loaded' })).toBeNull()
     expect(parseMobileWebShellLoadState({ state: 3 })).toBeNull()

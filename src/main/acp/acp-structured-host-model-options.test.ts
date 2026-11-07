@@ -162,17 +162,21 @@ async function openModels(
     places: state.deliveryOrder['lanes'].get(SESSION)?.places.size ?? 0,
     lanes: state.deliveryOrder['lanes'].size
   })
+  const submissionFor = (id: string) => {
+    const current = journal()
+    return current.submission(current.queuedMessages.get(id)?.consumedAs ?? id)
+  }
   const complete = async (id: string) => {
-    await waitFor(() =>
-      expect(journal().submission(id)?.dispatchState).toMatch(/admitted|accepted/)
-    )
+    await waitFor(() => expect(submissionFor(id)?.dispatchState).toMatch(/admitted|accepted/))
     const frame = framesOf(rig.rig.child(), 'session/prompt').at(-1)!
     const turn = journal().runningTurn()?.turnId
     rig.rig.child().agent.reply(frame, { stopReason: 'end_turn' })
     await rig.rig.settle()
     await rig.host.flushStreamedEvents(SESSION)
     await waitFor(() => expect(journal().runningTurn()?.turnId).not.toBe(turn))
-    expect(structuredAgentSessionHandingOver(journal()).has(id)).toBe(false)
+    expect(
+      structuredAgentSessionHandingOver(journal()).has(submissionFor(id)!.clientMessageId)
+    ).toBe(false)
   }
   const defer = async (path: string | false) => {
     const busy = path === 'busy' ? await send(rig.host, 'busy') : undefined
@@ -215,6 +219,7 @@ async function openModels(
     picks,
     writes,
     complete,
+    submissionFor,
     deliver,
     attach,
     state,
@@ -296,7 +301,9 @@ it.each([10, 100, 'Send', 'rejection'] as const)(
         [first, FLASH],
         [second, PRO]
       ] as const) {
-        expect(rig.journal().submission(id)?.options).toEqual({ model, effort: 'low' })
+        expect(
+          rig.journal().queuedMessages.get(id)?.options ?? rig.submissionFor(id)?.options
+        ).toEqual({ model, effort: 'low' })
         await rig.complete(id)
       }
       expect(

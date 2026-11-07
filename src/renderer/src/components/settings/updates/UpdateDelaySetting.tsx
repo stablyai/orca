@@ -12,7 +12,7 @@ import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/update-status-types'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
 import {
@@ -106,7 +106,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
         'security',
         'supply chain'
       ]}
-      className="space-y-3"
+      className="space-y-3 py-3"
     >
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
