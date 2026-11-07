@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   WORKSPACE_GRID_VIEW_MAX_MEMBERS,
   addWorkspaceGridViewMember,
+  isUnfocusedGridViewMember,
   isWorkspaceGridViewFull,
   removeWorkspaceGridViewMember,
   resolveVisibleWorkspaceIds
@@ -132,5 +133,19 @@ describe('resolveVisibleWorkspaceIds', () => {
         mountableWorkspaceIds: mountable
       })
     ).toEqual([])
+  })
+})
+
+describe('isUnfocusedGridViewMember', () => {
+  it('is true only for a member while another member holds focus', () => {
+    expect(isUnfocusedGridViewMember(['a', 'b'], 'a', 'b')).toBe(true)
+    expect(isUnfocusedGridViewMember(['a', 'b'], 'a', 'a')).toBe(false)
+  })
+
+  it('is false when the grid view is not on screen or the workspace is outside it', () => {
+    expect(isUnfocusedGridViewMember(['a', 'b'], 'c', 'b')).toBe(false)
+    expect(isUnfocusedGridViewMember(['a', 'b'], 'a', 'c')).toBe(false)
+    expect(isUnfocusedGridViewMember(['a', 'b'], null, 'b')).toBe(false)
+    expect(isUnfocusedGridViewMember(['a', 'b'], 'a', undefined)).toBe(false)
   })
 })

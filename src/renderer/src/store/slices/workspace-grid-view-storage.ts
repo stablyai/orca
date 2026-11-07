@@ -12,10 +12,11 @@ export function loadWorkspaceGridViewMemberIds(): readonly string[] {
     if (!Array.isArray(parsed)) {
       return []
     }
-    const ids = [
+    // Why one member is kept: adding the active workspace first saves a one-member list, and the
+    // menu already shows it as a member, so a restart must not drop it.
+    return [
       ...new Set(parsed.filter((id): id is string => typeof id === 'string' && id.length > 0))
     ].slice(0, WORKSPACE_GRID_VIEW_MAX_MEMBERS)
-    return ids.length < 2 ? [] : ids
   } catch {
     return []
   }

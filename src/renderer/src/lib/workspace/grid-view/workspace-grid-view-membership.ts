@@ -46,6 +46,21 @@ export function isWorkspaceGridViewFull(
   return memberIds.filter(isKnownWorkspace).length >= WORKSPACE_GRID_VIEW_MAX_MEMBERS
 }
 
+/** A grid view member on screen while another member holds focus; it must not claim focus itself. */
+export function isUnfocusedGridViewMember(
+  memberIds: readonly string[],
+  activeWorkspaceId: string | null,
+  workspaceId: string | undefined
+): boolean {
+  return (
+    workspaceId !== undefined &&
+    activeWorkspaceId !== null &&
+    workspaceId !== activeWorkspaceId &&
+    memberIds.includes(activeWorkspaceId) &&
+    memberIds.includes(workspaceId)
+  )
+}
+
 /**
  * The workspaces the workbench shows at once: every mountable grid view member while the active
  * workspace is one of them, otherwise just the active workspace.

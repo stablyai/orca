@@ -51,11 +51,20 @@ describe('createWorkspaceGridViewSlice', () => {
     expect(makeStore('a').getState().workspaceGridViewMemberIds).toEqual(['a', 'b', 'c'])
   })
 
-  it('ignores saved grid views that are malformed or too small to show', () => {
+  it('ignores saved grid views that are malformed', () => {
     storage.values.set(STORAGE_KEY, '{not json')
     expect(makeStore('a').getState().workspaceGridViewMemberIds).toEqual([])
-    storage.values.set(STORAGE_KEY, JSON.stringify(['a', 7, 'a']))
+    storage.values.set(STORAGE_KEY, JSON.stringify({ a: 'b' }))
     expect(makeStore('a').getState().workspaceGridViewMemberIds).toEqual([])
+  })
+
+  it('keeps a one-member selection across a restart', () => {
+    const store = makeStore('a')
+    store.getState().addWorkspaceToGridView('a')
+    expect(storage.values.get(STORAGE_KEY)).toBe(JSON.stringify(['a']))
+
+    storage.values.set(STORAGE_KEY, JSON.stringify(['a', 7, 'a']))
+    expect(makeStore('a').getState().workspaceGridViewMemberIds).toEqual(['a'])
   })
 
   it('removes the saved grid view once it drops below two workspaces', () => {

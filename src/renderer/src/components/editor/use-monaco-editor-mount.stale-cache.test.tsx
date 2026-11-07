@@ -16,6 +16,8 @@ vi.mock('@/store', () => ({
     getState: () => ({
       pendingEditorReveal: null,
       pendingEditorFocusRequest: null,
+      workspaceGridViewMemberIds: [],
+      activeWorktreeId: null,
       editorDrafts: {},
       // A sibling wrote 'B' and this tab's baseline moved with it, but its panel cache kept 'A'.
       openFiles: [
