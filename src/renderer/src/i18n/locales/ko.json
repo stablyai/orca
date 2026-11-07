@@ -16729,6 +16729,7 @@
             "appearanceMatchOrca": "Orca와 일치",
             "appearanceLight": "밝게",
             "appearanceDark": "어둡게",
+            "fitWidth": "너비에 맞춤",
             "zoomPercent": "확대/축소 {{value0}}%"
           },
           "GrabConfirmationSheet": {

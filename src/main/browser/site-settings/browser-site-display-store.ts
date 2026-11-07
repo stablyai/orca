@@ -16,6 +16,9 @@ function parseSiteDisplay(value: unknown): BrowserSiteDisplay | null {
   if ('colorScheme' in value && isBrowserSiteColorScheme(value.colorScheme)) {
     display.colorScheme = value.colorScheme
   }
+  if ('fitWidth' in value && value.fitWidth === true) {
+    display.fitWidth = true
+  }
   return Object.keys(display).length > 0 ? display : null
 }
 

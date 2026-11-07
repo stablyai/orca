@@ -44,6 +44,7 @@ import {
 } from './browser-chrome-folded-tools'
 import {
   BrowserToolbarAppearanceSub,
+  BrowserToolbarFitWidthItem,
   BrowserToolbarZoomRow
 } from './browser-toolbar-page-display-items'
 
@@ -65,6 +66,7 @@ type BrowserToolbarMenuDropdownProps = {
   siteDisplay: BrowserPageSiteDisplay | null
   onZoomPage: (direction: BrowserPageZoomDirection) => void
   onSetSiteColorScheme: (colorScheme: BrowserSiteColorScheme | null) => void
+  onSetSiteFitWidth: (fitWidth: boolean) => void
   onOpenSourceFile?: (() => void) | null
   overflow: BrowserChromeOverflowMenuProps
 }
@@ -87,6 +89,7 @@ export function BrowserToolbarMenuDropdown({
   siteDisplay,
   onZoomPage,
   onSetSiteColorScheme,
+  onSetSiteFitWidth,
   onOpenSourceFile = null,
   overflow
 }: BrowserToolbarMenuDropdownProps): React.JSX.Element {
@@ -235,6 +238,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         <BrowserToolbarZoomRow display={siteDisplay} onZoom={onZoomPage} />
+        <BrowserToolbarFitWidthItem display={siteDisplay} onSetFitWidth={onSetSiteFitWidth} />
         <BrowserToolbarAppearanceSub
           browserPageId={browserPageId}
           display={siteDisplay}

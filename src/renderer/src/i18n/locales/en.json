@@ -17806,6 +17806,7 @@
             "appearanceMatchOrca": "Match Orca",
             "appearanceLight": "Light",
             "appearanceDark": "Dark",
+            "fitWidth": "Fit to Width",
             "zoomPercent": "Zoom {{value0}}%"
           },
           "GrabConfirmationSheet": {

@@ -117,6 +117,11 @@ export const browserGuestRegistrationAndDownloadsApi = {
     colorScheme: BrowserSiteColorScheme | null
   }): Promise<BrowserPageSiteDisplay | null> =>
     ipcRenderer.invoke('browser:setPageSiteColorScheme', args),
+  setPageSiteFitWidth: (args: {
+    browserPageId: string
+    fitWidth: boolean
+  }): Promise<BrowserPageSiteDisplay | null> =>
+    ipcRenderer.invoke('browser:setPageSiteFitWidth', args),
   setPageAudioMuted: (args: { browserPageId: string; muted: boolean }): Promise<boolean> =>
     ipcRenderer.invoke('browser:setPageAudioMuted', args),
   reportViewportScrollState: (args: {

@@ -86,6 +86,7 @@ export function BrowserChromeToolbar({
   importControl,
   extensionActions,
   passwordControl,
+  fitWidthControl,
   elementTools,
   markup,
   shareControl,
@@ -109,6 +110,8 @@ export function BrowserChromeToolbar({
   extensionActions?: ((compact: boolean) => React.ReactNode) | null
   /** Saved-password offer beside the address bar; never folded, it only shows after a login. */
   passwordControl?: React.ReactNode
+  /** Page fit-width toggle; never folded, the overflow menu repeats it. */
+  fitWidthControl?: React.ReactNode
   elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
@@ -228,6 +231,7 @@ export function BrowserChromeToolbar({
     >
       {passwordControl}
       {folded.has('import') ? null : importControl?.(folded.has('import-label'))}
+      {fitWidthControl}
 
       {elementTools ? (
         <BrowserChromeElementToolButtons

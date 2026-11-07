@@ -145,6 +145,10 @@ export type BrowserApi = {
     browserPageId: string
     colorScheme: BrowserSiteColorScheme | null
   }) => Promise<BrowserPageSiteDisplay | null>
+  setPageSiteFitWidth: (args: {
+    browserPageId: string
+    fitWidth: boolean
+  }) => Promise<BrowserPageSiteDisplay | null>
   setPageAudioMuted: (args: { browserPageId: string; muted: boolean }) => Promise<boolean>
   reportViewportScrollState?: (args: {
     browserPageId: string

@@ -1,4 +1,4 @@
-import { Minus, Plus, RotateCcw, SunMoon, ZoomIn } from 'lucide-react'
+import { Check, Minus, MoveHorizontal, Plus, RotateCcw, SunMoon, ZoomIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenuItem,
@@ -11,6 +11,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   browserPageZoomLevelToPercent,
   nextBrowserPageZoomLevel,
@@ -111,6 +112,29 @@ export function BrowserToolbarZoomRow({
           <RotateCcw />
         </Button>
       </span>
+    </DropdownMenuItem>
+  )
+}
+
+export function BrowserToolbarFitWidthItem({
+  display,
+  onSetFitWidth
+}: {
+  display: BrowserPageSiteDisplay | null
+  onSetFitWidth: (fitWidth: boolean) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const checked = display?.fitWidth ?? false
+  return (
+    <DropdownMenuItem
+      role="menuitemcheckbox"
+      aria-checked={checked}
+      disabled={!display?.site}
+      onSelect={() => onSetFitWidth(!checked)}
+    >
+      <MoveHorizontal className="mr-2 size-3.5" />
+      {t('auto.components.browser.pane.BrowserToolbarMenu.fitWidth', 'Fit to Width')}
+      {checked && <Check className="ml-auto" />}
     </DropdownMenuItem>
   )
 }
