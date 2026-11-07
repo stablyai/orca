@@ -3,7 +3,6 @@ import AVFoundation
 
 let ON_MIC_DATA_EVENT_NAME = "onMicrophoneData"
 let ON_INPUT_VOLUME_LEVEL_EVENT_NAME = "onInputVolumeLevelData"
-let ON_OUTPUT_VOLUME_LEVEL_EVENT_NAME = "onOutputVolumeLevelData"
 let ON_RECORDING_CHANGE_EVENT_NAME = "onRecordingChange"
 let ON_AUDIO_INTERRUPTION_EVENT_NAME = "onAudioInterruption"
 
@@ -31,7 +30,6 @@ public class ExpoTwoWayAudioModule: Module {
                 self.audioEngine = try AudioEngine()
                 self.setupMicrophoneCallback()
                 self.setupInputAudioLevelCallback()
-                self.setupOutputAudioLevelCallback()
                 self.setupAudioInterruptionCallback()
                 return true
             } catch {
@@ -98,7 +96,7 @@ public class ExpoTwoWayAudioModule: Module {
         }
 
         Function("restart") {
-            self.audioEngine?.resumeRecordingAndPlayer()
+            _ = self.audioEngine?.toggleRecording(true)
             self.sendEvent(
                 ON_RECORDING_CHANGE_EVENT_NAME,
                 [
@@ -107,28 +105,8 @@ public class ExpoTwoWayAudioModule: Module {
 
         }
 
-        Function("playPCMData") { (pcmData: Data) in
-            self.audioEngine?.playPCMData(pcmData)
-        }
-
         Function("bypassVoiceProcessing") { (bypass: Bool) in
             self.audioEngine?.bypassVoiceProcessing(bypass)
-        }
-
-        Function("isPlaying") { () -> Bool in
-            return self.audioEngine?.isPlaying ?? false
-        }
-
-        Function("stopPlayback") {
-            self.audioEngine?.stopPlayback()
-        }
-
-        Function("pausePlayback") {
-            self.audioEngine?.pausePlayback()
-        }
-
-        Function("resumePlayback") {
-            self.audioEngine?.resumePlayback()
         }
 
         AsyncFunction("getMicrophonePermissionsAsync") { (promise: Promise) in
@@ -152,7 +130,6 @@ public class ExpoTwoWayAudioModule: Module {
         Events([
             ON_MIC_DATA_EVENT_NAME,
             ON_INPUT_VOLUME_LEVEL_EVENT_NAME,
-            ON_OUTPUT_VOLUME_LEVEL_EVENT_NAME,
             ON_RECORDING_CHANGE_EVENT_NAME,
             ON_AUDIO_INTERRUPTION_EVENT_NAME,
         ])
@@ -172,16 +149,6 @@ public class ExpoTwoWayAudioModule: Module {
         audioEngine?.onInputVolumeCallback = { [weak self] level in
             self?.sendEvent(
                 ON_INPUT_VOLUME_LEVEL_EVENT_NAME,
-                [
-                    "data": level
-                ])
-        }
-    }
-
-    private func setupOutputAudioLevelCallback() {
-        audioEngine?.onOutputVolumeCallback = { [weak self] level in
-            self?.sendEvent(
-                ON_OUTPUT_VOLUME_LEVEL_EVENT_NAME,
                 [
                     "data": level
                 ])
