@@ -19,6 +19,7 @@ import {
   type JournalStoredRow
 } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
 import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/writing/journal-write-projection'
+import { memoryJournalMap } from '../../../src/main/native-chat/agent-session-journal/journal-memory-collections'
 import { readPublishedQueuedMessages } from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
@@ -61,11 +62,13 @@ afterEach(() => {
 
 const view = (journal: ContinuedJournal) => {
   const state = journal.queuedMessages.displayState()
+  const cards =
+    state.queue.cards instanceof Map
+      ? memoryJournalMap(state.queue.cards).values()
+      : state.queries.queueCardsForInitialization(state)
   return {
     snapshot: journal.snapshot(),
-    cards: [...state.queries.queueCardsForInitialization(state)].sort(
-      (a, b) => a.position - b.position
-    )
+    cards: [...cards].sort((a, b) => a.position - b.position)
   }
 }
 
