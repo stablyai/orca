@@ -14680,6 +14680,7 @@
             "openLog": "Ouvrir le log",
             "revealLog": "Révéler le log",
             "openWorkingDirectory": "Ouvrir le répertoire de travail",
+            "revealArtifactsFolder": "Révéler le dossier des artefacts",
             "copySessionId": "Copier l'ID de session",
             "copyLogPath": "Copier le chemin du log",
             "messageCount": "{{value0}} msg",

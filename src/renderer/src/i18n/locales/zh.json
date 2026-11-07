@@ -14083,6 +14083,7 @@
             "openLog": "打开日志",
             "revealLog": "显示日志",
             "openWorkingDirectory": "打开工作目录",
+            "revealArtifactsFolder": "显示产物文件夹",
             "copySessionId": "复制会话 ID",
             "copyLogPath": "复制日志路径",
             "messageCount": "{{value0}} 条消息",

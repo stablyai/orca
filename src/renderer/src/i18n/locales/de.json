@@ -14739,6 +14739,7 @@
             "openLog": "Protokoll öffnen",
             "revealLog": "Protokoll im Dateimanager anzeigen",
             "openWorkingDirectory": "Arbeitsverzeichnis öffnen",
+            "revealArtifactsFolder": "Artefaktordner im Dateimanager anzeigen",
             "copySessionId": "Sitzungs-ID kopieren",
             "copyLogPath": "Protokollpfad kopieren",
             "messageCount": "{{value0}} Nachr.",

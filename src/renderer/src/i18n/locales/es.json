@@ -14451,6 +14451,7 @@
             "openLog": "Abrir registro",
             "revealLog": "Mostrar registro en carpeta",
             "openWorkingDirectory": "Abrir directorio de trabajo",
+            "revealArtifactsFolder": "Mostrar carpeta de artefactos",
             "copySessionId": "Copiar ID de sesión",
             "copyLogPath": "Copiar ruta de registro",
             "messageCount": "{{value0}} mens.",

@@ -34,6 +34,7 @@ export function SessionActionMenuItems({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   deleteBlockedReason,
   onDelete
 }: {
@@ -57,13 +58,14 @@ export function SessionActionMenuItems({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   // Null when Delete is offered; otherwise the tooltip explaining why it isn't.
   deleteBlockedReason: string | null
   onDelete?: () => void
 }) {
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem
   const Separator = menuKind === 'context' ? ContextMenuSeparator : DropdownMenuSeparator
-  const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd)
+  const hasLocalPathActions = Boolean(onOpenLog || onRevealLog || onOpenCwd || onRevealArtifacts)
   // Why: Jump/Resume items act on this conversation; the hand-off starts a new one, so it sits apart.
   const hasItemsAboveHandOff = Boolean(
     onJumpToOriginalPane ||
@@ -167,6 +169,15 @@ export function SessionActionMenuItems({
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.openWorkingDirectory',
                 'Open Working Directory'
+              )}
+            </Item>
+          ) : null}
+          {onRevealArtifacts ? (
+            <Item onSelect={onRevealArtifacts}>
+              <FolderOpen className="size-3.5" />
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.revealArtifactsFolder',
+                'Reveal Artifacts Folder'
               )}
             </Item>
           ) : null}

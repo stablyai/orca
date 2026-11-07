@@ -10718,6 +10718,7 @@
             "openLog": "Abrir Registro",
             "revealLog": "Mostrar Registro",
             "openWorkingDirectory": "Abrir Diretório de Trabalho",
+            "revealArtifactsFolder": "Mostrar Pasta de Artefatos",
             "copySessionId": "Copiar ID da Sessão",
             "copyLogPath": "Copiar Caminho do Registro",
             "messageCount": "{{value0}} msgs",

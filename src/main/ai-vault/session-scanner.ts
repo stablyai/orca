@@ -19,6 +19,7 @@ import { aiVaultScanWorkload, noteAiVaultScanReading } from './ai-vault-scan-pro
 import { yieldScanInventory } from './session-scanner-scope-inventory'
 import { prepareScopeScan, scanInScopeSessions } from './session-scanner-scope-walk'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
+import { withAntigravityArtifactsDirs } from './scanners/antigravity/antigravity-session-artifacts'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
@@ -126,8 +127,13 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         span.setAttribute('bytesRead', parseStats.bytesRead)
         span.setAttribute('issues', issues.length)
 
+        const sessions = await withAntigravityArtifactsDirs(
+          mergeSessions(cappedSessions, scopeSessions),
+          options.signal
+        )
+        throwIfAiVaultScanCancelled(options.signal)
         return {
-          sessions: mergeSessions(cappedSessions, scopeSessions),
+          sessions,
           issues: issues.map((issue) => ({ executionHostId, ...issue })),
           scannedAt: new Date().toISOString()
         }

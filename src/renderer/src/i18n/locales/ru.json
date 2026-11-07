@@ -15181,6 +15181,7 @@
             "openLog": "Открыть журнал",
             "revealLog": "Показать журнал",
             "openWorkingDirectory": "Открыть рабочую папку",
+            "revealArtifactsFolder": "Показать папку артефактов",
             "copySessionId": "Копировать ID сессии",
             "copyLogPath": "Копировать путь к журналу",
             "messageCount": "Сообщений: {{value0}}",

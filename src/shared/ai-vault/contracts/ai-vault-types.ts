@@ -139,6 +139,8 @@ export type AiVaultSession = {
   previewMessagesTruncated?: boolean
   /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
   antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
+  /** Local agy conversation folder, set only when the scan saw top-level artifact files in it. */
+  antigravityArtifactsDir?: string
   /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */

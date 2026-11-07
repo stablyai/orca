@@ -14536,6 +14536,7 @@
             "openLog": "開啟日誌",
             "revealLog": "顯示日誌",
             "openWorkingDirectory": "開啟工作目錄",
+            "revealArtifactsFolder": "顯示成品資料夾",
             "copySessionId": "複製工作階段 ID",
             "copyLogPath": "複製日誌路徑",
             "messageCount": "{{value0}} 則訊息",
