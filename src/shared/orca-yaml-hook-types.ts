@@ -38,7 +38,13 @@ export type OrcaVmRecipe = {
   resume?: string
   destroy?: string
   destroyDisabled?: boolean
+  // Per-mode wall-clock limits; orca.yaml accepts one number for every mode or a per-mode map.
+  timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
 }
+
+export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
+
+export type OrcaVmRecipeTimeoutSeconds = Partial<Record<OrcaVmRecipeLifecycleMode, number>>
 
 export type OrcaVmRecipeDiagnostic = {
   index: number
