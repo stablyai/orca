@@ -1,7 +1,6 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getEditorFileReadContext } from '@/lib/editor-file-operation-owner'
 import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionIdForFile } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import {
   getRuntimeGitBranchDiff,
@@ -71,11 +70,10 @@ export function useEditorPanelDiffContentLoader({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
-        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
-        const fileTarget = requireRuntimeTargetForFileOwner(
+        const { connectionId, target: fileTarget } = getEditorFileReadContext(
           useAppStore.getState(),
-          file.worktreeId,
-          file.runtimeEnvironmentId
+          file,
+          worktreePath
         )
         const gitScope = getRuntimeGitScope(fileTarget, connectionId)
         const effectiveDiffSource: typeof file.diffSource =

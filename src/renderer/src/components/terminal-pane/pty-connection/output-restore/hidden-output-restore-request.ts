@@ -1,7 +1,7 @@
 import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
 import { useAppStore } from '@/store/index'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { requestTerminalPaneRecovery } from '../../terminal-pane-recovery'
+import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
 import { registerStaleDocumentVisibilityRecovery } from '../../stale-document-visibility'
 import { warnTerminalLifecycleAnomaly } from '../../terminal-lifecycle-diagnostics'
 import { registerTerminalBacklogRecovery } from '@/lib/pane-manager/pane-terminal-output-queue-registry'

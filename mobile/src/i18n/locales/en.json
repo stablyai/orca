@@ -2810,6 +2810,7 @@
       "sendMessage": "Send message",
       "sendQueue": "Queue",
       "sendSteer": "Steer",
+      "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
       "sendSteerHint": "Goes into what the agent is doing now"
     },

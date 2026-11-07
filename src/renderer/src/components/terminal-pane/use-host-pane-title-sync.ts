@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
-import type { TerminalPaneLayoutController } from './use-terminal-pane-layout-persistence'
+import { collectLeafIdsInOrder } from './layout/terminal-layout-leaf-traversal'
+import type { TerminalPaneLayoutController } from './layout/persistence/use-terminal-pane-layout-persistence'
 
 /** Sync owner-published pane titles while retaining pending local renames until host echo. */
 export function hostPaneTitleUpdates(args: {

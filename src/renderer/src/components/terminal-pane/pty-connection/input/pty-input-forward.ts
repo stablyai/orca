@@ -6,7 +6,7 @@ import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying } from '../../replay-guard'
 import { isXtermMouseReport, isXtermWheelCursorKey } from '../../terminal-pointer-input-sequences'
-import { shouldDropQuarantinedTerminalInput } from '../../terminal-input-quarantine'
+import { shouldDropQuarantinedTerminalInput } from '../../input/terminal-input-quarantine'
 import {
   TERMINAL_FOCUS_IN_SEQUENCE,
   TERMINAL_FOCUS_OUT_SEQUENCE

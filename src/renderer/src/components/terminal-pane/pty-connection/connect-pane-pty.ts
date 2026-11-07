@@ -11,7 +11,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyConnectionDeps } from '../pty-connection-types'
-import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
+import { registerTerminalPaneRecoveryInstance } from '../render-health/recovery/terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
 import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
 import { TerminalStreamPosition } from '../terminal-stream-position'

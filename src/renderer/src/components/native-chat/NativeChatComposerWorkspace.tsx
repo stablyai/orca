@@ -13,6 +13,10 @@ import {
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
 
+// Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
+const FOOTER_TEXT =
+  'min-w-0 overflow-x-clip text-ellipsis text-2xs whitespace-nowrap [text-box:trim-both_cap_alphabetic]'
+
 export function NativeChatComposerWorkspace({
   terminalTabId,
   structuredTransport
@@ -58,7 +62,7 @@ export function NativeChatComposerWorkspace({
         : translate('components.native-chat.composerWorkspace.worktree', 'Worktree')
 
   return (
-    <div className="@container mt-1 flex h-6 shrink-0 min-w-0 items-center gap-2 px-3 text-xs text-chat-foreground-faint">
+    <div className="@container mt-1 flex h-5.5 shrink-0 min-w-0 items-center gap-1.5 px-3 text-2xs text-chat-foreground-faint">
       {hostId && (
         <span
           className={
@@ -67,11 +71,11 @@ export function NativeChatComposerWorkspace({
               : 'hidden min-w-0 max-w-40 shrink items-center gap-1 @sm:flex'
           }
         >
-          <Server className="size-3.5 shrink-0" aria-hidden />
+          <Server className="size-3 shrink-0" aria-hidden />
           {hostId === 'local' ? (
             <LocalMachineName name={machine ?? ''} />
           ) : (
-            <span className="truncate" title={machine}>
+            <span className={FOOTER_TEXT} title={machine}>
               {machine}
             </span>
           )}
@@ -86,8 +90,8 @@ export function NativeChatComposerWorkspace({
               size="xs"
               className={
                 identity
-                  ? 'hidden min-w-0 max-w-56 shrink justify-start @sm:flex'
-                  : 'min-w-0 max-w-56 shrink justify-start'
+                  ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @sm:flex'
+                  : 'h-5.5 min-w-0 max-w-56 shrink justify-start'
               }
               aria-label={translate(
                 'components.native-chat.composerWorkspace.copyIdentity',
@@ -96,9 +100,11 @@ export function NativeChatComposerWorkspace({
               )}
               onClick={() => void copyValue(checkout)}
             >
-              <Folder className="size-3.5" aria-hidden />
-              <span className="truncate">{checkout}</span>
-              <span className="shrink-0 font-normal text-chat-foreground-faint">· {kindLabel}</span>
+              <Folder className="size-3" aria-hidden />
+              <span className={FOOTER_TEXT}>{checkout}</span>
+              <span className="shrink-0 font-normal text-2xs text-chat-foreground-faint [text-box:trim-both_cap_alphabetic]">
+                · {kindLabel}
+              </span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
@@ -113,7 +119,7 @@ export function NativeChatComposerWorkspace({
               type="button"
               variant="ghost"
               size="xs"
-              className="min-w-0 flex-1 justify-start"
+              className="h-5.5 min-w-0 flex-1 justify-start"
               aria-label={translate(
                 'components.native-chat.composerWorkspace.copyIdentity',
                 'Copy {{value0}}',
@@ -122,11 +128,11 @@ export function NativeChatComposerWorkspace({
               onClick={() => void copyValue(identityCopyValue)}
             >
               {identity.kind === 'branch' ? (
-                <GitBranch className="size-3.5" aria-hidden />
+                <GitBranch className="size-3" aria-hidden />
               ) : (
-                <GitCommitHorizontal className="size-3.5" aria-hidden />
+                <GitCommitHorizontal className="size-3" aria-hidden />
               )}
-              <span className="truncate font-mono">{label}</span>
+              <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
@@ -141,7 +147,7 @@ export function NativeChatComposerWorkspace({
 function LocalMachineName({ name }: { name: string }): React.JSX.Element {
   const published = usePublishedMachineName(name)
   return (
-    <span className="truncate" title={published ?? undefined}>
+    <span className={FOOTER_TEXT} title={published ?? undefined}>
       {published}
     </span>
   )

@@ -14,8 +14,8 @@ import {
   decodeTerminalStreamFrame
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { installSavedResumeStartupCancellation } from '../../pty-connection/startup/saved-resume-startup-cancellation'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const fixture = vi.hoisted(() => ({ state: {} }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => fixture.state } }))

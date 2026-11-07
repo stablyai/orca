@@ -24,6 +24,8 @@ export function useMobileNativeChatComposerGoalMode(
   send: (send: ComposerSend, text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   placeholder: string | undefined
   sendFollowUp: (followUp: NativeChatSendFollowUp | null) => NativeChatSendFollowUp | null
+  /** A host goal is no message, so the composer neither queues, steers nor sends a waiting card. */
+  holdsFollowUp: boolean
   strip: ReactNode
   chip: ReactNode
 } {
@@ -72,6 +74,7 @@ export function useMobileNativeChatComposerGoalMode(
       : undefined,
     // A host goal is no message, so it neither queues nor steers.
     sendFollowUp: (followUp) => (active && hostSetsGoals ? null : followUp),
+    holdsFollowUp: active && hostSetsGoals,
     // Each goal opens collapsed, so a tap meant for a new goal never lands on the last one's controls.
     strip: threadGoal
       ? createElement(MobileNativeChatThreadGoalStrip, {

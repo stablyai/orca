@@ -43,7 +43,7 @@ import {
 import {
   getTerminalPaneSplitMountLeaseTabIds,
   subscribeTerminalPaneSplitMountLeases
-} from '../../terminal-pane-split-request-routing'
+} from '../../layout/split/terminal-pane-split-request-routing'
 
 type TerminalOverlayTabAssignment = {
   groupId: string

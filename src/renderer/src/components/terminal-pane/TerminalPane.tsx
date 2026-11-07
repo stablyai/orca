@@ -1,8 +1,8 @@
 import { TerminalPaneSurface } from './TerminalPaneSurface'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
-import { useTerminalPaneController } from './use-terminal-pane-controller'
+import { useTerminalPaneController } from './controller/use-terminal-pane-controller'
 import { useHostTerminalScrollbackHold } from './snapshots/use-host-terminal-scrollback-hold'
-import type { TerminalPaneProps } from './terminal-pane-types'
+import type { TerminalPaneProps } from './controller/terminal-pane-types'
 
 function MountedTerminalPane(props: TerminalPaneProps): React.JSX.Element {
   return <TerminalPaneSurface controller={useTerminalPaneController(props)} />

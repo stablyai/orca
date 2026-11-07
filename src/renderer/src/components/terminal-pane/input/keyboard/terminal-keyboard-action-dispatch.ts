@@ -1,16 +1,16 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PaneCwdMap } from '../../resolve-split-cwd'
+import type { PaneCwdMap } from '../../layout/split/resolve-split-cwd'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { copyTerminalSelection } from '../../clipboard/terminal-selection-copy'
-import { splitTerminalPaneWithInheritedCwd } from '../../terminal-pane-split-with-inherited-cwd'
+import { splitTerminalPaneWithInheritedCwd } from '../../layout/split/terminal-pane-split-with-inherited-cwd'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
 import type { resolveTerminalKeyboardShortcutAction } from './terminal-keyboard-shortcut-matching'
-import { equalizeTerminalPanes } from '../../terminal-pane-layout-owner-commands'
+import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 

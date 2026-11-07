@@ -33,6 +33,8 @@ export type SourceControlAgentActionDialogProps = {
   savedAgentArgs?: string | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   connectionId?: string | null
   repoId?: string | null
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -51,7 +53,7 @@ export type SourceControlAgentActionDialogProps = {
   onLaunchAccepted?: () => void
   /** Fires when an accepted launch later failed to deliver its prompt. */
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: RunSourceControlAgentActionStartArgs['onLaunched']
   startLabel?: string
   onStart?: RunSourceControlAgentActionStartArgs['onStart']
 }

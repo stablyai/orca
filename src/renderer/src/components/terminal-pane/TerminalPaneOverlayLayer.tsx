@@ -8,7 +8,7 @@ import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
-import type { HiddenTerminalPrewarm } from './terminal-pane-types'
+import type { HiddenTerminalPrewarm } from './controller/terminal-pane-types'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'

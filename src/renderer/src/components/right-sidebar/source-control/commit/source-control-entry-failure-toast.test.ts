@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 
+import { act, createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
+import { SourceControlScopeProvider } from '../panel/worktree-scope'
 import type { SourceControlToastTestOptions } from './source-control-toast-test-options'
 
 const { toastError, toastDismiss } = vi.hoisted(() => ({
@@ -81,6 +85,31 @@ describe('showSourceControlEntryFailureToast', () => {
     expect(toastDismiss).not.toHaveBeenCalled()
 
     dismissSourceControlEntryFailureToast('wt-2')
+    expect(toastDismiss).toHaveBeenCalledWith('source-control-entry-mutation')
+  })
+
+  it('keeps Retry while a folder section shows the worktree under the active folder workspace', () => {
+    storeState.activeWorktreeId = 'folder:feature'
+    const owner = {
+      worktreeId: 'wt-1',
+      repoId: 'repo-1',
+      executionHostId: 'local' as const,
+      worktree: makeWorktree('wt-1', 'feature-a'),
+      attachedAt: 1,
+      repo: makeRepo(),
+      placementWorkspaceId: 'folder:feature'
+    }
+    const root = createRoot(document.createElement('div'))
+    act(() => root.render(createElement(SourceControlScopeProvider, { owner }, null)))
+    const onRetry = vi.fn()
+    show({ onRetry })
+
+    clickRetry()
+    expect(onRetry).toHaveBeenCalledTimes(1)
+
+    act(() => root.unmount())
+    clickRetry()
+    expect(onRetry).toHaveBeenCalledTimes(1)
     expect(toastDismiss).toHaveBeenCalledWith('source-control-entry-mutation')
   })
 })

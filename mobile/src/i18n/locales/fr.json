@@ -191,6 +191,7 @@
       "sendMessage": "Envoyer le message",
       "sendQueue": "Mettre en file d’attente",
       "sendSteer": "Envoyer maintenant",
+      "sendSteerQueued": "Envoyer le suivant",
       "sendQueueHint": "S’exécute après le tour en cours",
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },

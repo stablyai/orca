@@ -73,6 +73,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 : {}),
               ...(data.launchToken ? { launchToken: data.launchToken } : {}),
               ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+              ...(data.trustWorktreeId ? { trustWorktreeId: data.trustWorktreeId } : {}),
               ...(data.startupCommandDelivery
                 ? { startupCommandDelivery: data.startupCommandDelivery }
                 : {})

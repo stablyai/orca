@@ -119,7 +119,7 @@ async function heldLaunch({
   transportBuffers.clearPreHandlerPtyState('pty-1')
   transportDispatcher.ensurePtyDispatcher()
   transportDispatcher.reattachPtyDispatcherPushListeners()
-  const handoffs = await import('../../deferred-split-pane-handoff')
+  const handoffs = await import('../../layout/split/deferred-split-pane-handoff')
   const transportModule = await import('../../pty-transport/ipc/pty-transport')
   const transports: PtyTransport[] = []
   vi.mocked(transportModule.createIpcPtyTransport).mockImplementation((opts) => {
@@ -139,7 +139,7 @@ async function heldLaunch({
   const cwd = Promise.withResolvers<string>()
   const key = makePaneKey('tab-1', createPane(1).leafId)
   const firstHandle = handoffs.beginDeferredSplitPaneHandoff(key, cwd.promise)
-  const { createTerminalPanePtyDeps } = await import('../../terminal-pane-pty-deps')
+  const { createTerminalPanePtyDeps } = await import('../../mounting/terminal-pane-pty-deps')
   async function mount(
     handle = firstHandle,
     seeds: PtyPreconnectInputEntry[] = [],
@@ -330,7 +330,7 @@ describe('Git Bash console-capacity pane retention', () => {
   })
   afterEach(async () => {
     restoreUserAgent?.()
-    const handoffs = await import('../../deferred-split-pane-handoff')
+    const handoffs = await import('../../layout/split/deferred-split-pane-handoff')
     handoffs.resetDeferredSplitPaneHandoffsForTests()
     await restoreTerminalTestGlobals()
     vi.restoreAllMocks()

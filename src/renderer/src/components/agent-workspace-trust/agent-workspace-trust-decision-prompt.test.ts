@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  installIpcPtyWindow,
+  restorePtySpecWindow
+} from '../terminal-pane/pty-transport-test-harness'
 
 type StoreState = {
   repos: Partial<Repo>[]
@@ -51,6 +55,71 @@ afterEach(async () => {
 })
 
 describe('first agent launch in a repo', () => {
+  it.each([true, false])(
+    'asks once for concurrent section launches through PTY connect (save succeeds: %s)',
+    async (saveSucceeds) => {
+      const originalWindow: typeof window | undefined = globalThis.window
+      installIpcPtyWindow(originalWindow, {})
+      if (!saveSucceeds) {
+        state.updateRepo = vi.fn(async () => false)
+      }
+      vi.mocked(window.api.pty.spawn)
+        .mockResolvedValueOnce({ id: 'section-1' })
+        .mockResolvedValueOnce({ id: 'section-2' })
+      const { createIpcPtyTransport } =
+        await import('../terminal-pane/pty-transport/ipc/pty-transport')
+      const transports = ['folder:placement', 'folder:other'].map((worktreeId) =>
+        createIpcPtyTransport({
+          worktreeId,
+          trustWorktreeId: WORKTREE,
+          cwd: '/repos/app/feature',
+          command: 'claude',
+          launchAgent: 'claude'
+        })
+      )
+      const connecting = Promise.all(
+        transports.map((transport) => transport.connect({ url: '', callbacks: {} }))
+      )
+      try {
+        expect(getAgentWorkspaceTrustDecisionRequest()).toMatchObject({
+          repoId: 'repo-1',
+          repoName: 'app',
+          hostId: 'local'
+        })
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        await answerAgentWorkspaceTrustDecision('agent-asks')
+        await connecting
+        expect(state.updateRepo).toHaveBeenCalledExactlyOnceWith(
+          'repo-1',
+          { agentWorkspaceTrust: 'agent-asks' },
+          { hostId: 'local' }
+        )
+        expect(getAgentWorkspaceTrustDecisionRequest()).toBeNull()
+        expect(vi.mocked(window.api.pty.spawn).mock.calls.map(([args]) => args)).toMatchObject([
+          {
+            worktreeId: 'folder:placement',
+            trustWorktreeId: WORKTREE,
+            cwd: '/repos/app/feature',
+            skipAgentWorkspaceTrust: true
+          },
+          {
+            worktreeId: 'folder:other',
+            trustWorktreeId: WORKTREE,
+            cwd: '/repos/app/feature',
+            skipAgentWorkspaceTrust: true
+          }
+        ])
+      } finally {
+        await answerAgentWorkspaceTrustDecision('agent-asks')
+        await connecting
+        for (const transport of transports) {
+          transport.destroy?.()
+        }
+        restorePtySpecWindow(originalWindow)
+      }
+    }
+  )
+
   it('holds the launch until answered, asking once for all its worktrees', async () => {
     const first = launch()
     const second = launch('repo-1::/repos/app/other')
