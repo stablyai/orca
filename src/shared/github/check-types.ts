@@ -11,6 +11,8 @@ export type PRCheckDetail = {
     | 'pending'
     // Manual-approval suites may have no check run/rollup row yet block auto-merge as unstable; expose them separately.
     | 'action_required'
+    // GitLab `allow_failure` job that failed: its pipeline still passes, so it is not a failure.
+    | 'allowed_failure'
     | null
   url: string | null
   // Provider ISO times for when this check ran; absent when the host or read path has none.

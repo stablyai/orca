@@ -4,6 +4,7 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   return check.conclusion ?? 'pending'
 }
 
+/** English status label for a check, for shared code outside the renderer i18n. */
 export function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
@@ -20,6 +21,9 @@ export function getCheckStatusLabel(check: PRCheckDetail): string {
   }
   if (conclusion === 'action_required') {
     return 'Action required'
+  }
+  if (conclusion === 'allowed_failure') {
+    return 'Allowed to fail'
   }
   if (conclusion === 'neutral') {
     return 'Neutral'

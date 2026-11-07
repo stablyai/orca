@@ -21,6 +21,7 @@ export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string
   neutral: CircleDashed,
   timed_out: CircleX,
   action_required: AlertTriangle,
+  allowed_failure: AlertTriangle,
   stale: CircleDashed
 }
 
@@ -33,6 +34,7 @@ export const CHECK_COLOR: Record<string, string> = {
   neutral: 'text-muted-foreground',
   timed_out: 'text-rose-500',
   action_required: 'text-amber-500',
+  allowed_failure: 'text-amber-500',
   stale: 'text-muted-foreground'
 }
 

@@ -7,8 +7,9 @@ import { summarizeProviderChecks } from '../../../src/shared/source-control/chec
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-request-types'
 import type { GitLabPipeline } from '../../../src/shared/gitlab-types'
 
-type GitLabPipelineJobLike = { status: string }
+type GitLabPipelineJobLike = { status: string; allowFailure?: boolean }
 
+/** Checks summary for a GitLab item: the pipeline verdict when known, else a job rollup. */
 export function buildGitLabCheckSummary(
   jobs: GitLabPipelineJobLike[],
   pipeline?: GitLabPipeline
@@ -23,7 +24,7 @@ export function buildGitLabCheckSummary(
   return summarizeProviderChecks(
     jobs.map((job) => ({
       status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
-      conclusion: mapGitLabPipelineJobStatusToConclusion(job.status)
+      conclusion: mapGitLabPipelineJobStatusToConclusion(job.status, job.allowFailure)
     }))
   )
 }

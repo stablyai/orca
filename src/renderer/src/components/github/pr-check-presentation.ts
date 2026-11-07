@@ -6,6 +6,7 @@ import type {
   PRCheckJob
 } from '../../../../shared/github/check-types'
 
+/** Localized status label for one check row. */
 export function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
   if (conclusion === 'success') {
@@ -24,6 +25,12 @@ export function getCheckStatusLabel(check: PRCheckDetail): string {
     return translate(
       'auto.components.editor.CheckRunDetailsPanel.actionRequired',
       'Action required'
+    )
+  }
+  if (conclusion === 'allowed_failure') {
+    return translate(
+      'auto.components.editor.CheckRunDetailsPanel.allowedFailure',
+      'Allowed to fail'
     )
   }
   if (conclusion === 'neutral') {

@@ -3,6 +3,7 @@ import {
   getGitLabPipelineNotLatestCommitSha,
   gitLabPipelineJobsToPRChecks
 } from './gitlab-pipeline-checks'
+import { summarizeProviderChecks } from '../provider-check-summary'
 import type { GitLabPipelineJob } from '../../../gitlab-types'
 
 describe('gitLabPipelineJobsToPRChecks', () => {
@@ -76,6 +77,22 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         gitlabJobId: 4
       }
     ])
+  })
+
+  it('keeps a failed allow_failure job out of the failing count', () => {
+    const job = { stage: 'test', webUrl: '', duration: 3, allowFailure: true }
+    const jobs: GitLabPipelineJob[] = [
+      { ...job, id: 1, name: 'lint', status: 'failed' },
+      { ...job, id: 2, name: 'unit', status: 'success' }
+    ]
+
+    const checks = gitLabPipelineJobsToPRChecks(jobs)
+    expect(checks.map((check) => check.conclusion)).toEqual(['allowed_failure', 'success'])
+    expect(summarizeProviderChecks(checks)).toMatchObject({
+      state: 'success',
+      passed: 2,
+      failed: 0
+    })
   })
 
   it('omits the job id when GitLab does not report a usable one', () => {
