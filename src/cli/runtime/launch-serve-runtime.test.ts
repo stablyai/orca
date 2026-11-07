@@ -115,7 +115,7 @@ describe('orca serve host selection', () => {
         expect.any(String),
         expect.not.objectContaining({ ELECTRON_RUN_AS_NODE: expect.anything() }),
         join(appRoot, 'out', 'web'),
-        process.platform === 'win32' ? undefined : join(appRoot, 'node_modules', recognizer)
+        process.platform === 'win32' ? undefined : join(appRoot, 'node_modules')
       )
       expect(spawnMock).not.toHaveBeenCalled()
       expect(stderr.join('')).toContain('[serve] running on orcad 1')
