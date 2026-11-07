@@ -3646,7 +3646,6 @@
       "pages": "GitHub 结果页",
       "pullRequests": "PR",
       "queryingSource": "正在查询 {{source}}",
-      "repoDescription": "选择要查询的仓库。",
       "repos": "仓库",
       "upstream": "上游"
     },

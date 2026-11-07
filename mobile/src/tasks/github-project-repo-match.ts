@@ -7,6 +7,7 @@ export type GitHubProjectRepoMatch = {
   id: string
   path: string
   displayName: string
+  issueRepository?: { owner: string; repo: string; host?: string } | null
   // Absent fork parent means non-fork or not yet resolved.
   upstream?: { owner: string; repo: string; host?: string } | null
 }
@@ -14,6 +15,7 @@ export type GitHubProjectRepoMatch = {
 export type GitHubRepoSlugCacheEntry = {
   path: string
   repository: { owner: string; repo: string; host?: string } | null
+  issueRepository?: { owner: string; repo: string; host?: string } | null
   failed?: boolean
 }
 
@@ -35,7 +37,11 @@ export function dropFailedGitHubRepoSlugEntries(
 type CachedSlugState =
   | { status: 'missing' }
   | { status: 'stale' }
-  | { status: 'resolved'; repository: GitHubRepoSlugCacheEntry['repository'] }
+  | {
+      status: 'resolved'
+      repository: GitHubRepoSlugCacheEntry['repository']
+      issueRepository?: GitHubRepoSlugCacheEntry['issueRepository']
+    }
 
 export function normalizeGitHubRepositorySlug(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
@@ -60,7 +66,34 @@ function cachedSlugStateForRepo(
   if (cached.path !== repo.path) {
     return { status: 'stale' }
   }
-  return { status: 'resolved', repository: cached.repository }
+  return {
+    status: 'resolved',
+    repository: cached.repository,
+    issueRepository: cached.issueRepository
+  }
+}
+
+function issueRepositoryIdentityKeysForRepo(
+  repo: GitHubProjectRepoMatch,
+  originState: CachedSlugState | undefined
+): string[] {
+  const keys: string[] = []
+  const inheritedHost =
+    originState?.status === 'resolved' ? originState.repository?.host : undefined
+  for (const candidate of [
+    repo.issueRepository,
+    originState?.status === 'resolved' ? originState.issueRepository : null
+  ]) {
+    if (!candidate?.owner || !candidate.repo) {
+      continue
+    }
+    const host = candidate.host ?? inheritedHost
+    if (!host && !isDefaultGitHubHost(inheritedHost)) {
+      continue
+    }
+    keys.push(githubRepoIdentityKey({ ...candidate, ...(host ? { host } : {}) }))
+  }
+  return keys
 }
 
 // Legacy fork metadata may omit upstream.host; inherit resolved origin host to avoid mapping GHES to github.com.
@@ -112,6 +145,16 @@ export function findRepoForGitHubProjectRepository(
     return slugMatches[0]!
   }
   if (slugMatches.length > 1) {
+    return null
+  }
+
+  const issueRepoMatches = repos.filter((repo) =>
+    issueRepositoryIdentityKeysForRepo(repo, slugStates.get(repo.id)).includes(requestedIdentityKey)
+  )
+  if (issueRepoMatches.length === 1) {
+    return issueRepoMatches[0]!
+  }
+  if (issueRepoMatches.length > 1) {
     return null
   }
 

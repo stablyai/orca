@@ -37,6 +37,7 @@ export type NormalizedNestedRepoScanOptions = {
   maxDepth: number
   maxRepos: number
   timeoutMs: number | null
+  includeNestedInsideGitRepo: boolean
 }
 
 const DEFAULT_MAX_DEPTH = 3
@@ -72,11 +73,12 @@ export function normalizeNestedRepoScanOptions(options: unknown): NormalizedNest
         ? null
         : typeof raw.timeoutMs === 'number' && Number.isFinite(raw.timeoutMs)
           ? Math.max(500, Math.min(30_000, Math.floor(raw.timeoutMs)))
-          : null
+          : null,
+    includeNestedInsideGitRepo: raw.includeNestedInsideGitRepo === true
   }
 }
 
-function shouldSkipDirectory(name: string, depth: number): boolean {
+export function shouldSkipDirectory(name: string, depth: number): boolean {
   if (VCS_METADATA_DIRS.has(name)) {
     return true
   }

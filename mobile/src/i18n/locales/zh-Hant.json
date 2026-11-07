@@ -3646,7 +3646,6 @@
       "pages": "GitHub 結果頁",
       "pullRequests": "PR",
       "queryingSource": "正在查詢 {{source}}",
-      "repoDescription": "選擇要查詢的存放庫。",
       "repos": "存放庫",
       "upstream": "上游"
     },

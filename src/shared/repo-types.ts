@@ -63,6 +63,8 @@ export type Repo = {
   executionHostId?: 'local' | `ssh:${string}` | `runtime:${string}` | null
   /** Absent means auto; writers omit on creation for persisted-record compatibility. */
   issueSourcePreference?: IssueSourcePreference
+  /** Explicit GitHub owner/repo override for issue and Project board queries (e.g. separate ticket repo or origin-less workspace). */
+  issueRepository?: GitHubRepositoryIdentity | null
   /** Host-owned Jira project default; users can override it in each composer. */
   defaultJiraProject?: JiraProjectReference | null
   /** Bind host/login only; resolve a short-lived gh token at spawn and inject into that child’s environment. */

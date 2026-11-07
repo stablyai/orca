@@ -92,6 +92,7 @@ export class RepoUpdatePersistenceOperations {
         | 'badgeColor'
         | 'repoIcon'
         | 'upstream'
+        | 'issueRepository'
         | 'gitRemoteIdentity'
         | 'hookSettings'
         | 'editorFormatter'
@@ -191,6 +192,10 @@ export class RepoUpdatePersistenceOperations {
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
+    }
+    if ('issueRepository' in sanitizedUpdates && sanitizedUpdates.issueRepository == null) {
+      delete repo.issueRepository
+      delete sanitizedUpdates.issueRepository
     }
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath

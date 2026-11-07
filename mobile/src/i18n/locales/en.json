@@ -4222,7 +4222,6 @@
     },
     "providerPickers": {
       "repos": "Repositories",
-      "repoDescription": "Choose which repositories to query.",
       "allRepositories": "All repositories",
       "issueSources": "GitHub Issue Sources",
       "issueSourcesDescription": "Choose whether each repository queries and creates work from upstream or origin.",
@@ -4237,7 +4236,10 @@
       "pageHint": "Jump to a loaded or available result page.",
       "pageNumber": "Page {{page}}",
       "pageLoaded": "Loaded",
-      "pageNotLoaded": "Loads older results"
+      "pageNotLoaded": "Loads older results",
+      "repoMapDescription": "Choose which repositories to query or map a project folder to owner/repo.",
+      "mapRepoTitle": "Ticket repository for {{name}}",
+      "unmappedFolders": "Workspace folders (tap to map)"
     },
     "reviewerLinear": {
       "unassigned": "Unassigned",
