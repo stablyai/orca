@@ -150,7 +150,7 @@ export class SessionSearchRetrieval {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     // Why: SQLite lower()/LIKE fold only ASCII, so match in JS to keep titles like "Gestión" findable.
-    // ponytail: scans every session title per query; move titles into FTS if session counts grow large.
+    // Why: a linear title scan per query is cheap at sidebar scale; index titles in FTS if histories grow large.
     const rows = this.db
       .prepare(`SELECT id, title FROM sessions ${where} ORDER BY updated_at DESC, id DESC`)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessions.id and sessions.title are NOT NULL columns of the private schema.
