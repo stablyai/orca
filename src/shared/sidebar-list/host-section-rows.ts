@@ -109,6 +109,7 @@ function getProjectGroupHeaderDepth(row: Row): number | null {
     : null
 }
 
+/** Sorts rows into one section per host, keeping each row's enclosing headers with it. */
 export function addHostSectionRows(args: {
   rows: readonly Row[]
   hostOptions: readonly HostSectionOption[]
@@ -148,6 +149,7 @@ export function addHostSectionRows(args: {
   const usedPendingRows = new Set<Row>()
   // Each host's last emitted header path, so a sibling group repeats only what differs.
   const emittedPathByHostId = new Map<ExecutionHostId, string[]>()
+  /** Emits the part of a header path that `hostId`'s section has not already drawn. */
   const pushPendingPath = (
     path: readonly Extract<Row, { type: 'header' }>[],
     hostId: ExecutionHostId
@@ -169,6 +171,7 @@ export function addHostSectionRows(args: {
     }
     rowsByHostId.set(hostId, hostRows)
   }
+  /** Places headers no row claimed: under their hosts if they name any, else above all hosts. */
   const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
     for (const row of rows) {
       if (usedPendingRows.has(row)) {
@@ -184,6 +187,7 @@ export function addHostSectionRows(args: {
     globalRows.push(...rows.filter((row) => !row.hostWorktreeCounts && !usedPendingRows.has(row)))
   }
 
+  /** Appends a row to its host's section, after any headers it still needs. */
   const pushHostRow = (row: Row, rowHostId: ExecutionHostId): void => {
     pushPendingPath(pendingRows, rowHostId)
     rowsByHostId.get(rowHostId)?.push(row)

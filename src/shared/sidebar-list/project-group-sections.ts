@@ -22,6 +22,7 @@ import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
 import { compareRootProjectEntries } from '../root-project-order'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 
+/** Appends every project group with its contents, then the projects outside any group. */
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
   args: {
@@ -105,6 +106,7 @@ export function appendProjectGroupSections(
     )
   }
 
+  /** Adds one per host for each project and folder in the group and its nested groups. */
   const addProjectGroupSubtreeHostCounts = (
     projectGroup: ProjectGroup,
     counts: Map<ExecutionHostId, number>
@@ -123,7 +125,7 @@ export function appendProjectGroupSections(
     }
   }
 
-  // Why: a collapsed group has no rows left to tell host sections which machines it belongs to.
+  /** A collapsed group has no rows left to tell host sections which machines it belongs to. */
   const getCollapsedProjectGroupHostCounts = (
     projectGroup: ProjectGroup
   ): Map<ExecutionHostId, number> | undefined => {
@@ -132,6 +134,7 @@ export function appendProjectGroupSections(
     return counts.size > 0 ? counts : undefined
   }
 
+  /** Appends a group's header and, unless collapsed, its folders, projects and nested groups. */
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []

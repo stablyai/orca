@@ -69,6 +69,7 @@ function worktree(owner: Repo): Worktree {
   } as Worktree
 }
 
+/** The sidebar's host and header rows, top to bottom, with each group's count. */
 function sidebarOrder(
   repos: Repo[],
   projectGroups: ProjectGroup[],
