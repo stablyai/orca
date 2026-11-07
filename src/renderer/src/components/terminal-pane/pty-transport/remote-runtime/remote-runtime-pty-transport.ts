@@ -1,3 +1,4 @@
+import { createAgentSessionTrustWorktreeOptions } from '@/runtime/agent-session-create-request'
 import { parseTerminalAttachmentLaunchResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-pty-shell'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -60,7 +61,7 @@ import type {
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
-import { isSshSessionGoneError } from '../../pty-connection/pty-connect-limits'
+import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../../../runtime/runtime-rpc-result'
 import { latestTerminalRetirementProof } from '../../../../runtime/web-session-terminal-orphan-recovery-surface-index'
 import {
@@ -221,6 +222,7 @@ export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
 ): PtyTransport {
+  const trustOptions = createAgentSessionTrustWorktreeOptions(opts.trustWorktreeId)
   const {
     command,
     startupCommandDelivery,
@@ -3624,7 +3626,11 @@ export function createRemoteRuntimePtyTransport(
               }
             })())
           : {}
+      const sectionTrustOptions = opts.trustWorktreeId
+        ? await trustOptions(createEnvironmentId)
+        : {}
       const legacyCreateParams = {
+        ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
@@ -3710,6 +3716,8 @@ export function createRemoteRuntimePtyTransport(
                   withAgentSessionCreateOperationId(
                     {
                       ...keyboardOptions,
+                      ...sectionTrustOptions,
+                      ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       ...(agentPrompt ? { prompt: agentPrompt } : {}),

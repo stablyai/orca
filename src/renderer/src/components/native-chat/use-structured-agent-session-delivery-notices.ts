@@ -86,6 +86,7 @@ function sameNoticesKept(
     const same =
       before !== undefined &&
       before.text === notice.text &&
+      before.failureKind === notice.failureKind &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)
     allKept &&= same
     kept.set(id, same ? before : notice)

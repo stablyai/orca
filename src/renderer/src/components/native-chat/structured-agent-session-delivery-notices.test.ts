@@ -105,8 +105,10 @@ describe('the line under each of the chat own messages', () => {
       detail: { text: '(code 1)\nclaude: unknown option --foo', audience: 'log' }
     }
     const submission = row('a', 'rejected', { reason: 'Written by the host.', rejection: exited })
-    expect(notices({ submissions: [submission] }).get(agentJournalSubmissionKey('a'))).toEqual({
-      text: 'Claude stopped before it finished starting. Send your message to try again.',
+    expect(
+      notices({ submissions: [submission] }).get(agentJournalSubmissionKey('a'))
+    ).toMatchObject({
+      failureKind: 'providerStartFailed',
       detail: '(code 1)\nclaude: unknown option --foo'
     })
     expect(

@@ -38,7 +38,7 @@ export async function prepareWorktreeCreationHooks(
     return null
   }
 
-  const { setupDecision, trustDecision } = confirmed
+  const { setupDecision, trustDecision, approvedSetupHash } = confirmed
   let issueCommand = request.issueCommand
   if (preparation.issueCommand && preparation.executionHostId && trustDecision !== 'skip') {
     const confirmed = await readAndConfirmRuntimeIssueCommand(
@@ -74,6 +74,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision,
+    ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -81,4 +82,16 @@ export async function prepareWorktreeCreationHooks(
     phase: getInitialWorktreeCreationPhase(prepared)
   })
   return prepared
+}
+
+/** Setup fields for the create call; the approved hash lets the host check the created branch. */
+export function setupCreateArgs(
+  request: Pick<WorktreeCreationRequest, 'setupOnly' | 'approvedSetupHash'>
+): { setupOnly?: boolean; approvedSetupHash?: string } {
+  return {
+    setupOnly: request.setupOnly,
+    ...(request.approvedSetupHash !== undefined
+      ? { approvedSetupHash: request.approvedSetupHash }
+      : {})
+  }
 }

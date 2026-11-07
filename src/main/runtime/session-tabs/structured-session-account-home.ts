@@ -1,6 +1,7 @@
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { agentWorkspaceTrustDecisionForWorkspace } from '../../agent-launch/trust/agent-workspace-trust-spawn'
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -35,6 +36,13 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           prepareCodexLaunchHome: this.prepareCodexStructuredLaunchFn,
           readCodexLaunchHome: this.resolveCodexStructuredLaunchHomeFn,
           workspaceTrustSettings: () => this.requireStore().getSettings(),
+          workspaceTrustRepoDecision: (launchLocation) =>
+            launchLocation?.workspaceKind === 'folder'
+              ? undefined
+              : agentWorkspaceTrustDecisionForWorkspace(
+                  launchLocation?.workspaceId,
+                  this.requireStore()
+                ),
           // The chat host's own state root (ensureStructuredAgentSessionHost).
           stateDirectory: getProfileUserDataPath()
         }

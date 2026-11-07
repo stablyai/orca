@@ -1,7 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { UseTerminalPaneLifecycleDeps } from '../terminal-pane-lifecycle-types'
+import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,

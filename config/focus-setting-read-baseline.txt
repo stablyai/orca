@@ -3,7 +3,7 @@
 # This is a RATCHET: counts may only go DOWN. Only creation flows with no source row may read
 # the default host, through defaultCreationHost. Everything else routes by the owner.
 # Prune after removing reads: pnpm check:focus-read-ratchet --prune
-1 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx
+3 src/renderer/src/app-shell/ActiveWorkspaceSyncGate.tsx # existing watch selector now visible through useCallback; includes its import-path occurrence
 2 src/renderer/src/app-shell/use-app-shell-services.ts
 2 src/renderer/src/App.tsx
 1 src/renderer/src/component-fixtures/component-fixture-explorer.tsx # dev-only fixture page seeds default settings
@@ -170,18 +170,18 @@
 11 src/renderer/src/components/task-page/TaskPage.tsx
 3 src/renderer/src/components/task-page/use-task-page-detail-routing.ts
 2 src/renderer/src/components/task-page/use-task-page-source-availability.ts
-1 src/renderer/src/components/terminal-pane/pty-connection/agent-idle-working-handlers.ts
+1 src/renderer/src/components/terminal-pane/pty-connection/pane-connection-context.ts
 1 src/renderer/src/components/terminal-pane/retire-unbound-runtime-terminal-pane.ts
 1 src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.ts
 1 src/renderer/src/components/terminal-pane/links/terminal-link-open-hints.ts
-2 src/renderer/src/components/terminal-pane/terminal-pane-close-admission.ts
-1 src/renderer/src/components/terminal-pane/terminal-pane-mount-preparation.ts
-2 src/renderer/src/components/terminal-pane/use-terminal-pane-close-actions.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-controller.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-1 src/renderer/src/components/terminal-pane/use-terminal-pane-mount-lifecycle.ts
+2 src/renderer/src/components/terminal-pane/layout/close/terminal-pane-close-admission.ts
+1 src/renderer/src/components/terminal-pane/mounting/terminal-pane-mount-preparation.ts
+2 src/renderer/src/components/terminal-pane/layout/close/use-terminal-pane-close-actions.ts
+1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-controller.ts
+1 src/renderer/src/components/terminal-pane/controller/use-terminal-pane-lifecycle.ts
+1 src/renderer/src/components/terminal-pane/mounting/use-terminal-pane-mount-lifecycle.ts
 1 src/renderer/src/components/terminal/terminal-tab-actions.ts
-4 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
+2 src/renderer/src/components/terminal/terminal-tab-bulk-actions.ts
 2 src/renderer/src/components/terminal/terminal-tab-create.ts
 2 src/renderer/src/components/use-new-linear-issue-projects.ts
 4 src/renderer/src/components/task-page/jira/use-task-page-jira-creation-metadata.ts
@@ -223,7 +223,6 @@
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
 1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
-1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab.ts
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts
@@ -253,7 +252,6 @@
 1 src/renderer/src/runtime/web-runtime-initial-terminal-bootstrap-dispatch.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
 1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
-1 src/renderer/src/runtime/web-runtime-terminal-create-operation.ts
 1 src/renderer/src/runtime/web-runtime-terminal-creation.ts
 1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts

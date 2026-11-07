@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorStore, ownedEditorFileId } from './editor-slice-test-harness'
+import {
+  createEditorTabsStore as createEditorStore,
+  ownedEditorFileId
+} from './editor-slice-test-harness'
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 

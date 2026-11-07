@@ -9,7 +9,7 @@ export function runtimeWaitExitCode(wait: { exitCode?: number | null }): number 
   return wait.exitCode ?? UNVERIFIED_PROCESS_EXIT_CODE
 }
 
-/** Drop tab/PTY identity only on proven exit (as in pty-exit-hibernate); synthetic loss retires transport but preserves reconnect adoption and guards against orphan cleanup. */
+/** Drop tab/PTY identity only on proven exit (as in pane-pty-exit); synthetic loss retires transport but preserves reconnect adoption and guards against orphan cleanup. */
 export function settleTabPtyBinding(tabId: string, ptyId: string, code: number): void {
   const state = useAppStore.getState()
   if (isProvenProcessExit(code)) {

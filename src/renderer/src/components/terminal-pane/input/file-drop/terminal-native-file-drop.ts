@@ -5,7 +5,7 @@ import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-clie
 import { translate } from '@/i18n/i18n'
 import { isWslUncPath } from '../../../../../../shared/wsl-paths'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
 import {
   type captureTerminalDropTarget,

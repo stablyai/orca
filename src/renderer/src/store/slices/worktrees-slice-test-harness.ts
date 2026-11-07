@@ -71,6 +71,7 @@ export const mockApi = {
   worktrees: {
     create: stubMock(),
     adoptProvisionedRoot: stubMock(),
+    runApprovedSetup: stubMock(),
     prefetchCreateBase: stubMock().mockResolvedValue(undefined),
     listDetected: listDetectedMock,
     listKnownForExecutionHost: listKnownForExecutionHostMock,
@@ -86,7 +87,7 @@ export const mockApi = {
       stubMock<[{ worktreeId: string; updates: Partial<WorktreeMeta> }]>().mockResolvedValue(
         undefined
       ),
-    updateLineage: stubMock().mockResolvedValue(null)
+    updateLineage: stubMock().mockResolvedValue({ lineage: null, workspaceLineage: null })
   },
   pty: {
     kill: stubMock().mockResolvedValue(undefined)

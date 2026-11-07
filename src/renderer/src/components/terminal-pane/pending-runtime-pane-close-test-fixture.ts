@@ -3,7 +3,7 @@ import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
-import { preparePendingSplitClose } from './pending-split-close-test-fixture'
+import { preparePendingSplitClose } from './layout/close/pending-split-close-test-fixture'
 import { flushPtySideEffects } from './pty-transport-test-harness'
 
 export async function preparePendingRuntimeClose(id = 'remote:env-1@@term_original') {

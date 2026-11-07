@@ -1,4 +1,3 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/connection-context'
@@ -23,7 +22,11 @@ import {
   findMarkdownPreviewOpenedEditFileId,
   findMarkdownPreviewTargetWorktree
 } from './markdown-preview-source-routing'
-import { handleMarkdownPreviewSystemLinkClick } from './markdown-preview-system-link-action'
+import {
+  handleMarkdownPreviewSystemLinkClick,
+  markdownPreviewLinkEditorOpener
+} from './markdown-preview-system-link-action'
+import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 
@@ -149,7 +152,10 @@ export async function handleMarkdownPreviewLinkClick({
       showLocalPathOpenBlockedToast()
       return
     }
-    void window.api.shell.openFileUri(target.toString(), LOCAL_EXECUTION_HOST_ID)
+    void openMarkdownFileLinkWithSystemDefault(
+      target.toString(),
+      markdownPreviewLinkEditorOpener(href, filePath, context)
+    )
     return
   }
 

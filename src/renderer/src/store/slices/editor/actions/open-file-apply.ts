@@ -1,3 +1,4 @@
+import { editorOpenTabBarOrder } from '../tabs/workspace-editor-files'
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
@@ -48,6 +49,7 @@ export function applyOpenFileToState(
   linkIntent: EditorOpenLinkIntent | null = null
 ): Partial<AppState> | AppState {
   const worktreeId = file.worktreeId
+  const placementId = options?.placementWorkspaceId ?? worktreeId
   let operationProvenance = file.operationProvenance
   if (!operationProvenance && file.mode === 'edit' && file.readOnly !== true) {
     try {
@@ -55,7 +57,8 @@ export function applyOpenFileToState(
         s,
         worktreeId,
         options?.suppressActiveRuntimeFallback ? null : file.runtimeEnvironmentId,
-        options?.suppressActiveRuntimeFallback === true || file.runtimeEnvironmentId !== undefined
+        options?.suppressActiveRuntimeFallback === true || file.runtimeEnvironmentId !== undefined,
+        options?.executionHostId
       )
     } catch (error) {
       toast.error(extractIpcErrorMessage(error, 'Failed to resolve file owner.'))
@@ -109,10 +112,11 @@ export function applyOpenFileToState(
   const requestedGroupId =
     splitGroup?.id ??
     (linkPlacement?.kind === 'group' ? linkPlacement.groupId : options?.targetGroupId)
-  const targetGroupId = resolveEditorOpenTargetGroupId(s, worktreeId, requestedGroupId) ?? undefined
+  const targetGroupId =
+    resolveEditorOpenTargetGroupId(s, placementId, requestedGroupId) ?? undefined
   scratch.editorItemTargetGroupId = targetGroupId
   const activeResult =
-    options?.selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
+    options?.selection === 'none' ? {} : buildEditorActiveResult(s, placementId, id)
   if (existing) {
     const updatedPreview = isPreview ? existing.isPreview : false
     const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
@@ -194,7 +198,7 @@ export function applyOpenFileToState(
   // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
   let newFiles = s.openFiles
   if (isPreview) {
-    const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+    const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
     const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
     if (existingPreviewIdx !== -1) {
       const replacedPreview = s.openFiles[existingPreviewIdx]
@@ -220,12 +224,12 @@ export function applyOpenFileToState(
             }
           : f
       )
-      const prevOrder = s.tabBarOrderByWorktree?.[worktreeId]
+      const prevOrder = s.tabBarOrderByWorktree?.[placementId]
       const previewTabBarUpdate = prevOrder
         ? {
             tabBarOrderByWorktree: {
               ...s.tabBarOrderByWorktree,
-              [worktreeId]: prevOrder.map((eid) => (eid === replacedPreview.id ? id : eid))
+              [placementId]: prevOrder.map((eid) => (eid === replacedPreview.id ? id : eid))
             }
           }
         : {}
@@ -239,11 +243,11 @@ export function applyOpenFileToState(
           mirroredFromRuntimeSession: _rmirrored,
           ...snap
         } = replacedPreview
-        const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
-        const position = getRecentlyClosedTabPosition(s, worktreeId, replacedPreview.id)
+        const stack = s.recentlyClosedEditorTabsByWorktree[placementId] ?? []
+        const position = getRecentlyClosedTabPosition(s, placementId, replacedPreview.id)
         nextRecentlyClosed = {
           ...s.recentlyClosedEditorTabsByWorktree,
-          [worktreeId]: [
+          [placementId]: [
             {
               ...(snap as ClosedEditorTabSnapshot),
               reopenId: replacedPreview.id,
@@ -254,7 +258,7 @@ export function applyOpenFileToState(
         }
         nextRecentlyClosedKinds = pushRecentlyClosedTabKind(
           s.recentlyClosedTabKindsByWorktree,
-          worktreeId,
+          placementId,
           'editor'
         )
       }
@@ -276,26 +280,6 @@ export function applyOpenFileToState(
     }
   }
 
-  // Why: append to the persisted tab bar order, else TabBar's reconcileOrder falls back to type-grouped ordering (terminals first).
-  const tabBarUpdate: Record<string, unknown> = {}
-  if (s.tabBarOrderByWorktree) {
-    const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
-    const terminalIds = (s.tabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
-    const editorFileIds = s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-    const browserIds = (s.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
-    const allExisting = new Set([...terminalIds, ...editorFileIds, ...browserIds])
-    const base = currentOrder.filter((eid) => allExisting.has(eid))
-    const inBase = new Set(base)
-    for (const eid of [...terminalIds, ...editorFileIds, ...browserIds]) {
-      if (!inBase.has(eid)) {
-        base.push(eid)
-        inBase.add(eid)
-      }
-    }
-    base.push(id)
-    tabBarUpdate.tabBarOrderByWorktree = { ...s.tabBarOrderByWorktree, [worktreeId]: base }
-  }
-
   return {
     ...splitState,
     openFiles: [
@@ -309,7 +293,7 @@ export function applyOpenFileToState(
         operationProvenance
       }
     ],
-    ...tabBarUpdate,
+    ...editorOpenTabBarOrder(s, placementId, id),
     ...activeResult
   }
 }

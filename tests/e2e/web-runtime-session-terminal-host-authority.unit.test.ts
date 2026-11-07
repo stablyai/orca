@@ -650,6 +650,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       deliverCreatedWebRuntimeAgentSessionPrompt(
         await createWebRuntimeSessionTerminalResult({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: 'fresh',
           agent: 'claude',
           command: 'claude'
@@ -715,6 +716,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       deliverCreatedWebRuntimeAgentSessionPrompt(
         await createWebRuntimeSessionTerminalResult({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: 'fresh',
           agent: 'claude',
           command: "claude --prefill 'https://github.com/o/r/issues/12'"
