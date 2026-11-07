@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS journal_proj_items (
   subagent_row INTEGER NOT NULL DEFAULT 0,
   subagent_group_key TEXT,
   subagent_names TEXT,
+  message_role TEXT,
+  command_entry INTEGER NOT NULL,
+  lifecycle_state TEXT,
+  assistant_prose INTEGER NOT NULL,
+  turn_scope_kind TEXT,
   PRIMARY KEY (session_id, epoch, entry_key)
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_items_position
