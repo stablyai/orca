@@ -21,7 +21,8 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   dsh: 'deepseek.com',
   omp: 'omp.sh',
   kilo: 'kilo.ai',
-  droid: 'factory.ai'
+  droid: 'factory.ai',
+  junie: 'jetbrains.com'
 }
 
 /** A newer host's agent reads by its id until this build knows its name. */

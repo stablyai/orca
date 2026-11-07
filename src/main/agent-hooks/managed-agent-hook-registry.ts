@@ -17,6 +17,7 @@ import { geminiHookService } from '../gemini/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { jcodeHookService } from '../jcode/hook-service'
+import { junieHookService } from '../junie/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { kiroHookService } from '../kiro/hook-service'
 import { museHookService } from '../muse/hook-service'
@@ -64,7 +65,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['zcode', () => zcodeHookService.install()],
   ['dsh', () => dshHookService.install()],
   ['jcode', () => jcodeHookService.install()],
-  ['kiro', () => kiroHookService.install()]
+  ['kiro', () => kiroHookService.install()],
+  ['junie', () => junieHookService.install()]
 ]
 
 // Refresh shared launchers even after CLI removal; Amp/Hermes manage provider-native plugins separately.
@@ -89,7 +91,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['zcode', () => zcodeHookService.refreshManagedScripts()],
   ['dsh', () => dshHookService.refreshManagedScripts()],
   ['jcode', () => jcodeHookService.refreshManagedScripts()],
-  ['kiro', () => kiroHookService.refreshManagedScripts()]
+  ['kiro', () => kiroHookService.refreshManagedScripts()],
+  ['junie', () => junieHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -115,7 +118,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['zcode', () => zcodeHookService.remove()],
   ['dsh', () => dshHookService.remove()],
   ['jcode', () => jcodeHookService.remove()],
-  ['kiro', () => kiroHookService.remove()]
+  ['kiro', () => kiroHookService.remove()],
+  ['junie', () => junieHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
@@ -145,5 +149,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['zcode', () => zcodeHookService.getStatus()],
   ['dsh', () => dshHookService.getStatus()],
   ['jcode', () => jcodeHookService.getStatus()],
-  ['kiro', () => kiroHookService.getStatus()]
+  ['kiro', () => kiroHookService.getStatus()],
+  ['junie', () => junieHookService.getStatus()]
 ]

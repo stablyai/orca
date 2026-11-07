@@ -17,7 +17,8 @@ export const AGENT_NAMES = [
   'grok',
   'devin',
   'zcode',
-  'jcode'
+  'jcode',
+  'junie'
 ]
 
 // Allow Windows launcher suffixes such as openclaude.exe while rejecting arbitrary dotted paths.
