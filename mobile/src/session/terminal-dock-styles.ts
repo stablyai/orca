@@ -89,6 +89,35 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   disabled: {
     opacity: feedback.disabledOpacity
   },
+  arrowPad: {
+    width: 66,
+    height: KEY_HEIGHT,
+    borderRadius: radii.control,
+    backgroundColor: colors.bgRaised
+  },
+  arrowPadDragging: {
+    backgroundColor: colors.borderSubtle
+  },
+  arrowLeft: {
+    position: 'absolute',
+    left: 6,
+    top: 10
+  },
+  arrowRight: {
+    position: 'absolute',
+    right: 6,
+    top: 10
+  },
+  arrowUp: {
+    position: 'absolute',
+    left: 27.5,
+    top: 2
+  },
+  arrowDown: {
+    position: 'absolute',
+    left: 27.5,
+    bottom: 2
+  },
   sheetContent: {
     gap: spacing.md,
     paddingBottom: spacing.lg

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Platform, View, Text, ScrollView, Pressable } from 'react-native'
 import {
   ChevronDown,
   Keyboard as KeyboardIcon,
@@ -11,14 +11,17 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal/terminal-accessory-repeat'
 import { getVisibleTerminalAccessoryKeys } from '../terminal/terminal-accessory-layout'
+import { NO_STICKY_MODIFIERS, type StickyModifiers } from '../terminal/terminal-sticky-modifiers'
 import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { TerminalArrowPad } from './TerminalArrowPad'
 import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { styles as sessionStyles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
+import { terminalDockKeyInput } from './use-terminal-dock-keys'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionKeyboardLift } from './use-mobile-session-keyboard-lift'
 
@@ -35,11 +38,13 @@ export function MobileSessionAccessoryKeys({
     customKeys,
     setShowCustomKeyModal,
     setDeleteKeyTarget,
+    directionPadEnabled,
     visibleBuiltInIds,
     visibleBuiltInAccessoryKeys,
     terminalModes,
     canPaste,
     canSend,
+    dockKeys,
     toggleDisplayMode,
     handleAccessoryKey,
     dismissSoftwareKeyboard,
@@ -50,6 +55,11 @@ export function MobileSessionAccessoryKeys({
   } = controller
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const accessoryPresses = useRef(new Map<string, ReturnType<typeof prepareAccessoryPress>>())
+  const [padHeld, setPadHeld] = useState(false)
+  const padPressRef = useRef<{
+    modifiers: StickyModifiers
+    tap: (() => Promise<boolean>) | null
+  } | null>(null)
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   // An unmounting Pressable never fires onPressOut, so a held key would outlive its row.
   useEffect(() => cancelAccessoryRepeat, [cancelAccessoryRepeat])
@@ -100,6 +110,7 @@ export function MobileSessionAccessoryKeys({
       <ScrollView
         style={styles.keyScroll}
         horizontal
+        scrollEnabled={Platform.OS === 'web' ? true : !padHeld}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.keyScrollContent}
@@ -142,6 +153,49 @@ export function MobileSessionAccessoryKeys({
           >
             <Text style={styles.keyText}>{t('session.accessoryKeys.paste', 'Paste')}</Text>
           </Pressable>
+        )}
+        {!padAvailable && directionPadEnabled !== false && (
+          <TerminalArrowPad
+            key="arrows"
+            disabled={!canSend}
+            // Prepared on touch-down so a lift after a terminal switch cannot land on the new terminal.
+            onPressStart={(side) => {
+              const modifiers = dockKeys?.takeModifiers?.() ?? NO_STICKY_MODIFIERS
+              const input = terminalDockKeyInput(side, modifiers)
+              padPressRef.current = {
+                modifiers,
+                tap: input ? prepareAccessoryPress(input).tap : null
+              }
+            }}
+            onTap={() => {
+              void padPressRef.current?.tap?.()
+              padPressRef.current = null
+            }}
+            onRepeatStart={(arrow) => {
+              const input = terminalDockKeyInput(
+                arrow,
+                padPressRef.current?.modifiers ?? dockKeys?.modifiers ?? NO_STICKY_MODIFIERS
+              )
+              if (input) {
+                prepareAccessoryPress(input).hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
+              }
+            }}
+            onRepeatStop={() => {
+              padPressRef.current = null
+              stopAccessoryRepeat()
+            }}
+            onAccessibilityArrow={(arrow) => {
+              if (dockKeys) {
+                dockKeys.sendKey(arrow)
+                return
+              }
+              const input = terminalDockKeyInput(arrow, NO_STICKY_MODIFIERS)
+              if (input) {
+                void handleAccessoryKey(input)
+              }
+            }}
+            onHoldChange={setPadHeld}
+          />
         )}
         {builtInKeys.map((key) => (
           <Pressable
