@@ -272,11 +272,10 @@ export function activateAndRevealWorktreeWithOutcome(
     }
   }
 
-  if (
+  const startupAccepted =
     opts?.notifyHostRuntime !== false &&
     !opts?.backendStartupTerminalSpawned &&
-    opts?.providesInitialSurface !== true
-  ) {
+    opts?.providesInitialSurface !== true &&
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
@@ -284,9 +283,8 @@ export function activateAndRevealWorktreeWithOutcome(
       startup: opts?.startup,
       agent: opts?.agent
     })
-  }
 
-  return { opened: { primaryTabId } }
+  return { opened: { primaryTabId, ...(startupAccepted ? { startupAccepted } : {}) } }
 }
 
 /** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */

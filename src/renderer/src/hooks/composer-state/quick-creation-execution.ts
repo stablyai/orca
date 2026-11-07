@@ -160,11 +160,17 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         isRemote: selectedRepoIsRemote,
         telemetrySource,
         route: agentLaunchRoute,
-        launchInputs: options?.launchInputs
+        launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        ephemeralVm: Boolean(ephemeralVmRecipe)
       })
 
       if (isSubmissionCancelled()) {
         return
+      }
+      if (quickStartup.creationStartup) {
+        quickStartup.creationStartup.onLegacyPreparationFailure =
+          options?.onLegacyPreparationFailure
       }
       const request = buildQuickCreationRequest({
         repoId,
@@ -191,6 +197,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         agentLaunchRoute,
         launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        creationStartup: quickStartup.creationStartup,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,

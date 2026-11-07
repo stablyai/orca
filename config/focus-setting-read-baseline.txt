@@ -222,7 +222,6 @@
 6 src/renderer/src/lib/browser/navigation/http-link-destinations.ts
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
-1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
 1 src/renderer/src/lib/launch-ai-vault-session.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts

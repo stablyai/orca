@@ -27,6 +27,7 @@ export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
   initialEphemeralVmRecipeId: string | undefined
   initialName: string
+  initialNote: string
   initialPrompt: string
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null

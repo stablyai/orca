@@ -58,7 +58,7 @@ type MockTransport = {
 
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
-const toastInfo = vi.fn()
+const toastInfo = vi.hoisted(() => vi.fn())
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: Record<string, unknown>

@@ -6,7 +6,10 @@ import type { WorktreeStartupPayload } from './workspace/creation/worktree-start
 import type { WorktreeActivationSurfaceSelection } from './workspace/activation/worktree-activation-surface-selection'
 import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 
-export type ActivateAndRevealResult = { primaryTabId: string | null }
+export type ActivateAndRevealResult = {
+  primaryTabId: string | null
+  startupAccepted?: boolean
+}
 
 export type WorkspaceActivationOutcome =
   | { opened: ActivateAndRevealResult }
