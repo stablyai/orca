@@ -1,6 +1,6 @@
 import { createChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
-import { getRepoIdFromWorktreeId, type WorktreeSlice } from '../../worktree-helpers'
-import { composeWorktreeId } from '../../../../../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, composeWorktreeId } from '../../../../../../shared/worktree/id'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
@@ -67,10 +67,9 @@ export function createRemoveWorktree(
       removalRoute,
       hostId,
       removalGenerationGuard,
-      sameIdSurvivingHostId: catalogSameIdSurvivingHostId
+      sameIdSurvivingHostId: catalogSurvivorHostId
     } = start
-    const sameIdSurvivingHostId =
-      catalogSameIdSurvivingHostId ?? options?.sameIdSurvivingHostId ?? null
+    const sameIdSurvivingHostId = catalogSurvivorHostId ?? options?.sameIdSurvivingHostId ?? null
     const deleteStateKey = getWorktreeDeleteStateKey(get(), worktreeId, requiredExecutionHostId)
     markWorktreeRemovalStarted(set, deleteStateKey, requiredExecutionHostId)
 

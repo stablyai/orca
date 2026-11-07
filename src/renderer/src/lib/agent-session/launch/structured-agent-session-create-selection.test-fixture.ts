@@ -20,7 +20,7 @@ import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function registerCreateSelectionTests(): void {

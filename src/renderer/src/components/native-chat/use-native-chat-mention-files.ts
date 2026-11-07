@@ -4,7 +4,7 @@ import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list
 import { rankQuickOpenFilesWithHistory } from '@/components/quick-open-history-ranking'
 import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
 import { findTerminalTabWorktreeId } from './native-chat-file-link'
-import { useFileListWorktree } from '@/store/selectors'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 
 const MENTION_FILE_LIMIT = 20
 const NO_FILES: readonly string[] = []

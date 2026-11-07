@@ -2,7 +2,7 @@ import {
   useAppStateViewActive,
   useAppViewExternalStore,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {

@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import {
   installReposRuntimeRoutingHarness,
   remoteRepo,

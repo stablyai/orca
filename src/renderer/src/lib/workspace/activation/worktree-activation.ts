@@ -38,7 +38,7 @@ import {
   readPreviousActive,
   recordShownTabFocus
 } from './worktree-activation-visit'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 import {
   workspaceActivationResult,

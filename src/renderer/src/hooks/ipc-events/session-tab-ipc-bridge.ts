@@ -10,7 +10,7 @@ import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+} from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'

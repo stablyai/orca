@@ -1,11 +1,9 @@
 import { useAppStore } from '@/store'
 import { activateWebRuntimeSessionWorktreeOnEnvironment } from '@/runtime/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
-import {
-  selectWorkspaceByHostTarget,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+import { findFirstIndexedWorktree } from './workspace/ownership/worktree-runtime-owner-index'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -59,7 +57,7 @@ export function showStructuredChatWorkspace(
           state,
           hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
         )
-      : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+      : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
     if (!worktree || findPendingWorktreeCreationId(state.pendingWorktreeCreations, worktree.id)) {
       return false
     }

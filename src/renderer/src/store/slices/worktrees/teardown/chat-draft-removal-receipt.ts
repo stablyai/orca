@@ -13,7 +13,10 @@ import type { OrchestrationPartyLocationResult } from '../../../../../../shared/
 import type { AppState } from '../../../types'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
-import { captureHostIdentityFence, isHostIdentityContinued } from '@/store/host-catalog-fencing'
+import {
+  captureHostIdentityFence,
+  isHostIdentityContinued
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import {
   captureNativeChatDraftRemovalScopes,

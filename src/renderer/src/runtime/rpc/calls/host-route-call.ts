@@ -1,7 +1,10 @@
 import { getHostOperationOwnership } from '../../../../../shared/host-operation-ownership'
 import { callRuntimeRpc } from './runtime-rpc-call'
 import type { HostRoute } from '../targets/runtime-client-target'
-import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '@/store/host-catalog-fencing'
+import {
+  captureHostIdentityFence,
+  isHostIdentityFenceCurrent
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 /** The host behind the route changed while the call was in flight; it may or may not have run. */
 export class HostRouteUnverifiableError extends Error {

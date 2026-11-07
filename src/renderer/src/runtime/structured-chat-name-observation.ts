@@ -1,4 +1,4 @@
-import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { ExecutionHostId } from '../../../shared/execution-host'

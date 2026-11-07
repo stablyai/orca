@@ -35,7 +35,7 @@ import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 
 function SetupScriptPromptCard(): React.JSX.Element | null {
   useUiLanguageRevision()

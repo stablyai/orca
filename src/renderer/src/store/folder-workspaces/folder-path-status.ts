@@ -22,7 +22,7 @@ import {
 } from '../project-groups/project-group-owner-routing'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { selectFolderWorkspaces } from '../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
 
 type FolderPathStatusSnapshotState = Pick<
   AppState,

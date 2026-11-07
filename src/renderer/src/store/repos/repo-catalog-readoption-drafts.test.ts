@@ -1,7 +1,7 @@
 import { it, expect, vi, afterEach } from 'vitest'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../slices/store-test-helpers'
-import { TEST_REPO } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { TEST_REPO } from './repo.test-fixture'
 import {
   type RuntimeEnvironmentCallRequest,
   createCompatibleRuntimeStatusResponseIfNeeded

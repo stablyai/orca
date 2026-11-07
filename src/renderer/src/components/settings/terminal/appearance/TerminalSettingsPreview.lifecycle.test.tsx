@@ -115,7 +115,7 @@ vi.mock('@/components/ui/card', () => ({
   CardTitle: 'CardTitle'
 }))
 
-vi.mock('@/store/plugin-fonts', () => ({
+vi.mock('@/store/plugins/appearance/plugin-fonts', () => ({
   pluginFontFamilyWhenLoaded: (fontFamily: string) => fontFamily,
   usePluginFontReady: () => true
 }))

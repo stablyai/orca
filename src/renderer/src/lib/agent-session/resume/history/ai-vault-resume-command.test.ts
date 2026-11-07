@@ -1,6 +1,7 @@
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { TEST_REPO, makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAiVaultResumeCopyCommandForWorktree,

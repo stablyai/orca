@@ -4,10 +4,8 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRoutableExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
-import {
-  selectWorkspaceByHostTarget,
-  selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { GitPushTarget } from '../../../shared/worktree/types'

@@ -5,10 +5,13 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner
 import type { Tab } from '../../../../../../shared/tab-types'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
-import { createTabsSliceMockApi } from '../../tabs-slice-test-harness'
-import { createTestStore } from '../../store-test-helpers'
-import { makeLayout, makeTab } from '../../store-session-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { createTabsSliceMockApi } from '../../tabs/tabs-slice-test-harness'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
+import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

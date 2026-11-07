@@ -10,14 +10,14 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project-types'
-import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
+import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
   assertNotSshProjectHost,
@@ -28,7 +28,10 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 import { toastProjectAddFailure } from './project-add-failure-toast'
-import { captureHostIdentityFence, isHostIdentityContinued } from '../host-catalog-fencing'
+import {
+  captureHostIdentityFence,
+  isHostIdentityContinued
+} from '../../runtime/rpc/environment-revisions/host-identity-fence'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],

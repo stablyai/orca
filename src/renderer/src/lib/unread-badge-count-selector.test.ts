@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'

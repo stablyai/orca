@@ -1,8 +1,8 @@
 // Tests install an after-flush store/reference-build observer (installLayoutFrameApplyCheck); release/dev builds install none.
 
 import type { AppState } from '@/store/types'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
-import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
+import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
+import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 
 export type LayoutFrameApplyObservation = {

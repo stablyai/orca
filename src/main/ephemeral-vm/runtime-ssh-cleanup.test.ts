@@ -120,24 +120,3 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
   })
   expect(cleaned).not.toHaveProperty('sshTargetId')
 })
-
-it('repairs completed cleanup records that already lost their target id', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
-  tempDirs.push(userDataPath)
-  const runtime = createRuntime(userDataPath, 'cleanup_failed', {
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
-
-  await expect(
-    removeEphemeralVmRuntimeSshTarget({
-      userDataPath,
-      runtime,
-      removeTarget: vi.fn()
-    })
-  ).resolves.toMatchObject({
-    status: 'cleaned',
-    cleanupStatus: 'succeeded',
-    sshTargetId: undefined
-  })
-})

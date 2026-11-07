@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'zustand'
 import { useAppStore } from '@/store'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import '../../../editor-buffer-record-lifecycle'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import './editor-buffer-record-lifecycle'
 
 import './editor-draft-state'
 

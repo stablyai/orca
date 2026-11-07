@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { createEditorSaveQueue } from './editor-save-queue'

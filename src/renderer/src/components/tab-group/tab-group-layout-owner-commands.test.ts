@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { beginLayoutFramePositions, endLayoutFramePositions } from '@/runtime/layout-frame-position'
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   dropTabThroughLayoutOwner,
   setGroupRatioThroughLayoutOwner

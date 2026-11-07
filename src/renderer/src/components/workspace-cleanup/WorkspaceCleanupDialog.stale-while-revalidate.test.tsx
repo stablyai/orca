@@ -8,7 +8,7 @@ import type {
   WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
-import { createTestStore, seedStore } from '../../store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
 import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup/workspace-cleanup-browse'
 import {
   NOW,

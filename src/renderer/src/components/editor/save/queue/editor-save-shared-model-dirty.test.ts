@@ -11,7 +11,7 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { overwriteDiskWithTabEdits } from '../../external-changes/ExternalFileChangeBanner'
 import { isStaleCachedEditorText } from '../../model-lifetime/buffer-text/editor-stale-mount-guard'
 import { stampCleanTabDiskBaseline } from '../../external-changes/editor-clean-tab-disk-baseline'

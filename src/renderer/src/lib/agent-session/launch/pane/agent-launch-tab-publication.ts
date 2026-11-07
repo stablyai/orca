@@ -11,7 +11,7 @@ import { useAppStore } from '../../../../store/index'
 import { resolveUnifiedTabCreatePlacement } from '../../../../store/slices/tabs/tabs-create-placement'
 import { insertUnifiedTabAfterAnchor } from '../../../unified-tab-anchor-insertion'
 import { rememberAgentLaunchPanePrompt } from './agent-launch-pane-prompt'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function landedGroupId(worktreeId: string, tabId: string): string | undefined {
   return useAppStore

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
 import * as memory from '@/components/native-chat/native-chat-composer-draft-memory'
 import * as sources from '@/components/native-chat/native-chat-launch-draft-source'

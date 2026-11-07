@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
 import {

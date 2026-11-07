@@ -6,7 +6,7 @@ import {
 } from '../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import '@/store/slices/worktree-helpers'
+
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findIndexedRepoOwner as findRepoRecord } from './repo-owner-index'
 import {

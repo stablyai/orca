@@ -7,7 +7,7 @@ import { reloadTabContentFromDisk } from '../../external-changes/ExternalFileCha
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 
 import { GUARDED_PATH } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { toast } from 'sonner'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))

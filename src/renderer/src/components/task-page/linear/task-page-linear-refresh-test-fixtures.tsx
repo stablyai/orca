@@ -136,12 +136,12 @@ vi.mock('@/hooks/useIssueMetadata', async (original) => ({
   })
 }))
 
-vi.mock('@/store/selectors', async (original) => {
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), useAllWorktrees: () => empty }
 })
 
-vi.mock('@/store/workspace-record-selectors', async (original) => {
+vi.mock('@/store/workspaces/catalog/workspace-record-fields', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), selectFolderWorkspaces: () => empty }
 })

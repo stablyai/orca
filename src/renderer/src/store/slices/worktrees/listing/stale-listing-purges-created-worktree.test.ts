@@ -6,14 +6,11 @@ import { applyCreatedWorktree } from '../create/created-worktree-state-merge'
 import { worktreeCatalogVersionKey } from './worktree-catalog-version-state'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import type { WorktreeListingMergeOutcome } from './detected-worktree-refresh-admission'
-import {
-  TEST_REPO,
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../../store-test-helpers'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   readStructuredAgentLaunchRecord,

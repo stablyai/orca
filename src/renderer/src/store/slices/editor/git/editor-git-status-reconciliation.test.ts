@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { createEditorStore, createEditorTabsStore } from '../editor-slice-test-harness'
-import { makeFolderWorkspace } from '../../worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()

@@ -1,7 +1,10 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
 import { useAppStore } from '@/store/index'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import {
+  guardPinnedTabClose,
+  resolvePinnedTabLabel
+} from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
@@ -10,7 +13,7 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
-import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,

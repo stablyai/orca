@@ -9,7 +9,7 @@ import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-sessi
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { setGroupRatioThroughLayoutOwner } from '../components/tab-group/tab-group-layout-owner-commands'
 import { layoutOwnerPaneGestures } from '../components/terminal-pane/layout/ownership/terminal-pane-layout-owner-gestures'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { provideLayoutFrameTerminalPanes } from './layout-frame-terminal-panes'
 import { layoutApplyTestTransport } from './layout-apply-test-transport.test-fixture'

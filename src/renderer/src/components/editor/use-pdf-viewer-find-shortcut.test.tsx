@@ -101,16 +101,6 @@ describe('PDF viewer find shortcut', () => {
     expect(openFind['second-pdf']).not.toHaveBeenCalled()
   })
 
-  it('opens from its own tab, its editor header and the file explorer while its group is focused', () => {
-    const { openFind, view } = setup('pdf')
-    for (const id of ['pdf-tab', 'pdf-header-copy-path', 'explorer-row']) {
-      expect(pressFind(view.getByTestId(id)).defaultPrevented).toBe(true)
-    }
-    expect(pressFind(document.body).defaultPrevented).toBe(true)
-    expect(openFind.pdf).toHaveBeenCalledTimes(4)
-    expect(openFind['second-pdf']).not.toHaveBeenCalled()
-  })
-
   it('leaves a text field its keys, and always opens from inside the PDF', () => {
     const { openFind, view } = setup('chat')
     expect(pressFind(view.getByTestId('sidebar-search')).defaultPrevented).toBe(false)

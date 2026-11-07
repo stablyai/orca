@@ -2,7 +2,7 @@ import type React from 'react'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { useFileSearchScope } from './useFileSearchScope'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import type {
   SearchFileResult,
   SearchMatch,

@@ -18,7 +18,7 @@ import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry-property-schemas'
 import {
   normalizeSourceControlActionRecipe,
   type SourceControlActionRecipe,

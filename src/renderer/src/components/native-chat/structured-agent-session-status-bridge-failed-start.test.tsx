@@ -103,7 +103,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
   }
 })
 
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {

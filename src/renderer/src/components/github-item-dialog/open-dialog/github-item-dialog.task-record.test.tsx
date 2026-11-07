@@ -40,7 +40,9 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
 vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: mocks.details,
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.item
