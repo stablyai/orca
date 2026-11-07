@@ -31,6 +31,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from '../themes/TerminalThemeSections'
+import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting'
 import { TerminalWindowSection } from '../TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
@@ -290,6 +291,10 @@ export function TerminalAppearanceSection({
           preferredTarget={preferredThemeTarget}
           renderAdvancedContent={renderPreviewAdvancedContent}
         />
+      ) : null}
+
+      {showDesktopThemeImports ? (
+        <ClaudeCodeThemeSyncSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showDesktopThemeImports ? (

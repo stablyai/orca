@@ -127,6 +127,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
   terminalDividerColorLight: string
+  /** Mirror the terminal palette into Claude Code's theme; off restores the theme Orca replaced. */
+  claudeCodeThemeSync: boolean
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
