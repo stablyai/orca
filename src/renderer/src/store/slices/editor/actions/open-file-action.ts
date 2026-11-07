@@ -1,3 +1,4 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -24,15 +25,23 @@ export function createOpenFileAction(
     /** The view once it is drawn; null when none was. */
     onShown?: (result: EditorOpenResult | null) => void
   ): { fileId: string; result: EditorOpenResult | null } => {
-    const editorItemWorktreeId = file.worktreeId
+    const editorItemWorktreeId = options?.placementWorkspaceId ?? file.worktreeId
+    const intent = editorPlacementIntent(get, editorItemWorktreeId)
     const scratch: OpenFileApplyScratch = {
       editorItemFileId: file.filePath,
       editorItemTargetGroupId: options?.targetGroupId,
       editorItemIsPreview: false,
       refused: false
     }
-    set((s) => applyOpenFileToState(s, file, options, scratch, linkIntent))
+    set((s) => {
+      const patch = applyOpenFileToState(s, file, options, scratch, linkIntent)
+      if (!scratch.refused) {
+        intent.register(scratch.editorItemFileId)
+      }
+      return patch
+    })
     if (scratch.refused) {
+      intent.finish(null)
       return { fileId: scratch.editorItemFileId, result: null }
     }
     // Why: a reentrant update may remove the chosen group after selection; never recreate it.
@@ -41,19 +50,23 @@ export function createOpenFileAction(
       scratch.editorItemTargetGroupId &&
       !isLiveEditorOpenGroup(get(), editorItemWorktreeId, scratch.editorItemTargetGroupId)
     ) {
+      intent.finish(null)
       return { fileId: scratch.editorItemFileId, result: null }
     }
-    const editorItemViewStateId = openWorkspaceEditorItem(
-      get(),
-      scratch.editorItemFileId,
-      editorItemWorktreeId,
-      file.relativePath,
-      editorTabContentTypeForMode(file.mode),
-      scratch.editorItemIsPreview,
-      scratch.editorItemTargetGroupId,
-      options?.selection,
-      options?.groupIndex
-    )
+    const editorItemViewStateId =
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          scratch.editorItemFileId,
+          editorItemWorktreeId,
+          file.relativePath,
+          editorTabContentTypeForMode(file.mode),
+          scratch.editorItemIsPreview,
+          scratch.editorItemTargetGroupId,
+          options?.selection,
+          options?.groupIndex
+        )
+      ) ?? scratch.editorItemFileId
     const settled: { ran: boolean; result: EditorOpenResult | null } = { ran: false, result: null }
     // Why after: a layout-owner build draws a new tab only with main's frame; today's is drawn already.
     afterPendingTab(editorItemViewStateId, (shownId) => {

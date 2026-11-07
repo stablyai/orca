@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { getRuntimeGitCommitCompare } from '@/runtime/runtime-git-diff-client'
 import { getRuntimeGitRemoteCommitUrl } from '@/runtime/runtime-git-working-tree-client'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { detectLanguage } from '@/lib/language-detect'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
@@ -50,8 +50,10 @@ export function useGitHistoryCommitActions({
   ownerConnectionId?: string | null
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
 }): GitHistoryCommitActions {
-  const openCommitAllDiffs = useAppStore((s) => s.openCommitAllDiffs)
-  const openCommitDiff = useAppStore((s) => s.openCommitDiff)
+  const scope = useSourceControlScope()
+  const executionHostId = scope?.executionHostId
+  const placementWorkspaceId = scope?.placementWorkspaceId
+  const runtimeEnvironmentId = scope?.runtimeOwnerEnvironmentId
 
   // Share compare results across expansion and diff opening to avoid a second round-trip.
   const commitCompareCacheRef = useRef<Map<string, GitCommitCompareResult>>(new Map())
@@ -72,7 +74,7 @@ export function useGitHistoryCommitActions({
       }
       const connectionId =
         ownerConnectionId === undefined
-          ? (getConnectionId(activeWorktreeId) ?? undefined)
+          ? sourceControlConnectionId(scope, activeWorktreeId)
           : (ownerConnectionId ?? undefined)
       const result = await getRuntimeGitCommitCompare(
         {
@@ -96,7 +98,7 @@ export function useGitHistoryCommitActions({
       commitCompareCacheRef.current.set(item.id, result)
       return result.entries
     },
-    [activeRepoTarget, activeWorktreeId, worktreePath, ownerConnectionId]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -110,14 +112,17 @@ export function useGitHistoryCommitActions({
         if (!cached) {
           return
         }
-        openCommitAllDiffs(
-          activeWorktreeId,
-          worktreePath,
-          cached.summary,
-          cached.entries,
-          item.subject,
-          item.message
-        )
+        useAppStore
+          .getState()
+          .openCommitAllDiffs(
+            activeWorktreeId,
+            worktreePath,
+            cached.summary,
+            cached.entries,
+            item.subject,
+            item.message,
+            { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
+          )
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -129,7 +134,14 @@ export function useGitHistoryCommitActions({
         )
       }
     },
-    [activeWorktreeId, loadCommitFiles, openCommitAllDiffs, worktreePath]
+    [
+      activeWorktreeId,
+      loadCommitFiles,
+      placementWorkspaceId,
+      executionHostId,
+      runtimeEnvironmentId,
+      worktreePath
+    ]
   )
 
   const openCommitFile = useCallback(
@@ -146,7 +158,7 @@ export function useGitHistoryCommitActions({
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
-      openCommitDiff(
+      useAppStore.getState().openCommitDiff(
         activeWorktreeId,
         worktreePath,
         entry,
@@ -159,10 +171,23 @@ export function useGitHistoryCommitActions({
           message: item.message
         },
         detectLanguage(entry.path),
-        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
+        {
+          targetGroupId,
+          placementWorkspaceId,
+          executionHostId,
+          runtimeEnvironmentId,
+          preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId)
+        }
       )
     },
-    [activeWorktreeId, openCommitDiff, resolveSplitTargetGroupId, worktreePath]
+    [
+      activeWorktreeId,
+      placementWorkspaceId,
+      executionHostId,
+      resolveSplitTargetGroupId,
+      runtimeEnvironmentId,
+      worktreePath
+    ]
   )
 
   const copyCommitText = useCallback(async (text: string, label: string): Promise<void> => {
@@ -198,7 +223,7 @@ export function useGitHistoryCommitActions({
             worktreePath,
             connectionId:
               ownerConnectionId === undefined
-                ? (getConnectionId(activeWorktreeId) ?? undefined)
+                ? sourceControlConnectionId(scope, activeWorktreeId)
                 : (ownerConnectionId ?? undefined)
           },
           { sha: item.id }
@@ -251,7 +276,7 @@ export function useGitHistoryCommitActions({
       }
       void explainCommitWithDefaultAgent(activeWorktreeId, item)
     },
-    [activeRepoTarget, activeWorktreeId, copyCommitText, worktreePath, ownerConnectionId]
+    [activeRepoTarget, activeWorktreeId, copyCommitText, scope, worktreePath, ownerConnectionId]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

@@ -339,7 +339,7 @@
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-connect-failure-recovery.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-exit-record.test.ts
 3 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-subscribe-ack-input.test.ts
-1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/resolve-split-cwd.test.ts
+1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/input/ime/terminal-ime-xterm-preedit-cell-grid.test.ts
 1 test-no-real-time-wait:src/renderer/src/hooks/runtime-project-refresh-scheduler.test.ts

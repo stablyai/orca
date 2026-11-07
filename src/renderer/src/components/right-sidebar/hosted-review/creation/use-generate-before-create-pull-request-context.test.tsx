@@ -67,8 +67,7 @@ function useComposer(key: string) {
     fieldsAreSeedPlaceholders: fields.fieldsAreSeedPlaceholders,
     generatePullRequestFields: fields.handleGenerate,
     generationKey: key,
-    repo: null,
-    settings: null
+    repo: null
   })
   return fields
 }

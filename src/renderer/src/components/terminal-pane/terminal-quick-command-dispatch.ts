@@ -4,7 +4,7 @@ import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from './input/terminal-input-activity'
 import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 type QuickCommandPane = {

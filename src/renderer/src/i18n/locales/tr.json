@@ -13918,7 +13918,8 @@
             "clearNotesFromFile_one": "{{path}} dosyasındaki {{count}} not silinsin mi?",
             "markResolved": "Çözüldü olarak işaretle",
             "keepFile": "Dosyayı koru",
-            "keepDeletion": "Silmeyi koru"
+            "keepDeletion": "Silmeyi koru",
+            "refreshAll": "Tümünü yenile"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -16942,7 +16943,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Konuşma hatası: {{value0}}",
-          "7afff43472": "Dikte tamamlandı, ancak odaklanılmış bir metin alanı yoktu.",
           "55127a3706": "Dikte tamamlanamadı: {{value0}}",
           "bb7f599ee7": "Ayarları Aç",
           "2d5b9fabf9": "Mikrofon erişimi reddedildi. Sistem ayarlarından erişim verin, ardından Orca'yı yeniden başlatın.",
@@ -16953,7 +16953,13 @@
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
-          "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu."
+          "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
+          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Dikte eklenemedi, bu yüzden panoya kopyalandı.",
+          "copiedWithoutTarget": "Odaklanmış bir metin alanı yoktu, bu yüzden dikte panoya kopyalandı.",
+          "lost": "Dikte eklenemedi ve kopyalanamadı."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Dikteyi durdur",
@@ -18273,6 +18279,10 @@
           "actionsUnavailable": "Eklenti işlemleri bu istemcide kullanılamıyor.",
           "messageTooLarge": "Mesaj boyut sınırını aşıyor.",
           "tooManyRequests": "Çok fazla istek."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Bu çalışma ağacını aç",
+          "reconnect": "Bu çalışma ağacının değişikliklerini görmek için yeniden bağlanın."
         }
       },
       "link": {
@@ -20989,6 +20999,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}} içinde başlatıldı",
     "actionSaveFailed": "Bu eylem kaydedilemedi. Ayarlar bölümünden yeniden kaydetmeyi deneyin.",
     "discard": {
       "deleteUntrackedFileDescription": "Bu işlem, izlenmeyen bu dosyayı kalıcı olarak siler. Bu işlem geri alınamaz.",

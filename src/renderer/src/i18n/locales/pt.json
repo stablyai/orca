@@ -19,6 +19,7 @@
     "scanTooLarge": "A varredura da Abertura rápida é grande demais ({{reason}})."
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado em {{value0}}",
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculado"
     },
@@ -9948,7 +9949,8 @@
             "clearNotesFromFile_many": "Limpar {{count}} notas de {{path}}?",
             "markResolved": "Marcar como resolvido",
             "keepFile": "Manter arquivo",
-            "keepDeletion": "Manter exclusão"
+            "keepDeletion": "Manter exclusão",
+            "refreshAll": "Atualizar tudo"
           },
           "checks": {
             "panel": {
@@ -18317,6 +18319,10 @@
           "actionsUnavailable": "As ações de plugin não estão disponíveis neste cliente.",
           "messageTooLarge": "A mensagem excede o limite de tamanho.",
           "tooManyRequests": "Muitas requisições."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Abrir este worktree",
+          "reconnect": "Reconecte para ver as alterações deste worktree."
         }
       },
       "cmd": {
@@ -19212,7 +19218,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Erro de fala: {{value0}}",
-          "7afff43472": "O ditado terminou, mas nenhum campo de texto estava em foco.",
           "55127a3706": "Falha no ditado: {{value0}}",
           "bb7f599ee7": "Abrir Configurações",
           "2d5b9fabf9": "Acesso ao microfone negado. Conceda acesso nas configurações do sistema e reinicie o Orca.",
@@ -19223,7 +19228,13 @@
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
-          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+          "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
+          "stoppedAfterSilence": "Parou após um minuto de silêncio"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
+          "copiedWithoutTarget": "Nenhum campo de texto estava em foco, então o ditado foi copiado para a área de transferência.",
+          "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Parar ditado",

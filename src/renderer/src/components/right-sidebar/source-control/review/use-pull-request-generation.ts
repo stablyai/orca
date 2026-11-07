@@ -1,7 +1,12 @@
+import { resolveSourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import {
+  useSourceControlState,
+  sourceControlConnectionId,
+  useSourceControlScope
+} from '../panel/worktree-scope'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
@@ -25,7 +30,6 @@ import {
 } from '@/store/slices/pull-request-generation'
 import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { SourceControlAi } from '../ai/use-ai'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -39,9 +43,7 @@ export function useSourceControlPullRequestGeneration({
   allocatePullRequestGenerationRequestId,
   branchName,
   hostedReviewCreateProvider,
-  prGenerationRecords,
   refreshGitStatusAfterPullRequestGeneration,
-  resolvedPrCreationDefaults,
   setPullRequestGenerationRecord,
   updatePullRequestGenerationRecord,
   worktreePath
@@ -52,22 +54,24 @@ export function useSourceControlPullRequestGeneration({
   allocatePullRequestGenerationRequestId: SourceControlStoreActions['allocatePullRequestGenerationRequestId']
   branchName: string
   hostedReviewCreateProvider: HostedReviewProvider
-  prGenerationRecords: SourceControlStoreActions['prGenerationRecords']
   refreshGitStatusAfterPullRequestGeneration: SourceControlStatusRefresh['refreshGitStatusAfterPullRequestGeneration']
-  resolvedPrCreationDefaults: SourceControlAi['resolvedPrCreationDefaults']
   setPullRequestGenerationRecord: SourceControlStoreActions['setPullRequestGenerationRecord']
   updatePullRequestGenerationRecord: SourceControlStoreActions['updatePullRequestGenerationRecord']
   worktreePath: string | null
 }) {
+  const scope = useSourceControlScope()
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
     worktreeId: activeWorktreeId,
     worktreePath,
     repoId: activeRepo?.id,
     branch: branchName
   })
-  const activePullRequestGenerationRecordCandidate = activePullRequestGenerationKey
-    ? (prGenerationRecords[activePullRequestGenerationKey] ?? null)
-    : null
+  // Select only this owner's record so another worktree's generation cannot re-render this panel.
+  const activePullRequestGenerationRecordCandidate = useSourceControlState((s) =>
+    activePullRequestGenerationKey
+      ? (s.pullRequestGenerationRecords[activePullRequestGenerationKey] ?? null)
+      : null
+  )
   const activePullRequestGenerationRecord =
     activePullRequestGenerationRecordCandidate &&
     activePullRequestGenerationRecordCandidate.context.repoId === activeRepo?.id &&
@@ -101,13 +105,19 @@ export function useSourceControlPullRequestGeneration({
       ) {
         return undefined
       }
+      const currentDefaults = resolveSourceControlAiPrCreationDefaults({
+        settings: useAppStore.getState().settings ?? {},
+        repo: activeRepo
+      })
       const requestId = allocatePullRequestGenerationRequestId()
       // Why one resolution: the result must land on this copy, not a same-path twin.
-      const copy = activeWorktreeId ? resolveWorktreeGitCopyNow(activeWorktreeId) : null
+      const copy = activeWorktreeId
+        ? resolveWorktreeGitCopyNow(activeWorktreeId, scope?.executionHostId)
+        : null
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath,
-        connectionId: copy ? copy.connectionId : (getConnectionId(activeWorktreeId) ?? undefined),
+        connectionId: copy ? copy.connectionId : sourceControlConnectionId(scope, activeWorktreeId),
         ownerHostId: copy?.hostId ?? null,
         jiraIssueKey:
           (hostedReviewCreateProvider === 'github' || hostedReviewCreateProvider === 'gitlab') &&
@@ -146,7 +156,7 @@ export function useSourceControlPullRequestGeneration({
               body: seed.body,
               draft: seed.draft,
               provider: hostedReviewCreateProvider,
-              useTemplate: resolvedPrCreationDefaults.useTemplate
+              useTemplate: currentDefaults.useTemplate
             },
             overrides
           )
@@ -193,6 +203,7 @@ export function useSourceControlPullRequestGeneration({
       return await settlePullRequestGenerationRequest(generationKey, requestId, request)
     },
     [
+      scope,
       activePullRequestGenerationKey,
       activeRepo,
       activeRepoTarget,
@@ -201,7 +212,6 @@ export function useSourceControlPullRequestGeneration({
       branchName,
       hostedReviewCreateProvider,
       refreshGitStatusAfterPullRequestGeneration,
-      resolvedPrCreationDefaults.useTemplate,
       setPullRequestGenerationRecord,
       updatePullRequestGenerationRecord,
       worktreePath
@@ -212,7 +222,8 @@ export function useSourceControlPullRequestGeneration({
     if (!activePullRequestGenerationKey) {
       return
     }
-    const record = prGenerationRecords[activePullRequestGenerationKey]
+    const record =
+      useAppStore.getState().pullRequestGenerationRecords[activePullRequestGenerationKey]
     if (!record || record.status !== 'running') {
       return
     }
@@ -242,7 +253,7 @@ export function useSourceControlPullRequestGeneration({
         }
       })
     })
-  }, [activePullRequestGenerationKey, prGenerationRecords, updatePullRequestGenerationRecord])
+  }, [activePullRequestGenerationKey, updatePullRequestGenerationRecord])
 
   const handlePullRequestGenerationSeedRestored = useCallback((): void => {
     if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {

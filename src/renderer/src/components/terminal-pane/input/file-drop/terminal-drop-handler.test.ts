@@ -73,7 +73,7 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
-vi.mock('../../terminal-input-activity', () => ({
+vi.mock('../terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 

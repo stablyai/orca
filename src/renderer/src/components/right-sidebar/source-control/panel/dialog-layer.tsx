@@ -34,6 +34,7 @@ export function SourceControlDialogLayer({
   baseRefDialogOpen,
   onBaseRefDialogOpenChange,
   baseRefRepoId,
+  baseRefHostId,
   pickerBaseRef,
   onSelectBaseRef,
   onUsePrimaryBaseRef,
@@ -77,6 +78,7 @@ export function SourceControlDialogLayer({
   onConfirmDiscard: DiscardDialogProps['onConfirm']
   baseRefDialogOpen: boolean
   onBaseRefDialogOpenChange: (open: boolean) => void
+  baseRefHostId?: BaseRefPickerProps['hostId']
   baseRefRepoId: string
   pickerBaseRef: BaseRefPickerProps['currentBaseRef']
   onSelectBaseRef: BaseRefPickerProps['onSelect']
@@ -174,6 +176,7 @@ export function SourceControlDialogLayer({
           <div className="min-h-0 overflow-y-auto scrollbar-sleek">
             <BaseRefPicker
               repoId={baseRefRepoId}
+              hostId={baseRefHostId}
               currentBaseRef={pickerBaseRef}
               onSelect={onSelectBaseRef}
               onUsePrimary={onUsePrimaryBaseRef}
@@ -209,7 +212,8 @@ export function SourceControlDialogLayer({
         onSaveAgentDefault={onSaveAgentDefault}
         onOpenSettings={onOpenSourceControlAiSettings}
         {...resolveConflictsEditor}
-        onLaunched={() =>
+        onLaunched={(backgroundWorkspaceId) =>
+          !backgroundWorkspaceId &&
           toast.success(
             translate(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',

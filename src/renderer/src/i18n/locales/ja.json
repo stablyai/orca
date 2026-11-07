@@ -13296,7 +13296,8 @@
             "clearNotesFromFile_other": "{{path}} から {{count}} 件のメモを削除しますか？",
             "markResolved": "解決済みとしてマーク",
             "keepFile": "ファイルを残す",
-            "keepDeletion": "削除を維持"
+            "keepDeletion": "削除を維持",
+            "refreshAll": "すべて更新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -16282,7 +16283,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "音声エラー: {{value0}}",
-          "7afff43472": "ディクテーションは終了しましたが、テキストフィールドにフォーカスがありませんでした。",
           "55127a3706": "ディクテーションが失敗しました: {{value0}}",
           "bb7f599ee7": "設定を開く",
           "2d5b9fabf9": "マイクへのアクセスが拒否されました。システム設定でアクセスを許可し、Orca を再起動。",
@@ -16293,7 +16293,13 @@
           "5d2c3e7ae3": "音声が検出されませんでした。",
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
-          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。"
+          "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
+          "copiedWithoutTarget": "テキストフィールドにフォーカスがなかったため、音声入力をクリップボードにコピーしました。",
+          "lost": "音声入力を挿入もコピーもできませんでした。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "ディクテーションを停止する",
@@ -17590,6 +17596,10 @@
           "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
           "messageTooLarge": "メッセージがサイズ制限を超えています。",
           "tooManyRequests": "リクエストが多すぎます。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "このワークツリーを開く",
+          "reconnect": "再接続して、このワークツリーの変更を表示してください。"
         }
       },
       "link": {
@@ -20723,6 +20733,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}} で開始しました",
     "actionSaveFailed": "このアクションを保存できませんでした。設定でもう一度保存してください。",
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"

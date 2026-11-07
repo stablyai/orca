@@ -13745,7 +13745,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 則筆記？",
             "markResolved": "標記為已解決",
             "keepFile": "保留檔案",
-            "keepDeletion": "保留刪除"
+            "keepDeletion": "保留刪除",
+            "refreshAll": "全部重新整理"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -16731,7 +16732,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "語音錯誤：{{value0}}",
-          "7afff43472": "聽寫完成，但沒有聚焦文字欄位。",
           "55127a3706": "聽寫失敗：{{value0}}",
           "bb7f599ee7": "開啟設定",
           "2d5b9fabf9": "麥克風存取被拒絕。在系統設定中授予存取權限，然後重新啟動 Orca。",
@@ -16742,7 +16742,13 @@
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
-          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
+          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
+          "stoppedAfterSilence": "靜音一分鐘後已停止"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
+          "copiedWithoutTarget": "沒有聚焦的文字欄位，已將聽寫內容複製到剪貼簿。",
+          "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止聽寫",
@@ -18039,6 +18045,10 @@
           "actionsUnavailable": "此用戶端不支援外掛操作。",
           "messageTooLarge": "訊息超過大小限制。",
           "tooManyRequests": "請求過多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "開啟此工作樹",
+          "reconnect": "請重新連線以查看此工作樹的變更。"
         }
       },
       "link": {
@@ -20691,6 +20701,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中啟動",
     "actionSaveFailed": "無法儲存此動作。請在「設定」中再試著儲存。",
     "discard": {
       "deleteUntrackedFileDescription": "這將永久刪除此未追蹤的檔案。此操作無法復原。",

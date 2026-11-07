@@ -185,7 +185,8 @@ export type NativeChatComposerHandle = {
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
-  insertTypedText: (text: string) => boolean
+  /** Dictated text is spaced from the text around the caret. */
+  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean

@@ -235,7 +235,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
-      settings: null,
       repo: null,
       worktreeId: WORKTREE_ID,
       promptDelivery: 'submit-after-ready',

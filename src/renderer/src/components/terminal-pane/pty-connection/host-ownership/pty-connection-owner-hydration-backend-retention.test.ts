@@ -1,6 +1,6 @@
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { makeTab } from '@/store/slices/store-session-test-harness'
-import { createPaneManagerOptionsTestContext } from '../../terminal-pane-manager-options-test-context'
+import { createPaneManagerOptionsTestContext } from '../../mounting/terminal-pane-manager-options-test-context'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -138,7 +138,8 @@ describe('connectPanePty owner hydration and backend retention', () => {
     const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
     const { createRemoteRuntimePtyTransport } =
       await import('../../pty-transport/remote-runtime/remote-runtime-pty-transport')
-    const { createTerminalPaneManagerOptions } = await import('../../terminal-pane-manager-options')
+    const { createTerminalPaneManagerOptions } =
+      await import('../../mounting/terminal-pane-manager-options')
     const { clearTerminalTabsParkedOnUnresolvedHost, getTabIdsAwaitingHostHydrationRemount } =
       await import('@/lib/parked-terminal-host-hydration')
     clearTerminalTabsParkedOnUnresolvedHost()
@@ -207,7 +208,7 @@ describe('connectPanePty owner hydration and backend retention', () => {
       const agentTitleMocks5 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { createTerminalPaneManagerOptions } =
-        await import('../../terminal-pane-manager-options')
+        await import('../../mounting/terminal-pane-manager-options')
       vi.stubGlobal('navigator', { userAgent: 'Windows' })
       const worktreeId = rowless ? 'ephemeral-setup-terminal:install' : 'repo1::/tmp/wt-1'
       if (!rowless) {

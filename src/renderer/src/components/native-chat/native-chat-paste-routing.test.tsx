@@ -6,17 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18nModule from '@/i18n/i18n'
 
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import type { NativeChatComposerHandle } from './NativeChatComposer'
+import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { NativeChatPaneCover } from '../terminal-pane/NativeChatPaneCover'
 
 import { registerTerminalPanePasteListeners } from '../terminal-pane/input/paste/terminal-pane-paste-listeners'
-import type { TerminalPaneCloseController } from '../terminal-pane/use-terminal-pane-close-actions'
+import type { TerminalPaneCloseController } from '../terminal-pane/layout/close/use-terminal-pane-close-actions'
 import type { TerminalPanePasteExecution } from '../terminal-pane/input/paste/terminal-pane-paste-execution'
 import {
   pasteTerminalPaneMenuClipboard,
   type TerminalPaneMenuPasteContext
 } from '../terminal-pane/input/paste/terminal-pane-menu-paste'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 
 const mocks = vi.hoisted(() => ({
   readClipboardText: vi.fn(),

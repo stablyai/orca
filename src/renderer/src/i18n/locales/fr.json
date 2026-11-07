@@ -13849,7 +13849,8 @@
             "clearNotesFromFile_many": "Effacer {{count}} notes de {{path}} ?",
             "markResolved": "Marquer comme résolu",
             "keepFile": "Conserver le fichier",
-            "keepDeletion": "Conserver la suppression"
+            "keepDeletion": "Conserver la suppression",
+            "refreshAll": "Tout actualiser"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -16910,7 +16911,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Erreur vocale : {{value0}}",
-          "7afff43472": "La dictée est terminée, mais aucun champ de texte n'avait le focus.",
           "55127a3706": "Échec de la dictée : {{value0}}",
           "bb7f599ee7": "Ouvrir les paramètres",
           "2d5b9fabf9": "Accès au micro refusé. Accordez l'autorisation dans les réglages système, puis redémarrez Orca.",
@@ -16921,7 +16921,13 @@
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
-          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes."
+          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes.",
+          "stoppedAfterSilence": "Arrêt après une minute de silence"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "La dictée n'a pas pu être insérée, elle a donc été copiée dans le presse-papiers.",
+          "copiedWithoutTarget": "Aucun champ de texte n'avait le focus, la dictée a donc été copiée dans le presse-papiers.",
+          "lost": "La dictée n'a pu être ni insérée ni copiée."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Arrêter la dictée",
@@ -18267,6 +18273,10 @@
           "actionsUnavailable": "Les actions de plugin ne sont pas disponibles dans ce client.",
           "messageTooLarge": "Le message dépasse la taille limite.",
           "tooManyRequests": "Trop de requêtes."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Ouvrir ce worktree",
+          "reconnect": "Reconnectez-vous pour voir les modifications de ce worktree."
         }
       },
       "link": {
@@ -21356,6 +21366,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Démarré dans {{value0}}",
     "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"

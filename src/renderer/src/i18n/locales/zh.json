@@ -13296,7 +13296,8 @@
             "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 条备注？",
             "markResolved": "标记为已解决",
             "keepFile": "保留文件",
-            "keepDeletion": "保留删除"
+            "keepDeletion": "保留删除",
+            "refreshAll": "全部刷新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -16282,7 +16283,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "语音错误：{{value0}}",
-          "7afff43472": "听写完成，但没有聚焦文本字段。",
           "55127a3706": "听写失败：{{value0}}",
           "bb7f599ee7": "打开设置",
           "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
@@ -16293,7 +16293,13 @@
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
-          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
+          "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
+          "stoppedAfterSilence": "静音一分钟后已停止"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",
+          "copiedWithoutTarget": "没有聚焦的文本框，已将听写内容复制到剪贴板。",
+          "lost": "无法插入或复制听写内容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止听写",
@@ -17590,6 +17596,10 @@
           "actionsUnavailable": "此客户端不支持插件操作。",
           "messageTooLarge": "消息超过大小限制。",
           "tooManyRequests": "请求过多。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "打开此工作树",
+          "reconnect": "请重新连接以查看此工作树的更改。"
         }
       },
       "link": {
@@ -20722,6 +20732,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "已在 {{value0}} 中启动",
     "actionSaveFailed": "无法保存此操作。请在设置中重试保存。",
     "unlinkedPr": {
       "status": "PR #{{number}} 未链接"

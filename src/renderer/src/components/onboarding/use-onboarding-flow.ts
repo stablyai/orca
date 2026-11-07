@@ -16,7 +16,7 @@ import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboardi
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
 import { useOnboardingYoloPermissions } from './use-onboarding-yolo-permissions'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import {
   isSkippedStepIndex,
   remapOpenOnboardingLastCompletedStep,
@@ -24,7 +24,6 @@ import {
   shouldSkipIntegrationsStep,
   shouldSkipWindowsTerminalStep
 } from './onboarding-flow-state'
-
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 

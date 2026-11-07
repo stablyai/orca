@@ -15,9 +15,7 @@ import { getDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
-
-export { TerminalPaneRecoveryPortals } from './TerminalPaneRecoveryPortals'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 
 export function TerminalPaneCodexRestartPortals({
   controller

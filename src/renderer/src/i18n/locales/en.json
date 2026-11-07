@@ -14293,7 +14293,8 @@
             "clearNotesFromFile_other": "Clear {{count}} notes from {{path}}?",
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
-            "keepDeletion": "Keep deletion"
+            "keepDeletion": "Keep deletion",
+            "refreshAll": "Refresh all"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -17343,7 +17344,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Speech error: {{value0}}",
-          "7afff43472": "Dictation finished, but no text field was focused.",
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
@@ -17354,7 +17354,13 @@
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
-          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit."
+          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
+          "stoppedAfterSilence": "Stopped after a minute of silence"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
+          "copiedWithoutTarget": "No text field was focused, so dictation was copied to the clipboard.",
+          "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation",
@@ -18688,6 +18694,10 @@
           "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
           "pluginMessage": "Message from {{value0}}: {{value1}}",
           "reloaded": "Reloaded"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Open this worktree",
+          "reconnect": "Reconnect to see this worktree’s changes."
         }
       },
       "link": {
@@ -21654,6 +21664,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Started in {{value0}}",
     "actionSaveFailed": "Could not save this action. Try saving it again in Settings.",
     "discard": {
       "deleteUntrackedFileDescription": "This will permanently delete this untracked file. This cannot be undone.",
