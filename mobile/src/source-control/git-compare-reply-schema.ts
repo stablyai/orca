@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 const GIT_BRANCH_CHANGE_STATUS = ['modified', 'added', 'deleted', 'renamed', 'copied'] as const

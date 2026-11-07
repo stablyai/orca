@@ -16,6 +16,7 @@ import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { lineageStoreKeyOfRow } from '../../../../shared/worktree/cross-store-lineage-resolution'
 import { validCrossStoreLineage } from '../../../../shared/worktree/cross-store-lineage-records'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderLineageEdgeOf } from '../../../../shared/worktree/folder-lineage-parents'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
@@ -26,6 +27,7 @@ export function readWindowPairedServerRows(
     | 'repos'
     | 'worktreeLineageById'
     | 'crossStoreLineageByStoreKey'
+    | 'workspaceLineageByChildKey'
   >,
   hostIds: ReadonlySet<string>
 ): Map<string, PairedServerWorkspaceRow> {
@@ -58,7 +60,13 @@ export function readWindowPairedServerRows(
         ? undefined
         : validCrossStoreLineage(state.crossStoreLineageByStoreKey[storeKey])[
             worktreeWorkspaceKey(worktree.id)
-          ]
+          ],
+      kind === 'git'
+        ? folderLineageEdgeOf(
+            state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)],
+            worktree.instanceId
+          )
+        : undefined
     )
     rows.set(row.key, row)
   }

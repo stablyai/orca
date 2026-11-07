@@ -1,16 +1,19 @@
-import { resolveBrowserLinkSession } from './browser-link-session'
-import { activateAndRevealWorkspace } from './worktree-activation'
+import { resolveBrowserLinkSession } from './browser/navigation/browser-link-session'
+import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { WorkspaceFilePreviewPlan } from './file-preview'
-import type { BrowserLinkOpenContext, BrowserOpenOutcome } from './browser-link-destination'
-import { openLocalBrowserLink } from './browser-link-open'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from './browser/navigation/browser-link-destination'
+import { openLocalBrowserLink } from './browser/navigation/browser-link-open'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import { createBrowserLinkHostMatcher } from './browser-link-owner'
+import { createBrowserLinkHostMatcher } from './browser/navigation/browser-link-owner'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { hasIndexedDetectedWorktree } from './worktree-runtime-owner-index'
+import { hasIndexedDetectedWorktree } from './workspace/ownership/worktree-runtime-owner-index'
 
 export type FileBrowserLinkTarget = {
   filePath: string

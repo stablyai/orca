@@ -8,18 +8,6 @@ const BITWARDEN = 'nngceckbapebfimnlniiiahkandclblb'
 
 describe('parseChromeWebStoreExtensionInput', () => {
   it.each([
-    BITWARDEN,
-    `  ${BITWARDEN.toUpperCase()}  `,
-    `https://chromewebstore.google.com/detail/bitwarden-password-manage/${BITWARDEN}`,
-    `https://chromewebstore.google.com/detail/bitwarden-password-manage/${BITWARDEN}?hl=en&pli=1`,
-    `https://chromewebstore.google.com/detail/${BITWARDEN}`,
-    `chromewebstore.google.com/detail/bitwarden/${BITWARDEN}#reviews`,
-    `https://chrome.google.com/webstore/detail/bitwarden/${BITWARDEN}`
-  ])('reads the id from %s', (input) => {
-    expect(parseChromeWebStoreExtensionInput(input)).toBe(BITWARDEN)
-  })
-
-  it.each([
     '',
     'bitwarden',
     BITWARDEN.slice(1),

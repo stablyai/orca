@@ -1,7 +1,7 @@
 import {
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AppState } from './types'
 
 /** Retire before publishing external runtime revisions so views detach from old records with drafts; revision changes then resolve every identity. */

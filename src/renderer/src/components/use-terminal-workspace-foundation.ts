@@ -12,8 +12,8 @@ import {
 } from '@/store/repos/wsl-moved-projects'
 import { useReusedArrayIdentity } from './sidebar/worktree-list/listing/use-reused-array-identity'
 import { usePairedRuntimeParkingEnvironmentIds } from '@/store/use-runtime-status-view'
-import { createTerminalWorktreeTopologyProjection } from './terminal-pane/terminal-hidden-worktree-retention'
-import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/terminal-side-effect-facts-handler'
+import { createTerminalWorktreeTopologyProjection } from './terminal-pane/parking/retention/terminal-hidden-worktree-retention'
+import { isMainTerminalSideEffectAuthorityForPty } from './terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 
 export function useTerminalWorkspaceFoundation() {

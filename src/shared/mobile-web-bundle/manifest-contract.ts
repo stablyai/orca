@@ -1,11 +1,11 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { sha256 } from '../sha256'
 
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
 
-/** Page build number: shells require their minimum and wall older desktops. Bump when a shell stops handling an older page. */
-export const MOBILE_WEB_PAGE_VERSION = 1
+/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. */
+export const MOBILE_WEB_PAGE_VERSION = 2
 
 /** The only stable-named asset, and the only one that references the content-addressed names. */
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'

@@ -118,6 +118,7 @@ export type RuntimePtySpawnArgs = {
   cwd?: string
   command?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   commandDelivery?: 'renderer' | 'provider'

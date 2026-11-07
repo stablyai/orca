@@ -9,7 +9,7 @@ import {
   type WorkspaceLayoutStreamFrame
 } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+import { subscribeRuntimeRpc } from './rpc/subscriptions/runtime-rpc-subscribe'
 import { exposeLocalLayoutStreamE2EEnd } from './local-layout-stream-e2e-end'
 
 /** `lost`: the stream ended without a refusal and the client stopped. `refused`: the host answered

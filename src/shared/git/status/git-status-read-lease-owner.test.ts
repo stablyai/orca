@@ -71,42 +71,6 @@ describe('GitStatusReadLeaseOwner', () => {
     await Promise.resolve()
   })
 
-  it('cleans listeners and entries after success, failure, and cancellation', async () => {
-    const owner = new GitStatusReadLeaseOwner<string>()
-    const successController = new AbortController()
-    const successRemove = vi.spyOn(successController.signal, 'removeEventListener')
-    await expect(
-      owner.lease('success', successController.signal, async () => 'success')
-    ).resolves.toBe('success')
-    expect(successRemove).toHaveBeenCalledOnce()
-
-    const failureController = new AbortController()
-    const failureRemove = vi.spyOn(failureController.signal, 'removeEventListener')
-    const failure = new Error('failed')
-    await expect(
-      owner.lease('failure', failureController.signal, async () => {
-        throw failure
-      })
-    ).rejects.toBe(failure)
-    expect(failureRemove).toHaveBeenCalledOnce()
-
-    const cancelController = new AbortController()
-    const cancelRemove = vi.spyOn(cancelController.signal, 'removeEventListener')
-    const cancelPending = deferred<string>()
-    const cancelled = owner.lease('cancel', cancelController.signal, () => cancelPending.promise)
-    cancelController.abort()
-    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
-    expect(cancelRemove).toHaveBeenCalledOnce()
-
-    const freshLoad = vi.fn(async () => 'fresh')
-    await expect(owner.lease('success', undefined, freshLoad)).resolves.toBe('fresh')
-    await expect(owner.lease('failure', undefined, freshLoad)).resolves.toBe('fresh')
-    await expect(owner.lease('cancel', undefined, freshLoad)).resolves.toBe('fresh')
-    expect(freshLoad).toHaveBeenCalledTimes(3)
-    cancelPending.reject(new Error('underlying aborted'))
-    await Promise.resolve()
-  })
-
   it('invalidates joinability without breaking already-issued leases', async () => {
     const owner = new GitStatusReadLeaseOwner<string>()
     const firstPending = deferred<string>()

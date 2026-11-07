@@ -12,8 +12,8 @@ import type {
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store'
 import {
   discoverInstalledAgentSkills,

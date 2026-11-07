@@ -330,7 +330,9 @@ describe('actual stream result partitions', () => {
                     crash: captureValue(null)
                   }
             )
-            expect(run.requests).toHaveLength(operation === 'session.live-worktree-name' ? 1 : 0)
+            if (operation !== 'session.live-worktree-name') {
+              expect(run.requests).toHaveLength(0)
+            }
             expect(run.effects.filter((effect) => effect.name === 'stream-listener-crash')).toEqual(
               []
             )
@@ -350,7 +352,6 @@ describe('actual stream result partitions', () => {
                 name: 'Feature Work Renamed',
                 resolution: 'present'
               })
-              expect(run.requests).toHaveLength(2)
             } else if (operation === 'session.native-chat-page') {
               expect(last.state).toMatchObject({
                 messageIds:

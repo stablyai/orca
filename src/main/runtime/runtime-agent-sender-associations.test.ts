@@ -9,9 +9,13 @@ import { createRuntimeAgentProjections } from './construction/runtime-agent-proj
 import {
   fingerprintOrchestrationPeer,
   pairedOrchestrationPeers
-} from './orchestration/environment-transport'
+} from './orchestration/federation/environment-transport'
 import { devicePrincipalOf } from './rpc/server/pairing/device-principal'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
 import type { RuntimeLeafRecord } from './terminal/records/runtime-terminal-state-records'
@@ -19,7 +23,7 @@ import { makeTuiIdlePty } from './terminal/wait/tui-idle-wait-test-harness'
 import {
   conversationRecordReader,
   type AgentSessionRecordReader
-} from './orchestration/structured-session-lineage'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
@@ -30,9 +34,9 @@ import {
   mintStructuredWorkerPaneKey
 } from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
-import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
+import { projectSessionTabsForClient } from './rpc/methods/session-tabs/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
-import { structuredMailSource } from './orchestration/structured-mail-source'
+import { structuredMailSource } from './orchestration/mailbox/structured-mail/structured-mail-source'
 import { scaleStore } from './agent-session-scale.test-fixture'
 import { AgentSenderPublisher } from './runtime-agent-sender-publication'
 

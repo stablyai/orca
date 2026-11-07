@@ -1,5 +1,5 @@
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration-task-display'
-import type { TaskRow } from '../types'
+import type { TaskRow } from '../db/orchestration-records'
 
 export function crewTaskDisplay(
   task: Pick<TaskRow, 'spec' | 'task_title' | 'display_name'> | undefined

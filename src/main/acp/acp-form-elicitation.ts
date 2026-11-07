@@ -4,13 +4,12 @@ import {
   legacyAgentSessionQuestionAnswers
 } from '../../shared/agent-session/agent-session-question-answer'
 import type { AgentJournalQuestion } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS } from '../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { pendingAcpResolution, type AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpRpcError } from './acp-errors'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
-// OMP pairs each choice field `qN` with a free-text `qN__other`.
-const OTHER_SUFFIX = '__other'
+const OTHER_SUFFIXES = ['__other', '_custom'] as const
 const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
 const choiceSchema = z.looseObject({
@@ -22,6 +21,7 @@ const propertySchema = z.looseObject({
   type: z.enum(['string', 'boolean', 'array']),
   title: z.string().optional(),
   description: z.string().optional(),
+  format: z.string().optional(),
   default: z.unknown().optional(),
   enum: z.array(z.string()).optional(),
   oneOf: z.array(choiceSchema).optional(),
@@ -32,7 +32,10 @@ const propertySchema = z.looseObject({
 const formSchema = z.object({
   mode: z.literal('form'),
   message: z.string(),
-  requestedSchema: z.looseObject({ properties: z.record(z.string(), propertySchema) })
+  requestedSchema: z.looseObject({
+    properties: z.record(z.string(), propertySchema),
+    required: z.array(z.string()).optional()
+  })
 })
 
 type Choice = { value: string; label: string; description?: string }
@@ -41,7 +44,10 @@ type Field = { key: string; otherKey?: string; choices?: Choice[]; question: Age
 const unsupportedForm = () => new AcpRpcError(-32602, 'Unsupported ACP elicitation form')
 
 // A form field with no choices becomes a text answer; enums and arrays become pickable options.
-function fieldChoices(property: z.infer<typeof propertySchema>): Choice[] | undefined {
+function fieldChoices(
+  property: z.infer<typeof propertySchema>,
+  hasOther: boolean
+): Choice[] | undefined {
   if (property.type === 'boolean') {
     return [
       { value: 'true', label: 'Yes' },
@@ -56,13 +62,13 @@ function fieldChoices(property: z.infer<typeof propertySchema>): Choice[] | unde
       label: choice.title || choice.const,
       ...(choice.description ? { description: choice.description } : {})
     })) ?? values?.map((value) => ({ value, label: value }))
-  if (choices?.length === 0 || (property.type === 'array' && !choices)) {
+  if ((choices?.length === 0 && !hasOther) || (property.type === 'array' && !choices)) {
     throw unsupportedForm()
   }
   return choices
 }
 
-/** Presents a form elicitation (OMP's `ask` batch, select, confirm, input) as one question card. */
+/** Keeps form field identity while presenting choices and text on the existing question card. */
 export function acpFormElicitationPresentation(params: unknown): AcpRequestPresentation {
   const parsed = formSchema.safeParse(params)
   if (!parsed.success) {
@@ -70,22 +76,46 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   }
   const { message, requestedSchema } = parsed.data
   const properties = requestedSchema.properties
-  const keys = Object.keys(properties).filter(
-    (key) =>
-      !(key.endsWith(OTHER_SUFFIX) && Object.hasOwn(properties, key.slice(0, -OTHER_SUFFIX.length)))
-  )
+  const required = new Set(requestedSchema.required)
+  const otherKeys = new Map<string, string>()
+  for (const [key, property] of Object.entries(properties)) {
+    if (
+      required.has(key) ||
+      (property.type !== 'string' && property.type !== 'array') ||
+      !(property.enum || property.oneOf || property.type === 'array')
+    ) {
+      continue
+    }
+    const otherKey = OTHER_SUFFIXES.map((suffix) => key + suffix).find((candidate) => {
+      const other = properties[candidate]
+      return (
+        other?.type === 'string' &&
+        !other.enum &&
+        !other.oneOf &&
+        other.format === undefined &&
+        !required.has(candidate)
+      )
+    })
+    if (otherKey) {
+      otherKeys.set(key, otherKey)
+    }
+  }
+  const companions = new Set(otherKeys.values())
+  const keys = Object.keys(properties).filter((key) => !companions.has(key))
   if (keys.length === 0) {
     throw unsupportedForm()
   }
   const fields: Field[] = keys.slice(0, MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS).map((key, index) => {
     const property = properties[key]!
-    const otherKey = Object.hasOwn(properties, key + OTHER_SUFFIX) ? key + OTHER_SUFFIX : undefined
-    const choices = fieldChoices(property)
+    const otherKey = otherKeys.get(key)
+    const choices = fieldChoices(property, otherKey !== undefined)
     const id = `q${index + 1}`
     const question: AgentJournalQuestion = {
       id,
-      question: keys.length === 1 ? message : property.title || message,
-      ...(choices && property.description ? { header: property.description } : {}),
+      question: [...new Set([message, property.title, property.description].filter(Boolean))].join(
+        '\n\n'
+      ),
+      ...(property.title ? { header: property.title } : {}),
       multiSelect: property.type === 'array',
       options: (choices ?? []).map((choice, choiceIndex) => ({
         id: `o${choiceIndex + 1}`,
@@ -112,7 +142,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   const first = questions.length === 1 && !questions[0]!.multiSelect ? questions[0]! : undefined
   const body = {
     kind: 'question' as const,
-    question: message,
+    question: first?.question ?? message,
     options: first?.options ?? [],
     ...(first?.freeTextQuestionId ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
     ...(first?.freeTextInput ? { freeTextInput: first.freeTextInput } : {}),
@@ -152,9 +182,15 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
         }
       }
       for (const key of keys.slice(MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS)) {
-        const otherKey = key.endsWith(OTHER_SUFFIX) ? key : key + OTHER_SUFFIX
-        if (Object.hasOwn(properties, otherKey)) {
+        const otherKey = otherKeys.get(key)
+        if (otherKey) {
           content[otherKey] = NOT_SHOWN_ANSWER
+        } else if (
+          properties[key]!.type === 'string' &&
+          !properties[key]!.enum &&
+          !properties[key]!.oneOf
+        ) {
+          content[key] = NOT_SHOWN_ANSWER
         }
       }
       return { action: 'accept', content }

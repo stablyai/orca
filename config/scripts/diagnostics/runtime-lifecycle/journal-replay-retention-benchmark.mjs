@@ -18,7 +18,7 @@ const root = fileURLToPath(new URL('../../../..', import.meta.url))
 const journalSource = './src/main/native-chat/agent-session-journal'
 const entries = {
   baseline: `export {openAgentSessionJournal} from '${journalSource}/journal-store-factory'; export {replayJournal} from '${journalSource}/journal-open'; export {openJournalDatabase} from '${journalSource}/journal-database'; export {journalDatabaseFile} from '${journalSource}/journal-paths';`,
-  current: `export {openAgentSessionJournal} from '${journalSource}/journal-store-factory'; export {replayJournal} from '${journalSource}/journal-open'; export {JournalHostDatabase, journalDatabasePath} from '${journalSource}/journal-host-database';`
+  current: `export {openAgentSessionJournal} from '${journalSource}/journal-store-factory'; export {replayJournal} from '${journalSource}/replay/journal-open'; export {JournalHostDatabase, journalDatabasePath} from '${journalSource}/database/journal-host-database';`
 }
 const sourceRoots = { baseline: resolve(baselineDir), current: root }
 const identity = {

@@ -28,7 +28,7 @@ vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => null }
 })
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   listRuntimeMarkdownDocuments: runtime.list,
   statRuntimePath: runtime.stat
 }))

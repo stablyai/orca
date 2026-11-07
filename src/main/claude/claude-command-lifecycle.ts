@@ -7,7 +7,7 @@ import {
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE
-} from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+} from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt

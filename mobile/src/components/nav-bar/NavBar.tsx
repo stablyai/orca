@@ -9,9 +9,11 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
+import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useWorkingSweep } from '../use-working-motion'
 import { NAV_BAR_BUTTON_SIZE } from './NavBarButton'
 
 export const NAV_BAR_HEIGHT = 52
@@ -32,6 +34,8 @@ type NavBarProps = {
   /** From useCollapsingTitle: the title waits until the list's PageTitle has scrolled under the bar. */
   titleOpacity?: Animated.AnimatedInterpolation<number>
   dividerOpacity?: Animated.AnimatedInterpolation<number>
+  /** From useRefreshHint: shown data is refreshing in the background. */
+  refreshing?: boolean
 }
 
 // The one top bar: leading button, a centred compact title, and up to two trailing buttons.
@@ -44,7 +48,8 @@ export function NavBar({
   accessory,
   style,
   titleOpacity,
-  dividerOpacity
+  dividerOpacity,
+  refreshing = false
 }: NavBarProps) {
   useMobileColorScheme()
   return (
@@ -79,6 +84,31 @@ export function NavBar({
       {dividerOpacity ? (
         <Animated.View pointerEvents="none" style={[styles.divider, { opacity: dividerOpacity }]} />
       ) : null}
+      {refreshing ? <NavBarRefreshLine /> : null}
+    </View>
+  )
+}
+
+// Sits on the bar's bottom edge so the title, subtitle and accessory never move.
+function NavBarRefreshLine() {
+  const reducedMotion = useReducedMotionEnabled()
+  const sweep = useWorkingSweep(reducedMotion === false)
+  // Draw nothing until the preference is known, so a reveal never swaps shapes.
+  if (reducedMotion === null) {
+    return null
+  }
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.refreshTrack}
+    >
+      <Animated.View
+        ref={sweep.ref}
+        onLayout={sweep.onLayout}
+        style={[styles.refreshSegment, reducedMotion ? styles.refreshSegmentStill : sweep.style]}
+      />
     </View>
   )
 }
@@ -154,6 +184,24 @@ const styles = themedStyleSheet(() => ({
     bottom: -StyleSheet.hairlineWidth,
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
+  },
+  refreshTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -StyleSheet.hairlineWidth,
+    height: 2,
+    overflow: 'hidden'
+  },
+  refreshSegment: {
+    width: '28%',
+    height: '100%',
+    borderRadius: 1,
+    backgroundColor: colors.textSecondary
+  },
+  refreshSegmentStill: {
+    width: '100%',
+    opacity: 0.45
   },
   // Equal sides keep the title centred whatever the buttons on either side.
   side: {

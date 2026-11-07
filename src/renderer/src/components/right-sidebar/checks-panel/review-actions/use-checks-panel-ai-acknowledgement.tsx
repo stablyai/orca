@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
@@ -15,7 +15,7 @@ import type { ChecksPanelControllerState } from '../use-checks-panel-controller-
 import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from '../refresh/use-checks-panel-polling'
 import { buildSnapshottedThreadResolver } from '../comments/pr-comment-snapshotted-thread-resolver'
-import { markPRCommentThreadResolved } from '@/lib/pr-comment-thread-resolution'
+import { markPRCommentThreadResolved } from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
 import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
 import { clearPRCommentsListSelection } from '../comments/pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'

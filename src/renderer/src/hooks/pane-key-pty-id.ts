@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { collectLeafIdsInOrder } from '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 
 export function getPtyIdForPaneKey(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)

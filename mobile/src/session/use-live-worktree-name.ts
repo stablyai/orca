@@ -1,9 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { parseRoutableExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc-client'
+import { subscribeSharedClientEvents } from '../transport/shared-client-events'
 import type { ConnectionState } from '../transport/types'
 import { sessionProjectNameRead, sessionWorktreeRecordRead } from './mobile-session-read-operations'
 import { getLiveWorktreeDisplayName } from './worktree-display-name'
@@ -231,43 +231,38 @@ export function useLiveWorktreeName({
       }
 
       startFallbackPoll()
-      const unsubscribe = client.subscribe(
-        'runtime.clientEvents.subscribe',
-        null,
-        (payload: unknown) => {
-          if (stale || !payload || typeof payload !== 'object') {
-            return
+      const unsubscribe = subscribeSharedClientEvents(client, (event) => {
+        if (stale) {
+          return
+        }
+        if (event.type === 'ready') {
+          const replayedAfterReconnect = eventStreamReady
+          eventStreamReady = true
+          if (hasSuccessfulRefresh) {
+            stopFallbackPoll()
           }
-          const event = payload as RuntimeClientEventStreamMessage | { type: 'error' }
-          if (event.type === 'ready') {
-            const replayedAfterReconnect = eventStreamReady
-            eventStreamReady = true
-            if (hasSuccessfulRefresh) {
-              stopFallbackPoll()
-            }
-            if (replayedAfterReconnect) {
-              refreshProjectName = true
-              // Reconnect must reread once because disconnected clients miss title invalidations.
-              invalidateAndRefresh()
-            }
-            return
-          }
-          if (event.type === 'end' || event.type === 'error') {
-            eventStreamReady = false
-            startFallbackPoll()
-            return
-          }
-          if (
-            event.type === 'reposChanged' ||
-            (event.type === 'worktreesChanged' && event.repoId === repoId)
-          ) {
-            if (event.type === 'reposChanged') {
-              refreshProjectName = true
-            }
+          if (replayedAfterReconnect) {
+            refreshProjectName = true
+            // Reconnect must reread once because disconnected clients miss title invalidations.
             invalidateAndRefresh()
           }
+          return
         }
-      )
+        if (event.type === 'end' || event.type === 'error') {
+          eventStreamReady = false
+          startFallbackPoll()
+          return
+        }
+        if (
+          event.type === 'reposChanged' ||
+          (event.type === 'worktreesChanged' && event.repoId === repoId)
+        ) {
+          if (event.type === 'reposChanged') {
+            refreshProjectName = true
+          }
+          invalidateAndRefresh()
+        }
+      })
       // Runtime displayName owns the title; retain fallback polling until invalidations prove available on this host.
       void refreshWorktreeName()
       return () => {

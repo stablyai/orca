@@ -4,11 +4,11 @@ import { createTestStore, makeTab } from './store-test-helpers'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   planAgentHibernationCandidates
-} from '../../lib/agent-hibernation-planner'
+} from '../../lib/agent-session/hibernation/agent-hibernation-planner'
 import {
   getHibernationBoundaryResolvedAtByPaneKey,
   resetHibernationPaneAgeForTests
-} from '../../lib/agent-hibernation-pane-age'
+} from '../../lib/agent-session/hibernation/agent-hibernation-pane-age'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE = `tab-1:${LEAF}`

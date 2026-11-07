@@ -1,5 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
 
 type EditorShotCleanup = {

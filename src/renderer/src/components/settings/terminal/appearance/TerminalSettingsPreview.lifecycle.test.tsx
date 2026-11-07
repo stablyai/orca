@@ -115,6 +115,11 @@ vi.mock('@/components/ui/card', () => ({
   CardTitle: 'CardTitle'
 }))
 
+vi.mock('@/store/plugin-fonts', () => ({
+  pluginFontFamilyWhenLoaded: (fontFamily: string) => fontFamily,
+  usePluginFontReady: () => true
+}))
+
 vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
   buildDefaultTerminalOptions: () => ({ scrollback: 0 })
 }))
@@ -123,7 +128,7 @@ vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 
-vi.mock('@/components/terminal-pane/terminal-appearance', () => ({
+vi.mock('@/components/terminal-pane/appearance/terminal-appearance', () => ({
   composeActiveTerminalTheme: () => ({ background: '#111111', foreground: '#eeeeee' })
 }))
 

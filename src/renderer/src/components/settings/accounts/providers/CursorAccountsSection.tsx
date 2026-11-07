@@ -8,7 +8,7 @@ import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import type { CursorAccountStatus } from '../../../../../../shared/rate-limit-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 const CURSOR_USAGE_DASHBOARD_URL = 'https://cursor.com/dashboard/spending'
 const SEARCH_KEYWORDS = ['cursor', 'usage', 'plan', 'spend', 'billing', 'rate limit']

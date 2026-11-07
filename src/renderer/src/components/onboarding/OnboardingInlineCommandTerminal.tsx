@@ -256,7 +256,9 @@ export function OnboardingInlineCommandTerminal({
         return
       }
       if (hasPty) {
-        ptyFirstSeenAt ??= Date.now()
+        if (ptyFirstSeenAt == null) {
+          ptyFirstSeenAt = Date.now()
+        }
         // GPU/canvas renderers may expose no DOM prompt text; settled PTY presence provides a bounded fallback.
         if (Date.now() - ptyFirstSeenAt >= PTY_TEXT_FALLBACK_MS) {
           scheduleInsert()

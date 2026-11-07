@@ -1,7 +1,7 @@
 import { readPRCheckRefreshOwner } from '@/lib/pr-check-refresh-owner'
 import type React from 'react'
 import { toast } from 'sonner'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   resetGitHubChecksTabForSource,
   updateGitHubChecksTabLocalChecks,

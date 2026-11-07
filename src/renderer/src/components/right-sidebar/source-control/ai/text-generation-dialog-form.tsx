@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
+import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
@@ -26,7 +27,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../
 import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
@@ -47,7 +48,7 @@ export type SourceControlTextGenerationSaveTarget = {
 type SourceControlTextGenerationDialogFormProps = {
   actionId: SourceControlTextActionId
   generateLabel: string
-  settings: GlobalSettings | null
+  settings: SourceControlRenderSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   baseParams: ResolvedSourceControlAiGenerationParams | null
   basePromptPreview?: string
@@ -129,14 +130,16 @@ export function SourceControlTextGenerationDialogForm({
       return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
     }) ?? saveTargets[0]
 
-  const params = buildCommitMessageGenerationParams({
-    agentId,
-    commandTemplate,
-    agentArgs,
-    baseParams,
-    settings,
-    customAgentCommand: baseParams?.customAgentCommand
-  })
+  const buildParams = (settings: SourceControlRenderSettings | null) =>
+    buildCommitMessageGenerationParams({
+      agentId,
+      commandTemplate,
+      agentArgs,
+      baseParams,
+      settings,
+      customAgentCommand: baseParams?.customAgentCommand
+    })
+  const params = buildParams(settings)
   // Only chips use workspace previews; synthetic planning keeps empty linkedIssue from blocking repo/global recipe saves.
   const variablePreviews = useMemo(() => {
     const previews: Record<string, string> = {}
@@ -227,7 +230,7 @@ export function SourceControlTextGenerationDialogForm({
       )
       return
     }
-    onGenerate(params)
+    onGenerate(buildParams(useAppStore.getState().settings) ?? params)
     onOpenChange(false)
   }
 

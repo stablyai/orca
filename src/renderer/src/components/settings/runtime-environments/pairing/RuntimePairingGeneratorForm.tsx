@@ -9,7 +9,9 @@ import { AddressPicker, type AddressOption } from '../../../network/AddressPicke
 import { parseServerShareAddress } from '../../../../../../shared/network/server-share-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import type { RuntimePairingIntent } from './runtime-pairing-link-state'
+import type { RuntimePairingLinkExpiry } from './use-runtime-pairing-link-expiry'
 import { translate } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 type RuntimePairingGeneratorFormProps = {
   intent: RuntimePairingIntent
@@ -22,6 +24,7 @@ type RuntimePairingGeneratorFormProps = {
   runtimePairingUrl: string | null
   copiedTarget: 'web' | 'pairing' | null
   generatedAddress: string | null
+  linkExpiry: RuntimePairingLinkExpiry
   onIntentChange: (intent: RuntimePairingIntent) => void
   onSelectedAddressChange: (address: string) => void
   onRefreshNetworkInterfaces: () => void
@@ -40,6 +43,7 @@ export function RuntimePairingGeneratorForm({
   runtimePairingUrl,
   copiedTarget,
   generatedAddress,
+  linkExpiry,
   onIntentChange,
   onSelectedAddressChange,
   onRefreshNetworkInterfaces,
@@ -87,6 +91,8 @@ export function RuntimePairingGeneratorForm({
   ]
   const generatedIsCurrent = generatedAddress === selectedAddress
   const staleGeneratedLink = generatedAddress !== null && !generatedIsCurrent
+  // Hide an expired unused link so it cannot be copied; Create link mints a new one.
+  const showLink = generatedIsCurrent && linkExpiry?.kind !== 'expired'
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
@@ -311,7 +317,7 @@ export function RuntimePairingGeneratorForm({
         </div>
       </div>
 
-      {generatedIsCurrent && webClientUrl ? (
+      {showLink && webClientUrl ? (
         <GeneratedUrlRow
           label={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.browserLinkLabel',
@@ -325,7 +331,7 @@ export function RuntimePairingGeneratorForm({
           copied={copiedTarget === 'web'}
           onCopy={() => onCopy('web', webClientUrl)}
         />
-      ) : generatedIsCurrent && runtimePairingUrl ? (
+      ) : showLink && runtimePairingUrl ? (
         <UnavailableUrlRow
           label={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.browserLinkLabel',
@@ -338,7 +344,7 @@ export function RuntimePairingGeneratorForm({
         />
       ) : null}
 
-      {generatedIsCurrent && runtimePairingUrl ? (
+      {showLink && runtimePairingUrl ? (
         <GeneratedUrlRow
           label={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.accessLinkLabel',
@@ -352,6 +358,25 @@ export function RuntimePairingGeneratorForm({
           copied={copiedTarget === 'pairing'}
           onCopy={() => onCopy('pairing', runtimePairingUrl)}
         />
+      ) : null}
+
+      {generatedIsCurrent && runtimePairingUrl && linkExpiry ? (
+        <p className="text-xs text-muted-foreground">
+          {linkExpiry.kind === 'expired'
+            ? translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.linkExpired',
+                'Link expired'
+              )
+            : translate(
+                'auto.components.settings.RuntimePairingUrlGenerator.unusedLinkExpires',
+                'Unused link expires at {{time}}',
+                {
+                  time: uiDateTimeFormat({ hour: 'numeric', minute: '2-digit' }).format(
+                    linkExpiry.at
+                  )
+                }
+              )}
+        </p>
       ) : null}
     </>
   )

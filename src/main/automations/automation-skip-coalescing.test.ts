@@ -13,7 +13,8 @@ import {
   testState,
   writePersistedStateJson
 } from '../persistence/persistence-test-harness'
-import { AutomationService } from './service'
+import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -66,23 +67,11 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
   return { store: await createStore(), automation }
 }
 
-function attachedService(store: Store): AutomationService {
-  const service = new AutomationService(store, { tickMs: 60_000 })
-  service.setWebContents({ isDestroyed: () => false, send: vi.fn() } as never)
-  return service
-}
-
-async function evaluateAt(
-  store: Store,
-  service: AutomationService,
-  automationId: string,
-  when: string
-): Promise<void> {
+async function evaluateAt(store: Store, automationId: string, when: string): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  service.setRendererReady()
+  await tickAt(when)
   await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
@@ -111,11 +100,12 @@ describe('repeated skipped_unavailable coalescing', () => {
   it('folds every later refusal into the first record instead of writing a row each', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
-    const service = attachedService(store)
+    const service = startedAutomationService(store)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-15T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-14T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-15T09:01:00')
+    service.stop()
 
     const runs = store.listAutomationRuns(automation.id)
     expect(runs).toHaveLength(1)
@@ -131,10 +121,10 @@ describe('repeated skipped_unavailable coalescing', () => {
   it('gives a manual attempt its own answer rather than folding it into a scheduled skip', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
-    const service = attachedService(store)
+    const service = startedAutomationService(store)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    const manual = await service.runNow(automation.id)
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    const manual = await runNowSettled(service, store, automation.id)
 
     expect(manual.status).toBe('skipped_unavailable')
     expect(manual.occurrenceCount).toBeUndefined()

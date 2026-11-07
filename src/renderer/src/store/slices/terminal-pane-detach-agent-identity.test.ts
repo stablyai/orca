@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
+import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/input/keyboard/terminal-windows-shift-enter'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 describe('syncPaneDetachPtyOwnership agent identity', () => {

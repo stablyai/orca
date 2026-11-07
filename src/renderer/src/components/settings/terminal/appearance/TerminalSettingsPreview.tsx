@@ -6,7 +6,8 @@ import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
+import { pluginFontFamilyWhenLoaded, usePluginFontReady } from '@/store/plugin-fonts'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalFontWeights } from '../../../../../../shared/terminal/appearance/terminal-fonts'
@@ -65,6 +66,7 @@ export function TerminalSettingsPreview({
   const skipInitialThemeRewriteRef = useRef(false)
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
+  const fontReady = usePluginFontReady(effectiveFontFamily)
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
   // Seed from app theme once; preview toggles remain independent afterward.
@@ -127,7 +129,7 @@ export function TerminalSettingsPreview({
       cursorStyle: settings.terminalCursorStyle,
       cursorBlink: settings.terminalCursorBlink,
       fontSize: settings.terminalFontSize,
-      fontFamily: buildFontFamily(effectiveFontFamily),
+      fontFamily: buildFontFamily(pluginFontFamilyWhenLoaded(effectiveFontFamily)),
       fontWeight: weights.fontWeight,
       fontWeightBold: weights.fontWeightBold,
       lineHeight: terminalLineHeight,
@@ -173,7 +175,7 @@ export function TerminalSettingsPreview({
       settings.terminalFontWeightBold
     )
     terminal.options.fontSize = settings.terminalFontSize
-    terminal.options.fontFamily = buildFontFamily(effectiveFontFamily)
+    terminal.options.fontFamily = buildFontFamily(pluginFontFamilyWhenLoaded(effectiveFontFamily))
     terminal.options.fontWeight = weights.fontWeight
     terminal.options.fontWeightBold = weights.fontWeightBold
     terminal.options.lineHeight = terminalLineHeight
@@ -185,6 +187,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
     effectiveFontFamily,
+    fontReady,
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,

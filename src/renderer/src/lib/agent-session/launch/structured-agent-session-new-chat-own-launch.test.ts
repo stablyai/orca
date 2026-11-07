@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
@@ -7,7 +8,6 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/ta
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
-import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
 
 const mocks = vi.hoisted(() => ({
   createIntent: vi.fn(),
@@ -107,15 +107,17 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     mocks.callRuntimeRpc(target, method, params)
 }))
 // Switch-on, main answers the window's chat opens and its frames draw them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply({
-    ...(await importOriginal<typeof RpcClientModule>()),
-    callRuntimeRpc: mocks.callRuntimeRpc,
-    ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
+    ...(await importOriginal<typeof RuntimeRpcCallModule>()),
+    callRuntimeRpc: mocks.callRuntimeRpc
   })
 )
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
+  ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
+}))
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
@@ -137,7 +139,7 @@ vi.mock('@/store/index', async () =>
 
 import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
 import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
-import { adoptAgentSessionLaunchVerdict } from '../../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './routing/agent-session-launch-plan'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   type StructuredAgentSessionProvisionalLaunch

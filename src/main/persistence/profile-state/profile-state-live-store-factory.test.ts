@@ -1,6 +1,6 @@
 import { build } from 'esbuild'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { agentHookServer } from '../../agent-hooks/server'
@@ -8,6 +8,7 @@ import { buildProfileStateCutoverFixture } from '../profile-state-cutover-fixtur
 import type { Store } from '../loading-store/store'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { createLiveProfileStateStore } from './profile-state-live-store-factory'
+import type { ProfileStateStoreFactoryOptions } from './profile-state-store-factory'
 import {
   profileStateJsonExportPath,
   profileStateJsonExportPaths
@@ -65,7 +66,7 @@ function options() {
   }
 }
 
-async function open(input: ReturnType<typeof options>) {
+async function open(input: ProfileStateStoreFactoryOptions) {
   const result = await createLiveProfileStateStore(input, workerOptions)
   stores.push(result.store)
   return result
@@ -81,6 +82,19 @@ function readState(input: ReturnType<typeof options>) {
 }
 
 describe('live profile authority admission', () => {
+  it('persists initial Home through the desktop writer before restart', async () => {
+    const input = { ...options(), initializeHomeWorkspace: true }
+    const { store } = await open(input)
+    const [home] = store.getRepos()
+    expect(home).toMatchObject({ path: homedir(), kind: 'folder' })
+    await store.flushPendingOrThrowAsync()
+    await store.freezeWritesAsync()
+
+    const reopened = await open(input)
+    expect(reopened.store.getRepos()).toEqual([home])
+    expect(reopened.store.getWorkspaceSession().activeRepoId).toBe(home.id)
+  })
+
   it.each([false, true])(
     'hands unbound aliases to admitted startup only (worker refused=%s)',
     async (refused) => {

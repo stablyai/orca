@@ -1,8 +1,9 @@
-import { resolveHostCapabilities, workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
-} from '@/lib/agent-session-launch-plan'
+} from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
