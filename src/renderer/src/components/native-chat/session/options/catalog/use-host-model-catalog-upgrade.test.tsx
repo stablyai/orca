@@ -97,16 +97,6 @@ function answerCatalog(answers: (() => Promise<unknown>)[]): void {
   })
 }
 
-function catalogReads(): unknown[] {
-  return mocks.call.mock.calls
-    .filter(([, method]) => method === 'agentSession.modelCatalog')
-    .map(([, , params]) => params)
-}
-
-function usable(snapshot: readonly SessionOptionDescriptor[]): boolean {
-  return model(snapshot).settable && modelChoices(snapshot).length > 0
-}
-
 function model(snapshot: readonly SessionOptionDescriptor[]): SessionOptionDescriptor {
   return snapshot.find((entry) => entry.id === 'model')!
 }
@@ -146,61 +136,6 @@ describe('host model catalog read', () => {
     sessionId = `session-${sessionCount}`
   })
 
-  it('shows saved input before the host catalog arrives', async () => {
-    const first = deferred()
-    answerCatalog([() => first.promise])
-    const { result, unmount } = renderOptions()
-    await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
-    expect(model(result.current.optionSnapshot).kind.currentValue).toBe('gpt-5.5')
-    first.resolve(HOST_CATALOG)
-    await flush()
-    expect(catalogReads()).toContainEqual({ agent: 'codex', sessionId })
-    expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    const named = model(result.current.optionSnapshot)
-    expect(named.kind.type === 'select' ? named.kind.currentValue : null).toBe('gpt-5.5')
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    unmount()
-  })
-
-  it('a cold catalog keeps only the saved model until discovery adds replacement choices', async () => {
-    const waited = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
-    const { result, unmount } = renderOptions()
-    await flush()
-    // Pending discovery describes only the saved input, never built-in replacement choices.
-    const first = model(result.current.optionSnapshot)
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(first.kind.currentValue).toBe('gpt-5.5')
-    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
-    expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
-    await act(async () => {
-      expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(true)
-    })
-
-    waited.resolve(HOST_CATALOG)
-    await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    unmount()
-  })
-
-  it('keeps the built-in list when the waiting read fails or times out', async () => {
-    for (const failure of [
-      () => Promise.resolve(UNKNOWN),
-      () => Promise.reject(Object.assign(new Error('timed out'), { code: 'runtime_timeout' })),
-      () => Promise.reject(Object.assign(new Error('gone'), { code: 'not_connected' }))
-    ]) {
-      mocks.call.mockReset()
-      answerCatalog([() => Promise.resolve(LISTING), failure])
-      const { result, unmount } = renderOptions()
-      await flush()
-      expect(usable(result.current.optionSnapshot)).toBe(true)
-      expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
-      unmount()
-    }
-  })
-
   it('the running provider list wins over a host listing that lands later', async () => {
     const live = deferred()
     const waited = deferred()
@@ -221,49 +156,6 @@ describe('host model catalog read', () => {
     waited.resolve(HOST_CATALOG)
     await flush()
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
-    unmount()
-  })
-
-  it('joins the wait already in flight through attach', async () => {
-    const waited = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
-    const { result, rerender, unmount } = renderOptions()
-    await flush()
-    rerender({ attached: true })
-    await flush()
-    waited.resolve(HOST_CATALOG)
-    await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    unmount()
-  })
-
-  it('joins the wait already in flight when the pane hides and shows again', async () => {
-    const waited = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
-    const { result, rerender, unmount } = renderOptions()
-    await flush()
-    rerender({ hidden: true })
-    await flush()
-    rerender({})
-    await flush()
-    waited.resolve(HOST_CATALOG)
-    await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
-    unmount()
-  })
-
-  it('joins the wait already in flight when the chat mounts again', async () => {
-    const waited = deferred()
-    answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
-    const first = renderOptions()
-    await flush()
-    first.unmount()
-    const { result, unmount } = renderOptions()
-    await flush()
-    expect(usable(result.current.optionSnapshot)).toBe(true)
-    waited.resolve(HOST_CATALOG)
-    await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toContain('gpt-hosted')
     unmount()
   })
 

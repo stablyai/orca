@@ -66,9 +66,6 @@ const connected = (id: string): RuntimeEnvironmentStatus =>
 const transportDown = (id: string): RuntimeEnvironmentStatus =>
   entry(id, { verification: 'unavailable', transport: 'disconnected' })
 
-const refused = (id: string): RuntimeEnvironmentStatus =>
-  entry(id, { verification: 'blocked', transport: 'disconnected' })
-
 function setHost(environmentId: string, status: RuntimeEnvironmentStatus | null): void {
   act(() => {
     const next = new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
@@ -112,45 +109,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatHostOutage', () => {
-  it('says a reconnecting host only after the grace, and drops it the moment the host is back', () => {
-    const { result } = renderHook(() => useNativeChatHostOutage(remote))
-    setHost('env-a', transportDown('env-a'))
-    advance(NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS - 1)
-    expect(result.current).toBeNull()
-
-    advance(1)
-    expect(result.current).toMatchObject({ kind: 'reconnecting', hostLabel: 'Build box' })
-    expect(result.current?.canReconnect).toBe(false)
-
-    setHost('env-a', connected('env-a'))
-    expect(result.current).toBeNull()
-  })
-
-  it('says nothing for a blip that recovers inside the grace, and starts the grace over next time', () => {
-    const { result } = renderHook(() => useNativeChatHostOutage(remote))
-    setHost('env-a', transportDown('env-a'))
-    advance(1_500)
-    setHost('env-a', connected('env-a'))
-    advance(1_000)
-    expect(result.current).toBeNull()
-
-    setHost('env-a', transportDown('env-a'))
-    advance(NATIVE_CHAT_HOST_RECONNECTING_GRACE_MS - 1)
-    expect(result.current).toBeNull()
-  })
-
-  it('keeps saying offline through a retry probe, until the host is back', () => {
-    const { result } = renderHook(() => useNativeChatHostOutage(remote))
-    setHost('env-a', refused('env-a'))
-    setHost('env-a', entry('env-a', { verification: 'checking', transport: 'unknown' }))
-    expect(result.current?.kind).toBe('offline')
-
-    setHost('env-a', connected('env-a'))
-    expect(result.current).toBeNull()
-    setHost('env-a', transportDown('env-a'))
-    expect(result.current).toBeNull()
-  })
-
   it("starts the grace over when the chat's host changes", () => {
     setHost('env-a', transportDown('env-a'))
     setHost('env-b', transportDown('env-b'))

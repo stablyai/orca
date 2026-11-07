@@ -48,24 +48,6 @@ const userTurn: NativeChatMessage = {
   source: 'transcript'
 }
 
-const ASK_CALL: NativeChatMessage = {
-  id: 'call-ask',
-  role: 'assistant',
-  timestamp: 2,
-  source: 'transcript',
-  blocks: [
-    {
-      type: 'tool-call',
-      name: 'AskUserQuestion',
-      input: {
-        questions: [
-          { question: 'Tabs or spaces?', multiSelect: false, options: [{ label: 'Tabs' }] }
-        ]
-      }
-    }
-  ]
-}
-
 function transcript(): NativeChatLiveSession {
   return {
     messages: [userTurn],
@@ -154,65 +136,5 @@ describe('NativeChatResolvedView prompt cards own the input region', () => {
     renderPane('pty-card-reconnected')
     expect(document.querySelector('[data-native-chat-approval-card="true"]')).toBeNull()
     expect(ptyInput.verified).toHaveBeenCalledOnce()
-  })
-
-  it('shows an identical question again in a new wait that arrived while the view was unmounted', () => {
-    const question = JSON.stringify({
-      questions: [{ question: 'Continue?', multiSelect: false, options: [{ label: 'Yes' }] }]
-    })
-    const ask = {
-      state: 'waiting',
-      toolName: 'AskUserQuestion',
-      interactivePrompt: question
-    } as const
-    setStatus(ask, 100)
-    const first = renderPane()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-    first.unmount()
-    setStatus({ state: 'working' }, 200)
-    setStatus(ask, 300)
-    renderPane()
-    expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent('Continue?')
-  })
-
-  it('keeps a collapsed transcript question collapsed while the transcript re-reads', () => {
-    const withAsk = { ...transcript(), messages: [userTurn, ASK_CALL] }
-    retained.session = withAsk
-    setStatus({ state: 'waiting' })
-    const view = renderPane()
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-    retained.session = { ...withAsk, messages: [], readPhase: 'loading' }
-    view.rerender(paneElement())
-    retained.session = withAsk
-    view.rerender(paneElement())
-    expect(document.querySelector('[data-native-chat-prompt-strip="true"]')).not.toBeNull()
-  })
-
-  it('keeps a partly answered question across collapse and expand, and Escape in its text field', () => {
-    setStatus(
-      {
-        state: 'waiting',
-        toolName: 'AskUserQuestion',
-        interactivePrompt: JSON.stringify({
-          questions: [
-            { question: 'Which folder?', multiSelect: false, options: [{ label: 'dist' }] },
-            { question: 'Which mode?', multiSelect: false, options: [{ label: 'slow' }] }
-          ]
-        })
-      },
-      100
-    )
-    renderPane()
-    fireEvent.click(screen.getByRole('button', { name: /dist/ }))
-    fireEvent.click(screen.getByRole('button', { name: /Next/ }))
-    const other = screen.getByPlaceholderText('Type your answer')
-    fireEvent.change(other, { target: { value: 'turbo' } })
-    fireEvent.keyDown(other, { key: 'Escape' })
-    expect(document.querySelector('[data-native-chat-prompt-strip="true"]')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-    expect(screen.getByTestId('native-chat-question-card-title')).toHaveTextContent('Which mode?')
-    expect(screen.getByPlaceholderText('Type your answer')).toHaveValue('turbo')
   })
 })

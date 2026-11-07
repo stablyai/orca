@@ -315,7 +315,6 @@
 4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/session/options/controls/NativeChatModelCombobox.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
 4 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
