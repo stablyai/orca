@@ -258,6 +258,38 @@ describe('orchestration worker automatic release', () => {
     expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
   })
 
+  describe('set by the serve environment', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    it('keeps a settled worker open when ORCA_WORKER_AUTO_RELEASE is off', async () => {
+      vi.stubEnv('ORCA_WORKER_AUTO_RELEASE', 'off')
+      setupWithFakeClock()
+      const { dispatchId } = await h.startSettledWorker()
+
+      await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
+
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBeNull()
+      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    })
+
+    it('releases a settled worker after ORCA_WORKER_AUTO_RELEASE_GRACE_SECONDS', async () => {
+      vi.stubEnv('ORCA_WORKER_AUTO_RELEASE_GRACE_SECONDS', '600')
+      setupWithFakeClock()
+      const { dispatchId } = await h.startSettledWorker()
+      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBe(
+        '2026-10-27 12:10:00'
+      )
+
+      await vi.advanceTimersByTimeAsync(600_000 - 1_000)
+      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
+    })
+  })
+
   describe('across a restart', () => {
     let userDataDir: string
 

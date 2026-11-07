@@ -34,6 +34,8 @@ class OrchestrationDbCore {
   workerTerminalAutoReleaseListener: (() => void) | undefined
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
+  /** How long a settled worker stays open before it is released; unset means the default grace. */
+  workerAutoReleaseGraceMs: (() => number) | undefined
 
   constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)

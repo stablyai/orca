@@ -9,6 +9,11 @@ import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 
 export const WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS = 2 * 60_000
 
+/** The grace before a settled worker is released: the runtime's configured value, or the default. */
+export function workerAutoReleaseGraceMs(db: OrchestrationDb): number {
+  return db.workerAutoReleaseGraceMs?.() ?? WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS
+}
+
 const RELEASABLE_STATES_SQL = WORKER_RELEASABLE_STATES.map((state) => `'${state}'`).join(', ')
 
 // The owner Dispatch, local or a paired host's attachment, finished in a state Orca may close.
@@ -44,7 +49,7 @@ export function armWorkerTerminalAutoReleaseStatement(
           AND release_state = 'not_requested'
           AND auto_release_dispatch_id IS NOT owner_dispatch_id`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), dispatchId)
+    .run(toSqliteUtcTimestamp(nowMs + workerAutoReleaseGraceMs(this)), dispatchId)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -74,7 +79,7 @@ export function restartWorkerTerminalAutoRelease(
       `UPDATE worker_terminal_resources SET auto_release_at = ?, updated_at = datetime('now')
         WHERE pane_key = ? AND ${ARMED_SQL} AND auto_release_at IS NULL`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), paneKey)
+    .run(toSqliteUtcTimestamp(nowMs + workerAutoReleaseGraceMs(this)), paneKey)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -186,7 +191,7 @@ export function armFederatedHomeAutoRelease(
           SET home_auto_release_at = ?, home_auto_release_state = 'armed', updated_at = datetime('now')
         WHERE dispatch_id = ? AND home_auto_release_state IS NULL`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), dispatchId)
+    .run(toSqliteUtcTimestamp(nowMs + workerAutoReleaseGraceMs(this)), dispatchId)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -220,6 +225,7 @@ export function claimDueFederatedHomeAutoReleases(this: OrchestrationDb, nowMs: 
         SET home_auto_release_at = ?, updated_at = datetime('now')
       WHERE dispatch_id = ? AND home_auto_release_state = 'armed' AND home_auto_release_at <= ?`
   )
+  // A failed claim retries on the default cadence; a long configured grace must not slow recovery.
   const retryAt = toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS)
   return due.flatMap(({ dispatch_id }) =>
     claim.run(retryAt, dispatch_id, toSqliteUtcTimestamp(nowMs)).changes > 0 ? [dispatch_id] : []
