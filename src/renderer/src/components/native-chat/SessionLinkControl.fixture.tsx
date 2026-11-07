@@ -13,32 +13,32 @@ import { SessionLinkOwnerQuestion } from './SessionLinkOwnerQuestion'
 import { SessionLinkControl } from './SessionLinkControl'
 
 const source = SessionLinkParticipant.parse({
-  sessionId: 'codex-registry',
-  conversationId: 'codex-registry',
-  name: 'Reading registry implementation',
+  sessionId: 'codex-checkout',
+  conversationId: 'codex-checkout',
+  name: 'Checkout implementation',
   agent: 'codex',
   role: 'implementer',
-  workspaceId: 'registry',
-  directory: '/projects/djinn/deid-reading-registry',
-  branch: 'deid-reading-registry',
-  task: 'Implement slice 1b; stop before paid corpus measurements.',
+  workspaceId: 'app',
+  directory: '/projects/acme/app',
+  branch: 'feature/checkout',
+  task: 'Implement checkout slice 2; stop before paid verification.',
   context: ''
 })
 const partner = SessionLinkParticipant.parse({
-  sessionId: 'claude-djinn',
-  conversationId: 'claude-djinn',
-  name: 'Slice 1b architecture and review',
+  sessionId: 'claude-review',
+  conversationId: 'claude-review',
+  name: 'Checkout architecture and review',
   agent: 'claude',
   role: 'reviewer',
-  workspaceId: 'djinn',
-  directory: '/projects/djinn',
+  workspaceId: 'review',
+  directory: '/projects/acme/review',
   branch: 'main',
-  task: 'Review the privacy boundaries and tasks 1–5.',
+  task: 'Review the checkout flow and tasks 1–5.',
   context: ''
 })
 const link = SessionLink.parse({
   id: 'demo-link',
-  story: 'De-identification · slice 1b',
+  story: 'Checkout flow · slice 2',
   policy: { turnLimit: null },
   participants: [source, partner],
   state: 'active',
@@ -61,7 +61,7 @@ const report = SessionLinkEvent.parse({
   operationId: 'report-operation',
   createdAt: 1_800_000_001_000,
   detail: '',
-  body: 'Tasks 1–5 are ready. Local checks pass. Please review before corpus measurements; no spending or holdout access has been authorized.'
+  body: 'Tasks 1–5 are ready. Local checks pass. Please review before paid verification; no spending has been authorized.'
 })
 
 function setup(state: 'create' | 'waiting' | 'paused' | 'ended' | 'unknown') {
@@ -237,9 +237,9 @@ export const ownerQuestionRussian = defineFixture({
 
 const longOwnerQuestion = `Offline checks passed. Should we run the next verification stage with a maximum budget of $0.10, or continue using offline evidence only?
 
-The implementation report is at /projects/djinn/deid-reading-registry/docs/experiments/reading-slice-1b/checkpoint-report.md. The reviewer recorded the remaining limits at https://example.test/reviews/de-identification/slice-1b/privacy-boundary-and-verification.
+The implementation report is at /projects/acme/app/docs/reports/checkpoint.md. The reviewer recorded the remaining limits at https://example.test/reviews/checkout/slice-2/acceptance-boundary-and-verification.
 
-The run will use the configured provider and the existing data boundary. No corpus access or spending has been approved yet. Your choice will be delivered to both agents before the link resumes.`
+The run will use the configured provider and the existing data boundary. No paid verification or spending has been approved yet. Your choice will be delivered to both agents before the link resumes.`
 
 function setupLongOwnerQuestion() {
   setup('paused')

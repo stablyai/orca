@@ -26,7 +26,7 @@ Generic send, reply, ask and group fan-out to the paired peer are fenced after r
 
 Focused tests use real orchestration SQLite storage and the actual structured host with test provider adapters, without sending prompts to external models. They cover restart, lost responses, owner authority, human prompt gates, admission races, correlation, alias fencing, budget exhaustion and cancellation provenance. Fixtures render the actual dialog in both themes. Real Claude/Codex acceptance remains a separate check after installing the feature build and selecting the exact intended chats.
 
-The acceptance story is de-identification slice 1b: Codex reports tasks 1–5, Claude reviews or requests the owner, and Codex continues within existing permissions. No paid calls or holdout access are authorized by the link itself.
+The acceptance scenario pairs an implementer with a reviewer: the implementer sends a checkpoint, the reviewer accepts it or asks the owner a specific question, and implementation continues within existing permissions. The link itself never authorizes spending or access to restricted data.
 
 ## Deferred
 

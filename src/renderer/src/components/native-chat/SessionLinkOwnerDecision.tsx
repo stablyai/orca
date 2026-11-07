@@ -109,7 +109,6 @@ export function SessionLinkOwnerDecision({
               setSubmitting(true)
               void onAnswer(body).finally(() => setSubmitting(false))
             }}
-            onCancel={() => setCollapsed(true)}
             onCollapse={() => setCollapsed(true)}
           />
         </div>

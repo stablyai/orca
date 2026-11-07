@@ -3,6 +3,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject, type ReactNode } from 'react'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { translate } from '@/i18n/i18n'
 import { NativeChatQuestionHeader } from './NativeChatQuestionHeader'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
@@ -36,7 +37,7 @@ export type NativeChatQuestionCardProps = {
   allowOther?: boolean | readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
   /** Dismiss the prompt (sends Escape to the agent). */
-  onCancel: () => void
+  onCancel?: () => void
   /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
   onCollapse?: () => void
   /** Take focus when the card takes the input region; number keys pick while it holds. */
@@ -74,6 +75,7 @@ export function NativeChatQuestionCard({
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
+  const fades = useScrollEdgeFades<HTMLDivElement>()
   const blocked = disabled || isSubmitting || isCancelling
   const autoAdvance = useNativeChatQuestionAutoAdvance(blocked)
   const [index, setIndex] = useState(0)
@@ -187,7 +189,7 @@ export function NativeChatQuestionCard({
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
-      onCancel()
+      onCancel?.()
     }
   }
 
@@ -212,7 +214,7 @@ export function NativeChatQuestionCard({
   )
   const cancel = (): void => {
     autoAdvance.cancel()
-    onCancel()
+    onCancel?.()
   }
   const collapse = onCollapse
     ? (): void => {
@@ -293,14 +295,17 @@ export function NativeChatQuestionCard({
         ) : null}
 
         <div className="flex max-h-[75vh] flex-col overflow-hidden rounded-lg border border-input bg-card shadow-xs">
-          <div className="min-h-0 overflow-y-auto scrollbar-sleek">
+          <div
+            ref={heading ? fades.ref : undefined}
+            className={cn('min-h-0 overflow-y-auto scrollbar-sleek', heading && fades.className)}
+          >
             <NativeChatQuestionHeader
               question={q.question}
               heading={heading}
               context={context}
               disabled={blocked}
               isCancelling={isCancelling}
-              onCancel={cancel}
+              onCancel={onCancel ? cancel : undefined}
               onCollapse={collapse}
             />
             {!heading ? (
