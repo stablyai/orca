@@ -9,7 +9,8 @@ import type {
 export function mergedAgentModelCatalogModels(
   discovered: AgentModelCatalogListing | null,
   live: AgentModelCatalogListing | null,
-  configured: AgentModelCatalogConfiguredDefault | null
+  configured: AgentModelCatalogConfiguredDefault | null,
+  modelSpecificEfforts = false
 ): AgentSessionModelOption[] {
   const liveIsNewer = live !== null && (discovered === null || live.at >= discovered.at)
   const newer = liveIsNewer ? live : discovered
@@ -27,8 +28,11 @@ export function mergedAgentModelCatalogModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const { efforts, effortsKnown } =
-      olderModel && model.effortsKnown !== olderModel.effortsKnown
+    const { efforts, effortsKnown } = modelSpecificEfforts
+      ? model.effortsKnown === false && olderModel
+        ? olderModel
+        : model
+      : olderModel && model.effortsKnown !== olderModel.effortsKnown
         ? model.effortsKnown === false
           ? olderModel
           : model

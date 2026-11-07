@@ -193,7 +193,11 @@ function RoundButton({ button, emphasis = false }: { button: BarButton; emphasis
         button.disabled && styles.disabled
       ]}
     >
-      <Icon size={20} color={emphasis ? colors.bgBase : colors.textPrimary} strokeWidth={2.2} />
+      <Icon
+        size={20}
+        color={emphasis ? colors.onCreateActionFill : colors.textPrimary}
+        strokeWidth={2.2}
+      />
       {lit ? (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{badge}</Text>
@@ -250,7 +254,7 @@ const styles = themedStyleSheet(() => ({
     elevation: 6
   },
   buttonEmphasis: {
-    backgroundColor: colors.surfaceBright,
+    backgroundColor: colors.createActionFill,
     borderColor: 'transparent'
   },
   buttonLit: {

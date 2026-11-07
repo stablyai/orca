@@ -3,12 +3,12 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../../shared/terminal-quick-command-types'
+} from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   getTerminalQuickCommandBody,
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand
-} from '../../../../../shared/terminal-quick-commands'
+} from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { cn } from '@/lib/utils'

@@ -1,6 +1,6 @@
 import type * as pty from 'node-pty'
-import type { PtyStartupIngress } from '../../../shared/pty-startup-ingress'
-import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
+import type { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import { readPtySlavePath } from '../../../shared/terminal/pty/native-process/pty-slave-line-discipline-echo'
 import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe

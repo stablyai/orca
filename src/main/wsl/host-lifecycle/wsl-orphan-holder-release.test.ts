@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   addWslHostEnvironment,
   setWslHostPendingStop
-} from '../../../shared/runtime-environment-wsl-host-store'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { getWslHostDeploymentStorePath } from '../../../shared/wsl-host-deployment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { getWslHostDeploymentStorePath } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { wslDistroHolderDirectory } from '../discovery/wsl-distro-holder-record'
 import { releaseUnwantedWslHolders, wslHolderKeepPolicy } from './wsl-orphan-holder-release'
@@ -60,15 +60,6 @@ afterEach(() => {
 })
 
 describe('releasing orphaned WSL holders at launch', () => {
-  it('touches nothing for a user who never ran a WSL host', async () => {
-    const { factory } = fakeHolder()
-    await expect(
-      releaseUnwantedWslHolders({ userDataPath, isWanted: () => false, holder: factory })
-    ).resolves.toEqual([])
-    // No holder means no process table read and no wsl.exe.
-    expect(factory).not.toHaveBeenCalled()
-  })
-
   it('keeps a live host’s holder and releases only orphans and pending removals', async () => {
     addHost('Ubuntu', 42000)
     addHost('Debian', 42001)

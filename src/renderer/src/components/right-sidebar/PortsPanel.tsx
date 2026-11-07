@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { Server } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { translate } from '@/i18n/i18n'
 import { LocalWorkspacePortsPanel } from './local-workspace-ports-panel'
 import { SshPortsPanel } from './ssh-ports-panel'
@@ -11,13 +11,6 @@ import {
   portsPanelForwardTargetId,
   portsPanelHostForOwnerKey
 } from './ports-panel-host'
-
-export { getLocalWorkspacePortSections } from './local-workspace-port-sections'
-export {
-  killWorkspacePortForTarget,
-  openWorkspacePortInBrowser,
-  scanWorkspacePortsForTarget
-} from '@/lib/workspace-ports/workspace-port-actions'
 
 export default function PortsPanel({ isVisible }: { isVisible: boolean }): React.JSX.Element {
   const activeWorktree = useActiveWorktree()

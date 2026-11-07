@@ -5,6 +5,18 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'sidebar.projects.toggleCollapse',
+    title: 'Collapse / Expand All Projects',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'projects', 'collapse', 'expand', 'all'],
+    defaultBindings: {
+      darwin: ['Mod+Alt+P'],
+      linux: ['Mod+Shift+H'],
+      win32: ['Mod+Shift+H']
+    }
+  },
+  {
     id: 'chat.find',
     title: 'Find in chat',
     group: 'Chat',

@@ -10,9 +10,9 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
-import { linearAddIssueComment } from '@/runtime/runtime-linear-issue-mutations'
+import { linearAddIssueComment } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { LinearLocalComment } from '@/components/linear-item-drawer-types'

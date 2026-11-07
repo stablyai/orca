@@ -8,7 +8,7 @@ import type {
 import {
   ALL_TUI_AGENTS,
   TUI_AGENT_DISPLAY_NAMES
-} from '../../../../../shared/tui-agent-display-names'
+} from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
 import { uniqueKeywords } from '../search/settings-search-keywords'
 
@@ -40,6 +40,8 @@ const STATIC_TITLE_COPY = {
   'view.tasks': () => translate('keybindings.title.viewTasks', 'Open Tasks'),
   'view.plugins': () => translate('keybindings.title.viewPlugins', 'Open Plugins'),
   'sidebar.left.toggle': () => translate('keybindings.title.sidebarLeftToggle', 'Toggle Sidebar'),
+  'sidebar.projects.toggleCollapse': () =>
+    translate('keybindings.title.sidebarProjectsToggleCollapse', 'Collapse / Expand All Projects'),
   'sidebar.right.toggle': () =>
     translate('keybindings.title.sidebarRightToggle', 'Toggle Right Sidebar'),
   'sidebar.explorer.toggle': () =>

@@ -19,12 +19,13 @@ import {
 import { parseAgentJournalItemKey } from '../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { Tab } from '../../src/shared/tab-types'
 import type { AppState } from '../../src/renderer/src/store/types'
-import { createCodexJournalTranslator } from '../../src/main/codex/codex-structured-journal-translation'
-import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/codex-structured-prompt-replies'
-import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed-test-session'
+import { createCodexJournalTranslator } from '../../src/main/codex/structured/journal/codex-structured-journal-translation'
+import '../../src/main/codex/structured/prompts/codex-structured-prompt-replies'
+import { CODEX_COMMAND_APPROVAL_METHOD } from '../../src/main/codex/structured/prompts/codex-prompt-registry'
+import { createTrackedJournalOpener } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../src/main/native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
+import { indexedStatusFeedSession } from '../../src/main/native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'
 import {
   makeRepo,
   makeWorktree
@@ -51,7 +52,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const useAppStore = createTestStore()
   mocks.store = useAppStore
   return { useAppStore }
@@ -65,8 +66,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 import { StructuredAgentSessionStatusBridge } from '../../src/renderer/src/components/native-chat/StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
-import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
-import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { testEventSinkLogging } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const SESSION = 'codex-child-approval'

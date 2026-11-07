@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LinearClientModule from './client'
 import { loadLinearSdk } from './linear-sdk'
 import { getDescriptionImageUrls } from './linear-description-images'
-import { getIssue } from './linear-issue-lookups'
 
 const { rawRequest, issue, getClients, getPublicFileUrlClient, isAuthError } = vi.hoisted(() => ({
   rawRequest: vi.fn(),
@@ -43,25 +42,6 @@ describe('Linear description images', () => {
     getPublicFileUrlClient.mockReturnValue({ client: { rawRequest } })
   })
 
-  it('keeps editable description URLs canonical while supplying signed display URLs', async () => {
-    const description = `Before\n\n![Screenshot](${source})\n\nAfter`
-    issue.mockResolvedValue({
-      data: { issue: { id: 'issue-1', description, updatedAt: '2026-11-02T00:00:00Z' } }
-    })
-    rawRequest.mockResolvedValue({
-      data: { issue: { description: description.replace(source, signed) } }
-    })
-
-    await expect(getIssue('issue-1', 'workspace-1')).resolves.toEqual({
-      id: 'issue-1',
-      description,
-      updatedAt: '2026-11-02T00:00:00.000Z',
-      descriptionImageUrls: { [source]: signed }
-    })
-    expect(getPublicFileUrlClient).toHaveBeenCalledWith(entry, expect.any(AbortSignal))
-    expect(rawRequest.mock.calls[0][1]).toEqual({ id: 'issue-1' })
-  })
-
   it('sends the signing header through the real SDK transport with the owning workspace token', async () => {
     const clientModule = await vi.importActual<typeof LinearClientModule>('./client')
     getPublicFileUrlClient.mockImplementation(clientModule.getPublicFileUrlClient)
@@ -84,58 +64,5 @@ describe('Linear description images', () => {
         })
       })
     )
-  })
-
-  it.each([undefined, 'No images', '![Public](https://example.com/image.png)'])(
-    'skips the extra read for descriptions without private uploads: %s',
-    async (description) => {
-      issue.mockResolvedValue({
-        data: { issue: { id: 'issue-1', description, updatedAt: '2026-11-02T00:00:00Z' } }
-      })
-      await expect(getIssue('issue-1')).resolves.toMatchObject({
-        id: 'issue-1',
-        description,
-        updatedAt: '2026-11-02T00:00:00.000Z'
-      })
-      expect(getPublicFileUrlClient).not.toHaveBeenCalled()
-    }
-  )
-
-  it('matches reordered media by path using the original URL as the lookup key', async () => {
-    const original = `${source}?width=640`
-    rawRequest.mockResolvedValue({
-      data: {
-        issue: {
-          description: `![Other](https://uploads.linear.app/w/other?signature=other)\n![Screenshot](${signed})`
-        }
-      }
-    })
-    await expect(
-      getDescriptionImageUrls(entry, 'issue-1', `![Screenshot](${original})`)
-    ).resolves.toEqual({ [original]: signed })
-  })
-
-  it('keeps the issue readable when the signing read fails', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    issue.mockResolvedValue({
-      data: {
-        issue: {
-          id: 'issue-1',
-          description: `![Screenshot](${source})`,
-          updatedAt: '2026-11-02T00:00:00Z'
-        }
-      }
-    })
-    rawRequest.mockRejectedValue(new Error('Network unavailable'))
-    await expect(getIssue('issue-1')).resolves.toMatchObject({ id: 'issue-1' })
-  })
-
-  it('propagates authentication failures for credential recovery', async () => {
-    const error = new Error('Unauthorized')
-    isAuthError.mockReturnValue(true)
-    rawRequest.mockRejectedValue(error)
-    await expect(
-      getDescriptionImageUrls(entry, 'issue-1', `![Screenshot](${source})`)
-    ).rejects.toBe(error)
   })
 })

@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge'
-import { formatTimeAgo } from '@/components/right-sidebar/ai-vault-session-time'
+import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
 import { cn } from '@/lib/utils'
 import { useNow } from '@/hooks/use-now'
 import { translate } from '@/i18n/i18n'

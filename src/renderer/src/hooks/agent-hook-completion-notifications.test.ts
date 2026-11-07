@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
-import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()
@@ -59,11 +59,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
+vi.mock('@/components/terminal-pane/notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
 
-vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
+vi.mock('@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle
 }))
 

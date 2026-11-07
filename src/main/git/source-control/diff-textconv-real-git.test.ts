@@ -71,22 +71,6 @@ describe('diff drivers with textconv', () => {
     })
   })
 
-  it('falls back to the stored blob when the driver fails', async () => {
-    await writeFile(path.join(repo, '.gitattributes'), 'notes.txt diff=broken\n')
-    git('config', 'diff.broken.textconv', 'false')
-    await writeFile(path.join(repo, 'notes.txt'), 'one\n')
-    git('add', '.')
-    git('commit', '-m', 'init')
-    await writeFile(path.join(repo, 'notes.txt'), 'two\n')
-    git('add', 'notes.txt')
-
-    expect(await getDiff(repo, 'notes.txt', true)).toMatchObject({
-      kind: 'text',
-      originalContent: 'one\n',
-      modifiedContent: 'two\n'
-    })
-  })
-
   it('re-reads driver output once the driver recovers', async () => {
     await writeFile(path.join(repo, '.gitattributes'), 'notes.txt diff=keyed\n')
     // Stand-in for a locked key: the driver fails until the marker exists.

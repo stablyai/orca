@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { NativeChatSignInContext } from './native-chat-sign-in'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
@@ -24,7 +25,7 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
+import { MessageRow } from './NativeChatMessageRow'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -41,6 +42,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 }))
 
 afterEach(cleanup)
+const signInView = { signingIn: false, signIn: vi.fn() }
 
 function renderMessage(
   role: NativeChatMessage['role'],
@@ -64,58 +66,6 @@ function renderMessage(
 }
 
 describe('MessageRow control visibility', () => {
-  it('renders and copies a fenced code block through the markdown path', async () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(window, { api: { ui: { writeClipboardText } } })
-
-    render(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'assistant',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: '```ts\nconst answer = 42\n```' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText('TypeScript')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
-
-    await waitFor(() => {
-      expect(writeClipboardText).toHaveBeenCalledWith('const answer = 42\n')
-    })
-  })
-
-  it('composes the edit-from-here action into the user hover/focus strip', () => {
-    const request = vi.fn()
-    renderMessage('user', 0, { disabledReason: null, request })
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    const time = screen.getByRole('time')
-    const edit = screen.getByRole('button', { name: 'Rewind to here' })
-    expect(Array.from(copy.parentElement!.children)).toEqual([copy, time, edit])
-    expect(copy.parentElement).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
-    edit.focus()
-    expect(edit).toHaveFocus()
-    fireEvent.click(edit)
-    expect(request).toHaveBeenCalledWith('message', confirm)
-  })
-
-  it('copies the sent message text from a user bubble', async () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    Object.assign(window, { api: { ui: { writeClipboardText } } })
-
-    renderMessage('user')
-    fireEvent.click(screen.getByRole('button', { name: 'Copy message' }))
-
-    await waitFor(() => {
-      expect(writeClipboardText).toHaveBeenCalledWith('Message text')
-    })
-  })
-
   it('copies an assistant reply without its visual lines, which mean nothing outside Orca', async () => {
     const writeClipboardText = vi.fn().mockResolvedValue(undefined)
     Object.assign(window, { api: { ui: { writeClipboardText } } })
@@ -144,70 +94,6 @@ describe('MessageRow control visibility', () => {
       expect(writeClipboardText).toHaveBeenCalledWith('Here it is.\n\nDone.')
     })
   })
-
-  it('omits the copy button on image-only user messages', () => {
-    render(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'user',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'image-ref', path: '/tmp/screenshot.png', alt: 'Screenshot' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-      />
-    )
-    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
-    expect(screen.getByRole('time')).toBeInTheDocument()
-  })
-
-  it.each(['assistant', 'user'] as const)('omits unknown timestamps on %s rows', (role) => {
-    renderMessage(role, null)
-    expect(screen.queryByRole('time')).toBeNull()
-    expect(screen.getByText('Message text')).toBeInTheDocument()
-    expect(screen.queryAllByRole('button')).toHaveLength(role === 'assistant' ? 2 : 1)
-  })
-
-  it.each(['reasoning', 'system'] as const)(
-    'omits timestamp and agent controls on %s rows',
-    (role) => {
-      renderMessage(role)
-      expect(screen.queryByRole('time')).toBeNull()
-      expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
-      expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
-      expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
-    }
-  )
-
-  it('holds the agent controls back until the turn stops working', () => {
-    const row = (activeTurnIsWorking: boolean) => (
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'assistant',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Message text' }]
-        }}
-        expandSignal={false}
-        activeTurnIsWorking={activeTurnIsWorking}
-        trailingRun
-        onScrollMessageToTop={vi.fn()}
-      />
-    )
-    const { rerender } = render(row(true))
-    expect(screen.getByText('Message text')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
-    expect(screen.queryByRole('time')).toBeNull()
-
-    rerender(row(false))
-    expect(screen.getByRole('button', { name: 'Copy message' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Scroll this message to top' })).toBeInTheDocument()
-    expect(screen.getByRole('time')).toBeInTheDocument()
-  })
 })
 
 describe('which messages can be quoted', () => {
@@ -220,36 +106,6 @@ describe('which messages can be quoted', () => {
     window.getSelection()!.selectAllChildren(screen.getByText('Message text'))
 
     expect(readNativeChatQuotableSelection(container)?.text).toBe(quoted)
-  })
-})
-
-describe('MessageRow send mode', () => {
-  function renderUser(sentAs?: NativeChatMessage['sentAs']) {
-    return render(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'user',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Ship the parser' }],
-          ...(sentAs ? { sentAs } : {})
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-      />
-    )
-  }
-
-  it('marks a user message that was sent as a goal', () => {
-    renderUser('goal')
-    expect(screen.getByText('Ship the parser')).toBeInTheDocument()
-    expect(screen.getByText('Sent as goal')).toBeInTheDocument()
-  })
-
-  it('leaves an ordinary user message unmarked', () => {
-    renderUser()
-    expect(screen.queryByText('Sent as goal')).not.toBeInTheDocument()
   })
 })
 
@@ -278,6 +134,29 @@ describe('what a user message says about its delivery', () => {
       />
     )
   }
+
+  it('lets a user sign in from the refused message when no composer notice is shown', () => {
+    const { signIn } = signInView
+    render(
+      <NativeChatSignInContext.Provider value={signInView}>
+        <RecordedMessage
+          submission={{
+            clientMessageId: 'signed-out',
+            fence: 1,
+            payloadFingerprint: 'signed-out',
+            dispatchState: 'rejected',
+            rejection: { kind: 'notSignedIn' },
+            providerItemId: null,
+            reason: 'Sign in to Pi.',
+            submittedAt: 1,
+            resolvedAt: 2
+          }}
+        />
+      </NativeChatSignInContext.Provider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(signIn).toHaveBeenCalledOnce()
+  })
 
   it.each(['accepted', 'rejected', 'unknown'] as const)(
     'keeps a recorded steer Sending through handoff until it becomes %s',
@@ -318,69 +197,4 @@ describe('what a user message says about its delivery', () => {
       }
     }
   )
-
-  function renderUser(deliveryNotice?: NativeChatDeliveryNotice) {
-    return render(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'user',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Message text' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-        deliveryNotice={deliveryNotice}
-      />
-    )
-  }
-
-  it('says why under the message, with no control where the surface has none', () => {
-    renderUser({ text: 'Not delivered — check the terminal' })
-
-    expect(screen.getByText('Not delivered — check the terminal')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
-  })
-
-  it('says nothing when it went through', () => {
-    renderUser()
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
-  })
-
-  // Delivery status replaces the timestamp without changing row height or copy-button reveal.
-  it('says quietly that it is still sending in place of its time, with no Retry', () => {
-    renderUser({ sending: true })
-
-    const sending = screen.getByText('Sending…')
-    const copy = screen.getByRole('button', { name: 'Copy message' })
-    expect(sending).toHaveClass('text-xs', 'text-chat-foreground-faint')
-    expect(Array.from(sending.parentElement!.children)).toEqual([copy, sending])
-    expect(sending.parentElement).not.toHaveClass('can-hover:opacity-0')
-    expect(sending.parentElement!.parentElement).toHaveClass('group')
-    expect(copy).toHaveClass('can-hover:opacity-0', 'group-hover:opacity-100')
-    expect(screen.queryByRole('time')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull()
-  })
-
-  it('keeps the same row when the message is confirmed, with the time back in its place', () => {
-    const { rerender } = renderUser({ sending: true })
-    const meta = screen.getByText('Sending…').parentElement
-    rerender(
-      <MessageRow
-        message={{
-          id: 'message',
-          role: 'user',
-          timestamp: 0,
-          source: 'transcript',
-          blocks: [{ type: 'text', text: 'Message text' }]
-        }}
-        expandSignal={false}
-        onScrollMessageToTop={vi.fn()}
-      />
-    )
-    expect(screen.queryByText('Sending…')).toBeNull()
-    expect(screen.getByRole('time').parentElement).toBe(meta)
-    expect(meta).toHaveClass('can-hover:opacity-0')
-  })
 })

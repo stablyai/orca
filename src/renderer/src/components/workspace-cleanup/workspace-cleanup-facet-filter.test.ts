@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import {
   buildWorkspaceCleanupSizeIndex,
-  buildWorkspaceCleanupWorktreeIndex,
-  getWorkspaceCleanupHostIdentity
+  buildWorkspaceCleanupWorktreeIndex
 } from './workspace-cleanup-host-identity'
+import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
   DAY,
   FACET_NOW,
@@ -15,14 +15,14 @@ import {
 import {
   createDefaultWorkspaceCleanupFilterState,
   type WorkspaceCleanupFilterState
-} from '../../../../shared/workspace-cleanup-filter-model'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 import {
   countWorkspaceCleanupFacetMatches,
   matchesWorkspaceCleanupFilters,
   queryWorkspaceCleanupCandidates
 } from './workspace-cleanup-query'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import { canQueueWorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import { canQueueWorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 function filters(patch: (state: WorkspaceCleanupFilterState) => void): WorkspaceCleanupFilterState {
   const state = createDefaultWorkspaceCleanupFilterState()

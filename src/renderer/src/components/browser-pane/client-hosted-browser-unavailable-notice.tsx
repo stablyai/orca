@@ -3,12 +3,12 @@ import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { readBrowserClientHostId } from '@/runtime/browser-client-host-identity'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat

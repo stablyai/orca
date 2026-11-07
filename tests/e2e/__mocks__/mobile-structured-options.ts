@@ -30,7 +30,7 @@ export async function loadMobileStructuredOptions(): Promise<
           }))
           builder.onLoad({ filter: /^uuid$/, namespace: 'unit-phone' }, () => ({
             resolveDir: process.cwd(),
-            contents: `export { createBrowserUuid as randomV4Uuid } from ${JSON.stringify(resolve('src/renderer/src/lib/browser-uuid.ts'))}`
+            contents: `export { createNonSecureContextUuid as randomV4Uuid } from ${JSON.stringify(resolve('src/shared/non-secure-context-uuid.ts'))}`
           }))
         }
       }

@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useRef,
   useState,
   type MouseEventHandler,
@@ -8,8 +7,8 @@ import {
   type RefObject
 } from 'react'
 import { flushSync } from 'react-dom'
-import { chatMathSelectionText } from '../sidebar/chat-markdown-math-selection'
-import { Clipboard, Copy, GitFork, Image as ImageIcon, SquareTerminal } from 'lucide-react'
+import { markdownMathSelectionText } from '../../../../shared/markdown-math-selection'
+import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,8 +37,8 @@ import {
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
-import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
+import { AgentSessionContinuationMenuItem } from '@/components/agent-session-continuation/AgentSessionContinuationMenuItem'
+import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import {
   noNativeChatContextMenuTarget,
   readNativeChatContextMenuTarget,
@@ -101,7 +100,6 @@ export type NativeChatContextMenuActions = {
   onToggleExpand: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
-  onForkAgentSession: () => void
   onCopyAgentSessionContext: () => void
   onSetTitle: () => void
   canClearPaneTitle: boolean
@@ -124,7 +122,6 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   onToggleExpand: () => {},
   canContinueAgentSessionInNewSession: false,
   onContinueAgentSessionInNewSession: () => {},
-  onForkAgentSession: () => {},
   onCopyAgentSessionContext: () => {},
   onSetTitle: () => {},
   canClearPaneTitle: false,
@@ -182,13 +179,9 @@ export function useNativeChatContextMenu({
   const hasItems =
     hasEditItems || hasSessionItems || chatPane !== undefined || resolveOrcaSessionId !== undefined
 
-  useEffect(() => {
-    if (!enabled) {
-      setState((current) =>
-        current.open ? { ...current, open: false, image: undefined } : current
-      )
-    }
-  }, [enabled])
+  if (!enabled && state.open) {
+    setState({ ...state, open: false, image: undefined })
+  }
 
   const onContextMenuCapture = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
@@ -337,13 +330,6 @@ export function useNativeChatContextMenu({
                   onSelect={actions.onContinueAgentSessionInNewSession}
                 />
               ) : null}
-              <DropdownMenuItem onSelect={actions.onForkAgentSession}>
-                <GitFork />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
-                  'Fork Agent Session…'
-                )}
-              </DropdownMenuItem>
               <AgentSessionContextCopyMenuItem onSelect={actions.onCopyAgentSessionContext} />
             </>
           ) : null}
@@ -412,7 +398,7 @@ function getNativeChatSelectedText(root: HTMLElement | null): string {
   if (!nodeBelongsToRoot(anchor, root) || !nodeBelongsToRoot(focus, root)) {
     return ''
   }
-  return chatMathSelectionText(selection, root) ?? selection.toString()
+  return markdownMathSelectionText(selection, root) ?? selection.toString()
 }
 
 function nodeBelongsToRoot(node: Node | null, root: HTMLElement): boolean {

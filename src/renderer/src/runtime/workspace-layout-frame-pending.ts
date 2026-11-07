@@ -1,6 +1,6 @@
 // Accumulate per-record changes until flush. Bindings/live titles apply alone; other records require a workspace build.
 
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
+import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
 import { stableJson } from '../../../shared/workspace-layout/workspace-layout-load-report'
 import type { WorkspaceLayoutRecordsFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import type {

@@ -6,12 +6,12 @@ import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
-import { runWithRemoteCliPageAdmission } from '../remote-cli-page-admission'
+import { runWithRemoteCliPageAdmission } from '../routing/input-ownership/remote-cli-page-admission'
 import { runWithActionEffects } from './agent-browser-action-effects'
-import { getRequestedPageUrl, runExpectingPageUrl } from '../browser-expected-page-url'
+import { getRequestedPageUrl, runExpectingPageUrl } from '../cdp/input/browser-expected-page-url'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
-import { releaseHeldPageInput } from '../guest-direct-key-input'
-import { onBrowserJavaScriptDialogOpened } from '../browser-javascript-dialogs'
+import { releaseHeldPageInput } from '../cdp/input/guest-direct-key-input'
+import { onBrowserJavaScriptDialogOpened } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
   assertNoJavaScriptDialog,
   dialogAnswerHint,

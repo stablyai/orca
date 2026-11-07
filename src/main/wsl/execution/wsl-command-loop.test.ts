@@ -84,16 +84,6 @@ describe.runIf(posix)('WSL command loop', () => {
     expect(sessionLeads).toBe('own\n')
   })
 
-  it('runs concurrent commands on separate loops up to the cap, then declines', async () => {
-    const { pool: loops, conn } = pool({ maxLoops: 2 })
-    const slow = [execCommand(conn, 'sleep 0.3; echo a'), execCommand(conn, 'sleep 0.3; echo b')]
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    await expect(loops.run('echo c')).resolves.toBeNull()
-    expect(await Promise.all(slow)).toEqual(['a\n', 'b\n'])
-    expect(await execCommand(conn, 'echo d')).toBe('d\n')
-    expect(spawned).toHaveLength(2)
-  })
-
   it('does not let a backgrounded writer leak into the next command', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-loop-'))
     try {

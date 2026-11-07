@@ -4,9 +4,9 @@ import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/files/runtime-file-client-types'
 import { useAppStore } from '@/store'
-import type { TerminalTab } from '../../src/shared/terminal-tab-types'
+import type { TerminalTab } from '../../src/shared/workspace-layout/terminal-tab-types'
 
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../src/shared/constants'
 import {
@@ -18,7 +18,7 @@ import {
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '../../src/renderer/src/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '../../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/native-chat-file-link'
 import {
   resolveNativeChatSkillDiscoveryContext,
@@ -26,7 +26,7 @@ import {
 } from '../../src/renderer/src/components/native-chat/native-chat-skill-discovery-context'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { adoptFromEndpoint } from '@/store/adopt-from-endpoint'
+import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
 import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/files/file-mutation-expectation'
 import {
   resetSshConnectionGenerations,

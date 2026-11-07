@@ -5,11 +5,13 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { clearGitHubSlugMetadataCache, useRepoAssigneesBySlug } from './useGitHubSlugMetadata'
 import type { MetadataListState } from './useMetadataListRequest'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const listUsers = vi.fn()
 const baseUser = { login: 'member', name: 'Member Name', avatarUrl: 'https://example.test/a' }

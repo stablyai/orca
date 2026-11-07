@@ -5,8 +5,8 @@ import {
 import {
   classifyPairedE2EEV2AuthReply,
   pairedE2EEV2TokenAuth
-} from '../../../src/shared/paired-e2ee-client-handshake'
-import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+} from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import type { PairedE2EEV2ClientSession as MobileE2EEV2ClientSession } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
 import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
 import { inflateCompressedFrame } from './compressed-frame-inflate'
 

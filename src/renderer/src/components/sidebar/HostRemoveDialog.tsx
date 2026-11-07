@@ -14,12 +14,12 @@ import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { translate } from '@/i18n/i18n'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { projectRemovalTargets } from './removal-unsaved-files'
+import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'
 import { clearHostRename } from './host-rename-remove'
 import type { HostRemovalTarget } from './host-rename-remove'
 import { resolveSshHostRemoval } from './ssh-host-remove-resolution'
@@ -28,7 +28,7 @@ import { removeWslHost } from './wsl-host-removal'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type HostRemoveDialogProps = {
   open: boolean
@@ -79,7 +79,7 @@ function HostRemoveDialogBody({
     return resolveSshHostRemoval({
       targetId: target.targetId,
       repos,
-      worktrees: getAllWorktreesFromState({ worktreesByRepo })
+      worktrees: getIndexedAllWorktrees(worktreesByRepo)
     })
   }, [target, repos, worktreesByRepo])
 
@@ -106,14 +106,6 @@ function HostRemoveDialogBody({
     void state.updateSettings({
       hostSettingOverrides: clearHostRename(state.settings, hostId)
     })
-  }
-
-  const removeSshTarget = async (targetId: string): Promise<void> => {
-    // Main refuses a managed server's host; the error says why.
-    await window.api.ssh.removeTarget({ id: targetId })
-    // Clear deferred reconnect state so focused tabs stop retrying the removed target.
-    useAppStore.getState().clearRemovedSshTargetState(targetId)
-    dropOverridesForHost()
   }
 
   // Reuse server Settings’ active-host switching and error handling through a preselected deep link.
@@ -151,7 +143,8 @@ function HostRemoveDialogBody({
         await removeWslHost(target.environmentId)
         dropOverridesForHost()
       } else {
-        await removeSshTarget(target.targetId)
+        // Main refuses a managed server's host, and on success clears the target's live state and rename.
+        await window.api.ssh.removeTarget({ id: target.targetId })
       }
       if (mountedRef.current) {
         onOpenChange(false)

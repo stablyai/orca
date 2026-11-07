@@ -7,12 +7,12 @@ import {
   SettingsSegmentedControl
 } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { LIGHT_BG_MIN_CONTRAST } from '../../../../../../shared/terminal-contrast-correction'
+import { LIGHT_BG_MIN_CONTRAST } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
 import {
   MIN_TERMINAL_CONTRAST_RATIO,
   MAX_TERMINAL_CONTRAST_RATIO,
   normalizeTerminalMinimumContrastRatio
-} from '../../../../../../shared/terminal-minimum-contrast-settings'
+} from '../../../../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { translate } from '@/i18n/i18n'
 
 type ContrastMode = 'auto' | 'off' | 'custom'

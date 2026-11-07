@@ -1,4 +1,5 @@
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   closeTerminalTab,
   type PrecomputedTerminalCloseState
@@ -7,8 +8,8 @@ import {
   buildTerminalTabRetirementPlans,
   type TerminalTabRetirementPlan,
   type TerminalTabRetirementState
-} from '@/store/slices/terminal-tab-retirement'
-import { reserveTerminalRetirementTeardowns } from '@/store/slices/terminal-retirement-teardown-reservation'
+} from '@/store/terminals/terminal-tab-retirement'
+import { reserveTerminalRetirementTeardowns } from '@/store/terminals/terminal-retirement-teardown-reservation'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2
@@ -48,6 +49,8 @@ type KillAllTerminalSurfaceDependencies = {
   closeSurface: (
     tabId: string,
     options: {
+      /** Kill-all is the user's own command (daemon actions, quit and stop all). */
+      reason: 'user'
       force: true
       localPtyTeardownOwnedExternally: true
       precomputedRetirementPlan: TerminalTabRetirementPlan
@@ -226,6 +229,7 @@ export async function runKillAllTerminalSurfaces(
       let closeFailed = false
       try {
         deps.closeSurface(targetId, {
+          reason: 'user',
           force: true,
           localPtyTeardownOwnedExternally: true,
           precomputedRetirementPlan: retirementPlan,

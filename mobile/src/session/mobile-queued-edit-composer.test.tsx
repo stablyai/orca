@@ -11,7 +11,8 @@ import { act } from 'react-test-renderer'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AcpCommandOptionsFixtureModule,
-  MobileQueuedEditHostFixtureModule
+  MobileQueuedEditHostFixtureModule,
+  MobileQueuedEditHostClockFixtureModule
 } from '../../../src/shared/mobile-queued-edit-host.test-fixture-contract'
 import { mobileQueuedEditHarness, readOrHoldReply } from './mobile-queued-edit-hook.test-fixture'
 import { TextInput } from 'react-native'
@@ -32,13 +33,16 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../../../src/main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../../../src/main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })
 
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./native-chat/composer/MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
@@ -60,7 +64,10 @@ vi.mock('../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
 }))
 
 const hostFixtures = await vi.importActual<MobileQueuedEditHostFixtureModule>(
-  '../../../src/main/native-chat/agent-session-wire/mobile-queued-edit-host.test-fixture'
+  '../../../src/main/native-chat/agent-session-wire/host/testing/mobile-queued-edit-host.test-fixture'
+)
+const { HOST_TEST_NOW } = await vi.importActual<MobileQueuedEditHostClockFixtureModule>(
+  '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 )
 const { AcpStructuredOptions } = await vi.importActual<AcpCommandOptionsFixtureModule>(
   '../../../src/main/acp/acp-structured-options'
@@ -371,7 +378,7 @@ describe('real phone inline composer from More through picker pruning and host b
     async (kind) => {
       const { ok, snapshotEvent } =
         await import('./use-mobile-structured-agent-session-queued.test-fixture')
-      const clock = vi.spyOn(Date, 'now').mockReturnValue(hostFixtures.now)
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW)
       const rig = await hostFixtures.createMobileQueuedEditHostFixture()
       try {
         await rig.start()
@@ -470,7 +477,7 @@ describe('real phone inline composer from More through picker pruning and host b
         )
         await open()
         expect(state.hook!.queued.editor?.text).toBe('user replacement')
-        expect(state.hook!.queued.cards[0]?.attribution).toBeNull()
+        expect(state.hook!.queued.cards[0]?.from).toBeUndefined()
       } finally {
         await rig.dispose()
         clock.mockRestore()

@@ -2,7 +2,7 @@ import type { AppState } from '../../../types'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import { editorTabContentTypeForMode, isEditorTabContentType } from './editor-tab-content-type'
 import type { OpenFile } from '../types/open-file'
-import { ownsGlobalSelection } from '../../../global-selection-owner'
+import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import type { EditorOpenLinkIntent } from '../types/editor-open-link-intent'
 import { pickAdjacentEditorOpenGroupId } from './editor-open-adjacent-group'
 import {

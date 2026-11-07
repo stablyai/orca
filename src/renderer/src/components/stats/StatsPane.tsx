@@ -17,14 +17,14 @@ import {
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   useStructuredAgentSessionHostCapabilityState,
   type StructuredAgentSessionHostCapabilityState
 } from '@/runtime/structured-agent-session-host-capability'
 import { USAGE_ANALYTICS_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
-import { isSameStatsHost } from '../../store/slices/stats'
+import { isSameStatsHost } from '../../store/slices/process-stats/stats'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {

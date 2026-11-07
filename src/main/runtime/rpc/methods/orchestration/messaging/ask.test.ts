@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../../../shared/orchestration-ask-timeout'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { MessageWake } from '../../../../runtime-message-waiters'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()

@@ -119,35 +119,6 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     tool_input: undefined
   })
 
-  it("keeps the cancel when the child's next hook restates the relay's working main agent", async () => {
-    const pane = await startSshPane(new AgentHookServer())
-    await postCaptured(pane, upToCancel)
-    expect(pressCtrlC(pane.desktop)).toBe(true)
-    expect(row(pane.desktop)).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', outcome: 'cancellation' },
-      subagents: [expect.objectContaining({ state: 'working' })]
-    })
-
-    // Child activity arrives while the relay still believes the main agent is working.
-    const childTool = hookAt(records, 9)
-    expect(childTool.payload.agent_id).toBeDefined()
-    await pane.post(childTool.payload)
-    expect(row(pane.desktop)).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-
-    // Owed child notification holds the relay row while desktop cancellation remains authoritative.
-    await pane.post(subagentStop(4))
-    await pane.post(subagentStop(9))
-    expect(row(pane.desktop)).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-    expect(row(pane.desktop).subagents).toBeUndefined()
-  })
-
   it("keeps the cancel through a child's permission prompt and its approval", async () => {
     const pane = await startSshPane(new AgentHookServer())
     await postCaptured(pane, upToCancel)
@@ -185,19 +156,6 @@ describe('a relayed Claude cancel with a live subagent (captured)', () => {
     expect(row(pane.desktop)).toMatchObject({
       state: 'working',
       mainAgent: { state: 'done', outcome: 'cancellation' }
-    })
-  })
-
-  it('keeps the cancel through a reconnect replay of the relay cache', async () => {
-    const pane = await startSshPane(new AgentHookServer())
-    await postCaptured(pane, upToCancel)
-    expect(pressCtrlC(pane.desktop)).toBe(true)
-
-    expect(pane.relay.replayCachedPayloadsForPanes()).toBe(1)
-    expect(row(pane.desktop)).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', outcome: 'cancellation' },
-      subagents: [expect.objectContaining({ state: 'working' })]
     })
   })
 

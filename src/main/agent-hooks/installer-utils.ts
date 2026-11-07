@@ -11,7 +11,7 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from '../filesystem/permission-errors'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'

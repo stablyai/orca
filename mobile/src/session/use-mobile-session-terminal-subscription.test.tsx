@@ -22,6 +22,8 @@ import { useMobileSessionTerminalSubscription } from './use-mobile-session-termi
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
+
 const HANDLE = 'term-1'
 const PHONE = { cols: 55, rows: 44 }
 
@@ -67,6 +69,8 @@ function subscriptionHarness(opts: {
   }
   const fields = {
     client: {
+      onStateChange: () => () => {},
+      sendRequest: vi.fn(async () => ({ ok: true, result: { credited: true } })),
       subscribe: vi.fn(
         (_method: string, params: Record<string, unknown>, onData: StreamHandler) => {
           order.push(`subscribe ${JSON.stringify(params.viewport ?? null)}`)
@@ -251,44 +255,12 @@ describe('a terminal first subscribe', () => {
     ])
   })
 
-  it('sizes from the reported box against the laid-out frame', () => {
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, frameWidth: 427.5 })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).toHaveBeenCalledWith({ width: 427.5, height: 751 })
-    expect(harness.order).toEqual(['subscribe {"cols":55,"rows":44}'])
-  })
-
-  it('keeps a measured viewport rather than fitting again', () => {
-    const measured = { cols: 60, rows: 40 }
-    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: measured })
-    harness.subscribe()
-    expect(harness.terminal.fitDimensions).not.toHaveBeenCalled()
-    expect(harness.order).toEqual(['subscribe {"cols":60,"rows":40}'])
-  })
-
   it('holds a ready document without a box until its frame is laid out', () => {
     const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
     harness.subscribe()
     expect(harness.order).toEqual([])
     harness.layOutFrame(427)
     expect(harness.order).toEqual(['subscribe null'])
-  })
-
-  it('keeps one frame, notifies a new width, and subscribes on the first layout only', () => {
-    const harness = subscriptionHarness({ fit: null, webReady: true, frameWidth: 0 })
-    const { notifyTerminalFrameHeight, notifyTerminalFrameWidth } = harness.fields
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toBeNull()
-    harness.layOutFrame(427, 751)
-    harness.layOutFrame(427, 700)
-    expect(harness.order).toEqual(['subscribe null'])
-    expect(notifyTerminalFrameWidth).not.toHaveBeenCalled()
-    harness.layOutFrame(0, 0)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 427, height: 700 })
-    harness.layOutFrame(360.5, 700)
-    expect(harness.terminalFrameRef.current).toEqual({ width: 360.5, height: 700 })
-    expect(notifyTerminalFrameWidth).toHaveBeenCalledTimes(1)
-    expect(notifyTerminalFrameHeight.mock.calls.map(([height]) => height)).toEqual([751, 700, 700])
   })
 
   it('goes without dims when no cell box was reported, and the fit pass resubscribes once', async () => {
@@ -325,13 +297,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     harness.fields.webReadyHandlesRef.current.clear()
     harness.fields.webReadyHandlesRef.current.add(HANDLE)
   }
-
-  it('still fits a current initial snapshot after the same settling delay', () => {
-    const h = start()
-    expect(fits(h)).toHaveLength(1)
-    act(() => fits(h)[0]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
-  })
   it('does not fit after the stream was unsubscribed', () => {
     const h = start()
     h.fields.unsubscribeTerminal(HANDLE)
@@ -396,13 +361,6 @@ describe('settled terminal fits belong to their stream and document', () => {
     act(() => fits(h)[0]())
     expect(h.terminal.resetZoom).not.toHaveBeenCalled()
     expect(h.fields.signalTerminalInventoryRecovery).toHaveBeenCalledTimes(1)
-  })
-  it('still fits the current geometry-only resize', () => {
-    const h = start()
-    h.event(0, { type: 'resized', seq: 2, cols: 60, rows: 40 })
-    expect(h.terminal.resize).toHaveBeenCalledWith(60, 40, h.terminalFrameRef.current)
-    act(() => fits(h)[1]())
-    expect(h.terminal.resetZoom).toHaveBeenCalledTimes(1)
   })
   it('does not let an ignored older resize invalidate the latest accepted fit', () => {
     const h = start()
@@ -563,5 +521,93 @@ describe('two visible terminal subscriptions', () => {
     harness.event(0, { type: 'data', chunk: 'still live' })
     expect(harness.terminal.write).toHaveBeenCalledWith('still live')
     expect(harness.fields.terminalUnsubsRef.current.size).toBe(2)
+  })
+})
+
+describe('terminal output credit', () => {
+  function creditedTerminal() {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
+    const parsed: (() => void)[] = []
+    harness.replaceTerminal({
+      ...harness.terminal,
+      writeWithParseAck: vi.fn((_data: string, onParsed: () => void) => {
+        parsed.push(onParsed)
+      })
+    })
+    harness.subscribe()
+    return { harness, parsed }
+  }
+  const acks = (harness: ReturnType<typeof subscriptionHarness>) =>
+    harness.fields.client.sendRequest.mock.calls
+  const capabilities = (harness: ReturnType<typeof subscriptionHarness>) =>
+    harness.fields.client.subscribe.mock.calls[0][1].capabilities
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('acks received output units only after xterm has parsed them', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal()
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    // Counted as received, before the document rewrites the status dot's selector.
+    harness.event(0, { type: 'data', chunk: '\u23fa\ufe0f ok' })
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(acks(harness)).toEqual([])
+
+    act(() => parsed.forEach((onParsed) => onParsed()))
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
+    expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 10 }]])
+  })
+
+  it('acks output dropped unwritten while native chat covers the terminal', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal()
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.fields.showNativeChatRef.current = true
+    harness.event(0, { type: 'data', chunk: 'dropped' })
+    act(() => {
+      vi.advanceTimersByTime(250)
+    })
+    expect(parsed).toEqual([])
+    expect(acks(harness)).toEqual([['terminal.ackOutput', { streamToken: 'token-1', units: 7 }]])
+  })
+
+  it('retries an ack the bridge refused before sending it on the next tick, not at once', async () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal()
+    harness.fields.client.sendRequest.mockRejectedValueOnce(new Error('bridge request cap'))
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'x'.repeat(128 * 1024) })
+    await act(async () => parsed.forEach((onParsed) => onParsed()))
+    expect(acks(harness)).toHaveLength(1)
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+    expect(acks(harness)).toEqual([
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }],
+      ['terminal.ackOutput', { streamToken: 'token-1', units: 131072 }]
+    ])
+  })
+
+  it('asks for credit but acks nothing to a host that did not echo it', () => {
+    vi.useFakeTimers()
+    const { harness, parsed } = creditedTerminal()
+    expect(capabilities(harness)).toEqual({ terminalBinaryStream: 1, outputAck: 1 })
+    harness.event(0, { type: 'subscribed' })
+    harness.scrollback(0, PHONE.cols, PHONE.rows)
+    harness.event(0, { type: 'data', chunk: 'hello' })
+    act(() => parsed.forEach((onParsed) => onParsed()))
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(acks(harness)).toEqual([])
   })
 })

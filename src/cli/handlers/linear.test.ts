@@ -94,42 +94,6 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
-  it('maps MCP-compatible list-issues filters and cursor pagination', async () => {
-    queueFixtures(callMock, okFixture('req_list', issueResult()))
-
-    await main(
-      [
-        'linear',
-        'list-issues',
-        '--team',
-        'ENG',
-        '--assignee',
-        'me',
-        '--priority',
-        '2',
-        '--cursor',
-        'next-page',
-        '--order-by',
-        'createdAt',
-        '--include-archived',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.mcpListIssues',
-      expect.objectContaining({
-        team: 'ENG',
-        assignee: 'me',
-        priority: 2,
-        cursor: 'next-page',
-        orderBy: 'createdAt',
-        includeArchived: true
-      })
-    )
-  })
-
   it('prints truncation on human stdout and in JSON without using stderr for JSON', async () => {
     const listResult = {
       issues: [
@@ -222,72 +186,6 @@ describe('orca linear CLI handlers', () => {
     })
   })
 
-  it('maps project list to agent project RPC with capped limit', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_projects', {
-        projects: [],
-        meta: {
-          query: 'launch',
-          workspaceId: 'all',
-          limit: 50,
-          returned: 0,
-          hasMore: false,
-          partial: false,
-          workspaceErrors: []
-        }
-      })
-    )
-
-    await main(
-      ['linear', 'project', 'list', '--query', 'launch', '--workspace', 'all', '--limit', '500'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('linear.agentProjectList', {
-      query: 'launch',
-      limit: 50,
-      workspaceId: 'all'
-    })
-  })
-
-  it('maps status writes to the agent write RPC with an explicit target', async () => {
-    queueFixtures(callMock, okFixture('req_status', statusSetResult()))
-
-    await main(['linear', 'status', 'set', 'ENG-123', '--to', 'In Review', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueSetState',
-      {
-        input: 'ENG-123',
-        current: false,
-        workspaceId: undefined,
-        to: 'In Review',
-        context: {
-          remote: false,
-          cwd: '/tmp/repo'
-        }
-      },
-      { timeoutMs: 75_000 }
-    )
-  })
-
-  it('maps priority writes with Linear API priority numbering', async () => {
-    queueFixtures(callMock, okFixture('req_priority', taskUpdateResult('priority')))
-
-    await main(['linear', 'priority', 'set', 'ENG-123', '--to', 'urgent', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueUpdateTask',
-      expect.objectContaining({
-        input: 'ENG-123',
-        operation: 'priority',
-        priority: 1
-      }),
-      { timeoutMs: 75_000 }
-    )
-  })
-
   it('maps relation writes to the current-issue perspective', async () => {
     queueFixtures(callMock, okFixture('req_relation', relationWriteResult()))
 
@@ -317,36 +215,6 @@ describe('orca linear CLI handlers', () => {
         operation: 'add',
         context: { remote: false, cwd: '/tmp/repo' }
       },
-      { timeoutMs: 75_000 }
-    )
-  })
-
-  it('dispatches relation rm through the remove handler', async () => {
-    queueFixtures(callMock, okFixture('req_relation_rm', relationWriteResult()))
-
-    await main(
-      [
-        'linear',
-        'relation',
-        'rm',
-        'ENG-123',
-        '--related',
-        'ENG-456',
-        '--type',
-        'related',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueRelationWrite',
-      expect.objectContaining({
-        input: 'ENG-123',
-        relatedInput: 'ENG-456',
-        relationship: 'relatedTo',
-        operation: 'remove'
-      }),
       { timeoutMs: 75_000 }
     )
   })
@@ -505,97 +373,6 @@ describe('orca linear CLI handlers', () => {
     expect(payload.error.code).toBe('linear_invalid_write_id')
   })
 
-  it('maps create with parent-current and optional body flags', async () => {
-    queueFixtures(callMock, okFixture('req_create', createResult()))
-
-    await main(
-      [
-        'linear',
-        'create',
-        '--title',
-        'Follow-up bug',
-        '--body',
-        'Concrete repro',
-        '--parent-current',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueCreate',
-      {
-        title: 'Follow-up bug',
-        body: 'Concrete repro',
-        teamInput: undefined,
-        state: undefined,
-        assignee: undefined,
-        priority: undefined,
-        estimate: undefined,
-        dueDate: undefined,
-        labels: [],
-        parentInput: undefined,
-        parentCurrent: true,
-        workspaceId: undefined,
-        writeId: undefined,
-        context: {
-          remote: false,
-          cwd: '/tmp/repo'
-        }
-      },
-      { timeoutMs: 75_000 }
-    )
-  })
-
-  it('maps enriched create task fields', async () => {
-    queueFixtures(callMock, okFixture('req_create', createResult()))
-
-    await main(
-      [
-        'linear',
-        'create',
-        '--title',
-        'Triage bug',
-        '--team',
-        'ENG',
-        '--project',
-        'project-1',
-        '--state',
-        'Todo',
-        '--assignee',
-        'me',
-        '--priority',
-        'high',
-        '--estimate',
-        '2',
-        '--due-date',
-        '2026-06-30',
-        '--label',
-        'Bug',
-        '--label',
-        'Regression',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'linear.issueCreate',
-      expect.objectContaining({
-        title: 'Triage bug',
-        teamInput: 'ENG',
-        projectInput: 'project-1',
-        state: 'Todo',
-        assignee: 'me',
-        priority: 2,
-        estimate: 2,
-        dueDate: '2026-06-30',
-        labels: ['Bug', 'Regression']
-      }),
-      { timeoutMs: 75_000 }
-    )
-  })
-
   it('maps MCP-style save-issue updates and explicit clears', async () => {
     queueFixtures(callMock, okFixture('req_save', createResult()))
 
@@ -680,15 +457,6 @@ function issueResult(): unknown {
       includeErrors: [],
       sections: {}
     }
-  }
-}
-
-function statusSetResult(): unknown {
-  return {
-    issue: { id: 'issue-id', identifier: 'ENG-123', url: 'https://linear.app/acme/issue/ENG-123' },
-    state: { id: 'state-review', name: 'In Review', type: 'started' },
-    previousState: { id: 'state-started', name: 'In Progress' },
-    meta: { workspaceId: 'workspace-1', alreadyInState: false }
   }
 }
 

@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react'
-import { getBranchPrefixIssue, normalizeBranchPrefix } from '../../../../../shared/branch-prefix'
+import {
+  getBranchPrefixIssue,
+  normalizeBranchPrefix
+} from '../../../../../shared/git/branches/branch-prefix'
 import { translate } from '@/i18n/i18n'
 
 type BranchPrefixFeedbackProps = {

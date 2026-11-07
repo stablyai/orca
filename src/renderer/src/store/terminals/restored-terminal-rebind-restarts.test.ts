@@ -9,7 +9,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { publishWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
@@ -23,17 +23,17 @@ import {
 import { bindTabTerminalPanesInSession } from '../../../../main/persistence/restoring-sessions/tab-terminal-pane-binding-repair'
 import { windowViewSaveForMain } from '../../../../main/persistence/window-save-view'
 import { deriveShutdownReconnectFacts } from '../../../../main/runtime/terminal/recovery/shutdown-reconnect-facts'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { buildWorkspaceSessionHostSnapshots } from '@/lib/workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { buildWorkspaceSessionHostSnapshots } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   bootWindowFromPartitions,
   type StoredPartition
 } from '../../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../slices/store-session-test-harness'
-import { createTestStore } from '../slices/store-test-helpers'
-import { getOrphanTerminalIds } from '../slices/terminal-orphan-helpers'
-import { buildLayoutFrameSlices } from '../workspace-layout-frame-slices'
-import { buildLayoutFrameStorePatch } from '../workspace-layout-frame-store-patch'
+import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { getOrphanTerminalIds } from './terminal-orphan-cleanup'
+import { buildLayoutFrameSlices } from '../workspace-layout/frames/workspace-layout-frame-slices'
+import { buildLayoutFrameStorePatch } from '../workspace-layout/frames/workspace-layout-frame-store-patch'
 import type { AppState } from '../types'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

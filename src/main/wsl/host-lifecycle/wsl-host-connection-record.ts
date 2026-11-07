@@ -1,8 +1,8 @@
-import { refreshWslHostPairing } from '../../../shared/runtime-environment-wsl-host-store'
+import { refreshWslHostPairing } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import {
   readWslHostDeployments,
   type WslHostDeploymentRecord
-} from '../../../shared/wsl-host-deployment-store'
+} from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import {
   wslHostStatusDetailText,
   type WslHostCopyParams,

@@ -1,7 +1,7 @@
 // If main removes a user-only side group containing their held tab, follow the tab into main’s resulting group.
 
 import type { AppState } from '@/store/types'
-import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
+import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 
 type FollowState = Pick<
   AppState,

@@ -1,15 +1,15 @@
-import type { DirectWorkItemLaunchResult } from '@/lib/direct-work-item-setup'
+import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
-import { buildFixBrokenChecksPrompt } from '../../../../../shared/pr-checks-fix-prompt'
-import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control-ai-recipe-save'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
+import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
+import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { saveSourceControlAiActionRecipeForTarget } from '../../right-sidebar/source-control/ai/recipe-persistence'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../shared/source-control-ai-actions'
+} from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'

@@ -3,7 +3,7 @@ import { lstat } from 'node:fs/promises'
 import type { ImportSkipReason } from '../../../shared/filesystem-import-result-types'
 import { errorMessage } from '../../../shared/error-message'
 import { isPermissionError } from '../../filesystem/permission-errors'
-import { isENOENT } from './filesystem-path-containment'
+import { isENOENT } from './access/filesystem-path-containment'
 
 export type ImportSourceRejection =
   | { sourcePath: string; status: 'skipped'; reason: ImportSkipReason }

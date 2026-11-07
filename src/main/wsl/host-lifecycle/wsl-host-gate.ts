@@ -8,7 +8,7 @@ import {
   resolveWslHostsGateState,
   type WslHostsGateState
 } from '../../../shared/wsl-host-internal-gate'
-import type { OrcadDeploymentLink } from '../../../shared/runtime-environments'
+import type { OrcadDeploymentLink } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { wslHostRunRefusal, WSL_HOST_REMOVING_MESSAGE } from './wsl-host-add-admission'
 import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../../shared/wsl-hosts-policy'
 

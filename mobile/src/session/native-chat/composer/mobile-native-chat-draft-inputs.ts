@@ -77,6 +77,29 @@ export function addMobileNativeChatDraftImages(
     ]
   }))
 }
+/** Drops only these chips, keeping any attached meanwhile. */
+export function removeMobileNativeChatDraftImages(
+  target: string | MobileNativeChatDraftDestination,
+  ids: readonly string[]
+): void {
+  const removed = new Set(ids)
+  updateMobileNativeChatDraftInputs(target, (current) => ({
+    ...current,
+    images: current.images.filter((image) => !removed.has(image.id))
+  }))
+}
+/** Puts back the chips an unconfirmed send carried, after any attached since. */
+export function returnMobileNativeChatDraftAttachments(
+  destination: MobileNativeChatDraftDestination,
+  images: readonly PendingNativeChatImage[],
+  files: readonly PendingNativeChatFile[]
+): void {
+  updateMobileNativeChatDraftInputs(destination, (current) => ({
+    ...current,
+    images: [...current.images, ...images],
+    files: [...current.files, ...files]
+  }))
+}
 export function subscribeMobileNativeChatDraftInputs(
   scope: string | null,
   listener: () => void
@@ -94,12 +117,23 @@ export function subscribeMobileNativeChatDraftInputs(
     }
   }
 }
-export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs {
+export function useMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs
+export function useMobileNativeChatDraftInputs<K extends keyof MobileNativeChatDraftInputs>(
+  scope: string | null,
+  key: K
+): MobileNativeChatDraftInputs[K]
+export function useMobileNativeChatDraftInputs(
+  scope: string | null,
+  key?: keyof MobileNativeChatDraftInputs
+) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeMobileNativeChatDraftInputs(scope, listener),
     [scope]
   )
-  return useSyncExternalStore(subscribe, () => readMobileNativeChatDraftInputs(scope))
+  return useSyncExternalStore(subscribe, () => {
+    const inputs = readMobileNativeChatDraftInputs(scope)
+    return key === undefined ? inputs : inputs[key]
+  })
 }
 export function closeMobileNativeChatEditInputs(
   scope: string,

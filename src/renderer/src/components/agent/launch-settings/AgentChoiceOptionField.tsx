@@ -3,7 +3,7 @@ import { Label } from '../../ui/label'
 import { SelectTrigger, SelectValue } from '../../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { SourceControlActionChoiceRoute } from '../../../../../shared/source-control-action-options'
+import type { SourceControlActionChoiceRoute } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 
 export function SourceControlActionOptionField({
   label,

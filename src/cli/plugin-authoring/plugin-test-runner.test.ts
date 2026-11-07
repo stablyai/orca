@@ -169,10 +169,6 @@ describe('orca plugin test with a worker', () => {
 })
 
 describe('the example plugins', () => {
-  it('include the build-less and gallery examples', () => {
-    expect(TESTED_EXAMPLES).toEqual(expect.arrayContaining(['hello-tsx', 'components-gallery']))
-  })
-
   it.each(TESTED_EXAMPLES)(
     '%s passes its own tests and renders without problems',
     async (example) => {

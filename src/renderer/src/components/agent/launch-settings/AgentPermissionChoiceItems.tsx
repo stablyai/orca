@@ -1,5 +1,5 @@
 import { Terminal } from 'lucide-react'
-import type { AgentPermissionChoice } from '../../../../../shared/tui-agent-permission-choice'
+import type { AgentPermissionChoice } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuRadioItem, DropdownMenuSeparator } from '../../ui/dropdown-menu'
 import {

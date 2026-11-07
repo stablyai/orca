@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { useWorktreeMap } from '../../store/selectors'
+import { useWorktreeMap } from '../../store/slices/worktrees/listing/use-worktree-catalog'
 import type {
   Metric,
   UnifiedProjectGroup,

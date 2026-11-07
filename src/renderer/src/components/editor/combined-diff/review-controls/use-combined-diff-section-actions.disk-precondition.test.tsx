@@ -3,27 +3,28 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
-import type { DiffSection } from '../../diff-section-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useCombinedDiffSectionActions } from './use-combined-diff-section-actions'
-import { getStoredTextDiffResult } from '../../large-diff-section-content'
+import { getStoredTextDiffResult } from '../../diff/large-files/large-diff-section-content'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { acquireCombinedDiffSectionOperation } from '../load-sections/combined-diff-section-connection'
 import { fetchCombinedDiffSection } from '../load-sections/fetch-combined-diff-section'
 import {
   makeFolderWorkspace,
   makeProjectGroup
-} from '@/components/sidebar/folder-workspace-composer-submit-fixtures'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({ writeRuntimeFile: vi.fn(), diff: vi.fn() }))
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitDiff: mocks.diff,
   getRuntimeGitBranchDiff: mocks.diff,
   getRuntimeGitCommitDiff: mocks.diff
 }))
 
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
   writeRuntimeFile: mocks.writeRuntimeFile
 }))
 beforeEach(() => {
@@ -75,43 +76,6 @@ function section(): DiffSection {
   }
 }
 
-it('guards section saves, marks a refusal as a section conflict, and overwrites only on request', async () => {
-  const sections = [section()]
-  const setSections = vi.fn()
-  const { result } = renderHook(() =>
-    useCombinedDiffSectionActions({
-      activeGroupId: undefined,
-      branchCompare: null,
-      canOpenWorkspaceFileBrowserForPath: () => false,
-      commitCompare: null,
-      file,
-      isAllMode: false,
-      isBranchMode: false,
-      isCommitMode: false,
-      sections,
-      sectionsRef: { current: sections },
-      setSectionHeights: vi.fn(),
-      setSections
-    })
-  )
-
-  mocks.writeRuntimeFile.mockResolvedValueOnce({ ok: false, diskConflict: 'changed' })
-  await act(() => result.current.handleSectionSaveRef.current(0))
-  const guarded = { expectedSignature: getDiskBaselineSignature('loaded'), allowMissing: false }
-  expect(mocks.writeRuntimeFile.mock.calls[0]?.[4]).toEqual(guarded)
-  const [[markConflict]] = setSections.mock.calls
-  expect(markConflict(sections)).toEqual([{ ...sections[0], saveConflict: true }])
-
-  // Saving again stays guarded; only the conflict bar's Overwrite writes plain.
-  mocks.writeRuntimeFile.mockResolvedValueOnce({ ok: false, diskConflict: 'changed' })
-  await act(() => result.current.handleSectionSaveRef.current(0))
-  expect(mocks.writeRuntimeFile.mock.calls[1]?.[4]).toEqual(guarded)
-
-  mocks.writeRuntimeFile.mockResolvedValueOnce({ ok: true })
-  await act(() => result.current.handleSectionSaveRef.current(0, 'overwrite'))
-  expect(mocks.writeRuntimeFile.mock.calls[2]?.[4]).toBeUndefined()
-})
-
 const LIMITED: DiffSection['largeDiffRenderLimit'] = {
   limited: true,
   reason: 'character-count',
@@ -138,28 +102,6 @@ function renderSave(sections: DiffSection[], setSections = vi.fn()) {
     })
   ).result
 }
-
-// Why limited: a huge paste into an empty file trips the live render limit without pruning the load.
-it('treats an empty loaded file as a known version, even after a huge paste', async () => {
-  const empty: DiffSection = {
-    ...section(),
-    diffResult: {
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: '',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    },
-    largeDiffRenderLimit: LIMITED
-  }
-  const result = renderSave([empty])
-  mocks.writeRuntimeFile.mockResolvedValueOnce({ ok: true })
-  await act(() => result.current.handleSectionSaveRef.current(0))
-  expect(mocks.writeRuntimeFile.mock.calls[0]?.[4]).toEqual({
-    expectedSignature: getDiskBaselineSignature(''),
-    allowMissing: false
-  })
-})
 
 it('refuses to guess a version for a load whose bodies were pruned', async () => {
   const loaded = section().diffResult

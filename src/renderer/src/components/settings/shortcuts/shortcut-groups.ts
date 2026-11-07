@@ -6,8 +6,8 @@ import type {
   KeybindingActionId,
   KeybindingDefinition
 } from '../../../../../shared/keybindings/types'
-import { normalizeDisabledTuiAgents } from '../../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
+import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { localizeKeybindingDefinition } from './keybinding-title-copy'
 
 export type ShortcutGroup = {

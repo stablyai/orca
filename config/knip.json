@@ -3,7 +3,7 @@
   "entry": [
     "src/main/index.ts",
     "src/preload/index.ts",
-    "src/preload/browser-window-close.ts",
+    "src/preload/browser-guest.ts",
     "src/main/daemon/daemon-entry.ts",
     "src/main/plugins/workers/plugin-host-entry.ts",
     "src/main/computer/computer-sidecar.ts",
@@ -57,7 +57,7 @@
     "src/**/*-test-fixture.ts",
     "src/**/*.test-fixture.{ts,tsx}",
     "src/main/runtime/rpc/rpc-params-type-parity.ts",
-    "src/main/runtime/rpc/methods/ui-state-schema-parity-checks.ts",
+    "src/main/runtime/rpc/methods/client-state/ui-state-schema-parity-checks.ts",
     "src/renderer/src/components/editor/monaco-internal-test-module-types.ts",
     "mobile/**/*.{ts,tsx}",
     "cloud/**/*.{ts,tsx,mjs}"

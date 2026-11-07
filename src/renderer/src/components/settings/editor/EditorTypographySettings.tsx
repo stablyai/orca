@@ -4,8 +4,8 @@ import {
   TERMINAL_FONT_WEIGHT_MAX,
   TERMINAL_FONT_WEIGHT_MIN,
   TERMINAL_FONT_WEIGHT_STEP
-} from '../../../../../shared/terminal-fonts'
-import { fontFamilyHasKnownLigatures } from '../../../../../shared/terminal-ligatures'
+} from '../../../../../shared/terminal/appearance/terminal-fonts'
+import { fontFamilyHasKnownLigatures } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import {
   EDITOR_FONT_SIZE_MAX,
   EDITOR_FONT_SIZE_MIN,

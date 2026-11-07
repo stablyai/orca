@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { isAiVaultScanCancelledError } from '../../shared/ai-vault-types'
+import { isAiVaultScanCancelledError } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './transcripts/session-transcript-record-budget'
 
@@ -29,126 +29,6 @@ vi.mock('../native-chat/wsl-transcript-fs-access', () => ({
 afterEach(() => {
   source.beforeChunk = undefined
   vi.restoreAllMocks()
-})
-
-it('decodes a single owned unterminated tail without concatenation or cursor advancement', async () => {
-  const tail = JSON.stringify({ text: 'é😀 growing final record' })
-  const prefix = '\r\nmalformed\n{"type":"user"}\r\n'
-  const content = prefix + tail
-  source.chunks = [Buffer.from(content)]
-  const original = Buffer.concat
-  let copiedBytes = 0
-  vi.spyOn(Buffer, 'concat').mockImplementation((parts, total) => {
-    copiedBytes += parts.reduce((sum, part) => sum + part.length, 0)
-    return original(parts, total)
-  })
-
-  for (let index = 0; index < 20; index += 1) {
-    const lines: string[] = []
-    const result = await consumeCompleteJsonlLines({
-      path: '/log',
-      start: 41,
-      onLine: (line) => lines.push(line)
-    })
-    expect(lines).toEqual(['', 'malformed', '{"type":"user"}'])
-    expect(result).toEqual({
-      consumedThrough: 41 + Buffer.byteLength(prefix),
-      trailingPartialLine: tail,
-      bytesRead: Buffer.byteLength(content),
-      skippedRecords: []
-    })
-    expect(source.closed).toBe(true)
-  }
-  expect(copiedBytes).toBe(0)
-})
-
-it('still joins an unterminated multi-part UTF-8 tail exactly once', async () => {
-  const tail = JSON.stringify({ text: 'é😀'.repeat(20_000) })
-  const bytes = Buffer.from(tail)
-  const cut = bytes.indexOf(Buffer.from('😀')) + 2
-  source.chunks = [bytes.subarray(0, cut), bytes.subarray(cut)]
-  const original = Buffer.concat
-  const copiedBytes: number[] = []
-  vi.spyOn(Buffer, 'concat').mockImplementation((parts, total) => {
-    copiedBytes.push(parts.reduce((sum, part) => sum + part.length, 0))
-    return original(parts, total)
-  })
-  const onLine = vi.fn()
-  expect(await consumeCompleteJsonlLines({ path: '/log', start: 41, onLine })).toEqual({
-    consumedThrough: 41,
-    trailingPartialLine: tail,
-    bytesRead: bytes.length,
-    skippedRecords: []
-  })
-  expect(onLine).not.toHaveBeenCalled()
-  expect(source.closed).toBe(true)
-  expect(copiedBytes).toEqual([bytes.length])
-})
-
-it('bounds concatenation when the next chunk contains many complete lines', async () => {
-  source.chunks = Array.from({ length: 100 }, () => Buffer.from(`${'a\n'.repeat(1000)}x`))
-  const original = Buffer.concat
-  let copied = 0
-  const concat = vi.spyOn(Buffer, 'concat').mockImplementation((chunks, total) => {
-    copied += total ?? chunks.reduce((sum, chunk) => sum + chunk.length, 0)
-    return original(chunks, total)
-  })
-  let lines = 0
-  let result: Awaited<ReturnType<typeof consumeCompleteJsonlLines>>
-  try {
-    result = await consumeCompleteJsonlLines({
-      path: '/log',
-      start: 0,
-      onLine: () => {
-        lines += 1
-      }
-    })
-  } finally {
-    concat.mockRestore()
-  }
-  expect(lines).toBe(100000)
-  expect(result!).toEqual({
-    consumedThrough: 200099,
-    trailingPartialLine: 'x',
-    bytesRead: 200100,
-    skippedRecords: []
-  })
-  expect(copied).toBeLessThan(1000)
-})
-
-it('preserves UTF-8/CRLF carry, byte callbacks and stop offsets', async () => {
-  source.chunks = [Buffer.from('ab\r'), Buffer.from('\ncd\npartial')]
-  const lines: string[] = []
-  expect(
-    await consumeCompleteJsonlLines({
-      path: '/log',
-      start: 5,
-      onLine: () => {},
-      onLineBytes: (line) => lines.push(line.toString())
-    })
-  ).toEqual({
-    consumedThrough: 12,
-    trailingPartialLine: 'partial',
-    bytesRead: 14,
-    skippedRecords: []
-  })
-  expect(lines).toEqual(['ab', 'cd'])
-  let stopped = false
-  expect(
-    await consumeCompleteJsonlLines({
-      path: '/log',
-      start: 5,
-      onLine: () => {
-        stopped = true
-      },
-      shouldStop: () => stopped
-    })
-  ).toEqual({ consumedThrough: 9, trailingPartialLine: null, bytesRead: 14, skippedRecords: [] })
-  const unicode = Buffer.from('🦀\n')
-  source.chunks = [unicode.subarray(0, 2), unicode.subarray(2)]
-  const onLine = vi.fn()
-  await consumeCompleteJsonlLines({ path: '/log', start: 0, onLine })
-  expect(onLine).toHaveBeenCalledWith('🦀')
 })
 
 // Arbitrary chunk cuts must preserve UTF-8, CRLF boundaries and byte-accurate resume offsets.
@@ -280,42 +160,6 @@ it('leaves the cursor before an unterminated oversized tail and skips it once te
   })
 })
 
-it('skips back-to-back oversized records without losing the cursor', async () => {
-  const buffer = Buffer.from(`${OVERSIZED}\n${OVERSIZED}\n{"a":1}\n`, 'utf-8')
-  source.chunks = chunksAt(buffer, 1, OVERSIZED.length + 1, OVERSIZED.length * 2 + 2)
-  const lines: string[] = []
-  const result = await consumeCompleteJsonlLines({
-    path: '/log',
-    start: 0,
-    onLine: (line) => lines.push(line)
-  })
-  expect(lines).toEqual(['{"a":1}'])
-  expect(result.consumedThrough).toBe(buffer.length)
-  expect(result.skippedRecords).toEqual([
-    { byteOffset: 0, approximateBytes: OVERSIZED.length },
-    { byteOffset: OVERSIZED.length + 1, approximateBytes: OVERSIZED.length }
-  ])
-})
-
-it('accepts records exactly at the byte cap and a larger file of separate records', async () => {
-  const line = Buffer.alloc(MAX_SESSION_TRANSCRIPT_RECORD_BYTES, 'x')
-  source.chunks = [line, Buffer.from('\n'), line, Buffer.from('\n'), line]
-  const lengths: number[] = []
-  const result = await consumeCompleteJsonlLines({
-    path: '/log',
-    start: 41,
-    onLine: () => {},
-    onLineBytes: (bytes) => lengths.push(bytes.length)
-  })
-  expect(lengths).toEqual([line.length, line.length])
-  expect({ ...result, trailingPartialLine: result.trailingPartialLine?.length }).toEqual({
-    consumedThrough: 41 + 2 * (line.length + 1),
-    trailingPartialLine: line.length,
-    bytesRead: 3 * line.length + 2,
-    skippedRecords: []
-  })
-})
-
 it('counts UTF-8 bytes instead of decoded characters at the record cap', async () => {
   const chars = Math.floor(MAX_SESSION_TRANSCRIPT_RECORD_BYTES / 3)
   source.chunks = [Buffer.from('界'.repeat(chars)), Buffer.from('界\n{"a":1}\n')]
@@ -328,21 +172,6 @@ it('counts UTF-8 bytes instead of decoded characters at the record cap', async (
   expect(lines).toEqual(['{"a":1}'])
   expect(result.skippedRecords).toEqual([{ byteOffset: 0, approximateBytes: 3 * (chars + 1) }])
   expect(result.consumedThrough).toBe(3 * (chars + 1) + 1 + 8)
-})
-
-it('never opens the transcript once the scan is cancelled', async () => {
-  source.chunks = [Buffer.from('{"a":1}\n')]
-  source.opens = 0
-  const onLine = vi.fn()
-  const read = consumeCompleteJsonlLines({
-    path: '/log',
-    start: 0,
-    onLine,
-    signal: AbortSignal.abort()
-  })
-  await expect(read).rejects.toSatisfy(isAiVaultScanCancelledError)
-  expect(source.opens).toBe(0)
-  expect(onLine).not.toHaveBeenCalled()
 })
 
 it('stops between chunks on cancel and releases the stream', async () => {

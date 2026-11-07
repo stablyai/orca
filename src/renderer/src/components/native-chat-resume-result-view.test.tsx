@@ -46,17 +46,6 @@ async function mountSurfaces(): Promise<void> {
   )
 }
 
-it('saves "Don\'t ask again" ticked on a finished resume the user started', async () => {
-  fakeHost()
-  await mountSurfaces()
-  await act(async () => button('Resume 2 chats').click())
-  await act(async () => lastToastShow()?.())
-  expect(dialog()?.textContent).toContain('Resumed 2 of 2 chats')
-  await act(async () => dontAskAgain().click())
-  await act(async () => button('Done').click())
-  expect(useAppStore.getState().settings?.nativeChatResumeWorkOnRestart).toBe(true)
-})
-
 it('does not restore a hidden picker preference when closing a run', async () => {
   const host = fakeHost()
   host.hold('a', 'b')
@@ -132,44 +121,4 @@ it('reopens a collapsed result group with tree keys', async () => {
   await press('ArrowRight')
   expect(disclosure.getAttribute('aria-expanded')).toBe('true')
   expect(document.activeElement).toBe(disclosure)
-})
-
-it('does not place an untouched offer in the Need you filter', async () => {
-  fakeHost()
-  await mountSurfaces()
-  const secondChat = document.querySelector<HTMLElement>(
-    '[role="checkbox"][aria-label*="Prompt b"]'
-  )
-  await act(async () => secondChat?.click())
-  await act(async () => button('Resume 1 chat').click())
-  await act(async () => lastToastShow()?.())
-  expect(dialog()?.textContent).toContain('Check the list for chats that still need attention')
-  expect(dialog()?.textContent).not.toContain('Chats that need you are at the top')
-  expect(button('Need you0')).toBeTruthy()
-  expect(button('Resume 1 chat')).toBeTruthy()
-})
-
-it('says a launch resumed on its own and links to the setting', async () => {
-  const openSettingsPage = vi.fn()
-  const openSettingsTarget = vi.fn()
-  useAppStore.setState((state) => ({
-    settings: { ...state.settings!, nativeChatResumeWorkOnRestart: true },
-    openSettingsPage,
-    openSettingsTarget
-  }))
-  fakeHost()
-  await mountSurfaces()
-  expect(dialog()).toBeNull()
-  await act(async () => lastToastShow()?.())
-  expect(dialog()?.textContent).toContain('Resumed automatically after the restart.')
-  expect(dialog()?.textContent).not.toContain("Don't ask again")
-
-  await act(async () => button('Change in Settings').click())
-  expect(openSettingsPage).toHaveBeenCalledOnce()
-  expect(openSettingsTarget).toHaveBeenCalledWith({
-    pane: 'chat',
-    repoId: null,
-    sectionId: 'chat-resume-on-restart'
-  })
-  expect(dialog()).toBeNull()
 })

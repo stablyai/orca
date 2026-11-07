@@ -1,4 +1,4 @@
-import { usePluginCommands } from '@/store/plugin-panels'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { matchesRecentTabSwitcherChord } from '../../../../shared/window-shortcut-policy'
 import {
@@ -11,8 +11,8 @@ import {
   toModifierDoubleTapEvent
 } from '../../../../shared/modifier-double-tap-detector'
 import { useAppStore } from '../../store'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from '../../../../shared/native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
@@ -74,8 +74,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       const options = { context, terminalShortcutPolicy: state.settings?.terminalShortcutPolicy }
       if (
         matchesRecentTabSwitcherChord(input, platform, state.keybindings, options) ||
-        (context === 'app' &&
-          !input.isComposing &&
+        (!input.isComposing &&
           input.key !== 'Process' &&
           !globalShortcutTargetYields(input, platform, state.keybindings, options) &&
           findPluginCommandForKeybinding(
@@ -83,7 +82,8 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
             input,
             platform,
             state.keybindings,
-            Boolean(state.activeWorktreeId)
+            Boolean(state.activeWorktreeId),
+            options
           ))
       ) {
         return

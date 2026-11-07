@@ -5,15 +5,15 @@ import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { LoaderCircle } from 'lucide-react'
 
-import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown-extensions'
-import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown-image-context'
-import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/raw-markdown-html'
+import { createRichMarkdownExtensions } from '@/components/editor/rich-markdown/schema/rich-markdown-extensions'
+import { setRichMarkdownImageResolverContext } from '@/components/editor/rich-markdown/images/rich-markdown-image-context'
+import { encodeRawMarkdownHtmlForRichEditor } from '@/components/editor/rich-markdown/raw-source/raw-markdown-html'
 import {
   createRichMarkdownEditorCodec,
   type RichMarkdownEditorCodec
-} from '@/components/editor/rich-markdown-source-transport'
+} from '@/components/editor/rich-markdown/document/rich-markdown-source-transport'
 import { LinearIssueMarkdownToolbar } from '@/components/LinearIssueMarkdownToolbar'
-import { RichMarkdownTableControls } from '@/components/editor/RichMarkdownTableControls'
+import { RichMarkdownTableControls } from '@/components/editor/rich-markdown/tables/RichMarkdownTableControls'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -21,7 +21,8 @@ import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
-} from '@/components/editor/rich-markdown-spellcheck'
+} from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
@@ -64,15 +65,15 @@ export function LinearIssueMarkdownDescriptionEditor({
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
   // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
-  const codec = useMemo(() => {
-    void language
-    return createRichMarkdownEditorCodec()
-  }, [language])
-  const linearIssueMarkdownExtensions = useMemo(() => {
-    // Language keys editor recreation because Tiptap freezes translated extension options.
-    void language
-    return createLinearIssueMarkdownExtensions(codec)
-  }, [codec, language])
+  const codec = useMemo(
+    () => recomputeOn([language], () => createRichMarkdownEditorCodec()),
+    [language]
+  )
+  // Language keys editor recreation because Tiptap freezes translated extension options.
+  const linearIssueMarkdownExtensions = useMemo(
+    () => recomputeOn([language], () => createLinearIssueMarkdownExtensions(codec)),
+    [codec, language]
+  )
 
   const editor = useEditor(
     {

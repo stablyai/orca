@@ -1,8 +1,11 @@
 import { mkdirSync, writeFileSync, chmodSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/setup-agent-startup-policy'
-import { nativeWindowsPathToPosixShellPath } from '../../shared/setup-runner-command'
-import { scriptDeclaresPosixShell } from '../../shared/setup-script-shebang'
+import {
+  nativeWindowsPathToPosixShellPath,
+  type SetupRunnerShell
+} from '../../shared/setup-runner-command'
+import { scriptDeclaresPosixShell } from '../../shared/workspace-setup/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../pty/shell-startup/git-bash'
 import { gitExecFileSync } from '../git/command-runner/git-exec-file-sync'
@@ -12,15 +15,18 @@ import { resolveWslWorktreeGitPath } from '../git/worktrees/catalog/wsl-worktree
 import { knownWslAutomountRoots } from '../wsl/filesystem/wsl-automount-root'
 import { isWslPath } from '../wsl/filesystem/unc-path-access'
 import { toWindowsWslPath, toLinuxPath } from '../../shared/wsl-paths'
-import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
+import {
+  getHookRuntimeTarget,
+  getHookWslContext,
+  type HookRuntimeTarget
+} from './hook-runtime-target'
 import { SETUP_RUNNER_PATH_ENV_KEYS, getSetupRunnerEnvVars } from './setup-hook-env-vars'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from './setup-runner-script-text'
-import type { HookRuntimeTarget } from './hook-runtime-target'
+
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { SetupAgentStartupPolicy } from '../../shared/orca-yaml-hook-types'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { SetupRunnerShell } from '../../shared/setup-runner-command'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 

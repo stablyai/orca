@@ -2,7 +2,7 @@ import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
 } from '../../../shared/worktree/base-ref-drift-types'
-import { readGitCommandFailureText } from '../../../shared/git-command-failure-text'
+import { readGitCommandFailureText } from '../../../shared/git/commands/git-command-failure-text'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import type { WorktreeCheckoutProgressListener } from './creation/worktree-checkout-progress'
@@ -24,6 +24,8 @@ export type GitWorktreeExecOptions = {
   includeCreatePreparations?: boolean
   admissionTier?: GitAdmissionTier
   spawnOnWorkerThread?: boolean
+  canStart?: () => boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
@@ -96,6 +98,8 @@ export type GitExecOptionsForWorktree = {
   timeout?: number
   admissionTier?: GitAdmissionTier
   spawnOnWorkerThread?: boolean
+  canStart?: () => boolean
+  observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
 }
 
 export function gitExecOptions(
@@ -108,7 +112,11 @@ export function gitExecOptions(
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeout ? { timeout: options.timeout } : {}),
     ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
-    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {})
+    ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
+    ...(options.canStart ? { canStart: options.canStart } : {}),
+    ...(options.observeChildTermination
+      ? { observeChildTermination: options.observeChildTermination }
+      : {})
   }
 }
 

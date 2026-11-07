@@ -2,8 +2,8 @@ import type { WorkspaceAttachment } from '../../../shared/worktree/types'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../shared/workspace-attachment-capabilities'
-import { assertRuntimeEnvironmentCapability } from './runtime-rpc-client'
+} from '../../../shared/workspace-attachments/workspace-attachment-capabilities'
+import { assertRuntimeEnvironmentCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 

@@ -1,18 +1,19 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
-} from '@/components/editor/combined-diff-viewport'
+} from '@/components/editor/combined-diff/scroll-viewport/combined-diff-viewport'
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { translate } from '@/i18n/i18n'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
+import { DiffSectionItem } from '@/components/editor/diff/sections/DiffSectionItem'
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import { useCombinedDiffSectionIndexMap } from '../../editor/combined-diff/resolve-changes/use-combined-diff-section-index-map'
 import { handleCombinedDiffFileTreeNavigation } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-navigation'
-import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff-section-layout'
-import type { DiffSection } from '@/components/editor/diff-section-types'
+import { getDiffSectionRowEstimatedHeight } from '@/components/editor/diff/sections/diff-section-layout'
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import { getCombinedDiffBranchEntriesInTreeOrder } from '../../editor/combined-diff/browse-files/combined-diff-file-tree-filter'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
 import { PRViewedCheckbox } from '@/components/github/PRViewedCheckbox'
@@ -33,7 +34,7 @@ import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
 import { usePRFileSectionHeights } from './section-heights'
 import { usePRFileActiveSection } from './active-section'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRFilesCombinedDiffViewer({
   files,
@@ -369,6 +370,15 @@ export function PRFilesCombinedDiffViewer({
                       'Open files on GitHub'
                     )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
+                    imageUploadAddress={() =>
+                      githubCommentImageUploadAddress({
+                        repoPath,
+                        repoId,
+                        sourceContext,
+                        type: 'pr',
+                        prRepo
+                      })
+                    }
                     onAddLineComment={handleAddLineComment}
                     addLineCommentLabel={translate(
                       'auto.components.GitHubItemDialog.bf43425540',

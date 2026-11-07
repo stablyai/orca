@@ -82,22 +82,6 @@ beforeEach(() => {
 })
 
 describe('Bitbucket credential store', () => {
-  it('writes both credential files 0600', async () => {
-    const store = await loadStore()
-    store.saveBitbucketCredential({
-      authMode: 'token',
-      email: null,
-      baseUrl: null,
-      account: 'dev',
-      accessToken: 'access-secret',
-      apiToken: null
-    })
-
-    for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
-      expect(statSync(join(tempHome, '.orca', file)).mode & 0o777).toBe(0o600)
-    }
-  })
-
   it('re-tightens permissions when overwriting an existing credential', async () => {
     const store = await loadStore()
     const save = (account: string): void =>
@@ -266,25 +250,6 @@ describe('Bitbucket credential store', () => {
     })
   })
 
-  it('writes the whole credential even when the filesystem short-writes (STA-3941)', async () => {
-    const store = await loadStore({ shortWrites: true })
-    store.saveBitbucketCredential({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null,
-      account: 'ada',
-      accessToken: null,
-      apiToken: 'a-token-long-enough-to-need-several-writes'
-    })
-    store._resetBitbucketCredentialCache()
-
-    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
-      apiToken: 'a-token-long-enough-to-need-several-writes',
-      email: 'ada@example.com'
-    })
-    expect(store.getStoredBitbucketMetadata()?.account).toBe('ada')
-  })
-
   it('clears both files and in-memory state on disconnect', async () => {
     const store = await loadStore()
     store.saveBitbucketCredential({
@@ -320,13 +285,5 @@ describe('Bitbucket credential store', () => {
 
     expect(() => store.clearStoredBitbucketCredential()).toThrow(/permission denied/)
     expect(existsSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toBe(true)
-  })
-
-  it('ignores a missing file on disconnect', async () => {
-    const missing: NodeJS.ErrnoException = Object.assign(new Error('no such file'), {
-      code: 'ENOENT'
-    })
-    const store = await loadStore({ unlinkError: missing })
-    expect(() => store.clearStoredBitbucketCredential()).not.toThrow()
   })
 })

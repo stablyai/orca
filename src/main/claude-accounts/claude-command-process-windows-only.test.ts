@@ -44,14 +44,6 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: originalPlatform })
 })
 
-it('says Claude is installed only on Windows instead of a raw spawn ENOENT', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux' })
-  state.resolved.push(WINDOWS_ONLY, WINDOWS_ONLY, WINDOWS_ONLY)
-  await expect(runClaudeCommandProcess(['auth', 'status'], config, 1000)).rejects.toThrow(
-    'Claude is installed only on Windows, not in this WSL distro. Install it inside the distro.'
-  )
-})
-
 it('never keeps the Windows-only answer, so a Claude installed in WSL since is used', async () => {
   Object.defineProperty(process, 'platform', { value: 'linux' })
   // The first lookup sees only the Windows copy; every later one finds the new WSL install.

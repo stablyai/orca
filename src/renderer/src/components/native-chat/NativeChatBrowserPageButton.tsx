@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/mirrored-browser-tabs'
-import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
+import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
 import {
   getBrowserAgentActivityRevision,
   useLastBrowserAgentActivity

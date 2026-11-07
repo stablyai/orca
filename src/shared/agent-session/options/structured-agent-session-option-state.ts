@@ -1,5 +1,5 @@
 import type { AgentSessionStatusSummary } from '../agent-session-wire'
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type { TrackedNativeChatSessionOption } from '../../native-chat/input/native-chat-session-option-state'
 
@@ -9,7 +9,13 @@ export type StructuredAgentSessionOptionRecord = {
   values: Record<string, TrackedNativeChatSessionOption>
 }
 
-const ANSWERED_VALUE_IDS = ['model', 'effort', 'fastMode', 'serviceTier'] as const
+const ANSWERED_VALUE_IDS = [
+  'model',
+  'effort',
+  'fastMode',
+  'serviceTier',
+  'interactionMode'
+] as const
 
 export function createStructuredAgentSessionOptionRecord(
   agent: AgentType
@@ -73,16 +79,24 @@ export function structuredAgentSessionOptionStamp(
   summary:
     | Pick<
         AgentSessionStatusSummary,
-        'model' | 'permissionMode' | 'effort' | 'fastMode' | 'serviceTier'
+        | 'model'
+        | 'reportedModel'
+        | 'permissionMode'
+        | 'effort'
+        | 'fastMode'
+        | 'serviceTier'
+        | 'interactionMode'
       >
     | undefined
 ): string {
   return [
     summary?.model,
+    summary?.reportedModel,
     summary?.permissionMode,
     summary?.effort,
     summary?.fastMode,
-    summary?.serviceTier
+    summary?.serviceTier,
+    summary?.interactionMode
   ]
     .map((value) => value ?? '')
     .join('|')

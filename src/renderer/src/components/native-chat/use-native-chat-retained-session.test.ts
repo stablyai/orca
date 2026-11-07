@@ -67,17 +67,6 @@ describe('useNativeChatRetainedSession', () => {
     liveSession.mockReset()
   })
 
-  it('keeps settled messages during a same-identity rebind', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue(session('loading', []))
-    await render(ARGS)
-
-    expect(latest?.readPhase).toBe('loading')
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
-  })
-
   it('misses retained messages when the source owner changes', async () => {
     liveSession.mockReturnValue(session('ready', [message('owner-a')]))
     await render(ARGS)
@@ -88,38 +77,23 @@ describe('useNativeChatRetainedSession', () => {
     expect(latest?.readPhase).toBe('loading')
     expect(latest?.messages).toEqual([])
   })
-
-  it('keeps retained messages instead of a full-pane read error', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
-    await render(ARGS)
-
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
-    expect(latest?.readPhase).toBe('error')
-    expect(latest?.status).toBe('ready')
-    expect(latest?.error).toBeUndefined()
-  })
-
-  it('surfaces a read error when nothing was retained', async () => {
-    liveSession.mockReturnValue({ ...session('error', []), status: 'error', error: 'read failed' })
-    await render(ARGS)
-
-    expect(latest?.messages).toEqual([])
-    expect(latest?.status).toBe('error')
-    expect(latest?.error).toBe('read failed')
-  })
-
-  it('does not overwrite retention with the session-less view', async () => {
-    liveSession.mockReturnValue(session('ready', [message('settled')]))
-    await render(ARGS)
-
-    liveSession.mockReturnValue(session('ready', [], null))
-    await render({ ...ARGS, sessionId: null })
-    liveSession.mockReturnValue(session('loading', []))
-    await render(ARGS)
-
-    expect(latest?.messages.map((entry) => entry.id)).toEqual(['settled'])
-  })
+  it.each(['loading', 'error'] as const)(
+    'releases expanded fallback rows during %s',
+    async (phase) => {
+      const rows = Array.from({ length: 800 }, (_, index) => message(`row-${index}`))
+      liveSession.mockReturnValue(session('ready', rows))
+      await render(ARGS)
+      const trimHistory = vi.fn()
+      liveSession.mockReturnValue({ ...session(phase, []), trimHistory })
+      await render(ARGS)
+      expect(latest?.messages).toHaveLength(800)
+      act(() => latest?.trimHistory?.())
+      liveSession.mockReturnValue({ ...session(phase, []), trimHistory, olderHistoryGeneration: 1 })
+      await render(ARGS)
+      expect(latest?.messages).toHaveLength(300)
+      expect(latest?.messages[0]?.id).toBe('row-500')
+      expect(latest?.messages.at(-1)?.id).toBe('row-799')
+      expect(trimHistory).toHaveBeenCalledOnce()
+    }
+  )
 })

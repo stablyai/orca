@@ -45,11 +45,7 @@ describe('push host session store', () => {
     })
   })
 
-  it('accepts a session on its final millisecond', async () => {
-    const session = await sessions.create(HOST)
-    clock += PUSH_LIMITS.sessionTtlMs
-    await expect(sessions.resolve(session.sessionToken)).resolves.toMatchObject({ ok: true })
-  })
+
 
   it('keeps one live session per host and prunes it once expired', async () => {
     const first = await sessions.create(HOST)

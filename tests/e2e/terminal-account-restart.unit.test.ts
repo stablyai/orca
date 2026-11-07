@@ -4,8 +4,8 @@ import {
   setupPtyIpcSuite,
   type PtyIpcSuiteFixtures
 } from '../../src/main/ipc/pty/pty-ipc-test-harness'
-import { TerminalKilledError } from '../../src/main/daemon/daemon-pty-lifecycle-errors'
-import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { TerminalKilledError } from '../../src/main/daemon/providers/adapter/daemon-pty-lifecycle-errors'
+import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
 import { TerminalIntentionalStops } from '../../src/main/runtime/terminal-intentional-stops'
@@ -66,12 +66,12 @@ vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
     m.migrationUnsupportedPtyModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-pane-account-registry', () =>
+vi.mock('../../src/main/codex/configuration/homes/codex-pane-account-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexPaneAccountRegistryModuleMock()
   )
 )
-vi.mock('../../src/main/codex/codex-state-db-backfill-recovery', () =>
+vi.mock('../../src/main/codex/history/index/codex-state-db-backfill-recovery', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.codexBackfillRecoveryModuleMock()
   )
@@ -226,20 +226,20 @@ function installRestartHarness(
 import {
   createPane,
   createManager
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-deps'
-import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
-import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
-import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-test-harness'
+import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import type * as React from 'react'
-import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport-types'
+import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
 
 let rendererState: StoreState
-vi.mock('@/store', () => ({
+vi.mock('@/store/index', () => ({
   useAppStore: Object.assign(
     (selector: (state: StoreState) => unknown) => selector(rendererState),
     {
@@ -262,12 +262,14 @@ vi.mock('react', async (importOriginal) => ({
   useLayoutEffect: (effect: () => void) => effect()
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => true)
 }))
 vi.mock(
-  '../../src/renderer/src/components/terminal-pane/terminal-pane-recovery',
+  '../../src/renderer/src/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     requestTerminalPaneRecovery
@@ -323,9 +325,9 @@ describe('account restart through renderer connection and host spawn', () => {
       }
     })
     const { createIpcPtyTransport } =
-      await import('../../src/renderer/src/components/terminal-pane/pty-transport')
+      await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport')
     const { useTerminalPaneProcessExitActions } =
-      await import('../../src/renderer/src/components/terminal-pane/use-terminal-pane-process-exit-actions')
+      await import('../../src/renderer/src/components/terminal-pane/controller/use-terminal-pane-process-exit-actions')
     const oldTransport = createIpcPtyTransport({ worktreeId, tabId, leafId })
     oldTransport.attach({ existingPtyId: 'pty-old', callbacks: {} })
     const pane = createPane(1)
@@ -466,9 +468,9 @@ describe('account restart through renderer connection and host spawn', () => {
       )
       Object.assign(window.api, { runtimeEnvironments: { call: runtimeCall, subscribe } })
       const { createRemoteRuntimePtyTransport } =
-        await import('../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport')
+        await import('../../src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { releasePaneTransportForRestart } =
-        await import('../../src/renderer/src/components/terminal-pane/pane-restart-transport-handoff')
+        await import('../../src/renderer/src/components/terminal-pane/process-exit/pane-restart-transport-handoff')
       const { buildCodexAccountRestartStartup } =
         await import('../../src/renderer/src/lib/agent-account-restart-startup')
       const options = {

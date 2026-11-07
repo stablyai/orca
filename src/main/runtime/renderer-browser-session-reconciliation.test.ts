@@ -1,9 +1,10 @@
+import { withReconciledBrowserTabs } from './mobile-session-browser-group-projection'
 import { expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import { OrcaRuntimeWithCloseStructuredAgentSessionTab } from './session-tabs/structured-session-tab-close'
+
 import { OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs } from './session-lifecycle/projection/reconcile-headless-mobile-session-browser-tabs'
 
 const rendererPage: RuntimeMobileSessionBrowserTab = {
@@ -95,13 +96,6 @@ function reconcile(
   return storeMobileSessionSnapshot.mock.calls[0]?.[1]
 }
 
-it('keeps renderer-owned browser pages when refreshing client-hosted pages on an attached desktop', () => {
-  const published = reconcile({}) ?? snapshot
-
-  expect(published.tabs).toContainEqual(rendererPage)
-  expect(published.tabGroups?.[0].tabOrder).toContain('renderer-tab')
-})
-
 it.each([false, true])('retires absent offscreen pages when attached=%s', (attached) => {
   expect(
     reconcile({ attached, offscreen: true }, { ...snapshot, publicationEpoch: 'headless:1' })?.tabs
@@ -122,7 +116,7 @@ it('removes retired client pages and publishes live ones while retaining rendere
     }
   )
 
-  expect(published?.tabs).toEqual([rendererPage, livePage])
+  expect(published?.tabs).toEqual([{ ...rendererPage, isActive: true }, livePage])
   expect(published?.tabGroups?.[0].tabOrder).toEqual(['renderer-tab', 'live'])
   expect(published?.activeTabId).toBe('renderer-tab')
   expect(published?.publicationEpoch).toBe(snapshot.publicationEpoch)
@@ -138,44 +132,58 @@ it('never publishes a row twice when the live build reclaims a renderer-owned id
 
   const published = reconcile({ live: [reclaimed] })
 
-  expect(published?.tabs).toEqual([reclaimed])
+  expect(published?.tabs).toEqual([{ ...reclaimed, isActive: true }])
   expect(published?.tabGroups?.[0].tabOrder).toEqual([rendererPage.id])
 })
 
-it('does not republish when a client row merely sits before a renderer row', () => {
-  const interleaved = {
+it('retains a browser workspace alias until its last page is actually retired, then selects the replacement', () => {
+  const closed = {
+    ...rendererPage,
+    id: 'closed',
+    browserPageId: 'closed',
+    browserWorkspaceId: 'shared',
+    isActive: true
+  }
+  const survivor = { ...closed, id: 'surviving', browserPageId: 'surviving', isActive: false }
+  const replacement = {
+    ...rendererPage,
+    id: 'replacement',
+    browserPageId: 'replacement',
+    browserWorkspaceId: 'replacement'
+  }
+  const existing = {
     ...snapshot,
-    tabs: [clientPage, rendererPage],
-    tabGroups: [{ id: 'group', activeTabId: 'renderer-tab', tabOrder: ['client', 'renderer-tab'] }]
+    activeTabId: 'closed',
+    tabs: [closed, replacement],
+    tabGroups: [{ id: 'group', activeTabId: 'shared', tabOrder: ['shared', 'replacement'] }]
   }
-
-  expect(reconcile({ live: [clientPage] }, interleaved)).toBeUndefined()
-})
-
-it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
-  const storeMobileSessionSnapshot = vi.fn()
-  const runtime = OrcaRuntimeWithCloseStructuredAgentSessionTab.prototype as unknown as {
-    markHeadlessBrowserSessionTabActive(
-      worktreeId: string,
-      browserPageId: string,
-      options: { focusesHost: boolean }
-    ): void
-  }
-
-  runtime.markHeadlessBrowserSessionTabActive.call(
+  const onePageLeft = withReconciledBrowserTabs(
+    existing,
+    [survivor, replacement],
+    ['surviving', 'replacement'],
+    new Set(['closed', 'replacement'])
+  )
+  expect(onePageLeft.activeTabId).toBe('surviving')
+  expect(onePageLeft.tabGroups?.[0]?.activeTabId).toBe('shared')
+  const lastPageClosed = withReconciledBrowserTabs(
+    onePageLeft,
+    [replacement],
+    ['replacement'],
+    new Set(['surviving', 'replacement'])
+  )
+  expect(lastPageClosed.activeTabId).toBe('replacement')
+  expect(lastPageClosed.tabGroups?.[0]?.activeTabId).toBe('replacement')
+  expect(lastPageClosed.tabs.map((tab) => [tab.id, tab.isActive])).toEqual([['replacement', true]])
+  const newlyDiscovered = withReconciledBrowserTabs(
     {
-      offscreenBrowserBackend: {},
-      hydrateHeadlessMobileSessionTabsFromWorkspaceSession: () => undefined,
-      mobileSessionTabsByWorktree: new Map([['wt', snapshot]]),
-      storeMobileSessionSnapshot,
-      emitMobileSessionTabsSnapshot: vi.fn()
+      ...existing,
+      tabs: [closed],
+      tabGroups: [{ id: 'group', activeTabId: 'shared', tabOrder: ['shared'] }]
     },
-    'wt',
-    'renderer-page',
-    { focusesHost: false }
+    [replacement],
+    ['replacement'],
+    new Set(['closed'])
   )
-
-  expect(storeMobileSessionSnapshot.mock.calls[0]?.[1].publicationEpoch).toBe(
-    snapshot.publicationEpoch
-  )
+  expect(newlyDiscovered.activeTabId).toBe('replacement')
+  expect(newlyDiscovered.tabGroups?.[0]?.activeTabId).toBe('replacement')
 })

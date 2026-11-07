@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useAppStore } from '../store'
 import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './i18n'
-import { usePluginLanguagePacks } from '../store/plugin-language-packs'
+import { usePluginLanguagePacks } from '../store/plugins/localization/plugin-language-packs'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
 

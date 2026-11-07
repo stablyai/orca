@@ -1,4 +1,4 @@
-import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
+import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -50,7 +50,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 

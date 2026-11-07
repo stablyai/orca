@@ -18,11 +18,13 @@ vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.w
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionOwnPermissionState: () => mocks.capability
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_id: string, listener: () => void) => {
     mocks.contacts.add(listener)
     return () => mocks.contacts.delete(listener)
@@ -37,7 +39,7 @@ vi.mock('../../../store/index', () => ({
   ) => selector({ settingsSearchQuery: '', runtimeEnvironments: mocks.environments })
 }))
 import { mutateHostAgentLaunchSettings } from '../../../runtime/agent-launch-settings/agent-launch-settings-transport'
-import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
+import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/choices/agent-launch-settings'
 beforeEach(() => {
   mocks.web = false
   mocks.capability = 'unsupported'

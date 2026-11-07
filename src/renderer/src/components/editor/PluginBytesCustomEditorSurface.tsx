@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import { readRuntimeFileBytes } from '@/runtime/runtime-paged-file-read'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import { readRuntimeFileBytes } from '@/runtime/files/reads/runtime-paged-file-read'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { matchPluginFile } from '../../../../shared/plugins/contributions/plugin-file-match'
 import { fileTypeOfPath } from '../../../../shared/plugins/contributions/plugin-file-type'
 import { formatBytes } from '../status-bar/workspace-space-format'
 import { Button } from '../ui/button'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
-import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { ExternalFileChangeBanner } from './external-changes/ExternalFileChangeBanner'
 import {
   editorBytesDocument,
   editorBytesEdits,
@@ -22,7 +22,7 @@ import {
   setEditorBytesDraft,
   sha256Hex,
   subscribeEditorBytes
-} from './editor-bytes-documents'
+} from './save/bytes/editor-bytes-documents'
 
 type BytesState =
   | { status: 'ok' }

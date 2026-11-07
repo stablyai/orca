@@ -4,7 +4,7 @@ import { vi } from 'vitest'
 import type {
   AgentStatusClearIpcPayload,
   MigrationUnsupportedPtyEntry
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
 
 export function buildWindowApi(args: {
@@ -126,6 +126,7 @@ export function buildWindowApi(args: {
         onCredentialRequest: () => () => {},
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
@@ -159,11 +160,11 @@ export function stubReactSyncEffect(): void {
 
 export function stubAuxiliaryModules(): void {
   vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
   vi.doMock('@/lib/editor-font-zoom', () => ({

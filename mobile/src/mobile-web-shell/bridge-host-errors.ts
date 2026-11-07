@@ -55,7 +55,9 @@ export const BRIDGE_NATIVE_REFUSAL_CODES = [
   // Android only: no installed app handles application/pdf, so retrying cannot help.
   'native_pdf_no_viewer',
   // The workspace's host predates mobile file downloads (files.stat/readChunk).
-  'native_pdf_host_outdated'
+  'native_pdf_host_outdated',
+  // The user refused Orca adding to their photo library; only Settings can undo that.
+  'native_image_permission_denied'
 ] as const
 
 export type BridgeNativeRefusalCode = (typeof BRIDGE_NATIVE_REFUSAL_CODES)[number]

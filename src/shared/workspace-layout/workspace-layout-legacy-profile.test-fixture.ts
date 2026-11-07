@@ -1,7 +1,7 @@
 // Legacy inconsistencies for comparing window restore against the Loader’s repairs.
 
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import {
   sleepingRecord,
   type WorkspaceLayoutProfile

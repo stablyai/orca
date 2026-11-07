@@ -1,7 +1,7 @@
 import { Loader2, Link2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
+import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import {
   Dialog,
   DialogContent,
@@ -16,8 +16,8 @@ import { Label } from '@/components/ui/label'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store/index'
 import {
   RuntimeHostAccessFailureAlert,

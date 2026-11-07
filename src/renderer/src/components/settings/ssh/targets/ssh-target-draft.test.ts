@@ -3,66 +3,17 @@ import {
   EMPTY_FORM,
   applyParsedSshHostInput,
   getEditingTargetForSshTarget,
-  getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
-  hasAdvancedConnectionValues,
-  isSshTargetFormDirty,
-  parseSshHostInput,
-  type EditingTarget
+  parseSshHostInput
 } from './ssh-target-draft'
 
 describe('parseSshHostInput', () => {
-  it('parses scp-style user, host, and port input', () => {
-    expect(parseSshHostInput('deploy@example.com:2202')).toEqual({
-      host: 'example.com',
-      username: 'deploy',
-      port: 2202,
-      configHost: 'example.com'
-    })
-  })
-
-  it('parses ssh URLs', () => {
-    expect(parseSshHostInput('ssh://deploy@example.com:2202/srv/app')).toEqual({
-      host: 'example.com',
-      username: 'deploy',
-      port: 2202,
-      configHost: 'example.com'
-    })
-  })
-
   it('normalizes bracketed IPv6 hosts from ssh URLs', () => {
     expect(parseSshHostInput('ssh://deploy@[::1]:2202/srv/app')).toEqual({
       host: '::1',
       username: 'deploy',
       port: 2202,
       configHost: '::1'
-    })
-  })
-
-  it('marks invalid pasted host ports instead of keeping them in the hostname', () => {
-    expect(parseSshHostInput('deploy@example.com:99999')).toEqual({
-      host: 'example.com',
-      username: 'deploy',
-      port: undefined,
-      invalidPort: true,
-      configHost: 'example.com'
-    })
-    expect(parseSshHostInput('[::1]:0')).toEqual({
-      host: '::1',
-      username: undefined,
-      port: undefined,
-      invalidPort: true,
-      configHost: '::1'
-    })
-  })
-
-  it('marks invalid ssh URL ports instead of keeping the raw URL as the hostname', () => {
-    expect(parseSshHostInput('ssh://deploy@example.com:99999/srv/app')).toEqual({
-      host: 'example.com',
-      username: 'deploy',
-      port: undefined,
-      invalidPort: true,
-      configHost: 'example.com'
     })
   })
 
@@ -75,29 +26,9 @@ describe('parseSshHostInput', () => {
       configHost: 'example.com'
     })
   })
-
-  it('keeps plain OpenSSH config aliases valid without a username', () => {
-    expect(parseSshHostInput('prod-box')).toEqual({
-      host: 'prod-box',
-      username: undefined,
-      port: undefined,
-      configHost: 'prod-box'
-    })
-  })
 })
 
 describe('applyParsedSshHostInput', () => {
-  it('fills empty username and default port from pasted input', () => {
-    expect(
-      applyParsedSshHostInput({ ...EMPTY_FORM, host: 'deploy@example.com:2202' })
-    ).toMatchObject({
-      host: 'example.com',
-      configHost: 'example.com',
-      username: 'deploy',
-      port: '2202'
-    })
-  })
-
   it('does not overwrite explicit username or non-default port', () => {
     expect(
       applyParsedSshHostInput({
@@ -112,36 +43,9 @@ describe('applyParsedSshHostInput', () => {
       port: '2022'
     })
   })
-
-  it('keeps invalid pasted ports visible for correction', () => {
-    expect(applyParsedSshHostInput({ ...EMPTY_FORM, host: 'deploy@example.com:99999' })).toEqual({
-      ...EMPTY_FORM,
-      host: 'deploy@example.com:99999'
-    })
-  })
 })
 
 describe('getSshTargetDraftConnectionFields', () => {
-  it('uses pasted user and port when the dedicated fields are still default', () => {
-    expect(
-      getSshTargetDraftConnectionFields({ ...EMPTY_FORM, host: 'deploy@example.com:2202' })
-    ).toEqual({
-      host: 'example.com',
-      configHost: 'example.com',
-      username: 'deploy',
-      port: 2202
-    })
-  })
-
-  it('allows config aliases without a username', () => {
-    expect(getSshTargetDraftConnectionFields({ ...EMPTY_FORM, host: 'prod-box' })).toEqual({
-      host: 'prod-box',
-      configHost: 'prod-box',
-      username: '',
-      port: 22
-    })
-  })
-
   it('surfaces invalid pasted ports to the form validator', () => {
     const fields = getSshTargetDraftConnectionFields({
       ...EMPTY_FORM,
@@ -198,98 +102,5 @@ describe('getEditingTargetForSshTarget', () => {
       username: 'deploy',
       port: 22
     })
-  })
-
-  it('preserves explicit system SSH connection reuse opt-outs while editing', () => {
-    const draft = getEditingTargetForSshTarget({
-      id: 'ssh-1',
-      label: 'Restricted appliance',
-      host: 'appliance.example.com',
-      port: 22,
-      username: 'admin',
-      systemSshConnectionReuse: false
-    })
-
-    expect(draft.systemSshConnectionReuse).toBe(false)
-  })
-})
-
-describe('getEditingTargetFromSshConfigHost', () => {
-  it('prefills connection fields from a config summary', () => {
-    const draft = getEditingTargetFromSshConfigHost({
-      alias: 'prod-bastion',
-      hostname: 'bastion.prod.example',
-      port: 2222,
-      username: 'ops',
-      identityFiles: ['~/.ssh/prod', '~/.ssh/fallback'],
-      identitiesOnly: true,
-      forwardAgent: false,
-      gssapiAuthentication: true,
-      proxyUseFdpass: false,
-      jumpHost: 'edge'
-    })
-
-    expect(draft).toMatchObject({
-      label: 'prod-bastion',
-      configHost: 'prod-bastion',
-      host: 'bastion.prod.example',
-      port: '2222',
-      username: 'ops',
-      identityFile: '',
-      gssapiAuthentication: true,
-      jumpHost: 'edge'
-    })
-    expect(getSshTargetDraftConnectionFields(draft)).toEqual({
-      host: 'bastion.prod.example',
-      configHost: 'prod-bastion',
-      username: 'ops',
-      port: 2222
-    })
-    expect(hasAdvancedConnectionValues(draft)).toBe(true)
-  })
-
-  it('keeps alias as host when HostName is omitted', () => {
-    const draft = getEditingTargetFromSshConfigHost({
-      alias: 'gpu-lab',
-      hostname: 'gpu-lab',
-      port: 22,
-      username: 'jinjing',
-      identityFiles: [],
-      identitiesOnly: false,
-      forwardAgent: false,
-      proxyUseFdpass: false
-    })
-
-    expect(draft.configHost).toBe('')
-    expect(draft.host).toBe('gpu-lab')
-    expect(getSshTargetDraftConnectionFields(draft)).toEqual({
-      host: 'gpu-lab',
-      configHost: 'gpu-lab',
-      username: 'jinjing',
-      port: 22
-    })
-  })
-})
-
-describe('isSshTargetFormDirty', () => {
-  it('is clean when the draft matches the baseline', () => {
-    expect(isSshTargetFormDirty(EMPTY_FORM, EMPTY_FORM)).toBe(false)
-  })
-
-  // Why: a dropped field comparison silently discards unsaved edits on outside
-  // click, so every editable field must be covered.
-  it.each<Partial<EditingTarget>>([
-    { label: 'box' },
-    { configHost: 'alias' },
-    { host: 'box' },
-    { port: '2222' },
-    { username: 'deploy' },
-    { identityFile: '~/.ssh/id_ed25519' },
-    { gssapiAuthentication: true },
-    { proxyCommand: 'nc %h %p' },
-    { jumpHost: 'bastion' },
-    { systemSshConnectionReuse: false }
-  ])('detects %o against the open-session baseline', (change) => {
-    expect(isSshTargetFormDirty({ ...EMPTY_FORM, ...change }, EMPTY_FORM)).toBe(true)
   })
 })

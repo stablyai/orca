@@ -1,8 +1,9 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useRef } from 'react'
 import { toast } from 'sonner'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { translate } from '@/i18n/i18n'
@@ -72,7 +73,7 @@ export function useSshBulkRemove(args: {
       return
     }
     const state = useAppStore.getState()
-    const worktrees = getAllWorktreesFromState(state)
+    const worktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state))
     const plan = planSshBulkRemove(chosen, (target) => {
       if (isManagedServerSshHost(target)) {
         return 'managed-server'

@@ -4,7 +4,7 @@ import {
   createLocalPtyInventoryReader,
   type LocalPtyInventoryReader
 } from './local-tmux-managed-pty'
-import { createLocalHookRootEvidenceReader } from '../../shared/hook-process-root-evidence-reader'
+import { createLocalHookRootEvidenceReader } from '../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 

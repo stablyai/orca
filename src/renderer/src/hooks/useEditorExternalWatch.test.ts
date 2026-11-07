@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 
 vi.mock('@/store', () => ({
@@ -8,7 +8,7 @@ vi.mock('@/store', () => ({
   }
 }))
 // Stub autosave’s window-event exports so the handler runs in headless Node.
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -22,15 +22,15 @@ import {
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
 import { useAppStore } from '@/store'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import {
   __clearSelfWriteRegistryForTests,
   recordSelfWrite
-} from '@/components/editor/editor-self-write-registry'
+} from '@/components/editor/external-changes/editor-self-write-registry'
 import { __clearEditorPathMovesForTests } from '@/components/editor/editor-path-move-inflight'
 
 describe('createExternalWatchEventHandler tombstone coalescing', () => {

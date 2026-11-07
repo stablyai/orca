@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
 import { mergeFontSuggestions } from '../appearance/fonts/font-suggestions'

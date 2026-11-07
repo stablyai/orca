@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../shared/project-types'
 import type { Repo } from '../../../../../shared/repo-types'
+import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
@@ -24,6 +25,10 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './execution/RepositoryForkSyncSection'
+import {
+  getRepositoryAgentTrustSearchEntry,
+  RepositoryAgentTrustSection
+} from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
@@ -31,7 +36,7 @@ import { matchesRepositoryIdentitySearch } from './identity/repository-identity-
 import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
@@ -73,6 +78,8 @@ type RepositoryPaneProps = {
     projectId: string,
     updates: ProjectUpdateArgs['updates']
   ) => void | Promise<unknown>
+  /** Lets the repository's text pickers save model lists its host reports. */
+  writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
 }
 
 export function RepositoryPane({
@@ -92,7 +99,8 @@ export function RepositoryPane({
   wslAvailable = false,
   wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false,
-  updateProject
+  updateProject,
+  writeSourceControlAiSettings
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   // Bind writes to the switcher-selected owner; same-ID/self-paired repos must not use focused-host fallback.
@@ -175,6 +183,7 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
     translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    getRepositoryAgentTrustSearchEntry().title,
     translate(
       'auto.components.settings.repository.search.keepForkUpToDate',
       'Keep Fork Up to Date'
@@ -308,6 +317,12 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         />
 
+        <RepositoryAgentTrustSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
         {!isFolder ? (
           <>
             <RepositoryHostSetupsSection
@@ -380,6 +395,7 @@ export function RepositoryPane({
         key="source-control-ai"
         repo={repo}
         updateRepo={updateSelectedRepo}
+        writeSourceControlAiSettings={writeSourceControlAiSettings}
       />
     ) : null,
     !isFolder &&

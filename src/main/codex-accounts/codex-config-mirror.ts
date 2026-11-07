@@ -5,8 +5,8 @@ import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome
-} from '../codex/codex-config-mirror'
-import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
+} from '../codex/configuration/settings/codex-config-mirror'
+import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
 import type { Store } from '../persistence/loading-store/store'
 import { wasWslDistroLastSeenRunningSettled } from '../wsl/discovery/wsl-background-distro-gate'
 import { WSL_UNC_RUNNING_LEASE_MS } from '../wsl/filesystem/wsl-unc-access-gate'

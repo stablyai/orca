@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
-vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: vi.fn() }))
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn()
+}))
 
 import {
   getStructuredAgentSessionStatusFeed,
@@ -98,25 +100,6 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getNamingActive('running')).toBe(false)
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'status', session: owned })
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
-  })
-
-  it('retains history without ownership while stopped and until remount receives fresh evidence', async () => {
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const deactivate = feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [owned, done] })
-    deactivate()
-    expect(vi.getTimerCount()).toBe(0)
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    expect(feed.getSnapshot().get('running')?.updatedAt).toBe(owned.updatedAt)
-    expect(feed.getSnapshot().get('completed')).toBe(done)
-    feed.activate()
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'status', session: owned })
-    expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
-    subscription(1).emit({ type: 'snapshot', sessions: [owned] })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
   })
 })

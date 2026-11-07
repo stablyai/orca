@@ -1,7 +1,17 @@
+import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
+import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
+import {
+  GitGraph,
+  GitCompareArrows,
+  Eye,
+  ShieldAlert,
+  Pin,
+  ListChecks,
+  Smartphone
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -10,23 +20,24 @@ import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { detectLanguage } from '@/lib/language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
-import { STATUS_COLORS, STATUS_LABELS } from '../right-sidebar/status-display'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { OpenFile } from '../../store/slices/editor'
+import { STATUS_COLORS } from '../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
+
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
-import type { TabDragItemData } from '../tab-group/useTabDragSplit'
+
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
-  getTabStripBorderClasses,
-  type DropIndicator
+  getTabStripBorderClasses
 } from './drop-indicator'
-import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
+import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
@@ -35,7 +46,7 @@ import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
@@ -58,29 +69,16 @@ export default function EditorFileTab({
   dragData,
   dropIndicator,
   includeTopTabBorder = true
-}: {
-  file: OpenFile & { tabId?: string }
-  isActive: boolean
-  isPinned: boolean
-  hasTabsToRight: boolean
-  hasTabsToLeft: boolean
-  tabCount: number
-  gitStatus: GitFileStatus | null
-  onActivate: () => void
-  onClose: () => void
-  onCloseOthers: () => void
-  onCloseToRight: () => void
-  onCloseToLeft: () => void
-  onCloseSplitPane?: () => void
-  onCloseAll: () => void
-  onMakePermanent?: () => void
-  onTogglePin: () => void
-  dragData: TabDragItemData
-  dropIndicator?: DropIndicator
-  includeTopTabBorder?: boolean
-}): React.JSX.Element {
-  const worktree = useWorktreeById(file.worktreeId)
-  const repo = useRepoById(worktree?.repoId ?? null)
+}: EditorFileTabProps): React.JSX.Element {
+  const placedElsewhere = useAppStore((state) =>
+    file.tabId
+      ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId
+      : false
+  )
+  const worktree = useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))
+  const repo = useAppStore((state) =>
+    worktree ? resolveReviewRepository(state.repos, worktree) : null
+  )
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -94,17 +92,20 @@ export default function EditorFileTab({
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
   // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
-  const ModeIcon = isConflictReview
-    ? ShieldAlert
-    : isCheckDetails
-      ? ListChecks
-      : isDiff
-        ? GitCompareArrows
-        : isMarkdownPreviewTab
-          ? Eye
-          : file.language === 'simulator'
-            ? Smartphone
-            : null
+  const ModeIcon =
+    file.mode === 'git-graph'
+      ? GitGraph
+      : isConflictReview
+        ? ShieldAlert
+        : isCheckDetails
+          ? ListChecks
+          : isDiff
+            ? GitCompareArrows
+            : isMarkdownPreviewTab
+              ? Eye
+              : file.language === 'simulator'
+                ? Smartphone
+                : null
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}
@@ -338,6 +339,7 @@ export default function EditorFileTab({
             }}
           >
             {getEditorDisplayLabel(file)}
+            {placedElsewhere && repo ? ` · ${repo.displayName}` : ''}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
@@ -384,7 +386,7 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={getEditorDisplayLabel(file)}
+              title={`${getEditorDisplayLabel(file)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
               programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}

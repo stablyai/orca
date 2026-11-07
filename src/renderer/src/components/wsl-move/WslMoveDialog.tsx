@@ -26,7 +26,7 @@ import {
 } from './wsl-move-dialog-store'
 import { collectWslMoveSleptPaneBindings } from './wsl-move-slept-pane-bindings'
 import { followWslMoveOrchestratorStatus } from './wsl-move-orchestrator-status'
-import { findWorktreeById } from '@/store/github/worktree-refresh'
+import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import {
   wslMoveBlockerProjects,
@@ -35,7 +35,10 @@ import {
   type WslMoveCatalog
 } from './wsl-move-scope-rows'
 import type { WslMoveBlockerView } from './WslMoveBlockerList'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'

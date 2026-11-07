@@ -29,7 +29,7 @@ import {
   isWebSessionCloseIntentPending,
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
-import { toHostSessionTabId } from '../../../shared/terminal-surface-id'
+import { toHostSessionTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 
 type OwnerHost = 'local' | 'runtime:env-1'
 

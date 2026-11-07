@@ -5,7 +5,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { sendLayoutApply } from '@/runtime/layout-apply-send'
 import type { AppState } from '../../types'
-import { patchTab } from '../tab-group-state'
+import { patchTab } from './tab-group-state'
 
 type OwnerState = Parameters<typeof sendLayoutApply>[0]
 type TabsState = Pick<AppState, 'unifiedTabsByWorktree'>

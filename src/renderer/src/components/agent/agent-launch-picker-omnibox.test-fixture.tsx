@@ -1,9 +1,10 @@
-import { act, fireEvent, waitFor } from '@testing-library/react'
+import { act, fireEvent, getByRole, waitFor } from '@testing-library/react'
 import { expect } from 'vitest'
 import type { Root } from 'react-dom/client'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useNewTabAgentMenuRows } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import TabBarCreateEntry from '../tab-bar/TabBarCreateEntry'
@@ -96,7 +97,7 @@ export async function verifyOmniboxPresetIdentity(
     fireEvent.change(document.querySelector('textarea')!, {
       target: { value: '--model private/preset --preset-pending' }
     })
-    fireEvent.blur(document.querySelector('textarea')!)
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
     close()
     await showEntries(false)
     await configure()

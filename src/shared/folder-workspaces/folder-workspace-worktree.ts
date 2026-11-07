@@ -1,0 +1,154 @@
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { Worktree } from '../worktree/types'
+import { folderWorkspaceKey } from '../workspace-scope'
+import {
+  getConnectionExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
+import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import { normalizeWorkspaceCreatorProvenance } from '../workspace-creator-provenance'
+import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
+import { normalizeWorkspaceAttachment } from '../workspace-attachments/workspace-attachment-normalization'
+
+/** Folder Worktrees borrow repoId for their project group; it is never null, so absence cannot detect a non-Git workspace.
+ * Keep prefix creation/recognition together to avoid drift. */
+const FOLDER_WORKSPACE_REPO_ID_PREFIX = 'folder-workspace:'
+
+export function folderWorkspaceRepoId(projectGroupId: string): string {
+  return `${FOLDER_WORKSPACE_REPO_ID_PREFIX}${projectGroupId}`
+}
+
+/** The project group a synthetic repoId stands for, or null when it names a real git repo. */
+export function projectGroupIdFromRepoId(repoId: string | null | undefined): string | null {
+  if (typeof repoId !== 'string' || !repoId.startsWith(FOLDER_WORKSPACE_REPO_ID_PREFIX)) {
+    return null
+  }
+  const projectGroupId = repoId.slice(FOLDER_WORKSPACE_REPO_ID_PREFIX.length)
+  return projectGroupId === '' ? null : projectGroupId
+}
+
+export function getFolderWorkspaceWorktreeHostId(
+  workspace: Pick<FolderWorkspace, 'executionHostId' | 'connectionId'>
+): ExecutionHostId {
+  return workspace.executionHostId ?? getConnectionExecutionHostId(workspace.connectionId)
+}
+
+export function getFolderWorkspaceHostIdentity(
+  workspace: Pick<FolderWorkspace, 'id' | 'executionHostId' | 'connectionId'>
+): string {
+  return composeWorktreeHostIdentity(
+    getFolderWorkspaceWorktreeHostId(workspace),
+    folderWorkspaceKey(workspace.id)
+  )
+}
+
+const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
+
+const qualifiedFolderWorktreeCache = new WeakMap<
+  FolderWorkspace,
+  {
+    hostId: ExecutionHostId
+    connectionId: string | null
+    worktree: Worktree
+  }
+>()
+/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
+export function getFolderWorkspaceWorktree(
+  folderWorkspace: FolderWorkspace,
+  resolved?: { hostId: ExecutionHostId; connectionId: string | null }
+): Worktree {
+  if (resolved) {
+    const cached = qualifiedFolderWorktreeCache.get(folderWorkspace)
+    if (cached?.hostId === resolved.hostId && cached.connectionId === resolved.connectionId) {
+      return cached.worktree
+    }
+    const worktree = folderWorkspaceToWorktree({
+      ...folderWorkspace,
+      executionHostId: resolved.hostId,
+      connectionId: resolved.connectionId
+    })
+    qualifiedFolderWorktreeCache.set(folderWorkspace, { ...resolved, worktree })
+    return worktree
+  }
+  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+  if (cached) {
+    return cached
+  }
+  const worktree = folderWorkspaceToWorktree(folderWorkspace)
+  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+  return worktree
+}
+
+export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
+  const linkedTask = folderWorkspace.linkedTask
+  const selectedTask = linkedTask
+    ? normalizeWorkspaceAttachment(linkedTask)
+    : getWorkspaceAttachments({
+        linkedItems: folderWorkspace.linkedItems
+      }).find((item) => item.type === 'issue')
+  const creatorProvenance = normalizeWorkspaceCreatorProvenance(folderWorkspace.creatorProvenance)
+  const hostId = getFolderWorkspaceWorktreeHostId(folderWorkspace)
+  const parsedHost = parseExecutionHostId(hostId)
+  return {
+    id: folderWorkspaceKey(folderWorkspace.id),
+    repoId: folderWorkspaceRepoId(folderWorkspace.projectGroupId),
+    ...(creatorProvenance ? { creatorProvenance } : {}),
+    displayName: folderWorkspace.name,
+    comment: folderWorkspace.comment,
+    linkedIssue:
+      selectedTask?.provider === 'github' && selectedTask.type === 'issue'
+        ? selectedTask.number
+        : null,
+    linkedPR: null,
+    linkedLinearIssue:
+      selectedTask?.provider === 'linear'
+        ? (selectedTask.identifier ?? selectedTask.linearIdentifier ?? null)
+        : null,
+    linkedLinearIssueWorkspaceId:
+      selectedTask?.provider === 'linear' ? (selectedTask.linearWorkspaceId ?? null) : null,
+    linkedLinearIssueOrganizationUrlKey:
+      selectedTask?.provider === 'linear' ? (selectedTask.linearOrganizationUrlKey ?? null) : null,
+    linkedGitLabMR: null,
+    linkedGitLabIssue:
+      selectedTask?.provider === 'gitlab' && selectedTask.type === 'issue'
+        ? selectedTask.number
+        : null,
+    linkedBitbucketPR: null,
+    linkedAzureDevOpsPR: null,
+    linkedGiteaPR: null,
+    linkedWorkItem: linkedTask,
+    ...(folderWorkspace.linkedItems !== undefined
+      ? { linkedItems: folderWorkspace.linkedItems }
+      : {}),
+    linkedTaskSourceContext: folderWorkspace.linkedTaskSourceContext ?? null,
+    isArchived: folderWorkspace.isArchived,
+    isUnread: folderWorkspace.isUnread,
+    isPinned: folderWorkspace.isPinned,
+    sortOrder: folderWorkspace.sortOrder,
+    manualOrder: folderWorkspace.manualOrder,
+    lastActivityAt: folderWorkspace.lastActivityAt,
+    ...(folderWorkspace.smartTier !== undefined
+      ? { smartTier: folderWorkspace.smartTier, smartAt: folderWorkspace.smartAt }
+      : {}),
+    ...(folderWorkspace.lastTerminalUseAt !== undefined
+      ? { lastTerminalUseAt: folderWorkspace.lastTerminalUseAt }
+      : {}),
+    createdAt: folderWorkspace.createdAt,
+    createdWithAgent: folderWorkspace.createdWithAgent,
+    pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,
+    firstAgentMessageRenameError: folderWorkspace.firstAgentMessageRenameError,
+    workspaceStatus: folderWorkspace.workspaceStatus,
+    diffComments: folderWorkspace.diffComments,
+    path: folderWorkspace.folderPath,
+    head: '',
+    branch: '',
+    isBare: false,
+    isSparse: false,
+    isMainWorktree: false,
+    hostId,
+    ...(parsedHost?.kind === 'runtime'
+      ? { runtimeOwnerEnvironmentId: parsedHost.environmentId }
+      : {})
+  }
+}

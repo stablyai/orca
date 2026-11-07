@@ -8,16 +8,18 @@ import {
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees,
-  findIndexedRepoOwnerForHost,
-  resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner
+} from './workspace/ownership/repo-owner-index'
 // Type-only, so routing's shared vocabulary stays in one place without a runtime cycle.
 import type {
   WorktreeOperationOwnerRecord,

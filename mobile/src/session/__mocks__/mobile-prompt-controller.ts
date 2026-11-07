@@ -7,7 +7,8 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { RpcResponse, ConnectionState } from '../../transport/types'
 import type { MobileNativeChatTab } from '../native-chat/mobile-native-chat-eligibility'
 import type { MobileNativeChatController } from '../native-chat/mobile-native-chat-controller-contract'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import { useMobileNativeChatController } from '../native-chat/use-mobile-native-chat-controller'
 import { MobileNativeChatOverlay } from '../native-chat/MobileNativeChatOverlay'
@@ -155,7 +156,10 @@ function Harness(props: HarnessProps) {
   captureRenderedController(current)
   return createElement(MobileNativeChatOverlay, {
     controller: current,
+    worktreePath: null,
+    connState,
     onOpenFile: vi.fn(),
+    onRunInTerminal: vi.fn(),
     images: {
       sendNativeChat: (text: string) => controller.handleNativeChatSend(text),
       attachments: [],
@@ -187,7 +191,7 @@ export async function render(props: HarnessProps = lastProps ?? {}) {
     if (tree) {
       tree.update(element)
     } else {
-      tree = create(element)
+      tree = createWithQueryClient(element)
     }
   })
 }

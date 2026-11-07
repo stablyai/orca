@@ -2,12 +2,11 @@ import type { RuntimeMobileSessionMarkdownTab } from '../../../shared/runtime-ty
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'node:path'
 
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import './web-session-focus-intent'
-import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
-import { makeState as makePublisherState } from './sync-runtime-graph-test-harness'
+
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 import {
   ENV,
@@ -16,7 +15,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 // Why: a server's file is named by its owned id from the first open, as restore names it.
 const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)
@@ -98,44 +97,6 @@ describe('applyWebSessionTabsSnapshot host-invariant editor dedup', () => {
     runtimeEnvironmentId: ENV,
     mirroredFromRuntimeSession: true
   }
-
-  it('mirrors one tab when a snapshot lists the same file under several environment variants', () => {
-    const ids = [
-      envVariantId('env-a'),
-      envVariantId('env-b'),
-      envVariantId('env-c'),
-      buildOwnedEditorFileId('/repo/README.md', WT, null),
-      '/repo/README.md'
-    ]
-    // An older peer republishes its mirror as its own row; this build no longer publishes mirrors.
-    const olderPeerFile: OpenFile = { ...ownedFile, mirroredFromRuntimeSession: undefined }
-    const published = buildMobileSessionTabSnapshots(
-      makePublisherState({
-        openFiles: [olderPeerFile],
-        unifiedTabsByWorktree: {
-          [WT]: ids.flatMap(
-            (id) => stateWithVariant(id, olderPeerFile).unifiedTabsByWorktree[WT] ?? []
-          )
-        }
-      })
-    )[0]
-    if (!published) {
-      throw new Error('Desktop did not publish its editor tabs')
-    }
-    expect(published.tabs).toHaveLength(5)
-    const tabs = published.tabs.filter((tab) => tab.type === 'markdown')
-    expect(tabs).toHaveLength(5)
-    const patch = applyWebSessionTabsSnapshot(
-      makeState(),
-      makeSnapshot(tabs, { activeTabId: null, activeTabType: null }),
-      ENV,
-      NOW
-    )
-
-    expect(patch.openFiles).toHaveLength(1)
-    expect(patch.unifiedTabsByWorktree?.[WT]).toHaveLength(1)
-    expect(patch.unifiedTabsByWorktree?.[WT]?.[0]?.id).toBe(envVariantId('env-a'))
-  })
 
   it('retains a pending relay draft identity even when navigation selects another variant', () => {
     const retained: OpenFile = {

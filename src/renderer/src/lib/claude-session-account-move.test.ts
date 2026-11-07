@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -11,7 +11,7 @@ import type * as paneSelectionLane from './codex-pane-selection-lane'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import {
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount
@@ -21,7 +21,7 @@ import type { ClaudeHostFolders } from './claude-pane-account-folder'
 const laneByPtyId: Record<string, string> = {}
 let projectRuntime: ProjectExecutionRuntimeResolution | undefined
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(),
   confirmRuntimeTerminalForegroundProcess: vi.fn()
 }))

@@ -10,7 +10,7 @@ import {
   type LocalPathOpenOwner
 } from './local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import type { AppState } from '@/store/types'
 

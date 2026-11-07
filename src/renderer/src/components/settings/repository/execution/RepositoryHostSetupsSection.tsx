@@ -10,26 +10,24 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '../../../../store/index'
-import { getProjectHostSetupProjectionFromState } from '../../../../store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
 import { cn } from '../../../../lib/utils'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsBadge } from '../../form-controls/SettingsFormControls'
-import { matchesSettingsSearch } from '../../search/settings-search'
-import type { SettingsSearchEntry } from '../../search/settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from '../../search/settings-search'
+
 import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
-} from '@/store/slices/runtime-environment-ssh-selectors'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
   repo: Repo

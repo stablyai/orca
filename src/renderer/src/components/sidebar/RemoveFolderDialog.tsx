@@ -18,13 +18,13 @@ import {
 } from '../../../../shared/execution-host'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
-import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { projectRemovalTargets } from './removal-unsaved-files'
+import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // NUL cannot occur in project names, so translated name-token splitting is unambiguous.
 const NAME_TOKEN = '\u0000'

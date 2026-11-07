@@ -32,7 +32,7 @@ import {
   remoteInstallDirName,
   remoteInstallVersionDirRegex
 } from '../../managed-server/install/remote-install-model'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 import {
   readWslGuestIdentity,

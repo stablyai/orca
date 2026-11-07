@@ -1,4 +1,4 @@
-import type { MobileRelayServerWorktreeRow } from '../../../shared/mobile-relay-hosts-contract'
+import type { MobileRelayServerWorktreeRow } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   SERVER_FETCH_TIMEOUT_MS,
   SERVER_WORKTREE_LIMIT,

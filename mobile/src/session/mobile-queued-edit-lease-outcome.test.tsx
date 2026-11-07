@@ -25,7 +25,7 @@ const spoken = (text: string) => (draft: string) => insertDictationText(draft, t
 let queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost']
 beforeAll(async () => {
   const fixtures = await vi.importActual<QueuedEditHostFixtureModule>(
-    '../../../src/main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+    '../../../src/main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
   )
   queuedEditHost = fixtures.queuedEditHost
 })

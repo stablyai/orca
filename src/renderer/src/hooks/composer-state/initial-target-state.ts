@@ -153,11 +153,9 @@ export function useComposerInitialTargetState(input: ComposerInitialTargetStateI
     [actionableHostIds, projectGroups, selectedProjectGroupId]
   )
 
-  useEffect(() => {
-    if (selectedProjectGroupId && !selectedProjectGroup) {
-      setSelectedProjectGroupId(null)
-    }
-  }, [selectedProjectGroup, selectedProjectGroupId])
+  if (selectedProjectGroupId && !selectedProjectGroup) {
+    setSelectedProjectGroupId(null)
+  }
 
   useEffect(() => {
     if (

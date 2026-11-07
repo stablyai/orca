@@ -7,11 +7,11 @@ import {
   TERMINAL_FONT_WEIGHT_STEP,
   normalizeTerminalFontWeight,
   normalizeTerminalFontWeightBold
-} from '../../../../../../shared/terminal-fonts'
+} from '../../../../../../shared/terminal/appearance/terminal-fonts'
 import {
   fontFamilyHasKnownLigatures,
   resolveTerminalLigaturesEnabled
-} from '../../../../../../shared/terminal-ligatures'
+} from '../../../../../../shared/terminal/appearance/terminal-ligatures'
 import {
   NumberField,
   SettingsRow,

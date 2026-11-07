@@ -1,4 +1,4 @@
-import { classifyRemotePairingHostname } from '../../../../../../shared/remote-pairing-address'
+import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { translate } from '@/i18n/i18n'
 
 /** "Tailscale · 100.x.y.z" instead of the interface name ("utun6"), which means nothing to most people. */

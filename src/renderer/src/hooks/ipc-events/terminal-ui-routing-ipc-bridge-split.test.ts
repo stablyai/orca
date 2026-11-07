@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+vi.mock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
   hasRegisteredRuntimeTerminalTab: mocks.hasRegisteredRuntimeTerminalTab
 }))
 
@@ -36,7 +36,7 @@ import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   hasTerminalPaneSplitMountLease,
   registerTerminalPaneSplitRequestHandler
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import { routeRuntimeTerminalSplitRequest } from './terminal-ui-routing-ipc-bridge'
 
 beforeEach(() => {

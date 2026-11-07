@@ -7,7 +7,7 @@ import {
 import { pseudoLocalizeString } from '../../../src/shared/pseudo-localization'
 import React from 'react'
 import { Text } from 'react-native'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { CreateTerminalTab } from '../../../src/shared/rpc-contract/session-tabs-schemas-params'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'

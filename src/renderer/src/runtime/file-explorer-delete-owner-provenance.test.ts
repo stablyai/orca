@@ -2,19 +2,19 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
-import { useFileDeletion } from '@/components/right-sidebar/useFileDeletion'
-import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-operation-owner'
+import { useFileDeletion } from '@/components/right-sidebar/file-explorer/mutations/useFileDeletion'
+import { getFileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 import type {
   FileExplorerOperationOwner,
   TreeNode
-} from '@/components/right-sidebar/file-explorer-types'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+} from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { renameFileOnDisk } from '@/lib/rename-file'
 
 const { confirm, toastError } = vi.hoisted(() => ({
@@ -30,11 +30,11 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirm
 }))
 vi.mock('@/hooks/useShortcutLabel', () => ({ useShortcutLabel: () => 'Delete' }))
-vi.mock('@/components/editor/editor-autosave', () => ({
+vi.mock('@/components/editor/autosave/editor-autosave', () => ({
   requestEditorFileSave: vi.fn().mockResolvedValue(undefined),
   requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('@/components/right-sidebar/fileExplorerUndoRedo', () => ({
+vi.mock('@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo', () => ({
   commitFileExplorerOp: vi.fn()
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

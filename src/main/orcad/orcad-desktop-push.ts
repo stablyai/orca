@@ -3,7 +3,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { DesktopPushService } from '../runtime/push/desktop-push-service'
 import { resolvePushGatewayOrigin } from '../runtime/push/push-gateway-origin'
-import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 
 export function startOrcadDesktopPush(
   runtime: OrcaRuntimeService,

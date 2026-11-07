@@ -2,11 +2,11 @@ import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-ter
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../agent-launch/agent-launch-executor'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { WORKER_START_VOCABULARY } from '../structured-workers/orchestration-worker-start-mode'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import { resolveWorkerWorktreeName } from '../worker/worker-worktree-creation'
 import {
@@ -14,7 +14,8 @@ import {
   appendFederationTerminalEffects,
   type FederationEffect
 } from './federation-effects'
-import type { FederationAttachStartInput } from './federation-start-schema'
+import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 
 const TERMINAL_ONLY_MESSAGE = 'A federated worker starts a terminal agent only.'
 
@@ -26,6 +27,8 @@ export async function launchFederatedWorkerAgent(args: {
   launchPreferences: AgentLaunchPreferences | undefined
   /** The workspace to start in; absent creates the new top-level worktree the params describe. */
   worktree?: { id: string }
+  /** The paired client that asked, so its own sidebar counts the new worktree as its own. */
+  creatorProvenance?: Worktree['creatorProvenance']
   setupSource: string
   effects: FederationEffect[]
   /** The created worktree's setup receipt, as soon as it exists, so a later failure reports it. */
@@ -97,13 +100,16 @@ export async function launchFederatedWorkerAgent(args: {
           startupSuppressUpdatePrompt: true,
           ...(args.launchPreferences ? { startupLaunchPreferences: args.launchPreferences } : {}),
           activate: false,
-          lineage: { noParent: true }
+          ...(args.creatorProvenance ? { creatorProvenance: args.creatorProvenance } : {}),
+          lineage: params.crossStoreParent
+            ? { crossStoreParent: params.crossStoreParent }
+            : { noParent: true }
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle
         effects.push({
           kind: 'worktree',
-          action: 'created_top_level',
+          action: params.crossStoreParent ? 'created_child' : 'created_top_level',
           id: result.worktree.id,
           name: result.worktree.displayName
         })

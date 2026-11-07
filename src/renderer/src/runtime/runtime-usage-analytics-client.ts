@@ -1,4 +1,4 @@
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 export type UsageAnalyticsProvider = 'claude' | 'codex' | 'opencode' | 'muse'

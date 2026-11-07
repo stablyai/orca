@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginIconThemeArtifact } from '../../../shared/plugins/artifacts/plugin-icon-theme-artifact'
-import type { ActivePluginIconTheme } from '../store/plugin-icon-themes'
+import type { ActivePluginIconTheme } from '../store/plugins/appearance/plugin-icon-themes'
 import { getPluginFileTypeIconIndex } from './file-type-icons'
 
 const iconTheme = (maps: Partial<ActivePluginIconTheme>): ActivePluginIconTheme => ({

@@ -2,15 +2,21 @@ import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-ter
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { suggestCreatureNameForPaths } from '../../../../../../shared/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
 
 /** The repo a new worker worktree is created in, and its parent for `new-child`. */
-export type WorkerWorktreeCreationTarget = { repoSelector: string; parentWorktreeId?: string }
+export type WorkerWorktreeCreationTarget = {
+  repoSelector: string
+  parentWorktreeId?: string
+  /** A multi-repo folder workspace parent (`folder:<id>`); its destination repo is explicit. */
+  parentWorkspace?: string
+}
 
 export async function resolveWorkerWorktreeCreationTarget(args: {
   runtime: Pick<OrcaRuntimeService, 'showManagedWorktree'>
@@ -22,6 +28,19 @@ export async function resolveWorkerWorktreeCreationTarget(args: {
   // An explicit repo is all a top-level worktree needs, so callers outside a worktree can use it.
   if (requestedWorktree === 'new-top-level' && repo) {
     return { repoSelector: repo }
+  }
+  // A folder workspace spans several repos, so its child names the destination repo itself.
+  if (
+    requestedWorktree === 'new-child' &&
+    parseWorkspaceKey(args.callerWorktreeId)?.type === 'folder'
+  ) {
+    if (!repo) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        '--worktree new-child from a multi-repo folder workspace needs --repo <selector> naming the repo to create the worktree in.'
+      )
+    }
+    return { repoSelector: repo, parentWorkspace: args.callerWorktreeId }
   }
   const callerWorktree = await args.runtime
     .showManagedWorktree(`id:${args.callerWorktreeId}`)
@@ -134,6 +153,7 @@ export async function createWorkerWorktree(args: {
     activate: false,
     lineage: {
       parentWorktree: target.parentWorktreeId,
+      ...(target.parentWorkspace ? { parentWorkspace: target.parentWorkspace } : {}),
       noParent: requestedWorktree === 'new-top-level',
       callerTerminalHandle: params.from
     }

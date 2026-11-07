@@ -1,7 +1,7 @@
 /** Pin every removal step to confirmed host; same repoId::path on another machine may hold different uncommitted work (STA-4343). */
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -12,7 +12,7 @@ import {
   type WorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
 import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { WORKTREE_REMOVAL_HOST_CHANGED_ERROR } from '../listing/worktree-slice-constants'
 import { translate } from '@/i18n/i18n'
@@ -20,7 +20,7 @@ import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
 
-import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
+import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import {

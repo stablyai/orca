@@ -1,11 +1,11 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { clearTransientTerminalState } from '../slices/terminal-helpers'
+import { clearTransientTerminalState } from './terminal-transient-state'
 import {
   clearCommittedPtyShutdownSettlements,
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
-} from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import '../slices/agent-status/agent-status'
 import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
 import type {
@@ -13,7 +13,7 @@ import type {
   RetainedAgentEntry
 } from '../slices/agent-status/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { copyOnWriteRecord } from '../copy-on-write-record'
+import { copyOnWriteRecord } from './terminal-shutdown-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 

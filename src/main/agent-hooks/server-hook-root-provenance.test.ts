@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { PANE } from './server.test-fixtures'
 
-import '../../shared/hook-process-root-evidence'
+import '../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
 import '../../wsl-guest/agent-hook-server'
 import '../../wsl-guest/relay-pane-root'
@@ -37,7 +37,9 @@ import {
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
-vi.mock('../../shared/agent-process-presence-probe', () => ({ probeAgentProcessPresence: vi.fn() }))
+vi.mock('../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn()
+}))
 
 registerRootTestHarness()
 
@@ -47,6 +49,21 @@ const unboundRoot = () => {
   runningPane(49969, CLAUDE)
   io.resolveRoot.mockResolvedValueOnce(null)
 }
+
+it('rechecks Antigravity on its next turn when its process becomes the pane foreground', async () => {
+  const server = await createServer()
+  runningPane(49990, [49969, 101, 49969, 'agy', 'S'], [49990, 101, 49990, 'claude', 'S+'])
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Not foreground' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  runningPane(49969, [49969, 101, 49969, 'agy', 'S+'])
+  await hook(server, 'PreToolUse', { source: 'antigravity' })
+  expect(server.row()).toBeUndefined()
+  expect(attempts()).toBe(1)
+  await hook(server, 'PreInvocation', { source: 'antigravity', prompt: 'Foreground task' })
+  expect(server.row()).toMatchObject({ agentType: 'antigravity', prompt: 'Foreground task' })
+  expect(server.presence()).toMatchObject({ agent: 'antigravity', process: capture(49969) })
+})
 
 describe('an empty pane whose first hook cannot be proved', () => {
   it.each<[string, () => void, string?]>([

@@ -2,7 +2,7 @@ import {
   AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT,
   type AiVaultSessionTitle,
   type AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
+} from '../../../shared/ai-vault/contracts/ai-vault-session-title'
 
 export function parseAiVaultSessionTitlesResult(value: unknown): AiVaultSessionTitlesResult {
   if (!value || typeof value !== 'object') {
@@ -34,6 +34,8 @@ function parseTitle(value: unknown): AiVaultSessionTitle {
   return {
     agent: record.agent,
     sessionId: record.sessionId,
-    title: record.title.trim()
+    title: record.title.trim(),
+    // Unknown kinds from a newer host stay unclassified rather than failing the whole result.
+    ...(record.kind === 'named' || record.kind === 'fallback' ? { kind: record.kind } : {})
   }
 }

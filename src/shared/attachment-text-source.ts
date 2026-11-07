@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { attachmentTextSegments } from './attachment-text-segments'
 export { attachmentTextSegments } from './attachment-text-segments'
 import { waitForPromiseWithSignal } from './abort-signal-reason'

@@ -14,7 +14,7 @@ import {
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   callStructuredAgentSession,
   supportsStructuredAgentSessionQuietRepeatedStop
@@ -146,7 +146,9 @@ export function useStructuredAgentSessionMutate(args: {
         const message = result.refusal.message
         if (
           fingerprintMethod === 'agentSession.threadGoal' &&
-          (message === GOAL_COPY.settingsRejected || message === GOAL_COPY.settingsUnconfirmed)
+          (message === GOAL_COPY.settingsRejected ||
+            message === GOAL_COPY.settingsUnconfirmed ||
+            message === GOAL_COPY.noGoal)
         ) {
           outcome.notice = agentSessionGoalControlWords(message)
         }

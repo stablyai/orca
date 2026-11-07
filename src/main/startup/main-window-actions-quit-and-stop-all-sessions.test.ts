@@ -23,10 +23,12 @@ vi.mock('./quit-and-stop-all-sessions-prompt', () => ({
   confirmQuitAndStopAllSessions: prompt.confirm,
   explainStopAllSessionsUnavailable: prompt.explain
 }))
-vi.mock('../daemon/daemon-newer-protocol-hold', () => ({
+vi.mock('../daemon/providers/routing/daemon-newer-protocol-hold', () => ({
   isHoldingForNewerProtocolDaemon: daemon.holdingNewer
 }))
-vi.mock('../daemon/daemon-provider-state', () => ({ getDaemonProvider: daemon.provider }))
+vi.mock('../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  getDaemonProvider: daemon.provider
+}))
 vi.mock('../ipc/pty/pty-management', () => ({
   confirmNoDaemonSessionsRemain: daemon.noSessionsRemain
 }))

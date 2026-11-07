@@ -1,6 +1,6 @@
 import type { LinearProjectListResult } from './agent-result-types'
 import { appendLinearListTruncation } from './list-truncation-format'
-import { terminalSafeLine as safe } from '../terminal-safe-text'
+import { terminalSafeLine as safe } from '../terminal/output/terminal-safe-text'
 
 // Why: non-JSON project output aligns ids with the existing compact Linear tables.
 const LINEAR_PROJECT_NAME_COLUMN_WIDTH = 28

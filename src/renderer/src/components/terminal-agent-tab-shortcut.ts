@@ -1,5 +1,5 @@
 import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../store'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
@@ -9,7 +9,7 @@ import {
   resolveDefaultAgentForWorktreeNewTab
 } from '@/lib/agent-tab-shortcuts'
 import { chosenAgentChatUnlearned } from '@/lib/host-chat-program'
-import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 export type TerminalAgentTabShortcut = {
   actionId: KeybindingActionId | null
