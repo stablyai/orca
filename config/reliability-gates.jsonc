@@ -7491,9 +7491,9 @@
       ],
       "platforms": ["macos", "linux", "windows", "mobile"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": ["linux"],
       "coveredProviders": [],
-      "coverageNotes": "Audit1683 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1640 removes low-value IPC, SSH, workspace and transcript-watcher tests without equivalent replacement coverage. Per-source reviews record retained public refusal, cancellation, execution-host and real-filesystem outcomes with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1396 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; audit829 removes generated-file snapshots and their current byte-parity claim. No equivalent replacement for generated-script byte checks is claimed. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps. Audit1396: src/renderer/src/components/terminal-pane/pty-connection-pending-spawn.spec.ts reduced. Lose standalone debug-state retention/log silence alarm. React StrictMode is not mounted; bindings manually simulate remount over mocked transport. No equivalent replacement coverage is claimed.",
+      "coverageNotes": "Audit1760 removes the standalone startup-cwd policy suite without equivalent replacement. One fresh Linux run passed21 retained IPC transport unit cases; cwd-specific coverage returns mocked fallback metadata only. Original receipts and scope are archived in knownGaps; current platform scope reflects this unit run, not a native provider. Historical coverage account (not current evidence): Audit1683 removes low-value test projections, mock wiring, private-state assertions, inventories and duplicate examples without equivalent replacement coverage. Per-source reviews record retained public behavior and refusal boundaries with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1640 removes low-value IPC, SSH, workspace and transcript-watcher tests without equivalent replacement coverage. Per-source reviews record retained public refusal, cancellation, execution-host and real-filesystem outcomes with injected/native/remote limits. Affected historical receipts are retired; gates without active current evidence are downgraded. Historical scope before this audit: Audit1396 changes referenced sources. Retained unchanged-source receipts apply only to their unchanged commands; the reduced selectors have no new execution result. Historical coverage account (not a current claim for changed sources): Local macOS evidence covers the shared missing-dir fallback policy, main pty:spawn recovery and metadata, no-flag and reattach strictness, renderer IPC flag routing, SSH-tagged and remote-runtime omission, and the visibility-gated terminal notice. Real Bash and Zsh node-pty tests replace the active cwd inode and exercise the shared POSIX OMP wrapper; audit829 removes generated-file snapshots and their current byte-parity claim. No equivalent replacement for generated-script byte checks is claimed. Daemon shares the same pre-provider main cwd decision but lacks a live daemon-provider run; WSL UNC paths are exempt from the spawn probe and lack a live run; native PowerShell is unaffected; Linux/Windows and mobile/API strictness remain gaps. Audit1396: src/renderer/src/components/terminal-pane/pty-connection-pending-spawn.spec.ts reduced. Lose standalone debug-state retention/log silence alarm. React StrictMode is not mounted; bindings manually simulate remount over mocked transport. No equivalent replacement coverage is claimed.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7239",
         "https://github.com/stablyai/orca/pull/7750",
@@ -7504,14 +7504,12 @@
       "invariant": "A fresh local renderer terminal spawn may recover from a saved startup cwd whose directory no longer exists only by spawning at the selected workspace root and printing a generic in-terminal notice; existing directories — including ones outside the worktree (#7685) — spawn as requested, and reattach, SSH, remote-runtime, runtime/API, and mobile callers keep exact cwd semantics. A long-lived POSIX shell whose cwd inode was deleted and replaced may run a wrapped OMP command from the live path named by its logical PWD only in a subshell; the parent shell cwd, OMP argv, status extension, and exit status remain unchanged, while a genuinely unavailable path fails visibly without invoking OMP. A usable physical cwd remains authoritative when PWD is unset or names a removed logical symlink instead of being remapped to a workspace fallback.",
       "oracle": "Audit1683 retires changed-source assertion and execution scope without equivalent replacement coverage. Existing unchanged-selector receipts remain scoped to their original sources. Historical prior-source oracle: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The shared resolver falls back to the workspace root only when the injected existence probe reports the resolved cwd missing and the workspace root present, and never probes floating terminals or a cwd equal to the root. The renderer sends cwdFallback only for fresh local IPC spawns, main honors it only when connectionId and sessionId are absent, WSL UNC paths never engage the probe-based fallback, main returns fallback metadata only after an actual fallback, the IPC transport preserves that metadata, and the connection layer writes a generic notice that omits the missing path. In real interactive Bash and Zsh PTYs, unset PWD and remove a logical symlink while the physical cwd stays usable, requiring OMP to remain there; then delete and recreate the active project path, require extension-enabled and extension-skipping invocations to observe the replacement inode with byte-exact argv and nonzero status preserved, require the parent shell to remain on the stale inode, unset PWD and require recovery through ORCA_WORKTREE_PATH, clear every logical fallback and require an actionable failure without invoking OMP, and finally delete the replacement and require the same for the missing PWD path.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/shell/launch/terminal-startup-cwd.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts --maxWorkers=2",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts"
       ],
       "testFiles": [
-        "src/shared/shell/launch/terminal-startup-cwd.test.ts",
         "src/main/ipc/pty/pty-spawn-cwd-fallback.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts",
@@ -7520,20 +7518,8 @@
       ],
       "assertionRefs": [
         {
-          "file": "src/shared/shell/launch/terminal-startup-cwd.test.ts",
-          "assertions": [
-            "a missing requested cwd falls back to the workspace root and reports the missing path to the callback",
-            "existing cwds — nested or outside the worktree (#7685) — are never remapped",
-            "no fallback happens when the workspace root is missing too",
-            "floating terminal cwds and root-equal requests are never probed",
-            "non-ASCII worktree roots and folder workspace roots are recovered verbatim"
-          ]
-        },
-        {
           "file": "src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts",
           "assertions": [
-            "IPC transport sends cwdFallback only for local fresh spawns",
-            "SSH-tagged and session reattach spawns omit cwdFallback",
             "IPC transport returns startup cwd fallback metadata to the connection layer"
           ]
         },
@@ -7548,24 +7534,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-08",
+          "date": "2026-11-07",
           "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/shell/launch/terminal-startup-cwd.test.ts",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts --maxWorkers=2",
           "result": "passed",
-          "durationSeconds": 0.2,
-          "summary": "1 test file passed, 21 tests passed; covers the missing-dir fallback policy, #7685 outside-worktree preservation, and root-missing/floating exemptions."
-        },
-        {
-          "date": "2026-07-08",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.34,
-          "summary": "1 test file passed, 58 tests passed; covers cwdFallback forwarding only for local fresh spawns and metadata handoff.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts"
+          "durationSeconds": 38.8,
+          "summary": "21 retained IPC transport unit cases passed on Linux, including return of mocked startupCwdFallback metadata. No live PTY, real missing directory, recovery notice, native shell, SSH/WSL, phone, p95 or soak evidence. Executed via pinned Node24 Vitest entry, same root config and selected file; no actual provider coverage claimed."
         }
       ],
       "runtimeBudget": {
@@ -7574,7 +7549,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Changed selectors have no new soak result after Audit1396; any retained unchanged-source receipts apply only to their own commands. Historical account: New experimental gate added with local deterministic evidence only; needs CI soak before promotion."
+        "evidence": "Audit1760: one Linux IPC transport unit run passed21 cases; no current soak evidence. Original flake history archived in knownGaps."
       },
       "redGreenEvidence": {
         "status": "missing",
@@ -7599,7 +7574,11 @@
         "WSL UNC paths bypass the spawn probe by design and have no live existence-recovery run; Linux, Windows, and mobile/API spawn strictness are not directly exercised.",
         "Audit1396: src/renderer/src/components/terminal-pane/pty-connection-pending-spawn.spec.ts reduced. Lose standalone debug-state retention/log silence alarm. React StrictMode is not mounted; bindings manually simulate remount over mocked transport. No equivalent replacement coverage is claimed.",
         "Audit1396 retires this complete dated receipt because a source in its selector was deleted or reduced. It does not validate the reduced selector. Original receipt verbatim:\n{\n          \"date\": \"2026-07-08\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-runtime-owner-spawn-routing.test.ts\",\n          \"result\": \"passed\",\n          \"durationSeconds\": 6.5,\n          \"summary\": \"1 test file passed, 341 tests passed; covers local IPC marking, the generic terminal fallback notice, and remote-runtime omission.\",\n          \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection-spawn-and-startup.test.ts\"\n        }",
-        "Audit1396 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[\"local\",\"ssh\",\"remote-runtime\"]}. Remaining provider scope applies only to unchanged-source receipts."
+        "Audit1396 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[\"local\",\"ssh\",\"remote-runtime\"]}. Remaining provider scope applies only to unchanged-source receipts.",
+        "Audit1760 retired original receipt; complete record preserved: {\"date\": \"2026-07-08\", \"runner\": \"local\", \"platform\": \"macos\", \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/shared/terminal-startup-cwd.test.ts\", \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/shared/shell/launch/terminal-startup-cwd.test.ts\", \"result\": \"passed\", \"durationSeconds\": 0.2, \"summary\": \"1 test file passed, 21 tests passed; covers the missing-dir fallback policy, #7685 outside-worktree preservation, and root-missing/floating exemptions.\"}",
+        "Audit1760 retired original receipt; complete record preserved: {\"date\": \"2026-07-08\", \"runner\": \"local\", \"platform\": \"macos\", \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-connect-spawn.test.ts\", \"result\": \"passed\", \"durationSeconds\": 0.34, \"summary\": \"1 test file passed, 58 tests passed; covers cwdFallback forwarding only for local fresh spawns and metadata handoff.\", \"currentCommand\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts\"}",
+        "Audit1760 removes the standalone startup cwd policy examples without equivalent replacement. Current IPC unit source only checks returning mocked startupCwdFallback metadata; it does not retain the former local-fresh/SSH/reattach cwdFallback argument assertions. Original IPC assertion inventory: {\"file\": \"src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-connect-spawn.test.ts\", \"assertions\": [\"IPC transport sends cwdFallback only for local fresh spawns\", \"SSH-tagged and session reattach spawns omit cwdFallback\", \"IPC transport returns startup cwd fallback metadata to the connection layer\"]}",
+        "Audit1760 historical platform/provider/flake account: {\"coveredPlatforms\": [\"macos\"], \"coveredProviders\": [], \"flakeHistory\": {\"status\": \"unknown\", \"evidence\": \"Changed selectors have no new soak result after Audit1396; any retained unchanged-source receipts apply only to their own commands. Historical account: New experimental gate added with local deterministic evidence only; needs CI soak before promotion.\"}}"
       ],
       "demotionRule": "Demote or quarantine if the gate flakes without a product bug, if an existing directory is ever remapped away from the requested cwd, if a reattach/remote/API caller can engage the spawn fallback, or if OMP recovery remaps a usable cwd with unset PWD, changes argv/status/parent cwd, or invokes OMP when the logical path remains unavailable."
     },
