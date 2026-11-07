@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { ensurePluginAutoUpdatesWatched } from './plugin-auto-updates'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
 import { disambiguatedPluginNames } from '../components/plugins/presentation/plugin-name-disambiguation'
+import type { Translate } from '../i18n/use-translate'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
 export type ActivePluginPanel = PluginHostPanel & {
@@ -160,7 +161,8 @@ const displayNamesByList = new WeakMap<
 
 /** Installed plugins' names as shown: one sharing a name, unless official, adds its publisher. */
 export function installedPluginDisplayNames(
-  plugins: readonly PluginHostListEntry[]
+  plugins: readonly PluginHostListEntry[],
+  t?: Translate
 ): ReadonlyMap<string, string> {
   let names = displayNamesByList.get(plugins)
   if (!names) {
@@ -170,7 +172,8 @@ export function installedPluginDisplayNames(
         name: plugin.name,
         publisher: plugin.publisher || null,
         official: plugin.official
-      }))
+      })),
+      t
     )
     displayNamesByList.set(plugins, names)
   }
