@@ -25,13 +25,13 @@ vi.mock('../../../browser/cdp/screencast/browser-screencast-stream', () => ({
 
 const PHONE = 'phone-1'
 
-function frame(seq: number): Uint8Array {
+function frame(seq: number, image = new Uint8Array([seq])): Uint8Array {
   return encodeBrowserScreencastFrame({
     opcode: BrowserScreencastOpcode.Frame,
     seq,
     format: 'jpeg',
     metadata: {},
-    image: new Uint8Array([seq])
+    image
   })
 }
 
@@ -86,6 +86,16 @@ describe('screencast frame credit', () => {
 
     expect(ack(1)).toBe(true)
     expect(sent).toEqual([0, 1, 3])
+    subscription.session.stop()
+  })
+
+  it('does not charge credit for frames too large to send', async () => {
+    const { subscription, onFrame, sent } = await subscribe(true)
+    onFrame(frame(0, new Uint8Array(9 * 1024 * 1024)))
+    onFrame(frame(1, new Uint8Array(9 * 1024 * 1024)))
+    onFrame(frame(2))
+    onFrame(frame(3))
+    expect(sent).toEqual([2, 3])
     subscription.session.stop()
   })
 })

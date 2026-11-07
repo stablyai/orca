@@ -20,12 +20,13 @@ export function deliverScreencastSubscriberFrame(
     return
   }
   const outcome = sendSubscriberFrame(subscriber, bytes)
-  subscriber.pendingFrame = outcome === 'handled' ? null : bytes
-  // Backlog proves an active socket, not a ghost.
-  if (outcome !== 'backlogged') {
+  const retry = outcome === 'backlogged' || outcome === 'refused'
+  subscriber.pendingFrame = retry ? bytes : null
+  // Backlog proves an active socket, not a ghost; an oversize drop says nothing about the socket.
+  if (outcome === 'handled' || outcome === 'refused') {
     subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, outcome === 'handled')
   }
-  if (outcome !== 'handled') {
+  if (retry) {
     schedulePendingFrameRetry(subscriber)
   }
 }
