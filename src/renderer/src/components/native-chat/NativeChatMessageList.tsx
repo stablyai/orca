@@ -288,7 +288,14 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
-  const { railRef, wake: wakeRail } = useNativeChatRailWake()
+  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
+  const onTranscriptScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event)
+      sustainRail()
+    },
+    [onScroll, sustainRail]
+  )
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
@@ -345,7 +352,7 @@ export function NativeChatMessageList({
           <div className="relative min-h-0 flex-1">
             <div
               ref={scrollRef}
-              onScroll={onScroll}
+              onScroll={onTranscriptScroll}
               onCopy={copyChatMathSelection}
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.

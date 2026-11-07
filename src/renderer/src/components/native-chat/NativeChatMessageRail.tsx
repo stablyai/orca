@@ -155,8 +155,10 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           // Dimmed at rest; hover, keyboard focus or scrolling light it, and it fades back once idle.
           className={cn(
             'absolute top-1/2 right-2.5 z-10 flex w-6 -translate-y-1/2 flex-col',
-            'opacity-40 transition-opacity delay-700 duration-500 ease-out motion-reduce:duration-0',
+            'opacity-40 transition-opacity delay-700 duration-500 ease-out motion-reduce:transition-none',
             'hover:opacity-100 hover:delay-0 hover:duration-150',
+            // The preview card is portaled, so the pointer on it leaves the rail's :hover.
+            'data-[state=open]:opacity-100 data-[state=open]:delay-0 data-[state=open]:duration-150',
             'has-focus-visible:opacity-100 has-focus-visible:delay-0 has-focus-visible:duration-150',
             'data-awake:opacity-100 data-awake:delay-0 data-awake:duration-150'
           )}
