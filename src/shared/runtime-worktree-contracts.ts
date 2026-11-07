@@ -33,6 +33,10 @@ export type RuntimeWorktreeSetResult = {
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
   parentPaneKey: string | null
+  /** Canonical workspace that runs this pane. A mirrored copy keeps it. Old hosts omit it. */
+  homeWorktreeId?: string
+  /** Host of that workspace. Raw ids repeat across hosts. Old hosts omit it. */
+  homeHostId?: Worktree['hostId']
   state: AgentStatusState
   workingMode?: AgentWorkingMode
   agentType: AgentType | null
