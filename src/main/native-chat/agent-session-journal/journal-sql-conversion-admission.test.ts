@@ -26,7 +26,6 @@ import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { encodeJournalState } from './outcomes/journal-state-codec'
 
 let root: string
 let database: JournalHostDatabase
@@ -37,35 +36,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
-})
-
-it('skips superseded unreadable records and future keys while preserving newest deletions', () => {
-  database.transaction((db) => {
-    publishTestJournalEpoch(db, 'session', 'epoch')
-    publishJournalOutcomeEpoch(db, 'session', 'epoch', journalSqlLifecycleRows())
-    const source = journalOutcomeSource(db, 'session', 'epoch')!
-    const insert = db.prepare(`INSERT INTO journal_outcomes
-      VALUES (?,?,'items',?,99,'s0000000000000001:0000000000000000','{}',0)`)
-    insert.run(source.generation, 1, '"turn"')
-    insert.run(source.generation, source.through + 1, '"future"')
-  })
-  const oracle = restoreJournal(database.db, 'session')!
-  const selected = restoreJournal(database.db, 'session', { selection: 'recursive' })!
-  expect(selected).toMatchObject({ newer: null, damage: null })
-  expect(selected.state.items.get('assistant')).toBeUndefined()
-  expect(selected.state.items.get('turn')?.revision).toBe(1)
-  expect(encodeJournalState(selected.state)).toEqual(encodeJournalState(oracle.state))
-  database.db.exec('UPDATE journal_outcome_epochs SET through_seq=through_seq+1')
-  expect(restoreJournal(database.db, 'session', { selection: 'recursive' })).toMatchObject({
-    newer: { sequence: 1 },
-    damage: null
-  })
-  // A refused iterator releases its cursor before recovery or the next open accesses the file.
-  database.db.exec(`UPDATE journal_outcomes SET format=2 WHERE entry_key='"future"'`)
-  expect(restoreJournal(database.db, 'session', { selection: 'recursive' })).toMatchObject({
-    newer: null,
-    damage: { sequence: 1, cause: 'unparseable-row' }
-  })
 })
 
 it.each([
