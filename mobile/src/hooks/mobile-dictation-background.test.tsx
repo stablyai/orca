@@ -10,6 +10,7 @@ import {
 import type { DictationCapture } from '../platform/dictation-capture-contract'
 
 const appState = vi.hoisted(() => ({ handlers: new Set<(state: string) => void>() }))
+const microphone = vi.hoisted(() => ({ ends: 0 }))
 
 vi.mock('react-native', () => ({
   AppState: {
@@ -26,7 +27,9 @@ vi.mock('../platform/dictation-capture', () => {
   const capture: DictationCapture = {
     open: async () => ({ ok: true }),
     begin: () => true,
-    end: async () => {},
+    end: async () => {
+      microphone.ends += 1
+    },
     release: () => {},
     onChunk: () => ({ remove: () => {} }),
     onInterruption: () => ({ remove: () => {} })
@@ -118,9 +121,14 @@ describe('leaving the app while dictating', () => {
       }
     })
     expect(dictation().status).toBe('starting')
+    const endsBefore = microphone.ends
+
+    act(() => {
+      leave('background')
+    })
+    expect(microphone.ends).toBe(endsBefore + 1)
 
     await act(async () => {
-      leave('background')
       await pump(rpc)
     })
     expect(transcripts).toEqual(['what was heard'])
