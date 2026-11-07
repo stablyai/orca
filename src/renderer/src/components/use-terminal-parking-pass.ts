@@ -41,6 +41,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    visibleWorkspaceIds,
     workspaceSurfaceIds
   } = controller
   // Why: this effect is the sole writer, so these mirror the queued state without a render.
@@ -218,6 +219,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
+    visibleWorkspaceIds,
     workspaceSurfaceIds
   ])
 }

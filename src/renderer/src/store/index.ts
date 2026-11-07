@@ -53,6 +53,7 @@ import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-co
 import { createStructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
+import { createWorkspaceGridViewSlice } from './slices/workspace-grid-view'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import {
@@ -147,7 +148,8 @@ export const useAppStore = create<AppState>()(
           ...createTerminalQuickCommandHostsSlice(...a),
           ...createStructuredSessionLaunchDirectorySlice(...a),
           ...createStructuredChatSleptAtSlice(...a),
-          ...createWorkspaceAttentionSlice(...a)
+          ...createWorkspaceAttentionSlice(...a),
+          ...createWorkspaceGridViewSlice(...a)
         }
       })
     ),

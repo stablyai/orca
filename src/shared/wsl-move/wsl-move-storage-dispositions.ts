@@ -86,6 +86,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/lib/feature-education-telemetry.ts',
       'src/renderer/src/lib/orchestration-setup-state.ts',
       'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
+      // Per-device grid view membership; ids that stop resolving after a move are skipped.
+      'src/renderer/src/store/slices/workspace-grid-view-storage.ts',
       'src/renderer/src/web/preload-api/web-keybindings-api.ts',
       'src/renderer/src/web/preload-api/web-onboarding-api.ts',
       'src/renderer/src/web/preload-api/web-preferences-store.ts',

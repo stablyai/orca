@@ -13,8 +13,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Copy,
-  Bell,
-  BellOff,
   CircleX,
   Pencil,
   Pin,
@@ -31,6 +29,8 @@ import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
+import { WorkspaceGridViewMenuItems } from '../grid-view/WorkspaceGridViewMenuItems'
+import { WorktreeReadStateMenuItem } from './WorktreeReadStateMenuItem'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -200,19 +200,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                {worktree.isUnread ? (
-                  <BellOff className="size-3.5" />
-                ) : (
-                  <Bell className="size-3.5" />
-                )}
-                {worktree.isUnread
-                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
-                  : translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                      'Mark Unread'
-                    )}
-              </DropdownMenuItem>
+              <WorktreeReadStateMenuItem
+                isUnread={worktree.isUnread}
+                disabled={isDeleting}
+                onSelect={handleToggleRead}
+              />
+              <WorkspaceGridViewMenuItems workspaceId={worktree.id} disabled={isDeleting} />
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
