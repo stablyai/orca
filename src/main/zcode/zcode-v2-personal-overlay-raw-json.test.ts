@@ -76,7 +76,7 @@ const cases = ['providerRules', 'providerModelRules', 'manualProviderModelRules'
 
 describe('raw persisted personal rule keys', () => {
   it.each(cases)(
-    'refuses $group with raw $key before vault access or quota',
+    'refuses $group with raw $key before plan vault access or quota',
     async ({ group, key }) => {
       installRawLeaf(group, `{"${key}":{"syntheticUnknownLeaf":true}}`)
       const configBefore = fs.readFileSync(configPath)
@@ -88,11 +88,14 @@ describe('raw persisted personal rule keys', () => {
 
       expect(readZcodeV2PlanCredential(host).status).toBe('unavailable')
       expect(readZcodeUsageCredentials({ credentialHost: host }).status).toBe('unavailable')
-      expect((await fetchZcodeRateLimits({ credentialHost: host })).status).toBe('unavailable')
-      expect(fetch).not.toHaveBeenCalled()
       for (const calls of [stat.mock.calls, lstat.mock.calls, open.mock.calls, read.mock.calls]) {
         expect(calls.filter(([path]) => path === vaultPath)).toHaveLength(0)
       }
+
+      // The Start Plan session fallback may read the vault for the OAuth JWT, but a polluted
+      // config must still not reach the network or change any stored bytes.
+      expect((await fetchZcodeRateLimits({ credentialHost: host })).status).toBe('unavailable')
+      expect(fetch).not.toHaveBeenCalled()
       expect(fs.readFileSync(configPath)).toEqual(configBefore)
       expect(fs.readFileSync(vaultPath)).toEqual(vaultBefore)
 

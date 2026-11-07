@@ -1,4 +1,5 @@
 import {
+  readZcodeStartPlanCredential,
   readZcodeUsageCredentials,
   resolveUsageCredentials,
   ZCODE_PLAN_CREDENTIAL_SOURCE,
@@ -6,6 +7,7 @@ import {
   type ZcodeUsageCredentials,
   type ZcodeUsageCredentialOptions
 } from './zcode-usage-credentials'
+import { fetchZcodeStartPlanUsage } from './zcode-start-plan-usage-fetcher'
 export {
   hasZcodeCliPlanCredentials,
   ZCODE_PLAN_CREDENTIAL_SOURCE,
@@ -126,26 +128,60 @@ function asWindow(limit: QuotaLimit | undefined): RateLimitWindow | null {
   }
 }
 
+/** Coding Plan quotas first; Start Plan session balances only when no Coding Plan credential applies. */
 export async function fetchZcodeRateLimits(
   options: ZcodeUsageCredentialOptions & {
     planCredential?: ZcodePlanCredential | null
     signal?: AbortSignal
   } = {}
 ): Promise<ProviderRateLimits> {
+  const codingPlan = await fetchCodingPlanUsage(options)
+  // A selected credential pins the account: its failures must not be swapped for
+  // Start Plan usage, which can belong to a different ZCode login.
+  if (codingPlan.credentialSelected) {
+    return codingPlan.usage
+  }
+  const startPlan = readZcodeStartPlanCredential(options)
+  if (!startPlan) {
+    return codingPlan.usage
+  }
+  return fetchZcodeStartPlanUsage(startPlan, options.signal)
+}
+
+type CodingPlanUsageOutcome = {
+  usage: ProviderRateLimits
+  credentialSelected: boolean
+}
+
+async function fetchCodingPlanUsage(
+  options: ZcodeUsageCredentialOptions & {
+    planCredential?: ZcodePlanCredential | null
+    signal?: AbortSignal
+  }
+): Promise<CodingPlanUsageOutcome> {
   const plan = options.planCredential
   const saved = plan
     ? resolveUsageCredentials(plan.apiKey, plan.baseUrl, ZCODE_PLAN_CREDENTIAL_SOURCE)
     : null
   if (plan && !saved) {
-    return failed('The saved GLM Coding Plan API key is unusable', 'parse', '')
+    return {
+      usage: failed('The saved GLM Coding Plan API key is unusable', 'parse', ''),
+      credentialSelected: true
+    }
   }
   const cli = saved ? null : readZcodeUsageCredentials(options)
   if (cli?.status === 'error') {
-    return failed('Could not read the selected ZCode CLI Coding Plan credential', 'parse', '')
+    return {
+      usage: failed('Could not read the selected ZCode CLI Coding Plan credential', 'parse', ''),
+      credentialSelected: true
+    }
   }
   const credentials = saved ?? (cli?.status === 'ok' ? cli.credentials : null)
   if (!credentials) {
-    return unavailable('ZCode Coding Plan credentials are not configured')
+    return {
+      usage: unavailable('ZCode Coding Plan credentials are not configured'),
+      credentialSelected: false
+    }
   }
   const source = saved ? ZCODE_PLAN_CREDENTIAL_SOURCE : cli?.status === 'ok' ? cli.source : ''
   const result = await fetchUsage(credentials, source, options.signal)
@@ -155,10 +191,16 @@ export async function fetchZcodeRateLimits(
       current.status !== 'ok' ||
       current.credentials.authProvenance !== credentials.authProvenance
     ) {
-      return unavailable('ZCode Coding Plan account changed during refresh')
+      return {
+        usage: unavailable('ZCode Coding Plan account changed during refresh'),
+        credentialSelected: true
+      }
     }
   }
-  return { ...result, usageMetadata: { ...result.usageMetadata, credentialSource: source } }
+  return {
+    usage: { ...result, usageMetadata: { ...result.usageMetadata, credentialSource: source } },
+    credentialSelected: true
+  }
 }
 
 async function fetchUsage(
