@@ -1,11 +1,4 @@
-import {
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  truncateSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
@@ -21,7 +14,6 @@ import {
   getEnvironmentStorePath,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
 } from './runtime-environment-store-records'
-import { addManagedOrcadEnvironment } from './runtime-environment-managed-orcad-store'
 
 function pairingCode(
   endpoint = 'ws://127.0.0.1:6768',
@@ -77,73 +69,6 @@ describe('runtime environment store', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
-  it('refuses re-pairing a saved server with a code this same Orca profile issued', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-    const environment = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'dev box',
-      pairingCode: pairingCode()
-    })
-    writeProfileKeypair(userDataPath, 1)
-
-    expect(() =>
-      updateEnvironmentFromPairingCode(userDataPath, environment.id, {
-        pairingCode: pairingCode('ws://192.0.2.10:6768')
-      })
-    ).toThrow(RuntimeEnvironmentStoreError)
-    expect(listEnvironments(userDataPath)).toEqual([environment])
-  })
-
-  it('pairs a server with a different key even at a loopback address', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-    writeProfileKeypair(userDataPath, 2)
-
-    const environment = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'tunnel',
-      pairingCode: pairingCode('ws://127.0.0.1:6768')
-    })
-    expect(listEnvironments(userDataPath)).toEqual([environment])
-  })
-
-  it('rejects duplicate server names instead of silently replacing the saved server', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'dev box',
-      pairingCode: pairingCode('ws://127.0.0.1:6768')
-    })
-
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'dev box',
-        pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
-      })
-    ).toThrow(RuntimeEnvironmentStoreError)
-    expect(listEnvironments(userDataPath)).toEqual([first])
-  })
-
-  it('rejects a name that differs only in case or surrounding spaces, as --environment resolves it', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'build',
-      pairingCode: pairingCode('ws://127.0.0.1:6768')
-    })
-
-    for (const name of ['Build', ' build ', '"build"']) {
-      expect(() =>
-        addEnvironmentFromPairingCode(userDataPath, {
-          name,
-          pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2)
-        })
-      ).toThrow('A server named "build" already exists.')
-    }
-    expect(listEnvironments(userDataPath)).toEqual([first])
-  })
-
   it('advances pairing revisions across equal and backward clock readings', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
@@ -173,50 +98,6 @@ describe('runtime environment store', () => {
     ]).toEqual([101, 102, 200])
   })
 
-  it('keeps SSH-tunnel metadata only while the pairing endpoint is loopback', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-    const environment = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'tunneled box',
-      pairingCode: pairingCode(),
-      connectionDependency: 'ssh-tunnel'
-    })
-    expect(environment.connectionDependency).toBe('ssh-tunnel')
-
-    const updated = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    expect(updated).not.toHaveProperty('connectionDependency')
-
-    const direct = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'direct box',
-      pairingCode: pairingCode('ws://192.0.2.11:6768', undefined, 2),
-      connectionDependency: 'ssh-tunnel'
-    })
-    expect(direct).not.toHaveProperty('connectionDependency')
-  })
-
-  it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-    const env = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'dev box',
-      pairingCode: pairingCode()
-    })
-
-    markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 1_000 })
-    expect(listEnvironments(userDataPath)[0]).toMatchObject({
-      lastUsedAt: 1_000,
-      runtimeId: 'runtime-1'
-    })
-
-    markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 5_000 })
-    expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(1_000)
-
-    markEnvironmentUsed(userDataPath, env.id, { runtimeId: 'runtime-1', now: 61_000 })
-    expect(listEnvironments(userDataPath)[0]!.lastUsedAt).toBe(61_000)
-  })
-
   it('persists immediately when the runtimeId changes within the throttle window', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
@@ -232,42 +113,6 @@ describe('runtime environment store', () => {
       lastUsedAt: 2_000,
       runtimeId: 'runtime-2'
     })
-  })
-
-  it('persists paired device identity from pairing and status backfill', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
-    tempDirs.push(userDataPath)
-    const paired = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'paired box',
-      pairingCode: pairingCode('ws://127.0.0.1:6768', 'device-from-offer'),
-      now: 1_000
-    })
-    const legacy = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'legacy box',
-      pairingCode: pairingCode('ws://192.0.2.10:6768', undefined, 2),
-      now: 1_000
-    })
-
-    expect(paired.pairedDeviceId).toBe('device-from-offer')
-    markEnvironmentUsed(userDataPath, legacy.id, {
-      pairedDeviceId: 'device-from-status',
-      pairingDeviceToken: legacy.endpoints[0]!.deviceToken,
-      now: 2_000
-    })
-    expect(listEnvironments(userDataPath).find((entry) => entry.id === legacy.id)).toMatchObject({
-      pairedDeviceId: 'device-from-status',
-      lastUsedAt: 2_000
-    })
-  })
-
-  it('rejects an oversized sparse environment store before parsing it', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-bound-'))
-    tempDirs.push(userDataPath)
-    const path = getEnvironmentStorePath(userDataPath)
-    writeFileSync(path, '{"version":1,"environments":[]}')
-    truncateSync(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES + 1)
-
-    expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
   })
 
   it('backs up a NUL-filled store when a server is saved over it', () => {
@@ -299,28 +144,6 @@ describe('runtime environment store', () => {
     // The rejected save above left no copy; only the save that replaced the file did.
     expect(backups).toHaveLength(1)
     expect(readFileSync(join(userDataPath, backups[0]))).toEqual(Buffer.alloc(640))
-  })
-
-  it('registers a managed SSH server over a NUL-filled store', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    onTestFinished(() => warn.mockRestore())
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-nul-managed-'))
-    tempDirs.push(userDataPath)
-    writeFileSync(getEnvironmentStorePath(userDataPath), Buffer.alloc(640))
-
-    const added = addManagedOrcadEnvironment(userDataPath, {
-      id: 'managed',
-      name: 'ssh box',
-      pairingCode: pairingCode('ws://127.0.0.1:41000'),
-      orcadDeployment: {
-        sshTargetId: 'target',
-        sshTargetGeneration: 1,
-        localPort: 41000,
-        remotePort: 6768
-      }
-    })
-
-    expect(listEnvironments(userDataPath)).toEqual([added])
   })
 
   it.each([

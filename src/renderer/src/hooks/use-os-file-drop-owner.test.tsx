@@ -25,7 +25,11 @@ type DropHandler<Destination = undefined> = (
 ) => void | Promise<void>
 
 const uuid = vi.hoisted(() => ({ next: 0 }))
-vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => `uuid-${++uuid.next}` }))
+
+const mockLaunchUuid = vi.hoisted(() => () => `uuid-${++uuid.next}`)
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
+}))
 
 const getPathForFile = vi.fn((file: File) => `/dropped/${file.name}`)
 const prepareDroppedPaths = vi.fn(
@@ -549,4 +553,32 @@ describe('useOsFileDropOwner', () => {
       reported.mockRestore()
     }
   })
+})
+
+it('delivers trusted File payloads synchronously to the nearest byte consumer without path preparation', () => {
+  const received = vi.fn()
+  const outer = vi.fn()
+  function ByteOwner() {
+    const root = useRef<HTMLElement | null>(null)
+    const attach = useOsFileDropOwner(root, { kind: 'files', onFiles: received })
+    return (
+      <div ref={attach}>
+        <span data-testid="image-target" />
+      </div>
+    )
+  }
+  const view = render(
+    <Owner onDrop={outer}>
+      <ByteOwner />
+    </Owner>
+  )
+  const file = new File(['png'], 'image.png', { type: 'image/png' })
+  const target = view.getByTestId('image-target')
+  drag(target, 'drop', [file])
+  expect(received).toHaveBeenCalledExactlyOnceWith([file], { target })
+  expect(prepareDroppedPaths).not.toHaveBeenCalled()
+  expect(outer).not.toHaveBeenCalled()
+  received.mockClear()
+  drag(target, 'drop', [file], { trusted: false })
+  expect(received).not.toHaveBeenCalled()
 })

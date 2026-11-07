@@ -1,3 +1,4 @@
+import { agentSessionInteractionCommand } from '../../../src/shared/agent-session/options/agent-session-interaction-mode'
 import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session/requests/agent-session-current-requests'
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
@@ -176,37 +177,44 @@ export function useMobileStructuredSendWithOutcome(args: {
           : 'rejected'
       }
       const messageText = objective === null ? text : `/goal ${objective}`
-      const commandOutcome = await dispatchMobileStructuredCommand({
-        text: messageText,
-        hasAttachments,
-        client,
-        sessionId,
-        fence: currentFence,
-        pending: commandPending,
-        controller: { agent: agent ?? undefined, ...controller, sessionCommands },
-        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
-        holds: () => {
-          const state = stateRef.current
-          const turnId = runningStructuredAgentSessionTurnId(state)
-          const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
-          return {
-            working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
-            prompt: Boolean(
-              actionableStructuredApproval(state) || actionableStructuredQuestion(state)
-            ),
-            background: tasks.show || tasks.isMonitoring,
-            backgroundTasksRunning: tasks.isMonitoring,
-            sending: sendsOut.sending()
-          }
-        },
-        startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
-        waitsInLine: (command) =>
-          command === 'compact' &&
-          commandsWait &&
-          !pendingPromptsAllUnanswerableHere(selectAgentSessionCurrentRequests(stateRef.current)),
-        onError: onSendError,
-        timeoutMs
-      })
+      const pickedModeSkill =
+        agentSessionInteractionCommand(agent ?? '', messageText) !== null &&
+        pickedSkills?.some((skill) => messageText.trimEnd() === `/${skill.name}`)
+      const commandOutcome = pickedModeSkill
+        ? null
+        : await dispatchMobileStructuredCommand({
+            text: messageText,
+            hasAttachments,
+            client,
+            sessionId,
+            fence: currentFence,
+            pending: commandPending,
+            controller: { agent: agent ?? undefined, ...controller, sessionCommands },
+            agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+            holds: () => {
+              const state = stateRef.current
+              const turnId = runningStructuredAgentSessionTurnId(state)
+              const tasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+              return {
+                working: mobileStructuredAgentSessionWorking(state) || queueSendsNext,
+                prompt: Boolean(
+                  actionableStructuredApproval(state) || actionableStructuredQuestion(state)
+                ),
+                background: tasks.show || tasks.isMonitoring,
+                backgroundTasksRunning: tasks.isMonitoring,
+                sending: sendsOut.sending()
+              }
+            },
+            startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
+            waitsInLine: (command) =>
+              command === 'compact' &&
+              commandsWait &&
+              !pendingPromptsAllUnanswerableHere(
+                selectAgentSessionCurrentRequests(stateRef.current)
+              ),
+            onError: onSendError,
+            timeoutMs
+          })
       if (commandOutcome !== null) {
         return commandOutcome
       }

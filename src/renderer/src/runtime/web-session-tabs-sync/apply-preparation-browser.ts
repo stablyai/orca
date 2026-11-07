@@ -14,7 +14,7 @@ import {
   hostSnapshotAffirmsWorktreeContents
 } from '../host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import {
   advanceWebSessionOpenFilesIndex,
   sameOpenFiles,
@@ -23,7 +23,7 @@ import {
 import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { executionHostIdForSessionTabsOwner } from '../local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from './mirror-row-ownership'
-import { isUnlistedCreatedChat } from '@/lib/structured-agent-session-unlisted-created-chats'
+import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>

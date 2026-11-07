@@ -1,4 +1,4 @@
-import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
+import type { StructuredAgentDefinition } from '../native-chat/agent-session-wire/providers/structured-agent-definition'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
@@ -16,7 +16,7 @@ export function isAcpStructuredOptionKey(key: string): boolean {
 }
 
 export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAgentDefinition {
-  const { managedRuntime } = spec
+  const { managedRuntime, hostBackend } = spec
   return {
     agent: spec.agent,
     handleTransport: ACP_HANDLE_TRANSPORT,
@@ -24,6 +24,10 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     capabilities: {
       // ACP has no stable rewind or goal methods.
       rewind: false,
+      // Imported tips need native terminal evidence; Grok's importer does not observe it yet.
+      ...(spec.transcriptImport && ['omp', 'opencode', 'opencode2'].includes(spec.agent)
+        ? { fork: 'tip' as const }
+        : {}),
       compact: spec.compaction === true,
       compactInstructions: spec.compactionInstructions === true,
       threadGoal: false,
@@ -34,6 +38,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
       approvalEnforcement: 'orca'
     },
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
+    ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
     restingOptions: {
       acceptsKey: (key) =>
         spec.restingOptionKeys?.some((option) => option === key) ?? isAcpStructuredOptionKey(key),

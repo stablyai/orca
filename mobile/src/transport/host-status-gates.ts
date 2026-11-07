@@ -6,7 +6,7 @@ import { hostStatusSchema, type HostStatusReply } from './host-status-reply-sche
 import { normalizeHostAppVersion } from './host-app-version'
 import { recordHostAppVersion } from './host-app-version-store'
 import { recordHostDescriptorFromStatus } from './host-descriptor-recorder'
-import { startRuntimeStatusProbe } from './runtime-status-probe'
+import { readConnectionStatusProbe, startRuntimeStatusProbe } from './runtime-status-probe'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
@@ -72,6 +72,26 @@ export function hostStatusGatesFromStatus(
   }
 }
 
+// Keyed by the cached answer so a connection's proven gates keep one identity across renders.
+const gatesByProbedStatus = new WeakMap<HostStatusReply, HostStatusGates>()
+
+// Draw at once from the status this connection already proved; the gate's own read still refreshes live capabilities.
+function readProbedGates(
+  client: RpcClient | null,
+  connState: ConnectionState
+): HostStatusGates | null {
+  const status = client && connState === 'connected' ? readConnectionStatusProbe(client) : undefined
+  if (!status) {
+    return null
+  }
+  let gates = gatesByProbedStatus.get(status)
+  if (!gates) {
+    gates = { ...hostStatusGatesFromStatus(status), statusPending: false }
+    gatesByProbedStatus.set(status, gates)
+  }
+  return gates
+}
+
 export function useHostStatusGates(args: {
   hostId: string | undefined
   client: RpcClient | null
@@ -103,6 +123,10 @@ export function useHostStatusGates(args: {
     })
   }, [client, connState, hostId])
 
+  const probed = readProbedGates(client, connState)
+  if (probed) {
+    return probed
+  }
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
   const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
   // The seed stands only for the connection the shell proved it on; after a drop the page reads again.

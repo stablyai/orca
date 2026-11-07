@@ -11,7 +11,7 @@ import {
   workspaceAttachmentProviderLabel
 } from './worktree-attachment-editing'
 import { getWorkspaceAttachmentSourceLabel } from '../review/workspace-attachment-source-label'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: WorkspaceAttachment

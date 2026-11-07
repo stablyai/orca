@@ -22,16 +22,18 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (target: RuntimeClientTarget, method: string, params: unknown) => {
     if (!bridge.current.call) {
       throw new Error('transport fixture not bound')
     }
     return bridge.current.call(target, method, params)
-  },
+  }
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: bridge.workspace,
   activateAndRevealFolderWorkspace: bridge.workspace
 }))
@@ -42,7 +44,7 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 
 import { CHAT, SURVIVOR, createReopenRig } from './helpers/automation-chat-reopen-test-harness'
 import { createTabsSliceMockApi } from '../../src/renderer/src/store/slices/tabs-slice-test-harness'
-import { resetWebSessionTabsSyncTestState } from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 
 createTabsSliceMockApi()

@@ -7,8 +7,8 @@ import {
   closeProviderTimelineRigs,
   messageText
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { failedAcquisitionSettlement } from '../native-chat/agent-session-wire/structured-agent-session-failed-create-refusal'
-import { structuredAgentSessionStartFailure } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { failedAcquisitionSettlement } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-failed-create-refusal'
+import { structuredAgentSessionStartFailure } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
 import {

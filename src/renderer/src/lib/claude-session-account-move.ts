@@ -4,7 +4,7 @@ import { type AppState, useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 import {
   isAgentForegroundWrapperProcess,
@@ -27,7 +27,7 @@ import type {
   ClaudeRateLimitAccountsState
 } from '../../../shared/managed-account-types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
+import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from './agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from './claude-session-pane-holders'
 import {

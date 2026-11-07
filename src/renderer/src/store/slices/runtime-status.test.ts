@@ -3,11 +3,9 @@ import { create } from 'zustand'
 import { toast } from 'sonner'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
-import {
-  callRuntimeRpc,
-  clearRuntimeCompatibilityCacheForTests
-} from '../../runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   createRuntimeStatusSlice,
@@ -15,7 +13,7 @@ import {
 } from './runtime-status'
 import '@/lib/provider-runtime-context'
 import '../../../../shared/workspace-creator-visibility'
-import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }

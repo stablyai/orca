@@ -420,6 +420,16 @@ describe('WebSocketTransport', () => {
     ws.close()
   })
 
+  it('drops a source the guard refuses before any HTTP or upgrade handling', async () => {
+    const admit = vi.fn(() => false)
+    const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0, sourceGuard: { admit } })
+    transports.push(transport)
+    await transport.start()
+
+    await expect(connectWs(transport)).rejects.toThrow()
+    expect(admit).toHaveBeenCalledWith('127.0.0.1')
+  })
+
   it('is idempotent on double start', async () => {
     const { transport } = await createTransport()
 

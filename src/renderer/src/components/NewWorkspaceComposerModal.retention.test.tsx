@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
@@ -72,7 +72,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
         }
       : { seedOptions: {} }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async () => ({
     agents: [
       { agent: 'claude', capabilities: {} },

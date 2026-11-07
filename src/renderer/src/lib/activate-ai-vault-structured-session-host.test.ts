@@ -25,7 +25,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionWorktreeTabs: async () => undefined
 }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.navigate }))
+vi.mock('./workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.navigate
+}))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: mocks.moved }))
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -37,9 +39,12 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  callRuntimeRpc: mocks.call,
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/snapshot-apply', async (original) => ({

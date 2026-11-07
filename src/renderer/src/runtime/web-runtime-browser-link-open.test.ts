@@ -5,19 +5,23 @@ import '../store/slices/store-test-helpers'
 import { getDefaultSettings } from '../../../shared/constants'
 import '../../../shared/session-tabs-runtime-capabilities'
 import '../../../shared/protocol-version'
-import { canOfferHttpLinkGroupAction } from '../lib/http-link-in-group-availability'
+import { canOfferHttpLinkGroupAction } from '../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SnapshotModule from './web-runtime-session-snapshot'
 import { useAppStore } from '../store'
-import { openWorkspaceBrowserTabForLink } from '../lib/workspace-browser-tab-open'
-import * as workspaceBrowserTabOpen from '../lib/workspace-browser-tab-open'
-import { openHttpLink } from '../lib/http-link-routing'
+import { openWorkspaceBrowserTabForLink } from '../lib/browser/workspace/workspace-browser-tab-open'
+import * as workspaceBrowserTabOpen from '../lib/browser/workspace/workspace-browser-tab-open'
+import { openHttpLink } from '../lib/browser/navigation/http-link-routing'
 import { captureLinkOpenIntent } from '../lib/link-open-intent'
 import { beginLinkOpenRequest } from '../lib/link-open-request'
 import { makeWorktree, TEST_REPO } from '../store/slices/worktrees-slice-test-fixtures'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
-import { resetWebSessionTabsSyncTestState, ENV, WT } from './web-session-tabs-sync-test-harness'
+import {
+  resetWebSessionTabsSyncTestState,
+  ENV,
+  WT
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   G1,
   G2,

@@ -8,7 +8,7 @@ import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
-} from '@/lib/ai-vault-session-drag'
+} from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import type {
   AiVaultScope,
   AiVaultSession
@@ -62,6 +62,7 @@ export function VaultSessionRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHit,
   sourceHostLabel,
@@ -95,6 +96,7 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
   /** The host a search hit came from, set when hits span several hosts. */
@@ -110,15 +112,18 @@ export function VaultSessionRow({
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
-  const deleteBlockedReason = onRequestDelete
-    ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
-    : translate(
-        'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
-        'The transcript source is unavailable.'
+  const deleteBlockedReason = session.structuredSession
+    ? translate(
+        'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
+        "This session can't be deleted from Orca."
       )
-  const requestDelete = session.structuredSession
-    ? undefined
-    : (): void => onRequestDelete?.(session)
+    : onRequestDelete
+      ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
+      : translate(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
+  const requestDelete = (): void => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
@@ -217,6 +222,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onRequestDelete={requestDelete}
           actionsHidden={Boolean(onPick)}
@@ -296,6 +302,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onDelete={requestDelete}
         />

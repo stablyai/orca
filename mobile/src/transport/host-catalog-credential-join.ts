@@ -9,35 +9,32 @@ export async function joinHostCatalogCredentials(args: {
   readToken: (hostId: string) => Promise<string | null>
   getRevision: () => number
 }): Promise<HostListSnapshot> {
-  const catalog: HostCatalogEntry[] = []
-  const profiles: HostListSnapshot['profiles'] = []
-  for (const stored of args.storedHosts) {
-    let token = args.tokenCache.get(stored.id)
-    let credentialStatus: HostCatalogEntry['credentialStatus'] = 'ready'
-    if (!token) {
-      const readRevision = args.getRevision()
-      let fetched: string | null
-      try {
-        fetched = await args.readToken(stored.id)
-      } catch {
-        credentialStatus = 'temporarily-unavailable'
-        fetched = null
+  const catalog = await Promise.all(
+    args.storedHosts.map(async (stored): Promise<HostCatalogEntry> => {
+      let token = args.tokenCache.get(stored.id)
+      let credentialStatus: HostCatalogEntry['credentialStatus'] = 'ready'
+      if (!token) {
+        const readRevision = args.getRevision()
+        let fetched: string | null
+        try {
+          fetched = await args.readToken(stored.id)
+        } catch {
+          credentialStatus = 'temporarily-unavailable'
+          fetched = null
+        }
+        if (!fetched && credentialStatus === 'ready') {
+          credentialStatus = 'missing'
+        }
+        token = fetched ?? undefined
+        if (token && readRevision === args.getRevision()) {
+          args.tokenCache.set(stored.id, token)
+        }
       }
-      if (!fetched && credentialStatus === 'ready') {
-        credentialStatus = 'missing'
-      }
-      token = fetched ?? undefined
-      if (token && readRevision === args.getRevision()) {
-        args.tokenCache.set(stored.id, token)
-      }
-    }
-    const relay = args.relays.get(stored.id)
-    const base = { ...stored, ...(relay ? { relay } : {}) }
-    const profile = token ? { ...base, deviceToken: token } : null
-    catalog.push({ ...base, credentialStatus, profile })
-    if (profile) {
-      profiles.push(profile)
-    }
-  }
-  return { catalog, profiles }
+      const relay = args.relays.get(stored.id)
+      const base = { ...stored, ...(relay ? { relay } : {}) }
+      const profile = token ? { ...base, deviceToken: token } : null
+      return { ...base, credentialStatus, profile }
+    })
+  )
+  return { catalog, profiles: catalog.flatMap(({ profile }) => (profile ? [profile] : [])) }
 }

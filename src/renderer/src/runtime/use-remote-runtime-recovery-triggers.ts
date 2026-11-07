@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
-import {
-  retryAllRemoteRuntimePtyRecoveriesNow,
-  reviveRemoteRuntimePtyRecoveriesForEnvironment
-} from '@/components/terminal-pane/remote-runtime-pty-recovery-state'
+import { retryAllRemoteRuntimePtyRecoveriesNow } from '@/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-recovery-state'
+import { reviveRemoteRuntimePtyRecoveriesForEnvironment } from '@/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-control-ready-revivers'
 
 export function useRemoteRuntimeRecoveryTriggers(): void {
   useEffect(() => {

@@ -7,6 +7,10 @@ import {
 } from '../../../../../shared/keybindings/formatting'
 import { getEffectiveKeybindingsForDefinition } from '../../../../../shared/keybindings/effective'
 import { getKeybindingDefinition } from '../../../../../shared/keybindings/definitions'
+import {
+  getKeybindingResetBindings,
+  resolveKeybindingOverrides
+} from '../../../../../shared/keybindings/profile-defaults'
 import { keybindingFromInputForAction } from '../../../../../shared/keybindings/input'
 import { normalizeKeybindingListForAction } from '../../../../../shared/keybindings/normalization'
 import type {
@@ -185,15 +189,28 @@ export function ShortcutsPane(): React.JSX.Element {
       return false
     }
     const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
-    const next =
-      (sameBindings(normalizedResult, defaults) ||
-        (normalizedResult.length === 0 && defaults.length === 0)) &&
+    const explicitOverrides = keybindingSnapshot?.defaultOverrides
+      ? { ...keybindingSnapshot.commonOverrides, ...keybindingSnapshot.platformOverrides[platform] }
+      : keybindings
+    const shouldReset =
+      sameBindings(normalizedResult, defaults) &&
       !hasCommonBindingOverride(keybindingSnapshot, actionId)
-        ? removeBindingOverride(keybindings, actionId)
-        : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
-      ignoredActionIds: ignoredConflictActionIds
-    }).find((conflict) => conflict.actionIds.includes(actionId))
+    const nextBindings = shouldReset
+      ? getKeybindingResetBindings(actionId, platform, keybindingSnapshot?.commonOverrides ?? {})
+      : normalizedResult
+    const next =
+      nextBindings === null
+        ? removeBindingOverride(explicitOverrides, actionId)
+        : { ...explicitOverrides, [actionId]: nextBindings }
+    const blockingConflict = findKeybindingConflictsForDefinitions(
+      definitions,
+      platform,
+      resolveKeybindingOverrides(platform, next, keybindingSnapshot?.defaultOverrides ?? {}),
+      {
+        ignoredActionIds: ignoredConflictActionIds,
+        includeMainProcessInterception: true
+      }
+    ).find((conflict) => conflict.actionIds.includes(actionId))
     if (blockingConflict) {
       const labels = blockingConflict.actionIds
         .filter((id) => id !== actionId)
@@ -212,10 +229,7 @@ export function ShortcutsPane(): React.JSX.Element {
 
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
     try {
-      const matchesDefault =
-        sameBindings(normalizedResult, defaults) ||
-        (normalizedResult.length === 0 && defaults.length === 0)
-      await (matchesDefault && !hasCommonBindingOverride(keybindingSnapshot, actionId)
+      await (shouldReset
         ? resetKeybindingOverride(actionId)
         : setKeybindingOverride(actionId, normalizedResult))
       return true
@@ -258,19 +272,7 @@ export function ShortcutsPane(): React.JSX.Element {
   }
 
   const resetBinding = async (actionId: KeybindingActionId): Promise<void> => {
-    setErrors((prev) => ({ ...prev, [actionId]: undefined }))
-    try {
-      await (hasCommonBindingOverride(keybindingSnapshot, actionId)
-        ? setKeybindingOverride(actionId, effectiveBindingsForAction(actionId, {}))
-        : resetKeybindingOverride(actionId))
-    } catch (error) {
-      if (mountedRef.current) {
-        setErrors((prev) => ({
-          ...prev,
-          [actionId]: error instanceof Error ? error.message : 'Failed to reset shortcut.'
-        }))
-      }
-    }
+    await saveBindings(actionId, effectiveBindingsForAction(actionId, {}))
   }
 
   const disableBinding = async (actionId: KeybindingActionId): Promise<void> => {

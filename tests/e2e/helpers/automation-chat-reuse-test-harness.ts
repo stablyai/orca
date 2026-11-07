@@ -10,9 +10,10 @@ import { expect, vi, type Mock } from 'vitest'
 import { gitExecFileAsync } from '../../../src/main/git/runner'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createRuntimeAutomationService } from '../../../src/main/automations/runtime-automation-service'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
+import { runNowSettled } from '../../../src/main/automations/automation-run-now-settled.test-fixture'
 import type { AutomationChatLaunchRequest } from '../../../src/main/automations/automation-chat-agent-launch'
 import { automationRunOperationId } from '../../../src/main/automations/automation-run-operation'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
@@ -21,11 +22,10 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
   HOST_TEST_LOCATION
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import {
-  createQueuedMessageTestRig,
-  eventually
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createQueuedMessageTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+
+import { eventually } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   createStore,
   closeTestStores,
@@ -116,14 +116,19 @@ export async function exerciseBusyChatReuse(
       openedAgentSessionRecordStore: () => rig.store,
       setAutomationService: vi.fn(),
       notifyAutomationsChanged: vi.fn(),
+      canOpenRunTerminals: () => true,
       showManagedWorktree: async () => {
         throw new Error('optional display unavailable')
       }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime facade is scripted; the real host/store and service/send/receipt/queue/observer/writer execute.
     const runtime = runtimeFacade as unknown as OrcaRuntimeService
-    service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
-    const dispatched = await service.runNow(saved.id)
+    service = createRuntimeAutomationService({
+      store: disk,
+      runtime,
+      allowRemoteHostScheduling: true
+    })
+    const dispatched = await runNowSettled(service, disk, saved.id)
     expect(dispatched).toMatchObject({
       status: 'dispatched',
       sessionKind: 'chat',
@@ -149,7 +154,11 @@ export async function exerciseBusyChatReuse(
       })
       await rig.restartHostProcess()
       controls.setHost(rig.host)
-      service = createRuntimeAutomationService({ store: disk, runtime, headless: true })
+      service = createRuntimeAutomationService({
+        store: disk,
+        runtime,
+        allowRemoteHostScheduling: true
+      })
       service.start()
       await eventually(() =>
         expect(disk.listAutomationRuns(saved.id).find((r) => r.id === current.id)).toMatchObject({

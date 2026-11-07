@@ -10,12 +10,12 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
-import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from '@/lib/worktree-activation-created-agent.test-fixture'
+} from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { registerNativeChatPane } from '@/components/native-chat/native-chat-composer-mount'
@@ -29,7 +29,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     method === 'agentSession.createSupport' ? host.createSupport() : new Promise(() => undefined)
   )
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -85,6 +85,7 @@ export type VirtualizedWorktreeViewportProps = {
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
   // Full canonical repo-id order; must include hidden repos or a reorder silently drops them.
   allRepoIds: string[]
   onReorderHostSections: (orderedHostIds: ExecutionHostId[]) => void

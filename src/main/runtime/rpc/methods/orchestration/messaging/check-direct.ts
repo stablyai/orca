@@ -1,12 +1,13 @@
-import type { MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type { MessageType } from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { formatMessageBanner } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
 import { exposeMessages } from './mailbox-message-receipt'
 import { staleDelivery } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
+import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
-import type { CheckParams } from '../schemas'
+import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { z } from 'zod'
 
 type CheckParamsInput = z.infer<typeof CheckParams>

@@ -1,3 +1,4 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
@@ -33,7 +34,7 @@ import { usePRFilesDiffViewPersistence } from './view-restore'
 import { buildInlineReviewComments } from './inline-comments'
 import { usePRFileSectionHeights } from './section-heights'
 import { usePRFileActiveSection } from './active-section'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRFilesCombinedDiffViewer({
   files,
@@ -369,6 +370,15 @@ export function PRFilesCombinedDiffViewer({
                       'Open files on GitHub'
                     )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
+                    imageUploadAddress={() =>
+                      githubCommentImageUploadAddress({
+                        repoPath,
+                        repoId,
+                        sourceContext,
+                        type: 'pr',
+                        prRepo
+                      })
+                    }
                     onAddLineComment={handleAddLineComment}
                     addLineCommentLabel={translate(
                       'auto.components.GitHubItemDialog.bf43425540',

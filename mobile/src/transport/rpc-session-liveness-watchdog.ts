@@ -22,6 +22,8 @@ type WatchdogOptions = {
   sendProbe: (identity: RpcSessionIdentity, id: string) => boolean
   terminate: (identity: RpcSessionIdentity) => void
   onTimeout?: (evidence: LivenessTimeoutEvidence) => void
+  // A probe reply can queue behind a large reply or stream backlog, so tolerant misses don't count while the link is busy.
+  isLinkBusy?: (framesArrivedDuringProbe: boolean, silentMs: number) => boolean
   idleProbeMs?: number | null
   probeTimeoutMs?: number
   missedProbeLimit?: number
@@ -94,9 +96,7 @@ export class RpcSessionLivenessWatchdog {
     if (this.identity !== identity || this.probeId !== id) {
       return
     }
-    this.missedProbes = 0
-    this.probeId = null
-    this.armIdle(identity)
+    this.settleProbe(identity)
   }
 
   // A decisive probe ends the session on its first miss when suspension may have killed the link.
@@ -177,6 +177,12 @@ export class RpcSessionLivenessWatchdog {
     this.lastDecisiveProbeAt = null
   }
 
+  private settleProbe(identity: RpcSessionIdentity): void {
+    this.missedProbes = 0
+    this.probeId = null
+    this.armIdle(identity)
+  }
+
   private armIdle(identity: RpcSessionIdentity, delayMs = this.idleProbeMs): void {
     this.clearActiveTimer()
     if (delayMs === null) {
@@ -238,6 +244,13 @@ export class RpcSessionLivenessWatchdog {
         timeoutMs
       })
       this.startProbe(identity, decisiveTimeoutMs)
+      return
+    }
+    if (
+      decisiveTimeoutMs === null &&
+      this.options.isLinkBusy?.(this.lastInboundAt > sentAt, this.now() - this.lastInboundAt)
+    ) {
+      this.settleProbe(identity)
       return
     }
     this.missedProbes += 1

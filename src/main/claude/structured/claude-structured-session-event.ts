@@ -1,5 +1,5 @@
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import type * as SessionAdapter from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type * as SessionAdapter from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ClaudePendingPrompt } from '../claude-prompt-registry'
 import type { ClaudeStartedSend } from './claude-structured-session-state'
 

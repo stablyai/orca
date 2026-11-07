@@ -9,7 +9,7 @@ import { DeviceRegistry } from './pairing/device-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
-import { visibleSnapshot } from '../methods/session-tabs-snapshot.test-fixture'
+import { visibleSnapshot } from '../methods/session-tabs/session-tabs-snapshot.test-fixture'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,

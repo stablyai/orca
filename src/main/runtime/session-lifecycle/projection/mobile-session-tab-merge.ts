@@ -101,7 +101,8 @@ export function mergeMobileSessionTabGroups(
   worktreeId: string,
   groups: readonly RuntimeMobileSessionTabGroup[],
   tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  activeTab: RuntimeMobileSessionTerminalTab | null
+  activeTab: RuntimeMobileSessionTerminalTab | null,
+  placementGroups?: readonly RuntimeMobileSessionTabGroup[]
 ): RuntimeMobileSessionTabGroup[] {
   const parentTabOrder = collectHeadlessParentTabOrder(
     tabs.filter((tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal')
@@ -120,11 +121,24 @@ export function mergeMobileSessionTabGroups(
             tabOrder: []
           }
         ]
-  // Preserve existing group ownership; assign only new tabs to the active group.
+  // Current membership wins; admitted placement fills omissions without importing navigation.
   const ownerGroupId = new Map<string, string>()
   for (const group of nextGroups) {
     for (const tabId of group.tabOrder) {
       ownerGroupId.set(tabId, group.id)
+    }
+  }
+  if (placementGroups && placementGroups !== groups) {
+    const currentGroupIds = new Set(nextGroups.map((group) => group.id))
+    for (const group of placementGroups) {
+      if (!currentGroupIds.has(group.id)) {
+        continue
+      }
+      for (const tabId of group.tabOrder) {
+        if (!ownerGroupId.has(tabId)) {
+          ownerGroupId.set(tabId, group.id)
+        }
+      }
     }
   }
   // Publishers place chats/editors/browsers; preserve listed chat positions before their rows restore.
@@ -167,9 +181,12 @@ export function mergeMobileSessionTabGroups(
         ...group,
         tabOrder,
         activeTabId:
-          activeParentId && tabOrder.includes(activeParentId)
-            ? activeParentId
-            : (keptActive ?? tabOrder[0] ?? null)
+          groups.length > 0 && group.activeTabId === null
+            ? null
+            : (keptActive ??
+              (activeParentId && tabOrder.includes(activeParentId) ? activeParentId : null) ??
+              (group.activeTabId ? tabOrder[0] : null) ??
+              null)
       }
     })
     .filter((group) => group.tabOrder.length > 0)
@@ -186,20 +203,14 @@ export function keepSnapshotChatTabs(
   if (chatTabs.length === 0) {
     return [...rebuilt]
   }
-  // Snapshot-selected chat outranks a rebuilt terminal's active flag.
-  const activeChatId = chatTabs.find((tab) => tab.id === prior?.activeTabId)?.id ?? null
-  return [
-    ...rebuilt.map((tab) => (activeChatId && tab.isActive ? { ...tab, isActive: false } : tab)),
-    ...chatTabs.map((tab) => ({ ...tab, isActive: tab.id === activeChatId }))
-  ]
+  return mergeMobileSessionSnapshotTabs(rebuilt, chatTabs)
 }
 
 /** Restore chats to their prior group/preceding-tab position, falling back to the first group. */
 export function appendChatTabOrder(
   groups: readonly RuntimeMobileSessionTabGroup[],
   priorGroups: readonly RuntimeMobileSessionTabGroup[] | undefined,
-  tabs: readonly RuntimeMobileSessionSnapshotTab[],
-  activeTabId: string | null = tabs.find((tab) => tab.isActive)?.id ?? null
+  tabs: readonly RuntimeMobileSessionSnapshotTab[]
 ): RuntimeMobileSessionTabGroup[] {
   const chatTabIds = tabs.filter((tab) => tab.type === 'agent-session').map((tab) => tab.id)
   if (chatTabIds.length === 0) {
@@ -218,9 +229,6 @@ export function appendChatTabOrder(
     if (!target.tabOrder.includes(tabId)) {
       const at = chatInsertIndex(target.tabOrder, priorGroup?.tabOrder ?? [], tabId)
       target.tabOrder.splice(at, 0, tabId)
-    }
-    if (tabId === activeTabId) {
-      target.activeTabId = tabId
     }
   }
   return next

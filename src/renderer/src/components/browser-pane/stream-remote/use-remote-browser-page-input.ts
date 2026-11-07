@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'

@@ -68,6 +68,19 @@ export function unscopedAutomationListRows(
   }))
 }
 
+/** A project moved to its host's Orca server keeps its id, so a leftover still names it. */
+export function automationProjectName(
+  automation: Automation,
+  repo: Repo | null | undefined,
+  repoMap: ReadonlyMap<string, Repo>,
+  leftover: boolean
+): string | undefined {
+  return (
+    repo?.displayName ??
+    (leftover ? repoMap.get(getAutomationRunRepoId(automation))?.displayName : undefined)
+  )
+}
+
 export function automationRepoForRow(
   row: AutomationListRow,
   repos: readonly Repo[]

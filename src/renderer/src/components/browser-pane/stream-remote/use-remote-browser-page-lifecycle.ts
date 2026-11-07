@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
@@ -22,7 +22,7 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
-import { subscribeRuntimeEnvironment } from '@/runtime/runtime-environment-pairing-refresh'
+import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
