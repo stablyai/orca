@@ -22,6 +22,8 @@ export function buildAgentActivitySubjects(state: AppState): AgentActivitySubjec
   ) {
     return []
   }
+  const tabsByWorktree = state.tabsByWorktree ?? {}
+  const unifiedTabsByWorktree = state.unifiedTabsByWorktree
   const { events, paneEntryByPaneKey } = buildActivityEvents(
     {
       chatNames: names,
@@ -29,8 +31,8 @@ export function buildAgentActivitySubjects(state: AppState): AgentActivitySubjec
       retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
       migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
       runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
-      tabsByWorktree: state.tabsByWorktree ?? {},
-      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
+      tabsByWorktree,
+      unifiedTabsByWorktree,
       worktreeMap: getWorktreeMapFromState(state),
       repoMap: getRepoMapFromState(state),
       repos: state.repos,
