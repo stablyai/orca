@@ -14,7 +14,7 @@ import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
@@ -103,6 +103,7 @@ export function EditorContent({
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
       ? activeFile.id
@@ -142,10 +143,7 @@ export function EditorContent({
     if (!checkRunDetails) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.editor.EditorContent.6c4f1a8d2e',
-            'Check details are unavailable.'
-          )}
+          {t('auto.components.editor.EditorContent.6c4f1a8d2e', 'Check details are unavailable.')}
         </div>
       )
     }
@@ -203,7 +201,7 @@ export function EditorContent({
     if (!fileContent) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          {translate('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
+          {t('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
         </div>
       )
     }
@@ -221,7 +219,7 @@ export function EditorContent({
     if (fileContent.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.EditorContent.8608ce4cb1',
             'Markdown preview is unavailable for binary files.'
           )}

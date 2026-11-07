@@ -9,7 +9,7 @@ import {
 import { formatGitHistoryTimestamp } from '@/components/right-sidebar/source-control/sync/git-history-format'
 import type { useGitHistoryCommitActions } from '@/components/right-sidebar/source-control/sync/use-git-history-commit-actions'
 import type { GitHistoryItem } from '../../../../../shared/git/history/git-history-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function GitGraphDetails({
   item,
@@ -20,6 +20,7 @@ export function GitGraphDetails({
   actions: ReturnType<typeof useGitHistoryCommitActions>
   onParent: (id: string) => void
 }) {
+  const t = useTranslate()
   const [files, setFiles] = useState<GitHistoryCommitFilesState>({ status: 'loading' })
   const loadFiles = actions.loadCommitFiles
   useEffect(() => {
@@ -62,20 +63,18 @@ export function GitGraphDetails({
               <Button
                 size="icon-xs"
                 variant="ghost"
-                aria-label={translate('gitGraph.copyHash', 'Copy commit hash')}
+                aria-label={t('gitGraph.copyHash', 'Copy commit hash')}
                 onClick={() => actions.handleCommitAction('copy-hash', item)}
               >
                 <Copy className="size-3.5" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{translate('gitGraph.copyHash', 'Copy commit hash')}</TooltipContent>
+            <TooltipContent>{t('gitGraph.copyHash', 'Copy commit hash')}</TooltipContent>
           </Tooltip>
         </div>
         {!!item.parentIds.length && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-muted-foreground">
-              {translate('gitGraph.parents', 'Parents')}
-            </span>
+            <span className="text-muted-foreground">{t('gitGraph.parents', 'Parents')}</span>
             {item.parentIds.map((id) => (
               <Button key={id} variant="ghost" size="xs" onClick={() => onParent(id)}>
                 <span className="font-mono text-2xs">{id.slice(0, 7)}</span>
@@ -85,7 +84,7 @@ export function GitGraphDetails({
         )}
       </div>
       <div className="border-t border-border px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {translate('gitGraph.files', 'Files')}
+        {t('gitGraph.files', 'Files')}
       </div>
       <GitHistoryCommitFiles
         state={files}
