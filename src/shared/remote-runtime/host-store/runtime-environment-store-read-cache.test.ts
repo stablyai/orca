@@ -18,7 +18,8 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-describe('secure file content cache', () => {
+// Windows never reuses reads (ACLs are invisible to the snapshot), so there is no cache to exercise.
+describe.skipIf(process.platform === 'win32')('secure file content cache', () => {
   it('computes from the bytes it keys on and reuses them only while they are unchanged', () => {
     const cache = createSecureFileContentCache<{ texts: (string | null)[] }>()
     const compute = vi.fn((texts: (string | null)[]) => ({ texts }))

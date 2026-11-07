@@ -51,8 +51,9 @@ function samePresence(a: Snapshot, b: Snapshot): boolean {
  * set are visibly in place (POSIX), so any drift or earlier failure is repaired by the next uncached read.
  */
 function isProtected(snapshot: Snapshot): boolean {
+  // Windows protection lives in ACLs the snapshot cannot see; never claim it is in place.
   if (process.platform === 'win32') {
-    return true
+    return false
   }
   return (
     (snapshot.directoryMode === null ||
@@ -88,14 +89,6 @@ export function createSecureFileContentCache<T>(): SecureFileContentCache<T> {
       }
       const cached = cache.get(key)
       if (cached && sameBytes(cached.snapshot, current) && isProtected(current)) {
-        if (process.platform === 'win32') {
-          // ACLs are invisible in the snapshot; keep the readers' verify-and-retry (with its own backoff).
-          for (const [index, file] of files.entries()) {
-            if (current.files[index]) {
-              hardenExistingSecureFile(file.path)
-            }
-          }
-        }
         // Callers own their copy; one mutating a result must not leak into the next read.
         return structuredClone(cached.value)
       }

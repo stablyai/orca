@@ -96,7 +96,8 @@ export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): MergedEnvironmentStore {
-  if (options.requireStoreFile || options.recoverBlankStore) {
+  // Windows hits must re-verify ACLs anyway, which costs as much as the read it would skip (measured).
+  if (options.requireStoreFile || options.recoverBlankStore || process.platform === 'win32') {
     return readEnvironmentStoreUncached(userDataPath, options)
   }
   const storePath = getEnvironmentStorePath(userDataPath)
