@@ -884,13 +884,15 @@
         "keyword": {
           "windsurf": "windsurf",
           "devin": "devin",
-          "devinDesktop": "devin desktop"
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
         }
       }
     },
     "openInApp": {
       "preset": {
-        "devinDesktop": "Devin Desktop"
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
       }
     },
     "mcp": {
