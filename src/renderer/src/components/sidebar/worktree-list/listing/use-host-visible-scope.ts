@@ -7,12 +7,12 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
-import { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-creator-visibility'
+import type { filterFolderWorkspacesFromOtherDevices } from '../../../../../../shared/workspace-creator-visibility'
 import {
-  filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
+import { filterFolderWorkspacesForSidebar } from '../../../../../../shared/sidebar-list/folder-workspace-project-visibility'
 
 // Apply host/device scope consistently to repos, project groups and folder workspaces.
 export function useSidebarHostVisibleScope(args: {
@@ -24,8 +24,7 @@ export function useSidebarHostVisibleScope(args: {
   pairedDeviceIdsByEnvironment: Parameters<typeof filterFolderWorkspacesFromOtherDevices>[1]
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
-  const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
-    filterState
+  const { visibleWorkspaceHostIds, workspaceHostScope } = filterState
   const visibleHostIdSet = useMemo(
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
@@ -44,28 +43,27 @@ export function useSidebarHostVisibleScope(args: {
     () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     [defaultHostId, projectGroups, visibleHostIdSet]
   )
-  const visibleFolderWorkspacesForRows = useMemo(() => {
-    const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
+  const visibleFolderWorkspacesForRows = useMemo(
+    () =>
+      filterFolderWorkspacesForSidebar(
+        folderWorkspaces,
+        projectGroups,
+        visibleHostIdSet,
+        defaultHostId,
+        args.pairedDeviceIdsByEnvironment,
+        repos,
+        filterState
+      ),
+    [
+      args.pairedDeviceIdsByEnvironment,
+      defaultHostId,
       folderWorkspaces,
+      filterState,
       projectGroups,
-      visibleHostIdSet,
-      defaultHostId
-    )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      args.pairedDeviceIdsByEnvironment
-    )
-  }, [
-    args.pairedDeviceIdsByEnvironment,
-    defaultHostId,
-    folderWorkspaces,
-    hideWorkspacesFromOtherDevices,
-    projectGroups,
-    visibleHostIdSet
-  ])
+      repos,
+      visibleHostIdSet
+    ]
+  )
 
   return { visibleReposForRows, visibleProjectGroupsForRows, visibleFolderWorkspacesForRows }
 }
