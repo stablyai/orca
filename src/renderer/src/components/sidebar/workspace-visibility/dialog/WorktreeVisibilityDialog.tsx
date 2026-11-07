@@ -14,7 +14,7 @@ import {
   type NewExternalWorktreesInboxActionState
 } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
 import WorktreeVisibilityHelpPopover from './WorktreeVisibilityHelpPopover'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
 import {
   resolveWorktreeVisibilityHostTarget,
   useWorktreeVisibilityHostActions

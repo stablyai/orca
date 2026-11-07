@@ -10,7 +10,7 @@ import type {
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
