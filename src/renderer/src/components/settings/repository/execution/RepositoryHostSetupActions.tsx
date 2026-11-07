@@ -6,7 +6,7 @@ import type {
   ProjectHostSetupCreateResult,
   ProjectHostSetupResult
 } from '../../../../../../shared/project-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { HostCombobox } from '../../../host-picker/HostCombobox'
@@ -57,6 +57,7 @@ export function RepositoryHostSetupActions({
   createProjectHostSetup,
   onSetupReady
 }: RepositoryHostSetupActionsProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<SetupStep>('choose')
   const [selectedSetupHostId, setSelectedSetupHostId] = useState<ExecutionHostId | null>(null)
@@ -162,13 +163,10 @@ export function RepositoryHostSetupActions({
       <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-3">
         <div className="min-w-0 space-y-1">
           <Label className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.RepositoryPane.hostAvailability',
-              'Host availability'
-            )}
+            {t('auto.components.settings.RepositoryPane.hostAvailability', 'Host availability')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryPane.hostAvailabilityHelp',
               'Add this same project on another connected host.'
             )}
@@ -176,10 +174,7 @@ export function RepositoryHostSetupActions({
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => setIsOpen(true)}>
           <Plus className="size-4" />
-          {translate(
-            'auto.components.settings.RepositoryPane.addToAnotherHost',
-            'Add to another host'
-          )}
+          {t('auto.components.settings.RepositoryPane.addToAnotherHost', 'Add to another host')}
         </Button>
       </div>
     )
@@ -190,13 +185,10 @@ export function RepositoryHostSetupActions({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <Label className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.RepositoryPane.addProjectHost',
-              'Add project to host'
-            )}
+            {t('auto.components.settings.RepositoryPane.addProjectHost', 'Add project to host')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryPane.addProjectHostHelp',
               'Choose where this project should also be available.'
             )}
@@ -206,7 +198,7 @@ export function RepositoryHostSetupActions({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={translate('auto.components.settings.RepositoryPane.closeHostSetup', 'Close')}
+          aria-label={t('auto.components.settings.RepositoryPane.closeHostSetup', 'Close')}
           onClick={resetFlow}
         >
           <X className="size-4" />
@@ -215,7 +207,7 @@ export function RepositoryHostSetupActions({
 
       <div className="space-y-2">
         <Label className="text-xs font-medium text-muted-foreground">
-          {translate('auto.components.settings.RepositoryPane.setupHostLabel', 'Host')}
+          {t('auto.components.settings.RepositoryPane.setupHostLabel', 'Host')}
         </Label>
         <HostCombobox
           value={setupTargetHostId ?? ''}

@@ -4,7 +4,7 @@ import type { OrcadDeltaMovePreview } from '../../../../../../shared/orcad-manag
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -34,6 +34,7 @@ export function SshHostDeltaMoveDialog({
   onClose,
   onFinished
 }: SshHostDeltaMoveDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const [preview, setPreview] = useState<OrcadDeltaMovePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -93,10 +94,10 @@ export function SshHostDeltaMoveDialog({
       <DialogContent showCloseButton={!running}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.deltaMove.title', 'Move the new projects')}
+            {t('auto.components.settings.deltaMove.title', 'Move the new projects')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.deltaMove.description',
               'An older version of Orca changed this host after its projects moved to Orca on the host. This adds what it created to the server; it never merges over what the server already has.'
             )}
@@ -106,34 +107,31 @@ export function SshHostDeltaMoveDialog({
           <div className="space-y-3 text-sm">
             <section className="space-y-1">
               <p className="font-medium">
-                {translate('auto.components.settings.deltaMove.added', 'Added to the server')}
+                {t('auto.components.settings.deltaMove.added', 'Added to the server')}
               </p>
               {preview.added.length > 0 ? (
                 <ul className="list-disc pl-5 text-muted-foreground">
                   {preview.added.map((row) => (
-                    <li key={`${row.kind}:${row.id}`}>{deltaMoveRowLabel(row)}</li>
+                    <li key={`${row.kind}:${row.id}`}>{deltaMoveRowLabel(row, t)}</li>
                   ))}
                 </ul>
               ) : (
                 <p className="text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.deltaMove.nothingNew',
-                    'Nothing new to add.'
-                  )}
+                  {t('auto.components.settings.deltaMove.nothingNew', 'Nothing new to add.')}
                 </p>
               )}
             </section>
             {unreflected.length > 0 ? (
               <section className="space-y-1">
                 <p className="font-medium">
-                  {translate(
+                  {t(
                     'auto.components.settings.deltaMove.notReflected',
                     'Changed or removed on the older version; the server keeps its own copy'
                   )}
                 </p>
                 <ul className="list-disc pl-5 text-muted-foreground">
                   {unreflected.map((row) => (
-                    <li key={`${row.kind}:${row.id}`}>{deltaMoveRowLabel(row)}</li>
+                    <li key={`${row.kind}:${row.id}`}>{deltaMoveRowLabel(row, t)}</li>
                   ))}
                 </ul>
               </section>
@@ -150,14 +148,14 @@ export function SshHostDeltaMoveDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={running}>
-            {translate('auto.components.settings.deltaMove.cancel', 'Cancel')}
+            {t('auto.components.settings.deltaMove.cancel', 'Cancel')}
           </Button>
           <Button
             onClick={() => void move()}
             disabled={running || !preview || preview.added.length === 0 || blocked}
           >
             {running ? <Loader2 className="animate-spin" /> : null}
-            {translate('auto.components.settings.deltaMove.confirm', 'Move the new projects')}
+            {t('auto.components.settings.deltaMove.confirm', 'Move the new projects')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -33,12 +33,16 @@ function cachedFormatter<T>(
   return formatter
 }
 
-export function uiDateTimeFormat(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+export function uiDateTimeFormat(
+  options: Intl.DateTimeFormatOptions,
+  intlLocale?: string
+): Intl.DateTimeFormat {
   return cachedFormatter(
     dateTimeFormats,
     options,
     Intl.DateTimeFormat,
-    (locale) => new Intl.DateTimeFormat(locale, options)
+    (locale) => new Intl.DateTimeFormat(locale, options),
+    intlLocale
   )
 }
 
