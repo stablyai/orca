@@ -131,7 +131,11 @@ it('keeps disk blockers authoritative and offers the existing branch after a col
   if (!recovery || typeof recovery !== 'object' || !('onClick' in recovery)) {
     throw new Error('Collision toast has no recovery action')
   }
-  await act(async () => Reflect.apply(recovery.onClick, undefined, []))
+  const toastHost = document.createElement('div')
+  const toastRoot = createRoot(toastHost)
+  await act(async () => toastRoot.render(<button onClick={recovery.onClick}>Recover</button>))
+  await act(async () => toastHost.querySelector('button')?.click())
+  await act(async () => toastRoot.unmount())
   expect(switchRuntimeGitBranch).toHaveBeenLastCalledWith(
     props.context,
     { kind: 'local', name: 'hidden' },
