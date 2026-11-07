@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { CloudOff } from 'lucide-react-native'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
@@ -30,22 +30,23 @@ export function useHostOfflineBanner({
 }): { offline: boolean; asOf: number | null; retry: (() => void) | null } | null {
   const state = useCalmConnectionState(connState, lastConnectedAt)
   const show = hasData && state !== 'connected' && state !== 'auth-failed'
-  // Live data stopped at the last reply before the drop; held so reconnect attempts don't move it.
-  const [asOf, setAsOf] = useState<number | null>(null)
-  if (show && asOf === null) {
-    const lastLive = client?.getLastInboundAt?.() ?? lastConnectedAt
-    if (lastLive !== null) {
-      setAsOf(lastLive)
-    }
-  } else if (!show && asOf !== null) {
-    setAsOf(null)
-  }
+  // Live data stopped when the connection dropped; a screen that mounts offline shows the last connect.
+  const [droppedAt, setDroppedAt] = useState<number | null>(() =>
+    connState === 'connected' ? null : lastConnectedAt
+  )
+  useEffect(
+    () =>
+      client?.onStateChange((next) =>
+        setDroppedAt((held) => (next === 'connected' ? null : (held ?? Date.now())))
+      ),
+    [client]
+  )
   if (!show) {
     return null
   }
   // A nudge redials now instead of waiting out the reconnect backoff.
   const retry = forceReconnect ?? (client ? () => client.notifyForeground('focus') : null)
-  return { offline: outage || state === 'disconnected', asOf, retry }
+  return { offline: outage || state === 'disconnected', asOf: droppedAt, retry }
 }
 
 /**
