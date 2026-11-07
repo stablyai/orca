@@ -29,6 +29,7 @@ import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
 import { useWindowWidth } from './use-window-width'
+import { useRightSidebarReturnFocus } from './use-right-sidebar-return-focus'
 import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
@@ -87,6 +88,7 @@ function RightSidebarInner(): React.JSX.Element {
     setWidth: setRightSidebarWidth
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
+  useRightSidebarReturnFocus(rightSidebarOpen, containerRef)
 
   const panelContent = rightSidebarOpen ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
@@ -126,6 +128,8 @@ function RightSidebarInner(): React.JSX.Element {
         <button
           type="button"
           className="sidebar-toggle mr-1"
+          data-right-sidebar-toggle
+          onMouseDown={(event) => event.preventDefault()}
           onClick={toggleRightSidebar}
           aria-label={translate(
             'auto.components.right.sidebar.index.e8e2e4ce74',
