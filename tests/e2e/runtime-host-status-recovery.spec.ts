@@ -4,6 +4,7 @@ import {
   decodePairingOffer,
   encodePairingOffer
 } from '../../src/shared/remote-runtime/pairing/pairing'
+import type { PairingCreateOfferResult } from '../../src/shared/remote-runtime/pairing/pairing-create-offer-contract'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -40,16 +41,23 @@ async function interruptibleHost(offer: RuntimeDesktopPairingOffer) {
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address() as AddressInfo
-  const pairingUrl = encodePairingOffer({ ...pairing, endpoint: `ws://127.0.0.1:${address.port}` })
-  let webClientUrl: string | undefined
-  if (offer.webClientUrl) {
-    const url = new URL(offer.webClientUrl)
-    url.search = ''
-    url.hash = new URLSearchParams({ pairing: pairingUrl }).toString()
-    webClientUrl = url.href
+  function proxyPairingOffer(candidate: RuntimeDesktopPairingOffer) {
+    const pairingUrl = encodePairingOffer({
+      ...decodePairingOffer(candidate.pairingUrl),
+      endpoint: `ws://127.0.0.1:${address.port}`
+    })
+    let webClientUrl: string | undefined
+    if (candidate.webClientUrl) {
+      const url = new URL(candidate.webClientUrl)
+      url.search = ''
+      url.hash = new URLSearchParams({ pairing: pairingUrl }).toString()
+      webClientUrl = url.href
+    }
+    return { pairingUrl, webClientUrl }
   }
   return {
-    offer: { pairingUrl, webClientUrl },
+    offer: proxyPairingOffer(offer),
+    proxyPairingOffer,
     setOnline(value: boolean) {
       online = value
       if (!online) {
@@ -153,7 +161,28 @@ for (const topology of ['desktop', 'headless'] as const) {
       await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
       await expect(client.page.getByText('Recovering host', { exact: true }).first()).toBeVisible()
       await client.page.screenshot({ path: testInfo.outputPath(`${topology}-recovered.png`) })
-      browser = await launchPairedWebClient(electronApp, proxy.offer)
+      // Each viewer needs its own ticket; browser key migration retires its pairing ticket.
+      let browserOffer: RuntimeDesktopPairingOffer
+      if (topology === 'desktop') {
+        browserOffer = await createRuntimeDesktopPairingOffer(page)
+      } else {
+        const { result } = await headless.client.call<PairingCreateOfferResult>(
+          'pairing.createOffer',
+          {
+            scope: 'runtime',
+            address: '127.0.0.1',
+            rotate: true
+          }
+        )
+        if (!result.available) {
+          throw new Error(result.guidance)
+        }
+        browserOffer = {
+          pairingUrl: result.pairingUrl,
+          ...(result.webClientUrl ? { webClientUrl: result.webClientUrl } : {})
+        }
+      }
+      browser = await launchPairedWebClient(electronApp, proxy.proxyPairingOffer(browserOffer))
       await expect
         .poll(() => statusEvidence(browser!.page), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
