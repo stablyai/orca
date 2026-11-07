@@ -162,9 +162,10 @@ export function runtimeHostsPagesOnThisDesktop(
 export function assertClientCreationActionAvailable(
   state: AppState,
   worktreeId: string | null,
-  action: ClientCreationAction
+  action: ClientCreationAction,
+  executionHostId?: ExecutionHostId
 ): void {
-  const availability = getClientCreationActionPolicy(state, worktreeId)[action]
+  const availability = getClientCreationActionPolicy(state, worktreeId, executionHostId)[action]
   if (availability.state !== 'enabled') {
     throw new Error(availability.reason)
   }

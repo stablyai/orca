@@ -14,7 +14,7 @@ import { getTerminalBufferPositionForMouseEvent } from '@/components/terminal-pa
 import { findHttpLinkAtTerminalMouseEvent } from '@/components/terminal-pane/links/http/terminal-url-link-hit-testing'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   dashboardPreviewHttpActions,

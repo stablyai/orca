@@ -3,6 +3,7 @@ import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/remote-ru
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
+import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
@@ -204,7 +205,7 @@ export class RpcClientSocketSession {
         onAuthRejected: () => {
           if (isCurrent()) {
             this.clearHandshakeTimer()
-            this.options.onAuthRejected('Unauthorized — pairing may be revoked')
+            this.options.onAuthRejected(AUTH_REJECTED)
           }
         },
         onProtocolError: (error) => {

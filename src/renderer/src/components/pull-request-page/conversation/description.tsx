@@ -1,3 +1,5 @@
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,6 +12,7 @@ import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
 
 export function ConversationDescription({
+  imageUploadAddress,
   authorLabel,
   updatedAt,
   canEditBody,
@@ -28,6 +31,7 @@ export function ConversationDescription({
   onSave,
   onDraftChange
 }: {
+  imageUploadAddress?: GitHubImageUploadAddress | (() => GitHubImageUploadAddress)
   authorLabel: string
   updatedAt: string
   canEditBody: boolean
@@ -46,6 +50,12 @@ export function ConversationDescription({
   onSave: () => void
   onDraftChange: (value: string) => void
 }): React.JSX.Element {
+  const images = useGitHubImagePending()
+  const save = () => {
+    if (!images.pendingRef.current) {
+      onSave()
+    }
+  }
   return (
     <div className="rounded-lg border border-border/50 bg-card shadow-xs">
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
@@ -73,8 +83,8 @@ export function ConversationDescription({
                 type="button"
                 size="xs"
                 className="gap-1.5"
-                disabled={bodySaving || !bodyChanged}
-                onClick={onSave}
+                disabled={bodySaving || !bodyChanged || images.pending}
+                onClick={save}
               >
                 {bodySaving ? (
                   <LoaderCircle className="size-3.5 animate-spin" />
@@ -115,6 +125,11 @@ export function ConversationDescription({
           </div>
         ) : bodyEditing ? (
           <MentionTextarea
+            imageUpload={{
+              address: imageUploadAddress,
+              onPending: images.onPending,
+              enabled: !bodySaving
+            }}
             textareaRef={bodyTextareaRef}
             value={resolvedBodyDraft}
             onValueChange={onDraftChange}
@@ -126,7 +141,7 @@ export function ConversationDescription({
               }
               if (isScreenSubmitShortcut(event) && !bodySaving && bodyChanged) {
                 event.preventDefault()
-                onSave()
+                save()
               }
             }}
             placeholder={translate('auto.components.PullRequestPage.778683ec84', 'Description')}

@@ -9,6 +9,7 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-cap
 import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../shared/emulator-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
+import { toast } from 'sonner'
 
 const selected = vi.hoisted((): { store: ReturnType<typeof createTestStore> | null } => ({
   store: null
@@ -68,6 +69,32 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   setLocalRuntimeCapabilitiesForTests(null)
+})
+it('refuses simulator creation on an ambiguous captured host', async () => {
+  const hook = renderHook(() =>
+    useTabGroupCreationCommands({
+      worktreeId: id,
+      groupId: 'remote-group',
+      executionHostId: 'ssh:box',
+      worktreeState: snapshot
+    })
+  )
+  selected.store!.setState({
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({ id, repoId: 'repo1', hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'peer' }),
+        makeWorktree({ id, repoId: 'repo1', hostId: 'ssh:box', runtimeOwnerEnvironmentId: 'rival' })
+      ]
+    }
+  })
+  vi.mocked(toast.error).mockClear()
+  await act(async () => {
+    await hook.result.current.newSimulatorTab?.()
+  })
+  expect(selected.store!.getState().unifiedTabsByWorktree[id].map((tab) => tab.id)).toEqual([
+    'local-sim'
+  ])
+  expect(toast.error).toHaveBeenCalledWith('The selected workspace host is unavailable.')
 })
 it.each([true, false])(
   'uses the selected runtime copy while a local twin has a simulator (existing=%s)',

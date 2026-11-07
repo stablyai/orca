@@ -92,6 +92,67 @@ it('resolves a detected local copy project runtime without borrowing its visible
 })
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
+  it('keeps the nested SSH platform for a captured folder owner, matching ordinary launch', () => {
+    const nested = state()
+    nested.folderWorkspaces = [
+      {
+        id: 'folder',
+        projectGroupId: 'group',
+        name: 'Folder',
+        folderPath: 'C:\\project',
+        executionHostId: 'runtime:linux-box',
+        connectionId: 'box',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    nested.sshStateByEnvironment.set('linux-box', {
+      connectionStates: new Map([
+        [
+          'box',
+          {
+            targetId: 'box',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'win32'
+          }
+        ]
+      ]),
+      targetLabels: new Map(),
+      targetGenerations: new Map(),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const ordinary = resolveWorktreeExecutionHostPlatform(nested, 'folder:folder', 'C:\\project')
+    const captured = resolveWorktreeExecutionHostPlatform(
+      { ...nested, activeWorktreeId: 'folder:folder' },
+      'folder:folder',
+      'C:\\project',
+      undefined,
+      'runtime:linux-box'
+    )
+    expect(ordinary).toMatchObject({ kind: 'known', platform: 'win32', hostKind: 'ssh' })
+    expect(captured).toEqual(ordinary)
+    nested.runtimeStatusByEnvironmentId.clear()
+    expect(
+      resolveWorktreeExecutionHostPlatform(
+        nested,
+        'folder:folder',
+        'C:\\project',
+        undefined,
+        'runtime:linux-box'
+      )
+    ).toEqual(ordinary)
+  })
+
   it("lets a worktree's own host outrank its repo's", () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(state(), serverRepo, {

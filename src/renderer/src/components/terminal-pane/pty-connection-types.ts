@@ -7,7 +7,7 @@ import type { NotificationWorkspaceOwner } from '../../../../shared/notification
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport/pty-transport-types'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
-import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
+import type { RestoredViewportBlankingPanesRef } from './viewport/terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from './agent-completion/agent-completion-coordinator-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'

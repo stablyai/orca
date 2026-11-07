@@ -62,7 +62,7 @@ export async function openMobileEmulatorTab(
   options: OpenMobileEmulatorTabOptions = {}
 ): Promise<string | null> {
   const store = useAppStore.getState()
-  assertClientCreationActionAvailable(store, worktreeId, 'mobile-emulator')
+  assertClientCreationActionAvailable(store, worktreeId, 'mobile-emulator', options.executionHostId)
   if (store.settings?.mobileEmulatorEnabled === false) {
     return null
   }

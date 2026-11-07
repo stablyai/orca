@@ -8,8 +8,8 @@ import {
   requestTabPaneTreeRedraw
 } from '@/runtime/layout-owner-pane-intents'
 import { isHostAuthoritativeLayout } from './terminal-live-layout-reconciliation'
-import { reconcileMountedPanesToLayout } from './terminal-pane-frame-reconciliation'
-import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import { reconcileMountedPanesToLayout } from './layout/reconciliation/terminal-pane-frame-reconciliation'
+import type { TerminalPaneCloseController } from './layout/close/use-terminal-pane-close-actions'
 
 /** Local tabs follow main’s framed tree; paired tabs use host reconciliation, and pending local commands hold their tab until answered. */
 export function useLayoutOwnerPaneTree(controller: TerminalPaneCloseController): void {

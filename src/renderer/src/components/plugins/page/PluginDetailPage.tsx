@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { BadgeCheck, ChevronLeft } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
@@ -20,6 +20,17 @@ import type { PluginPagePreview } from '../state/use-plugin-catalog'
 import type { PluginLogsState } from '../state/use-plugin-logs'
 import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
 import { PluginNotOfficialWarning } from '../review/PluginNotOfficialWarning'
+import {
+  pluginAuthor,
+  pluginAuthorCatalogId,
+  pluginsBySamePublisher
+} from '../presentation/plugin-author'
+import {
+  pluginInstallCountLabel,
+  usePluginInstallCount
+} from '../presentation/plugin-install-count'
+import { PluginAuthorByline, PluginMoreFromAuthor } from './PluginAuthor'
+import { PluginPageIcon } from './PluginPageIcon'
 
 type PluginDetailPageProps = {
   entry: PluginListEntry
@@ -37,10 +48,14 @@ type PluginDetailPageProps = {
     decision: 'approve' | 'keep-disabled'
   ) => Promise<void>
   onBack: () => void
+  hasPreviousPage?: boolean
   onOpenShortcuts: () => void
+  /** Every displayed plugin, to find matching publisher declarations. */
+  entries: Parameters<typeof pluginsBySamePublisher>[1]
+  onOpenPlugin: (pluginKey: string) => void
 }
 
-function sourceLabel(entry: PluginListEntry): string {
+function sourceLabel(entry: PluginListEntry): string | null {
   const source = entry.installed?.source
   if (entry.installed?.bundled || source?.kind === 'bundled') {
     return translate('auto.components.settings.PluginDetailPage.bundled', 'Bundled with Orca')
@@ -51,12 +66,13 @@ function sourceLabel(entry: PluginListEntry): string {
   if (source?.kind === 'git') {
     return translate('auto.components.settings.PluginDetailPage.gitUrl', 'Git URL')
   }
-  return entry.listing?.marketplaceName ?? ''
+  // Why: the verified-source chip already names a community catalog.
+  return entry.verifiedSource.kind === 'catalog' ? null : (entry.listing?.marketplaceName ?? null)
 }
 
 /** One plugin's page: what it adds, what it can reach, where it came from, and its logs. */
 export function PluginDetailPage({
-  entry,
+  entry: currentEntry,
   busy,
   orcaVersion,
   logsState,
@@ -66,14 +82,19 @@ export function PluginDetailPage({
   refreshing,
   onConsent,
   onBack,
-  onOpenShortcuts
+  hasPreviousPage = false,
+  onOpenShortcuts,
+  entries,
+  onOpenPlugin
 }: PluginDetailPageProps): React.JSX.Element {
-  const model = usePluginPageModel({ entry, fetchPreview, refreshing })
-  const { plugin, listing, preview, stale } = model
+  const model = usePluginPageModel({ entry: currentEntry, fetchPreview, refreshing })
+  const { entry, plugin, listing, preview, stale } = model
   const palettes = usePluginArtPalettes(entry.pluginKey, listing?.release?.themePreview)
   const tooNew = needsNewerOrca(entry.minimumOrca, orcaVersion) !== null
   // Why: a fetched manifest names the plugin exactly; older catalogs only give its key.
-  const name = plugin?.name ?? preview?.manifest.name ?? entry.name
+  const name = entry.nameShowsPublisher
+    ? entry.name
+    : (plugin?.name ?? preview?.manifest.name ?? entry.name)
   const action = usePluginPageAction({
     entry,
     name,
@@ -84,6 +105,9 @@ export function PluginDetailPage({
     onConsent
   })
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const author = pluginAuthor(entry)
+  const authorPlugins = useMemo(() => pluginsBySamePublisher(entry, entries), [entry, entries])
+  const installCount = usePluginInstallCount(entry)
 
   useEffect(() => {
     headingRef.current?.focus()
@@ -211,33 +235,54 @@ export function PluginDetailPage({
     <article aria-labelledby="plugin-detail-heading" className="@container/plugin-detail">
       <Button variant="ghost" size="xs" className="-ml-2" onClick={onBack}>
         <ChevronLeft />
-        {translate('auto.components.settings.PluginDetailPage.back', 'Plugins')}
+        {hasPreviousPage
+          ? translate('auto.components.settings.PluginDetailPage.backToPlugin', 'Back')
+          : translate('auto.components.settings.PluginDetailPage.back', 'Plugins')}
       </Button>
       <div className="mt-4 flex flex-wrap items-start gap-x-4 gap-y-3">
+        <PluginPageIcon entry={entry} icon={model.images?.icon} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
             <h3
               id="plugin-detail-heading"
               ref={headingRef}
               tabIndex={-1}
-              className="text-xl font-semibold outline-none"
+              className="min-w-0 truncate text-2xl font-semibold tracking-tight outline-none"
             >
               {name}
             </h3>
             {entry.official ? (
               <BadgeCheck
-                className="plugin-security-chrome size-4 text-muted-foreground"
+                className="plugin-security-chrome size-5 shrink-0 text-muted-foreground"
                 role="img"
                 aria-label={pluginOfficialLabel()}
               />
             ) : null}
-            <PluginChips entry={entry} />
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {[entry.publisher, version ? `v${version}` : null, sourceLabel(entry)]
+          <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            {author ? <PluginAuthorByline author={author} /> : null}
+            {[
+              version ? `v${version}` : null,
+              installCount !== null ? pluginInstallCountLabel(installCount) : null,
+              sourceLabel(entry)
+            ]
               .filter(Boolean)
-              .join(' · ')}
-          </p>
+              .map((fact, index) => (
+                <Fragment key={fact}>
+                  {author || index > 0 ? <span aria-hidden="true">·</span> : null}
+                  <span>{fact}</span>
+                </Fragment>
+              ))}
+          </div>
+          {/* Why always there: installing fills this line instead of pushing the page down. */}
+          <div className="mt-2 flex min-h-5 flex-wrap items-center gap-x-3 gap-y-1.5">
+            <PluginChips entry={entry} />
+            {controls && controls.kind !== 'review' ? controls.status : null}
+            {action.status}
+          </div>
+          {description ? (
+            <p className="mt-3 max-w-prose text-sm leading-6 text-foreground/85">{description}</p>
+          ) : null}
           {entry.alsoListedBy.length > 0 ? (
             <p data-plugin-also-listed="" className="mt-1 text-xs text-muted-foreground">
               {translate(
@@ -247,11 +292,6 @@ export function PluginDetailPage({
               )}
             </p>
           ) : null}
-          {/* Why always there: installing fills this line instead of pushing the page down. */}
-          <div className="mt-2 flex h-5 items-center gap-3">
-            {controls && controls.kind !== 'review' ? controls.status : null}
-            {action.status}
-          </div>
         </div>
         {/* Why one slot: Install, Install & enable, Enable and the installed switch all sit here,
             so a state change never moves the page. */}
@@ -277,14 +317,11 @@ export function PluginDetailPage({
         </div>
       ) : null}
       {action.body}
-      {description ? <p className="mt-4 max-w-prose text-sm leading-6">{description}</p> : null}
       {alert}
-      {/* Why after the decision: the picture must never push Install or Enable below the fold. */}
-      <div className="mt-6">
-        <PluginPageHero entry={entry} images={model.images} palettes={palettes} />
-      </div>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_14.5rem] gap-7 @max-2xl/plugin-detail:grid-cols-1 @max-2xl/plugin-detail:gap-0">
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)_14.5rem] gap-7 @max-2xl/plugin-detail:grid-cols-1 @max-2xl/plugin-detail:gap-0">
         <div className="min-w-0">
+          {/* Why after the decision: the picture must never push Install or Enable below the fold. */}
+          <PluginPageHero entry={entry} images={model.images} palettes={palettes} />
           <PluginScreenshots images={model.images} />
           <PluginAddsSection
             plugin={plugin}
@@ -306,8 +343,22 @@ export function PluginDetailPage({
           ) : null}
           <PluginReleaseNotes entry={entry} />
           {plugin?.hasWorker ? <PluginLogsSection state={logsState} /> : null}
+          {author ? (
+            <PluginMoreFromAuthor
+              author={author}
+              plugins={authorPlugins}
+              onOpenPlugin={onOpenPlugin}
+            />
+          ) : null}
         </div>
-        <PluginDetailInfo entry={entry} version={version} />
+        <PluginDetailInfo
+          entry={entry}
+          version={version}
+          author={author}
+          authorPluginCount={
+            author && pluginAuthorCatalogId(entry) ? authorPlugins.length + 1 : null
+          }
+        />
       </div>
     </article>
   )

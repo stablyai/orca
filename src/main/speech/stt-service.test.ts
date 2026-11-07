@@ -138,14 +138,24 @@ vi.mock('./model-catalog', () => ({
           streaming: false,
           sampleRate: 16000
         }
-      : {
-          id: 'model-a',
-          type: 'transducer',
-          provider: 'local',
-          streaming: true,
-          sampleRate: 16000,
-          files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
-        }
+      : id === 'whisper-model'
+        ? {
+            id,
+            type: 'whisper',
+            provider: 'local',
+            streaming: false,
+            sampleRate: 16000,
+            files: ['encoder.onnx', 'decoder.onnx', 'tokens.txt'],
+            dictationLanguages: ['ja', 'ko']
+          }
+        : {
+            id: 'model-a',
+            type: 'transducer',
+            provider: 'local',
+            streaming: true,
+            sampleRate: 16000,
+            files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
+          }
 }))
 
 vi.mock('./openai-api-key-store', () => ({
@@ -181,6 +191,23 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
 
     expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('rebuilds the warm worker when the dictation language changes', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a local start reads only getModelState and getModelDir.
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'whisper-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/whisper-model')
+    } as never)
+
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ko')
+    await service.stopDictation('desktop')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ja')
+
+    expect(getCreatedWorkerCount()).toBe(2)
+    expect(getLastWorker()!.messages.find((message) => message.type === 'init')).toMatchObject({
+      language: 'ja'
+    })
   })
 
   it('frees the warm worker at once when a local dictation is discarded', async () => {

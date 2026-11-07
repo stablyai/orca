@@ -5,8 +5,8 @@ import {
   type TerminalTitleFactMeta
 } from '../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolvePaneTitleDecision } from './terminal-title-evidence'
-import { installTitleSpawnBell } from './pty-connection/title-spawn-bell'
-import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/confirmed-shell-agent-title'
+import { installPaneTitleObservation } from './pty-connection/agent-identity/pane-title-observation'
+import { clearStaleAgentTabTitleOnConfirmedShell } from './pty-connection/agent-identity/confirmed-shell-agent-title'
 
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import { isNormalizedAgentTitleStamp } from '../../../../shared/agent-status/title/agent-title-status'
@@ -20,9 +20,6 @@ vi.mock('@/store/index', () => ({
       tabsByWorktree: {}
     })
   }
-}))
-vi.mock('./pty-connection/pane-pty-visibility-bind', () => ({
-  installPanePtyVisibilityBind: vi.fn()
 }))
 
 describe('resolvePaneTitleDecision', () => {
@@ -127,11 +124,10 @@ describe('resolvePaneTitleDecision', () => {
       agentCompletionCoordinator: { observeTitle: completion },
       hasConsideredInitialCacheTimerSeed: true,
       neutralTerminalTitle: () => 'Terminal 1',
-      releaseCommandCodeDoneSettleExecutor: () => {},
       onTitleChange: (_title: string, _raw: string, _meta?: TerminalTitleFactMeta) => {}
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the installed title callback runs; its session dependencies are supplied above.
-    installTitleSpawnBell(session as never)
+    installPaneTitleObservation(session as never)
     const tracker = createTerminalTitleTracker({
       onTitle: (title, raw, meta) => {
         facts.push([title, raw, meta])
@@ -165,7 +161,6 @@ describe('resolvePaneTitleDecision', () => {
       expect(session.deps.updateTabTitle).toHaveBeenLastCalledWith('tab', 'Terminal 1')
     } finally {
       tracker.dispose()
-      session.releaseCommandCodeDoneSettleExecutor()
       vi.useRealTimers()
     }
   })

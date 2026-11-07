@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { PtyStartupIngress } from '../../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { installTerminalCapabilityReplyHandlers } from './terminal-capability-replies'
+import { installTerminalCapabilityReplyHandlers } from './emulation/terminal-capability-replies'
 import { createIpcPtyTransport } from './pty-transport/ipc/pty-transport'
 import type { PtyTransport } from './pty-transport/pty-transport-types'
 

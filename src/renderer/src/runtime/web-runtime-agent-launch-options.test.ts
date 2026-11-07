@@ -714,3 +714,33 @@ it('preserves explicit empty overrides and prepared workspace drafts while resum
   })
   expect(params('terminal.ensureAgentSession')).toHaveProperty('agentArgs', '--recorded-arguments')
 })
+
+// Background section launches carry a prompt too; selection must survive async host creation.
+it.each(['claude', 'codex'] as const)(
+  'keeps the folder selected after background %s creation and prompt delivery settle',
+  async (agent) => {
+    const state = {
+      ...mocks.getState(),
+      activeWorktreeId: 'folder:feature',
+      activeWorkspaceKey: 'folder:feature',
+      activeWorkspaceExecutionHostId: 'local'
+    }
+    mocks.getState.mockImplementation(() => state)
+    mocks.setActiveWorktree.mockImplementation((id: string, hostId: string) => {
+      state.activeWorktreeId = id
+      state.activeWorkspaceKey = id
+      state.activeWorkspaceExecutionHostId = hostId
+    })
+    const result = await launch({
+      agent,
+      activate: false,
+      prompt: 'Resolve the conflicts',
+      promptDelivery: 'submit-after-ready'
+    })
+    expect(result).toMatchObject({ delivered: true, outcome: { status: 'created' } })
+    expect(state.activeWorkspaceKey).toBe('folder:feature')
+    expect(state.activeWorktreeId).toBe('folder:feature')
+    expect(state.activeWorkspaceExecutionHostId).toBe('local')
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+  }
+)

@@ -18,7 +18,7 @@ import {
   type TerminalConfigImportPreview
 } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']

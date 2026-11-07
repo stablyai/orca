@@ -10,7 +10,7 @@ import {
   type RendererPolicyDecision,
   type ResolvePaneRendererPolicyInput,
   type TerminalGpuAccelerationMode
-} from './terminal-renderer-policy'
+} from './render-health/terminal-renderer-policy'
 
 /** Normalize display title using resolved compatible ownership instead of raw wrapper text. */
 export function resolvePaneDisplayTitle(

@@ -7,6 +7,7 @@ import {
   buildImportedHookSettings,
   formatCandidateProvenance,
   formatCandidateSource,
+  getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
   ignoresSharedSetupScripts,
   inspectSetupScriptPromptState,
@@ -392,6 +393,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     ignoresSharedSetupScripts(activeRepo)
   const candidateSource = candidate ? formatCandidateSource(candidate) : null
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
+  const detectedSetupPreview = candidate
+    ? getDetectedSetupPreviewContent(candidate, detectedSetupDraft)
+    : null
 
   return (
     <SetupScriptPromptCardShell
@@ -400,10 +404,9 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
       isInspectionError={isInspectionError}
       sharedSetupIgnored={sharedSetupIgnored}
       isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}
-      hasCandidate={Boolean(candidate)}
       candidateSource={candidateSource}
       candidateProvenance={candidateProvenance}
-      detectedSetupDraft={detectedSetupDraft}
+      detectedSetupPreview={detectedSetupPreview}
       isImporting={importingRepoHostIdentity === activeRepoHostIdentity}
       renderedStateOk={renderedPromptState.status === 'ok'}
       onDismiss={handleDismiss}

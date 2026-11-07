@@ -1,3 +1,4 @@
+import { getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -240,9 +241,12 @@ export function useTabBarRuntimeModel({
     () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
     [resolvedGroupId, unifiedTabs]
   )
-  const workspaceHasSimulatorTab = useMemo(
-    () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
-    [unifiedTabs]
+  const workspaceHasSimulatorTab = useAppStore((state) =>
+    executionHostId
+      ? Boolean(getSimulatorTabForWorktree(worktreeId, executionHostId, state))
+      : (state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS).some(
+          (tab) => tab.contentType === 'simulator'
+        )
   )
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {

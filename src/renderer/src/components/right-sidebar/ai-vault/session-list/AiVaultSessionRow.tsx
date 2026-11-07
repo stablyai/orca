@@ -110,15 +110,18 @@ export function VaultSessionRow({
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
-  const deleteBlockedReason = onRequestDelete
-    ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
-    : translate(
-        'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
-        'The transcript source is unavailable.'
+  const deleteBlockedReason = session.structuredSession
+    ? translate(
+        'auto.components.right.sidebar.AiVaultSessionRow.deleteReasonSyntheticPath',
+        "This session can't be deleted from Orca."
       )
-  const requestDelete = session.structuredSession
-    ? undefined
-    : (): void => onRequestDelete?.(session)
+    : onRequestDelete
+      ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
+      : translate(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
+  const requestDelete = (): void => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')

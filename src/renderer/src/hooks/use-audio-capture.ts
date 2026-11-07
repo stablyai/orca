@@ -1,13 +1,6 @@
 import { useRef, useCallback } from 'react'
 import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
-import {
-  DEFAULT_DICTATION_METER,
-  analyzeDictationAudioChunk,
-  createDictationMeterAnalyzerState,
-  dictationMeterStatesEqual,
-  toPublicDictationMeterState,
-  type DictationMeterState
-} from '../../../shared/dictation-audio-meter'
+import { useAudioCaptureMeter, type DictationMeterPublisher } from './use-audio-capture-meter'
 import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 
 type BufferedAudioChunk = {
@@ -25,6 +18,8 @@ type StartAudioCaptureOptions = {
   microphoneDeviceLabel?: string | null
   /** Fires when the live input device disappears mid-capture */
   onCaptureLost?: () => void
+  /** Fires when the host's session accepts no more audio (cloud upload cap) */
+  onAudioLimitReached?: () => void
 }
 
 export type StartAudioCaptureResult = {
@@ -33,9 +28,6 @@ export type StartAudioCaptureResult = {
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
 const MAX_BUFFERED_AUDIO_BYTES = 8 * 1024 * 1024
-const METER_PUBLISH_INTERVAL_MS = 1000 / 15
-
-type DictationMeterPublisher = (meter: DictationMeterState) => void
 
 export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const streamRef = useRef<MediaStream | null>(null)
@@ -52,10 +44,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const capturedChunkCountRef = useRef(0)
   const sessionIdRef = useRef('desktop')
   const trackLostCleanupRef = useRef<(() => void) | null>(null)
-  const meterAnalyzerRef = useRef<ReturnType<typeof createDictationMeterAnalyzerState>>(undefined!)
-  meterAnalyzerRef.current ??= createDictationMeterAnalyzerState()
-  const publishedMeterRef = useRef(DEFAULT_DICTATION_METER)
-  const lastMeterPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
+  const { resetMeter, measureChunk, getLastSpeechAt } = useAudioCaptureMeter(publishMeter)
 
   const cleanupCaptureResources = useCallback(() => {
     trackLostCleanupRef.current?.()
@@ -81,13 +70,6 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     bufferedAudioBytesRef.current = 0
     bufferedAudioSecondsRef.current = 0
   }, [])
-
-  const resetMeter = useCallback(() => {
-    meterAnalyzerRef.current = createDictationMeterAnalyzerState()
-    publishedMeterRef.current = DEFAULT_DICTATION_METER
-    lastMeterPublishedAtRef.current = Number.NEGATIVE_INFINITY
-    publishMeter?.(DEFAULT_DICTATION_METER)
-  }, [publishMeter])
 
   const removeOldestBufferedAudioChunk = useCallback(() => {
     const chunk = bufferedAudioRef.current.shift()
@@ -188,23 +170,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
             return
           }
           const samples = new Float32Array(e.inputBuffer.getChannelData(0))
-          const now = performance.now()
-          meterAnalyzerRef.current = analyzeDictationAudioChunk(
-            samples,
-            now,
-            meterAnalyzerRef.current
-          )
-          if (
-            !document.hidden &&
-            now - lastMeterPublishedAtRef.current >= METER_PUBLISH_INTERVAL_MS
-          ) {
-            lastMeterPublishedAtRef.current = now
-            const meter = toPublicDictationMeterState(meterAnalyzerRef.current)
-            if (!dictationMeterStatesEqual(publishedMeterRef.current, meter)) {
-              publishedMeterRef.current = meter
-              publishMeter?.(meter)
-            }
-          }
+          measureChunk(samples)
           capturedChunkCountRef.current += 1
           if (bufferAudioRef.current) {
             appendBufferedAudioChunk({
@@ -216,6 +182,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           }
           void window.api.speech
             .feedAudio(samples, actualRate, sessionIdRef.current)
+            .then((limitReached) => limitReached && options.onAudioLimitReached?.())
             .catch(() => undefined)
         }
 
@@ -274,7 +241,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     [
       appendBufferedAudioChunk,
       cleanupCaptureResources,
-      publishMeter,
+      measureChunk,
       resetBufferedAudio,
       resetMeter
     ]
@@ -333,6 +300,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     flushBufferedAudio,
     discardBufferedAudio,
     getCapturedChunkCount,
+    getLastSpeechAt,
     isCapturingRef
   }
 }

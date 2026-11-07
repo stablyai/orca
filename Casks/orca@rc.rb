@@ -29,7 +29,7 @@ cask "orca@rc" do
   # Use Orca’s prerelease-aware updater between frequent RCs.
   auto_updates true
   conflicts_with cask: "orca"
-  depends_on macos: :big_sur
+  depends_on macos: :ventura
 
   app "Orca.app"
 

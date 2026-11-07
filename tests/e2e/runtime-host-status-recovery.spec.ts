@@ -96,9 +96,15 @@ async function expectWorkspaceHostAppearance(
   ).toHaveCount(0)
   await expect(icon).toHaveClass(disconnected ? /text-destructive/ : /text-muted-foreground/)
   await icon.hover()
-  await expect(
-    page.getByRole('tooltip', { name: disconnected ? /disconnected/i : /Project on/ })
-  ).toBeVisible()
+  // Name the host: the previous card's tooltip can still be closing in the DOM.
+  const tooltipName = hostLabel
+    ? disconnected
+      ? `${hostLabel} disconnected`
+      : `Project on ${hostLabel}`
+    : disconnected
+      ? /disconnected/i
+      : /Project on/
+  await expect(page.getByRole('tooltip', { name: tooltipName, exact: true })).toBeVisible()
   await page.mouse.move(900, 600)
 }
 
@@ -114,21 +120,14 @@ for (const topology of ['desktop', 'headless'] as const) {
     let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
     let browser: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
     try {
-      headless =
-        topology === 'headless'
-          ? await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
-          : null
-      const offer = headless?.offer ?? (await createRuntimeDesktopPairingOffer(page))
-      await (headless
-        ? headless.client.call('repo.add', { path: testRepoPath })
-        : page.evaluate(async (path) => {
-            await window.api.repos.add({ path })
-            await window.__store
-              ?.getState()
-              .fetchRepos({ runtimeEnvironmentId: null, throwOnError: true })
-          }, testRepoPath))
-      proxy = await interruptibleHost(offer)
-      client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
+      // Why two servers: a client saves one entry per server, so the steady host must be another one.
+      headless = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
+      await headless.client.call('repo.add', { path: testRepoPath })
+      const desktopOffer = await createRuntimeDesktopPairingOffer(page)
+      const [recoveringOffer, directOffer] =
+        topology === 'headless' ? [headless.offer, desktopOffer] : [desktopOffer, headless.offer]
+      proxy = await interruptibleHost(recoveringOffer)
+      client = await launchPairedElectronClient(directOffer, testInfo, 'Direct host')
       proxy.setOnline(false)
       const offlineId = await client.page.evaluate(async (pairingCode) => {
         const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({

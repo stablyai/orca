@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { preparePendingSplitClose } from './pending-split-close-test-fixture'
+import { preparePendingSplitClose } from './layout/close/pending-split-close-test-fixture'
 import { preparePendingRuntimeClose } from './pending-runtime-pane-close-test-fixture'
 import { flushPtySideEffects } from './pty-transport-test-harness'
 import type { PtyRunningWorkProbe } from '../../../../shared/terminal/pty/lifecycle/pty-running-work-probe'
@@ -13,7 +13,8 @@ async function prepare(remote = false, requestedPtyId?: string) {
   const p = paired ?? (await preparePendingSplitClose(requestedPtyId))
   Object.assign(p.state, { settings: { skipCloseTerminalWithRunningProcessConfirm: false } })
   const { probePtyRunningWork } = await import('../terminal/pty-running-work-probe')
-  const { useTerminalPaneCloseActions } = await import('./use-terminal-pane-close-actions')
+  const { useTerminalPaneCloseActions } =
+    await import('./layout/close/use-terminal-pane-close-actions')
   // Supply the dialog state that the UI renders after setPendingCloseConfirmation.
   // oxlint-disable-next-line react-hooks/rules-of-hooks -- React registration is mocked; exercise public close callbacks without mounting UI.
   const actions = useTerminalPaneCloseActions({

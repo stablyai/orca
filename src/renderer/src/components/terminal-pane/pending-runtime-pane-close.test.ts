@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { preparePendingRuntimeClose } from './pending-runtime-pane-close-test-fixture'
-import { makeCloseTestTab } from './pending-split-close-test-fixture'
+import { makeCloseTestTab } from './layout/close/pending-split-close-test-fixture'
 
 it('closes the captured scoped handle while actual remote attach is still unbound', async () => {
   const p = await preparePendingRuntimeClose()

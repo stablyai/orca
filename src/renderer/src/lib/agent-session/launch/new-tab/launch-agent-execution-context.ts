@@ -1,3 +1,6 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspace-record-selectors'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -25,26 +28,44 @@ export type AgentLaunchExecutionContext = {
   queuedShell: AgentStartupShell | undefined
 }
 
+/** Scope the ordinary owner resolvers without changing the user's live selection. */
+export function agentTabLaunchStore(
+  store: ReturnType<typeof useAppStore.getState>,
+  args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'workspaceExecutionHostId'>
+): ReturnType<typeof useAppStore.getState> {
+  return args.workspaceExecutionHostId
+    ? {
+        ...store,
+        activeWorktreeId: args.worktreeId,
+        activeWorkspaceExecutionHostId: args.workspaceExecutionHostId
+      }
+    : store
+}
+
 /** `null` means the host's OS is unknown; the user has been told why the launch stopped. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
-  args: { worktreeId: string; launchPlatform?: NodeJS.Platform; executionHostId?: ExecutionHostId }
+  args: Pick<
+    LaunchAgentInNewTabArgs,
+    'worktreeId' | 'launchPlatform' | 'workspaceExecutionHostId'
+  > & { executionHostId?: ExecutionHostId }
 ): AgentLaunchExecutionContext | null {
+  const executionHostId = args.executionHostId ?? args.workspaceExecutionHostId
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
-  const worktreeSshConnectionId = args.executionHostId
-    ? getConnectionIdForWorktreeCopy(store, args.worktreeId, args.executionHostId)
+  const worktreeSshConnectionId = executionHostId
+    ? getConnectionIdForWorktreeCopy(store, args.worktreeId, executionHostId)
     : getConnectionIdFromState(store, args.worktreeId)
   // Why getKnownWorktreeById: folder workspaces are not in allWorktrees, and their path marks WSL.
-  const selectedWorktree = args.executionHostId
+  const selectedWorktree = executionHostId
     ? selectWorkspaceByHostTarget(
         store,
-        hostWorktreeTarget({ id: args.worktreeId, hostId: args.executionHostId })
+        hostWorktreeTarget({ id: args.worktreeId, hostId: executionHostId })
       )
     : undefined
   const workspacePath = (
     selectedWorktree ??
-    store.getKnownWorktreeById?.(args.worktreeId, args.executionHostId) ??
-    (args.executionHostId
+    store.getKnownWorktreeById?.(args.worktreeId, executionHostId) ??
+    (executionHostId
       ? undefined
       : store.allWorktrees?.().find((entry) => entry.id === args.worktreeId))
   )?.path
@@ -54,7 +75,7 @@ export function resolveAgentLaunchExecutionContext(
     args.worktreeId,
     workspacePath,
     undefined,
-    args.executionHostId
+    executionHostId
   )
   if (fact.kind === 'withheld') {
     toast.error(fact.reason)
@@ -70,4 +91,22 @@ export function resolveAgentLaunchExecutionContext(
       store.settings?.terminalWindowsShell
     )
   }
+}
+
+export function agentTabLaunchRuntimeEnvironmentId(
+  store: ReturnType<typeof useAppStore.getState>,
+  args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'selectedExecutionHostId'>
+) {
+  const worktreeId = args.worktreeId
+  const selectedOwner = args.selectedExecutionHostId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: worktreeId,
+        hostId: args.selectedExecutionHostId
+      })
+    : undefined
+  const runtimeEnvironmentId =
+    selectedOwner?.kind === 'resolved'
+      ? selectedOwner.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  return runtimeEnvironmentId
 }

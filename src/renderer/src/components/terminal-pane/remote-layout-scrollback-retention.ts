@@ -1,5 +1,5 @@
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from './layout/terminal-layout-leaf-traversal'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
 /** Host owns layout structure; preserve local captured bytes only for its surviving leaves. Park does not bump generation, so wholesale pulls otherwise erase newer local tails and propagate stale uploads. */

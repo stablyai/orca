@@ -149,24 +149,22 @@ describe('shell lifecycle log lines', () => {
     ])
   })
 
-  it('logs a missed ready deadline, the failure it causes and the recovery flow', () => {
+  it('logs a missed ready deadline but not the remount it earns', () => {
     const opened = replay(DOWNLOAD_OPEN)
     const { lines } = replay([{ type: 'document-loaded' }, { type: 'page-ready-deadline' }], opened)
     expect(summary(lines)).toEqual([
-      'web-shell-page Web shell: page never said ready before the deadline',
-      'web-shell-flow Web shell: checking host'
+      'web-shell-page Web shell: page never said ready before the deadline'
     ])
   })
 
-  it('logs a document that never finished loading, and the recovery flow', () => {
+  it('logs a document that never finished loading but not the remount it earns', () => {
     const opened = replay(DOWNLOAD_OPEN)
     const { lines } = replay(
       [{ type: 'document-started' }, { type: 'document-load-deadline' }],
       opened
     )
     expect(summary(lines)).toEqual([
-      'web-shell-page Web shell: document never finished loading before the deadline',
-      'web-shell-flow Web shell: checking host'
+      'web-shell-page Web shell: document never finished loading before the deadline'
     ])
   })
 

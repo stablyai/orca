@@ -7,10 +7,10 @@ import type { AgentSessionRefusalReference } from '../../../../shared/agent-sess
 import { joinSentences } from '../../../../shared/sentence-joining'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
-  isClaudeSignInFailureKind,
-  nativeChatClaudeSignInLabel,
-  type NativeChatClaudeSignIn
-} from './native-chat-claude-sign-in'
+  isNativeChatSignInFailureKind,
+  nativeChatSignInLabel,
+  type NativeChatSignIn
+} from './native-chat-sign-in'
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
@@ -21,14 +21,14 @@ function nativeChatLaunchNotice({
   failure = null,
   agentLabel,
   onRetry,
-  claudeSignIn = null
+  signIn = null
 }: {
   lifecycle: StructuredAgentSessionLaunchLifecycle | null
   failure?: StructuredLaunchFailure | null
   agentLabel?: string
   onRetry: () => void
   /** Replace Retry with sign-in until authentication succeeds. */
-  claudeSignIn?: NativeChatClaudeSignIn | null
+  signIn?: NativeChatSignIn | null
 }): NativeChatComposerNotice | null {
   if (lifecycle !== 'failed' && lifecycle !== 'visibility-unknown') {
     return null
@@ -59,11 +59,12 @@ function nativeChatLaunchNotice({
     kind: 'error',
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
-      claudeSignIn && isClaudeSignInFailureKind(failure?.details?.reason)
+      signIn && isNativeChatSignInFailureKind(failure?.details?.reason, signIn)
         ? {
-            label: nativeChatClaudeSignInLabel(claudeSignIn),
-            onClick: claudeSignIn.signIn,
-            disabled: claudeSignIn.signingIn
+            label: nativeChatSignInLabel(signIn),
+            primary: true,
+            onClick: signIn.signIn,
+            disabled: signIn.signingIn
           }
         : signInContent
           ? undefined
@@ -80,7 +81,7 @@ export function structuredSessionNotices({
   sessionError,
   readRefusal,
   composerError,
-  claudeSignIn = null,
+  signIn = null,
   availability = null,
   hostPermission = null
 }: {
@@ -93,7 +94,7 @@ export function structuredSessionNotices({
   sessionError: string | null
   readRefusal?: AgentSessionRefusalReference
   composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
-  claudeSignIn?: NativeChatClaudeSignIn | null
+  signIn?: NativeChatSignIn | null
   availability?: NativeChatComposerNotice | null
   hostPermission?: NativeChatComposerNotice | null
 }): NativeChatComposerNotice[] {
@@ -103,7 +104,7 @@ export function structuredSessionNotices({
     failure: launch.failure,
     agentLabel,
     onRetry: launch.retry,
-    claudeSignIn
+    signIn
   })
   // A missing history cannot replace the creation owner's available recovery.
   const sessionNotice =

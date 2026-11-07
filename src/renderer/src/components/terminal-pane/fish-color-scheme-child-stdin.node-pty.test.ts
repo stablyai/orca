@@ -41,7 +41,7 @@ let storeSubscribers: ((state: MutableState) => void)[] = []
 let transportFactoryQueue: unknown[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
+vi.mock('./render-health/terminal-webgl-atlas-recovery', () => ({
   scheduleTerminalWebglAtlasRecovery: vi.fn()
 }))
 vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
@@ -372,7 +372,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
   itWithFish(
     'writes no CSI 997 while fish arms mode 2031 around its prompt, so a child reads clean stdin',
     async () => {
-      const { connectPanePty } = await import('./pty-connection')
+      const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
       const nodePty = await import('node-pty')
 
       configHome = mkdtempSync(path.join(tmpdir(), 'orca-fish-2031-'))

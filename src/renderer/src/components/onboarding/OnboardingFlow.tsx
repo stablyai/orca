@@ -6,6 +6,8 @@ import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/scre
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { AgentStep } from './AgentStep'
+import { AntigravityInstallDialog } from './AntigravityInstallDialog'
+import type { AntigravityInstallTarget } from './antigravity-install-target'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
 import { IntegrationsStep } from './IntegrationsStep'
@@ -38,27 +40,31 @@ export default function OnboardingFlow({
     currentStep.id === 'agent' && flow.agentSurface === 'chat'
       ? stepCopy.agent_chat
       : stepCopy[currentStep.id]
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const shouldShowSetUpLater = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ??
-    (currentStep.id === 'notifications'
+    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
+  const [antigravityInstall, setAntigravityInstall] = useState<AntigravityInstallTarget | null>(
+    null
+  )
+  const installOpen = antigravityInstall !== null
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      if (busyLabel || skipConfirmOpen || languagePickerOpen) {
+      if (busyLabel || skipConfirmOpen || languagePickerOpen || installOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen, languagePickerOpen]
+    [busyLabel, skipConfirmOpen, languagePickerOpen, installOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -70,7 +76,8 @@ export default function OnboardingFlow({
   // Depend on stable callbacks/step ID so the changing flow object cannot churn the key listener.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (languagePickerOpen || skipConfirmOpen) {
+      // The installer terminal owns the keyboard; leaving the step would close it mid-install.
+      if (languagePickerOpen || skipConfirmOpen || installOpen) {
         return
       }
       // Do not submit while typing in clone URL or another editable field.
@@ -86,11 +93,11 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [flowNext, languagePickerOpen, skipConfirmOpen])
+  }, [flowNext, languagePickerOpen, skipConfirmOpen, installOpen])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || skipConfirmOpen || languagePickerOpen) {
+      if (event.key !== 'Escape' || skipConfirmOpen || languagePickerOpen || installOpen) {
         return
       }
       event.preventDefault()
@@ -98,7 +105,7 @@ export default function OnboardingFlow({
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
+  }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen, installOpen])
 
   return (
     <TooltipProvider delayDuration={0} skipDelayDuration={0}>
@@ -246,6 +253,7 @@ export default function OnboardingFlow({
                   isDetecting={flow.isDetectingAgents}
                   yoloPermissions={flow.yoloPermissions}
                   onYoloPermissionsChange={flow.setYoloPermissions}
+                  onInstallAntigravity={setAntigravityInstall}
                 />
               )}
               {currentStep.id === 'theme' && (
@@ -271,9 +279,9 @@ export default function OnboardingFlow({
             </div>
 
             <OnboardingFooter
-              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              shouldShowSetUpLater={shouldShowSetUpLater}
               busyLabel={busyLabel}
-              onSkipToRepo={() => void flow.skipToRepo()}
+              onSetUpLater={() => void flow.setUpLater()}
               stepIndex={stepIndex}
               onBack={flow.back}
               showPrimary
@@ -284,6 +292,17 @@ export default function OnboardingFlow({
             />
           </div>
         </section>
+        {antigravityInstall && (
+          <AntigravityInstallDialog
+            target={antigravityInstall}
+            detected={
+              flow.detectedSet.has('antigravity') ||
+              flow.chatDetected?.includes('antigravity') === true
+            }
+            onRecheck={flow.refreshDetectedAgents}
+            onClose={() => setAntigravityInstall(null)}
+          />
+        )}
         <OnboardingSkipConfirmationDialog
           open={skipConfirmOpen}
           onOpenChange={setSkipConfirmOpen}

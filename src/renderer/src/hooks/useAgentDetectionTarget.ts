@@ -1,5 +1,5 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -124,7 +124,7 @@ export function useAgentDetectionTargetForWorktree(
   worktreeId: string | null,
   executionHostId?: ExecutionHostId
 ): AgentDetectionTarget | undefined {
-  const key = useAppStore((s) =>
+  const key = useAppStateValue((s) =>
     getAgentDetectionTargetKeyForWorktree(s, worktreeId, executionHostId)
   )
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])

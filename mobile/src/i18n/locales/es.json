@@ -112,7 +112,8 @@
       "pastePairingCode": "O pegar código de emparejamiento",
       "scanCodeStep": "Escanea el código QR",
       "title": "Emparejar con un escritorio",
-      "tryAgain": "Reintentar"
+      "tryAgain": "Reintentar",
+      "codeExpiredOrReplaced": "Este código de emparejamiento caducó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
       "defaultText": "Predeterminado (100%)",
@@ -190,6 +191,7 @@
       "sendMessage": "Enviar mensaje",
       "sendQueue": "Poner en cola",
       "sendSteer": "Enviar ahora",
+      "sendSteerQueued": "Enviar el siguiente ahora",
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
@@ -223,7 +225,9 @@
       "historyRepaired": "No se pudo cargar parte del historial de este chat."
     },
     "message": {
-      "copyMessage": "Copiar mensaje"
+      "copyMessage": "Copiar mensaje",
+      "forkFromResponse": "Crear una rama desde esta respuesta",
+      "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
     },
     "messageActionsSheet": {
       "clipboardRejected": "El portapapeles rechazó el texto.",
@@ -305,7 +309,8 @@
       "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
       "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
       "signIn": "Iniciar sesión",
-      "signInHint": "Abre una terminal en el ordenador que ejecuta este chat"
+      "signInHint": "Abre una terminal en el ordenador que ejecuta este chat",
+      "forkedFrom": "Rama creada desde"
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -660,6 +665,12 @@
       "outcomeUnknownReturned": "Orca no pudo confirmar si la conversación volvió a este mensaje. Tu mensaje está de nuevo en el compositor y Orca comprobará la conversación antes de enviar tu próximo mensaje.",
       "timeout": "El chat no se actualizó después de volver a este mensaje. Vuelve a abrirlo para ver lo más reciente.",
       "pending": "Espera a que la conversación vuelva al mensaje anterior."
+    },
+    "fork": {
+      "busy": "Se está abriendo otro chat o terminal. Espera y vuelve a crear una rama del chat de {{agent}}.",
+      "unconfirmed": "{{agent}} no pudo confirmar la creación de la rama. Es posible que se haya abierto; revisa el historial de sesiones antes de volver a intentarlo.",
+      "failed": "{{agent}} no pudo crear una rama de este chat. {{detail}}",
+      "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo."
     }
   },
   "common": {
@@ -1111,6 +1122,12 @@
     "mermaidDiagram": {
       "expand": "Ampliar diagrama",
       "label": "Diagrama de Mermaid"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Planificar",
+        "exitPlanMode": "Salir del modo de planificación"
+      }
     }
   },
   "connection": {
@@ -1540,7 +1557,8 @@
       "removeHost": "Eliminar host",
       "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
       "sleep": "Suspender",
-      "unpin": "Desanclar"
+      "unpin": "Desanclar",
+      "rename": "Cambiar nombre"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fallidos",
@@ -1622,6 +1640,12 @@
       "thisComputer": "Este equipo",
       "waitingForDesktop": "Aún esperando respuesta del escritorio",
       "workspaceOptions": "Opciones de espacio de trabajo"
+    },
+    "workspaceRenameSheet": {
+      "title": "Cambiar nombre del espacio de trabajo",
+      "emptyUsesBranch": "Déjalo vacío para usar el nombre de la rama.",
+      "emptyUsesFolder": "Déjalo vacío para usar el nombre de la carpeta.",
+      "failed": "No se pudo cambiar el nombre del espacio de trabajo. {{reason}}"
     }
   },
   "navigation": {
@@ -2164,7 +2188,8 @@
       "usageLimitWindowWeeklyModel": "semanal del modelo",
       "waitForBackgroundTasks": "Espere a que terminen las tareas en segundo plano.",
       "waitForStart": "Espere a que el agente termine de iniciarse.",
-      "writeFailed": "Orca no pudo entregar este mensaje al agente, así que no se envió."
+      "writeFailed": "Orca no pudo entregar este mensaje al agente, así que no se envió.",
+      "pluginInputRequired": "{{agent}} se detuvo porque el complemento «{{plugin}}» espera una entrada en un panel de terminal. Desactiva el complemento para las sesiones de chat o ejecuta la tarea en un terminal de {{agent}}."
     },
     "fileReader": {
       "copyReviewNotes": "Copiar notas de revisión",
@@ -2397,7 +2422,8 @@
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
-      "allowAutoClose": "Permitir cierre automático"
+      "allowAutoClose": "Permitir cierre automático",
+      "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",
@@ -4084,6 +4110,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "El panel original del agente no está disponible. La salida guardada permanece aquí.",
       "openAgent": "Abrir agente",
       "retryHistory": "Reintentar historial",
+      "fullOutputUnavailable": "No se pudo cargar la salida completa.",
+      "retryFullOutput": "Reintentar",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No hay ejecuciones coincidentes en el historial cargado. Carga más para continuar.",
       "noMatchingRunsYet": "Aún no hay ejecuciones coincidentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4124,7 +4152,11 @@
       "notReported": "No informado",
       "searchOptions": "Buscar opciones",
       "task": "Tarea",
-      "review": "Revisar"
+      "review": "Revisar",
+      "discardChangesTitle": "¿Descartar cambios?",
+      "discardChangesMessage": "Se perderán los cambios no guardados de esta automatización.",
+      "discard": "Descartar",
+      "keepEditing": "Seguir editando"
     },
     "orphanIssues": {
       "hostReselection": "Edita esta automatización y vuelve a seleccionar su host antes de ejecutarla.",

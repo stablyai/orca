@@ -14,6 +14,7 @@ import {
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
+  resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRoute,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
@@ -29,7 +30,7 @@ import {
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
-  ownershipProjection: 'explicit' | 'legacy'
+  ownershipProjection: 'explicit' | 'qualified' | 'legacy'
   workspaceExecutionHostId?: ExecutionHostId
   childRepo?: { id: string; path: string }
   expectedSshConnectionGeneration?: number
@@ -155,6 +156,14 @@ export function resolveEditorOwnerRoute(
     return { kind: 'resolved', route: floatingRoute, ownershipProjection: 'explicit' }
   }
   const ownerState = focusFreeRouteStateOf(state)
+  if (folderHostId && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
+    const qualified = resolveWorktreeOperationRouteResultForHost(
+      ownerState,
+      worktreeId,
+      folderHostId
+    )
+    return { ...qualified, ownershipProjection: 'qualified' }
+  }
   const scope = parseWorkspaceKey(worktreeId)
   const explicit: WorktreeOperationRouteResolution =
     scope?.type === 'folder'
@@ -255,12 +264,15 @@ function resolveCurrentEditorRoute(
   const owner = resolveEditorOwnerRoute(
     state,
     worktreeId,
-    provenance.generation.route.executionHostId
+    provenance.ownershipProjection === 'qualified' ||
+      parseWorkspaceKey(worktreeId)?.type === 'folder'
+      ? provenance.generation.route.executionHostId
+      : undefined
   )
-  if (owner.ownershipProjection === 'explicit' && owner.kind === 'resolved') {
+  if (owner.ownershipProjection !== 'legacy' && owner.kind === 'resolved') {
     return owner.route
   }
-  if (owner.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
+  if (owner.kind === 'ambiguous' || provenance.ownershipProjection !== 'legacy') {
     return null
   }
   // Folder workspaces must still confirm their live owner rather than retain a published-worktree hint.

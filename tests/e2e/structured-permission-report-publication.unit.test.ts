@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { join } from 'node:path'
 import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
@@ -519,7 +520,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection
