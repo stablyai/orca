@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -58,7 +58,7 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
     expect(JSON.parse(await readFile(join(root, 'dist', 'result.json'), 'utf8'))).toEqual({
       status: 0,
       tracker: { count: 0 },
-      directory: join(root, 'dist'),
+      directory: await realpath(join(root, 'dist')),
       label: 'fixture-boot',
       lateLabel: 'fixture-boot'
     })
