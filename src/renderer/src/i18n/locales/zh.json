@@ -501,15 +501,12 @@
       "modelDescriptions": {
         "parakeetV3": "为 25 种欧洲语言提供最高准确度。支持标点、大小写和词级时间戳。",
         "parakeetV2": "仅限英语。准确度与 v3 相近，速度更快。支持标点和大小写。",
-        "zipformerBilingual": "中文 + 英文，支持语言混用。低延迟实时流式处理。",
-        "paraformerBilingual": "中文（普通话 + 方言）+ 英文。擅长识别各地口音和方言。",
         "zipformerStreamingEnRetired": "已不再提供：它会丢失句子开头。删除它以释放空间。",
-        "zipformerStreamingZh": "仅限中文。1400 万参数的超轻量模型，适合资源有限的设备。",
-        "zipformerStreamingKo": "仅限韩语。低延迟实时流式处理。",
-        "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
         "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
         "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
-        "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。"
+        "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。",
+        "retiredForEngine": "已不再提供：语音引擎已无法运行此模型。删除它以释放空间。",
+        "nemotron": "支持韩语、中文、日语等多种语言，可自动识别语言。"
       }
     },
     "diagnostics": {
@@ -8775,7 +8772,8 @@
           "dictationModeAuto": "自动",
           "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。",
           "speechGpuLabel": "使用 GPU",
-          "speechGpuDescription": "显卡可用时在显卡上识别语音，失败时改用 CPU。如果听写导致电脑卡死或重启，请关闭。"
+          "speechGpuDescription": "显卡可用时在显卡上识别语音，失败时改用 CPU。如果听写导致电脑卡死或重启，请关闭。",
+          "updateToFasterVersion": "更新到更快的版本（{{value0}} MB）"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -16295,6 +16293,7 @@
           "noModel": "未选择语音模型。请在“设置 > 语音”中下载一个。",
           "disabled": "语音听写已禁用。请在“设置 > 语音”中启用。",
           "notReady": "语音模型尚未就绪。请在“设置 > 语音”中下载。",
+          "modelNeedsUpdate": "你的语音模型需要更新才能继续使用。请在“设置 > 语音”中更新到更快的版本。",
           "unknownModel": "所选模型已不可用。请在“设置 > 语音”中选择其他模型。",
           "5d2c3e7ae3": "未检测到语音。",
           "micFallback": "所选麦克风不可用。使用系统默认值。",

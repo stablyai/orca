@@ -958,15 +958,12 @@
       "modelDescriptions": {
         "parakeetV3": "Höchste Genauigkeit für 25 europäische Sprachen. Zeichensetzung, Groß- und Kleinschreibung und Zeitstempel auf Wortebene.",
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
-        "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
-        "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
         "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
-        "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
-        "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
         "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
         "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
+        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel.",
+        "retiredForEngine": "Nicht mehr verfügbar: Die Spracherkennung kann dieses Modell nicht mehr ausführen. Löschen Sie es, um Speicherplatz freizugeben.",
+        "nemotron": "Koreanisch, Chinesisch, Japanisch und viele weitere Sprachen, mit automatischer Spracherkennung."
       }
     },
     "diagnostics": {
@@ -9471,7 +9468,8 @@
           "dictationModeAuto": "Automatisch",
           "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
           "speechGpuLabel": "GPU verwenden",
-          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren deinen Computer einfrieren oder neu starten lässt."
+          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
+          "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -16971,6 +16969,7 @@
           "noModel": "Kein Sprachmodell ausgewählt. Laden Sie eines unter Einstellungen > Spracheingabe herunter.",
           "disabled": "Spracheingabe ist deaktiviert. Aktivieren Sie sie unter Einstellungen > Spracheingabe.",
           "notReady": "Sprachmodell nicht bereit. Laden Sie es unter Einstellungen > Spracheingabe herunter.",
+          "modelNeedsUpdate": "Ihr Sprachmodell braucht ein Update, um weiter zu funktionieren. Aktualisieren Sie es unter Einstellungen > Spracheingabe auf die schnellere Version.",
           "unknownModel": "Das ausgewählte Modell ist nicht mehr verfügbar. Wählen Sie unter Einstellungen > Spracheingabe ein anderes aus.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",

@@ -1721,15 +1721,12 @@
       "modelDescriptions": {
         "parakeetV3": "Máxima precisão para 25 idiomas europeus. Pontuação, maiúsculas e minúsculas e marcas de tempo por palavra.",
         "parakeetV2": "Somente inglês. Mais rápido que v3 com precisão semelhante. Pontuação e maiúsculas e minúsculas.",
-        "zipformerBilingual": "Chinês + inglês com alternância de idiomas. Streaming em tempo real com baixa latência.",
-        "paraformerBilingual": "Chinês (mandarim + dialetos) + inglês. Bom desempenho com sotaques e variantes regionais do chinês.",
         "zipformerStreamingEnRetired": "Não é mais oferecido: ele perde o início das frases. Exclua-o para liberar espaço.",
-        "zipformerStreamingZh": "Somente chinês. Modelo ultraleve de 14 milhões de parâmetros, ideal para dispositivos com poucos recursos.",
-        "zipformerStreamingKo": "Somente coreano. Streaming em tempo real com baixa latência.",
-        "parakeetJa": "Somente japonês. Treinado com mais de 35 mil horas de fala natural. Inclui pontuação.",
         "whisperTiny": "Mais de 90 idiomas. Menor precisão que Parakeet, mas com a maior cobertura de idiomas.",
         "senseVoice": "Chinês, inglês, japonês, coreano e cantonês com detecção automática de idioma.",
-        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI."
+        "gptTranscribe": "Transcrição na nuvem com alta precisão. Exige uma chave de API da OpenAI.",
+        "retiredForEngine": "Não é mais oferecido: o mecanismo de fala não consegue mais executá-lo. Exclua-o para liberar espaço.",
+        "nemotron": "Coreano, chinês, japonês e muitos outros idiomas, com detecção automática de idioma."
       }
     },
     "diagnostics": {
@@ -6508,7 +6505,8 @@
           "dictationModeAuto": "Automático",
           "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
           "speechGpuLabel": "Usar GPU",
-          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador."
+          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
+          "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)"
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",
@@ -19256,6 +19254,7 @@
           "noModel": "Nenhum modelo de fala selecionado. Baixe um em Configurações > Voz.",
           "disabled": "O ditado por voz está desativado. Ative-o em Configurações > Voz.",
           "notReady": "O modelo de fala não está pronto. Baixe-o em Configurações > Voz.",
+          "modelNeedsUpdate": "Seu modelo de voz precisa de uma atualização para continuar funcionando. Atualize para a versão mais rápida em Configurações > Voz.",
           "unknownModel": "O modelo selecionado não está mais disponível. Escolha outro em Configurações > Voz.",
           "5d2c3e7ae3": "Nenhuma fala detectada.",
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",

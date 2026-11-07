@@ -934,15 +934,12 @@
       "modelDescriptions": {
         "parakeetV3": "25 Avrupa dili için en yüksek doğruluk. Noktalama, büyük/küçük harf kullanımı ve sözcük düzeyinde zaman damgaları.",
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
-        "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
-        "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
         "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
-        "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
-        "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
-        "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
+        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",
+        "retiredForEngine": "Artık sunulmuyor: konuşma motoru bu modeli artık çalıştıramıyor. Yer açmak için silin.",
+        "nemotron": "Korece, Çince, Japonca ve daha birçok dil; dil otomatik algılanır."
       }
     },
     "diagnostics": {
@@ -9455,7 +9452,8 @@
           "dictationModeAuto": "Otomatik",
           "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın.",
           "speechGpuLabel": "GPU kullan",
-          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın."
+          "speechGpuDescription": "Konuşmayı çalıştığında ekran kartında, başarısız olduğunda CPU’da tanır. Dikte bilgisayarınızı donduruyor veya yeniden başlatıyorsa kapatın.",
+          "updateToFasterVersion": "Daha hızlı sürüme güncelle ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -16955,6 +16953,7 @@
           "noModel": "Konuşma modeli seçilmedi. Ayarlar > Ses bölümünden bir model indirin.",
           "disabled": "Sesli dikte devre dışı. Ayarlar > Ses bölümünden etkinleştirin.",
           "notReady": "Konuşma modeli hazır değil. Ayarlar > Ses bölümünden indirin.",
+          "modelNeedsUpdate": "Konuşma modelinizin çalışmaya devam etmesi için güncellenmesi gerekiyor. Ayarlar > Ses bölümünden daha hızlı sürüme güncelleyin.",
           "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",

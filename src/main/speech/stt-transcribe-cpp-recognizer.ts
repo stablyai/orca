@@ -45,11 +45,15 @@ export async function createTranscribeCppRecognizer(
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
   const vocabulary = await readVocabulary(init.hotwordsFilePath)
+  const { languages } = model.capabilities
+  // The setting is ISO-639-1; Nemotron names locales (ko-KR) and rejects the bare code.
+  const language = init.language
+    ? (languages.find((code) => code === init.language) ??
+      languages.find((code) => code.startsWith(`${init.language}-`)))
+    : undefined
   const options: TranscribeCpp.TranscribeOptions = {
     timestamps: 'none',
-    ...(init.language && model.capabilities.languages.includes(init.language)
-      ? { language: init.language }
-      : {}),
+    ...(language ? { language } : {}),
     ...(vocabulary.length > 0 && model.supports('vocabulary') ? { vocabulary } : {})
   }
   const modelRate = model.capabilities.nativeSampleRate || init.sampleRate

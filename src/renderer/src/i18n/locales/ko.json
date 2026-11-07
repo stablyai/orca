@@ -501,15 +501,12 @@
       "modelDescriptions": {
         "parakeetV3": "유럽 25개 언어에서 가장 높은 정확도. 문장 부호, 대소문자, 단어별 타임스탬프 지원.",
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
-        "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
-        "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
         "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
-        "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
-        "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
-        "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
         "whisperTiny": "90개 이상 언어 지원. Parakeet보다 정확도는 낮지만 지원 언어가 가장 다양합니다.",
         "senseVoice": "중국어, 영어, 일본어, 한국어, 광둥어를 지원하며 언어를 자동으로 감지합니다.",
-        "gptTranscribe": "정확도가 높은 클라우드 전사. OpenAI API 키가 필요합니다."
+        "gptTranscribe": "정확도가 높은 클라우드 전사. OpenAI API 키가 필요합니다.",
+        "retiredForEngine": "더 이상 제공되지 않음: 음성 엔진에서 더 이상 실행할 수 없습니다. 삭제하여 공간을 확보하세요.",
+        "nemotron": "한국어, 중국어, 일본어 등 다양한 언어를 지원하며 언어를 자동으로 감지합니다."
       }
     },
     "diagnostics": {
@@ -8775,7 +8772,8 @@
           "dictationModeAuto": "자동",
           "dictationModesWithAutoDescription": "자동: {{shortcut}} 단축키를 길게 누르면 손을 뗄 때까지 받아쓰기하고, 짧게 누르면 시작하고 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다. 토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다.",
           "speechGpuLabel": "GPU 사용",
-          "speechGpuDescription": "그래픽 카드가 작동하면 그래픽 카드에서, 실패하면 CPU에서 음성을 인식합니다. 받아쓰기 중 컴퓨터가 멈추거나 다시 시작되면 끄세요."
+          "speechGpuDescription": "그래픽 카드가 작동하면 그래픽 카드에서, 실패하면 CPU에서 음성을 인식합니다. 받아쓰기 중 컴퓨터가 멈추거나 다시 시작되면 끄세요.",
+          "updateToFasterVersion": "더 빠른 버전으로 업데이트 ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -16295,6 +16293,7 @@
           "noModel": "선택된 음성 모델이 없습니다. 설정 > 음성에서 다운로드하세요.",
           "disabled": "음성 받아쓰기가 비활성화되어 있습니다. 설정 > 음성에서 활성화하세요.",
           "notReady": "음성 모델이 준비되지 않았습니다. 설정 > 음성에서 다운로드하세요.",
+          "modelNeedsUpdate": "음성 모델을 계속 사용하려면 업데이트가 필요합니다. 설정 > 음성에서 더 빠른 버전으로 업데이트하세요.",
           "unknownModel": "선택한 모델을 더 이상 사용할 수 없습니다. 설정 > 음성에서 다른 모델을 선택하세요.",
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",

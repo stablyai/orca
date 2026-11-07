@@ -26,6 +26,8 @@ export type SpeechModelManifest = {
   sizeBytes?: number
   downloadFiles?: SpeechModelDownloadFile[]
   files?: string[]
+  /** The sherpa-onnx files an earlier Orca downloaded for this model; they no longer run. */
+  legacyDownloadFiles?: SpeechModelDownloadFile[]
   sampleRate: number
   streaming: boolean
   modelingUnit?: ModelingUnit
@@ -57,6 +59,8 @@ export type SpeechModelState = {
   status: SpeechModelStatus
   progress?: number
   error?: string
+  /** Only the legacy sherpa-onnx files are on disk: downloading replaces them with the current ones. */
+  needsUpdate?: true
 }
 
 export type SpeechTranscriptEvent = {

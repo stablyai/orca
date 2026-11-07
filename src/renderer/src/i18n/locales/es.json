@@ -507,15 +507,12 @@
       "modelDescriptions": {
         "parakeetV3": "Máxima precisión para 25 idiomas europeos. Puntuación, mayúsculas y minúsculas y marcas de tiempo por palabra.",
         "parakeetV2": "Solo inglés. Más rápido que v3 con una precisión similar. Puntuación y mayúsculas y minúsculas.",
-        "zipformerBilingual": "Chino + inglés con alternancia de idiomas. Streaming en tiempo real de baja latencia.",
-        "paraformerBilingual": "Chino (mandarín + dialectos) + inglés. Buen rendimiento con acentos y variantes regionales del chino.",
         "zipformerStreamingEnRetired": "Ya no se ofrece: omite el comienzo de las frases. Elimínalo para liberar espacio.",
-        "zipformerStreamingZh": "Solo chino. Modelo ultraligero de 14 millones de parámetros, ideal para dispositivos con pocos recursos.",
-        "zipformerStreamingKo": "Solo coreano. Streaming en tiempo real de baja latencia.",
-        "parakeetJa": "Solo japonés. Entrenado con más de 35 000 horas de habla natural. Incluye puntuación.",
         "whisperTiny": "Más de 90 idiomas. Menor precisión que Parakeet, pero con la mayor cobertura de idiomas.",
         "senseVoice": "Chino, inglés, japonés, coreano y cantonés con detección automática de idioma.",
-        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI."
+        "gptTranscribe": "Transcripción en la nube con alta precisión. Requiere una clave API de OpenAI.",
+        "retiredForEngine": "Ya no se ofrece: el motor de voz ya no puede ejecutarlo. Elimínelo para liberar espacio.",
+        "nemotron": "Coreano, chino, japonés y muchos idiomas más, con detección automática del idioma."
       }
     },
     "diagnostics": {
@@ -9068,7 +9065,8 @@
           "dictationModeAuto": "Automático",
           "dictationModesWithAutoDescription": "Automático: mantén {{shortcut}} para dictar hasta que lo sueltes, o tócalo para empezar y parar. Mantener: dicta mientras {{shortcut}} se mantiene presionado. Alternar: pulsa {{shortcut}} una vez para empezar y otra para parar.",
           "speechGpuLabel": "Usar GPU",
-          "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívalo si el dictado congela o reinicia tu equipo."
+          "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívelo si el dictado congela o reinicia su equipo.",
+          "updateToFasterVersion": "Actualizar a la versión más rápida ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
@@ -16697,6 +16695,7 @@
           "noModel": "No hay ningún modelo de voz seleccionado. Descargue uno en Configuración > Voz.",
           "disabled": "El dictado por voz está desactivado. Actívelo en Configuración > Voz.",
           "notReady": "El modelo de voz no está listo. Descárguelo en Configuración > Voz.",
+          "modelNeedsUpdate": "Su modelo de voz necesita una actualización para seguir funcionando. Actualícelo a la versión más rápida en Configuración > Voz.",
           "unknownModel": "El modelo seleccionado ya no está disponible. Elija otro en Configuración > Voz.",
           "5d2c3e7ae3": "No se detectó ninguna voz.",
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
