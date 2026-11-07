@@ -29,7 +29,7 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return defined
 }
 
-/** Overlays shell variables on Orca's env; win32 names are case-insensitive, so drop the base spelling. */
+/** Overlays variables on a base env; win32 names are case-insensitive, so drop the base spelling. */
 function overlayShellVariables(
   base: Record<string, string>,
   shellVariables: Record<string, string>,
@@ -196,6 +196,7 @@ export async function resolveHostAgentBaseEnvironment(
 export type StructuredAgentEnvironmentSources = {
   prewarm?: boolean
   processEnvironment?: NodeJS.ProcessEnv
+  platform?: NodeJS.Platform
   /** Replaces the host's shell env, read once when the resolvers are made; never reread. */
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveShellEnvironmentPolicy?: () => NativeChatShellEnvironmentPolicy
@@ -214,6 +215,7 @@ export function createStructuredAgentEnvironmentResolvers(
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
   bindCatalogSources: (agents: readonly string[]) => () => void
 } {
+  const platform = sources.platform ?? process.platform
   // Start capture with the runtime so the first chat rarely waits for the shell profile.
   const injected = sources.resolveEnvironment?.()
   const shellEnvironment = injected ? () => injected : hostShellEnvironment
@@ -224,7 +226,8 @@ export function createStructuredAgentEnvironmentResolvers(
     structuredAgentBaseEnvironment({
       shellEnv: await shellEnvironment(cachedOnly),
       policy: sources.resolveShellEnvironmentPolicy?.() ?? nativeChatShellEnvironmentPolicy(null),
-      processEnv: sources.processEnvironment
+      processEnv: sources.processEnvironment,
+      platform
     })
   return {
     refreshAfterMissingProgram: injected
@@ -243,11 +246,11 @@ export function createStructuredAgentEnvironmentResolvers(
           agents.map((agent) => [agent, { ...sources.resolveAgentLaunchEnv?.(agent) }])
         )
         return (shellEnv) => {
-          const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv })
+          const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv, platform })
           return new Map(
             agents.map((agent) => {
-              const effective = { ...base, ...overlays.get(agent) }
-              return [agent, structuredAgentEnvironmentIdentity(effective)]
+              const effective = overlayShellVariables(base, overlays.get(agent) ?? {}, platform)
+              return [agent, structuredAgentEnvironmentIdentity(effective, platform)]
             })
           )
         }
@@ -258,10 +261,12 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) => ({
-      ...(await resolveBase()),
-      ...sources.resolveAgentLaunchEnv?.(agent)
-    })
+    resolveAgentEnvironment: async (agent) =>
+      overlayShellVariables(
+        await resolveBase(),
+        sources.resolveAgentLaunchEnv?.(agent) ?? {},
+        platform
+      )
   }
 }
 
