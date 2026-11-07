@@ -1471,7 +1471,9 @@
       "microphoneInitFailed": "Mikrofon başlatılamadı",
       "microphoneInterrupted": "Mikrofon kesintisi nedeniyle sesli dikte durdu. Tekrar deneyin.",
       "microphonePermissionDenied": "Mikrofon izni reddedildi",
-      "noSpeech": "Konuşma algılanmadı."
+      "noSpeech": "Konuşma algılanmadı.",
+      "phoneUnavailable": "Bu telefonda dikte hazır değil. Ses ayarlarından indirin veya Otomatik’i seçin.",
+      "phoneFailed": "Bu telefonda dikte çalışmayı durdurdu. Tekrar deneyin."
     }
   },
   "host": {
@@ -2826,6 +2828,18 @@
     },
     "agents": {
       "permissionOwnAll": "Ajanların kendi ayarları"
+    },
+    "voiceTranscribeOn": {
+      "heading": "YAZIYA DÖKME YERİ",
+      "description": "Bu telefonun duyduğu konuşma telefonda kalır. Otomatik, bu telefon yazıya dökemediğinde bilgisayarınızı kullanır.",
+      "automatic": "Otomatik",
+      "phone": "Bu telefon",
+      "computer": "Bilgisayar",
+      "phoneReady": "Bu telefonda hazır",
+      "phoneNeedsDownload": "Dil indirmesi gerekiyor",
+      "phoneDownloading": "İndiriliyor… %{{progress}}",
+      "phoneUnsupported": "Bu telefonun dilinde kullanılamıyor",
+      "download": "Bu telefona indir"
     }
   },
   "sourceControl": {

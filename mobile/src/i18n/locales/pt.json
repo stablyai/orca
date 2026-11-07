@@ -1510,7 +1510,9 @@
       "microphoneInitFailed": "Falha ao inicializar o microfone",
       "microphoneInterrupted": "O ditado por voz parou porque o uso do microfone foi interrompido. Tente novamente.",
       "microphonePermissionDenied": "Permissão de acesso ao microfone negada",
-      "noSpeech": "Nenhuma fala detectada."
+      "noSpeech": "Nenhuma fala detectada.",
+      "phoneUnavailable": "O ditado neste celular não está pronto. Baixe-o nos ajustes de Voz ou escolha Automático.",
+      "phoneFailed": "O ditado neste celular parou de funcionar. Tente novamente."
     }
   },
   "host": {
@@ -2898,6 +2900,18 @@
     },
     "agents": {
       "permissionOwnAll": "Configurações próprias dos agentes"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCREVER EM",
+      "description": "O que este celular ouve fica nele. Automático usa seu computador quando este celular não consegue transcrever.",
+      "automatic": "Automático",
+      "phone": "Este celular",
+      "computer": "Computador",
+      "phoneReady": "Pronto neste celular",
+      "phoneNeedsDownload": "Precisa baixar o idioma",
+      "phoneDownloading": "Baixando… {{progress}}%",
+      "phoneUnsupported": "Indisponível para o idioma deste celular",
+      "download": "Baixar para este celular"
     }
   },
   "sourceControl": {

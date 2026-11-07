@@ -126,32 +126,40 @@ export function subscribeMobileDictationAudioChunks(
     enqueueMobileDictationAudioChunk(client, dictationId, chunk, chunkQueue)
   }
   const subscription = capture.onChunk((chunk) => {
-    const client = source.getClient()
     const dictationId = source.getActiveId()
     const phase = source.audioPhase()
-    if (!client || !dictationId || phase === 'closed') {
+    if (!dictationId || phase === 'closed') {
       return
     }
+    // An on-device dictation holds its audio with no computer at all.
     if (phase === 'holding') {
       queue.heldAudio.hold(chunk)
       return
     }
-    send(client, dictationId, chunk)
+    const client = source.getClient()
+    if (client) {
+      send(client, dictationId, chunk)
+    }
   })
   return {
     remove: () => subscription.remove(),
     // Call once the phase turns to sending, before any later chunk, so the seq order matches speech order.
+    // Held audio is sent first through the normal slots; it may be a long on-device dictation's replay, so it never counts as falling behind.
     sendHeld: () => {
-      const held = queue.heldAudio.take()
       const client = source.getClient()
       const dictationId = source.getActiveId()
-      for (const chunk of held) {
-        // A failed send ends the dictation and clears the active id, so stop there.
-        if (!client || !dictationId || source.getActiveId() !== dictationId) {
-          return
-        }
-        send(client, dictationId, chunk)
+      if (!client || !dictationId) {
+        return
       }
+      if (queue.heldAudio.droppedBytes > 0) {
+        queue.failActiveDictation(
+          dictationId,
+          new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE)
+        )
+        return
+      }
+      queue.pendingAudioBudget.reserveBacklog(queue.heldAudio.bytes)
+      fillSendSlots(client, dictationId, chunkQueue)
     }
   }
 }
@@ -173,13 +181,23 @@ export function enqueueMobileDictationAudioChunk(
     return
   }
   queue.heldAudio.hold(chunk)
-  if (queue.pendingChunks.size >= MOBILE_DICTATION_MAX_CHUNK_SENDS_IN_FLIGHT) {
-    return
+  fillSendSlots(client, dictationId, queue)
+}
+
+function fillSendSlots(
+  client: RpcClient,
+  dictationId: string,
+  queue: MobileDictationAudioChunkQueue
+): void {
+  while (
+    queue.pendingChunks.size < MOBILE_DICTATION_MAX_CHUNK_SENDS_IN_FLIGHT &&
+    queue.heldAudio.bytes > 0
+  ) {
+    const slot = sendHeldAudio(client, dictationId, queue).finally(() => {
+      queue.pendingChunks.delete(slot)
+    })
+    queue.pendingChunks.add(slot)
   }
-  const slot = sendHeldAudio(client, dictationId, queue).finally(() => {
-    queue.pendingChunks.delete(slot)
-  })
-  queue.pendingChunks.add(slot)
 }
 
 // Finish awaits these slots, so a slot keeps sending until nothing is held.

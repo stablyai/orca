@@ -10,6 +10,8 @@ export const MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE =
 
 export class MobileDictationPendingAudioBudget {
   private pendingBytes = 0
+  // Audio held before the host committed (a whole on-device dictation, for a replay) is sent first and may exceed the limit; only audio after it counts.
+  private backlogBytes = 0
   private sentChunks = 0
   // Set at each start: a host that feeds each chunk seq once can take audio a drop left unanswered again.
   hostDedupesResends = false
@@ -24,21 +26,31 @@ export class MobileDictationPendingAudioBudget {
     return this.sentChunks++
   }
 
+  reserveBacklog(byteLength: number): void {
+    const normalizedByteLength = normalizeByteLength(byteLength)
+    this.pendingBytes += normalizedByteLength
+    this.backlogBytes += normalizedByteLength
+  }
+
   tryReserve(byteLength: number): boolean {
     const normalizedByteLength = normalizeByteLength(byteLength)
-    if (this.pendingBytes + normalizedByteLength > this.maxPendingBytes) {
+    if (this.pendingBytes + normalizedByteLength > this.maxPendingBytes + this.backlogBytes) {
       return false
     }
     this.pendingBytes += normalizedByteLength
     return true
   }
 
+  // Sends go out in order, so the backlog is always released first.
   release(byteLength: number): void {
-    this.pendingBytes = Math.max(0, this.pendingBytes - normalizeByteLength(byteLength))
+    const normalizedByteLength = normalizeByteLength(byteLength)
+    this.pendingBytes = Math.max(0, this.pendingBytes - normalizedByteLength)
+    this.backlogBytes = Math.max(0, this.backlogBytes - normalizedByteLength)
   }
 
   reset(hostDedupesResends = false): void {
     this.pendingBytes = 0
+    this.backlogBytes = 0
     this.sentChunks = 0
     this.hostDedupesResends = hostDedupesResends
   }

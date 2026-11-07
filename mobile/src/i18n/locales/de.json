@@ -1471,7 +1471,9 @@
       "microphoneInitFailed": "Mikrofon konnte nicht initialisiert werden.",
       "microphoneInterrupted": "Das Diktat wurde beendet, weil die Mikrofonaufnahme unterbrochen wurde. Erneut versuchen.",
       "microphonePermissionDenied": "Mikrofonzugriff verweigert",
-      "noSpeech": "Keine Sprache erkannt."
+      "noSpeech": "Keine Sprache erkannt.",
+      "phoneUnavailable": "Diktieren auf diesem Telefon ist nicht bereit. Lade es in den Spracheinstellungen herunter oder wähle Automatisch.",
+      "phoneFailed": "Diktieren auf diesem Telefon funktioniert nicht mehr. Versuche es erneut."
     }
   },
   "host": {
@@ -2826,6 +2828,18 @@
     },
     "agents": {
       "permissionOwnAll": "Eigene Einstellungen der Agenten"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSKRIBIEREN AUF",
+      "description": "Was dieses Telefon hört, bleibt auf ihm. Automatisch nutzt deinen Computer, wenn dieses Telefon nicht transkribieren kann.",
+      "automatic": "Automatisch",
+      "phone": "Dieses Telefon",
+      "computer": "Computer",
+      "phoneReady": "Auf diesem Telefon bereit",
+      "phoneNeedsDownload": "Sprachdownload erforderlich",
+      "phoneDownloading": "Wird geladen… {{progress}} %",
+      "phoneUnsupported": "Für die Sprache dieses Telefons nicht verfügbar",
+      "download": "Für dieses Telefon herunterladen"
     }
   },
   "sourceControl": {

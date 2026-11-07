@@ -60,10 +60,6 @@ type SpeechNativeModule = {
   speechCancel?: () => void
 }
 
-export const SPEECH_TEXT_EVENT = 'onSpeechText'
-export const SPEECH_ERROR_EVENT = 'onSpeechError'
-export const SPEECH_DOWNLOAD_PROGRESS_EVENT = 'onSpeechDownloadProgress'
-
 const speech = ExpoTwoWayAudioModule as SpeechNativeModule
 
 // A shell from before this contract lacks every function; partial builds are treated the same way.

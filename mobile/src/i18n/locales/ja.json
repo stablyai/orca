@@ -1467,7 +1467,9 @@
       "microphoneInitFailed": "マイクの初期化に失敗しました",
       "microphoneInterrupted": "マイクの使用が中断されたため、音声ディクテーションを停止しました。再試行してください。",
       "microphonePermissionDenied": "マイクの使用が許可されていません",
-      "noSpeech": "音声が検出されませんでした。"
+      "noSpeech": "音声が検出されませんでした。",
+      "phoneUnavailable": "この端末での音声入力は準備ができていません。音声設定でダウンロードするか、「自動」を選んでください。",
+      "phoneFailed": "この端末での音声入力が停止しました。もう一度お試しください。"
     }
   },
   "host": {
@@ -2822,6 +2824,18 @@
     },
     "agents": {
       "permissionOwnAll": "Agent 独自の設定"
+    },
+    "voiceTranscribeOn": {
+      "heading": "文字起こしの場所",
+      "description": "この端末で聞き取った音声は端末の外に出ません。「自動」では、この端末で文字起こしできないときにコンピュータを使います。",
+      "automatic": "自動",
+      "phone": "この端末",
+      "computer": "コンピュータ",
+      "phoneReady": "この端末で使用可能",
+      "phoneNeedsDownload": "言語のダウンロードが必要",
+      "phoneDownloading": "ダウンロード中… {{progress}}%",
+      "phoneUnsupported": "この端末の言語では使用できません",
+      "download": "この端末にダウンロード"
     }
   },
   "sourceControl": {

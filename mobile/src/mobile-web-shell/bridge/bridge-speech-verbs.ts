@@ -4,12 +4,7 @@ import * as z from 'zod'
 // One verb with an action keeps the session route within the grant ceiling. The page polls read on its audio drain tick because the bridge has no push lane.
 export const BRIDGE_SPEECH_VERB = 'native.speech.act'
 
-export const BRIDGE_SPEECH_STATUSES = [
-  'ready',
-  'needs-download',
-  'downloading',
-  'unsupported'
-] as const
+export const BRIDGE_SPEECH_STATUSES = ['ready', 'needs-download', 'unsupported'] as const
 
 export type BridgeSpeechStatus = (typeof BRIDGE_SPEECH_STATUSES)[number]
 
@@ -24,11 +19,14 @@ export const BRIDGE_SPEECH_FAILURES = [
 
 export type BridgeSpeechFailure = (typeof BRIDGE_SPEECH_FAILURES)[number]
 
+// The phone's own choice, kept by the shell: Automatic uses the phone when it can, This phone never sends audio to the computer, Computer is today's path.
+export const DICTATION_ENGINE_PREFERENCES = ['automatic', 'phone', 'computer'] as const
+
+export type DictationEnginePreference = (typeof DICTATION_ENGINE_PREFERENCES)[number]
+
 const localeSchema = z.string().min(1).max(35)
 
 const statusParamsSchema = z.strictObject({ action: z.literal('status'), locale: localeSchema })
-// Starts an asset download; the page watches progress through status.
-const downloadParamsSchema = z.strictObject({ action: z.literal('download'), locale: localeSchema })
 // Arm before native.audio.start so the recognizer hears the first word; the shell feeds it every captured sample from then on.
 const startParamsSchema = z.strictObject({ action: z.literal('start'), locale: localeSchema })
 const readParamsSchema = z.strictObject({ action: z.literal('read') })
@@ -37,25 +35,20 @@ const cancelParamsSchema = z.strictObject({ action: z.literal('cancel') })
 
 export const speechParamsSchema = z.discriminatedUnion('action', [
   statusParamsSchema,
-  downloadParamsSchema,
   startParamsSchema,
   readParamsSchema,
   finishParamsSchema,
   cancelParamsSchema
 ])
 
-export type BridgeSpeechParams = z.infer<typeof speechParamsSchema>
-
 const textSchema = z.string().max(64_000)
 
-// progress is 0..1 only while downloading.
+// Assets are downloaded from the phone's Voice settings, which talk to the recognizer directly.
 export const speechStatusResultSchema = z.strictObject({
   status: z.enum(BRIDGE_SPEECH_STATUSES),
   locale: localeSchema.nullable(),
-  progress: z.number().min(0).max(1).nullable()
+  preference: z.enum(DICTATION_ENGINE_PREFERENCES)
 })
-
-export const speechDownloadResultSchema = z.strictObject({ downloading: z.boolean() })
 
 export const speechStartResultSchema = z.strictObject({
   started: z.boolean(),
@@ -87,7 +80,6 @@ export type BridgeSpeechFinish = z.infer<typeof speechFinishResultSchema>
 // The verb table validates the shell's reply against any action's shape; the page re-parses with the action's own.
 export const speechResultSchema = z.union([
   speechStatusResultSchema,
-  speechDownloadResultSchema,
   speechStartResultSchema,
   speechReadResultSchema,
   speechFinishResultSchema,
