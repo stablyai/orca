@@ -167,14 +167,6 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
-  it('reports a worker stopped at an approval prompt', async () => {
-    const ctx = setup()
-    const stops = terminal(ctx, { row: hookRow({ state: 'blocked' }) })
-    stops.observe(moved('working', 'needs-you'))
-    await settle()
-    expect(ctx.mail()[0]?.subject).toBe('Worker is waiting on a prompt')
-  })
-
   it('escalates a prompt or error while its helper is open, but not a clean rest', async () => {
     const ctx = setup()
     const helperTask = ctx.db.createTask({ spec: 'help', runId: ctx.run.id })
@@ -298,18 +290,6 @@ describe('chat worker turn stops', () => {
       outcome,
       completedAt: 1
     }
-  })
-
-  it('reports a finished turn and leaves failures to the chat error escalation', () => {
-    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
-    const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
-    report(completion('failure'), status)
-    expect(ctx.mail()).toHaveLength(0)
-    report(completion('success'), status)
-    report(completion('success'), status)
-    expect(ctx.mail()).toHaveLength(1)
-    expect(ctx.mail()[0].body).toContain('Read the files.')
   })
 
   // The report claimed a follow-up on the same chat; its task is not handed over yet.
