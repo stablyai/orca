@@ -24,8 +24,10 @@ export async function resolveInitializedSubmodulePath(
   submodulePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<string> {
-  const normalized = submodulePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  const rawPath = submodulePath.replace(/\/+$/, '')
   const listed = await listSubmodulePaths(parentWorktreePath, options)
+  // A Linux submodule path may hold a literal backslash; only a miss falls back to Windows separators.
+  const normalized = listed.includes(rawPath) ? rawPath : rawPath.replace(/\\/g, '/')
   if (!listed.includes(normalized)) {
     throw new Error('Access denied: path is not a submodule of this worktree')
   }
