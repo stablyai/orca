@@ -183,17 +183,10 @@ export function AntigravityAccountsSection({
 
   return (
     <section id="accounts-antigravity" className="space-y-4 scroll-mt-6">
-      <div className="space-y-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <AgentIcon agent="antigravity" size={16} />
-          {translate('accounts.antigravity.title', 'Antigravity')}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {translate('accounts.antigravity.scope', 'Manage the native agy account on {{host}}.', {
-            host: label
-          })}
-        </p>
-      </div>
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <AgentIcon agent="antigravity" size={16} />
+        {translate('accounts.antigravity.title', 'Antigravity')}
+      </h3>
       <p className="text-xs text-muted-foreground">
         {translate(
           'accounts.antigravity.signIn',
@@ -340,37 +333,35 @@ export function AntigravityAccountsSection({
             )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <div className="space-y-4">
-          <ManagedRuntimeInstallRow
-            observation={chatRuntime}
-            agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-            signInRunning={antigravityChatSignInRunning(signIn.flow)}
-          >
-            {(line, actions) => (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {translate(
-                      'settings.chat.providers.antigravityDescription',
-                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
-                    )}
-                  </p>
-                  {line}
+        <AntigravityChatSignInRow
+          owner={owner}
+          label={label}
+          description={translate(
+            'accounts.antigravity.chatSeparate',
+            'Separate from your agy terminal account.'
+          )}
+          disabled={antigravityChatSignInBlocked(chatRuntime)}
+          runtime={
+            <ManagedRuntimeInstallRow
+              observation={chatRuntime}
+              agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+              signInRunning={antigravityChatSignInRunning(signIn.flow)}
+              buttonSize="default"
+            >
+              {(line, actions) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {translate('settings.agents.chatRuntime', 'Chat runtime')}
+                    </p>
+                    <div className="mt-0.5">{line}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">{actions}</div>
                 </div>
-                {actions}
-              </div>
-            )}
-          </ManagedRuntimeInstallRow>
-          <AntigravityChatSignInRow
-            owner={owner}
-            label={label}
-            description={translate(
-              'accounts.antigravity.chatDescription',
-              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
-            )}
-            disabled={antigravityChatSignInBlocked(chatRuntime)}
-          />
-        </div>
+              )}
+            </ManagedRuntimeInstallRow>
+          }
+        />
       ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
         <ChatUnavailableOnWindowsNote
           label={translate('accounts.antigravity.title', 'Antigravity')}
