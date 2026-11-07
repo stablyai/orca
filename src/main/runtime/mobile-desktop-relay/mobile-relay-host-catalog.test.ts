@@ -648,3 +648,63 @@ describe('mobile relay host catalog: the focused workspace context', () => {
     }
   })
 })
+
+describe('mobile relay host catalog: the focused workspace context under panel polling', () => {
+  const id = 'repo-1::/srv/app'
+
+  it('lets many panels polling a hung server share one fetch and one bounded wait per window', async () => {
+    vi.useFakeTimers()
+    try {
+      const { hosts, call } = fakeHosts([
+        { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+      ])
+      call.mockReturnValue(new Promise(() => {}))
+      const { catalog: hostCatalog } = catalog(hosts)
+      const stalledMs: number[] = []
+      // A 2 s poll from 8 panels for 30 s: one bounded wait per 10 s miss window, not per panel or poll.
+      for (let tick = 0; tick < 15; tick += 1) {
+        const started = Date.now()
+        const polls = Array.from({ length: 8 }, () =>
+          hostCatalog.workspaceContext('runtime:env', id).then(() => Date.now() - started)
+        )
+        await vi.advanceTimersByTimeAsync(1_500)
+        stalledMs.push(...(await Promise.all(polls)))
+        await vi.advanceTimersByTimeAsync(500)
+      }
+      expect(stalledMs.filter((ms) => ms > 0)).toHaveLength(3)
+      expect(Math.max(...stalledMs)).toBeLessThanOrEqual(1_500)
+      // The hung fetch is joined, not reissued.
+      expect(call).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('throttles a server whose fetch fails instead of retrying it on every poll', async () => {
+    let now = 1_000
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockRejectedValue(new Error('transport_closed'))
+    const serverRows = new PairedServerRowsProducer({
+      hasDemand: () => false,
+      hostLabelOverrides: () => new Map()
+    })
+    serverRows.attach(hosts)
+    const hostCatalog = new MobileRelayHostCatalog({
+      hosts,
+      serverRows,
+      hostLabelOverrides: () => new Map(),
+      getWorkspaceSession: () => null,
+      now: () => now
+    })
+
+    for (let poll = 0; poll < 5; poll += 1) {
+      await expect(hostCatalog.workspaceContext('runtime:env', id)).resolves.toBeNull()
+      now += 2_000
+    }
+    expect(call).toHaveBeenCalledTimes(1)
+    await expect(hostCatalog.workspaceContext('runtime:env', id)).resolves.toBeNull()
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+})

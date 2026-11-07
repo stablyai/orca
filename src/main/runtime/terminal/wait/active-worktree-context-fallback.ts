@@ -28,6 +28,22 @@ export function activeSessionWorkspaceId(
   )
 }
 
+/**
+ * Catalog lookups for the focused id, in order. A remote stamp stays scoped so a paired-server
+ * focus never borrows a local twin's row. A local (or unstamped) focus keeps its pre-host-field
+ * answer: a stale local stamp, e.g. after the repo moved hosts, must not turn into null.
+ */
+export function activeWorkspaceSelectorScopes(
+  hostId: ExecutionHostId | undefined
+): ({ requiredHostId: ExecutionHostId } | undefined)[] {
+  if (hostId === undefined) {
+    return [undefined]
+  }
+  return hostId === LOCAL_EXECUTION_HOST_ID
+    ? [{ requiredHostId: hostId }, undefined]
+    : [{ requiredHostId: hostId }]
+}
+
 /** What `MobileRelayHostCatalog.workspaceContext` answers: a paired server's listed workspace. */
 export type PairedWorkspaceContextSource = {
   workspaceContext(

@@ -18,6 +18,7 @@ import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interacti
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   activeSessionWorkspaceId,
+  activeWorkspaceSelectorScopes,
   resolveRemoteWorkspaceContext,
   type ActiveWorkspaceContext,
   type PairedWorkspaceContextSource
@@ -166,19 +167,18 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     if (!worktreeId) {
       return null
     }
-    try {
-      const resolved = await this.resolveWorkspaceSelector(
-        `id:${worktreeId}`,
-        hostId ? { requiredHostId: hostId } : undefined
-      )
-      return {
-        worktreeId: resolved.id,
-        path: resolved.git.path,
-        branch: resolved.git.branch,
-        displayName: resolved.displayName
+    for (const scope of activeWorkspaceSelectorScopes(hostId)) {
+      try {
+        const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`, scope)
+        return {
+          worktreeId: resolved.id,
+          path: resolved.git.path,
+          branch: resolved.git.branch,
+          displayName: resolved.displayName
+        }
+      } catch {
+        // A remote worktree is not in the local catalog; project what the stored row knows.
       }
-    } catch {
-      // A remote worktree is not in the local catalog; project what the stored row knows.
     }
     return resolveRemoteWorkspaceContext(
       this.store,

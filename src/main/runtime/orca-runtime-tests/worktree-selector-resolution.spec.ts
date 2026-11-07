@@ -255,6 +255,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     // The local catalog cannot resolve a remote worktree; the stored row is the only source.
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
       runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
       'resolveWorkspaceSelector'
     ).mockRejectedValue(new Error('selector_not_found'))
@@ -294,6 +295,7 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
       runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
       'resolveWorkspaceSelector'
     ).mockRejectedValue(new Error('selector_not_found'))
@@ -336,6 +338,7 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
       runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
       'resolveWorkspaceSelector'
     ).mockRejectedValue(new Error('selector_not_found'))
@@ -370,6 +373,7 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
       runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
       'resolveWorkspaceSelector'
     ).mockRejectedValue(new Error('selector_not_found'))
@@ -435,6 +439,7 @@ describe('OrcaRuntimeService', () => {
     }
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     vi.spyOn(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies on the protected catalog lookup to stand in for an unreachable remote catalog.
       runtime as unknown as { resolveWorkspaceSelector: (selector: string) => Promise<unknown> },
       'resolveWorkspaceSelector'
     ).mockRejectedValue(new Error('selector_not_found'))
