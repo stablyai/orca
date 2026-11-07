@@ -244,6 +244,13 @@ export function recognizeAgentProcessFromCommandLine(
   const viaEntrypoint = PYTHON_PROCESS_RE.test(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+  // Plugin hosts run the same bundle but cannot receive interactive agent tasks.
+  if (
+    viaEntrypoint?.agent === 'zcode' &&
+    tokens[tokens.indexOf(entrypoint, 1) + 1] === '__zcode-plugin-host'
+  ) {
+    return null
+  }
   if (
     viaEntrypoint?.agent === 'claude-agent-teams' &&
     tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
