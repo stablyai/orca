@@ -92,6 +92,8 @@ export type AgentLaunchPreferences = {
   model?: string
   effort?: string
   mode?: string
+  fastMode?: boolean
+  serviceTier?: string
 }
 
 export type AgentPromptDelivery = 'auto-submit' | 'draft'

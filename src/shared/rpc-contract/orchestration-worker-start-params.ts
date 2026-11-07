@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import { WorkerRoleName } from '../orchestration-worker-roles'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -27,8 +28,10 @@ export const WorkerStartParams = z
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
     terminal: OptionalString,
     agent: OptionalString,
+    role: WorkerRoleName.optional(),
     model: OptionalWorkerLaunchPreference,
     effort: OptionalWorkerLaunchPreference,
+    fastMode: z.boolean().optional(),
     retryOf: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     devMode: z.boolean().optional()
