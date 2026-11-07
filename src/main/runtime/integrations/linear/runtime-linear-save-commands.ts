@@ -39,6 +39,7 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
           dueDate: params.dueDate ?? undefined,
           labels: params.labels,
           projectInput: params.project ?? undefined,
+          cycle: params.cycle,
           parentInput: params.parentId ?? undefined,
           workspaceId: params.workspaceId,
           writeId: params.writeId,

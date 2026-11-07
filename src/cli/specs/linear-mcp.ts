@@ -6,7 +6,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'save-issue'],
     summary: 'Create or update a Linear issue',
     usage:
-      'orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>...] [--project <project>|null] [--parent-id <issue>|null] [--write-id <uuid>] [--workspace <id>] [--json]',
+      'orca linear save-issue [<id>] [--current] [--team <key|id>] [--title <title>] [--description <text> | --body-file <path|->] [--state <state>] [--assignee me|<user>|null] [--priority none|low|medium|high|urgent] [--estimate <number>|null] [--due-date <yyyy-mm-dd>|null] [--label <label>...] [--project <project>|null] [--parent-id <issue>|null] [--cycle current|<uuid>|null] [--write-id <uuid>] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'current',
@@ -22,6 +22,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
       'due-date',
       'label',
       'project',
+      'cycle',
       'parent-id',
       'write-id',
       'workspace',
@@ -36,7 +37,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Without <id> or --current, creates an issue and requires --team and --title.',
       'Labels replace the complete label set, matching Linear MCP save_issue semantics.',
-      'Use the literal null to clear assignee, estimate, due date, project, or parent.'
+      'Use the literal null to clear assignee, estimate, due date, project, cycle, or parent.'
     ]
   },
   {

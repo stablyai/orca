@@ -1,3 +1,4 @@
+import { resolveIssueCycle } from '../../../linear/issue-cycle-resolution'
 import {
   getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   getTeamStatesOrThrow as getLinearTeamStatesOrThrow
@@ -174,6 +175,11 @@ export class RuntimeLinearTaskFieldCommands extends RuntimeLinearLabelWriteComma
         )
         fields.labelIds = labels.map((label) => label.id)
       }
+    }
+    if (params.cycle !== undefined) {
+      fields.cycleId = await this.readLinearWriteLookup(() =>
+        resolveIssueCycle(params.cycle!, current.team.id, workspaceId, signal)
+      )
     }
     if (params.project !== undefined) {
       fields.projectId =

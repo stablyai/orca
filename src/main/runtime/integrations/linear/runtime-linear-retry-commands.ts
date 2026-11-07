@@ -129,6 +129,7 @@ export class RuntimeLinearRetryCommands extends RuntimeLinearCommandBase {
       ...(fields.estimate !== undefined && fields.estimate !== null
         ? [`--estimate=${fields.estimate}`]
         : []),
+      ...(fields.cycleId !== undefined ? [`--cycle=${fields.cycleId ?? 'null'}`] : []),
       ...(fields.dueDate ? [`--due-date=${fields.dueDate}`] : []),
       ...(fields.projectId
         ? [`--project=${this.commandToken(fields.projectId, 'PROJECT_ID')}`]

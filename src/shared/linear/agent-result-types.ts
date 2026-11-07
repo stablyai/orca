@@ -299,6 +299,7 @@ export type LinearCreateResult = {
     state: { id: string; name: string } | null
     parent: { id: string; identifier: string } | null
     project?: LinearNamedEntity | null
+    cycle?: { id: string; name: string | null; number: number } | null
     assignee?: LinearUserSummary | null
     priority?: number | null
     estimate?: number | null
