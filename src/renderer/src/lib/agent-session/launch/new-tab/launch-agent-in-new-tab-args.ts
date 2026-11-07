@@ -63,8 +63,12 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
 }
 
 export function snapshotAgentTabLaunchArgs(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabArgs {
+  const capturedHostId = args.selectedExecutionHostId ?? args.workspaceExecutionHostId
   return {
     ...args,
+    ...(capturedHostId
+      ? { selectedExecutionHostId: capturedHostId, workspaceExecutionHostId: capturedHostId }
+      : {}),
     ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
     ...(args.chatSessionOptions !== undefined
       ? { chatSessionOptions: { ...args.chatSessionOptions } }

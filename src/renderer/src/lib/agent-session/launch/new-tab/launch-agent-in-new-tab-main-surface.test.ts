@@ -1,3 +1,4 @@
+import { adoptAgentSessionLaunchVerdict } from '../routing/agent-session-launch-plan'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { planQueuedPaneAgentLaunch } from '../../../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import {
@@ -168,6 +169,36 @@ describe('launchAgentInNewTab main-window surface', () => {
     expect(state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(tabId)
     expect(state.activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('terminal')
   })
+})
+
+it('resumes a captured launch without navigating away from the current workspace', async () => {
+  const store = seedMainWindowOnEditor()
+  const owner = 'repo1::/path/background'
+  store.setState((state) => ({
+    worktreesByRepo: {
+      repo1: [
+        ...state.worktreesByRepo.repo1,
+        makeWorktree({ id: owner, repoId: 'repo1', path: '/path/background', hostId: 'local' })
+      ]
+    }
+  }))
+  const before = store.getState()
+  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  const result = launchAgentInNewTab({
+    agent: 'opencode',
+    worktreeId: owner,
+    selectedExecutionHostId: 'local',
+    agentSessionLaunchPlan: adoptAgentSessionLaunchVerdict({
+      route: 'terminal-tui',
+      requestId: 'resumed-launch',
+      agent: 'opencode',
+      worktreeId: owner
+    })
+  })
+  expect(result?.surface.kind).toBe('local-terminal')
+  expect(store.getState().activeWorktreeId).toBe(MAIN_WORKTREE_ID)
+  expect(store.getState().activeTabId).toBe(before.activeTabId)
+  expect(store.getState().unifiedTabsByWorktree[owner]?.[0]?.executionHostId).toBe('local')
 })
 
 // A new tab can mount during its publication; its first spawn must already own the cwd.

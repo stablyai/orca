@@ -1,3 +1,6 @@
+import { resolveOwner } from './resolve-owner'
+import { findIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -11,8 +14,8 @@ import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-s
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import {
-  getConnectionIdForWorktreeCopy,
-  getConnectionIdFromState
+  getConnectionIdFromState,
+  getConnectionIdForWorktreeCopy
 } from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
@@ -150,20 +153,51 @@ export function resolveWorktreeExecutionHostPlatform(
   workspacePath: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
-  // Why the routing default: an owner-less row launches where routing sends it, so read that host.
-  const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+  const owner = executionHostId
+    ? resolveOwner(state, { workspaceId: worktreeId, hostId: executionHostId })
+    : undefined
+  if (executionHostId && owner?.kind !== 'resolved') {
+    return { kind: 'withheld', reason: HOST_UNRESOLVED_WITHHELD }
+  }
+  const selectedWorktree = executionHostId
+    ? findKnownWorktreeById({ ...state, floatingWorkspacePath: null }, worktreeId, executionHostId)
+    : undefined
+  const selectedRepo =
+    selectedWorktree && executionHostId
+      ? findIndexedRepoOwnerForHost(state.repos, selectedWorktree.repoId, executionHostId)
+      : undefined
+  const host = parseExecutionHostId(
+    executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
+  )
+  const connectionId = executionHostId
+    ? getConnectionIdForWorktreeCopy(state, worktreeId, executionHostId)
+    : getConnectionIdFromState(state, worktreeId)
+  const environmentId =
+    owner?.kind === 'resolved' && owner.owner.endpoint.kind === 'environment'
+      ? owner.owner.endpoint.environmentId
+      : null
   return resolveHostPlatform(state, {
     host,
-    nestedSshTargetId:
-      host?.kind === 'runtime'
-        ? ((executionHostId
-            ? getConnectionIdForWorktreeCopy(state, worktreeId, executionHostId)
-            : getConnectionIdFromState(state, worktreeId)) ?? null)
-        : null,
+    nestedSshTargetId: host?.kind === 'runtime' ? (connectionId ?? null) : null,
     sshOwnerEnvironmentId:
-      host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null,
+      host?.kind === 'ssh'
+        ? executionHostId
+          ? environmentId
+          : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        : null,
     workspacePath,
-    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
+    projectRuntime: () =>
+      executionHostId && !(selectedWorktree && selectedRepo)
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(
+            state,
+            worktreeId,
+            undefined,
+            undefined,
+            selectedWorktree && selectedRepo
+              ? { worktree: selectedWorktree, repo: selectedRepo }
+              : undefined
+          )
   })
 }
 

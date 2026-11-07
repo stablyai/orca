@@ -62,9 +62,9 @@ function resolveSimulatorExecutionHostId(
 
 export function getSimulatorTabForWorktree(
   worktreeId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  state = useAppStore.getState()
 ): ExistingSimulatorTab | null {
-  const state = useAppStore.getState()
   const worktrees = getSimulatorWorktrees(state, worktreeId)
   const activeExecutionHostId =
     executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)

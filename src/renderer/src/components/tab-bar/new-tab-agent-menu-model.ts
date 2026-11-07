@@ -16,6 +16,7 @@ export type NewTabAgentMenuModel =
         launchCwd?: string | null
         workspace: ProspectiveWorkspace
         executionHostId: string
+        inventoryExecutionHostId?: string
         pairingRevision?: number
         runtimeId?: string | null
         settings: AgentPickerDefaultSettings | null
@@ -50,6 +51,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
       x?.key,
       x?.launchCwd,
       x?.executionHostId,
+      x?.inventoryExecutionHostId,
       x?.pairingRevision,
       x?.runtimeId,
       x?.workspace.kind,
@@ -77,6 +79,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
       y?.key,
       y?.launchCwd,
       y?.executionHostId,
+      y?.inventoryExecutionHostId,
       y?.pairingRevision,
       y?.runtimeId,
       y?.workspace.kind,

@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 /** Allocate the prompt’s owning pane before mount; main plans and starts it at the pane’s real size. */
 
 import { useAppStore } from '@/store/index'
@@ -15,6 +16,7 @@ import type { SessionOptionValue } from '../../../../../../shared/native-chat/in
 export type HostAgentLaunchArgs = {
   agent: TuiAgent
   worktreeId: string
+  executionHostId?: ExecutionHostId
   groupId?: string
   /** Kept by the window: a pane whose agent could not start offers to copy it. */
   prompt: string
@@ -63,6 +65,7 @@ export function launchAgentThroughHost(args: HostAgentLaunchArgs): {
   const started = awaitAgentLaunchPaneStart(tabId, leafId)
   store.createTab(args.worktreeId, args.groupId, undefined, {
     id: tabId,
+    ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
     initialLeafId: leafId,
     agentLaunchPane: { leafId },
     launchAgent: args.agent,

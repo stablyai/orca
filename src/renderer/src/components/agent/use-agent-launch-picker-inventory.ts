@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -54,7 +55,8 @@ export function useAgentLaunchPickerInventorySource(
   worktreeId: string | undefined,
   model: NewTabAgentMenuModel,
   open: boolean,
-  selected?: AgentPickerEntry['agent']
+  selected?: AgentPickerEntry['agent'],
+  selectedExecutionHostId?: ExecutionHostId
 ): AgentPickerInventorySource {
   const store = useAppStateView()
   const viewActive = useAppStateViewActive()
@@ -68,12 +70,15 @@ export function useAgentLaunchPickerInventorySource(
     context?.executionHostId ??
     buildAgentLaunchRouteInput(store.getState(), {
       agent: 'claude',
+      selectedExecutionHostId,
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
         ...(worktreeId ? { worktreeId } : {})
       }
     }).executionHostId
-  const target = structuredAgentSessionTargetForHost(executionHostId)
+  const target = structuredAgentSessionTargetForHost(
+    context?.inventoryExecutionHostId ?? executionHostId
+  )
   const registeredAgents = readHostStructuredAgentsForRuntime(
     executionHostId,
     target?.kind === 'local' ? null : context?.runtimeId

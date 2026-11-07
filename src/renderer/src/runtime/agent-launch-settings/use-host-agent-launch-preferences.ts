@@ -6,7 +6,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
 import {
-  buildAgentLaunchRouteInput,
+  resolveAgentLaunchInventoryHost,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
@@ -32,9 +32,7 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
       ? { agentLaunchChoices: state.settings.agentLaunchChoices }
       : {})
   }
-  const host = parseExecutionHostId(
-    buildAgentLaunchRouteInput(state, { agent: 'claude', workspace }).executionHostId
-  )
+  const host = parseExecutionHostId(resolveAgentLaunchInventoryHost(state, workspace))
   const owner =
     host?.kind === 'runtime'
       ? {

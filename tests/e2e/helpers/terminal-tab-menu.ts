@@ -25,12 +25,17 @@ async function activeTabBarRoot(page: Page): Promise<Locator> {
   return (await strip.count()) > 0 ? strip : page.locator('body')
 }
 
+export async function tabCreateMenuTrigger(scope: Page | Locator): Promise<Locator> {
+  const root = 'mainFrame' in scope ? await activeTabBarRoot(scope) : scope
+  return root.locator('[data-contextual-tour-target="tab-create-menu"]')
+}
+
 export async function createTerminalTabFromMenu(page: Page): Promise<string> {
   const tabBar = await activeTabBarRoot(page)
   const tabsBefore = await tabBar.locator(SORTABLE_TAB).count()
   const activeBefore = await getActiveTabId(page)
 
-  await tabBar.getByRole('button', { name: 'New tab' }).click()
+  await (await tabCreateMenuTrigger(tabBar)).click()
   await page
     .getByRole('menuitem', { name: /New Terminal/i })
     .first()

@@ -160,3 +160,20 @@ export function launchOnceHostAnswered(
       : {})
   }
 }
+
+export function runAgentTabLaunch(
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure: boolean,
+  launch: (notify: () => void) => AgentTabLaunchOutcome
+): AgentTabLaunchOutcome {
+  const notify = () => notifyAgentTabLaunchFailure(args.agent)
+  try {
+    return launch(notify)
+  } catch {
+    args.focusIntent?.cancel()
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
+  }
+}

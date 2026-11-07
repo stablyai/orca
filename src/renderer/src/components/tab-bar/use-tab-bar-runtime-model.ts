@@ -1,3 +1,5 @@
+import { getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
@@ -9,6 +11,8 @@ import { buildStatusMap } from '../../lib/git-path-decoration'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isNativeChatTranscriptLocalReadable } from '../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -26,7 +30,7 @@ import {
 } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -87,11 +91,14 @@ export type TabBarRuntimeModel = {
 
 export function useTabBarRuntimeModel({
   worktreeId,
-  groupId
+  groupId,
+  executionHostId
 }: {
   worktreeId: string
   groupId?: string
+  executionHostId?: ExecutionHostId
 }): TabBarRuntimeModel {
+  const selectedHost = parseExecutionHostId(executionHostId)
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
@@ -117,37 +124,53 @@ export function useTabBarRuntimeModel({
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
   )
-  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId)
+  const agentDetectionTarget = useAgentDetectionTargetForWorktree(worktreeId, executionHostId)
   const defaultWindowsPowerShellImplementation = useAppStore((s) =>
     resolveWindowsPowerShellImplementationSetting(s.settings)
   )
   const settings = useAppStore((s) => s.settings)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
-  const activeRuntimeEnvironmentId = useAppStore((s) =>
-    runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
-  )
+  const ownerRuntimeEnvironmentId = useAppStore((s) => {
+    if (!executionHostId) {
+      return runtimeEnvironmentIdOrLocalUnlessTwin(s, worktreeId)
+    }
+    const owner = runtimeEnvironmentIdForWorkspaceOwner(s, {
+      workspaceId: worktreeId,
+      hostId: executionHostId
+    })
+    return owner.kind === 'resolved' ? owner.environmentId : null
+  })
   // Why: retained tab strips rerun selectors on every store write; reuse canonical indexes, don't flatten both slices here.
   const worktreeConnectionId = useAppStore(
-    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
+    (s) =>
+      (executionHostId
+        ? getConnectionIdForWorktreeCopy(s, worktreeId, executionHostId)
+        : getConnectionIdFromState(s, worktreeId)
+      )?.trim() || null
   )
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
       return null
     }
-    return s.sshConnectionStates.get(worktreeConnectionId)?.remotePlatform ?? null
+    const connection = ownerRuntimeEnvironmentId
+      ? s.sshStateByEnvironment
+          .get(ownerRuntimeEnvironmentId)
+          ?.connectionStates.get(worktreeConnectionId)
+      : s.sshConnectionStates.get(worktreeConnectionId)
+    return connection?.remotePlatform ?? null
   })
   const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
-    activeRuntimeEnvironmentId,
+    ownerRuntimeEnvironmentId,
     worktreeConnectionId
   )
   const runtimeTarget = useMemo(
-    () => runtimeTargetForOwnerEnvironment(activeRuntimeEnvironmentId),
-    [activeRuntimeEnvironmentId]
+    () => runtimeTargetForOwnerEnvironment(ownerRuntimeEnvironmentId),
+    [ownerRuntimeEnvironmentId]
   )
   const shouldProbeWindowsShellCapabilities =
     isWindows ||
-    Boolean(activeRuntimeEnvironmentId?.trim()) ||
+    Boolean(ownerRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
@@ -159,16 +182,18 @@ export function useTabBarRuntimeModel({
   )
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
-    : windowsTerminalCapabilities.hostPlatform
+    : selectedHost?.kind === 'ssh'
+      ? null
+      : windowsTerminalCapabilities.hostPlatform
   const showWindowsShellMenu = shouldShowWindowsShellMenu({
-    activeRuntimeEnvironmentId,
+    ownerRuntimeEnvironmentId,
     hostPlatform: shellMenuHostPlatform,
     isWindowsClient: isWindows,
-    worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
+    worktreeHasRemoteConnection: Boolean(worktreeConnectionId) || selectedHost?.kind === 'ssh'
   })
   // Subscribe to project/worktree maps only for the local shell menu; their routine writes otherwise repaint every retained strip.
   const needsLocalProjectRuntime =
-    showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
+    showWindowsShellMenu && !ownerRuntimeEnvironmentId?.trim() && !worktreeConnectionId
   const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
   const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
   const worktreesByRepo = useAppStore((s) =>
@@ -216,13 +241,16 @@ export function useTabBarRuntimeModel({
     () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
     [resolvedGroupId, unifiedTabs]
   )
-  const workspaceHasSimulatorTab = useMemo(
-    () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),
-    [unifiedTabs]
+  const workspaceHasSimulatorTab = useAppStore((state) =>
+    executionHostId
+      ? Boolean(getSimulatorTabForWorktree(worktreeId, executionHostId, state))
+      : (state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS).some(
+          (tab) => tab.contentType === 'simulator'
+        )
   )
   const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
     useShallow((state) => {
-      const policy = getClientCreationActionPolicy(state, worktreeId)
+      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId, executionHostId)
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'

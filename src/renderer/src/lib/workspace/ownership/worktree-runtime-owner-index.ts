@@ -277,8 +277,12 @@ function addMatchingWorktree(
   id: string,
   row: WorktreeOwnerRecord
 ): void {
-  const hostId = parseExecutionHostId(row.hostId)?.id
-  for (const key of hostId ? [id, catalogOwnerKey(id, hostId)] : [id]) {
+  const hostIds =
+    parseExecutionHostId(row.hostId) || row.runtimeOwnerEnvironmentId?.trim()
+      ? worktreeOwnerHostIds(row)
+      : []
+  const keys = new Set([id, ...hostIds.map((hostId) => catalogOwnerKey(id, hostId))])
+  for (const key of keys) {
     const rows = index.get(key)
     if (rows) {
       rows.push(row)

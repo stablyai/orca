@@ -11,52 +11,36 @@ import '@/lib/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   agentTabLaunchStore,
+  agentTabLaunchRuntimeEnvironmentId,
   resolveAgentLaunchExecutionContext
 } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
-import '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import {
-  notifyAgentTabLaunchFailure,
+  runAgentTabLaunch,
   launchOnceHostAnswered,
   routeNewTabLaunch,
   type AgentTabLaunchOutcome,
   type LaunchAgentInNewTabResult
 } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 
-/**
- * Create a new terminal tab and queue the agent's launch command, optionally
- * with an initial prompt.
- *
- * Submission mode follows `promptInjectionMode`: argv/flag agents fold the
- * prompt into the launch command; followup-path agents launch empty and get a
- * post-ready draft paste. Callers can override via `promptDelivery`.
- *
- * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
- */
+/** Open the selected agent surface and deliver its initial prompt using the provider protocol. */
 export function launchAgentInNewTabWithOutcome(
   args: LaunchAgentInNewTabArgs,
   notifyFailure = true
 ): AgentTabLaunchOutcome {
-  const notify = () => notifyAgentTabLaunchFailure(args.agent)
-  try {
-    return openAgentInNewTab(args, notifyFailure, notify)
-  } catch {
-    args.focusIntent?.cancel()
-    if (notifyFailure) {
-      notify()
-    }
-    return { refused: { delivered: false, failureNotified: notifyFailure } }
-  }
+  return runAgentTabLaunch(args, notifyFailure, (notify) =>
+    openAgentInNewTab(args, notifyFailure, notify)
+  )
 }
 
 function openAgentInNewTab(
@@ -88,7 +72,7 @@ function openAgentInNewTab(
   const executionContext = resolveAgentLaunchExecutionContext(store, {
     worktreeId,
     launchPlatform,
-    workspaceExecutionHostId: args.workspaceExecutionHostId
+    executionHostId: args.selectedExecutionHostId
   })
   if (!executionContext) {
     args.focusIntent?.cancel()
@@ -161,7 +145,10 @@ function openAgentInNewTab(
     return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
   const buildStartup = (
-    agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
+    agentLaunchChoices = readAgentLaunchPreferencesForWorkspace(
+      store,
+      worktreeLaunchWorkspace(worktreeId, args.selectedExecutionHostId)
+    ).agentLaunchChoices
   ) =>
     planLaunchAgentStartupPrompt({
       base: resolveAgentStartupPlanInputs({
@@ -179,7 +166,7 @@ function openAgentInNewTab(
       isFollowupPath
     })
   args.focusIntent?.cancel()
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  const runtimeEnvironmentId = agentTabLaunchRuntimeEnvironmentId(store, args)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null
@@ -229,6 +216,7 @@ function openAgentInNewTab(
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({
+      ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
       agent,
       worktreeId,
       ...(groupId ? { groupId } : {}),
@@ -254,6 +242,7 @@ function openAgentInNewTab(
     }
   }
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
     launchAgent: agent,
     quickCommandLabel,
     ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),

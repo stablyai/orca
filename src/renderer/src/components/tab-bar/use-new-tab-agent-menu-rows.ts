@@ -1,3 +1,4 @@
+import { newTabAgentMenuHostFacts } from './new-tab-agent-menu-host-facts'
 import {
   useAppViewExternalStore,
   useAppStateView,
@@ -10,11 +11,6 @@ export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import {
-  isRuntimeHostContactRevokedVerdict,
-  runtimeHostContactForEntry
-} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -25,7 +21,6 @@ import {
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
 } from '@/runtime/host-structured-agents'
-import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -100,29 +95,12 @@ export function useAgentMenuObservation(
       : (target?.workspace ?? { kind: 'floating' as const })
   const facts = useAppStateValue(
     useShallow((state) => {
-      const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-      const host = parseExecutionHostId(input.executionHostId)
-      const status =
-        host?.kind === 'runtime'
-          ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          : undefined
-      const contact = runtimeHostContactForEntry(status)
-      return {
-        executionHostId: input.executionHostId,
-        runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
-        pairingRevision:
-          host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
-        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,
-        checking:
-          contact.verdict === 'unverifiable' &&
-          ['checking', 'transport-connecting'].includes(contact.reason),
-        capabilities: input.hostCapabilities?.join(',')
-      }
+      return newTabAgentMenuHostFacts(state, workspace)
     })
   )
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
-    unresolvedTarget ? null : facts,
+    unresolvedTarget ? null : { ...facts, executionHostId: facts.inventoryExecutionHostId },
     desktopSettings,
     viewActive && (open || shown),
     viewActive && open
@@ -262,6 +240,7 @@ export function useAgentMenuObservation(
           workspace,
           launchCwd,
           executionHostId: facts.executionHostId,
+          inventoryExecutionHostId: facts.inventoryExecutionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
           settings,

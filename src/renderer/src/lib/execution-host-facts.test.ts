@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
-  resolveRepoWorktreeLaunchPlatform,
-  resolveWorktreeExecutionHostPlatform
+  resolveWorktreeExecutionHostPlatform,
+  resolveRepoWorktreeLaunchPlatform
 } from './execution-host-facts'
+import * as rendererPlatform from './renderer-app-platform'
+import { makeWorktree, TEST_REPO } from '@/store/slices/store-test-helpers'
+import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import { getDefaultSettings } from '../../../shared/constants'
 
 vi.mock('./new-workspace', async (importOriginal) => ({
@@ -51,6 +54,44 @@ function state(): State {
 }
 
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
+
+it('resolves a detected local copy project runtime without borrowing its visible server twin', () => {
+  const base = state()
+  const id = 'repo1::/same-id'
+  const selected: State = {
+    ...base,
+    repos: [{ ...TEST_REPO, id: 'repo1', executionHostId: 'local', path: 'C:\\repo' }],
+    settings: {
+      ...getDefaultSettings('/tmp'),
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+    },
+    worktreesByRepo: {
+      repo1: [
+        makeWorktree({
+          id,
+          repoId: 'repo1',
+          hostId: 'runtime:linux-box',
+          runtimeOwnerEnvironmentId: 'linux-box'
+        })
+      ]
+    },
+    detectedWorktreesByRepo: {
+      repo1: makeDetectedResult('repo1', [
+        makeWorktree({ id, repoId: 'repo1', hostId: 'local', path: 'C:\\repo' })
+      ])
+    }
+  }
+  const platform = vi.spyOn(rendererPlatform, 'getRendererAppPlatform').mockReturnValue('win32')
+  try {
+    expect(resolveWorktreeExecutionHostPlatform(selected, id, 'C:\\repo', 'local')).toEqual({
+      kind: 'known',
+      platform: 'linux',
+      hostKind: 'local'
+    })
+  } finally {
+    platform.mockRestore()
+  }
+})
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
   it('keeps the nested SSH platform for a captured folder owner, matching ordinary launch', () => {

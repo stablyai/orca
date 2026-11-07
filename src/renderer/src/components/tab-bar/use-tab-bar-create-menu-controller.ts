@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 export type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 import { useAgentLaunchPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -14,17 +16,16 @@ import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
-import type {
-  getProjectRuntimeShellMenuMode,
-  resolveWindowsPowerShellImplementationSetting
-} from './use-tab-bar-runtime-model'
+import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
 export function useTabBarCreateMenuController({
   worktreeId,
+  executionHostId,
   resolvedGroupId,
   terminalOnly,
   showAgentLaunchItems = true,
+  initialOpen = false,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,
   mobileEmulatorCreationEnabled,
@@ -43,19 +44,19 @@ export function useTabBarCreateMenuController({
   onOpenFileTab
 }: {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   resolvedGroupId: string
   terminalOnly: boolean
   showAgentLaunchItems?: boolean
+  initialOpen?: boolean
   mobileEmulatorEnabled: boolean
   managedBrowserCreationEnabled: boolean
   mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
   showWindowsShellMenu: boolean
-  projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
+  projectRuntimeShellMenuMode: TabBarRuntimeModel['projectRuntimeShellMenuMode']
   defaultWindowsShell: string
-  defaultWindowsPowerShellImplementation: ReturnType<
-    typeof resolveWindowsPowerShellImplementationSetting
-  >
+  defaultWindowsPowerShellImplementation: TabBarRuntimeModel['defaultWindowsPowerShellImplementation']
   agentDetectionTarget: AgentDetectionTarget | undefined
   windowsTerminalCapabilities: WindowsTerminalCapabilities
   onNewTerminalTab: () => void
@@ -66,10 +67,12 @@ export function useTabBarCreateMenuController({
   onOpenFileTab?: () => void
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
-  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [newTabMenuOpen, setNewTabMenuOpen] = useState(initialOpen)
   const [createMenuQuery, setCreateMenuQuery] = useState('')
   const agentMenu = useNewTabAgentMenuRows(
-    worktreeId,
+    executionHostId
+      ? { workspace: worktreeLaunchWorkspace(worktreeId, executionHostId) }
+      : worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
     agentDetectionTarget,
     { wakeOnOpen: true }
@@ -80,7 +83,8 @@ export function useTabBarCreateMenuController({
     worktreeId,
     agentMenu,
     newTabMenuOpen && showAgentLaunchItems,
-    selectedPickerAgent
+    selectedPickerAgent,
+    executionHostId
   )
   const pendingNewTabMenuFocusRef = useRef<{ focus: () => void; synchronous?: true } | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)

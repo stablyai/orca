@@ -1,10 +1,14 @@
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -12,6 +16,7 @@ import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-l
 import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 // Import the resolver directly: the connection-context facade reaches the store root and creates a launch-graph cycle.
 import {
+  getConnectionIdForWorktreeCopy,
   getConnectionIdFromState,
   getRepoConnectionIdFromState
 } from '@/lib/connection-owner-resolution'
@@ -31,6 +36,9 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { authorityKey } from '../../../../../../shared/host-authority'
+import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
@@ -41,6 +49,8 @@ export type ProspectiveWorkspace = {
   kind: ProspectiveWorkspaceKind
   repoId?: string
   worktreeId?: string
+  /** Qualifies an existing workspace copy; creation hints below do not. */
+  hostId?: ExecutionHostId
   /** Only for workspaces that do not exist yet; with `worktreeId` the store's owner resolution wins. */
   executionHostId?: string
   runtimeEnvironmentId?: string | null
@@ -51,6 +61,7 @@ export type AgentLaunchRouteStore = {
   runtimeStatusByEnvironmentId?: AppState['runtimeStatusByEnvironmentId']
   /** Workspace roots distinguish a root cwd from a custom one; place these first so intersection lookups retain full records. */
   worktreesByRepo?: AppState['worktreesByRepo']
+  detectedWorktreesByRepo?: AppState['detectedWorktreesByRepo']
   folderWorkspaces?: AppState['folderWorkspaces']
 } & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
@@ -111,6 +122,7 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
 }
 
 export type AgentLaunchRouteArgs = {
+  selectedExecutionHostId?: ExecutionHostId
   agent: TuiAgent
   /** Invocation preference; host admission can still fall back to Terminal. */
   preferredSurface?: 'chat'
@@ -120,14 +132,19 @@ export type AgentLaunchRouteArgs = {
   tuiCustomization?: { cwd?: string | null }
 }
 
-export const worktreeLaunchWorkspace = (worktreeId: string): ProspectiveWorkspace => ({
+export { workspaceKindForWorktreeId }
+export const worktreeLaunchWorkspace = (
+  worktreeId: string,
+  hostId?: ExecutionHostId
+): ProspectiveWorkspace => ({
   kind: workspaceKindForWorktreeId(worktreeId),
-  worktreeId
+  worktreeId,
+  ...(hostId ? { hostId } : {})
 })
 
 function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
   if (workspace.worktreeId) {
-    return getExecutionHostIdForWorktree(store, workspace.worktreeId)
+    return workspace.hostId ?? getExecutionHostIdForWorktree(store, workspace.worktreeId)
   }
   if (workspace.runtimeEnvironmentId) {
     return toRuntimeExecutionHostId(workspace.runtimeEnvironmentId)
@@ -149,11 +166,23 @@ export function resolveHostCapabilities(
 function resolveProjectRuntime(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace,
-  executionHostId: string
+  executionHostId: string,
+  selectedWorkspace?: Worktree
 ): AgentLaunchRoutingInput['projectRuntime'] {
   // Remote hosts choose their own runtime; local Windows/WSL preferences cannot override paired createSupport.
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID || workspace.kind === 'floating') {
     return undefined
+  }
+  if (workspace.hostId && workspace.worktreeId) {
+    const repo =
+      selectedWorkspace &&
+      findIndexedRepoOwnerForHost(store.repos, selectedWorkspace.repoId, workspace.hostId)
+    return selectedWorkspace && repo
+      ? getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId, undefined, undefined, {
+          worktree: selectedWorkspace,
+          repo
+        })
+      : undefined
   }
   return workspace.worktreeId
     ? getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId)
@@ -166,7 +195,9 @@ function resolveTranscriptIsLocalReadable(
   executionHostId: string
 ): boolean {
   if (workspace.worktreeId) {
-    const connectionId = getConnectionIdFromState(store, workspace.worktreeId)
+    const connectionId = workspace.hostId
+      ? getConnectionIdForWorktreeCopy(store, workspace.worktreeId, workspace.hostId)
+      : getConnectionIdFromState(store, workspace.worktreeId)
     // Only undefined ownership delegates to the repo during hydration; resolved null authorizes local ownership.
     return isNativeChatTranscriptLocalReadable(
       connectionId === undefined
@@ -190,8 +221,17 @@ export function resolveAgentLaunchHost(
   store: AgentLaunchRouteStore,
   workspace: ProspectiveWorkspace
 ) {
+  const selected =
+    workspace.worktreeId && workspace.hostId
+      ? resolveOwner(store, { workspaceId: workspace.worktreeId, hostId: workspace.hostId })
+      : undefined
+  const selectedId = selected?.kind === 'resolved' ? authorityKey(selected.owner) : null
   const owner = workspace.worktreeId
-    ? resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
+    ? workspace.hostId
+      ? selectedId && structuredAgentSessionTargetForHost(selectedId)
+        ? selectedId
+        : null
+      : resolveStructuredAgentSessionOwner(store, workspace.worktreeId)
     : undefined
   const executionHostId = owner ?? resolveExecutionHostId(store, workspace)
   return {
@@ -201,12 +241,45 @@ export function resolveAgentLaunchHost(
   }
 }
 
+/** Inventory and preferences belong to the server even when the terminal runs in nested SSH. */
+export function resolveAgentLaunchInventoryHost(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+): string {
+  const owner = workspace.worktreeId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: workspace.worktreeId,
+        ...(workspace.hostId ? { hostId: workspace.hostId } : {})
+      })
+    : undefined
+  return owner?.kind === 'resolved' && owner.environmentId
+    ? toRuntimeExecutionHostId(owner.environmentId)
+    : resolveAgentLaunchHost(store, workspace).executionHostId
+}
+
 export function buildAgentLaunchRouteInput(
   store: AgentLaunchRouteStore,
   args: AgentLaunchRouteArgs
 ): AgentLaunchRoutingInput {
-  const { agent, workspace, tuiCustomization } = args
+  const { agent, tuiCustomization } = args
+  const workspace = args.selectedExecutionHostId
+    ? { ...args.workspace, hostId: args.selectedExecutionHostId }
+    : args.workspace
   const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
+  const selectedWorkspace =
+    workspace.worktreeId && workspace.hostId
+      ? findKnownWorktreeById(
+          {
+            ...store,
+            worktreesByRepo: selectWorktreesByRepo(store) ?? {},
+            folderWorkspaces: selectFolderWorkspaces(store) ?? [],
+            detectedWorktreesByRepo: selectDetectedWorktreesByRepo(store) ?? {},
+            floatingWorkspacePath: null
+          },
+          workspace.worktreeId,
+          workspace.hostId
+        )
+      : undefined
   return {
     agent,
     settings: store.settings,
@@ -221,7 +294,7 @@ export function buildAgentLaunchRouteInput(
     projectRuntime:
       workspace.executionContext?.kind === 'host'
         ? workspace.executionContext.projectRuntime
-        : resolveProjectRuntime(store, workspace, executionHostId),
+        : resolveProjectRuntime(store, workspace, executionHostId, selectedWorkspace),
     promptDelivery: args.promptDelivery,
     launchText: args.prompt,
     nativeChatTranscriptIsLocalReadable: resolveTranscriptIsLocalReadable(
@@ -234,12 +307,16 @@ export function buildAgentLaunchRouteInput(
       ? requestsCwdOutsideWorkspaceRootForWorkspace({
           workspaceId: workspace.worktreeId,
           requestedCwd: tuiCustomization?.cwd,
-          workspacePath: workspace.worktreeId
-            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
-            : undefined,
+          workspacePath: workspace.hostId
+            ? selectedWorkspace?.path
+            : workspace.worktreeId
+              ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+              : undefined,
           resolveFolderWorkspacePath: (folderWorkspaceId) =>
-            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
-              ?.folderPath
+            workspace.hostId
+              ? selectedWorkspace?.path
+              : selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
+                  ?.folderPath
         })
       : false,
     ...hostStructuredAgentsInput(store, executionHostId)

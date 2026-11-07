@@ -21,9 +21,10 @@ import {
   shutdownManagedSimulatorIfNoPane
 } from './simulator-pane-shutdown-scheduler'
 import { assertClientCreationActionAvailable } from './client-creation-action-policy'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 
 type OpenMobileEmulatorTabOptions = {
+  executionHostId?: ExecutionHostId
   targetGroupId?: string
   placement?: 'activeGroup' | 'rightSplit'
 }
@@ -61,11 +62,12 @@ export async function openMobileEmulatorTab(
   options: OpenMobileEmulatorTabOptions = {}
 ): Promise<string | null> {
   const store = useAppStore.getState()
-  assertClientCreationActionAvailable(store, worktreeId, 'mobile-emulator')
+  assertClientCreationActionAvailable(store, worktreeId, 'mobile-emulator', options.executionHostId)
   if (store.settings?.mobileEmulatorEnabled === false) {
     return null
   }
-  const existingTab = getSimulatorTabForWorktree(worktreeId, LOCAL_EXECUTION_HOST_ID)
+  const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
+  const existingTab = getSimulatorTabForWorktree(worktreeId, executionHostId)
   if (existingTab) {
     return existingTab.id
   }
@@ -87,7 +89,7 @@ export async function openMobileEmulatorTab(
       placement: options.placement ?? 'rightSplit',
       targetGroupId,
       surfacePane: true,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
+      executionHostId
     })
   }
   const alreadyLaunching = isManualSimulatorLaunchPending(worktreeId)
@@ -96,7 +98,7 @@ export async function openMobileEmulatorTab(
       placement: options.placement ?? 'rightSplit',
       targetGroupId,
       surfacePane: true,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
+      executionHostId
     })
   }
   beginManualSimulatorLaunch(worktreeId)
@@ -106,7 +108,7 @@ export async function openMobileEmulatorTab(
       placement: options.placement ?? 'rightSplit',
       targetGroupId,
       surfacePane: true,
-      executionHostId: LOCAL_EXECUTION_HOST_ID
+      executionHostId
     })
     if (!tabId) {
       return null
