@@ -59,10 +59,9 @@ export function HostActivityList({
         <View style={styles.heading}>
           <Text style={styles.title}>{t('hostScreen.activity.title', 'Activity View')}</Text>
           <Text style={styles.meta}>
-            {count}{' '}
             {count === 1
-              ? t('hostScreen.activity.session', 'session')
-              : t('hostScreen.activity.sessions', 'sessions')}
+              ? t('hostScreen.activity.sessionCount_one', '{{count}} session', { count })
+              : t('hostScreen.activity.sessionCount_other', '{{count}} sessions', { count })}
           </Text>
           {connState !== 'connected' ? (
             <Text style={styles.meta}>
@@ -133,7 +132,7 @@ function HostActivityCard({
   return (
     <Pressable
       onPress={onPress}
-      disabled={controller.connState !== 'connected'}
+      disabled={controller.isReadOnly}
       accessibilityRole="button"
       accessibilityLabel={`${title}, ${agentStateLabel(dotState)}, ${worktree.repo}`}
       style={({ pressed }) => [styles.card, pressed && pressedStyle]}

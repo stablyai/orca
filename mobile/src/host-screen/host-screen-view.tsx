@@ -9,6 +9,7 @@ import { HostConnectionStatus, HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
 import { HostActivityList } from './host-activity-list'
 import { HostWorkspaceList } from './host-workspace-list'
+import { HostScreenNotices } from './host-screen-notices'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenView({ controller }: { controller: HostScreenController }) {
@@ -37,6 +38,7 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
           collapsingTitle={controller.activityView.active ? undefined : collapsingTitle}
         />
       </SafeAreaView>
+      <HostScreenNotices controller={controller} />
       {controller.activityView.active ? (
         <HostActivityList controller={controller} bottomBarHeight={bottomBarHeight} />
       ) : (

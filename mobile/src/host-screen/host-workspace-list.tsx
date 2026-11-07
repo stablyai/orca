@@ -9,11 +9,7 @@ import {
   View
 } from 'react-native'
 import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
-import { AuthFailedBanner } from '../components/AuthFailedBanner'
-import { Presence } from '../components/AutoHeight'
 import { DisclosureChevron } from '../components/DisclosureChevron'
-import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
-import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../components/WorktreeListRow'
@@ -61,14 +57,8 @@ export function HostWorkspaceList({
     insets,
     isReadOnly,
     isWideLayout,
-    noticeParam,
     now,
-    reconnectAttempts,
-    relayRecovery,
-    routeNotice,
-    router,
     sectionsResult,
-    setDismissedNotice,
     settings,
     state
   } = controller
@@ -185,57 +175,6 @@ export function HostWorkspaceList({
 
   return (
     <>
-      {/* Banners ease in and out; a dismissed one keeps its message while it leaves. */}
-      <Presence>
-        {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
-          <AuthFailedBanner
-            canRetry={!!hostId && forceReconnectHost !== null}
-            onRetry={() => hostId && forceReconnectHost && void forceReconnectHost(hostId)}
-            onRepair={() => router.push('/pair-scan')}
-            onRemove={() => state.setConfirmRemoveHost(true)}
-          />
-        )}
-      </Presence>
-
-      {connState !== 'connected' &&
-      !relayRecovery.pairingRejected &&
-      reconnectAttempts >= 3 &&
-      hostId ? (
-        <HostDiagnosticsLink
-          onPress={() =>
-            router.push({ pathname: '/connection-log', params: { hostId: String(hostId) } })
-          }
-        />
-      ) : null}
-
-      <Presence>
-        {routeNotice && (
-          <HostRouteNoticeBanner
-            message={routeNotice}
-            onDismiss={() => setDismissedNotice(noticeParam ?? null)}
-          />
-        )}
-      </Presence>
-      <Presence>
-        {state.serverNotice ? (
-          <HostRouteNoticeBanner
-            message={state.serverNotice}
-            onDismiss={() => state.setServerNotice(null)}
-          />
-        ) : null}
-      </Presence>
-
-      {/* Keep action errors above the list so the header and reopened confirm remain usable. */}
-      <Presence>
-        {state.actionError !== '' && (
-          <HostRouteNoticeBanner
-            message={state.actionError}
-            tone="failure"
-            onDismiss={() => state.setActionError('')}
-          />
-        )}
-      </Presence>
-
       {hasRows ? null : pageTitle?.element}
 
       {controller.feed?.kind === 'reopen' ? (
