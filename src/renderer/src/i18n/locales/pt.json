@@ -6504,7 +6504,9 @@
           "cd9fe37556": "Permissão do microfone concedida",
           "openAiKeyName": "Sua chave de transcrição da OpenAI",
           "dictationShortcutDescription": "Pressione {{shortcut}} para ditar texto em qualquer painel com foco.",
-          "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado."
+          "dictationModesDescription": "Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado.",
+          "speechGpuLabel": "Usar GPU",
+          "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador."
         },
         "NotificationsPane": {
           "906b4afebf": "Enviar Notificação de Teste",

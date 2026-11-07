@@ -8776,7 +8776,9 @@
           "6fa734ed95": "{{value0}} 삭제",
           "openAiKeyName": "OpenAI 트랜스크립션 키",
           "dictationShortcutDescription": "{{shortcut}} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요.",
-          "dictationModesDescription": "토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다."
+          "dictationModesDescription": "토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다.",
+          "speechGpuLabel": "GPU 사용",
+          "speechGpuDescription": "그래픽 카드가 작동하면 그래픽 카드에서, 실패하면 CPU에서 음성을 인식합니다. 받아쓰기 중 컴퓨터가 멈추거나 다시 시작되면 끄세요."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
