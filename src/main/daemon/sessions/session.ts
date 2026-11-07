@@ -73,6 +73,7 @@ export class Session extends SessionProcessInspection {
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+      readForegroundGroup: this.subprocess.readForegroundGroup,
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })

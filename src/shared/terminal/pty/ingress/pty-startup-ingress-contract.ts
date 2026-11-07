@@ -15,6 +15,9 @@ export type PtyStartupIngressOptions = {
   /** Host-wide viewer colours, read per query so a theme change reaches a long-lived pane.
    *  Defaults to this process's pushed colours. */
   resolveHostColors?: () => TerminalOscColorQueryReplyColors | null
+  /** The PTY's foreground process group (tcgetpgrp). Lets the owner drop a colour query whose asker already exited;
+   *  absent (ConPTY), every query is answered at once. */
+  readForegroundGroup?: () => number | null | undefined
   write: (data: string) => void
   onEmission: (emission: PtyIngressEmission) => void
 }
@@ -33,6 +36,7 @@ export type PtyStartupIngressOperation =
   | { kind: 'expire' }
   | { kind: 'release-echo' }
   | { kind: 'release-query' }
+  | { kind: 'asker-wait' }
 
 export function slicePtyIngressSourceSpan(
   span: PtyIngressSourceSpan,

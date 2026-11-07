@@ -46,9 +46,14 @@ export class TerminalOscColorOverrideTracker {
   private readonly palette = new Map<number, TerminalViewRgb>()
   private overridesBase: string | null = null
   private readonly maxPendingChars: number
+  private markerEndsInput = false
 
-  /** `appearance`: also track palette and cursor, holding a torn SET of every palette slot. */
-  constructor(private readonly appearance = false) {
+  /** `appearance`: also track palette and cursor, holding a torn SET of every palette slot. `onOsc133` sees each
+   *  OSC 133 payload in this same pass; `adjacent` means no other output since the previous one. */
+  constructor(
+    private readonly appearance = false,
+    private readonly onOsc133?: (payload: string, adjacent: boolean) => void
+  ) {
     this.maxPendingChars = appearance ? MAX_APPEARANCE_OSC_BODY_CHARS + 16 : MAX_PENDING_OSC_CHARS
   }
 
@@ -57,6 +62,7 @@ export class TerminalOscColorOverrideTracker {
     const input = this.pending + data
     this.pending = ''
     let offset = input.indexOf('\x1b]')
+    let markerEnd = this.markerEndsInput ? 0 : -1
     while (offset !== -1) {
       const bodyStart = offset + 2
       const terminator = findOscTerminatorStart(input, bodyStart)
@@ -64,7 +70,12 @@ export class TerminalOscColorOverrideTracker {
       if (terminator === -1 || (!isBel && terminator === input.length - 1)) {
         const tail = input.slice(offset)
         this.pending = tail.length <= this.maxPendingChars ? tail : ''
+        this.markerEndsInput = markerEnd === offset && this.pending !== ''
         return
+      }
+      if (this.onOsc133 && input.startsWith('133;', bodyStart)) {
+        this.onOsc133(input.slice(bodyStart + 4, terminator), markerEnd === offset)
+        markerEnd = isBel ? terminator + 1 : terminator + 2
       }
       if (
         (isBel || input[terminator + 1] === '\\') &&
@@ -77,6 +88,7 @@ export class TerminalOscColorOverrideTracker {
     if (input.endsWith('\x1b')) {
       this.pending = '\x1b'
     }
+    this.markerEndsInput = markerEnd === input.length - this.pending.length
   }
 
   resolve(base: TerminalOscColorQueryReplyColors): TerminalOscColorQueryReplyColors {

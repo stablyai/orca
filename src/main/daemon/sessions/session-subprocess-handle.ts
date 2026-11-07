@@ -25,6 +25,8 @@ export type SubprocessHandle = {
   shellPath?: string
   shellCwd?: string
   shellPathEnv?: string
+  /** The PTY's foreground process group (tcgetpgrp); absent for ConPTY. */
+  readForegroundGroup?: () => number | null | undefined
   /** POSIX slave path for reading line discipline; absent for ConPTY. */
   slavePath?: string
   write(data: string): void

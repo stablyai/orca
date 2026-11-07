@@ -42,6 +42,13 @@ export function readPtyForegroundGroup(proc: unknown): number | null | undefined
   }
 }
 
+/** ConPTY has no foreground process group, so Windows PTYs get no reader. */
+export function ptyForegroundGroupReader(
+  proc: unknown
+): (() => number | null | undefined) | undefined {
+  return process.platform === 'win32' ? undefined : () => readPtyForegroundGroup(proc)
+}
+
 export function resolvePtyForegroundMembers(
   rows: readonly ProcessTableRow[],
   group: number
