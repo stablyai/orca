@@ -125,6 +125,23 @@ describe('Stats & Usage host', () => {
     expect(window.api.claudeUsage.refresh).not.toHaveBeenCalled()
   })
 
+  it('lets the user retry after a server refresh fails', async () => {
+    stubLocalApi()
+    callRuntimeRpc.mockImplementation(async (_target, method: string) => {
+      if (method === 'usage.refresh') {
+        throw new Error('connection lost')
+      }
+      return method === 'usage.getSnapshot' ? snapshot('server') : scanState('server')
+    })
+    const store = createStore()
+    store.getState().setStatsHost(SERVER)
+
+    await store.getState().refreshClaudeUsage()
+
+    expect(store.getState().claudeUsageScanState?.isScanning).toBe(false)
+    expect(store.getState().claudeUsageSummary).toEqual({ label: 'server' })
+  })
+
   it('does not rescan a host picked while Enable was pending on the previous one', async () => {
     let releaseLocal: (value: ReturnType<typeof scanState>) => void = () => {}
     const local = stubLocalApi({

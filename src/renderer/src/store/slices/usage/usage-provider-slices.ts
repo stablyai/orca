@@ -98,8 +98,8 @@ function createUsageProviderSlice<
     }
 
     const fetchUsage = async (opts?: { forceRefresh?: boolean }): Promise<void> => {
+      const { api, update, isCurrent } = bindToCurrentHost()
       try {
-        const { api, update, isCurrent } = bindToCurrentHost()
         const scanState = (await api.getScanState()) as T['snapshot']['scanState'] | undefined
         // Desktop-only usage APIs resolve undefined in paired web clients.
         if (!scanState || !isCurrent()) {
@@ -163,6 +163,11 @@ function createUsageProviderSlice<
         )
       } catch (error) {
         console.error(`Failed to fetch ${config.name} usage:`, error)
+        // Why: a dropped server call would otherwise leave Refresh disabled with no way to retry.
+        const failedScanState = isCurrent() ? read().scanState : null
+        if (failedScanState?.isScanning) {
+          update({ scanState: { ...failedScanState, isScanning: false } })
+        }
       }
     }
 
