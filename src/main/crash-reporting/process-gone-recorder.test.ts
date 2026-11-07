@@ -77,7 +77,8 @@ describe('recordProcessGoneCrash', () => {
 
     for (const [reason, exitCode] of [
       ['killed', 9],
-      ['crashed', 11]
+      ['crashed', 11],
+      ['oom', 1]
     ] as const) {
       recordProcessGoneCrash(
         { record, attachDetails } as never,

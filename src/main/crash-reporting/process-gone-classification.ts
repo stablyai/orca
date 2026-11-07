@@ -52,19 +52,25 @@ function isRecoverableChildProcess({
   if (source !== 'child') {
     return false
   }
+  const normalizedProcessType = processType?.toLowerCase()
+  // Orca handles every exit of its own utilities, including OOM and failed launches.
+  if (
+    normalizedProcessType === 'utility' &&
+    name !== undefined &&
+    RECOVERABLE_ORCA_UTILITY_NAMES.has(name)
+  ) {
+    return true
+  }
   if (!RECOVERABLE_CHILD_PROCESS_REASONS.has(reason)) {
     return false
   }
-  const normalizedProcessType = processType?.toLowerCase()
   if (normalizedProcessType && RECOVERABLE_CHILD_PROCESS_TYPES.has(normalizedProcessType)) {
     return true
   }
-  if (normalizedProcessType !== 'utility') {
-    return false
-  }
   return (
-    (serviceName !== undefined && RECOVERABLE_UTILITY_SERVICE_NAMES.has(serviceName)) ||
-    (name !== undefined && RECOVERABLE_ORCA_UTILITY_NAMES.has(name))
+    normalizedProcessType === 'utility' &&
+    serviceName !== undefined &&
+    RECOVERABLE_UTILITY_SERVICE_NAMES.has(serviceName)
   )
 }
 
