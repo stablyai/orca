@@ -425,8 +425,10 @@ it('keeps pristine, edited and reopened historical-host picker launches free of 
       ? createElement(
           TooltipProvider,
           null,
+          // Select mode still edits Arguments and Permissions; the launch menu leaves them to settings.
           createElement(AgentLaunchSetupPanel, {
             entry,
+            mode: 'select',
             draft: setup.draft,
             getDraft: setup.getDraft,
             onDraftChange: setup.change,
@@ -610,6 +612,7 @@ it.each(['claude', 'codex'] as const)(
             createElement(AgentLaunchSetupPanel, {
               key: current.ownerKey,
               entry: current,
+              mode: 'select',
               draft: setup.draft,
               getDraft: setup.getDraft,
               onDraftChange: setup.change,
