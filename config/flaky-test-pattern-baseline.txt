@@ -546,7 +546,7 @@
 1 test-no-wall-clock:src/main/agent-hooks/server-codex-capacity.test.ts
 1 test-no-wall-clock:src/main/agent-hooks/server-endpoint-file-lifecycle.test.ts
 3 test-no-wall-clock:src/main/agent-hooks/server-ingest-structured-status.test.ts
-6 test-no-wall-clock:src/main/agent-hooks/server-launch-resume-identity.test.ts
+4 test-no-wall-clock:src/main/agent-hooks/server-launch-resume-identity.test.ts
 5 test-no-wall-clock:src/main/agent-hooks/spool.test.ts
 2 test-no-wall-clock:src/main/agent-hooks/windows-native-hook-exe-hosts.test.ts
 2 test-no-wall-clock:src/main/ai-vault-search/session-search-indexer.test.ts
@@ -755,7 +755,6 @@
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/ArtifactCollection.test.tsx
-2 test-no-wall-clock:src/renderer/src/components/artifacts/artifact-list-windowing.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/automations/use-automation-list-search.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
