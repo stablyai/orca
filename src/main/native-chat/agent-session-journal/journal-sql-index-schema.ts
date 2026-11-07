@@ -21,6 +21,8 @@ CREATE INDEX IF NOT EXISTS journal_proj_places_sequence
   ON journal_proj_places(session_id, epoch, index_id, sequence, tie);
 CREATE INDEX IF NOT EXISTS journal_proj_places_position
   ON journal_proj_places(session_id, epoch, index_id, position DESC);
+CREATE INDEX IF NOT EXISTS journal_proj_places_eligible
+  ON journal_proj_places(session_id, epoch, index_id, domain, sequence, position);
 CREATE INDEX IF NOT EXISTS journal_proj_places_live
   ON journal_proj_places(session_id, epoch, index_id, domain, sequence)
   WHERE head OR command OR waiting OR handoff;
@@ -62,10 +64,10 @@ CREATE TABLE IF NOT EXISTS journal_proj_releases (
   pause_gen INTEGER NOT NULL,
   PRIMARY KEY (session_id, epoch, index_id, id)
 ) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_releases_position
-  ON journal_proj_releases(session_id, epoch, index_id, position DESC);
+CREATE INDEX IF NOT EXISTS journal_proj_releases_introduced
+  ON journal_proj_releases(session_id, epoch, index_id, introduced, position);
 CREATE INDEX IF NOT EXISTS journal_proj_releases_pause
-  ON journal_proj_releases(session_id, epoch, index_id, pause_gen, position DESC);
+  ON journal_proj_releases(session_id, epoch, index_id, pause_gen, introduced, position);
 CREATE TABLE IF NOT EXISTS journal_proj_turn_sources (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

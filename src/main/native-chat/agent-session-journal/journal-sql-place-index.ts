@@ -197,16 +197,13 @@ export class JournalSqlPlaceIndex implements JournalInputPlaceStorage {
       result = mergeInputPlaces(result, journalSqlPlaceSummary(this.scope, row))
     }
     if (!commandOnly) {
-      const positions = this.scope.db
-        .prepare(`SELECT domain, sequence, position FROM journal_proj_places
-          WHERE session_id=? AND epoch=? AND index_id=? ORDER BY position DESC`)
-        .iterate(...this.prefix)
-      for (const row of positions) {
-        this.scope.examined(row)
-        if (!cut || (row.domain === cut.epoch && Number(row.sequence) < cut.sequence)) {
-          result.position = Number(row.position)
-          break
-        }
+      const eligible = this.scope.db
+        .prepare(`SELECT MAX(position) AS position FROM journal_proj_places
+          WHERE session_id=? AND epoch=? AND index_id=? ${cut ? 'AND domain=? AND sequence<?' : ''}`)
+        .get(...this.prefix, ...(cut ? [cut.epoch, cut.sequence] : []))!
+      this.scope.examined(eligible)
+      if (eligible.position !== null) {
+        result.position = Number(eligible.position)
       }
     }
     return result

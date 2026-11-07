@@ -144,18 +144,17 @@ export class JournalSqlDomainIndex implements JournalInputDomainStorage {
     const rows = this.scope.db
       .prepare(`SELECT id, domain, sequence, position, head, command, waiting, handoff, card_json
         FROM journal_proj_domains WHERE session_id=? AND epoch=? AND index_id=?
-        AND introduced>=? AND introduced<?`)
-      .all(...this.prefix, low, high)
+        AND introduced>=? AND introduced<? ${coordinate ? 'AND domain=? AND sequence<?' : ''}`)
+      .all(
+        ...this.prefix,
+        low,
+        high,
+        ...(coordinate ? [coordinate.epoch, coordinate.sequence] : [])
+      )
     rows.forEach((row) => this.scope.examined(row))
     rows.sort(compareJournalSqlPlaces)
     let result: InputPlaceQuery = { position: -Infinity }
     for (const row of rows) {
-      if (
-        coordinate &&
-        (row.domain !== coordinate.epoch || Number(row.sequence) >= coordinate.sequence)
-      ) {
-        continue
-      }
       result = mergeInputPlaces(result, journalSqlPlaceSummary(this.scope, row))
     }
     return result

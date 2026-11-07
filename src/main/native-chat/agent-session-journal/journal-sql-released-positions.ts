@@ -117,16 +117,14 @@ export class JournalSqlReleasedPositions implements JournalInputReleasedStorage 
     this.scope.examined(exists)
     if (place.context.basis === 'observed') {
       const sincePause = place.context.cut <= floor
-      const positions = this.scope.db
-        .prepare(`SELECT position, introduced FROM journal_proj_releases
+      const eligible = this.scope.db
+        .prepare(`SELECT MAX(position) AS position FROM journal_proj_releases
           WHERE session_id=? AND epoch=? AND index_id=? ${sincePause ? 'AND pause_gen=?' : ''}
-          ORDER BY position DESC`)
-        .iterate(...this.prefix, ...(sincePause ? [state.pause_gen] : []))
-      for (const row of positions) {
-        this.scope.examined(row)
-        if (Number(row.introduced) < place.context.cut) {
-          return { position: Number(row.position) }
-        }
+          AND introduced<?`)
+        .get(...this.prefix, ...(sincePause ? [state.pause_gen] : []), place.context.cut)!
+      this.scope.examined(eligible)
+      if (eligible.position !== null) {
+        return { position: Number(eligible.position) }
       }
     } else if (place.context.cut > floor) {
       return mergeInputPlaces(
