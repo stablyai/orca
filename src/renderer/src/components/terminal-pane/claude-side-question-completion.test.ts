@@ -1,22 +1,22 @@
-import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
+import { bindPtyConnectionTestMocks } from './pty-connection/test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { flushAsyncTicks } from './pty-connection-test-async'
+import { flushAsyncTicks } from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
   createPane,
   createManager,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { connectMockPanePty } from './pty-connection-test-connect-mock-pane'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { connectMockPanePty } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import type { AgentCompletionStatusSnapshot } from './agent-completion/agent-completion-coordinator-types'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
@@ -26,7 +26,7 @@ import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listen
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 const PANE_KEY = makePaneKey('tab-1', LEAF_1)
 const SEA = "The sea's waves carry the endless rhythm of tides."

@@ -200,7 +200,7 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press })
+  registerAutomationRunHistoryTests({ mount, root, press, setTree })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,
@@ -507,7 +507,8 @@ describe('mobile automation navigation and setup', () => {
       loading: false,
       error: null,
       loadMore: vi.fn(),
-      reload: vi.fn()
+      reload: vi.fn(),
+      scope: null
     }
     await act(async () => {
       tree = create(

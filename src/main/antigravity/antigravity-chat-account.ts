@@ -1,3 +1,9 @@
+import { join } from 'node:path'
+import {
+  resolveAntigravityChatAuthConfig,
+  type AntigravityChatAuthConfig
+} from '../../shared/antigravity-chat-auth-config'
+import { durableWriteTempPath, writeFileDurableIfCurrent } from '../filesystem/durable-file-write'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
@@ -60,7 +66,12 @@ export async function closeAntigravitySignInOwner(
 // Every credential writer retries the exact retained child before preparing its account.
 export const antigravityChatAccount = {
   ...folder,
-  prepare: async (env: Readonly<Record<string, string>>): Promise<void> => {
+  prepare: async (
+    env: Readonly<Record<string, string>>,
+    config?: AntigravityChatAuthConfig,
+    assertCurrent?: () => void
+  ): Promise<void> => {
+    const auth = resolveAntigravityChatAuthConfig(config)
     const home = env.GEMINI_HOME
     if (!home) {
       throw new Error('GEMINI_HOME is not set')
@@ -74,5 +85,30 @@ export const antigravityChatAccount = {
       )
     }
     await folder.prepare?.(env)
+    const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
+    const projection = {
+      auth: { type: auth.method },
+      ...(auth.method === 'oauth-business'
+        ? { gcp: { project: auth.gcpProject, location: auth.gcpLocation } }
+        : {})
+    }
+    try {
+      await writeFileDurableIfCurrent(
+        durableWriteTempPath(path),
+        path,
+        JSON.stringify(projection),
+        () => {
+          assertCurrent?.()
+          return true
+        },
+        0o600
+      )
+    } catch (cause) {
+      assertCurrent?.()
+      throw new AntigravitySignInSentence(
+        'Antigravity account settings could not be prepared. Check that Orca can write its data folder and try again.',
+        { cause }
+      )
+    }
   }
 }

@@ -21,7 +21,7 @@ import {
   deliverCreatedWebRuntimeAgentSessionPrompt,
   type createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-terminal-creation'
-import type { CreateWebRuntimeSessionTerminalArgs } from '@/runtime/web-runtime-session-types'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/web-runtime-session-types'
 import { planLaunchAgentStartupPrompt } from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
@@ -78,7 +78,7 @@ export async function launchAgentInWebHostTab(args: {
     : undefined
   let legacyPreparationCancelled = false
   let startup: LaunchAgentStartupPromptPlan
-  let launch: CreateWebRuntimeSessionTerminalArgs
+  let launch: CreateWebRuntimeSessionTerminalOnHostArgs
   try {
     const { capable, complete } = environmentId
       ? await agentSessionCreateCapabilities(environmentId).catch((error: unknown) => {

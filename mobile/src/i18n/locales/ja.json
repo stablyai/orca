@@ -3982,6 +3982,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
       "openAgent": "Agentを開く",
       "retryHistory": "履歴を再読み込み",
+      "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+      "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
       "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",

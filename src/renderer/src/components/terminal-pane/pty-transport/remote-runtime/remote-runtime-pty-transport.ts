@@ -63,7 +63,7 @@ import type {
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
 import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
-import { isSshSessionGoneError } from '../../pty-connection/pty-connect-limits'
+import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../../../../runtime/runtime-rpc-result'
 import { latestTerminalRetirementProof } from '../../../../runtime/web-session-terminal-orphan-recovery-surface-index'
 import {

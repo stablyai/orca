@@ -70,6 +70,7 @@ function harness(options: {
         setCaret: calls.setCaret
       })
       return useNativeChatComposerSubmit({
+        textareaRef: { current: null },
         structuredTransport: options.lane === 'pty' ? undefined : structuredTransport,
         draftScopeKey: SCOPE,
         draft: props.draft,

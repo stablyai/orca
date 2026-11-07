@@ -89,6 +89,19 @@ function assertMobileUploadOwner(
   return clientId
 }
 
+export function claimClipboardImageUpload(uploadId: string, ctx: RpcContext): Buffer {
+  const upload = getUpload(uploadId)
+  assertMobileUploadOwner(upload, ctx)
+  try {
+    if (upload.receivedBase64Length !== upload.expectedBase64Length) {
+      throw new Error('Clipboard image upload is incomplete')
+    }
+    return decodeClipboardImageUpload(upload.chunks)
+  } finally {
+    deleteUpload(uploadId)
+  }
+}
+
 export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.saveImageAsTempFile',

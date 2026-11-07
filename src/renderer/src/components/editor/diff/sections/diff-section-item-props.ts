@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -22,6 +23,7 @@ export type DiffSectionItemProps = {
   openSectionTitle: string
   onOpenPreview?: (section: DiffSection, index: number) => void
   renderHeaderTrailingContent?: (section: DiffSection, index: number) => ReactNode
+  imageUploadAddress?: GitHubImageIntake['address']
   onAddLineComment?: (
     section: DiffSection,
     args: { lineNumber: number; startLine?: number; body: string }
