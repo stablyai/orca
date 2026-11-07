@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Host-owned sidebar facts use ExecutionHostId spellings and each row’s own workspace ID. */
 export const DesktopSidebarFactsSchema = z.object({

@@ -37,11 +37,14 @@ export type HookListenerState = {
   warnedEnvs: Set<string>
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
+  /** Reply text the event being normalized carried; normalizeProviderEvent takes and clears it, so it never outlives that event. */
+  eventReplyCandidate: string | undefined
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
   lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
-  /** Conversation that spawned in-process subagents; kept until its fully idle Stop because children outlive its turns. */
-  antigravitySubagentParentByPaneKey: Map<string, string>
+  /** Work outliving the turn, kept until agy's fully idle Stop: the conversation that spawned in-process subagents,
+   *  and run_command steps agy backgrounded (PreToolUse seen, the PostToolUse it sends when the command ends not yet). */
+  antigravityChildWorkByPaneKey: Map<string, { subagentParent?: string; commands?: Set<string> }>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
   ampCompletedCacheKeys: Set<string>
@@ -102,6 +105,10 @@ export type HermesPaneTurn = {
 export type MusePaneState = {
   /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
   childSessionIds: Set<string>
+  /** Spawned subagents between SubagentStart and SubagentStop, by child session id, with their last hook time. */
+  runningChildren: Map<string, number>
+  /** Main-agent status as last derived, so restatements keep its clock. */
+  mainAgent?: AgentMainAgentStatus
   log?: MuseSessionLogState
   /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
   pendingApproval?: { toolName?: string; toolInput?: unknown }
@@ -131,9 +138,10 @@ export function createHookListenerState(
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
+    eventReplyCandidate: undefined,
     lastStatusByPaneKey: adapter.view,
     antigravityCompletedTranscriptByPaneKey: new Map(),
-    antigravitySubagentParentByPaneKey: new Map(),
+    antigravityChildWorkByPaneKey: new Map(),
     jcodeTurnPromptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
@@ -233,7 +241,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
     }
   }
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
-  deletePaneScopedCacheEntry(state.antigravitySubagentParentByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.antigravityChildWorkByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   deletePaneScopedCacheEntry(state.claudeConsumedCompactPromptIdByPaneKey, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
@@ -272,7 +280,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
   moveLegacyAgentStatuses(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.antigravitySubagentParentByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.antigravityChildWorkByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.jcodeTurnPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
@@ -302,7 +310,7 @@ export function clearPaneTurnCacheState(state: HookListenerState, paneKey: strin
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)
   state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
-  state.antigravitySubagentParentByPaneKey.delete(paneKey)
+  state.antigravityChildWorkByPaneKey.delete(paneKey)
   state.jcodeTurnPromptByPaneKey.delete(paneKey)
   state.ampCompletedCacheKeys.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
@@ -315,7 +323,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastToolByPaneKey.clear()
   clearLegacyAgentStatuses(state)
   state.antigravityCompletedTranscriptByPaneKey.clear()
-  state.antigravitySubagentParentByPaneKey.clear()
+  state.antigravityChildWorkByPaneKey.clear()
   state.jcodeTurnPromptByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()

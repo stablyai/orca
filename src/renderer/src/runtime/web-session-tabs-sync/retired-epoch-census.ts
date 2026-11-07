@@ -1,6 +1,6 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import {
   admitRetiredValueUnderAuthority,
   isRetiredSessionTabsPublicationEpoch,

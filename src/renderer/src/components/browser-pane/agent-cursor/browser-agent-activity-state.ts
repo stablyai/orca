@@ -12,6 +12,8 @@ type BrowserAgentCursorSink = {
 type BrowserAgentActivityMark = { pageId: string; revision: number }
 
 const activePageIds = new Set<string>()
+/** The SSH host driving a page through the desktop browser bridge, by its label. */
+const controllerHostByPage = new Map<string, string>()
 const lastActivityByWorktree = new Map<string, BrowserAgentActivityMark>()
 const lastCursorByPage = new Map<string, BrowserAgentCursorEvent>()
 const sinksByPage = new Map<string, BrowserAgentCursorSink>()
@@ -34,16 +36,23 @@ function subscribe(listener: () => void): () => void {
 export function setBrowserAgentPageActive(
   browserPageId: string,
   active: boolean,
-  worktreeId: string | null
+  worktreeId: string | null,
+  controllerHostLabel?: string
 ): void {
   if (active) {
     revision += 1
     activePageIds.add(browserPageId)
+    if (controllerHostLabel) {
+      controllerHostByPage.set(browserPageId, controllerHostLabel)
+    } else {
+      controllerHostByPage.delete(browserPageId)
+    }
     if (worktreeId) {
       lastActivityByWorktree.set(worktreeId, { pageId: browserPageId, revision })
     }
   } else {
     activePageIds.delete(browserPageId)
+    controllerHostByPage.delete(browserPageId)
     lastCursorByPage.delete(browserPageId)
   }
   sinksByPage.get(browserPageId)?.setActive(active)
@@ -85,6 +94,22 @@ export function useBrowserAgentDrivesAnyPage(
 ): boolean {
   const drives = (): boolean => browserPageIds.some((id) => id != null && activePageIds.has(id))
   return useSyncExternalStore(subscribe, drives, drives)
+}
+
+/** The SSH host controlling any of these pages, or null when none is (or a local agent is). */
+export function useBrowserAgentControllerHost(
+  browserPageIds: readonly (string | null | undefined)[]
+): string | null {
+  const read = (): string | null => {
+    for (const id of browserPageIds) {
+      const host = id != null && activePageIds.has(id) ? controllerHostByPage.get(id) : undefined
+      if (host) {
+        return host
+      }
+    }
+    return null
+  }
+  return useSyncExternalStore(subscribe, read, read)
 }
 
 /** What an agent in this worktree drove most recently, while this window has been open. */

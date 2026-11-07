@@ -7,22 +7,27 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
-import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+} from '../../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
 
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const createStructuredSession = vi.fn()
-vi.mock('../../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: (...args: unknown[]) => createStructuredSession(...args)
-}))
-const { AGENT_LAUNCH_METHODS } = await import('../../../src/main/runtime/rpc/methods/agent-launch')
+vi.mock(
+  '../../../src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: (...args: unknown[]) =>
+      createStructuredSession(...args)
+  })
+)
+const { AGENT_LAUNCH_METHODS } =
+  await import('../../../src/main/runtime/rpc/methods/agent-launch/agent-launch')
 
 let directory: string
 let store: AgentSessionRecordStore

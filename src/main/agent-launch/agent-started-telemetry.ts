@@ -16,3 +16,11 @@ export function agentStartedTelemetry(
     request_kind: 'new'
   }
 }
+
+/** A phone's own label names the desktop surface it mirrors; the host knows the caller is the phone. */
+export function callerLaunchSource(
+  caller: { clientKind?: 'mobile' | 'runtime' },
+  launchSource: string | undefined
+): string | undefined {
+  return caller.clientKind === 'mobile' ? 'mobile' : launchSource
+}

@@ -3,8 +3,8 @@ import { useAppStore } from '@/store'
 import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
-import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import { selectReviewCacheEntry } from '../source-control/review/review-cache-entry-selection'
 import { selectChecksPanelReview, type ChecksPanelReview } from './checks-panel-review'
 import { isGitLabChecksPanelReview } from './gitlab-review-client'
@@ -12,7 +12,7 @@ import { clearPendingPRCommentAiAck } from './comments/pr-comments-ai-launch-ack
 import {
   buildGitHubPRRefreshStateClearToken,
   getGitHubPRRefreshStateExpiryAt
-} from '@/store/github/pr-refresh-state'
+} from '@/store/github/refresh/pr-refresh-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import { recordChecksPanelPRRefreshBreadcrumb } from './refresh/checks-panel-pr-refresh-breadcrumb'
 import { isChecksPanelHardRefreshErrorType } from './review-actions/checks-panel-review-creation'

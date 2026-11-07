@@ -1,5 +1,5 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/runtime-client-target'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { ipcOrRuntimeTargetForHostId } from '../../../../runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'

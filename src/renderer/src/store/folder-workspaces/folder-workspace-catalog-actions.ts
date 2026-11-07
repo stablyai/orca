@@ -2,7 +2,7 @@ import { continueFolderLaunchDrafts } from '@/components/native-chat/native-chat
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import type { FetchedFolderWorkspaceCatalog } from './folder-workspace-catalog'
 import type { HostCatalogFence } from '../host-catalog-fencing'
 import type { RepoSlice } from '../repos/repo-state'

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-runtime-capabilities', () => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
   readLocalRuntimeCapabilitiesOrUnknown: () => mocks.capabilities
@@ -36,7 +36,7 @@ import {
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
 import { installHostModelCatalogSnapshotsSync } from './host-model-catalog-snapshots-sync'
-import { createCompatibleRuntimeStatusResponse } from './runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from './rpc/testing/runtime-compatibility-test-fixture'
 
 const LOCAL = { kind: 'local' } as const
 const PAIRED = { kind: 'environment', environmentId: 'server-1' } as const

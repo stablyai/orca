@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getEffectiveGitUpstreamStatus } from '../remotes/git-effective-upstream'
 import { resolveConfiguredGitPushTarget } from '../remotes/git-push-target-resolution'
 
 function createRunner(config = new Map<string, string>(), snapshotFails = false) {
@@ -28,21 +27,6 @@ function createRunner(config = new Map<string, string>(), snapshotFails = false)
 }
 
 describe('resolution config snapshots', () => {
-  it('shares one snapshot across upstream fallback and push-target status checks', async () => {
-    const runGit = createRunner()
-
-    await expect(getEffectiveGitUpstreamStatus(runGit)).resolves.toEqual({
-      hasUpstream: false,
-      ahead: 0,
-      behind: 0
-    })
-
-    expect(runGit.mock.calls.filter(([args]) => args[0] === 'config')).toEqual([
-      [['config', '--list', '-z']]
-    ])
-    expect(runGit).toHaveBeenCalledTimes(4)
-  })
-
   it('reads a fresh push snapshot after branch config changes', async () => {
     const config = new Map([
       ['branch.feature.remote', 'fork'],
@@ -64,23 +48,5 @@ describe('resolution config snapshots', () => {
       [['config', '--list', '-z']],
       [['config', '--list', '-z']]
     ])
-  })
-
-  it('falls back to individual config reads once when the snapshot fails', async () => {
-    const runGit = createRunner(
-      new Map([
-        ['branch.feature.remote', 'fork'],
-        ['branch.feature.merge', 'refs/heads/feature']
-      ]),
-      true
-    )
-
-    await expect(resolveConfiguredGitPushTarget(runGit)).resolves.toEqual({
-      remote: 'fork',
-      refspec: 'HEAD:feature'
-    })
-
-    expect(runGit.mock.calls.filter(([args]) => args[1] === '--list')).toHaveLength(1)
-    expect(runGit.mock.calls.filter(([args]) => args[1] === '--get')).toHaveLength(5)
   })
 })

@@ -1,22 +1,14 @@
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
 import {
   type AgentProviderSessionMetadata,
   agentProviderSessionsEqual
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
-  AGENT_SESSION_HISTORY_MAX_LIMIT,
-  type AgentSessionHistoryResult
-} from '../../../../shared/agent-session/agent-session-wire'
-import {
   EMPTY_STRUCTURED_AGENT_SESSION,
-  oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
 } from '../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
-import { OLDER_PAGE_ANCHOR_ATTEMPTS } from './structured-agent-session-older-page-read'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 
@@ -33,10 +25,6 @@ import {
   forgetStructuredReadOwner
 } from './structured-agent-session-read-owner-registry'
 
-export function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
-  return item.body.kind !== 'status' || !item.body.providerFrame
-}
-
 export function createReadOwner(
   key: string,
   sessionId: string,
@@ -46,6 +34,7 @@ export function createReadOwner(
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false,
     olderHistoryGeneration: 0,
+    initialHistoryAutoLoad: true,
     current: false
   }
   let stopActiveRun: (() => void) | null = null
@@ -54,6 +43,7 @@ export function createReadOwner(
   const activations = new Map<symbol, StructuredAgentSessionReadEffects>()
   const listeners = new Set<() => void>()
   const commandListeners = new Set<() => void>()
+  const historyReaders = new Set<symbol>()
   let disposed = false
   const activity = createStructuredAgentSessionReadActivity(
     () => !disposed,
@@ -110,84 +100,40 @@ export function createReadOwner(
       olderHistoryGeneration: snapshot.olderHistoryGeneration + 1
     })
   }
-  const hydrate = async (shouldStop: () => boolean): Promise<void> => {
-    if (!target) {
+  const trimUnusedHistory = (): void => {
+    if (disposed || historyReaders.size > 0) {
       return
     }
-    const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
-      target,
-      'agentSession.history',
-      { sessionId, direction: 'tail', limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
-    )
-    if (shouldStop()) {
+    const state = reduceStructuredAgentSession(snapshot.state, { type: 'trim-history' })
+    if (state === snapshot.state && !snapshot.loadingOlder) {
       return
     }
-    setProviderSession(result.providerSession)
-    if (!result.ok) {
-      if (shouldStop()) {
-        return
-      }
-      apply({
-        type: 'event',
-        event: {
-          type: 'reset',
-          sessionId,
-          reset: result.reset,
-          page: result.page,
-          fence: result.fence ?? 0
-        }
-      })
-      return
+    if (state.submissions !== snapshot.state.submissions) {
+      activity.observe(state)
     }
-    if (shouldStop()) {
-      return
-    }
-    apply({ type: 'history-page', page: result.page })
-    if (shouldStop()) {
-      return
-    }
-    let restored = snapshot.state.items.filter(countsTowardInitialHistory).length
-    let anchorSlides = 0
-    while (snapshot.state.hasOlder && restored < NATIVE_CHAT_INITIAL_LIMIT) {
-      const oldest = oldestStructuredAgentSessionCursor(snapshot.state)
-      if (!oldest || shouldStop()) {
-        break
-      }
-      const missing = NATIVE_CHAT_INITIAL_LIMIT - restored
-      const older = await callStructuredAgentSession<AgentSessionHistoryResult>(
-        target,
-        'agentSession.history',
-        {
-          sessionId,
-          direction: 'before',
-          cursor: oldest,
-          limit: Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, missing)
-        }
-      )
-      if (shouldStop()) {
-        return
-      }
-      if (!older.ok || older.page.window.oldest?.sequence === oldest.sequence) {
-        break
-      }
-      if (shouldStop()) {
-        return
-      }
-      // Bound re-anchoring when head trimming makes older pages discontiguous.
-      if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== oldest.sequence) {
-        anchorSlides += 1
-        if (anchorSlides >= OLDER_PAGE_ANCHOR_ATTEMPTS) {
-          break
-        }
-        continue
-      }
-      apply({ type: 'older-page', requestedCursor: oldest, page: older.page })
-      if (shouldStop()) {
-        return
-      }
-      restored = snapshot.state.items.filter(countsTowardInitialHistory).length
-    }
+    setSnapshot({
+      ...snapshot,
+      state,
+      loadingOlder: false,
+      olderHistoryGeneration: snapshot.olderHistoryGeneration + 1
+    })
   }
+  const trimHistory = (): void => {
+    if (disposed) {
+      return
+    }
+    if (snapshot.initialHistoryAutoLoad) {
+      setSnapshot({ ...snapshot, initialHistoryAutoLoad: false })
+    }
+    trimUnusedHistory()
+  }
+  const hydrate = createStructuredAgentSessionReadHydrate({
+    target,
+    sessionId,
+    getState: () => snapshot.state,
+    apply,
+    setProviderSession
+  })
 
   const start = (effects: StructuredAgentSessionReadEffects): void => {
     if (!target) {
@@ -289,6 +235,7 @@ export function createReadOwner(
     },
     dispose: () => {
       disposed = true
+      historyReaders.clear()
       activity.dispose()
       activations.clear()
       listeners.clear()
@@ -296,6 +243,16 @@ export function createReadOwner(
       stopActiveRun?.()
     },
     getSnapshot: () => snapshot,
+    trimHistory,
+    retainHistory: () => {
+      const reader = Symbol('history-reader')
+      historyReaders.add(reader)
+      return () => {
+        if (historyReaders.delete(reader) && !snapshot.initialHistoryAutoLoad) {
+          trimUnusedHistory()
+        }
+      }
+    },
     subscribeCommandsChanged: (listener) => subscribeTo(commandListeners, listener),
     loadOlder: createStructuredAgentSessionOlderPageLoader({
       target,
@@ -303,7 +260,11 @@ export function createReadOwner(
       getSnapshot: () => snapshot,
       setSnapshot,
       apply,
-      captureHistoryReadGuard: () => captureActiveHistoryReadGuard()
+      captureHistoryReadGuard: () => {
+        const stopped = captureActiveHistoryReadGuard()
+        const generation = snapshot.olderHistoryGeneration
+        return () => stopped() || generation !== snapshot.olderHistoryGeneration
+      }
     }),
     subscribe: (listener) => subscribeTo(listeners, listener)
   }

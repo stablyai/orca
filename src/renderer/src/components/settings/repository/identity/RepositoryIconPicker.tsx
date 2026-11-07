@@ -10,7 +10,7 @@ import {
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId

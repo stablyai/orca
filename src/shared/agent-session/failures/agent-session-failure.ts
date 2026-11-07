@@ -1,3 +1,8 @@
+import {
+  readAgentUpdate,
+  readAttachmentProblem,
+  type AgentSessionAttachmentProblem
+} from './agent-session-failure-details'
 import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
@@ -49,6 +54,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerRejected',
   'pluginInputRequired',
   'modelUnavailable',
+  /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
+  'modelNotSelected',
   'claudeEffortInvalid',
   'attachmentInvalid',
   'attachmentUnreadable',
@@ -132,24 +139,11 @@ export type ProviderDiagnostic = {
 /** Bound stderr dumps to the lease exit-reason cap so diagnostics always fit the record. */
 export const MAX_PROVIDER_DIAGNOSTIC_CHARS = 512
 
-/** Which of Orca's checks an image failed. A new one needs a sentence before it compiles. */
-export const AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS = [
-  'empty',
-  'tooLarge',
-  'tooMany',
-  'totalTooLarge',
-  'unsupportedType',
-  'notAFile',
-  'noSource'
-] as const
-export type AgentSessionAttachmentProblemReason =
-  (typeof AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS)[number]
-
-export type AgentSessionAttachmentProblem = {
-  reason: AgentSessionAttachmentProblemReason
-  /** The limit it broke: bytes for `tooLarge` and `totalTooLarge`, a count for `tooMany`. */
-  limit?: number
-}
+export {
+  AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS,
+  type AgentSessionAttachmentProblem,
+  type AgentSessionAttachmentProblemReason
+} from './agent-session-failure-details'
 
 /** What the provider said it is retrying, in its own fields. */
 export type AgentSessionProviderRetry = {
@@ -187,6 +181,9 @@ export type AgentSessionFailureFact = {
   backgroundStop?: AgentSessionBackgroundStop
   /** On `startFailed`: the provider request that got no answer before Orca's deadline. */
   requestTimeout?: AgentSessionRequestTimeout
+  /** On `modelUnavailable`: the first agent release that can use what was refused, when the
+   *  running agent reported an older one. A fixed capability boundary, never the installed version. */
+  agentUpdate?: string
 }
 
 export type AgentSessionBackgroundStop = 'task' | 'all'
@@ -224,6 +221,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     neverReachedAgent?: true
     backgroundStop?: AgentSessionBackgroundStop
     requestTimeout?: AgentSessionRequestTimeout
+    agentUpdate?: string
   } = {}
 ): AgentSessionFailureFact & { kind: TKind } {
   // Re-bounded here, so no writer can store more than the cap however it built the detail.
@@ -241,7 +239,10 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {}),
     ...(extra.neverReachedAgent ? { neverReachedAgent: true as const } : {}),
     ...(extra.backgroundStop ? { backgroundStop: extra.backgroundStop } : {}),
-    ...(extra.requestTimeout ? { requestTimeout: extra.requestTimeout } : {})
+    ...(extra.requestTimeout ? { requestTimeout: extra.requestTimeout } : {}),
+    ...(kind === 'modelUnavailable' && readAgentUpdate(extra.agentUpdate)
+      ? { agentUpdate: extra.agentUpdate }
+      : {})
   }
 }
 
@@ -255,20 +256,6 @@ export function isProviderDiagnostic(value: unknown): value is ProviderDiagnosti
     typeof value.text === 'string' &&
     (value.audience === 'person' || value.audience === 'log')
   )
-}
-
-function readAttachmentProblem(value: unknown): AgentSessionAttachmentProblem | undefined {
-  if (!isRecord(value)) {
-    return undefined
-  }
-  const reason = AGENT_SESSION_ATTACHMENT_PROBLEM_REASONS.find((known) => known === value.reason)
-  if (!reason) {
-    return undefined
-  }
-  const limit = value.limit
-  return typeof limit === 'number' && Number.isFinite(limit) && limit > 0
-    ? { reason, limit }
-    : { reason }
 }
 
 /** A retry as a reader meets it; undefined when it names no field. */
@@ -325,7 +312,8 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
     ...(value.backgroundStop === 'task' || value.backgroundStop === 'all'
       ? { backgroundStop: value.backgroundStop }
       : {}),
-    ...(requestTimeout ? { requestTimeout } : {})
+    ...(requestTimeout ? { requestTimeout } : {}),
+    ...(readAgentUpdate(value.agentUpdate) ? { agentUpdate: value.agentUpdate } : {})
   })
 }
 

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
+import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-workspace-tab-activation'
 import { useAppStore } from '../../store'
 import {
   findBrowserTabWorktreeId,

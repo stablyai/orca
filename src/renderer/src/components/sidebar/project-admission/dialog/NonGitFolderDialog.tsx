@@ -19,7 +19,7 @@ import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import { addRuntimeSshRepo } from '@/runtime/runtime-ssh-target-management'
+import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 

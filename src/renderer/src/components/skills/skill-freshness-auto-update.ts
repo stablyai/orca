@@ -8,7 +8,7 @@ import { isBundledSkillAutoUpdateOp } from '../../../../shared/bundled-skill-sum
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
-import { autoUpdateBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { useAppStore } from '@/store'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 

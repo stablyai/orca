@@ -12,9 +12,9 @@ import {
   resetNativeChatPtySendQueuesForTests
 } from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
 import { buildAskAnswerKeys } from '../../src/shared/native-chat/input/native-chat-ask-answer'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
 

@@ -9,8 +9,8 @@ import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-eq
 import {
   clearRecentRuntimeCompatibilityFailure,
   clearRuntimeCompatibilityCache
-} from '@/runtime/runtime-rpc-client'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/installed-agent-skill-discovery'
 import {
@@ -31,7 +31,7 @@ import {
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { applyRuntimeHostStatusSnapshot, snapshotOutrunsCatalog } from './runtime-status-snapshot'
-import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
   classifyPeerReplacements,
   replacedRuntimeEnvironmentIds

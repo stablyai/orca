@@ -77,7 +77,9 @@ vi.mock('@/runtime/use-worktree-runtime-target', () => ({
       ? { kind: 'environment', environmentId: runtimeEnvironmentId }
       : { kind: 'local' }
 }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: statRuntimePathMock }))
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
+  statRuntimePath: statRuntimePathMock
+}))
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: (worktreeId: string) => targetConnectionOwners.get(worktreeId)
 }))
@@ -104,7 +106,7 @@ vi.mock('../../markdown/navigation/MarkdownTableOfContentsPanel', () => ({
 import MarkdownPreview from './MarkdownPreview'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
-import { registerHttpLinkStoreAccessor } from '../../../../lib/http-link-routing'
+import { registerHttpLinkStoreAccessor } from '../../../../lib/browser/navigation/http-link-routing'
 
 describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
   let container: HTMLDivElement

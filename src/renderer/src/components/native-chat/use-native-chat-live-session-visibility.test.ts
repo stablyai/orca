@@ -259,4 +259,114 @@ describe('useNativeChatLiveSession visibility', () => {
     expect(transport.readSession).toHaveBeenCalledTimes(3)
     expect(latest?.messages.map((message) => message.id)).toEqual(['fresh-after-reveal'])
   })
+  it.each(['seed', 'snapshot'] as const)(
+    'bounds both retained buffers on return to live from a %s base and retires late history',
+    async (source) => {
+      const initial = Array.from({ length: 300 }, (_, index) =>
+        assistant(`message-${index + 700}`, index + 700)
+      )
+      const expanded = Array.from({ length: 500 }, (_, index) =>
+        assistant(`message-${index + 500}`, index + 500)
+      )
+      const late = deferred<{ messages: NativeChatMessage[] }>()
+      transport.readSession
+        .mockResolvedValueOnce({ messages: initial })
+        .mockResolvedValueOnce({ messages: expanded })
+        .mockImplementationOnce(() => late.promise)
+      await render(BASE_ARGS)
+      if (source === 'snapshot') {
+        await emit(0, { type: 'snapshot', messages: initial, hasMore: true })
+      }
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      await emit(0, {
+        type: 'append',
+        messages: Array.from({ length: 400 }, (_, index) =>
+          assistant(`live-${index}`, index + 1000)
+        )
+      })
+      expect((latest?.messages.length ?? 0) > 600).toBe(true)
+      let oldRead: Promise<string> | undefined
+      await act(async () => {
+        oldRead = latest?.loadEarlier()
+      })
+      await act(async () => {
+        latest?.trimHistory?.()
+      })
+      expect(latest?.messages.map((row) => row.id)).toEqual(
+        Array.from({ length: 300 }, (_, index) => `live-${index + 100}`)
+      )
+      expect(latest?.messages.at(-1)?.id).toBe('live-399')
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.loadingEarlier).toBe(false)
+      await act(async () => {
+        late.resolve({ messages: [assistant('stale-page', -1)] })
+        await expect(oldRead).resolves.toBe('superseded')
+      })
+      expect(latest?.messages.at(-1)?.id).toBe('live-399')
+      transport.readSession.mockResolvedValueOnce({ messages: expanded })
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      expect(transport.readSession.mock.calls.at(-1)?.[2]).toBe(500)
+      expect(subscriptions[0]?.unsubscribe).not.toHaveBeenCalled()
+    }
+  )
+  it('retires the first older read when returning before it enlarged the budget', async () => {
+    const initial = Array.from({ length: 300 }, (_, index) =>
+      assistant(`row-${index + 700}`, index + 700)
+    )
+    const older = deferred<{ messages: NativeChatMessage[] }>()
+    transport.readSession
+      .mockResolvedValueOnce({ messages: initial })
+      .mockImplementationOnce(() => older.promise)
+    await render(BASE_ARGS)
+    let request: Promise<string> | undefined
+    await act(async () => {
+      request = latest?.loadEarlier()
+    })
+    await act(async () => latest?.trimHistory?.())
+    await act(async () => {
+      older.resolve({
+        messages: Array.from({ length: 500 }, (_, index) =>
+          assistant(`row-${index + 500}`, index + 500)
+        )
+      })
+      await expect(request).resolves.toBe('superseded')
+    })
+    expect(latest?.messages.map((row) => row.id)).toEqual(initial.map((row) => row.id))
+    expect(latest?.loadingEarlier).toBe(false)
+  })
+
+  it.each(['seed', 'snapshot'] as const)(
+    'applies the current budget to a late enlarged reveal %s',
+    async (source) => {
+      const initial = Array.from({ length: 300 }, (_, index) =>
+        assistant(`row-${index + 700}`, index + 700)
+      )
+      const expanded = Array.from({ length: 500 }, (_, index) =>
+        assistant(`row-${index + 500}`, index + 500)
+      )
+      const reveal = deferred<{ messages: NativeChatMessage[] }>()
+      transport.readSession
+        .mockResolvedValueOnce({ messages: initial })
+        .mockResolvedValueOnce({ messages: expanded })
+        .mockImplementationOnce(() => reveal.promise)
+      await render(BASE_ARGS)
+      await act(async () => {
+        await latest?.loadEarlier()
+      })
+      await render({ ...BASE_ARGS, enabled: false })
+      await render(BASE_ARGS)
+      await act(async () => latest?.trimHistory?.())
+      if (source === 'snapshot') {
+        await emit(1, { type: 'snapshot', messages: expanded, hasMore: false })
+      }
+      await act(async () => reveal.resolve({ messages: expanded }))
+      expect(latest?.messages.map((row) => row.id)).toEqual(initial.map((row) => row.id))
+      expect(latest?.hasMore).toBe(true)
+      expect(subscriptions[1]?.unsubscribe).not.toHaveBeenCalled()
+    }
+  )
 })

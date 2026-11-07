@@ -1,0 +1,40 @@
+import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+// Derive cards from journal rows; read the legacy table only for import. Handoff outcomes return
+// refusals, requeue proven non-delivery, and spend uncertain or accepted sends.
+
+export type QueuedMessageState = 'waiting' | 'dispatched' | 'returned' | 'withdrawn'
+
+/** Per-card conversion hold; unknown reasons remain held, retired reasons derive from queue pauses. */
+export type QueuedMessageHoldReason = typeof QUEUED_MESSAGE_PAUSED_SEND_FAILED
+
+/** Edited legacy uncertain deliveries require explicit Send; publish as a plain hold. */
+export const QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED = 'delivery_unconfirmed'
+
+/** Only waiting/returned cards count toward Stop, clear, editing and published bounds. */
+export function isUnsettledQueuedMessage(row: Pick<QueuedMessageRow, 'state'>): boolean {
+  return row.state === 'waiting' || row.state === 'returned'
+}
+
+export type QueuedMessageRow = {
+  messageId: string
+  position: number
+  body: AgentJournalMessageItem
+  /** Derived from body; never stored. */
+  fingerprint: string
+  state: QueuedMessageState
+  /** Unknown non-null reasons remain plain holds. */
+  holdReason: string | null
+  returnedReason: string | null
+  returnedRejection: UnreadAgentSessionFailureFact | null
+  /** Host-only handoff link; clear on proven withdrawal, retain on return. Clients use queuedMessageId. */
+  consumedAs: string | null
+  recovers?: string
+  /** Where the journal stood when it was queued: a Stop's pause holds only cards queued before
+   *  it. Null on cards from builds before it was recorded, which read as queued before any Stop. */
+  queuedAt: AgentJournalCursor | null
+  options?: AgentSessionExecutionOptions
+}

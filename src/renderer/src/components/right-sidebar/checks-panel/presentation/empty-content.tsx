@@ -1,14 +1,16 @@
+import { githubCreationImageUploadAddress } from '@/components/github/github-creation-image-upload-address'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { CreateHostedReviewComposer } from '../../hosted-review/creation/CreateHostedReviewComposer'
 import {
   getChecksPanelReviewState,
+  checksPanelOperationLabel,
   shouldShowChecksPanelPublishBranchAction
 } from './checks-panel-empty-state'
 import { openChecksPanelHostedReviewUrl } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { isRateLimitRefresh } from '../checks-panel-review-state-model'
-import { isMacPlatform } from '../../../terminal-pane/terminal-link-open-hints'
+import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
@@ -156,17 +158,7 @@ export function ChecksPanelEmptyContent({
   if (!activeReview) {
     // Detached HEAD during Git operations does not mean the original branch lost its PR.
     const operationInProgress = conflictOperation !== 'unknown'
-    const operationLabel =
-      conflictOperation === 'rebase'
-        ? translate('auto.components.right.sidebar.checks.panel.content.operation.rebase', 'Rebase')
-        : conflictOperation === 'merge'
-          ? translate('auto.components.right.sidebar.checks.panel.content.operation.merge', 'Merge')
-          : conflictOperation === 'cherry-pick'
-            ? translate(
-                'auto.components.right.sidebar.checks.panel.content.operation.cherryPick',
-                'Cherry-pick'
-              )
-            : null
+    const operationLabel = checksPanelOperationLabel(conflictOperation)
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
     const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github')
@@ -272,6 +264,13 @@ export function ChecksPanelEmptyContent({
             <CreateHostedReviewComposer
               key={panelContextKey}
               className="p-0"
+              imageUploadPending={model.prImageUploadPending}
+              imageUpload={githubCreationImageUploadAddress(
+                model.repo,
+                model.activeWorktreePath,
+                hostedReviewCreateProvider,
+                model.onPrImageUploadPending
+              )}
               provider={hostedReviewCreateProvider}
               branch={branch}
               base={prBase}

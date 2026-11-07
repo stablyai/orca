@@ -4,7 +4,7 @@ import {
   setTrailingGraphSyncScheduler
 } from './sync-runtime-graph/graph-publication'
 import { graphState, RUNTIME_GRAPH_SYNC_COALESCE_MS } from './sync-runtime-graph/graph-state'
-import { subscribeMountedTerminalTabChanges } from './mounted-terminal-tab-registry'
+import { subscribeMountedTerminalTabChanges } from './hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { measureTerminalGroupGridSizes } from './sync-runtime-graph/terminal-group-grid-sizes'
 export function setRuntimeGraphStoreStateGetter(getter: (() => AppState) | null): void {
   graphState.getStoreState = getter

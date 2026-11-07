@@ -11,10 +11,10 @@ const mocks = vi.hoisted(() => ({
   requestBrowserFocus: vi.fn()
 }))
 
-vi.mock('@/lib/workspace-tab-palette-activation', () => ({
+vi.mock('@/lib/workspace/search/tabs/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: mocks.activateWorkspaceTab
 }))
-vi.mock('@/lib/browser-page-palette-activation', () => ({
+vi.mock('@/lib/browser/palette/browser-page-palette-activation', () => ({
   activateBrowserPagePaletteResult: mocks.activateBrowserPage
 }))
 vi.mock('@/lib/simulator-tab-palette-activation', () => ({

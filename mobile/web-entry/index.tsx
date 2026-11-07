@@ -26,6 +26,7 @@ import {
 } from '../src/mobile-web-shell/bridge/page-first-paint'
 import { PageFaultBoundary } from '../src/mobile-web-shell/bridge/page-fault-boundary'
 import type { BridgeUiLocale } from '../src/mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../src/mobile-web-shell/bridge/bridge-route-update'
 import { activateMobileUiLocale, subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { getUiIntlLocale } from '../src/i18n/ui-intl-locale'
 import { readDeviceUiLocaleTags, resolveUiLocaleFromTags } from '../src/i18n/system-ui-locale'
@@ -36,8 +37,10 @@ import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blu
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
 import { RpcClientProvider } from '../src/transport/client-context.web'
+import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
+import { preloadBootRoutes } from './boot-route-preload'
 
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
@@ -61,9 +64,11 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
     }, [])
     return (
       <RpcClientProvider client={client}>
-        <RouteScreenPaintProvider report={reportRouteScreenPaint}>
-          {children}
-        </RouteScreenPaintProvider>
+        <OrcaQueryProvider>
+          <RouteScreenPaintProvider report={reportRouteScreenPaint}>
+            {children}
+          </RouteScreenPaintProvider>
+        </OrcaQueryProvider>
       </RpcClientProvider>
     )
   }
@@ -165,8 +170,12 @@ bootstrapShellPage({
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })
-    // Activation settles to English on failure, so the page always mounts.
-    void settleLatest(() => uiLocaleActivation).then(() =>
+    // Open-target boots stay lazy: the stack moves the URL to the target only when it mounts after the container.
+    const bootRoutes = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
+      ? null
+      : preloadBootRoutes(window.location.pathname)
+    // Activation settles to English on failure and preloads settle either way, so the page always mounts.
+    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes]).then(() =>
       createRoot(container).render(
         // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.
         <PageFaultBoundary

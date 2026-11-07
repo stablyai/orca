@@ -9,7 +9,7 @@ import {
 } from '@/lib/client-creation-action-policy'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -18,11 +18,11 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))
 
-vi.mock('@/store/slices/browser/paired-browser-tab-creator', () => ({
+vi.mock('@/store/slices/browser/tabs/paired-browser-tab-creator', () => ({
   getRegisteredPairedBrowserTabCreator: () => null,
   loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))

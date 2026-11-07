@@ -7,7 +7,7 @@ import {
   acquireReadyCodexForTest
 } from '../session-lifecycle/codex-structured-session-adapter-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { journalItemEchoFields } from '../../../native-chat/agent-session-journal/journal-item-echo'
+import { journalItemEchoFields } from '../../../native-chat/agent-session-journal/projection/journal-item-echo'
 import { expect, it } from 'vitest'
 import { codexTurnLifecycleIdentity } from '../journal/codex-structured-journal-translation-turns'
 import {
@@ -23,8 +23,8 @@ import type {
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { structuredRewindCut } from '../../../native-chat/agent-session-wire/structured-rewind-cut'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
+import { structuredRewindCut } from '../../../native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 
 export function registerCodexCatchUpEchoTests(input: {
   codexWith: typeof catchUpCodexWith

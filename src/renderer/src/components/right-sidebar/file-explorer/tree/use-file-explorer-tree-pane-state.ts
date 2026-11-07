@@ -1,10 +1,10 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
@@ -21,7 +21,7 @@ import { useFileExplorerTreeLoadEffects } from './use-file-explorer-tree-load-ef
 import { useFileExplorerWatch } from '../watching/useFileExplorerWatch'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
 
 type UseFileExplorerTreePaneStateParams = {

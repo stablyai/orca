@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
 import type { RelayHostReachability } from '../../transport/relay-host-reachability'
 import type { RpcClient } from '../../transport/rpc-client'

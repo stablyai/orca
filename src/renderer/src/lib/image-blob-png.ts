@@ -1,6 +1,9 @@
 import {
+  CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit
+  assertClipboardImageDimensionsWithinLimit,
+  encodeClipboardImageWithinLimit,
+  type ClipboardImageDimensions
 } from '../../../shared/clipboard-image'
 
 export function blobToBase64(blob: Blob): Promise<string> {
@@ -24,9 +27,34 @@ async function hasPngSignature(blob: Blob): Promise<boolean> {
   return PNG_SIGNATURE.every((byte, index) => head[index] === byte)
 }
 
+function encodeImagePng(
+  image: HTMLImageElement,
+  { height, width }: ClipboardImageDimensions
+): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) {
+    throw new Error('Clipboard image could not be decoded')
+  }
+  context.imageSmoothingQuality = 'high'
+  context.drawImage(image, 0, 0, width, height)
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((png) => {
+      if (png) {
+        resolve(png)
+      } else {
+        reject(new Error('Clipboard image could not be encoded as PNG'))
+      }
+    }, 'image/png')
+  })
+}
+
+// Pastes shrink to fit the save limit; copies keep full size and fail instead of silently degrading.
 export async function convertImageBlobToPng(
   blob: Blob,
-  options: { maxEdge?: number } = {}
+  { downscaleToFit = false, maxEdge }: { downscaleToFit?: boolean; maxEdge?: number } = {}
 ): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
   const url = URL.createObjectURL(blob)
@@ -36,38 +64,34 @@ export async function convertImageBlobToPng(
     await image.decode()
     const width = image.naturalWidth
     const height = image.naturalHeight
-    assertClipboardImageDimensionsWithinLimit({ width, height })
-    // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
-    if (options.maxEdge === undefined && (await hasPngSignature(blob))) {
-      return blob
-    }
-    const canvas = document.createElement('canvas')
-    const scale = Math.min(
-      1,
-      (options.maxEdge ?? Math.max(width, height)) / Math.max(width, height)
-    )
-    canvas.width = Math.max(1, Math.round(width * scale))
-    canvas.height = Math.max(1, Math.round(height * scale))
-    const context = canvas.getContext('2d')
-    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+    if (maxEdge !== undefined && (!Number.isFinite(maxEdge) || maxEdge <= 0)) {
       throw new Error('Clipboard image could not be decoded')
     }
-    context.drawImage(image, 0, 0, canvas.width, canvas.height)
-    return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((png) => {
-        if (!png) {
-          reject(new Error('Clipboard image could not be encoded as PNG'))
-          return
-        }
-        try {
-          assertClipboardImageByteLengthWithinLimit(png.size)
-        } catch (error) {
-          reject(error)
-          return
-        }
-        resolve(png)
-      }, 'image/png')
-    })
+    const scale = maxEdge === undefined ? 1 : Math.min(1, maxEdge / Math.max(width, height))
+    const size =
+      maxEdge === undefined
+        ? { width, height }
+        : {
+            width: Math.max(1, Math.round(width * scale)),
+            height: Math.max(1, Math.round(height * scale))
+          }
+    const pastedOverPixelCap = downscaleToFit && width * height > CLIPBOARD_IMAGE_MAX_PIXELS
+    // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
+    if (maxEdge === undefined && !pastedOverPixelCap && (await hasPngSignature(blob))) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
+      return blob
+    }
+    if (!downscaleToFit) {
+      assertClipboardImageDimensionsWithinLimit({ width, height })
+      const png = await encodeImagePng(image, size)
+      assertClipboardImageByteLengthWithinLimit(png.size)
+      return png
+    }
+    return await encodeClipboardImageWithinLimit(
+      size,
+      (size) => encodeImagePng(image, size),
+      (png) => png.size
+    )
   } finally {
     URL.revokeObjectURL(url)
   }

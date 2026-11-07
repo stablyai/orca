@@ -14,10 +14,12 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
   CreateWorktreeResult,
+  SetupTrustMismatch,
   WorktreeCheckoutProgress,
   WorktreeCreateBaseFallback
 } from '../../shared/worktree/create-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
@@ -62,6 +64,10 @@ import {
   getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../workspace-hooks/effective-hook-config'
+import {
+  checkCreatedWorktreeSetupTrust,
+  defaultTabsWithoutCommands
+} from '../workspace-hooks/created-worktree-setup-trust'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
@@ -100,6 +106,7 @@ import {
   crossStoreManualLineage,
   recordCreatedWorktreeLineage
 } from '../runtime/workspaces/lineage/runtime-worktree-lineage-recording'
+import type { WorktreeLineageResolution } from '../runtime/workspaces/lineage/runtime-worktree-lineage-resolution'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -242,11 +249,13 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
+/** `noteLineage`: the common create resolver's answer for a task id in the note, absent an explicit parent. */
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
   worktree: Worktree,
-  createdAt: number
+  createdAt: number,
+  noteLineage?: WorktreeLineageResolution
 ): CreatedWorktreeLineageRecords {
   if (args.crossStoreParent) {
     const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
@@ -258,6 +267,17 @@ export function recordWorkspaceLineageForCreatedWorktree(
       console.warn(`[worktree-create] ${warning.message}`)
     }
     return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+  }
+  if (!args.parentWorkspace && noteLineage) {
+    const { lineage, workspaceLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      noteLineage
+    )
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { lineage, workspaceLineage }
   }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
@@ -287,7 +307,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
+  // Folder parents have no WorktreeLineage row; their link is the workspace lineage record.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
   let lineageOwnedByTwin = false
@@ -324,18 +344,34 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  const workspaceLineage = store.setWorkspaceLineage({
+  const row: WorkspaceLineage = {
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    parentInstanceId:
+      parentScope.type === 'folder'
+        ? parentScope.folderWorkspaceId
+        : (parentWorktreeMeta?.instanceId ?? null),
     origin: 'manual',
     capture: {
       source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
       confidence: 'explicit'
     },
     createdAt
-  })
+  }
+  if (parentScope.type === 'folder') {
+    // The checkout exists by now, so a same-id twin owning the bucket only warns.
+    const target = worktreeRowTarget(store, worktree)
+    const workspaceLineage = (target && store.setFolderParentLineage(target, row)) ?? null
+    if (!workspaceLineage) {
+      console.warn(
+        `[worktree-create] ${worktree.id}'s lineage is held by a same-path workspace on another host; skipping lineage`
+      )
+    }
+    return { lineage, workspaceLineage }
+  }
+  // A recorded worktree link already wrote this row as its workspace projection.
+  const workspaceLineage = lineage ? row : store.setWorkspaceLineage(row)
   return { lineage, workspaceLineage }
 }
 
@@ -992,6 +1028,13 @@ async function performLocalWorktreeCreate(
   if (args.crossStoreParent !== undefined) {
     await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
   }
+  // A task id in the note names the parent here, as it does for every other create path.
+  const noteLineage =
+    args.comment && !args.parentWorkspace && !args.crossStoreParent
+      ? await runtime
+          .resolveLineageForWorktreeCreate({ comment: args.comment }, repo)
+          .catch(() => undefined)
+      : undefined
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
@@ -1592,6 +1635,7 @@ async function performLocalWorktreeCreate(
   const metaUpdates: Partial<WorktreeMeta> = {
     // Path IDs can be reused after external deletion; rotate instance identity to reject stale lineage.
     instanceId: randomUUID(),
+    ...(args.comment ? { comment: args.comment } : {}),
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -1660,7 +1704,7 @@ async function performLocalWorktreeCreate(
     lineage: worktreeLineage,
     workspaceLineage,
     crossStoreLineage
-  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(
@@ -1716,11 +1760,22 @@ async function performLocalWorktreeCreate(
   // Created branch hooks are authoritative; benign divergence from primary must not disable setup (#1280).
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
+  let setupTrustMismatch: SetupTrustMismatch | undefined
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+    setupTrustMismatch = checkCreatedWorktreeSetupTrust(
+      repo,
+      createdYamlHooks,
+      args.setupDecision,
+      args
+    )
+    // Only the approved content may run; the client re-prompts with the branch's.
+    const setupDecision = setupTrustMismatch ? 'skip' : args.setupDecision
     try {
-      defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
+      const launch = getDefaultTabsLaunch(createdYamlHooks, repo, setupDecision)
+      // Approving the branch's commands opens the command tabs later.
+      defaultTabs = setupTrustMismatch ? defaultTabsWithoutCommands(launch) : launch
     } catch (error) {
       // Unapproved target-branch tab commands may create tabs but must not execute.
       console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
@@ -1732,7 +1787,7 @@ async function performLocalWorktreeCreate(
     let shouldLaunchSetup = false
     if (setupScript) {
       try {
-        shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
+        shouldLaunchSetup = shouldRunSetupForCreate(repo, setupDecision)
       } catch (error) {
         // Target branch can add unseen hooks; skip unapproved setup without failing the existing workspace.
         console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
@@ -1824,6 +1879,7 @@ async function performLocalWorktreeCreate(
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(baseFallback ? { baseFallback } : {}),
+    ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     ...(createWarning ? { warning: createWarning } : {}),
     timing: timing.finish()
   }

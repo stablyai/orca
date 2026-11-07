@@ -9,7 +9,7 @@ import type { AcpTimelineEvent } from './acp-timeline-event'
 import { acpPromptTurnId } from './acp-prompt-turns'
 import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpChildStops, AcpDialect } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
 import {
@@ -20,7 +20,7 @@ import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-wor
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { createAcpOwnershipReader } from './acp-ownership-reader'
 import type { AcpTextDrop } from './acp-turn-messages'
 
@@ -331,5 +331,3 @@ export class AcpStructuredLane {
     }
   }
 }
-
-export { acpLaneChildWorkDelivery } from './acp-lane-child-work-delivery'
