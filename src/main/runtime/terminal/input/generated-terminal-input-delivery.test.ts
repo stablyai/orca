@@ -244,9 +244,12 @@ describe('one host transaction for generated input', () => {
           () => {},
           agent
         )
-        if (agent === 'opencode2') {
-          runtime.onPtyData('pty-prompt', '\x1b[?1049h\x1b[?2004h', 0)
-        }
+        // The host painted this grid, so it holds a model of it, as a real host would.
+        runtime.onPtyData(
+          'pty-prompt',
+          agent === 'opencode2' ? '\x1b[?1049h\x1b[?2004h' : readRuntimeFixture(fixture),
+          0
+        )
         vi.spyOn(
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: spies the host's protected screen read to stand in a recorded grid.
           runtime as unknown as { readGeneratedInputScreen: () => Promise<unknown> },

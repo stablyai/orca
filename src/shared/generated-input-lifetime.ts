@@ -1,6 +1,10 @@
 /** What a retired operation's pending awaits reject with; never a caller-visible error. */
 export const GENERATED_INPUT_RETIRED = Symbol('generated-input-retired')
 
+/** A startup frame's evidence is not available yet on a host that can observe it: before any frame
+ *  was handed over, the operation returns to its own wait. Never a caller-visible error. */
+export const GENERATED_INPUT_PENDING = Symbol('generated-input-pending')
+
 /** The approved wait-through-dialog budget for a request whose caller set none, armed when its
  *  queue turn opens (after any permission hold or earlier prompt main also waited through). */
 export const GENERATED_INPUT_TURN_BUDGET_MS = 60_000
@@ -136,6 +140,11 @@ export class GeneratedInputLifetime {
         this.progress.enter ||= enter
       }
     }
+  }
+
+  /** Whether any frame of this attempt was handed over: from then nothing may be written again. */
+  get frameHandedOver(): boolean {
+    return this.textStarted
   }
 
   private markTextStarted(): void {

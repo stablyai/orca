@@ -243,6 +243,8 @@ function windowSees() {
 }
 const phoneSees = () => f.runtime!.generatedInputNotices.page(0, 0, 'device:phone').frames
 
+const READY = 'claude-ready-task-wakeup'
+
 const DIALOG = [
   'Bypass Permissions',
   '❯ 1. No, exit',
@@ -288,12 +290,12 @@ async function setUp(agent: TuiAgent, capable: boolean): Promise<string> {
   // The host's facts follow the same stand-ins as the older host's.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the host's protected fact reads on OrcaRuntimeService to stand in the same facts.
   const host = runtime as unknown as {
-    readGeneratedInputScreen: () => Promise<unknown>
+    readGeneratedInputScreen: (ptyId: string) => Promise<unknown>
     readGeneratedInputProcess: () => Promise<unknown>
   }
   const realScreen = host.readGeneratedInputScreen.bind(runtime)
-  vi.spyOn(host, 'readGeneratedInputScreen').mockImplementation(async () =>
-    f.grid ? f.grid : capable ? await realScreen() : 'unknown'
+  vi.spyOn(host, 'readGeneratedInputScreen').mockImplementation(async (ptyId) =>
+    f.grid ? f.grid : capable ? await realScreen(ptyId) : 'unknown'
   )
   vi.spyOn(host, 'readGeneratedInputProcess').mockImplementation(async () => {
     await f.holdProcessRead
@@ -538,7 +540,8 @@ describe.each([
     const lines = (await grid('claude-ready-task-wakeup')).lines
     f.streamTail = [...lines]
     f.backlog = lines.join('\r\n')
-    f.runtime?.onPtyData('pty-prompt', f.backlog, Date.now())
+    // A host sees its PTY's own bytes from launch; only an older host's stream read lacks the modes.
+    f.runtime?.onPtyData('pty-prompt', capable ? readRuntimeFixture(READY) : f.backlog, Date.now())
     const result = pasteDraftToAgentPtyWhenReady({
       ptyId,
       content: 'go',
@@ -642,7 +645,8 @@ describe.each([
     const lines = (await grid('claude-ready-task-wakeup')).lines
     f.streamTail = [...lines]
     f.backlog = lines.join('\r\n')
-    f.runtime?.onPtyData('pty-prompt', f.backlog, Date.now())
+    // A host sees its PTY's own bytes from launch; only an older host's stream read lacks the modes.
+    f.runtime?.onPtyData('pty-prompt', capable ? readRuntimeFixture(READY) : f.backlog, Date.now())
     const result = pasteDraftToAgentPtyWhenReady({
       ptyId,
       content: 'go',

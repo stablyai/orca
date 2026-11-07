@@ -17,6 +17,7 @@ import {
   type GeneratedInputEvidence
 } from './generated-input-readiness-evaluation'
 import {
+  GENERATED_INPUT_PENDING as PENDING,
   GENERATED_INPUT_RETIRED as RETIRED,
   GENERATED_INPUT_TURN_BUDGET_MS,
   ownTurn,
@@ -29,6 +30,8 @@ import {
  *  synchronously as the bytes are handed over and told whether the terminal took them ('unknown'
  *  when the answer was lost, which stays unconfirmed). */
 export type GeneratedInputFrameGate = {
+  /** The operation's current intent: a startup frame whose evidence is pending waits for it. */
+  readonly startup: boolean
   admit: (typedText?: string) => Promise<boolean>
   dispatching: () => (taken: boolean | 'unknown') => void
 }
@@ -198,7 +201,8 @@ export function runGeneratedInputOperation(
         if (accepted && (marker || observed === observation.sequence)) {
           return true
         }
-        if (!accepted) {
+        // A pending screen refuses nothing for good: it is asked again once it catches up.
+        if (!accepted && screen !== null) {
           refusedAt = observed
         }
       }
@@ -210,6 +214,9 @@ export function runGeneratedInputOperation(
   }
 
   const gate = (frame: 'text' | 'enter'): GeneratedInputFrameGate => ({
+    get startup() {
+      return !running
+    },
     admit: async (typedText) => {
       // Text is refused when the budget left cannot also hold its settle wait and Enter.
       if (
@@ -220,6 +227,10 @@ export function runGeneratedInputOperation(
         return false
       }
       const { evidence, screen } = await read()
+      // Before any frame left, startup evidence still pending sends the operation back to its wait.
+      if (!running && screen === null && !lifetime.frameHandedOver && !lifetime.retired) {
+        throw PENDING
+      }
       return (
         !lifetime.retired &&
         admitsGeneratedInput({
@@ -271,8 +282,20 @@ export function runGeneratedInputOperation(
         await within(observation.start(source)).catch(() => undefined)
         running = false
       }
-      if (!(await admitted()) || !(await within(source.writeText(textGate)))) {
-        return lifetime.settle()
+      for (;;) {
+        try {
+          if (!(await admitted()) || !(await within(source.writeText(textGate)))) {
+            return lifetime.settle()
+          }
+          break
+        } catch (reason) {
+          // Pending before any frame left: the same wait, end and turn. After one, what was handed
+          // over decides the outcome; nothing is written again.
+          if (reason !== PENDING || lifetime.frameHandedOver) {
+            throw reason
+          }
+          await nextCheck()
+        }
       }
       lifetime.textDone()
       if (submit && !seq.carriesEnter) {
@@ -295,7 +318,7 @@ export function runGeneratedInputOperation(
         await request.afterWrite?.()
       }
     } catch (reason) {
-      if (reason !== RETIRED) {
+      if (reason !== RETIRED && reason !== PENDING) {
         error = reason
       }
       lifetime.settle()

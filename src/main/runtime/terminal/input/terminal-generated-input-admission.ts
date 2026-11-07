@@ -3,6 +3,7 @@ import {
   type GeneratedInputScreen
 } from '../../../../shared/generated-agent-input-admission'
 import type { GeneratedInputEvidence } from '../../../../shared/generated-input-readiness-evaluation'
+import { GENERATED_INPUT_PENDING } from '../../../../shared/generated-input-lifetime'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isAgentForegroundWrapperProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
@@ -29,8 +30,9 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
     return isTuiAgent(resolved) ? resolved : (expected ?? null)
   }
 
-  /** The caught-up host grid, else the current provider screen; null while a model this host
-   *  holds has not caught up, 'unknown' when it holds none to observe. */
+  /** The caught-up host grid, else the current provider screen; null while this host's own model
+   *  is not there yet (none before the first output, or one catching up). Never 'unknown': this
+   *  host can always observe its own terminal, so only an older host's source is blind. */
   protected async readGeneratedInputScreen(ptyId: string): Promise<GeneratedInputScreen> {
     const caughtUp = this.readCaughtUpRuledScreen(ptyId)
     if (caughtUp) {
@@ -49,20 +51,28 @@ export abstract class OrcaRuntimeWithGeneratedInputAdmission extends OrcaRuntime
         alternateScreen: this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen === true
       }
     }
-    return this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId)
-      ? null
-      : 'unknown'
+    return null
   }
 
   /** Immediately before a provider write, with nothing awaited after it: deadline and the caught-up
-   *  grid. A grid that lags is left to the awaited recheck just before. */
+   *  grid. A grid that lags is left to the awaited recheck just before. A startup write whose model
+   *  is gone again is pending before any frame left, and refused after one. */
   protected assertGeneratedInputCommit(
     ptyId: string,
     agent: TuiAgent | null,
     deadline: number,
     typedText?: string,
-    enterReserveMs = -1
+    enterReserveMs = -1,
+    startup = false,
+    frameHandedOver = false
   ): void {
+    if (
+      startup &&
+      !this.headlessTerminals.has(ptyId) &&
+      !this.providerSnapshotPreferredPtys.has(ptyId)
+    ) {
+      throw frameHandedOver ? this.generatedInputRefusal(ptyId) : GENERATED_INPUT_PENDING
+    }
     const grid = this.readCaughtUpRuledScreen(ptyId)
     // Text is refused up front when the budget left cannot also cover the Enter that follows it.
     const reserve =

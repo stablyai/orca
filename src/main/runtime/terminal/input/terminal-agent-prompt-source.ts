@@ -152,7 +152,9 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         agent,
         attempt.deadline ?? 0,
         typedText,
-        enterReserveMs
+        enterReserveMs,
+        gate.startup,
+        attempt.frameHandedOver
       )
       const taken = gate.dispatching()
       // A provider that throws after the handoff may have taken the bytes.
@@ -235,7 +237,14 @@ export abstract class OrcaRuntimeWithAgentPromptSource extends OrcaRuntimeWithOb
         // Claude can lose the start of a large bracketed paste split across writes.
         state.render?.arm()
         const data = submitWithPaste ? payload + AGENT_PROMPT_SUBMIT : payload
-        writeFrame(gate, 'text', data, undefined, submit && !submitWithPaste ? pasteIngestMs : -1)
+        try {
+          writeFrame(gate, 'text', data, undefined, submit && !submitWithPaste ? pasteIngestMs : -1)
+        } catch (error) {
+          // A refused or pending text ends this attempt's render gate; a retry arms its own.
+          state.render?.dispose()
+          state.render = null
+          throw error
+        }
         options.onPasteWritten?.()
         if (submitWithPaste) {
           options.onSubmitWritten?.()
