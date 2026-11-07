@@ -35,6 +35,34 @@ export function showDictationDisabledToast(): void {
   )
 }
 
+export function showMicrophoneFallbackToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.micFallback',
+      'Selected microphone unavailable. Using system default.'
+    )
+  )
+}
+
+/** The host keeps what was said up to its cap, so the caller stops normally to insert it. */
+export function showCloudLimitToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.cloudLimitReached',
+      'Dictation stopped at the 10-minute cloud limit.'
+    )
+  )
+}
+
+export function showMicrophoneDisconnectedToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.micDisconnected',
+      'Microphone disconnected. Dictation stopped.'
+    )
+  )
+}
+
 export function showDictationStartErrorToast(message: string): void {
   // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
   const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
