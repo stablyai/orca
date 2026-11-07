@@ -1,16 +1,10 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildRecognizerConfig, type RecognizerConfigInput } from './stt-worker-model-config'
+import { buildRecognizerConfig } from './stt-worker-model-config'
 import { createStopTailPadding } from './stt-stop-tail-padding'
 import { connectSttWorkerParentPort } from './stt-worker-parent-port'
-
-type WorkerMessage =
-  | ({ type: 'init'; sherpaModulePath: string } & RecognizerConfigInput)
-  | { type: 'feed'; streamId: string; samples: Float32Array; sampleRate: number }
-  | { type: 'stop'; streamId: string }
-  | { type: 'discard'; streamId: string }
-  | { type: 'teardown' }
+import type { SttWorkerRequest as WorkerMessage } from './stt-worker-process'
 
 // One per dictation session; every session shares the one loaded recognizer.
 type SessionStream = {
@@ -182,13 +176,6 @@ function handleDiscard(streamId: string): void {
   parentPort.post({ type: 'stopped', streamId })
 }
 
-function handleTeardown(): void {
-  streams.clear()
-  recognizer = null
-  sherpa = null
-  process.exit(0)
-}
-
 parentPort.onMessage((message) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends WorkerMessage.
   const msg = message as WorkerMessage
@@ -204,9 +191,6 @@ parentPort.onMessage((message) => {
       break
     case 'discard':
       handleDiscard(msg.streamId)
-      break
-    case 'teardown':
-      handleTeardown()
       break
   }
 })

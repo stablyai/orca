@@ -130,7 +130,7 @@ export function failSttEngine(state: SttSessionState, engine: SttEngine, error: 
     session.sink({ type: 'error', error })
     session.sink({ type: 'stopped' })
   }
-  void engine.worker.terminate().catch(() => undefined)
+  void engine.worker.terminate()
 }
 
 export async function prepareSttModelForDeletion(
@@ -142,7 +142,7 @@ export async function prepareSttModelForDeletion(
   }
   const engine = state.engine
   if (engine?.modelId === modelId) {
-    await teardownSttEngine(state, engine, { ignoreTerminateErrors: false })
+    await teardownSttEngine(state, engine)
   }
   if (state.engine?.modelId === modelId) {
     throw new Error('voice_model_in_use')
@@ -181,26 +181,12 @@ export async function teardownIdleSttEngine(
 }
 
 /** Only for a process no session uses. */
-export async function teardownSttEngine(
-  state: SttSessionState,
-  engine: SttEngine,
-  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
-): Promise<void> {
+export async function teardownSttEngine(state: SttSessionState, engine: SttEngine): Promise<void> {
   if (state.engine === engine) {
     state.engine = null
     clearSttIdleTeardownTimer(state)
   }
   engine.detach()
-  try {
-    engine.worker.postMessage({ type: 'teardown' })
-  } catch {
-    // The process may already have exited.
-  }
-  try {
-    await engine.worker.terminate()
-  } catch (error) {
-    if (!options.ignoreTerminateErrors) {
-      throw error
-    }
-  }
+  // Resolves once the process is gone, so its model files are free to delete.
+  await engine.worker.terminate()
 }
