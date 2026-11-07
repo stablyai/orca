@@ -48,12 +48,14 @@ export function CaffeinateStatusSegment({
     settings?.keepComputerAwakeWhileAgentsRun
   )
   const [serviceStatus, setServiceStatus] = useState<ComputerAwakeStatus>(INACTIVE_STATUS)
+  const [hasServiceStatus, setHasServiceStatus] = useState(false)
 
   useEffect(() => {
     let mounted = true
     const unsubscribe = window.api.agentAwake.onChanged((status) => {
       if (mounted) {
         setServiceStatus(status)
+        setHasServiceStatus(true)
       }
     })
     void window.api.agentAwake
@@ -61,6 +63,7 @@ export function CaffeinateStatusSegment({
       .then((status) => {
         if (mounted) {
           setServiceStatus(status)
+          setHasServiceStatus(true)
         }
       })
       .catch(() => {})
@@ -74,9 +77,11 @@ export function CaffeinateStatusSegment({
     return null
   }
 
-  const mode = serviceStatus.mode === configuredMode ? serviceStatus.mode : configuredMode
-  const active =
-    serviceStatus.mode === configuredMode ? serviceStatus.active : configuredMode === 'on'
+  // Before the first real status arrives, show the configured setting optimistically to avoid
+  // an inactive flash. Once the service has reported in, its `active` value is the truth — never
+  // synthesize activity from the setting alone, or a real outage would read as "Active".
+  const mode = configuredMode
+  const active = hasServiceStatus ? serviceStatus.active : configuredMode === 'on'
   const title = getAgentAwakeTitle()
   const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(active)}`
   const ariaLabel = translate(
