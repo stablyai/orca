@@ -26,10 +26,8 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../shared/floating-workspace-worktree'
-import {
-  createNativeChatTabOwnerSelector,
-  FILE_LINK_CONTEXT_INPUT_KEYS
-} from './native-chat-file-link'
+import { createNativeChatTabOwnerSelector } from './pane/ownership/native-chat-tab-owner'
+import { FILE_LINK_CONTEXT_INPUT_KEYS } from './links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 

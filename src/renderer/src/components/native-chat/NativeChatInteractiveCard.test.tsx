@@ -42,8 +42,8 @@ import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-ca
 import { asyncQuestionSourceScope } from '../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
-import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
+import { NativeChatFileLinkExistenceContext } from './links/actions/native-chat-file-link-existence'
 
 // Answered occurrences outlive a view by design; each test starts with none.
 beforeEach(nativeChatPromptDismissals.clearForTests)

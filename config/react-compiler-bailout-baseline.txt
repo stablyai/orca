@@ -220,11 +220,11 @@
 1 src/renderer/src/components/native-chat/NativeChatSessionOptionPickers.tsx
 1 src/renderer/src/components/native-chat/NativeChatSessionOptionRows.tsx
 1 src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx
-4 src/renderer/src/components/native-chat/NativeChatTextAttachmentPreview.tsx
+4 src/renderer/src/components/native-chat/media/text/NativeChatTextAttachmentPreview.tsx
 1 src/renderer/src/components/native-chat/NativeChatToolOutput.tsx
-1 src/renderer/src/components/native-chat/NativeChatTranscriptChrome.tsx
+1 src/renderer/src/components/native-chat/media/images/NativeChatImageAttachments.tsx
 2 src/renderer/src/components/native-chat/NativeChatTranscriptItems.tsx
-2 src/renderer/src/components/native-chat/NativeChatVisualFrame.tsx
+2 src/renderer/src/components/native-chat/media/visuals/NativeChatVisualFrame.tsx
 4 src/renderer/src/components/native-chat/native-chat-agent-message-sender-source.ts
 1 src/renderer/src/components/native-chat/native-chat-paste-destination.ts
 2 src/renderer/src/components/native-chat/use-native-chat-account-usage.ts
@@ -250,7 +250,7 @@
 2 src/renderer/src/components/native-chat/use-native-chat-skills.ts
 2 src/renderer/src/components/native-chat/use-native-chat-transcript-projection.ts
 1 src/renderer/src/components/native-chat/use-native-chat-transcript-window.ts
-1 src/renderer/src/components/native-chat/use-native-chat-visual-theme.ts
+1 src/renderer/src/components/native-chat/media/visuals/use-native-chat-visual-theme.ts
 1 src/renderer/src/components/native-chat/use-structured-agent-session-command-write.ts
 6 src/renderer/src/components/native-chat/use-structured-agent-session-delivery-notices.ts
 1 src/renderer/src/components/native-chat/use-structured-agent-session-options.ts

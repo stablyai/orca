@@ -32,10 +32,14 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: transport.subscribe
 }))
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
-vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
-vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
-vi.mock('./native-chat-image-runtime-context', () => ({
+vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
+vi.mock('./links/actions/use-native-chat-file-link-context', () =>
+  moduleFactories.useNativeChatFileLinkContext()
+)
+vi.mock('./links/actions/use-native-chat-file-link-click', () =>
+  moduleFactories.useNativeChatFileLinkClick()
+)
+vi.mock('./media/images/native-chat-image-runtime-context', () => ({
   useNativeChatImageRuntimeContext: () => ({
     settings: null,
     worktreeId: 'shared-workspace',

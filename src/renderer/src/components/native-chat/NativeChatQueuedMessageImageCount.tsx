@@ -1,7 +1,10 @@
 import { Image as ImageIcon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { QueuedMessageCard } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import { nativeChatImageLabel, nativeChatImageLabelCopy } from './native-chat-image-label'
+import {
+  nativeChatImageLabel,
+  nativeChatImageLabelCopy
+} from './media/images/native-chat-image-label'
 
 /** Images are named in the tooltip, not drawn: the row stays one line. */
 export function QueuedMessageImageCount({

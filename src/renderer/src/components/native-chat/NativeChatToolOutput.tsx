@@ -15,7 +15,7 @@ import {
   nativeChatToolFullPayload,
   nativeChatToolOutputPartialSizes
 } from '../../../../shared/native-chat/tools/native-chat-tool-output'
-import { useNativeChatVisualOwner } from './native-chat-visual-owner'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 
 /** Read full output from its owning host on request; keep expansion state independent of live revisions. */
 export function NativeChatToolOutput({

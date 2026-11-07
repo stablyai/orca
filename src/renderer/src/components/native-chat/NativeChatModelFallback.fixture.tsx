@@ -1,5 +1,5 @@
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
-import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { ProviderFrameRow } from './messages/diagnostics/NativeChatProviderDetails'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { MessageRow } from './NativeChatMessageRow'
 import { projectStructuredItemToNativeChat } from '../../../../shared/agent-session/view/structured-agent-session-projection'

@@ -24,8 +24,8 @@ import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
   nativeChatTranscriptOuterClass
-} from '@/components/native-chat/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
+} from '@/components/native-chat/appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'

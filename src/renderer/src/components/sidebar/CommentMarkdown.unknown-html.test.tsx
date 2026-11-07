@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { NativeChatMarkdown } from '@/components/native-chat/NativeChatMarkdown'
+import { NativeChatMarkdown } from '@/components/native-chat/markdown/NativeChatMarkdown'
 
 function renderChat(content: string): string {
   return renderToStaticMarkup(<NativeChatMarkdown content={content} />)

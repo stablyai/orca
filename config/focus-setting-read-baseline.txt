@@ -63,7 +63,7 @@
 2 src/renderer/src/components/linear-item-drawer-comment-footer.tsx
 15 src/renderer/src/components/linear-item-drawer-edit-controller.tsx
 1 src/renderer/src/components/linear-item-drawer-edit-section.tsx
-1 src/renderer/src/components/native-chat/NativeChatVisualFrame.tsx
+1 src/renderer/src/components/native-chat/media/visuals/NativeChatVisualFrame.tsx
 1 src/renderer/src/components/new-workspace/use-jira-source-connection.ts
 7 src/renderer/src/components/new-workspace/use-linear-source-connection.ts
 1 src/renderer/src/components/new-workspace/use-smart-workspace-name-field-controller.ts

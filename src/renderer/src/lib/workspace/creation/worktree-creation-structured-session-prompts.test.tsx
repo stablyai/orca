@@ -72,10 +72,10 @@ vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
 vi.mock('../../../components/native-chat/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
 )
-vi.mock('../../../components/native-chat/use-native-chat-font-size', () =>
+vi.mock('../../../components/native-chat/appearance/use-native-chat-font-size', () =>
   moduleFactories.useNativeChatFontSize()
 )
-vi.mock('../../../components/native-chat/use-native-chat-file-link-context', () =>
+vi.mock('../../../components/native-chat/links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
 )
 vi.mock('../../../components/native-chat/NativeChatMessageList', () =>

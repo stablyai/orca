@@ -1,8 +1,8 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
-import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
-import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { nativeChatAppearanceStyle } from './appearance/native-chat-appearance-style'
+import { NativeChatFileLinkExistenceContext } from './links/actions/native-chat-file-link-existence'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
 const send: NativeChatInteractiveSend = {

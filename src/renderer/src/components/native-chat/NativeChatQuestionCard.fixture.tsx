@@ -2,9 +2,9 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
-import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
+import { nativeChatAppearanceStyle } from './appearance/native-chat-appearance-style'
 import { useState } from 'react'
-import { NativeChatFileLinkExistenceContext } from './native-chat-file-link-existence'
+import { NativeChatFileLinkExistenceContext } from './links/actions/native-chat-file-link-existence'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
 import type {
@@ -12,7 +12,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { NativeChatLinkClickContext } from './native-chat-link-click-context'
+import { NativeChatLinkClickContext } from './links/actions/native-chat-link-click-context'
 
 function QuestionControls({
   invertedAccent = false,

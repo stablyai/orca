@@ -53,10 +53,14 @@ vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null
 }))
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
-vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
+vi.mock('./links/actions/use-native-chat-file-link-context', () =>
+  moduleFactories.useNativeChatFileLinkContext()
+)
 vi.mock('./use-native-chat-tab-owner', () => moduleFactories.useNativeChatTabOwner())
-vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
+vi.mock('./links/actions/use-native-chat-file-link-click', () =>
+  moduleFactories.useNativeChatFileLinkClick()
+)
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())

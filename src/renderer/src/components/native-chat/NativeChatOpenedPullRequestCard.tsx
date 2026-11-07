@@ -28,11 +28,14 @@ import {
   loadGitHubLinkPreview,
   readCachedGitHubLinkPreview,
   reloadGitHubLinkPreview
-} from './native-chat-github-link-preview'
-import { githubLinkBelongsToRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
-import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
-import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
-import { useNativeChatLinkClick } from './native-chat-link-click-context'
+} from './links/previews/native-chat-github-link-preview'
+import {
+  githubLinkBelongsToRepo,
+  type NativeChatGitHubRepo
+} from './links/previews/native-chat-github-repo'
+import { NativeChatLinkPeekContext } from './links/previews/native-chat-link-peek-context'
+import { NativeChatMarkdownImageOwnerContext } from './media/images/native-chat-markdown-image-owner'
+import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 
 /** The chat's newest finished command that may have changed a pull request; cards reread on it. */
 export const NativeChatPullRequestChangeContext = createContext<string | undefined>(undefined)

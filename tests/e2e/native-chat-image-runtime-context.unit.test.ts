@@ -14,12 +14,12 @@ import {
   resolveNativeChatImageRuntimeContextForOwner,
   selectNativeChatImageOwnerState,
   useNativeChatImageRuntimeContext
-} from '../../src/renderer/src/components/native-chat/native-chat-image-runtime-context'
+} from '../../src/renderer/src/components/native-chat/media/images/native-chat-image-runtime-context'
 import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/native-chat-file-link'
+import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/links/actions/native-chat-file-link-context'
 import {
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs
