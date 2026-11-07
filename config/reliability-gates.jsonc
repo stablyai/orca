@@ -13753,14 +13753,6 @@
           "assertions": ["keeps hidden synchronized output off the global atlas recovery path"]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-input-and-repaint.test.ts",
-          "assertions": [
-            "refreshes renderer-risk output without clearing the shared glyph atlas",
-            "refreshes alternate-screen redraws without clearing the shared glyph atlas",
-            "avoids atlas clears when one chunk enters and exits alternate screen"
-          ]
-        },
-        {
           "file": "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts",
           "assertions": [
             "preserves the WebGL atlas and keeps terminal text painted after document visibility resumes"
@@ -13819,7 +13811,8 @@
         "Audit1342 historical platform/provider scope before source changes: {\"coveredPlatforms\":[\"macos\"],\"coveredProviders\":[\"local\"]}. Remaining provider scope applies only to unchanged-source receipts.",
         "Audit1342 historical assertion inventory for deleted/reduced sources; not current validated assertions:\n[\n  {\n    \"file\": \"src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts\",\n    \"assertions\": [\n      \"recovers a context-lost pane on the next rendering resume\"\n    ]\n  }\n]",
         "Audit1391: src/renderer/src/components/terminal-pane/pty-connection-remote-pause-drop-notice.spec.ts reduced. Lose repeated quiet switches avoiding snapshots and legacy host without drop-report capability requesting a snapshot. Retained imported registrar uses fake transport/xterm writes, exercising real gap/restore lifecycle rather than actual terminal rendering. No equivalent replacement coverage is claimed. Existing exact primary-selector receipts remain unchanged.",
-        "Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed."
+        "Audit1417 intentionally deletes src/renderer/src/components/terminal-pane/pty-connection-hidden-tui-snapshot-replay.spec.ts: Loses rich hidden snapshot sequence replay/grid resize and forced repaint after hidden snapshot alarms, including live-trigger deduplication. No equivalent replacement coverage or fresh result is claimed.",
+        "Issue #22458 removes non-Windows repaint tests that only assert private synchronous refresh calls. Their renderer-risk and alternate-screen atlas assertions are no longer registered; historical results do not validate equivalent coverage."
       ],
       "demotionRule": "Demote if ordinary PTY output re-enters shared reset/refresh recovery, pane-local redraw coverage regresses, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
     },
