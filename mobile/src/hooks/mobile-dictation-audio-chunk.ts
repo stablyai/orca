@@ -212,7 +212,8 @@ async function sendHeldAudio(
     if (!chunk) {
       return
     }
-    await sendAudioChunk(client, dictationId, chunk.data, queue)
+    const backlogShare = queue.pendingAudioBudget.takeBacklog(chunk.data.byteLength)
+    await sendAudioChunk(client, dictationId, chunk.data, backlogShare, queue)
   }
 }
 
@@ -220,6 +221,7 @@ async function sendAudioChunk(
   client: RpcClient,
   dictationId: string,
   bytes: Uint8Array,
+  backlogShare: number,
   queue: MobileDictationAudioChunkQueue
 ): Promise<void> {
   const params = {
@@ -261,7 +263,7 @@ async function sendAudioChunk(
     }
   } finally {
     if (queue.isActive(dictationId)) {
-      queue.pendingAudioBudget.release(bytes.byteLength)
+      queue.pendingAudioBudget.release(bytes.byteLength, backlogShare)
     }
   }
 }
