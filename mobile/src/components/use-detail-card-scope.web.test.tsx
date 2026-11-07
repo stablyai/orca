@@ -132,6 +132,23 @@ it('keeps outside actions and finite focus order while releasing a retained visu
     render(false, true)
     expect(node('card').inert).toBe(true)
     expect(node('opener')).toBe(opener)
+    render(false)
+    node('terminal').focus()
+    render(true)
+    const preventTerminalTouch = (event: Event) => {
+      if (event.target === node('terminal')) {
+        event.preventDefault()
+      }
+    }
+    document.addEventListener('touchstart', preventTerminalTouch, { capture: true, passive: false })
+    try {
+      const callsBeforeTouch = dismiss.mock.calls.length
+      node('terminal').dispatchEvent(new Event('touchstart', { bubbles: true, cancelable: true }))
+      expect(dismiss).toHaveBeenCalledTimes(callsBeforeTouch + 1)
+      expect(document.activeElement).toBe(node('terminal'))
+    } finally {
+      document.removeEventListener('touchstart', preventTerminalTouch, true)
+    }
     act(() => renderer.unmount())
     expect(host?.isConnected).toBe(false)
   } finally {
