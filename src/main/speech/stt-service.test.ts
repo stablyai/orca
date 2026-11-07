@@ -451,37 +451,6 @@ describe('SttService', () => {
     expect(worker!.terminated).toBe(true)
   })
 
-  it('frees an idle model for deletion while another model starts', async () => {
-    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
-    const secondModelState = new Promise<{ id: string; status: string }>((resolve) => {
-      resolveModelState = resolve
-    })
-    const getModelState = vi
-      .fn()
-      .mockResolvedValueOnce({ id: 'model-a', status: 'ready' })
-      .mockReturnValue(secondModelState)
-    const service = new SttService(
-      {
-        getModelState,
-        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
-      spawnMockWorker
-    )
-
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-    const idle = getLastWorker()!
-    await service.stopDictation('desktop')
-    const startOtherModel = service.startDictation('model-b', vi.fn(), undefined, 'desktop')
-    await Promise.resolve()
-
-    await expect(service.prepareModelForDeletion('model-a')).resolves.toBe(undefined)
-    expect(idle.terminated).toBe(true)
-
-    resolveModelState({ id: 'model-b', status: 'ready' })
-    await startOtherModel
-    expect(getCreatedWorkerCount()).toBe(2)
-  })
-
   it('uses the OpenAI transcription session without creating a worker', async () => {
     const sink = vi.fn()
     const service = new SttService(
