@@ -306,7 +306,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
 export async function readOpenCodeForkCoverageViaWorker(
   args: { dbPath: string; sessionId: string; sourceSessionId: string },
   signal?: AbortSignal
-): Promise<string[] | null> {
+): Promise<string[]> {
   const wsl = openCodeWslPath(args.dbPath)
   const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
   return client.readForkCoverage({ ...args, dbPath: wsl?.linuxPath ?? args.dbPath }, signal)

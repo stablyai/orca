@@ -201,7 +201,7 @@ export class OpenCodeSqliteWorkerClient {
   async readForkCoverage(
     args: Omit<OpenCodeForkCoverageRequest, 'id' | 'kind'>,
     signal?: AbortSignal
-  ): Promise<string[] | null> {
+  ): Promise<string[]> {
     const value = await this.dispatch(
       (id) => ({ ...args, id, kind: 'fork-coverage' }),
       PARSE_TIMEOUT_MS,
@@ -209,7 +209,7 @@ export class OpenCodeSqliteWorkerClient {
       'native-chat'
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This build's bundled reader constructs the private coverage result.
-    return value as string[] | null
+    return value as string[]
   }
 
   dispose(): void {

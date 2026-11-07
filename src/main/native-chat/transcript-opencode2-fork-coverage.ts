@@ -7,7 +7,7 @@ export function readOpenCode2ForkCoverage(
   db: SyncDatabase,
   sessionId: string,
   sourceSessionId: string
-): string[] | null {
+): string[] {
   db.exec('BEGIN')
   try {
     return readForkCoverageSnapshot(db, sessionId, sourceSessionId)
@@ -20,14 +20,29 @@ function readForkCoverageSnapshot(
   db: SyncDatabase,
   sessionId: string,
   sourceSessionId: string
-): string[] | null {
+): string[] {
   const invalid = () => new Error('OpenCode copied conversation provenance is invalid')
   if (!hasOpenCode2Session(db, sessionId)) {
     if (
       tableExists(db, 'session') &&
       db.prepare('SELECT 1 FROM session WHERE id = ?').get(sessionId)
     ) {
-      return null
+      return [
+        ...new Set(
+          db
+            .prepare(
+              "SELECT id FROM message WHERE session_id = ? AND json_extract(data, '$.role') = 'user' ORDER BY id"
+            )
+            .all(sessionId)
+            .map((value) => {
+              const row = asRecord(value)
+              if (typeof row?.id !== 'string') {
+                throw invalid()
+              }
+              return row.id
+            })
+        )
+      ]
     }
     throw invalid()
   }

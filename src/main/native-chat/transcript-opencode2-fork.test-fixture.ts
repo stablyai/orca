@@ -46,3 +46,40 @@ export function openCode2ForkStore(path: string) {
   )
   return db
 }
+
+// OpenCode 1.19.5 M1: regenerated message IDs and empty newer-schema tables.
+export function openCode1ForkStore(path: string) {
+  const db = new Database(path)
+  db.exec(`CREATE TABLE session (id TEXT PRIMARY KEY, parent_id TEXT);
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL);
+    CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT NOT NULL, session_id TEXT NOT NULL,
+      time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL, data TEXT NOT NULL);
+    CREATE TABLE session_message (id TEXT PRIMARY KEY, session_id TEXT, type TEXT,
+      seq INTEGER, data TEXT, time_created INTEGER, time_updated INTEGER);
+    INSERT INTO session VALUES ('ses_e4d773f6affe3HGZP6SZo2NjZp', NULL);
+    INSERT INTO session VALUES ('ses_e4d76d713ffe98vxcM3WaxWjVI', NULL);`)
+  const insert = db.prepare('INSERT INTO message VALUES (?, ?, 1, 1, ?)')
+  insert.run('msg_1b288c688001YdJeVFY2Yyte5V', 'ses_e4d773f6affe3HGZP6SZo2NjZp', '{"role":"user"}')
+  for (const [id, role] of [
+    ['msg_1b28928ed001PfHNbepa2ju4PH', 'user'],
+    ['msg_1b28928ee001wHBhq6QZzVGJ3f', 'assistant'],
+    ['msg_1b28928f5001P7iHSIEED9Iq2p', 'user'],
+    ['msg_1b28928f6001CkhDQSpYI3ByI4', 'user'],
+    ['msg_1b28928f80012WtB5Unb6QBY2Y', 'assistant'],
+    // Deliberately before capture: the accepted 1.x interval limitation covers this CLI root too.
+    ['msg_1b2892ade0019IigeE4JneP9j3', 'user']
+  ]) {
+    insert.run(id!, 'ses_e4d76d713ffe98vxcM3WaxWjVI', JSON.stringify({ role }))
+  }
+  const part = db.prepare(
+    "INSERT INTO part VALUES (?, ?, 'ses_e4d76d713ffe98vxcM3WaxWjVI', 1, 1, ?)"
+  )
+  part.run(
+    'file-part',
+    'msg_1b28928ed001PfHNbepa2ju4PH',
+    '{"type":"file","url":"file:///image.png"}'
+  )
+  part.run('compaction-part', 'msg_1b28928f6001CkhDQSpYI3ByI4', '{"type":"compaction","auto":true}')
+  return db
+}
