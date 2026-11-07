@@ -393,12 +393,17 @@
   "optionalDependencies": {
     "@orca/windows-registry": "workspace:*",
     "@orca/windows-security": "workspace:*",
+    "@transcribe-cpp/darwin-arm64-metal": "0.4.1",
+    "@transcribe-cpp/linux-arm64-cpu-vulkan": "0.4.1",
+    "@transcribe-cpp/linux-x64-cpu-vulkan": "0.4.1",
+    "@transcribe-cpp/win32-x64-cpu-vulkan": "0.4.1",
     "@vscode/windows-process-tree": "0.8.0",
     "sherpa-onnx-darwin-arm64": "1.12.37",
     "sherpa-onnx-darwin-x64": "1.12.37",
     "sherpa-onnx-linux-arm64": "1.12.37",
     "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37"
+    "sherpa-onnx-win-x64": "1.12.37",
+    "transcribe-cpp": "0.4.1"
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [

@@ -1,10 +1,10 @@
-import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { speechRecognizerPackageName } from '../../shared/speech-recognizer-package'
+import { hasSpeechEnginePackage } from '../../shared/speech-recognizer-package'
 
 /**
- * The installed app's on-device recognizer, for orcad's dictation (#31174). electron-builder puts
- * it in `resources/node_modules`, beside the app root; a dev checkout keeps it in node_modules.
+ * The installed app's node_modules holding its on-device speech engines, for orcad's dictation
+ * (#31174). electron-builder puts them in `resources/node_modules`, beside the app root; a dev
+ * checkout keeps them in node_modules.
  *
  * Not on Windows: a loaded addon locks its files for the server's life, which would make the next
  * app update fail to replace them. Windows orcad keeps cloud dictation only.
@@ -17,8 +17,9 @@ export function findAppSpeechRecognizerDir(
   if (platform === 'win32') {
     return undefined
   }
-  const name = speechRecognizerPackageName(platform, arch)
-  return [join(dirname(appRoot), 'node_modules', name), join(appRoot, 'node_modules', name)].find(
-    (dir) => existsSync(join(dir, 'sherpa-onnx.node'))
+  return [join(dirname(appRoot), 'node_modules'), join(appRoot, 'node_modules')].find(
+    (dir) =>
+      hasSpeechEnginePackage(dir, 'transcribe-cpp', platform, arch) ||
+      hasSpeechEnginePackage(dir, 'sherpa', platform, arch)
   )
 }

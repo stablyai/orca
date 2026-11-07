@@ -51,7 +51,7 @@ export class RuntimeMobileDictationController {
       throw new Error('voice_model_not_selected')
     }
     const manifest = getCatalogModel(modelId)
-    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer()) {
+    if (manifest && isLocalSpeechModel(manifest) && !hasLocalSpeechRecognizer(manifest)) {
       throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
     }
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
