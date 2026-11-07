@@ -26,12 +26,12 @@ final class OnDeviceSpeechController: @unchecked Sendable {
         guard let locale = await OnDeviceTranscriber.supportedLocale(for: identifier) else {
             return ["status": "unsupported", "locale": NSNull()]
         }
-        switch await OnDeviceSpeechAssets.status(for: locale) {
-        case .installed:
+        switch await OnDeviceSpeechAssets.readiness(for: locale) {
+        case .ready:
             return ["status": "ready", "locale": locale.identifier(.bcp47)]
-        case .supported, .downloading:
+        case .needsDownload:
             return ["status": "needs-download", "locale": locale.identifier(.bcp47)]
-        default:
+        case .unsupported:
             return ["status": "unsupported", "locale": NSNull()]
         }
     }
@@ -45,7 +45,7 @@ final class OnDeviceSpeechController: @unchecked Sendable {
             try await OnDeviceSpeechAssets.install(locale) { [emit] fraction in
                 emit(ON_SPEECH_DOWNLOAD_PROGRESS_EVENT_NAME, ["locale": resolved, "fraction": fraction])
             }
-            return await OnDeviceSpeechAssets.status(for: locale) == .installed
+            return await OnDeviceSpeechAssets.readiness(for: locale) == .ready
         } catch {
             print("Could not install on-device speech assets for \(resolved): \(error)")
             return false

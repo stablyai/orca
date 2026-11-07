@@ -22,29 +22,33 @@ enum OnDeviceTranscriber {
         }
     }
 
-    // nil when this language can't be transcribed on device.
+    // nil when this language can't be transcribed on device. Picks deterministically: supportedLocale(equivalentTo:)
+    // answers a different region on each call for "en" or an unsupported region such as "en-GH".
     static func supportedLocale(for identifier: String) async -> Locale? {
-        let locale = Locale(identifier: identifier)
-        guard locale.region == nil, let language = locale.language.languageCode else {
-            return await equivalent(to: locale)
-        }
-        // A bare language matches an arbitrary region ("en" gave en-NZ); prefer the phone's languages, then its region.
-        let preferred = Locale.preferredLanguages.map { Locale(identifier: $0) }.filter { $0.language.languageCode == language }
-        let regions = preferred.compactMap(\.region) + [Locale.current.region].compactMap { $0 }
-        for region in regions {
-            let regional = Locale(languageCode: language, script: locale.language.script, languageRegion: region)
-            if let match = await equivalent(to: regional), match.region == region {
+        let requested = Locale(identifier: identifier)
+        let language = requested.language.maximalIdentifier
+        let supported = SpeechTranscriber.isAvailable
+            ? await SpeechTranscriber.supportedLocales
+            : await DictationTranscriber.supportedLocales
+        let sameLanguage = supported.filter { sameLanguageAndScript($0.language.maximalIdentifier, language) }
+            .sorted { $0.identifier(.bcp47) < $1.identifier(.bcp47) }
+        // The requested region, then the regions of the phone's own languages and its region, then the language's usual one.
+        let phoneRegions = Locale.preferredLanguages.map(Locale.init(identifier:))
+            .filter { sameLanguageAndScript($0.language.maximalIdentifier, language) }
+            .map(\.region)
+        let regions = [requested.region] + phoneRegions + [Locale.current.region, Locale(identifier: language).region]
+        for region in regions.compactMap({ $0 }) {
+            if let match = sameLanguage.first(where: { $0.region == region }) {
                 return match
             }
         }
-        return await equivalent(to: locale)
+        return sameLanguage.first
     }
 
-    private static func equivalent(to locale: Locale) async -> Locale? {
-        if SpeechTranscriber.isAvailable {
-            return await SpeechTranscriber.supportedLocale(equivalentTo: locale)
-        }
-        return await DictationTranscriber.supportedLocale(equivalentTo: locale)
+    private static func sameLanguageAndScript(_ a: String, _ b: String) -> Bool {
+        let left = Locale.Language(identifier: a)
+        let right = Locale.Language(identifier: b)
+        return left.languageCode == right.languageCode && left.script == right.script
     }
 
     var module: any SpeechModule {
@@ -101,8 +105,23 @@ enum OnDeviceTranscriber {
 // Language assets for the on-device transcriber.
 @available(iOS 26.0, macOS 26.0, *)
 enum OnDeviceSpeechAssets {
-    static func status(for locale: Locale) async -> AssetInventory.Status {
-        await AssetInventory.status(forModules: [OnDeviceTranscriber(locale: locale).module])
+    enum Readiness {
+        case ready
+        case needsDownload
+        case unsupported
+    }
+
+    static func readiness(for locale: Locale) async -> Readiness {
+        let module = OnDeviceTranscriber(locale: locale).module
+        switch await AssetInventory.status(forModules: [module]) {
+        case .installed:
+            // The simulator installs the assets but has no audio format it can run them with ("Model not available").
+            return await module.availableCompatibleAudioFormats.isEmpty ? .unsupported : .ready
+        case .supported, .downloading:
+            return .needsDownload
+        default:
+            return .unsupported
+        }
     }
 
     static func install(_ locale: Locale, onProgress: @escaping @Sendable (Double) -> Void) async throws {
@@ -128,8 +147,9 @@ enum OnDeviceSpeechAssets {
         if reserved.contains(where: { $0.identifier(.bcp47) == locale.identifier(.bcp47) }) {
             return
         }
-        // At the limit, give up another language's reservation rather than fail this download.
-        if reserved.count >= AssetInventory.maximumReservedLocales, let other = reserved.first {
+        // At the limit, give up another reservation rather than fail this download, a variant of this language first.
+        if reserved.count >= AssetInventory.maximumReservedLocales,
+           let other = reserved.first(where: { $0.language.languageCode == locale.language.languageCode }) ?? reserved.first {
             await AssetInventory.release(reservedLocale: other)
         }
         try await AssetInventory.reserve(locale: locale)
@@ -159,13 +179,13 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
             guard let locale = await OnDeviceTranscriber.supportedLocale(for: identifier) else {
                 throw OnDeviceSpeechError.unsupported
             }
-            switch await OnDeviceSpeechAssets.status(for: locale) {
-            case .installed:
+            switch await OnDeviceSpeechAssets.readiness(for: locale) {
+            case .ready:
                 return locale
+            case .needsDownload:
+                throw OnDeviceSpeechError.needsDownload
             case .unsupported:
                 throw OnDeviceSpeechError.unsupported
-            default:
-                throw OnDeviceSpeechError.needsDownload
             }
         }
         self.ready = ready
