@@ -9,10 +9,6 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('./gh-utils', () => ({
-  acquire: vi.fn(),
-  release: vi.fn()
-}))
 import { rateLimitGuard, _resetRateLimitCache } from './rate-limit'
 import {
   clearGhRateLimitBlock,

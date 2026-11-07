@@ -6,7 +6,6 @@ import type {
 } from '../../shared/github/rate-limit-types'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isWslUncPath } from '../../shared/wsl-paths'
-import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'
 import {
   clearGhRateLimitBlock,
@@ -214,27 +213,22 @@ function refineBreakerForScope(scope: string): void {
   }
   const probe = (async () => {
     try {
-      await acquire()
-      try {
-        // Query the tripping runtime/host, independently of the shared native snapshot.
-        const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-          encoding: 'utf-8',
-          host: parts.host,
-          ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
-        })
-        const parsed = JSON.parse(stdout) as GhRateLimitPayload
-        scopeProbeFailureAtMs.delete(scope)
-        // Refine only this scope's buckets; never overwrite the native github.com snapshot.
-        for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
-          const b = parseBucket(parsed.resources?.[bucket])
-          if (b.limit > 0 && b.remaining <= 0) {
-            recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
-          } else if (b.limit > 0) {
-            clearGhRateLimitBlock(bucket, scope)
-          }
+      // Query the tripping runtime/host, independently of the shared native snapshot.
+      const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
+        encoding: 'utf-8',
+        host: parts.host,
+        ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
+      })
+      const parsed = JSON.parse(stdout) as GhRateLimitPayload
+      scopeProbeFailureAtMs.delete(scope)
+      // Refine only this scope's buckets; never overwrite the native github.com snapshot.
+      for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+        const b = parseBucket(parsed.resources?.[bucket])
+        if (b.limit > 0 && b.remaining <= 0) {
+          recordGhPrimaryRateLimit(bucket, b.resetAt * 1000, scope)
+        } else if (b.limit > 0) {
+          clearGhRateLimitBlock(bucket, scope)
         }
-      } finally {
-        release()
       }
     } catch {
       // Pasted hosts are user-controlled; bound retained failures across them.
@@ -272,8 +266,8 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   }
 }
 
+// Probes skip the gh semaphore: slot holders await them, so queueing would deadlock; dedupe bounds them.
 async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
-  await acquire()
   try {
     // Pin the shared native snapshot against ambient GH_HOST redirection.
     const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
@@ -294,7 +288,5 @@ async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
     const message = err instanceof Error ? err.message : String(err)
     probeFailure = { at: Date.now(), error: message }
     return { ok: false, error: message }
-  } finally {
-    release()
   }
 }
