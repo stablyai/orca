@@ -8,6 +8,7 @@ type SettingsGroupProps = {
   children?: React.ReactNode
   className?: string
   bodyClassName?: string
+  onHeaderClick?: (event: React.MouseEvent<HTMLDivElement>) => void
 }
 
 // Title sits outside the card so each group's start and end read at a glance.
@@ -17,27 +18,30 @@ export function SettingsGroup({
   action,
   children,
   className,
-  bodyClassName
+  bodyClassName,
+  onHeaderClick
 }: SettingsGroupProps): React.JSX.Element {
   return (
-    <section
-      data-settings-group=""
-      // Search can filter out every row; hide the group rather than leave an empty card.
-      className={cn('space-y-3 has-[[data-settings-group-body]:empty]:hidden', className)}
-    >
+    <section className={cn('space-y-3', className)}>
       {title ? (
-        <SettingsGroupHeader title={title} description={description} action={action} />
+        <SettingsGroupHeader
+          title={title}
+          description={description}
+          action={action}
+          onClick={onHeaderClick}
+        />
       ) : null}
       <div
         className={cn(
-          'overflow-hidden rounded-xl border border-border bg-card/50 px-5 shadow-xs',
+          // Search can filter out every row; hide the empty card but keep the header and its action.
+          'overflow-hidden rounded-xl border border-border bg-card/50 px-5 shadow-xs has-[>[data-settings-group-body]:empty]:hidden',
           bodyClassName
         )}
       >
-        {/* Rows nest at varying depths, so each innermost row draws its own top rule and the card clips the first. */}
+        {/* A row inside another row (a sub-field) draws no rule; each outermost row draws one and the card clips the first. */}
         <div
           data-settings-group-body=""
-          className="-mt-px [&_[data-settings-row]:not(:has([data-settings-row]))]:border-t [&_[data-settings-row]:not(:has([data-settings-row]))]:border-border"
+          className="-mt-px [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t-border"
         >
           {children}
         </div>
@@ -51,10 +55,13 @@ export function SettingsGroupHeader({
   title,
   description,
   action,
-  className
-}: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'className'>): React.JSX.Element {
+  className,
+  onClick
+}: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'className'> & {
+  onClick?: (event: React.MouseEvent<HTMLDivElement>) => void
+}): React.JSX.Element {
   return (
-    <div className={cn('flex items-end justify-between gap-3 px-1', className)}>
+    <div className={cn('flex items-end justify-between gap-3 px-1', className)} onClick={onClick}>
       <div className="min-w-0 space-y-1">
         <h3 className="text-base font-semibold leading-tight">{title}</h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}

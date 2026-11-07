@@ -81,6 +81,7 @@ export function renderDeveloperPermissionsSettingsSection(
   return model.showDesktopOnlySettings && model.isMac ? (
     <SettingsSection
       id="developer-permissions"
+      grouped
       title={translate('auto.components.settings.Settings.65660d4548', 'macOS Permissions')}
       description={translate(
         'auto.components.settings.Settings.9b83cc62c2',

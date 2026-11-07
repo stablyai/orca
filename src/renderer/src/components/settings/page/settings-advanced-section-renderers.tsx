@@ -19,6 +19,7 @@ export function renderAdvancedSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="advanced"
+      grouped
       title={translate('auto.components.settings.Settings.1c87f8d024', 'Advanced')}
       description={translate(
         'auto.components.settings.Settings.499c1cd7f9',
@@ -38,6 +39,7 @@ export function renderDevSettingsSection(context: SettingsRenderContext): React.
   return model.showDesktopOnlySettings && import.meta.env.DEV ? (
     <SettingsSection
       id="dev"
+      grouped
       title={translate('auto.components.settings.Settings.dev', 'Dev Tools')}
       description={translate(
         'auto.components.settings.Settings.devDescription',
@@ -61,6 +63,7 @@ export function renderExperimentalSettingsSection(
   return (
     <SettingsSection
       id="experimental"
+      grouped
       title={translate('auto.components.settings.Settings.8b017f2506', 'Experimental')}
       description={translate(
         'auto.components.settings.Settings.075341c763',

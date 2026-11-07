@@ -32,6 +32,8 @@ export function CodexTerminalServerIsolationSetting({
       title={title}
       description={description}
       keywords={getCodexTerminalServerIsolationSearchKeywords()}
+      // Two independent switches share one search unit, so split them like separate rows.
+      className="divide-y divide-border"
     >
       <SettingsSwitchRow
         label={title}
