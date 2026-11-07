@@ -35,6 +35,16 @@ describe('a failed document', () => {
   })
 })
 
+describe('a renderer the OS reclaimed', () => {
+  // Background jetsam remounts with no frames to paint, so a second background loss used to wall on return.
+  it('remounts without spending the one remount a crashing renderer gets', () => {
+    const reclaimed = { ...RENDERER_GONE, reclaimed: true } as const
+    const lost = run(readySession().session, reclaimed, REMOUNTED, RENDERER_GONE)
+    expect(lost.effects).toEqual([{ kind: 'remount' }])
+    expect(lost.session.state.kind).toBe('ready')
+  })
+})
+
 describe('try again after a failed document', () => {
   it('keeps the cache when the renderer was what failed', () => {
     const failed = run(readySession().session, RENDERER_GONE, REMOUNTED, RENDERER_GONE)
