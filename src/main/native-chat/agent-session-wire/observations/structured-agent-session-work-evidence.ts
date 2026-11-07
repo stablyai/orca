@@ -2,7 +2,13 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 export type StructuredAgentSessionWorkEvidence = {
-  record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
+  record: {
+    currentFence: AgentSessionConversationView['currentFence']
+    ownerObservation: Pick<
+      AgentSessionConversationView['ownerObservation'],
+      'claimStatus' | 'unreconciled' | 'handoffStage'
+    >
+  } | null
   ended?: StructuredAgentSessionSeenEnd
   revision?: number
   replaced?: StructuredAgentSessionReplacedEnd | undefined
