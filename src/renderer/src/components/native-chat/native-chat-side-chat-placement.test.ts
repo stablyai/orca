@@ -257,6 +257,20 @@ describe('when main draws the move', () => {
     expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
+  it('selects the side chat where it is when main never answers the move', () => {
+    vi.useFakeTimers()
+    try {
+      beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
+      publishSideChat()
+
+      vi.advanceTimersByTime(60_000)
+
+      expect(mocks.activateTab).toHaveBeenCalledWith('tab-side', { worktreeId: 'wt-1' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('selects the side chat where it is when main refuses the move', () => {
     beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
     publishSideChat()

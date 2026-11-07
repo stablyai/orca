@@ -156,7 +156,8 @@ export function beginNativeChatSideChatPlacement(
       chat = next
       settledAt = Date.now()
       // However long the fork took to open, its tab gets the same time to be drawn and moved.
-      expiry = setTimeout(retire, SIDE_CHAT_WATCH_MS)
+      // Main never drew or answered its move: select it where Fork put it.
+      expiry = setTimeout(() => (movingFrom ? finish() : retire()), SIDE_CHAT_WATCH_MS)
       lookingUp = true
       lookUp()
     }
