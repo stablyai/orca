@@ -1,9 +1,9 @@
 import { readAgentOrchestrationProjectionRecords } from '../orchestration-fleet-agent-status-snapshot'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
-import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/structured-mailbox-pointer-delivery'
+import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
-import { createStructuredMailboxPointerHost } from '../orchestration/structured-mailbox-pointer-host'
-import { localOrchestrationCliCommand } from '../orchestration/cli-command'
+import { createStructuredMailboxPointerHost } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import { localOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import { RuntimeOrchestrationSenderNames } from '../runtime-orchestration-sender-names'
 import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address'
@@ -30,13 +30,13 @@ import { OpenCodeRunLifetimeStatus } from '../opencode-run-lifetime-status'
 import { readLocalPtyForegroundCommandLine } from '../local-pty-foreground-command-line'
 import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from '../terminal/query/runtime-terminal-agent-status-query'
-import type { OrchestrationDb } from '../orchestration/db'
-import { OrchestrationMailboxOwner } from '../orchestration/mailbox-owner'
-import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox-delivery-target'
-import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox-pointer-delivery'
-import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox-notification-coordinator'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { OrchestrationMailboxOwner } from '../orchestration/mailbox/routing/mailbox-owner'
+import { OrchestrationMailboxDeliveryTarget } from '../orchestration/mailbox/routing/mailbox-delivery-target'
+import { OrchestrationMailboxPointerDelivery } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery'
+import { OrchestrationMailboxNotificationCoordinator } from '../orchestration/mailbox/notifications/mailbox-notification-coordinator'
 import { RuntimeMessageWaiters, type RuntimeMessageWaiter } from '../runtime-message-waiters'
-import type { WorkerTurnStopReportDeps } from '../orchestration/worker-turn-stop-report'
+import type { WorkerTurnStopReportDeps } from '../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../recent-pty-output-buffer'
@@ -108,7 +108,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
     resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
-    listResolvedWorktrees: () => this.listResolvedWorktrees(),
     showTerminal: (handle) => this.showTerminal(handle)
   })
 

@@ -37,7 +37,13 @@ export function NativeChatPermissionModeName(props: {
   const body = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
-      {props.truncate ? <span className="truncate">{label}</span> : <span>{label}</span>}
+      {props.truncate ? (
+        <span data-composer-label className="truncate">
+          {label}
+        </span>
+      ) : (
+        <span>{label}</span>
+      )}
     </>
   )
   return props.mode === 'full-access' ? (
@@ -124,10 +130,12 @@ function NativeChatPermissionModePickerInner({
               ) : (
                 <>
                   <Settings2 className="size-3.5 shrink-0" aria-hidden />
-                  <span className="truncate">{label}</span>
+                  <span data-composer-label className="truncate">
+                    {label}
+                  </span>
                 </>
               )}
-              <ChevronDown className="size-3" />
+              <ChevronDown data-composer-label className="size-3" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

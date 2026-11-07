@@ -16,6 +16,7 @@ import {
 import { Cloud, Download, Trash2, Loader2, ChevronDown, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { speechModelDescription } from './speech-model-description'
+import { isOfferedSpeechModel } from '../../../../../shared/speech-model-retirement'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
@@ -81,6 +82,11 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+            const isRetired = !isOfferedSpeechModel(manifest)
+            // Retired models stay listed only while downloaded, so their files can be deleted.
+            if (isRetired && !isReady) {
+              return null
+            }
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
             const isActive = voiceSettings.sttModel === manifest.id
@@ -93,7 +99,9 @@ export function VoiceSpeechModelSection({
                 key={manifest.id}
                 disabled={isDownloading}
                 onSelect={(event) => {
-                  if (isReady) {
+                  if (isRetired) {
+                    event.preventDefault()
+                  } else if (isReady) {
                     onUpdateVoiceSettings({ sttModel: manifest.id })
                   } else if (isCloud) {
                     onOpenOpenAiDialog(manifest.id)
@@ -125,7 +133,7 @@ export function VoiceSpeechModelSection({
                     <Cloud className="size-3.5 text-muted-foreground" />
                   ) : null}
                 </span>
-                <div className="min-w-0 flex-1">
+                <div className={`min-w-0 flex-1 ${isRetired ? 'opacity-50' : ''}`}>
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">{manifest.label}</span>
                     {!isCloud && (

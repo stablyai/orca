@@ -4,9 +4,9 @@ import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation
 import { useAppStore } from '@/store'
 import {
   findFirstIndexedWorktree,
-  findIndexedRepoOwnerForHost,
   findIndexedWorktreeOwnerForHost
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from './workspace/ownership/repo-owner-index'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

@@ -64,7 +64,6 @@ function buildScope(session: Session): MobileSessionTerminalWebviewModel {
     setFileActionTarget: noop,
     setBrowserActionTarget: noop,
     setAgentSessionActionTarget: noop,
-    keyboardHeight: 0,
     deviceTokenRef: { current: null },
     clientRef: { current: session.client },
     connStateRef: { current: 'connected' },

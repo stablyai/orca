@@ -13,7 +13,7 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
-} from './worktree-runtime-owner-index'
+} from './workspace/ownership/worktree-runtime-owner-index'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/workspace-record-selectors'
 import type { SingleRuntimeLegacyOwnerState } from './single-runtime-legacy-owner'
 import { getPairedWebClientEnvironmentId } from './paired-web-client-host'

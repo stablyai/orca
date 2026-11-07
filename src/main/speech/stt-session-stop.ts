@@ -210,6 +210,7 @@ function clearSttWorkerState(state: SttSessionState): void {
   state.worker = null
   state.activeModelId = null
   state.activeHotwordsFilePath = undefined
+  state.activeLanguage = undefined
   state.activeOwner = null
   state.eventSink = null
 }

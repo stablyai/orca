@@ -10,7 +10,7 @@ import {
   type AgentLaunchRouteView,
   agentLaunchRouteInputsChanged,
   selectAgentLaunchRouteView
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'

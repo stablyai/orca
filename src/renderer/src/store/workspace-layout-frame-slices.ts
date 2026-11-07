@@ -16,6 +16,7 @@ import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { projectHydratedBrowserSession } from './slices/browser/browser-hydration-state'
 import { buildHydratedEditorSessionState } from './slices/editor/actions/hydrated-editor-session-state'
+import { editorPlacementIndex } from './slices/editor/tabs/workspace-editor-files'
 import { openFileOfLayoutEditorView } from './slices/editor/tabs/open-file-layout-view'
 import type { OpenFile } from './slices/editor/types/open-file'
 import { editorTabLabelOf } from './slices/editor/tabs/editor-tab-label'
@@ -143,8 +144,11 @@ function framedViewFiles(layouts: WorkspaceLayoutCache): Map<string, FramedViewF
   const files = new Map<string, FramedViewFile>()
   for (const [key, layout] of Object.entries(layouts)) {
     for (const tab of layout.tabs) {
-      if (tab.editorView && !files.has(fileKey(key, tab.entityId))) {
-        files.set(fileKey(key, tab.entityId), {
+      if (
+        tab.editorView &&
+        !files.has(fileKey(tab.editorView.file.worktreeId ?? key, tab.entityId))
+      ) {
+        files.set(fileKey(tab.editorView.file.worktreeId ?? key, tab.entityId), {
           view: tab.editorView.view,
           file: openFileOfLayoutEditorView(tab.editorView, { ...tab, worktreeId: key })
         })
@@ -252,9 +256,16 @@ export function buildLayoutFrameSlices({
   })
 
   const framed = framedViewFiles(layouts)
+  const viewEntities = new Set([...framed.values()].map(({ file }) => file.id))
+  const placementIndex = editorPlacementIndex(session.unifiedTabs ?? {})
   // A diff, conflict or check tab is drawn from its view: every window open sends one.
-  const tabs = buildHydratedTabState(session, workspaceKeys, (worktreeId, fileId) =>
-    framed.has(fileKey(worktreeId, fileId))
+  const tabs = buildHydratedTabState(
+    session,
+    workspaceKeys,
+    (worktreeId, fileId) =>
+      framed.has(fileKey(worktreeId, fileId)) ||
+      (viewEntities.has(fileId) &&
+        (placementIndex.workspacesByEntityId.get(fileId)?.has(worktreeId) ?? false))
   )
   const editor = buildHydratedEditorSessionState(session, workspaceKeys, null)
   const openFiles = withFramedViewFiles(editor.state.openFiles, framed)

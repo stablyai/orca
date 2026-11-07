@@ -43,7 +43,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
@@ -169,6 +172,10 @@ describe('useEditorPanelContentState', () => {
     mocks.getState.mockReturnValue({
       ...createTestStore().getState(),
       settings: null,
+      repos: [{ id: 'repo-1', path: '/repo', hostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      },
       openFiles: [],
       setLastKnownDiskSignature: vi.fn()
     })

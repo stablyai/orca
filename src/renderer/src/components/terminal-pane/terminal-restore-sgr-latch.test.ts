@@ -1,14 +1,13 @@
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Terminal } from '@xterm/headless'
 import { afterEach, describe, expect, it } from 'vitest'
-
 import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE
 } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { restoreScrollbackBuffers } from './layout-serialization'
+import { restoreScrollbackBuffers } from './snapshots/saved-terminal-output-replay'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const UNCLOSED_BOLD_FIXTURE = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'

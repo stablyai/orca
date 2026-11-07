@@ -1,6 +1,6 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import type React from 'react'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 
 type SearchableSettingProps = SettingsSearchEntry & {
@@ -19,7 +19,7 @@ export function SearchableSetting({
   className,
   id
 }: SearchableSettingProps): React.JSX.Element | null {
-  const query = useAppStore((state) => state.settingsSearchQuery)
+  const query = useAppStateValue((state) => state.settingsSearchQuery)
   if (!forceVisible && !matchesSettingsSearch(query, { title, description, keywords })) {
     return null
   }

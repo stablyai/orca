@@ -6,8 +6,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from './pty-transport-types'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import type { AppState } from '../../store/types'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import {
@@ -42,7 +43,7 @@ vi.mock('@/store', () => ({
     })
   })
 }))
-vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+vi.mock('./input/terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 vi.mock('./TerminalPaneResumeInChatButton', () => ({
   TerminalPaneResumeInChatButton: () => <button type="button">Continue in Chat UI</button>
 }))

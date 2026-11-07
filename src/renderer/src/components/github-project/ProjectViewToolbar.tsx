@@ -8,7 +8,7 @@ import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
   const {

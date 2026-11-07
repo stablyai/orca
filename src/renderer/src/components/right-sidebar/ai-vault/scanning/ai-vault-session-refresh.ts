@@ -23,7 +23,7 @@ import {
   resetAgentSessionIdsRefreshKeys
 } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 
 // Share the forced-rescan budget across remounts so session creation cannot amplify full scans.
 import {

@@ -10,7 +10,7 @@ import {
 } from './worktrees-slice-test-harness'
 
 const { exactLookup } = vi.hoisted(() => ({ exactLookup: vi.fn() }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: exactLookup
 }))
 const url = 'https://github.com/acme/orca/pull/42'

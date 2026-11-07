@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { GitGraph } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useSourceControlState } from '../panel/worktree-scope'
 import {
-  useGitGraphScope,
+  gitGraphScope,
   gitGraphSupport,
   gitGraphUpdateMessage,
   openGitGraph,
@@ -13,13 +13,14 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
-  const scope = useGitGraphScope(worktreeId)
-  const owner = JSON.stringify([worktreeId, scope?.route])
-  const status = useAppStore((state) =>
-    scope?.route.runtimeEnvironmentId
-      ? state.runtimeStatusByEnvironmentId[scope.route.runtimeEnvironmentId]
-      : undefined
+  // Hidden section bodies stop these subscriptions; a primitive key keeps unrelated writes from rendering.
+  const owner = useSourceControlState((state) =>
+    JSON.stringify([worktreeId, gitGraphScope(worktreeId, state)?.route])
   )
+  const status = useSourceControlState((state) => {
+    const environmentId = gitGraphScope(worktreeId, state)?.route.runtimeEnvironmentId
+    return environmentId ? state.runtimeStatusByEnvironmentId.get(environmentId) : undefined
+  })
   const [probe, setProbe] = useState<{ owner: string; support: boolean | null }>()
   const support = probe?.owner === owner ? probe.support : null
   useEffect(() => {

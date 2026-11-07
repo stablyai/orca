@@ -1,10 +1,10 @@
+import { useAppStore } from '@/store'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription
 } from './behavior/claude-subagent-navigation-copy'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
-import { useAppStore } from '@/store/index'
 import { AgentAwakeSetting } from './behavior/AgentAwakeSetting'
 import { AgentCacheTimerSection } from './behavior/AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './runtime/AgentRuntimeSetting'
@@ -55,7 +55,6 @@ export function AgentsPane({
   wslDistros,
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
-  const refreshLocalAgents = useAppStore((state) => state.refreshDetectedAgents)
   return (
     <div className="space-y-8">
       <AgentLaunchSettingsSection
@@ -76,7 +75,9 @@ export function AgentsPane({
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
-          refresh={() => refreshLocalAgents(undefined, { wakeWslDistro: true })}
+          refresh={() =>
+            useAppStore.getState().refreshDetectedAgents(undefined, { wakeWslDistro: true })
+          }
           wslSupportedPlatform={wslSupportedPlatform}
           wslAvailable={wslAvailable}
           wslDistros={wslDistros}

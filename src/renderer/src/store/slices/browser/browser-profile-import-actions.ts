@@ -10,7 +10,7 @@ import {
   browserImportStateForHostUpdate,
   retainCookieImportExecutionHost
 } from './browser-host-state'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 function remoteCookieImportUnavailable(): BrowserCookieImportResult {
   return {

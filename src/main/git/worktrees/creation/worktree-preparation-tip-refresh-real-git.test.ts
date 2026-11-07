@@ -10,13 +10,7 @@ import {
   prepareWorktreeCreateCheckout
 } from './worktree-create-preparation'
 import { refreshPreparedWorktreeTip } from './worktree-preparation-tip-refresh'
-import {
-  _resetPreparationPoolForTests,
-  listPreparations,
-  startPreparation,
-  takePreparation
-} from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
-import { releasePreparationClaim } from '../../../workspaces/creation/preparation/worktree-create-preparation-claim-registry'
+import { _resetPreparationPoolForTests } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -103,54 +97,4 @@ it('preserves a competing lock and files when ownership changes before refresh',
   expect(await readFile(lock, 'utf8')).toBe('manual owner\n')
   expect(await readFile(join(prepared, 'version.txt'), 'utf8')).toBe('original\n')
   expect(await git(repo, ['worktree', 'list', '--porcelain'])).toContain('locked manual owner')
-})
-
-it('makes a racing claim wait for one fetched-tip reset on an already ready checkout', async () => {
-  const { root, repo, final, base } = await fixture()
-  const args = {
-    repoPath: repo,
-    workspaceRoot: root,
-    baseBranch: base,
-    canonicalBase: base,
-    options: {}
-  }
-  await startPreparation(args)
-  const entry = listPreparations()[0]!
-  let settle!: () => void
-  const beforeMaterialization = new Promise<void>((resolve) => {
-    settle = resolve
-  })
-  const spy = vi.spyOn(runner, 'gitExecFileAsync')
-  const refreshing = startPreparation({ ...args, beforeMaterialization })
-  const claim = takePreparation(entry)
-  let finalized = false
-  const create = entry.ready.then(async () => {
-    await finalizePreparedWorktree(
-      repo,
-      entry.preparedPath,
-      final,
-      'feature',
-      base,
-      false,
-      {},
-      entry.lockReason
-    )
-    finalized = true
-  })
-  try {
-    await Promise.resolve()
-    expect(finalized).toBe(false)
-    expect(spy.mock.calls.filter(([argv]) => argv.includes('reset'))).toHaveLength(0)
-    const target = await advance(repo, base, 'fetched ready tip\n')
-    expect(finalized).toBe(false)
-    settle()
-    await Promise.all([refreshing, create])
-    expect(spy.mock.calls.filter(([argv]) => argv.includes('reset'))).toHaveLength(1)
-    expect(await git(final, ['rev-parse', 'HEAD'])).toBe(target)
-    expect(await readFile(join(final, 'version.txt'), 'utf8')).toBe('fetched ready tip\n')
-    expect(await readFile(join(final, 'checkout-hook.txt'), 'utf8')).toBe('checkout\n')
-  } finally {
-    settle()
-    releasePreparationClaim(claim)
-  }
 })

@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '../../store'
 import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session-environment'
 import { moveWebRuntimeSessionTab } from '../../runtime/web-runtime-session-tab-move'

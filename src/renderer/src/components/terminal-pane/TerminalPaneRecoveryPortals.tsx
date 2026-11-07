@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
 import {
   useManagedPairingRefusedEnvironmentId,
@@ -23,7 +23,7 @@ import { useAppStore } from '@/store'
 import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from './terminal-error-accumulation'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(

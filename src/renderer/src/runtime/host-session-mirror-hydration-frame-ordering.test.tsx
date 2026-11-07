@@ -37,9 +37,9 @@ vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import '@/components/terminal/background-terminal-worktree-mount'
-import '@/lib/wake-sleeping-agents-in-background'
+import '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import {
   BG_MIRROR_TAB_ID,
   BG_WT,

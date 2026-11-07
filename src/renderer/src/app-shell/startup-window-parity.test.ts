@@ -62,7 +62,7 @@ describe('the window shows the same session before and after the shared Loader r
     expect(view[`${GIT} active terminal`]).toBe('tab-a')
   })
 
-  it('restores the terminals of a session from before the tab bar, dropping its file tabs', async () => {
+  it('restores terminals and saved edit tabs from a session before the tab bar', async () => {
     const profile = PROFILES.find(
       (entry) => entry.name === 'session from before the tab bar, with an open file'
     )!
@@ -71,7 +71,7 @@ describe('the window shows the same session before and after the shared Loader r
         { hostId: profile.hostId, session: profile.build() }
       ])
     )
-    expect(view[`${GIT} group 0 tabs`]).toEqual(['tab-a', 'tab-b'])
-    expect(view).not.toHaveProperty([`${GIT} tab /Users/dev/orca/src/app.ts`])
+    expect(view[`${GIT} group 0 tabs`]).toEqual(['/Users/dev/orca/src/app.ts', 'tab-a', 'tab-b'])
+    expect(view).toHaveProperty([`${GIT} tab /Users/dev/orca/src/app.ts`])
   })
 })

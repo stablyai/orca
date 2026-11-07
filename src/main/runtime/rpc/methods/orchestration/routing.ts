@@ -1,12 +1,20 @@
-import type { MessageType } from '../../../orchestration/db'
-import type { DispatchContextRow, RunRow } from '../../../orchestration/types'
+import type {
+  MessageType,
+  DispatchContextRow,
+  RunRow
+} from '../../../orchestration/db/orchestration-records'
+
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { OrchestrationCallerIdentity } from '../../../orchestration/orchestration-caller-identity'
-import { MESSAGE_TYPES } from '../../../orchestration/types'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration-party-identity'
+import { MESSAGE_TYPES } from '../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db'
+import '../../../orchestration/db/orchestration-db'
+import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db/contract-constants'
+import '../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../orchestration/db/dispatch-row-writer'
+import '../../../orchestration/db/attempt-outcome-projection'
 import { isDispatchMutationMessageType, parseMessageTaskId } from './schemas'
-import { federatedMessageNamesOnlyHome } from '../../../orchestration/dispatch-report-mailbox'
+import { federatedMessageNamesOnlyHome } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
 
 export function parseMessageTypes(rawTypes: string | undefined): MessageType[] | undefined {
   const types = rawTypes

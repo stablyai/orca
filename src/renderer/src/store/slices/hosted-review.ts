@@ -1,3 +1,4 @@
+import { createHostedReviewCreation } from './hosted-review-creation'
 import type { StateCreator } from 'zustand'
 import type {
   CreateHostedReviewResult,
@@ -15,7 +16,6 @@ import {
   type LinkedReviewHints
 } from './hosted-review-cache-identity'
 import {
-  findHostedReviewRepoByPath,
   findHostedReviewRepoForFetch,
   hasNewerHostedReviewCacheEntry,
   hostedReviewOwnerIpcArgs,
@@ -97,55 +97,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     )
   },
 
-  createHostedReview: async (repoPath, input) => {
-    const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const target = hostedReviewRepoOwnerTarget(repo)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
-    if (target.kind === 'environment') {
-      const { worktreePath, ...runtimeInput } = hostedReviewInput
-      return callRuntimeRpc<CreateHostedReviewResult>(
-        target,
-        'hostedReview.create',
-        {
-          repo: repo?.id ?? repoPath,
-          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
-          ...runtimeInput
-        },
-        { timeoutMs: 60_000 }
-      )
-    }
-    return window.api.hostedReview.create({
-      repoPath,
-      repoId: repo?.id ?? inputRepoId ?? undefined,
-      connectionId: repo?.connectionId ?? null,
-      ...hostedReviewInput
-    })
-  },
-
-  createStackedHostedReview: async (repoPath, input) => {
-    const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const target = hostedReviewRepoOwnerTarget(repo)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
-    if (target.kind === 'environment') {
-      const { worktreePath, ...runtimeInput } = hostedReviewInput
-      return callRuntimeRpc<CreateStackedHostedReviewResult>(
-        target,
-        'hostedReview.createStacked',
-        {
-          repo: repo?.id ?? repoPath,
-          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
-          ...runtimeInput
-        },
-        { timeoutMs: 90_000 }
-      )
-    }
-    return window.api.hostedReview.createStacked({
-      repoPath,
-      repoId: repo?.id ?? inputRepoId ?? undefined,
-      connectionId: repo?.connectionId ?? null,
-      ...hostedReviewInput
-    })
-  },
+  ...createHostedReviewCreation(get),
 
   fetchHostedReviewForBranch: async (
     repoPath,

@@ -3,8 +3,11 @@ import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/loca
 import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
-  AdoptProvisionedRootArgs
+  AdoptProvisionedRootArgs,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult
 } from '../../../../shared/worktree/create-types'
+import { runApprovedCreatedWorktreeSetup } from '../../../runtime/created-worktree-approved-setup'
 import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
@@ -132,6 +135,15 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
         })
       })
     }
+  )
+
+  ipcMain.handle(
+    'worktrees:runApprovedSetup',
+    (_event, args: RunApprovedWorktreeSetupArgs): Promise<RunApprovedWorktreeSetupResult> =>
+      // A click on the trust prompt is the user's act, so it may start the repo's WSL distro.
+      runApprovedCreatedWorktreeSetup(runtime, `id:${args.worktreeId}`, args.approvedSetupHash, {
+        wslUserAct: true
+      })
   )
 
   ipcMain.handle(
