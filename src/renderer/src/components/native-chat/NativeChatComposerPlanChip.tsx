@@ -5,7 +5,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import { runSessionOptionSurfaceCall } from './session/options/controls/native-chat-session-option-surface-call'
 import { NativeChatComposerModeChip } from './NativeChatComposerModeChip'
 
 export function useNativeChatPlanMode({

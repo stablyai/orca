@@ -315,7 +315,7 @@
 4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/NativeChatModelCombobox.test.tsx
+1 test-no-real-time-wait:src/renderer/src/components/native-chat/session/options/controls/NativeChatModelCombobox.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-lifecycle.test.tsx
 4 test-no-real-time-wait:src/renderer/src/components/native-chat/native-chat-composer-draft-store.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -739,7 +739,7 @@
 1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.queued-turn-order.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.turn-indicator.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatMessageList.unsent-message.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/native-chat/session/structured/delivery/NativeChatMessageList.unsent-message.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/NativeChatStructuredSessionStatus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx

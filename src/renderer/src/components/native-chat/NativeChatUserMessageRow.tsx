@@ -1,4 +1,4 @@
-import { NativeChatSignInButton } from './NativeChatSignInButton'
+import { NativeChatSignInButton } from './host-access/NativeChatSignInButton'
 import { NativeChatTextAttachments } from './media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'

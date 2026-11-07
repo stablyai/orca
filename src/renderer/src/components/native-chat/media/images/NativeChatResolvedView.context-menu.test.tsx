@@ -7,7 +7,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
 import { NativeChatImageAttachmentPreview } from '../../NativeChatImageAttachmentPreview'
-import type { NativeChatLiveSession } from '../../native-chat-live-session-contract'
+import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
 type RetainedSessionFixture = Pick<NativeChatLiveSession, 'status'> & {
@@ -38,7 +38,7 @@ vi.mock('../../../orchestration-crew/TerminalChatCrewPanel', () => ({
   TerminalChatCrewPanel: () => null
 }))
 
-vi.mock('../../use-native-chat-retained-session', () => ({
+vi.mock('../../session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: (): NativeChatLiveSession => ({
     messages: mocks.session.messages,
     status: mocks.session.status,

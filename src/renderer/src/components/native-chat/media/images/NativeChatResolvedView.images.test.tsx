@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { cleanup, screen, waitFor } from '@testing-library/react'
 import { render } from '../../native-chat-tooltip-test-harness'
-import type { NativeChatLiveSession } from '../../native-chat-live-session-contract'
+import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import '@/components/editor/document-images/useLocalImageSrc'
 import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '@/components/editor/document-images/local-image-src-cache'
 import { useAppStore } from '@/store'
@@ -30,7 +30,7 @@ const session: NativeChatLiveSession = {
   readPhase: 'ready'
 }
 
-vi.mock('../../use-native-chat-retained-session', () => ({
+vi.mock('../../session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => session
 }))
 vi.mock('../../NativeChatComposer', () => ({ NativeChatComposer: () => null }))

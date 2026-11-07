@@ -5,8 +5,8 @@ import {
   useNativeChatRevealLatest,
   type NativeChatMessageListHandle
 } from './use-native-chat-reveal-latest'
-import type { useStructuredAgentSession } from './use-structured-agent-session'
-import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
+import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
+import type { StructuredAgentSessionQueuedMessagesController } from './queue/use-structured-agent-session-queued-messages'
 
 type StructuredController = ReturnType<typeof useStructuredAgentSession>
 

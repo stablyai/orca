@@ -1,5 +1,5 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { focusNativeChatPromptCard } from '../../native-chat/use-native-chat-prompt-card-focus'
+import { focusNativeChatPromptCard } from '../../native-chat/prompts/use-native-chat-prompt-card-focus'
 
 const NATIVE_CHAT_COVER_SELECTOR = '.native-chat-pane-shell'
 

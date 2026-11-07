@@ -2,9 +2,9 @@ import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
 } from '../../../../shared/native-chat/claude-model-fallback'
-import { NativeChatUsageLimitAutoContinue } from './NativeChatUsageLimitAutoContinue'
-import { NativeChatUsageLimitActions } from './NativeChatUsageLimitActions'
-import { agentSessionGoalControlWords } from './agent-session-goal-control-words'
+import { NativeChatUsageLimitAutoContinue } from './usage/NativeChatUsageLimitAutoContinue'
+import { NativeChatUsageLimitActions } from './usage/NativeChatUsageLimitActions'
+import { agentSessionGoalControlWords } from './session/goals/agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useContext, useSyncExternalStore } from 'react'
@@ -24,21 +24,21 @@ import {
   nativeChatNoticeLook
 } from '../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
-import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
+import { NativeChatInterruptedContinueButton } from './usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
 } from './messages/diagnostics/NativeChatProviderDetails'
-import { NativeChatSignInButton } from './NativeChatSignInButton'
+import { NativeChatSignInButton } from './host-access/NativeChatSignInButton'
 import {
   agentSessionFailureDetailText,
   readWholeAgentSessionFailureFact
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
+import { nativeChatAntigravitySignInContent } from './host-access/native-chat-antigravity-settings'
 import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {

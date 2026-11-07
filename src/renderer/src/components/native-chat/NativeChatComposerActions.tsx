@@ -16,10 +16,10 @@ import {
   NativeChatComposerToolbar,
   type NativeChatComposerControl
 } from './NativeChatComposerToolbar'
-import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
-import { NativeChatComposerPermissionPicker } from './NativeChatPermissionModePicker'
+import { NativeChatSessionOptionPickers } from './session/options/controls/NativeChatSessionOptionPickers'
+import { NativeChatComposerPermissionPicker } from './session/options/controls/NativeChatPermissionModePicker'
 import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
-import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
+import { NativeChatContextUsageRing } from './usage/NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import type { NativeChatSteerChordPreview } from '../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'

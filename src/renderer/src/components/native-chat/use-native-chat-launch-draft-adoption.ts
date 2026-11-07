@@ -10,7 +10,7 @@ import {
 import {
   isNativeChatTranscriptUnsettled,
   type ReadState
-} from './native-chat-live-session-contract'
+} from './session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 import {
   composerDraftWithTerminalSeed,

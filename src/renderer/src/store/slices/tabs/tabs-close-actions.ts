@@ -6,7 +6,7 @@ import {
 } from './tabs-empty-workspace'
 export { landOnEmptiedWorktree } from './tabs-empty-workspace'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { findGroupForTab, findTabAndWorktree } from './tab-group-state'

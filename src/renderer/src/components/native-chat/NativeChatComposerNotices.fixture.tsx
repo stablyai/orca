@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatComposerNotices } from './NativeChatComposerNotices'
-import { structuredSessionNotices } from './native-chat-structured-session-notices'
+import { structuredSessionNotices } from './messages/notices/native-chat-structured-session-notices'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 
 // Captured retained-opening read refusal: history is absent while creation still owns Retry.

@@ -21,9 +21,12 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn()
 }))
 
-vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
-  enqueueSessionOptionSettingsWrite: mocks.settingsWrite
-}))
+vi.mock(
+  '@/components/native-chat/session/options/native-chat-session-option-settings-write',
+  () => ({
+    enqueueSessionOptionSettingsWrite: mocks.settingsWrite
+  })
+)
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 

@@ -12,7 +12,9 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
-vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
+vi.mock('./session/structured/use-structured-agent-session', () =>
+  moduleFactories.useStructuredAgentSession()
+)
 vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
@@ -22,8 +24,8 @@ vi.mock('./links/actions/use-native-chat-file-link-click', () =>
 )
 vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
-vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
-vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+vi.mock('./prompts/NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+vi.mock('./prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 afterEach(() => {
   cleanup()

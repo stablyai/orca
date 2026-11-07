@@ -8,7 +8,7 @@ import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/t
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
+import type { StructuredAgentSessionSendRequest } from './session/structured/delivery/structured-agent-session-send-slot'
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,

@@ -43,7 +43,7 @@ import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
 import { notificationDeliveryId } from '../../src/shared/notification-delivery-id'
 import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 

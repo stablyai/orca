@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 function hasTranscriptSelection(root: HTMLElement | null): boolean {
   const selection = root?.ownerDocument.getSelection()
