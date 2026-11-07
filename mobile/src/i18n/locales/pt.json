@@ -361,7 +361,8 @@
       "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
       "waitingFor": "Será enviada quando {{host}} voltar",
       "waiting": "Será enviada quando o computador voltar",
-      "behind": "Aguardando — uma mensagem anterior precisa de atenção"
+      "behind": "Aguardando — uma mensagem anterior precisa de atenção",
+      "closed": "Não enviada antes de o Orca fechar"
     },
     "receipt": {
       "cancelled": "Cancelado",

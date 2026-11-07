@@ -357,7 +357,8 @@
       "failed": "Nicht gesendet – zum erneuten Versuch auf Senden tippen",
       "waitingFor": "Wird gesendet, wenn {{host}} wieder erreichbar ist",
       "waiting": "Wird gesendet, wenn der Desktop wieder erreichbar ist",
-      "behind": "Wartet – eine Nachricht davor braucht Aufmerksamkeit"
+      "behind": "Wartet – eine Nachricht davor braucht Aufmerksamkeit",
+      "closed": "Nicht gesendet, bevor Orca geschlossen wurde"
     },
     "receipt": {
       "cancelled": "Abgebrochen",

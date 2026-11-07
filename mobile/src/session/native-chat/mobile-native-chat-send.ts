@@ -53,7 +53,7 @@ export type MobileNativeChatSendIntent = {
     files: readonly PendingNativeChatFile[]
   }
   /** A message the phone queued offline: it carries its own inputs and the send never touches the composer. */
-  queued?: Pick<MobileNativeChatOfflineSend, 'images' | 'files' | 'skills' | 'skillOrigin'>
+  queued?: Pick<MobileNativeChatOfflineSend, 'id' | 'images' | 'files' | 'skills' | 'skillOrigin'>
 }
 
 export type MobileNativeChatWriteOutcome = Exclude<MobileNativeChatSendOutcome, 'queued'>

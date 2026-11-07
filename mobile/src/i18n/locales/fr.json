@@ -361,7 +361,8 @@
       "failed": "Échec de l'envoi — touchez Envoyer pour réessayer",
       "waitingFor": "Sera envoyé au retour de {{host}}",
       "waiting": "Sera envoyé au retour de l'ordinateur",
-      "behind": "En attente — un message précédent requiert votre attention"
+      "behind": "En attente — un message précédent requiert votre attention",
+      "closed": "Non envoyé avant la fermeture d'Orca"
     },
     "receipt": {
       "cancelled": "Annulé",

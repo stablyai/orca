@@ -17,7 +17,9 @@ import {
   setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
 import {
+  beginMobileNativeChatOfflineSend,
   queueMobileNativeChatOfflineSend,
+  settleMobileNativeChatOfflineSend,
   readMobileNativeChatOfflineSends,
   removeMobileNativeChatOfflineSends,
   resumeMobileNativeChatOfflineSends,
@@ -69,8 +71,8 @@ export function useMobileNativeChatOfflineQueue(args: {
     async (target: string, queued: MobileNativeChatOfflineSend): Promise<boolean> => {
       drainingRef.current = true
       setDraining(true)
-      // Out of the queue before it goes, so nothing can send it twice; a send that doesn't go comes back paused.
-      removeMobileNativeChatOfflineSends(target, [queued.id])
+      // Marked on its way, so nothing sends it twice; it keeps its place (and its saved copy) until the send settles.
+      beginMobileNativeChatOfflineSend(target, queued.id)
       // A tab closed meanwhile took its queue with it; a late answer must not bring one back.
       const destination = mobileNativeChatDraftDestination(target)
       const putBack = () => {
@@ -87,9 +89,7 @@ export function useMobileNativeChatOfflineQueue(args: {
           onHandBack: putBack
         })
       } finally {
-        if (!sent) {
-          putBack()
-        }
+        settleMobileNativeChatOfflineSend(target, queued.id, sent)
         drainingRef.current = false
         setDraining(false)
       }
