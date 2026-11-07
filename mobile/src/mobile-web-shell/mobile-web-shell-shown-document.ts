@@ -14,7 +14,7 @@ import {
   readFailureSide,
   type MobileWebShellUpdateFailureCause
 } from './mobile-web-shell-update-failure'
-import { recordUpdateFailure } from './mobile-web-shell-update-failure-outcome'
+import { updateFailureRecordEffect } from './mobile-web-shell-update-failure-outcome'
 import { cachedGenerationWall, gateVerdict } from './mobile-web-shell-gates'
 import { CLEAR_PAGE_DOCUMENT_STATE } from './page-document-state'
 import { step } from './mobile-web-shell-session-step'
@@ -86,7 +86,7 @@ export function onUpdateFailed(
   return step(
     session,
     readFailureSide(cause.reason) === 'bundle' ? { updateNotice: 'update-failed' } : {},
-    [recordUpdateFailure(session, cause, session.state)]
+    [updateFailureRecordEffect(session, cause, session.state)]
   )
 }
 
