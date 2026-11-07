@@ -9,7 +9,7 @@ import {
   subscribeMobileDictationAudioChunks,
   type MobileDictationAudioPhase
 } from './mobile-dictation-audio-chunk'
-import { MobileDictationStartBuffer } from './mobile-dictation-start-buffer'
+import { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import {
   createMobileDictationId,
@@ -48,7 +48,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const pendingChunksRef = useRef<Set<Promise<void>>>(new Set())
   const pendingAudioBudgetRef = useRef(new MobileDictationPendingAudioBudget())
   const audioPhaseRef = useRef<MobileDictationAudioPhase>('closed')
-  const startBufferRef = useRef(new MobileDictationStartBuffer())
+  const heldAudioRef = useRef(new MobileDictationHeldAudio())
   const sendHeldAudioRef = useRef(() => {})
   const stopWhenStartedRef = useRef(false)
   const generationRef = useRef(0)
@@ -81,7 +81,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   const closeDictationAudio = useCallback(() => {
     audioPhaseRef.current = 'closed'
-    startBufferRef.current.clear()
+    heldAudioRef.current.clear()
     pendingChunksRef.current.clear()
     pendingAudioBudgetRef.current.reset()
     try {
@@ -123,7 +123,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingAudioBudget: pendingAudioBudgetRef.current,
       failActiveDictation,
       transcriptSoFar: keptTranscript,
-      startBuffer: startBufferRef.current
+      heldAudio: heldAudioRef.current
     })
     sendHeldAudioRef.current = sub.sendHeld
     return () => sub.remove()
