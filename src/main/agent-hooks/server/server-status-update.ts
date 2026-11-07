@@ -19,11 +19,11 @@ import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/
 import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
-  attachClaudePermissionToolUseId,
   pairedClaudeNonAgentWork,
   shouldKeepClaudePermissionVisible,
   withHeldChildWaitMainAgent
 } from './server-claude-status-rules'
+import { ClaudePendingToolUses } from './server-claude-pending-tool-uses'
 import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import { AgentHookServerStatusApplication } from './server-status-application'
@@ -34,6 +34,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     this.state
   )
   protected readonly relaySessions = new RelaySessionGenerations()
+  protected readonly claudeToolUses = new ClaudePendingToolUses()
 
   // Every row mutation passes here, including cancellation and pane moves.
   protected override commitStatusRowMutation(
@@ -212,7 +213,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...rootContextPreservingPayload,
             payload: { ...rootContextPreservingPayload.payload, agentType: identity.agentType }
           }
-    const attachedPayload = attachClaudePermissionToolUseId(previous, identityResolvedPayload)
+    const attachedPayload = this.claudeToolUses.admit(previous, identityResolvedPayload, !restated)
     // Resolve cancellation before permission holds adopt a replayed main-agent observation.
     const latch = resolveCancelVerdictLatch(previous, attachedPayload, Date.now())
     if (latch.hold) {

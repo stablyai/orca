@@ -179,8 +179,10 @@ function isClaudePermissionResumingApprovedTool(
   )
 }
 
+type ClaudeToolUseIdSource = AgentHookEventPayload & { restoredUnconfirmed?: true }
+
 export function shouldInheritClaudeToolUseIdForPermission(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  previous: ClaudeToolUseIdSource | undefined,
   next: AgentHookEventPayload
 ): boolean {
   if (
@@ -214,7 +216,7 @@ function claudeRowRequestFields(row: AgentHookEventPayload): ClaudeToolRequestFi
 }
 
 export function attachClaudePermissionToolUseId(
-  previous: EnrichedAgentHookEventPayload | undefined,
+  previous: ClaudeToolUseIdSource | undefined,
   next: AgentHookEventPayload
 ): AgentHookEventPayload {
   const inheritedToolUseId = previous?.toolUseId
