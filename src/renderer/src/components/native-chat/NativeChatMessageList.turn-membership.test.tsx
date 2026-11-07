@@ -47,7 +47,7 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 

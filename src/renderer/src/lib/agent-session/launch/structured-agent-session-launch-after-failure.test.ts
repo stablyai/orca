@@ -101,8 +101,8 @@ import {
 import {
   resetStructuredAgentSessionSendsForTests,
   sendStructuredAgentSessionMessage
-} from '@/components/native-chat/structured-agent-session-message-sender'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { relaunchFailedStructuredAgentSessionWithMessage } from './structured-agent-session-launch-message'
 import {
   clearNativeChatDraftCacheForTests,

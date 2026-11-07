@@ -39,8 +39,8 @@ import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 import { useAppStore } from '@/store'
 import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
-import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
+import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
+import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 

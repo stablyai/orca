@@ -89,7 +89,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { clearNativeChatDraftCacheForTests } from '@/components/native-chat/native-chat-draft-cache'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'

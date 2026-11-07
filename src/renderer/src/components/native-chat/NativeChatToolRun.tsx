@@ -18,7 +18,7 @@ import { nativeChatToolRunSentence } from './native-chat-tool-run-label'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../shared/native-chat/tools/native-chat-tool-activity'
 import { nativeChatToolRunHeader } from '../../../../shared/native-chat/tools/native-chat-tool-run-header'
 import { nativeChatAskRunSubject } from '../../../../shared/native-chat/input/native-chat-ask-row'
-import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
+import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
 import { NativeChatBackgroundTaskRun } from './NativeChatBackgroundTaskRun'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import type {

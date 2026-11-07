@@ -117,7 +117,7 @@ import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
 } from './structured-agent-session-launch-registry'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache

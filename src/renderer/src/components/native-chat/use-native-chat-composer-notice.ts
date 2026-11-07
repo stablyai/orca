@@ -7,7 +7,7 @@ import type {
   NativeChatComposerErrorDetail,
   NativeChatStructuredComposerTransport
 } from './native-chat-composer-types'
-import type { StructuredConversationCommandCauses } from './structured-conversation-command-send'
+import type { StructuredConversationCommandCauses } from './session/structured/writes/structured-conversation-command-send'
 
 type ComposerErrorLine = NativeChatComposerNoticeContent &
   Pick<NativeChatComposerErrorDetail, 'refusedWhile'>

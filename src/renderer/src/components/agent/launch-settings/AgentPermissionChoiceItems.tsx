@@ -5,7 +5,7 @@ import { DropdownMenuRadioItem, DropdownMenuSeparator } from '../../ui/dropdown-
 import {
   NativeChatPermissionModeItems,
   NativeChatPermissionModeName
-} from '../../native-chat/NativeChatPermissionModePicker'
+} from '../../native-chat/session/options/controls/NativeChatPermissionModePicker'
 
 function ownDescription(chatOwnSupported: boolean): string {
   if (!chatOwnSupported) {

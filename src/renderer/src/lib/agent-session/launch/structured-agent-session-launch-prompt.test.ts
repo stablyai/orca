@@ -23,7 +23,7 @@ import {
   sendStructuredAgentSessionMessage,
   settleStructuredAgentSessionSendsFromJournal,
   stopStructuredAgentSessionSends
-} from '@/components/native-chat/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
@@ -36,7 +36,7 @@ import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice,
   subscribeToStructuredAgentSessionPendingSends
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import {
   captureNativeChatStagedInput,
   releaseNativeChatStagedFiles,

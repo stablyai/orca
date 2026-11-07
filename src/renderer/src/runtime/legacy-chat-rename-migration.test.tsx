@@ -58,9 +58,12 @@ const mock = vi.hoisted(() => ({
   deactivates: vi.fn(),
   send: vi.fn()
 }))
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mock.send
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mock.send
+  })
+)
 vi.mock('@/store', async () => ({
   useAppStore: (await import('@/store/testing/app-store-test-fixture')).createTestStore()
 }))

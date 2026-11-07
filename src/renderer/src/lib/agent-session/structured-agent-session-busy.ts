@@ -11,9 +11,9 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
-import type { StructuredAgentSessionAdmission } from '@/components/native-chat/structured-agent-session-read-owner-contract'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import type { StructuredAgentSessionAdmission } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-contract'
 import type {
   AgentSessionStatusSummary,
   AgentSessionHistoryResult

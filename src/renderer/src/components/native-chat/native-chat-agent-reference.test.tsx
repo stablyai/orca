@@ -22,10 +22,10 @@ import {
 } from './native-chat-composer-draft-store'
 import { captureTerminalDropTarget } from '../terminal-pane/input/file-drop/terminal-drop-target'
 import { insertTerminalCrewMention } from '../terminal-pane/input/paste/terminal-crew-mention'
-import { clearStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
+import { clearStructuredAgentSessionPendingSends } from './session/structured/delivery/structured-agent-session-pending-sends'
 
 const crewRows = vi.hoisted(() => new Array<OrchestrationCrewRow>())
-vi.mock('./use-orchestration-crew', () => ({
+vi.mock('./worker-lifetime/use-orchestration-crew', () => ({
   useOrchestrationCrew: () => ({
     ...emptyCrew('ok'),
     sections: { managedBy: [], managing: crewRows, talkingWith: [] }

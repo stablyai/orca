@@ -31,7 +31,9 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   ...moduleFactories.structuredAgentSessionClient(),
   subscribeStructuredAgentSessionStatus: transport.subscribe
 }))
-vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
+vi.mock('./session/structured/use-structured-agent-session', () =>
+  moduleFactories.useStructuredAgentSession()
+)
 vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./links/actions/use-native-chat-file-link-context', () =>
   moduleFactories.useNativeChatFileLinkContext()
@@ -47,9 +49,9 @@ vi.mock('./media/images/native-chat-image-runtime-context', () => ({
   })
 }))
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
-vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
-vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
-vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+vi.mock('./host-access/NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
+vi.mock('./prompts/NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+vi.mock('./prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 vi.mock('./NativeChatPaneFileDropSurface', () => ({
   NativeChatPaneFileDropSurface: ({ children }: { children: ReactNode }) => children
 }))

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { NativeChatSignInContext } from './native-chat-sign-in'
+import { NativeChatSignInContext } from './host-access/native-chat-sign-in'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
@@ -30,7 +30,7 @@ import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { readNativeChatQuotableSelection } from './native-chat-quote-selection'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
+import { useStructuredAgentSessionDeliveryNotices } from './session/structured/delivery/use-structured-agent-session-delivery-notices'
 
 const confirm = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({

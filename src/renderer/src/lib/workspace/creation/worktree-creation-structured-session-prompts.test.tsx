@@ -69,7 +69,7 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null
 }))
-vi.mock('../../../components/native-chat/use-structured-agent-session', () =>
+vi.mock('../../../components/native-chat/session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()
 )
 vi.mock('../../../components/native-chat/appearance/use-native-chat-font-size', () =>
@@ -81,7 +81,7 @@ vi.mock('../../../components/native-chat/links/actions/use-native-chat-file-link
 vi.mock('../../../components/native-chat/NativeChatMessageList', () =>
   moduleFactories.nativeChatMessageList()
 )
-vi.mock('../../../components/native-chat/NativeChatEmptyState', () =>
+vi.mock('../../../components/native-chat/host-access/NativeChatEmptyState', () =>
   moduleFactories.nativeChatEmptyState()
 )
 vi.mock('../../../components/worktree-creation/WorktreeSetupSteps', () => ({

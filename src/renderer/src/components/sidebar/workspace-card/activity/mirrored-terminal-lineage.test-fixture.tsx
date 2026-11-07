@@ -50,7 +50,7 @@ export async function verifyMirroredTerminalLineage(
   const { toWebTerminalSurfaceTabId } =
     await import('../../../../../../shared/workspace-layout/terminal-surface-id')
   const { projectStatus } =
-    await import('@/components/native-chat/structured-agent-session-status-projection')
+    await import('@/components/native-chat/session/status/structured-agent-session-status-projection')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
     await import('../../../../../../shared/agent-session/view/structured-agent-session-projection')
   const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')

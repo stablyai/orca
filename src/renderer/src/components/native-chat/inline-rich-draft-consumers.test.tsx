@@ -11,7 +11,7 @@ import {
   createNativeChatQueuedEditDraft,
   handBackNativeChatQueuedEdit,
   discardNativeChatQueuedEdit
-} from './native-chat-queued-edit-draft'
+} from './queue/editing/native-chat-queued-edit-draft'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft,
@@ -239,7 +239,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], retry: () => {} })
 }))
-import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
+import { useStructuredAgentSessionQueuedEdit } from './queue/editing/use-structured-agent-session-queued-edit'
 import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import type {
@@ -248,7 +248,7 @@ import type {
   AgentSessionQueuedMessageEditHoldResult
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
-import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
+import type { StructuredAgentSessionWrite } from './session/structured/writes/use-structured-agent-session-mutate'
 let controller: ReturnType<typeof useStructuredAgentSessionQueuedEdit>
 let picker: ReturnType<typeof useNativeChatPickerState>
 const saveRpc = vi.fn()
@@ -440,7 +440,7 @@ it('retains re-picked rich identity after unknown proof and saves the whole repl
 })
 
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
-import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
+import { useNativeChatComposerEditSession } from './queue/editing/use-native-chat-composer-edit-session'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
 function useCapturedPrompt(

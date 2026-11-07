@@ -28,17 +28,17 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
-vi.mock('./use-structured-agent-session-hold', () => ({
+vi.mock('./session/structured/use-structured-agent-session-hold', () => ({
   useStructuredAgentSessionHold: () => undefined
 }))
 vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => mocks.confirm
 }))
-vi.mock('./use-structured-agent-session-read', () => ({
+vi.mock('./session/structured/read/use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({ state, loadingOlder: false, loadOlder: vi.fn() })
 }))
 
-import { useStructuredAgentSession } from './use-structured-agent-session'
+import { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_REWIND_RECOVERY_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 

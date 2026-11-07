@@ -127,7 +127,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   ]
 }))
 
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import {
   clearNativeChatDraftCacheForTests,

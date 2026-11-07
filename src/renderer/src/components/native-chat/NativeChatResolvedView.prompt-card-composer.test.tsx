@@ -8,14 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
 } from './native-chat-composer-types'
 
 import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
-import { clearPendingSendCacheForTests } from './native-chat-pending'
+import { clearPendingSendCacheForTests } from './session/terminal/delivery/native-chat-pending'
 
 const MESSAGE = 'please also run lint'
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
@@ -24,7 +24,7 @@ const pty = vi.hoisted(() => ({
   verified: vi.fn<(id: string, data: string) => Promise<boolean>>(),
   raw: vi.fn<(id: string, data: string) => boolean>()
 }))
-vi.mock('./use-native-chat-retained-session', () => ({
+vi.mock('./session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
 vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', async (importOriginal) => ({
@@ -99,7 +99,7 @@ const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
 const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
-const { nativeChatPromptDismissals } = await import('./native-chat-prompt-dismissals')
+const { nativeChatPromptDismissals } = await import('./prompts/native-chat-prompt-dismissals')
 
 const paneKey = 'tab-hidden:leaf-hidden'
 const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'npm test' } })
