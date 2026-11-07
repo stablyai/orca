@@ -4647,7 +4647,8 @@
             "left": "Left",
             "down": "Down",
             "up": "Up",
-            "moveToPaneColumn": "Move Tab to Split"
+            "moveToPaneColumn": "Move Tab to Split",
+            "moveToWorkspace": "Move to Workspace"
           },
           "EditorFileTabCloseButton": {
             "4655cf570e": "Close tab"

@@ -26,6 +26,10 @@ import { canDropTabIntoPaneBody, isTabDragData, type TabDragItemData } from './t
 import { useTabDragGestureLifecycle } from './tab-drag-gesture-lifecycle'
 import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-hover-preview'
 import { commitTabDragDrop } from './tab-drag-drop-commit'
+import {
+  clearWorktreeTabDropHighlight,
+  syncWorktreeTabDropHighlight
+} from './cross-worktree-tab-drop'
 
 export type { HoveredTabInsertion }
 export type { HoveredTabDropTarget }
@@ -134,6 +138,7 @@ export function useTabDragSplit({
     releaseMissedEndFallback()
     setActiveDrag(null)
     clearHoveredDropTarget()
+    clearWorktreeTabDropHighlight()
     tabInsertion.clear()
     preDragActivationSnapshotRef.current = null
     dragGeometryRef.current = null
@@ -205,9 +210,10 @@ export function useTabDragSplit({
       if (!tabDragActiveRef.current) {
         return
       }
+      syncWorktreeTabDropHighlight(event, worktreeId)
       handleDragUpdate(event)
     },
-    [handleDragUpdate]
+    [handleDragUpdate, worktreeId]
   )
 
   const onDragOver = useCallback((_event: DragOverEvent) => {
