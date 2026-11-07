@@ -39,7 +39,7 @@ import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisi
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
-import { useWslHostUnavailableReason } from '../../../terminal-pane/use-wsl-host-unavailable-reason'
+import { useWslHostUnavailableReason } from '../../../../lib/wsl-host-availability'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

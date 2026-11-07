@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MANIFEST,
-  afterCacheRead,
+  awaitingManifest,
   createMobileWebShellSession,
   gates,
   run
@@ -11,7 +11,7 @@ const UNLISTED_WALL = { kind: 'wall', verdict: { kind: 'blocked', reason: 'page-
 
 describe('a manifest whose page does not serve this route walls instead of going native', () => {
   it('walls the desktop as too old for a route the bundle does not list', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: { ...MANIFEST, routes: [{ pathname: '/h/[hostId]/tasks', grants: [] }] }
     })
@@ -20,7 +20,7 @@ describe('a manifest whose page does not serve this route walls instead of going
   })
 
   it('walls this app as too old for a route listed with a grant it does not implement', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: {
         ...MANIFEST,
@@ -35,7 +35,7 @@ describe('a manifest whose page does not serve this route walls instead of going
   })
 
   it('walls the desktop as too old when it predates the routes field itself', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: { ...MANIFEST, routes: undefined }
     })
@@ -43,7 +43,7 @@ describe('a manifest whose page does not serve this route walls instead of going
   })
 
   it('answers the compat wall before the route, since an unreadable schema hides the route list', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: { ...MANIFEST, schemaVersion: 99, routes: [] }
     })
@@ -54,7 +54,7 @@ describe('a manifest whose page does not serve this route walls instead of going
   })
 
   it('walls a page below the floor as it is, whatever routes it lists', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: { ...MANIFEST, pageVersion: 0, routes: [] }
     })
@@ -75,7 +75,7 @@ describe('a manifest whose page does not serve this route walls instead of going
   })
 
   it('says the screen is unavailable when the manifest carries a pattern this shell cannot read', () => {
-    const step = run(afterCacheRead(null).session, {
+    const step = run(awaitingManifest(null).session, {
       type: 'manifest-read',
       manifest: { ...MANIFEST, routes: [{ pathname: '/h/[...a]/[...b]', grants: [] }] }
     })

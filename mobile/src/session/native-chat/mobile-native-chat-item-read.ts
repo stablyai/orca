@@ -1,5 +1,5 @@
 import { createContext, type ContextType } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { isAdmissibleAgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'

@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
@@ -95,7 +96,7 @@ describe('useMobileStructuredAgentSession transcript', () => {
       return null
     }
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
 

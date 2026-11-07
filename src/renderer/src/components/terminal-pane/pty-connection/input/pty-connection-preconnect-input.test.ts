@@ -65,7 +65,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
+vi.mock('../../titles/cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle }))
 
 vi.mock('sonner', () => ({ toast: { info: toastInfo } }))
 

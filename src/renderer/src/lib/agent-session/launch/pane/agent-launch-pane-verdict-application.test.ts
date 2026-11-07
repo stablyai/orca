@@ -31,7 +31,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 const applyClosedTerminalLeafNotice = vi.hoisted(() => vi.fn())
-vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice
 }))
 

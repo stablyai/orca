@@ -18,6 +18,14 @@ const activeLeafFile = [
   path.join(paneDirectory, 'terminal-layout-leaf-ids.ts')
 ].find(existsSync)
 assert(activeLeafFile, 'The checked-out revision must define active layout leaf resolution')
+const mergeCapturedLeafStateFile = [
+  path.join(paneDirectory, 'snapshots/merge-captured-leaf-state.ts'),
+  path.join(paneDirectory, 'merge-captured-leaf-state.ts')
+].find(existsSync)
+assert(
+  mergeCapturedLeafStateFile,
+  'The checked-out revision must define captured leaf state merging'
+)
 const sources = [readFileSync(0, 'utf8'), readFileSync(entry, 'utf8')]
 assert(sources.every((source) => source.includes('export function captureTerminalShutdownLayout')))
 const layoutFile = [
@@ -62,7 +70,7 @@ async function load(source) {
             return { path: existsSync(target) ? target : `${target}.ts` }
           })
           builder.onResolve({ filter: /(?:^|[/\\])merge-captured-leaf-state$/ }, () => ({
-            path: path.join(paneDirectory, 'merge-captured-leaf-state.ts')
+            path: mergeCapturedLeafStateFile
           }))
           builder.onResolve(
             { filter: /(?:^|[/\\])(?:terminal-layout-leaf-ids|terminal-layout-active-leaf)$/ },

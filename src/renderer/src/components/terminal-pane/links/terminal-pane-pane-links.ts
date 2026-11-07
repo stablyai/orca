@@ -21,11 +21,11 @@ import { handleOscLink } from './terminal-osc-link-routing'
 import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { readTerminalClipboardSelection } from '../clipboard/terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from '../clipboard/terminal-native-copy-gutter'
-import { installMouseHideWhileTyping } from '../mouse-hide-while-typing'
+import { installMouseHideWhileTyping } from '../input/pointer/mouse-hide-while-typing'
 import { isPrimarySelectionEnabled, setPrimarySelectionText } from '@/lib/primary-selection'
 import { formatTerminalUrlTooltip } from './terminal-url-tooltip'
 import { terminalSelectionExceedsPrimaryLimit } from '../input/selection/terminal-primary-selection-limit'
-import { seedStartupSessionRestoredBanner } from '../session-restored-banner-pane-state'
+import { seedStartupSessionRestoredBanner } from '../session-restore/session-restored-banner-pane-state'
 
 type PaneLinkContext = {
   pane: ManagedPane

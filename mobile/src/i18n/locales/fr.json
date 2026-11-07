@@ -1337,7 +1337,6 @@
       "connecting": "Connexion à l'ordinateur…",
       "emptyState": "Aucun fichier trouvé",
       "loadFailed": "Impossible de charger les fichiers",
-      "loadInterrupted": "Chargement du dossier interrompu",
       "title": "Fichiers",
       "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
       "waiting": "En attente de l'ordinateur…"
@@ -2047,13 +2046,11 @@
       "saveNote": "Enregistrer la note"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Impossible de charger les modifications",
       "committedChangesFailed": "Échec du chargement des modifications committées",
       "committedChangesUnavailable": "Modifications committées indisponibles",
       "committedDiffUnavailable": "Le diff des modifications committées est indisponible",
       "desktopUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour examiner les modifications sur mobile.",
       "diffLoadFailed": "Impossible de charger le diff",
-      "invalidSourceControlResponse": "La réponse du contrôle de code source est invalide",
       "reviewNotesLoadFailed": "Impossible de charger les notes de revue"
     },
     "diffReviewQueue": {

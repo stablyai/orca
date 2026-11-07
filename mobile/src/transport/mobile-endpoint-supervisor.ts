@@ -30,10 +30,6 @@ import {
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
-const DIRECT_OBSERVATION_MS = 30_000
-const MINIMUM_DWELL_MS = 60_000
-const FAILURE_COOLDOWN_MS = 60_000
-
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
@@ -58,12 +54,7 @@ export class MobileEndpointSupervisor {
     relay: MobileRelayEndpoint,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
-    this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
-      directSuccessesRequired: 3,
-      directObservationMs: DIRECT_OBSERVATION_MS,
-      failureCooldownMs: FAILURE_COOLDOWN_MS,
-      minimumDwellMs: MINIMUM_DWELL_MS
-    })
+    this.hysteresis = new MobileEndpointHysteresis(dependencies.now())
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.relayReconnect.reportRecoveryTo(logical)
@@ -73,7 +64,9 @@ export class MobileEndpointSupervisor {
       isStopped: () => this.stopped,
       isForeground: () => this.backgroundGrace.isForeground(),
       setForeground: (foreground) => this.setForeground(foreground),
-      scheduleDirectProbe: () => this.directProbe.schedule(0)
+      scheduleDirectProbe: () => this.directProbe.schedule(0),
+      readLocalNetwork: dependencies.readLocalNetwork,
+      onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true

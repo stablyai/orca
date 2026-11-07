@@ -1337,7 +1337,6 @@
       "connecting": "Conectando con el escritorio…",
       "emptyState": "No se encontraron archivos",
       "loadFailed": "No se pudieron cargar los archivos",
-      "loadInterrupted": "Carga de la carpeta interrumpida",
       "title": "Archivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000",
       "waiting": "Esperando al escritorio…"
@@ -2047,13 +2046,11 @@
       "saveNote": "Guardar nota"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "No se pudieron cargar los cambios",
       "committedChangesFailed": "No se pudieron cargar los cambios confirmados",
       "committedChangesUnavailable": "Cambios confirmados no disponibles",
       "committedDiffUnavailable": "El diff de los commits no está disponible",
       "desktopUpdateRequired": "Actualiza Orca en el escritorio para revisar los cambios en el móvil.",
       "diffLoadFailed": "No se pudo cargar el diff",
-      "invalidSourceControlResponse": "La respuesta del control de código fuente no es válida",
       "reviewNotesLoadFailed": "No se pudieron cargar las notas de revisión"
     },
     "diffReviewQueue": {

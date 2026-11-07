@@ -1,3 +1,4 @@
+import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
@@ -130,6 +131,10 @@ export function EditorContent({
       activeFile.diffSource === 'combined-uncommitted' ||
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
+
+  if (activeFile.mode === 'git-graph') {
+    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+  }
 
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails

@@ -34,6 +34,14 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
     }
   }
 
+  if (file.mode === 'git-graph') {
+    return {
+      copyText: null,
+      copyToastLabel: '',
+      pathLabel: translate('gitGraph.title', 'Git Graph'),
+      pathTitle: translate('gitGraph.title', 'Git Graph')
+    }
+  }
   if (file.mode === 'check-details') {
     const label =
       file.checkRunDetails?.check.name ??

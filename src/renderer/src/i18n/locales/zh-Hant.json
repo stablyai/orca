@@ -13378,7 +13378,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "尚無提交",
-            "781a8bcf7b": "正在載入圖表...",
             "d0fb0f4bf2": "重新整理提交記錄",
             "9f7535d22b": "引用是指向該確切提交的分支或標籤名稱。它們僅出現在 Git 具有該提交的命名引用的位置。",
             "9289ba0cb9": "什麼是引用？",
@@ -14580,7 +14579,6 @@
             "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "正在載入檔案…",
             "b2c3d4e5f6": "此提交沒有檔案變更",
             "c3d4e5f6a7": "一起開啟所有變更"
           },
@@ -18931,17 +18929,6 @@
           "reviewStatus": "查看每個工作樹的議題狀態、審查狀態與 CI 檢查",
           "managePullRequests": "不離開 Orca，即可閱讀、留言與合併 PR"
         }
-      },
-      "agyInstall": {
-        "open": "安裝",
-        "title": "安裝 Antigravity",
-        "description": "在終端機中按 Enter 執行官方安裝程式。關閉終端機會停止仍在執行的命令。",
-        "target": "安裝位置：{{location}}",
-        "thisDevice": "此裝置",
-        "terminal": "Antigravity 安裝程式",
-        "detected": "已在 PATH 中偵測到 Antigravity。安裝程式完成後請關閉終端機。",
-        "close": "關閉終端機",
-        "recheck": "重新偵測代理程式"
       }
     },
     "jiraIssueAssigneeField": {
@@ -23123,5 +23110,32 @@
     "discussionAction": "加入討論",
     "checkAction": "檢查相容性",
     "settingsStatus": "Orca {{version}} 需要 macOS {{macos}} 或以上版本。這是適用於此 Mac 的最新版本。"
+  },
+  "gitGraph": {
+    "copyHash": "複製提交雜湊",
+    "parents": "父提交",
+    "files": "檔案",
+    "currentBranch": "目前分支",
+    "allBranches": "所有分支",
+    "chosenBranches": "選定分支",
+    "searchRefs": "搜尋分支和標籤",
+    "oldServer": "此伺服器的 Orca 版本僅顯示目前分支",
+    "copyBranch": "複製分支名稱",
+    "switchWorkspace": "切換至工作區",
+    "workspaceClosed": "此分支已不再於其他工作區中開啟。",
+    "workspaceCheckFailed": "無法檢查此工作區。請在連線後重試。",
+    "refresh": "重新整理提交",
+    "branchTag": "分支 / 標籤",
+    "graph": "圖",
+    "resizeColumn": "調整圖形欄寬",
+    "message": "訊息",
+    "author": "作者",
+    "date": "日期",
+    "loadMore": "載入更多",
+    "noCommits": "尚無提交",
+    "historyChanged": "歷史記錄再次變更。請重新整理 Git 圖後重試。",
+    "loadFailed": "無法載入 Git 歷史記錄",
+    "updateHost": "請更新 {{host}} 上的 Orca 以開啟 Git 圖",
+    "title": "Git 圖"
   }
 }

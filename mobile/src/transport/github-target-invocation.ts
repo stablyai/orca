@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from './rpc-operation'
 import { rpcResultVariant } from './rpc-operation-result-reader'
 import type { RpcClient, SendRequestOptions } from './rpc-client'

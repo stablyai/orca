@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   installIpcPtyWindow,
   restorePtySpecWindow
-} from '../terminal-pane/pty-transport-test-harness'
+} from '../terminal-pane/pty-transport/ipc/pty-transport-test-harness'
 
 type StoreState = {
   repos: Partial<Repo>[]

@@ -1294,7 +1294,6 @@
       "connecting": "正在連線至電腦…",
       "emptyState": "找不到檔案",
       "loadFailed": "無法載入檔案",
-      "loadInterrupted": "資料夾載入中斷",
       "title": "檔案",
       "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
       "waiting": "正在等待電腦…"
@@ -1977,13 +1976,11 @@
       "saveNote": "儲存備註"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "無法載入變更",
       "committedChangesFailed": "載入已提交的變更失敗",
       "committedChangesUnavailable": "無法取得已提交的變更",
       "committedDiffUnavailable": "無法取得已提交的差異",
       "desktopUpdateRequired": "請更新 Orca 桌面版，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
-      "invalidSourceControlResponse": "原始碼控制回應無效",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
     "diffReviewQueue": {

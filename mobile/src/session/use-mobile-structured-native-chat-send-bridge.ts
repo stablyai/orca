@@ -87,6 +87,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
         holdUnconfirmed(created.clientMessageId, () => {
           handBack()
+          intent?.onHandBack?.()
           onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
         })
       }

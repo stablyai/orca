@@ -2,7 +2,7 @@ import type { HostTerminalStop } from '../terminals/terminal-actions'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import { createTestStore, makeRuntimeOwnedWorktree, makeTab, seedStore } from './store-test-helpers'
 import {
   applySleepRuntimeRpcDefault,

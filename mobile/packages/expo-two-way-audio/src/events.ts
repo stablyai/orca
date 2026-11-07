@@ -19,7 +19,6 @@ export interface AudioInterruptionEvent {
 export interface ExpoTwoWayAudioEventMap {
   onMicrophoneData: MicrophoneDataEvent
   onInputVolumeLevelData: VolumeLevelEvent
-  onOutputVolumeLevelData: VolumeLevelEvent
   onRecordingChange: RecordingChangeEvent
   onAudioInterruption: AudioInterruptionEvent
 }

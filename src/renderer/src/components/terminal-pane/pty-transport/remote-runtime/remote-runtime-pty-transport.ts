@@ -19,8 +19,8 @@ import {
 } from './input/remote-runtime-input-journal'
 import type { AcceptedInputOptions } from '../input/pty-preconnect-input-buffer'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
-import { isSshSignInPendingTerminalError } from '../../terminal-ssh-sign-in-error'
-import { terminalCreateThemeParams } from '../../terminal-view-attributes-publisher'
+import { isSshSignInPendingTerminalError } from '../../errors/terminal-ssh-sign-in-error'
+import { terminalCreateThemeParams } from '../../appearance/terminal-view-attributes-publisher'
 /* eslint-disable max-lines -- Why: remote PTY transport keeps lifecycle, JSON fallback, and binary stream wiring together so reconnect/destroy ordering stays testable as one behavior surface. */
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import {
@@ -72,7 +72,7 @@ import {
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getRemoteRuntimeTerminalMultiplexer } from '../../../../runtime/remote-runtime-terminal-multiplexer'
 import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/remote-runtime-terminal-snapshot-state'
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 import {
   hostRecordedExitCode,
   hostRecordsTerminalExit,

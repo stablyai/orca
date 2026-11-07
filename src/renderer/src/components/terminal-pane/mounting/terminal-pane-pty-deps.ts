@@ -3,7 +3,7 @@ import {
   clearDeferredSplitPaneHandoff,
   type DeferredSplitPaneHandoffHandle
 } from '../layout/split/deferred-split-pane-handoff'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
 

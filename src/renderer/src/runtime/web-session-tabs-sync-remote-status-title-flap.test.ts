@@ -16,7 +16,7 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests,
   resolveRendererOwnedAgentStatusTiming
-} from '../components/terminal-pane/renderer-owned-agent-status-registry'
+} from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
