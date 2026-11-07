@@ -31,15 +31,20 @@ installTerminalLinkTestEnvironment(doubles)
 
 const VIDEO = '~/work/project-rh/guides/presentation.mp4'
 const HOST_VIDEO = '/data/m/work/project-rh/guides/presentation.mp4'
+const NOTES = '~/work/project-rh/guides/notes.md'
+const HOST_NOTES = '/data/m/work/project-rh/guides/notes.md'
 
-function hostHoldsVideoInSibling(): void {
+function hostHoldsVideoInSibling(
+  absolutePath = HOST_VIDEO,
+  relativePath = 'guides/presentation.mp4'
+): void {
   runtimeEnvironmentCallMock.mockResolvedValue({
     id: 'rpc-1',
     ok: true,
     result: {
       worktree: 'wt-b',
-      relativePath: 'guides/presentation.mp4',
-      absolutePath: HOST_VIDEO,
+      relativePath,
+      absolutePath,
       exists: true,
       isDirectory: false
     },
@@ -110,16 +115,17 @@ describe('a home-relative path printed in a paired-server terminal', () => {
     await flushDoubleRaf()
   }
 
+  // Why: a plain click downloads a host's video to open with this computer's app; text opens in Orca.
   it('opens the file in the workspace the host says holds it', async () => {
-    hostHoldsVideoInSibling()
-    const links = await provideLinks('/data/m/work/project')
+    hostHoldsVideoInSibling(HOST_NOTES, 'guides/notes.md')
+    const links = await provideLinks('/data/m/work/project', `Saved ${NOTES}`)
 
     await click(links[0]!)
 
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        filePath: HOST_VIDEO,
-        relativePath: 'guides/presentation.mp4',
+        filePath: HOST_NOTES,
+        relativePath: 'guides/notes.md',
         worktreeId: 'wt-b'
       }),
       { forceContentReload: true }
