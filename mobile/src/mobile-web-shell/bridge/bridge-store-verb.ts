@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { BRIDGE_MAX_REPLY_BYTES } from './bridge-caps'
 
 // The page's device store: one verb whose action picks read or write, so each route spends one grant.
