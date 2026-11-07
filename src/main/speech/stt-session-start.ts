@@ -142,7 +142,7 @@ async function acquireSttEngine(
       throw new Error('dictation_model_busy')
     }
     if (conflicts.length > 0) {
-      await Promise.allSettled(conflicts.map((other) => other.stopPromise))
+      await Promise.allSettled(conflicts.map((other) => other.stopPromise ?? Promise.resolve()))
       continue
     }
     const current = state.engine

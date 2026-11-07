@@ -133,6 +133,7 @@ const stoppedReply = (worker: InstanceType<typeof MockWorker>) => ({
 })
 
 const readyModels = (): ModelManager =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads only getModelState and getModelDir.
   ({
     getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
     getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
