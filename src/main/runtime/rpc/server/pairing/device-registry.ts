@@ -5,6 +5,7 @@ import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import {
   isExchangeSignIn,
+  planForkedTicketRetirement,
   planTicketExchange,
   promoteExchangedTicket
 } from './pairing-ticket-exchange'
@@ -218,6 +219,19 @@ export class DeviceRegistry extends DeviceRegistryStore {
     this.adoptExternalEdits()
     const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
     this.devices = this.save(next, { durable: true })
+  }
+
+  /** After an authenticated key sign-in; a failed write is retried on the next one. */
+  retireForkedTicket(signedInDeviceId: string): void {
+    const next = planForkedTicketRetirement(this.devices, signedInDeviceId)
+    if (next) {
+      this.saveOrLog(
+        { durable: true },
+        'retire a pairing code a browser replaced',
+        this.devices,
+        next
+      )
+    }
   }
 
   /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
