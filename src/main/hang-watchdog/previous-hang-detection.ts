@@ -5,12 +5,9 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-b
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
+  previousHangDetectionMarkerPath,
   type HangDetectionMarker
 } from './hang-detection-marker'
-
-function previousMarkerPath(userDataPath: string): string {
-  return `${hangDetectionMarkerPath(userDataPath)}.previous`
-}
 
 export function preservePreviousHangDetection(userDataPath: string): void {
   if (!resolveObservabilityConsent().localFileEnabled) {
@@ -18,7 +15,7 @@ export function preservePreviousHangDetection(userDataPath: string): void {
   }
   try {
     // Keep the previous run's note safe from a new startup hang until its trace sink opens.
-    renameSync(hangDetectionMarkerPath(userDataPath), previousMarkerPath(userDataPath))
+    renameSync(hangDetectionMarkerPath(userDataPath), previousHangDetectionMarkerPath(userDataPath))
   } catch {
     // Missing or inaccessible markers must not prevent startup; retain any earlier pending note.
   }
@@ -28,12 +25,13 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
   if (!hasActiveTraceSink()) {
     return null
   }
-  const marker = consumeHangDetectionMarker(previousMarkerPath(userDataPath))
+  const marker = consumeHangDetectionMarker(previousHangDetectionMarkerPath(userDataPath))
   if (marker) {
     recordDurableCrashBreadcrumb('main_thread_hang_detected', {
       unresponsiveMs: marker.unresponsiveMs,
       previousPid: marker.parentPid,
-      selfRecovered: marker.selfRecovered
+      selfRecovered: marker.selfRecovered,
+      relaunched: marker.relaunched === true
     })
   }
   return marker

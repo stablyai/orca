@@ -97,7 +97,8 @@ async function runInternal() {
         parentPid: process.pid,
         markerPath,
         timeoutMs: TIMEOUT_MS,
-        checkIntervalMs: CHECK_INTERVAL_MS
+        checkIntervalMs: CHECK_INTERVAL_MS,
+        relaunchBundlePath: null
       }
     })
     worker.once('error', (error) => {

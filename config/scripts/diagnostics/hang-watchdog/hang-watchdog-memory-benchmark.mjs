@@ -126,7 +126,8 @@ function startWorker(markerPath, timeoutMs, checkIntervalMs) {
       parentPid: process.pid,
       markerPath,
       timeoutMs,
-      checkIntervalMs
+      checkIntervalMs,
+      relaunchBundlePath: null
     }
   })
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
