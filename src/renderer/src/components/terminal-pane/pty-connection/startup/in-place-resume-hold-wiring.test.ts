@@ -9,7 +9,9 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('../../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
+vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', () => ({
+  warnTerminalLifecycleAnomaly: vi.fn()
+}))
 vi.mock('../instrumentation/pty-connect-diagnostics', () => ({
   recordPtyConnectDiagnostic: vi.fn()
 }))

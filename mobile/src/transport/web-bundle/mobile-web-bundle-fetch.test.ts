@@ -162,6 +162,18 @@ describe('fetchMobileWebBundle', () => {
     expect(host.calls[0]!.params).toEqual({})
   })
 
+  it('reads windows from a manifest the caller already read, without asking for it again', async () => {
+    const host = bundleHost({ 'index.html': '<h1>orca</h1>' })
+
+    const fetched = await fetchMobileWebBundle({
+      client: host.client,
+      opened: { manifest: { ...host.manifest, pageVersion: 1 }, chunkBytes: 4 }
+    })
+
+    expect(new TextDecoder().decode(fetched.assets.get('index.html'))).toBe('<h1>orca</h1>')
+    expect(host.calls.map((call) => call.method)).not.toContain('mobileWeb.bundle.manifest')
+  })
+
   it('fails when a reassembled asset does not hash to the manifest entry', async () => {
     const host = bundleHost(
       { 'index.html': 'abcdef' },

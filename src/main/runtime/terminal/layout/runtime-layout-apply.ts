@@ -52,7 +52,7 @@ export async function applyWindowLayoutCommand(
     return { ok: false, code: 'wsl_move_in_progress' }
   }
   if (command.type === 'moveTabToWorkspace') {
-    return moveTabToWorkspace(store, hostIdsFor, command)
+    return moveTabToWorkspace(store, hostIdsFor, command, run)
   }
   if (command.type === 'renameEditorFiles' && command.alsoIn) {
     return renameEditorFilesInWorkspaces(store, hostIdsFor, command)
@@ -187,7 +187,8 @@ async function renameTabs(
 async function moveTabToWorkspace(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
-  command: CommandOf<'moveTabToWorkspace'>
+  command: CommandOf<'moveTabToWorkspace'>,
+  run?: LayoutCommandRunOptions
 ): Promise<LayoutApplyReply> {
   const [from] = hostIdsFor(command.workspace, null)
   const [to] = hostIdsFor(command.toWorkspace, null)
@@ -202,12 +203,16 @@ async function moveTabToWorkspace(
     if (!store.moveTabToWorkspaceAcrossPartitions) {
       throw new Error('layout_store_unavailable')
     }
-    return store.moveTabToWorkspaceAcrossPartitions(command, from, to)
+    return run
+      ? store.moveTabToWorkspaceAcrossPartitions(command, from, to, run)
+      : store.moveTabToWorkspaceAcrossPartitions(command, from, to)
   }
   if (!store.applyLayoutCommand) {
     throw new Error('layout_store_unavailable')
   }
-  return store.applyLayoutCommand(command, [from])
+  return run
+    ? store.applyLayoutCommand(command, [from], run)
+    : store.applyLayoutCommand(command, [from])
 }
 
 /** Rename disk-move paths across partitions in one durable write; paired-server ownership refuses the whole operation. */

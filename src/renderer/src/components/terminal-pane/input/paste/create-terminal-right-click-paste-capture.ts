@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
   claimTerminalRightClickPasteMouseDown,
   isTerminalRightClickPasteGesture
-} from '../../terminal-right-click-paste-gesture'
+} from './terminal-right-click-paste-gesture'
 
 export function createTerminalRightClickPasteCapture({
   rightClickToPaste,

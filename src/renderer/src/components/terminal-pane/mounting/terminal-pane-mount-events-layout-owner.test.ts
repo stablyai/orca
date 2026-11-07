@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import { installTerminalPaneMountEvents } from './terminal-pane-mount-events'
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,

@@ -8,7 +8,7 @@ import {
   findTerminalHandleTarget,
   focusRendererTerminalHandle
 } from './terminal-handle-links'
-import { extractOrchestrationTaskLinks } from '../../terminal-orchestration-task-links'
+import { extractOrchestrationTaskLinks } from './terminal-orchestration-task-links'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 

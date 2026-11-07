@@ -24,7 +24,7 @@ import {
 import type { TerminalLaunchResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-session/launch/background/agent-background-session-cleanup'
 import type { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import {

@@ -11,7 +11,7 @@ import {
   createManager,
   type MockTransport
 } from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type * as UseNotificationDispatchModule from '../../use-notification-dispatch'
+import type * as UseNotificationDispatchModule from '../../notifications/use-notification-dispatch'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -77,7 +77,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
 }))
 
@@ -158,7 +158,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('../connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
-      '../../use-notification-dispatch'
+      '../../notifications/use-notification-dispatch'
     )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)

@@ -1,6 +1,12 @@
 import type { AppState } from '../store/types'
 
-const EDITOR_SESSION_CONTENT_TYPES = new Set(['editor', 'diff', 'conflict-review', 'check-details'])
+const EDITOR_SESSION_CONTENT_TYPES = new Set([
+  'editor',
+  'diff',
+  'conflict-review',
+  'check-details',
+  'git-graph'
+])
 
 export function closeMobileSessionTabInStore(
   store: Pick<AppState, 'unifiedTabsByWorktree' | 'openFiles' | 'closeFile' | 'closeUnifiedTab'>,

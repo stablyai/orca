@@ -3,9 +3,9 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { recoverVisibleTerminalWindowWake } from './terminal-visibility-resume'
 import { repairPaneWebglCanvasDpr } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
 import { presentPaneViewport } from '@/lib/pane-manager/pane-viewport-present'
-import { recordTerminalFreezeBreadcrumb } from '../../terminal-freeze-breadcrumbs'
+import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 import type { IDisposable } from '@xterm/xterm'
-import { activePaneIsCoveredByNativeChat } from '../../native-chat-covered-pane'
+import { activePaneIsCoveredByNativeChat } from '../../chat/native-chat-covered-pane'
 
 type UseTerminalWindowWakeRecoveryArgs = {
   isVisible: boolean

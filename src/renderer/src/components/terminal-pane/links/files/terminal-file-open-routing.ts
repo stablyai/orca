@@ -1,5 +1,5 @@
 import type { FileOpenFailure } from './terminal-file-open-failure'
-import { downloadAndOpenRemoteTerminalFile } from '../../terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { isMissingRuntimePathError } from '@/runtime/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import {

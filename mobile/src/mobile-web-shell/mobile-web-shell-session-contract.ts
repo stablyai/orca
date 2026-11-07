@@ -10,7 +10,6 @@ import type {
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-// Wait for connecting so cache cannot flash before the host’s compatibility check; only settled unreachability opens it unchecked.
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
 export type MobileWebShellGates = {
@@ -73,6 +72,8 @@ export type MobileWebShellSessionState =
       readonly buildId: string
       readonly totalBytes: number
       readonly elapsedMs: number
+      // The document's own window, judged against every new connection's status.
+      readonly compat: MobileWebBundleCompatManifest
     }
   // Neither app can be blamed when the path is unknown locally or its manifest pattern is unreadable.
   | { readonly kind: 'route-unavailable' }
@@ -89,6 +90,8 @@ export type MobileWebShellSessionEffect =
   | { readonly kind: 'open-cache' }
   | { readonly kind: 'read-manifest' }
   | { readonly kind: 'download' }
+  // Download behind a running page; it commits at a later open-cache once no page reads the old build.
+  | { readonly kind: 'stage-update' }
   | {
       readonly kind: 'open-generation'
       readonly directory: string
@@ -187,6 +190,10 @@ export type MobileWebShellSession = {
   // Clear on flow entry so the notice cannot outlive the fallback it explains.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly requestedBuildId: string | null
+  // The offered build's window; the download fetches exactly the manifest read, so it is the activated build's.
+  readonly requestedCompat: MobileWebBundleCompatManifest | null
+  // An open verdict reached this flow's document: from then on it may have talked, so a blocked verdict walls rather than reloads.
+  readonly verdicted: boolean
   // Stamp effects/results with the incremented flow to reject superseded work.
   readonly flow: number
 }

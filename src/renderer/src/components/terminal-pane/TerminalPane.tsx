@@ -1,5 +1,5 @@
-import { TerminalPaneSurface } from './TerminalPaneSurface'
-import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
+import { TerminalPaneSurface } from './controller/TerminalPaneSurface'
+import { TerminalRestoringPlaceholder } from './mounting/TerminalRestoringPlaceholder'
 import { useTerminalPaneController } from './controller/use-terminal-pane-controller'
 import { useHostTerminalScrollbackHold } from './snapshots/use-host-terminal-scrollback-hold'
 import type { TerminalPaneProps } from './controller/terminal-pane-types'
