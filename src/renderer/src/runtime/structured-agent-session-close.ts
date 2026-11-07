@@ -1,5 +1,5 @@
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from './structured-agent-session-client'
 

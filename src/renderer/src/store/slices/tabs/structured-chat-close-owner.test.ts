@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
-import { createTestStore, makeWorktree, seedStore } from '../store-test-helpers'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
@@ -13,7 +14,7 @@ vi.mock('sonner', () => ({
 vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: mocks.beginClose
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

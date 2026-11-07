@@ -11,7 +11,7 @@ import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle
 } from './header-event-guards'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { RepoWslDistroStoppedIndicator } from './RepoWslDistroStoppedIndicator'
 
 /** Retain failed-scan rows with a warning and explicit retry instead of waiting for an incidental refresh. */

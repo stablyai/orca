@@ -9,13 +9,15 @@ const mocks = vi.hoisted(() => ({
   worker: Boolean(true)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => ({
     autoClose: { kept: false, closesAt: '2026-10-27T12:02:00Z' }
-  })),
+  }))
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: vi.fn(async () => {}),
   readLocalRuntimeCapabilitiesOrUnknown: () => ['orchestration.worker-keep-open.v1']
 }))

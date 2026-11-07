@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 
-// Grant-only edits keep the build id: use fresh grants online but preserve the downloaded manifest for offline entry. Test cold mounts sharing only the real store’s disk.
+// Grant-only edits keep the build id: cached bytes run under the grants they arrived with, online and offline. Test cold mounts sharing only the real store’s disk.
 type Doubles = {
   connection: { client: object | null; state: string }
   gates: {
@@ -29,6 +29,7 @@ const doubles = vi.hoisted((): Doubles => ({
 
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
   encodeBase64Url: () => 'session-id'
 }))
@@ -133,7 +134,7 @@ async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<Mounted
         createStore: () => createGenerationStore({ fileSystem }),
         mintSessionId: () => 'session-id',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       }
     })
     latest.state = session.state
@@ -174,12 +175,13 @@ describe('an offline cold start after a grant-only manifest edit', () => {
     doubles.manifest = null
   })
 
-  it('reads the grants the assets arrived with, whatever a later online read accepted', async () => {
+  it('reads the grants the assets arrived with, whatever a later online read says', async () => {
     const fileSystem = createFakeGenerationFileSystem()
     await cacheGeneration(fileSystem, manifestGranting(GRANTS_A))
     doubles.manifest = M2
+    // Cached bytes open first, under their own grants; the same build id stages nothing.
     const online = await mountRoute(fileSystem)
-    expect(online.routeGrants()).toEqual(GRANTS_A_PLUS_B)
+    expect(online.routeGrants()).toEqual(GRANTS_A)
     await online.unmount()
 
     goOffline()

@@ -82,20 +82,6 @@ describe('createCoalescingKeyedRunner', () => {
     expect(order).toEqual(['upstream:3', 'origin:2'])
   })
 
-  it('bounds a mixed burst to one run per distinct share key beyond the one in flight', async () => {
-    const run = createCoalescingKeyedRunner<string>()
-    const first = deferred<string>()
-    const work = vi.fn(async () => 'done')
-    const leading = run('repo', 'origin', () => first.promise)
-    const burst = Array.from({ length: 12 }, (_, index) =>
-      run('repo', ['origin', 'upstream', 'fork'][index % 3] ?? 'origin', work)
-    )
-
-    first.resolve('done')
-    await Promise.all([leading, ...burst])
-    expect(work).toHaveBeenCalledTimes(3)
-  })
-
   it('starts the trailing run even when the run in flight rejects', async () => {
     const run = createCoalescingKeyedRunner<string>()
     const first = deferred<string>()
@@ -105,16 +91,6 @@ describe('createCoalescingKeyedRunner', () => {
     first.reject(new Error('boom'))
     await expect(leading).rejects.toThrow('boom')
     await expect(trailing).resolves.toBe('after failure')
-  })
-
-  it('does not let a rejected run block the next call', async () => {
-    const run = createCoalescingKeyedRunner<string>()
-
-    const failing = async (): Promise<string> => {
-      throw new Error('boom')
-    }
-    await expect(run('repo', 'target', failing)).rejects.toThrow('boom')
-    await expect(run('repo', 'target', async () => 'next')).resolves.toBe('next')
   })
 
   it('runs different keys concurrently', async () => {

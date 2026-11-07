@@ -9,13 +9,16 @@ export function structuredAgentSessionPickEntersGoalMode(
   return item.kind === 'command' && item.name === 'goal' && (hostSetsGoals || item.builtin === true)
 }
 
-/** The draft after a pick that enters goal mode: the chip replaces the `/goal ` token the pick would insert. */
-export function structuredAgentSessionGoalModeDraft(
+/** A mode chip replaces only the picked command, preserving the surrounding draft. */
+export function structuredAgentSessionModePickDraft(
   draft: string,
   caret: number,
   item: NativeChatPickerItem
-): { draft: string; caret: number } {
+): { draft: string; caret: number } | null {
   const inserted = applyPickerSuggestion(draft, caret, item)
+  if (!inserted.insertedToken) {
+    return null
+  }
   const tokenStart = inserted.caret - item.token.length - 1
   return {
     draft: inserted.draft.slice(0, tokenStart) + inserted.draft.slice(inserted.caret),

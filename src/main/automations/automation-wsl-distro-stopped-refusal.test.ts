@@ -8,7 +8,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import type { Store } from '../persistence/loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import type * as UncGate from '../wsl/filesystem/wsl-unc-access-gate'
-import { AutomationService } from './service'
+import { startedAutomationService, tickAt } from './automation-service-tick.test-fixture'
 
 const blocked = vi.hoisted(() =>
   vi.fn(
@@ -65,21 +65,12 @@ function seedAutomation(store: Store, path = REPO_PATH): Automation {
   })
 }
 
-function attachedService(store: Store, send = vi.fn()): AutomationService {
-  const service = new AutomationService(store, { tickMs: 60_000, onAutomationsChanged: vi.fn() })
-  service.setWebContents({ isDestroyed: () => false, send })
-  return service
-}
-
-async function evaluateAt(store: Store, service: AutomationService, id: string, when: string) {
+async function evaluateAt(store: Store, id: string, when: string) {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === id)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  await vi.waitFor(() => {
-    service.setRendererReady()
-    expect(nextRunAt()).toBeGreaterThan(before ?? 0)
-  })
+  await tickAt(when)
+  await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
 beforeEach(() => {
@@ -100,13 +91,14 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const store = await createStore()
     const automation = seedAutomation(store)
-    const send = vi.fn()
-    const service = attachedService(store, send)
+    const launch = vi.fn()
+    const service = startedAutomationService(store, launch)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-14T09:01:00')
+    service.stop()
 
-    // Repeated stopped ticks fold into one skip, and nothing reached the window.
+    // Repeated stopped ticks fold into one skip, and nothing launched.
     const runs = store.listAutomationRuns(automation.id)
     expect(runs).toHaveLength(1)
     expect(runs[0]).toMatchObject({
@@ -115,7 +107,7 @@ describe('a scheduled automation on a stopped WSL distro (E9)', () => {
       errorCode: 'wslDistroStopped',
       errorParams: { distro: 'Ubuntu' }
     })
-    expect(send).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
     expect(blocked).toHaveBeenCalledWith(REPO_PATH, undefined)
   })
 })

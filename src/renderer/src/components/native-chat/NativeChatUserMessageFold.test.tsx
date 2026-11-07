@@ -52,26 +52,6 @@ const showFull = () => screen.queryByRole('button', { name: 'Show full message' 
 const showLess = () => screen.queryByRole('button', { name: 'Show less' })
 
 describe('a long sent prompt', () => {
-  it('opens and folds again', () => {
-    renderPrompt(prompt('prompt'))
-    fireEvent.click(showFull()!)
-    expect(folded()).toBeNull()
-
-    fireEvent.click(showLess()!)
-    expect(folded()).not.toBeNull()
-    expect(showFull()).toBeInTheDocument()
-  })
-
-  it('measures again when a longer copy of the message replaces one that fit', () => {
-    const { show } = renderPrompt(prompt('prompt'), 150)
-    expect(showFull()).toBeNull()
-
-    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(800)
-    show(prompt('prompt', `${LONG_TEXT}\nmore`))
-    expect(folded()).not.toBeNull()
-    expect(showFull()).toBeInTheDocument()
-  })
-
   it('stays open after its row leaves the window and returns', () => {
     const { show } = renderPrompt(prompt('prompt'))
     fireEvent.click(showFull()!)

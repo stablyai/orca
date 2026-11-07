@@ -2,30 +2,30 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { holdNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
-} from '@/lib/pending-worktree-creation'
-import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
-import {
-  NativeChatComposer,
-  type NativeChatComposerHandle
-} from '@/components/native-chat/NativeChatComposer'
-import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/native-chat-composer-types'
+} from '@/lib/workspace/creation/pending-worktree-creation'
+import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
+import type {
+  NativeChatComposerHandle,
+  NativeChatStructuredComposerTransport
+} from '@/components/native-chat/native-chat-composer-types'
 import { useNativeChatComposerError } from '@/components/native-chat/use-native-chat-composer-notice'
 import type { NativeChatComposerNotice } from '@/components/native-chat/native-chat-composer-notice'
-import { NativeChatEmptyState } from '@/components/native-chat/NativeChatEmptyState'
+import { NativeChatEmptyState } from '@/components/native-chat/host-access/NativeChatEmptyState'
 import { NativeChatUserMessageRow } from '@/components/native-chat/NativeChatUserMessageRow'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
   nativeChatTranscriptOuterClass
-} from '@/components/native-chat/native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/use-native-chat-store-appearance-style'
+} from '@/components/native-chat/appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'

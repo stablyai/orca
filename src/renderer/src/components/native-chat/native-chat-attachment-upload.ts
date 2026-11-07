@@ -14,11 +14,11 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
@@ -28,7 +28,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-attachments'
 import type { AppState } from '@/store/types'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
-import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../lib/structured-chat-tab-index'
 
 /** The paired host validates every stored attachment path when admitting a structured send. */
 export type NativeChatRuntimeSessionAttachmentOwner = {

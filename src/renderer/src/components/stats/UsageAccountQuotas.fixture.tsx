@@ -42,3 +42,40 @@ export const reportedWindows = defineFixture({
     </div>
   )
 })
+
+export const savedProviderAccounts = defineFixture({
+  width: 800,
+  render: () => (
+    <div className="@container bg-background p-5">
+      <UsageAccountQuotas
+        accounts={{
+          claude: { accounts: [], activeAccountId: null },
+          codex: { accounts: [], activeAccountId: null },
+          rateLimits: null
+        }}
+        rateLimits={createEmptyRateLimitState({
+          muse: quota('muse', 24),
+          antigravity: quota('antigravity', 31),
+          antigravityAccounts: [
+            {
+              accountId: 'work',
+              email: 'work@example.test',
+              active: true,
+              rateLimits: quota('antigravity', 31)
+            },
+            {
+              accountId: 'personal',
+              email: 'personal@example.test',
+              active: false,
+              rateLimits: quota('antigravity', 64)
+            },
+            { accountId: 'unread', email: 'unread@example.test', active: false, rateLimits: null }
+          ]
+        })}
+        ownerLabel="Build server"
+        onRefresh={() => {}}
+        onManage={() => {}}
+      />
+    </div>
+  )
+})

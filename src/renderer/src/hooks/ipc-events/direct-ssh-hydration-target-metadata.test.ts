@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
@@ -39,6 +39,7 @@ function stubWindow(ssh: SshApiStub): void {
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
         onDetectedPortsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onStateChanged: (handler: (data: { targetId: string; state: unknown }) => void) => {
           onStateChangedHandler = handler
           return () => {}

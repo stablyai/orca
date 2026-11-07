@@ -8,8 +8,8 @@ import { buildCmdJBrowserNavigationAction } from '../cmd-j/browser-navigation-ac
 import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard
-} from '@/lib/worktree-palette-create-action'
-import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
+} from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
+import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import { useAppStore } from '@/store/index'
 import { useWorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
@@ -24,13 +24,13 @@ import type { QuickActionPaletteItem } from './worktree-jump-palette-model'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -42,7 +42,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 const { openWorkspaceBrowserTab } = vi.hoisted(() => ({ openWorkspaceBrowserTab: vi.fn() }))
-vi.mock(import('@/lib/workspace-browser-tab-open'), async (importOriginal) => ({
+vi.mock(import('@/lib/browser/workspace/workspace-browser-tab-open'), async (importOriginal) => ({
   ...(await importOriginal()),
   openWorkspaceBrowserTab
 }))

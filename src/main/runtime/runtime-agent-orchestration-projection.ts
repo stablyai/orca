@@ -7,17 +7,17 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from './terminal/records/runtime-terminal-state-records'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   buildWorkerAttentionContext,
   projectWorkerAttentionContext
-} from './orchestration/worker-attention-context'
+} from './orchestration/workers/reports/worker-attention-context'
 import { worktreeIdsEqual } from '../../shared/worktree/id'
-import type { AgentSessionRecordReader } from './orchestration/structured-session-lineage'
+import type { AgentSessionRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { createOrchestrationProjectionScope } from './runtime-agent-orchestration-scope'
 import { isRecentPresentationDispatch } from './orchestration/db/dispatch-context/dispatch-lookup'
 import { currentRunCoordinatorOrcaSessionId } from './orchestration/db/runs/run-coordinator-orca-session'
-import type { DispatchContextRow } from './orchestration/types'
+import type { DispatchContextRow } from './orchestration/db/orchestration-records'
 import type { PtyPaneOf } from './terminal/surface/pty-pane-query'
 
 export type RuntimeAgentOrchestrationDependencies = {

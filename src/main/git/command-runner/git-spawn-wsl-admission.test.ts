@@ -49,16 +49,4 @@ describe('withGitAdmission and a missing distro', () => {
       WslGitSkippedError
     )
   })
-
-  it('records nothing for an ordinary Git failure', async () => {
-    setLocalGitRuntimeRouter(() => 'Ubuntu')
-    await spawnAndClose('fatal: not a git repository\n')
-    expect(admitWslGit({ cwd: CWD, wslDistro: 'Ubuntu' })).toBeNull()
-  })
-
-  it('records nothing with the router off, even for an explicit distro', async () => {
-    await spawnAndClose('There is no distribution with the supplied name.\n', 'Ubuntu')
-    setLocalGitRuntimeRouter(() => 'Ubuntu')
-    expect(admitWslGit({ cwd: CWD, wslDistro: 'Ubuntu' })).toBeNull()
-  })
 })

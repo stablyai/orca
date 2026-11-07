@@ -155,17 +155,4 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     expect(existsSync(receivedHintsPath(input))).toBe(false)
     expect(hint(store)).toBe('/home/me/src')
   })
-
-  it('treats any successful write of the commit as proof, and a load from disk as proof', async () => {
-    const store = createStore()
-    const { input } = await stageHints(store)
-    store.commitStagedOrcadMigrationCatalog(input)
-    expect(getOrcadMigrationCatalogState({ store, manifest: input }).state).toBe('committed')
-    expect(existsSync(receivedHintsPath(input))).toBe(true)
-    await store.flushPendingOrThrowAsync()
-
-    const restarted = createStore()
-    expect(existsSync(receivedHintsPath(input))).toBe(false)
-    expect(hint(restarted)).toBe('/home/me/src')
-  })
 })

@@ -6,20 +6,20 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 
 import type { Tab } from '../../../../shared/tab-types'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
-import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
+import { makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
 import {
   makeFolderWorkspace,
   makeUnifiedTab
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 
 import * as history from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
-import type { NativeChatCliForkPreparation } from '@/lib/native-chat-cli-fork-preparation'
+import type { NativeChatCliForkPreparation } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 const mocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('./NativeChatView', async () => {
@@ -33,14 +33,16 @@ vi.mock('./NativeChatView', async () => {
     )
   }
 })
-vi.mock('@/lib/workspace-tab-commands', () => ({ dispatchWorkspaceTabCommand: mocks.close }))
-vi.mock('@/lib/native-chat-cli-fork-preparation', () => ({
+vi.mock('@/lib/workspace/tabs/workspace-tab-commands', () => ({
+  dispatchWorkspaceTabCommand: mocks.close
+}))
+vi.mock('@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation', () => ({
   prepareNativeChatCliFork: mocks.prepare
 }))
 vi.mock('@/lib/launch-ai-vault-session-and-reveal', () => ({
   launchAiVaultSessionAndReveal: mocks.launch
 }))
-vi.mock('@/lib/ai-vault-session-fork-startup', () => ({
+vi.mock('@/lib/agent-session/resume/history/ai-vault-session-fork-startup', () => ({
   assertAiVaultCopiedSessionLaunchAllowed: () => {},
   buildAiVaultForkStartupForWorktree: () => ({ command: 'fixture-fork' })
 }))

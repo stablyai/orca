@@ -3,22 +3,22 @@ import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publi
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
-import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { LinearComment } from '../../../shared/linear/issue-types'
-import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
+import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
 import {
   initLinearIssueEditState,
   type LinearItemDrawerProps,
   type LinearLocalComment
 } from '@/components/linear-item-drawer-types'
 import { renderLinearItemDrawerSheet } from '@/components/linear-item-drawer-sheet'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'

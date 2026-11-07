@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeTerminalChunk } from '../terminal-ansi-normalization'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
+import {
+  buildRestoredTerminalTailSeed,
+  MAX_RESTORE_TAIL_SEED_CHARS
+} from './terminal-tail-restore-seed'
 
 import { MAX_TAIL_PARTIAL_CHARS } from './terminal-tail-limits'
 import {
@@ -46,6 +50,35 @@ describe('terminal tail CRLF chunk boundaries', () => {
       }
     }
   )
+
+  it('ends lines at CR CR LF, the sequence raw-mode programs emit', async () => {
+    const ptyId = 'pty-cr-cr-lf'
+    const { runtime, leaf } = runtimeWithLeaf(ptyId)
+    try {
+      runtime.onPtyData(ptyId, 'first\r\r\nsecond\r\x1b[0m\r\nthird\r', 1)
+      runtime.onPtyData(ptyId, '\r', 2)
+      runtime.onPtyData(ptyId, '\n', 3)
+      runtime.onPtyData(ptyId, 'fourth\r', 4)
+      runtime.onPtyData(ptyId, '\x1b[0m', 5)
+      runtime.onPtyData(ptyId, '\r\n', 6)
+      const lines = ['first', 'second', 'third', 'fourth']
+      expect(readPtyTail(runtime, ptyId)).toEqual(lines)
+      expect(leaf.tailTranscriptBuffer).toEqual(lines)
+      expect(leaf.tailPendingAnsi).toBe('')
+    } finally {
+      await runtime.onPtyExit(ptyId, 0)
+    }
+  })
+
+  it('restores without a blank first row when the cut lands before CR CR LF', () => {
+    // The kept suffix starts exactly at CR CR LF.
+    const lineCount = Math.floor((MAX_RESTORE_TAIL_SEED_CHARS - 3) / 5)
+    const filler = 'x'.repeat(MAX_RESTORE_TAIL_SEED_CHARS - 3 - lineCount * 5)
+    const suffix = `\r\r\n${filler}${'line\n'.repeat(lineCount)}`
+    expect(suffix).toHaveLength(MAX_RESTORE_TAIL_SEED_CHARS)
+    const seed = buildRestoredTerminalTailSeed(`earlier output${suffix}`)
+    expect(seed?.linesTotal).toBe(lineCount)
+  })
 
   it('does not erase the final partial line on process exit', async () => {
     const ptyId = 'pty-crlf-exit'

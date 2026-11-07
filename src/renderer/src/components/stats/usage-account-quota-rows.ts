@@ -1,10 +1,11 @@
 import type {
+  AntigravityAccountUsage,
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../../../../shared/rate-limit-types'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   buildClaudeStatusSwitchGroups,
   normalizeClaudeStatusRuntimeTarget
@@ -14,6 +15,7 @@ import {
   normalizeCodexStatusRuntimeTarget
 } from '../status-bar/status-bar-codex-accounts'
 import { translate } from '@/i18n/i18n'
+import { USAGE_PROVIDER_KEYS } from '../status-bar/owner-usage-rate-limits'
 import {
   getVisibleUsageProvider,
   type UsageProviderSettings
@@ -99,6 +101,33 @@ function managedQuotaRows({
   )
 }
 
+function antigravityQuotaRows(
+  accounts: AntigravityAccountUsage[],
+  unverifiable: boolean,
+  ownerLabel?: string
+): UsageAccountQuotaRow[] {
+  return accounts.map((account) => ({
+    key: `antigravity:${account.accountId}`,
+    identity:
+      account.email ??
+      translate('auto.components.status.bar.antigravity.unknownAccount', 'Google account'),
+    runtimeLabel: ownerLabel,
+    active: account.active,
+    provider:
+      account.rateLimits && !unverifiable
+        ? account.rateLimits
+        : {
+            provider: 'antigravity',
+            session: null,
+            weekly: null,
+            status: 'unavailable',
+            updatedAt: account.rateLimits?.updatedAt ?? 0,
+            error: null,
+            ...(unverifiable ? { usageMetadata: { unverifiableOwner: true } } : {})
+          }
+  }))
+}
+
 export function buildUsageAccountQuotaRows(
   limits: RateLimitState,
   accounts: ProviderAccountsSnapshot | null,
@@ -151,15 +180,11 @@ export function buildUsageAccountQuotaRows(
   return [
     ...claude,
     ...codex,
-    ...[
-      limits.gemini,
-      limits.opencodeGo,
-      limits.kimi,
-      limits.minimax,
-      limits.antigravity,
-      limits.grok,
-      limits.cursor,
-      limits.zcode
-    ].flatMap(fallback)
+    ...(limits.antigravityAccounts?.length
+      ? antigravityQuotaRows(limits.antigravityAccounts, unverifiable, ownerLabel)
+      : fallback(limits.antigravity)),
+    ...USAGE_PROVIDER_KEYS.filter(
+      (key) => key !== 'claude' && key !== 'codex' && key !== 'antigravity'
+    ).flatMap((key) => fallback(limits[key]))
   ]
 }

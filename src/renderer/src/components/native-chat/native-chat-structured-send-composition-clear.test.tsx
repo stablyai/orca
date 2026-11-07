@@ -8,6 +8,8 @@ import type * as nativeChatAgentProfiles from '../../../../shared/native-chat/na
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
   translate: (_key: string, fallback: string) => fallback
@@ -37,7 +39,7 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
 vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
@@ -54,14 +56,14 @@ vi.mock('./native-chat-runtime-send', () => ({
 vi.mock('./native-chat-runtime-image-send', () => ({
   sendNativeChatMessageWithImageAttachments: vi.fn()
 }))
-vi.mock('./claude-model-switch-confirmation', () => ({
+vi.mock('./session/options/terminal/claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn()
 }))
 vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (importOriginal) => ({
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({
+vi.mock('./telemetry/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),

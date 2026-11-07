@@ -31,11 +31,17 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   ...moduleFactories.structuredAgentSessionClient(),
   subscribeStructuredAgentSessionStatus: transport.subscribe
 }))
-vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
-vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
-vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
-vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
-vi.mock('./native-chat-image-runtime-context', () => ({
+vi.mock('./session/structured/use-structured-agent-session', () =>
+  moduleFactories.useStructuredAgentSession()
+)
+vi.mock('./appearance/use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
+vi.mock('./links/actions/use-native-chat-file-link-context', () =>
+  moduleFactories.useNativeChatFileLinkContext()
+)
+vi.mock('./links/actions/use-native-chat-file-link-click', () =>
+  moduleFactories.useNativeChatFileLinkClick()
+)
+vi.mock('./media/images/native-chat-image-runtime-context', () => ({
   useNativeChatImageRuntimeContext: () => ({
     settings: null,
     worktreeId: 'shared-workspace',
@@ -43,22 +49,22 @@ vi.mock('./native-chat-image-runtime-context', () => ({
   })
 }))
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
-vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
-vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
-vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
+vi.mock('./host-access/NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
+vi.mock('./prompts/NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+vi.mock('./prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 vi.mock('./NativeChatPaneFileDropSurface', () => ({
   NativeChatPaneFileDropSurface: ({ children }: { children: ReactNode }) => children
 }))
 vi.mock('../tab-group/RetainedPaneHost', () => ({
   RetainedPaneHost: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   focusRendererTerminalHandle: transport.focusRenderer
 }))
 
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests

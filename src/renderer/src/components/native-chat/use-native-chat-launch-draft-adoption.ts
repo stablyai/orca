@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
+import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import {
   launchDraftResolvedByTranscript,
@@ -10,7 +10,7 @@ import {
 import {
   isNativeChatTranscriptUnsettled,
   type ReadState
-} from './native-chat-live-session-contract'
+} from './session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 import {
   composerDraftWithTerminalSeed,

@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastError: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focusRenderer,
   focusRuntimeTerminalHandle: mocks.focusRuntime
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
@@ -25,9 +25,9 @@ vi.mock('sonner', async (original) => ({
 }))
 
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'
 import {
   agentMessageSenderOpens,

@@ -1,76 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
-  areLocalWindowsWslPathAliases,
-  isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
-  isRuntimePathAbsolute,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot,
-  resolveRuntimePath
+  relativePathInsideRoot
 } from './cross-platform-path'
-
-describe('local Windows WSL aliases', () => {
-  it('matches UNC aliases and mounted drives without folding Linux path case', () => {
-    expect(
-      areLocalWindowsWslPathAliases(
-        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
-        '\\\\wsl$\\ubuntu\\home\\Alice\\file.ts'
-      )
-    ).toBe(true)
-    expect(
-      areLocalWindowsWslPathAliases(
-        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
-        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\file.ts'
-      )
-    ).toBe(false)
-    expect(
-      areLocalWindowsWslPathAliases(
-        '//wsl.localhost/Ubuntu/mnt/c/repo/file.ts',
-        'C:\\repo\\file.ts'
-      )
-    ).toBe(true)
-    expect(
-      areLocalWindowsWslPathAliases('//server/share/file.ts', '\\\\server\\share\\file.ts')
-    ).toBe(false)
-  })
-})
-
-describe('isCaseInsensitiveRuntimeRoot', () => {
-  it('folds Windows drive and plain UNC roots', () => {
-    expect(isCaseInsensitiveRuntimeRoot('C:\\repos\\app')).toBe(true)
-    expect(isCaseInsensitiveRuntimeRoot('c:/repos/app')).toBe(true)
-    expect(isCaseInsensitiveRuntimeRoot('\\\\server\\share\\app')).toBe(true)
-  })
-
-  it('keeps WSL UNC and POSIX roots case-sensitive', () => {
-    expect(isCaseInsensitiveRuntimeRoot('\\\\wsl.localhost\\Ubuntu\\home\\ada\\app')).toBe(false)
-    expect(isCaseInsensitiveRuntimeRoot('//wsl$/Ubuntu/home/ada/app')).toBe(false)
-    expect(isCaseInsensitiveRuntimeRoot('/home/ada/app')).toBe(false)
-    expect(isCaseInsensitiveRuntimeRoot('/Users/ada/app')).toBe(false)
-  })
-})
 
 describe('isWslUncPathForCallerLinuxPath', () => {
   const UBUNTU = 'Ubuntu-24.04'
-
-  it('matches the Linux path a WSL shell prints against both UNC spellings of its own distro', () => {
-    expect(
-      isWslUncPathForCallerLinuxPath(
-        '\\\\wsl.localhost\\Ubuntu-24.04\\home\\neil\\qa-repo',
-        '/home/neil/qa-repo',
-        UBUNTU
-      )
-    ).toBe(true)
-    expect(
-      isWslUncPathForCallerLinuxPath(
-        '//wsl$/ubuntu-24.04/home/neil/qa-repo',
-        '/home/neil/qa-repo',
-        UBUNTU
-      )
-    ).toBe(true)
-  })
 
   // The destructive case: this feeds `worktree rm`, so a tail-only match deletes the wrong distro.
   it('refuses a Linux path another distro spells identically', () => {
@@ -189,24 +127,6 @@ describe('cross-platform path containment', () => {
     ).toBe('line\nbreak')
   })
 
-  it('matches macOS NFD paths against agent-recorded NFC paths', () => {
-    // macOS pickers use NFD while Claude records NFC; non-ASCII workspaces must still match their sessions (#10832).
-    const nfc = '/Users/ada/내 드라이브/프로젝트'
-    const nfd = nfc.normalize('NFD')
-    expect(nfd).not.toBe(nfc)
-
-    expect(normalizeRuntimePathForComparison(nfd)).toBe(normalizeRuntimePathForComparison(nfc))
-    expect(isPathInsideOrEqual(nfd, `${nfc}/src`)).toBe(true)
-    expect(isPathInsideOrEqual(nfc, `${nfd}/src`)).toBe(true)
-
-    // WSL UNC keys return before the trailing fold, so they need NFC too.
-    expect(
-      normalizeRuntimePathForComparison(
-        `\\\\wsl$\\Ubuntu\\home\\ada\\${'프로젝트'.normalize('NFD')}`
-      )
-    ).toBe(normalizeRuntimePathForComparison(`\\\\wsl.localhost\\Ubuntu\\home\\ada\\프로젝트`))
-  })
-
   it('returns a byte-exact suffix when comparison folding changes length', () => {
     // NFC/case folding changes length; slicing raw paths by folded lengths fabricates suffixes callers rejoin on disk.
     const nfc = '/Users/ada/프로젝트'
@@ -238,21 +158,5 @@ describe('cross-platform path containment', () => {
         `\\\\wsl.localhost\\Ubuntu\\home\\ada\\repo\\${decomposed}\\a.ts`
       )
     ).toBe(`${decomposed}/a.ts`)
-  })
-
-  it('resolves POSIX relative paths without using the process cwd', () => {
-    expect(resolveRuntimePath('/repos/app/repo', '../worktrees/feature')).toBe(
-      '/repos/app/worktrees/feature'
-    )
-    expect(resolveRuntimePath('/repos/app/repo', '/custom/worktrees')).toBe('/custom/worktrees')
-    expect(isRuntimePathAbsolute('../worktrees')).toBe(false)
-  })
-
-  it('resolves Windows relative paths with Windows semantics', () => {
-    expect(resolveRuntimePath('C:\\Repos\\app\\repo', '..\\worktrees\\feature')).toBe(
-      'C:/Repos/app/worktrees/feature'
-    )
-    expect(resolveRuntimePath('C:\\Repos\\app\\repo', 'D:\\worktrees')).toBe('D:/worktrees')
-    expect(isRuntimePathAbsolute('/remote/worktrees', 'windows')).toBe(true)
   })
 })

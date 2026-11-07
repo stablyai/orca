@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { CodexManagedAccountSummary } from '../../../../shared/managed-account-types'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { UsageAccountQuotas, UsageAccountQuotaCard } from './UsageAccountQuotas'
 import { buildUsageAccountQuotaRows } from './usage-account-quota-rows'
 
@@ -162,6 +162,54 @@ describe('account quota coverage', () => {
     expect(screen.getByTestId('usage-quota-coverage')).toHaveTextContent(
       'Other providers show the current account only'
     )
+  })
+
+  it('shows Muse and each reported Antigravity account without duplicating the active account', () => {
+    const rateLimits = createEmptyRateLimitState({
+      muse: { ...quota(12, 'plus'), provider: 'muse' },
+      antigravity: { ...quota(31, 'plus'), provider: 'antigravity' },
+      antigravityAccounts: [
+        {
+          accountId: 'active',
+          email: 'active@example.test',
+          active: true,
+          rateLimits: { ...quota(31, 'plus'), provider: 'antigravity' }
+        },
+        {
+          accountId: 'saved',
+          email: 'saved@example.test',
+          active: false,
+          rateLimits: { ...quota(64, 'plus'), provider: 'antigravity' }
+        },
+        { accountId: 'unread', email: 'unread@example.test', active: false, rateLimits: null }
+      ]
+    })
+    render(
+      <UsageAccountQuotas
+        rateLimits={rateLimits}
+        ownerLabel="Build server"
+        onRefresh={() => {}}
+        onManage={() => {}}
+      />
+    )
+    const cards = screen.getAllByTestId('usage-quota-antigravity')
+    expect(cards).toHaveLength(3)
+    expect(cards[0]).toHaveTextContent('active@example.test')
+    expect(cards[0]).toHaveTextContent('31% used')
+    expect(cards[1]).toHaveTextContent('saved@example.test')
+    expect(cards[1]).toHaveTextContent('64% used')
+    expect(cards[2]).toHaveTextContent('unread@example.test')
+    expect(within(cards[2]).queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(screen.getByTestId('usage-quota-muse')).toHaveTextContent('12% used')
+    const unavailable = buildUsageAccountQuotaRows(rateLimits, null, true).filter(
+      (row) => row.provider.provider === 'antigravity'
+    )
+    expect(unavailable).toHaveLength(3)
+    expect(
+      unavailable.every(
+        (row) => row.provider.session === null && row.provider.usageMetadata?.unverifiableOwner
+      )
+    ).toBe(true)
   })
 
   it('warns about incomplete coverage when retained local accounts cannot be verified', () => {

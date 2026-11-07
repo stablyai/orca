@@ -5,9 +5,9 @@ import type {
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
-import { requestPluginInstallCounts } from '@/store/plugin-install-counts'
+import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =

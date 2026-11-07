@@ -1,5 +1,10 @@
-import type { AppState } from '@/store'
-import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -12,10 +17,10 @@ import { describePairedServerHosts } from '../../../../shared/remote-runtime/hos
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
 import { lineageStoreKeyOfRow } from '../../../../shared/worktree/cross-store-lineage-resolution'
 import { validCrossStoreLineage } from '../../../../shared/worktree/cross-store-lineage-records'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderLineageEdgeOf } from '../../../../shared/worktree/folder-lineage-parents'
 
 /** The paired-server rows the window fetched itself, keyed by host-qualified id, for these hosts. */
 export function readWindowPairedServerRows(
@@ -26,15 +31,16 @@ export function readWindowPairedServerRows(
     | 'repos'
     | 'worktreeLineageById'
     | 'crossStoreLineageByStoreKey'
+    | 'workspaceLineageByChildKey'
   >,
   hostIds: ReadonlySet<string>
 ): Map<string, PairedServerWorkspaceRow> {
   const rows = new Map<string, PairedServerWorkspaceRow>()
-  const repoById = getRepoMapFromState(state)
+  const repoById = getIndexedRepoMap(state.repos)
   // The server sends only edges its own check keeps, so the window checks its copy the same way.
   const checkedLineageByKey = new Map<string, WorktreeLineage | null>()
   for (const hostId of hostIds) {
-    const hostWorktrees = getAllWorktreesFromState(state).filter(
+    const hostWorktrees = getIndexedAllWorktrees(selectWorktreesByRepo(state)).filter(
       (worktree) => worktree.hostId === hostId
     )
     for (const worktree of projectResolvedWorktreeLineage(
@@ -58,11 +64,17 @@ export function readWindowPairedServerRows(
         ? undefined
         : validCrossStoreLineage(state.crossStoreLineageByStoreKey[storeKey])[
             worktreeWorkspaceKey(worktree.id)
-          ]
+          ],
+      kind === 'git'
+        ? folderLineageEdgeOf(
+            state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)],
+            worktree.instanceId
+          )
+        : undefined
     )
     rows.set(row.key, row)
   }
-  for (const worktree of getAllWorktreesFromState(state)) {
+  for (const worktree of getIndexedAllWorktrees(selectWorktreesByRepo(state))) {
     add(worktree, 'git')
   }
   for (const folder of selectFolderWorkspaces(state) ?? []) {

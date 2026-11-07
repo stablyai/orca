@@ -6,14 +6,14 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../shared/constants'
 import { RUNTIME_CAPABILITIES } from '../../../shared/protocol-version'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import NewWorkspaceComposerModal from './NewWorkspaceComposerModal'
 import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspace-composer-card-props'
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentPickerDraft } from '../../../shared/agent-launch/picker/agent-launch-picker'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const evidence = vi.hoisted(() => {
   const trace: {
@@ -72,7 +72,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
         }
       : { seedOptions: {} }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async () => ({
     agents: [
       { agent: 'claude', capabilities: {} },

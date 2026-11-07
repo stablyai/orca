@@ -16,16 +16,16 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeCapability } from '../../shared/protocol-version'
-import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
+import { attachFingerprintFields } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
+import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-sessions/structured-agent-session'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './agent-session/structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
 
 export const SESSION = 'session-integration-1'

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import type * as HostPersistence from '@/lib/workspace-session-host-persistence'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
+import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   _resetLayoutFramePositionForTests,
   beginLayoutFramePositions,
@@ -31,18 +32,23 @@ vi.mock('../../store', () => ({
       testStore().setState(...args)
   }
 }))
-vi.mock('@/components/terminal-pane/closed-terminal-leaf-notice', () => ({
+vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
 vi.mock('@/components/terminal/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
 vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
   runSleepWorktree: vi.fn()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: vi.fn() }))
-vi.mock('@/lib/workspace-session-host-persistence', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostPersistence>()),
-  persistWorkspaceSessionByHost: vi.fn()
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: vi.fn()
 }))
+vi.mock(
+  '@/lib/workspace/persistence/workspace-session-host-persistence',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HostPersistence>()),
+    persistWorkspaceSessionByHost: vi.fn()
+  })
+)
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 

@@ -12,7 +12,7 @@ import type {
   JiraMutationResult,
   JiraTransition
 } from '../../../shared/jira/jira-types'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   issue: JiraIssue

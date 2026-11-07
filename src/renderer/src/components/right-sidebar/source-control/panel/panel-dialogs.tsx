@@ -64,6 +64,7 @@ export function SourceControlPanelDialogs({
       baseRefDialogOpen={baseRefDialogOpen}
       onBaseRefDialogOpenChange={setBaseRefDialogOpen}
       baseRefRepoId={activeRepo.id}
+      baseRefHostId={model.scope?.executionHostId ?? undefined}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
         if (baseRefOwnedByWorktree && activeWorktreeId) {

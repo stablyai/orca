@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { worktreeCopyPushTarget } from '@/lib/worktree-git-copy'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
@@ -10,33 +10,34 @@ export function useSourceControlCreatePrIntentTarget({
   activeRepoId,
   activeWorktreeId,
   branchName,
-  createPrIntentCurrentTargetRef,
   effectiveBaseRef,
+  operationStore,
   worktreePath
 }: {
   activeRepoId: string | null
   activeWorktreeId: string | null
   branchName: string
-  createPrIntentCurrentTargetRef: SourceControlWorktreeOperationState['createPrIntentCurrentTargetRef']
   effectiveBaseRef: string | null
+  operationStore: SourceControlWorktreeOperationState['operationStore']
   worktreePath: string | null
 }) {
+  const previousOperationStoreRef = useRef(operationStore)
   useEffect(() => {
-    createPrIntentCurrentTargetRef.current = {
-      repoId: activeRepoId ?? null,
-      worktreeId: activeWorktreeId ?? null,
-      worktreePath,
-      branch: branchName,
-      baseRef: effectiveBaseRef ?? null
+    // Navigating to another owner backgrounds the previous run; unmounting alone does not.
+    if (previousOperationStoreRef.current !== operationStore) {
+      previousOperationStoreRef.current.setState({ createPrIntentTarget: {} })
+      previousOperationStoreRef.current = operationStore
     }
-  }, [
-    activeRepoId,
-    activeWorktreeId,
-    branchName,
-    createPrIntentCurrentTargetRef,
-    effectiveBaseRef,
-    worktreePath
-  ])
+    operationStore.setState({
+      createPrIntentTarget: {
+        repoId: activeRepoId ?? null,
+        worktreeId: activeWorktreeId ?? null,
+        worktreePath,
+        branch: branchName,
+        baseRef: effectiveBaseRef ?? null
+      }
+    })
+  }, [activeRepoId, activeWorktreeId, branchName, effectiveBaseRef, operationStore, worktreePath])
 
   const getCreatePrIntentOperationTarget = useCallback(
     (token: CreatePrIntentRunToken): SourceControlOperationTarget =>

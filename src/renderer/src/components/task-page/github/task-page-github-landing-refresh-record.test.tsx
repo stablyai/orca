@@ -11,7 +11,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -35,7 +35,7 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemByOwnerRepoForSource: vi.fn(async () => null)
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))

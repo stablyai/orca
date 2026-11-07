@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   readJiraQuickFilterState,
   writeJiraQuickFilterState
-} from '@/runtime/runtime-jira-quick-filter-state'
+} from '@/runtime/jira/runtime-jira-quick-filter-state'
 import {
   normalizeJiraQuickFilterState,
   type JiraQuickFilterState

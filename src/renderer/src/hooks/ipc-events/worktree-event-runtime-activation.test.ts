@@ -8,7 +8,7 @@ import {
 const { activateAndRevealWorktree } = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn()
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorktree }))
 
 const initialState = useAppStore.getState()
 afterEach(() => {
@@ -68,7 +68,7 @@ it.each([false, true])(
 )
 
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 it('the conditionally installed qualified rename keeps ordinary setup content and other-host input', async () => {
   drafts.clearNativeChatComposerDraftsForTests()
   const from = drafts.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'local')

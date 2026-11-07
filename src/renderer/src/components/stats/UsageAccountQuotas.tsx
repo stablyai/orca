@@ -11,7 +11,7 @@ import { getProviderUsageErrorMessage } from '../status-bar/usage-error-copy'
 import { getProviderDisplayName } from '../../../../shared/usage-provider-windows'
 import { formatWindowLabel } from '../../../../shared/rate-limit-window-label'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { buildUsageAccountQuotaRows } from './usage-account-quota-rows'
 
 export function UsageAccountQuotaCard({
@@ -184,8 +184,8 @@ export function UsageAccountQuotas({
       <p className="text-xs text-muted-foreground" data-testid="usage-quota-coverage">
         {accounts && !accountsUnverifiable && !accounts.failedProviders?.length
           ? translate(
-              'stats.usage.quota.accountCoverage',
-              'Claude and Codex show connected accounts reported by this host. Other providers show the current account only; unavailable windows do not mean zero usage.'
+              'stats.usage.quota.reportedAccountCoverage',
+              'Claude, Codex and Antigravity show accounts reported by this host. Other providers show the current account only; unavailable windows do not mean zero usage.'
             )
           : translate(
               'stats.usage.quota.partialAccounts',

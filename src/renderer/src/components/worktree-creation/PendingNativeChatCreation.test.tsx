@@ -9,7 +9,7 @@ import type { NativeChatComposerProps } from '@/components/native-chat/native-ch
 import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
 import { useNativeChatComposerRevealFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type * as ComposerModule from '@/components/native-chat/NativeChatComposer'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import PendingNativeChatCreation from './PendingNativeChatCreation'
 import {
   changePrompt,
@@ -39,6 +39,9 @@ const modelCatalog = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: modelCatalog
 }))
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 
 const composer = vi.hoisted((): { props: NativeChatComposerProps | null } => ({ props: null }))
 vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) => {
@@ -53,7 +56,7 @@ vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) =>
     })
   }
 })
-vi.mock('@/components/native-chat/NativeChatEmptyState', () => ({
+vi.mock('@/components/native-chat/host-access/NativeChatEmptyState', () => ({
   NativeChatEmptyState: () => null
 }))
 vi.mock('@/components/native-chat/NativeChatUserMessageRow', () => ({

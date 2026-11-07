@@ -91,7 +91,8 @@ export async function getIssueDetailsViaGraphQL(
         body: comment.body ?? '',
         createdAt: comment.createdAt ?? '',
         url: comment.url ?? '',
-        isBot: comment.author?.__typename === 'Bot'
+        isBot: comment.author?.__typename === 'Bot',
+        ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
       }))
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
