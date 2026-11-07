@@ -37,6 +37,21 @@ describe('the connection verdict hold', () => {
     expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'handshaking' } })
   })
 
+  it("serves the phone's own store before the verdict, so drafts typed offline are saved", async () => {
+    const { bridge } = heldBridge()
+    bridge.host.receive(
+      clientFrame({
+        type: 'request',
+        id: bridgeId(1),
+        method: 'native.store.rows',
+        params: { action: 'read', table: 'draft', keys: ['draft:chat:wt:'] }
+      })
+    )
+    await flushBridge()
+
+    expect(bridge.nativeCalls.map((call) => call.verb)).toEqual(['native.store.rows'])
+  })
+
   it('re-sends init as connected once the verdict opens, then sends what waited', () => {
     const { bridge, verdict } = heldBridge()
     bridge.host.receive(
