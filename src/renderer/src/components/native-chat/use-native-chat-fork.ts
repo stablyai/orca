@@ -15,9 +15,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   nativeChatForkableItemIds,
   nativeChatForkSupport,
+  nativeChatLatestForkItemId,
   type NativeChatForkSupport
 } from '../../../../shared/native-chat/native-chat-fork-offer'
 import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-chat-fork-launch'
+import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 /** What an offered row's button needs; the same object while support and pending hold. */
 export type NativeChatForkRowAction = {
@@ -27,11 +29,19 @@ export type NativeChatForkRowAction = {
   request: (throughItemId: string) => void
 }
 
+/** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
+export type NativeChatForkLatestOutcome = 'started' | 'pending' | 'none'
+
 export type NativeChatForkSurface = NativeChatForkRowAction & {
   contextFloorSequence: number
   forkableItemIds: ReadonlySet<string>
   /** Handed to offered rows, so a change in which rows offer it re-renders only those rows. */
   rowAction: NativeChatForkRowAction
+}
+
+/** The rows' surface plus `/fork`: the same request, through the newest response still in context. */
+export type NativeChatPaneFork = NativeChatForkSurface & {
+  forkLatest: () => NativeChatForkLatestOutcome
 }
 
 /** The chat's "Fork from this response"; undefined where its agent or host can't fork. */
@@ -46,7 +56,7 @@ export function useNativeChatFork(input: {
   contextFloor: AgentJournalCursor | undefined
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
-}): NativeChatForkSurface | undefined {
+}): NativeChatPaneFork | undefined {
   const host = useStructuredAgentSessionHostCapabilityState(
     input.target,
     AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
@@ -82,6 +92,7 @@ export function useNativeChatFork(input: {
     latestAgentSessionContextClearSequence(input.items),
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
+  const floorRef = useRef(contextFloorSequence)
   // Streaming replaces the items array on every commit; keep the set while its members hold, so the
   // context and every offered row's `fork` stay the same objects.
   const forkableRef = useRef<ReadonlySet<string>>(new Set())
@@ -94,7 +105,22 @@ export function useNativeChatFork(input: {
   }, [input.items])
   useLayoutEffect(() => {
     forkableRef.current = forkableItemIds
-  }, [forkableItemIds])
+    floorRef.current = contextFloorSequence
+  }, [contextFloorSequence, forkableItemIds])
+  const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
+    if (inFlight.current) {
+      return 'pending'
+    }
+    const throughItemId = nativeChatLatestForkItemId(latest.current.items, {
+      contextFloorSequence: floorRef.current,
+      forkableItemIds: forkableRef.current
+    })
+    if (!throughItemId) {
+      return 'none'
+    }
+    request(throughItemId)
+    return 'started'
+  }, [request])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
   const rowAction = useMemo<NativeChatForkRowAction>(
@@ -109,7 +135,39 @@ export function useNativeChatFork(input: {
     () =>
       supportKind === 'none' || !input.worktreeId || !isTuiAgent(input.agent)
         ? undefined
-        : { ...rowAction, contextFloorSequence, forkableItemIds, rowAction },
-    [contextFloorSequence, forkableItemIds, input.agent, input.worktreeId, rowAction, supportKind]
+        : { ...rowAction, contextFloorSequence, forkableItemIds, rowAction, forkLatest },
+    [
+      contextFloorSequence,
+      forkableItemIds,
+      forkLatest,
+      input.agent,
+      input.worktreeId,
+      rowAction,
+      supportKind
+    ]
   )
+}
+
+/** A structured pane's fork, shared by its response rows and its `/fork` command. */
+export function useNativeChatPaneFork(
+  pane: Pick<NativeChatStructuredViewProps, 'sessionId' | 'tabId' | 'agent' | 'target'>,
+  chat: {
+    journalItems: readonly AgentJournalRenderItem[]
+    epoch: string | null
+    contextFloor: AgentJournalCursor | undefined
+    forkSupport: AgentSessionOptionsResult['forkSupport']
+  },
+  worktreeId: string | null
+): NativeChatPaneFork | undefined {
+  return useNativeChatFork({
+    sessionId: pane.sessionId,
+    tabId: pane.tabId,
+    agent: pane.agent,
+    target: pane.target,
+    worktreeId,
+    items: chat.journalItems,
+    epoch: chat.epoch,
+    contextFloor: chat.contextFloor,
+    sessionForkSupport: chat.forkSupport
+  })
 }

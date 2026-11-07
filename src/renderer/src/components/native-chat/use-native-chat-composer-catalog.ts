@@ -27,6 +27,7 @@ export function useNativeChatComposerCatalog(
   const interactionModeSupported =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const accountUsage = structuredTransport?.accountUsage !== undefined
+  const fork = structuredTransport?.fork !== undefined
   const agentCommands = useMemo(
     () =>
       structured
@@ -38,12 +39,14 @@ export function useNativeChatComposerCatalog(
               compactInstructions,
               interactionModeSupported
             ),
-            accountUsage
+            accountUsage,
+            fork
           )
         : getVerifiedNativeChatCommands(agent),
     [
       accountUsage,
       agent,
+      fork,
       compactInstructions,
       conversationCommands,
       reported,
