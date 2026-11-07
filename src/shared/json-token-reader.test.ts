@@ -91,3 +91,19 @@ it('preserves selective scalar consumer errors and a number ending at EOF', () =
   )
   expect(() => throwing.write('"kept"')).toThrow(failure)
 })
+
+it('bounds retained scalars without accumulating discarded string values', () => {
+  let key = ''
+  const reader = createJsonTokenReader(
+    (token) => {
+      if (token.name === 'keyValue') {
+        key = token.value
+      }
+    },
+    7,
+    () => key !== 'ignored',
+    16
+  )
+  reader.write(`{"ignored":"${'x'.repeat(1024)}","kept":"`)
+  expect(() => reader.write(`${'y'.repeat(17)}"}`)).toThrow(RangeError)
+})

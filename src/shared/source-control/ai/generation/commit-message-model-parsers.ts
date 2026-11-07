@@ -97,20 +97,27 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
   )
 }
 
+/** Honor picker visibility while keeping older catalogs without the field compatible. */
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
-    const parsed = JSON.parse(stdout) as {
+    const parsed: {
       models?: {
         slug?: string
         display_name?: string
         supported_reasoning_levels?: { effort?: string }[]
         default_reasoning_level?: string
+        visibility?: string
       }[]
-    }
+    } = JSON.parse(stdout)
     return uniqueModels(
       (parsed.models ?? [])
-        .filter((model) => model.slug && model.display_name)
+        .filter(
+          (model) =>
+            model.slug &&
+            model.display_name &&
+            (model.visibility === undefined || model.visibility === 'list')
+        )
         .map((model) => ({
           id: model.slug!,
           label: model.display_name!,

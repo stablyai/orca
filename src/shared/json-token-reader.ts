@@ -2,11 +2,12 @@ import parser, { type Token } from 'stream-json/core/parser.js'
 import exec from 'stream-chain/exec.js'
 import { none } from 'stream-chain/defs.js'
 
-/** Bounds token batches while preserving caller-owned UTF-8 decoding. */
+/** Bounds token batches and retained scalars; callers own UTF-8 decoding. */
 export function createJsonTokenReader(
   consume: (token: Token) => void,
   batchCodeUnits = 64 * 1024,
-  retainScalar?: () => boolean
+  retainScalar?: () => boolean,
+  maxScalarCodeUnits = Infinity
 ): {
   write: (text: string) => void
   end: () => void
@@ -33,6 +34,9 @@ export function createJsonTokenReader(
       value = ''
     } else if (token.name === 'stringChunk' || token.name === 'numberChunk') {
       if (retained) {
+        if (value.length + token.value.length > maxScalarCodeUnits) {
+          throw new RangeError('JSON scalar exceeds the retained size limit')
+        }
         value += token.value
       }
     } else if (token.name === 'endString' || token.name === 'endNumber') {

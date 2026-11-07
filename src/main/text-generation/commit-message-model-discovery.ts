@@ -24,6 +24,7 @@ import {
 } from './source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from './source-control-local-generation'
 import { killSourceControlAgentProcess } from './source-control-local-process'
+import { createCodexModelDiscoveryOutput } from './codex-model-discovery-output'
 import type {
   DiscoverCommitMessageModelsResult,
   LocalProcessExecution,
@@ -82,6 +83,7 @@ export async function discoverModelsLocal(
   return attempt.result
 }
 
+/** Keep Codex home locks until subprocess teardown, even when output is rejected. */
 async function discoverModelsOnce(
   input: DiscoverModelsLocalInput,
   spec: AgentModelProbeSpec,
@@ -130,6 +132,10 @@ async function discoverModelsOnce(
 
       let stdout = ''
       let stderr = ''
+      const codexOutput =
+        input.agentId === 'codex'
+          ? createCodexModelDiscoveryOutput(MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES)
+          : undefined
       let outputLimitExceeded = false
       let settled = false
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -166,7 +172,7 @@ async function discoverModelsOnce(
 
       const onData = (chunk: Buffer, append: (text: string) => void): void => {
         if (
-          stdout.length + stderr.length + chunk.byteLength >
+          (codexOutput?.bytes ?? stdout.length) + stderr.length + chunk.byteLength >
           MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES
         ) {
           outputLimitExceeded = true
@@ -176,7 +182,22 @@ async function discoverModelsOnce(
         }
         append(chunk.toString('utf-8'))
       }
-      const onStdoutData = (chunk: Buffer): void => onData(chunk, (text) => (stdout += text))
+      const onStdoutData = (chunk: Buffer): void => {
+        if (!codexOutput) {
+          onData(chunk, (text) => (stdout += text))
+          return
+        }
+        try {
+          codexOutput.write(chunk)
+          if (codexOutput.bytes + stderr.length > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
+            throw new RangeError('Model discovery output exceeds the size limit')
+          }
+        } catch {
+          outputLimitExceeded = true
+          startTermination()
+          finish({ success: false, error: `${spec.label} returned too much model data.` })
+        }
+      }
       const onStderrData = (chunk: Buffer): void => onData(chunk, (text) => (stderr += text))
       const onError = (error: Error): void => {
         if (!child.pid) {
@@ -195,6 +216,13 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
+        if (!settled && codexOutput) {
+          try {
+            stdout = codexOutput.end()
+          } catch {
+            outputLimitExceeded = true
+          }
+        }
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)

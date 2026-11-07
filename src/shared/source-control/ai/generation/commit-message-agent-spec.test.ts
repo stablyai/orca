@@ -396,7 +396,7 @@ describe('model discovery parsers', () => {
     expect(discovery?.stdinPayload?.endsWith('\n')).toBe(true)
   })
 
-  it('parses Codex model JSON', () => {
+  it('parses listed and legacy Codex models while excluding hidden visibility', () => {
     expect(
       parseCodexModels(
         JSON.stringify({
@@ -406,7 +406,10 @@ describe('model discovery parsers', () => {
               display_name: 'GPT-5.5',
               default_reasoning_level: 'low',
               supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }]
-            }
+            },
+            { slug: 'listed-model', display_name: 'Listed model', visibility: 'list' },
+            { slug: 'hidden-model', display_name: 'Hidden model', visibility: 'hide' },
+            { slug: 'direct-model', display_name: 'Direct model', visibility: 'none' }
           ]
         })
       )
@@ -419,7 +422,8 @@ describe('model discovery parsers', () => {
           { id: 'high', label: 'High' }
         ],
         defaultThinkingLevel: 'low'
-      }
+      },
+      { id: 'listed-model', label: 'Listed model' }
     ])
   })
 
