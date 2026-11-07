@@ -1,6 +1,6 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchScope } from './session-search-engine-types'
-import { quoteFtsTerm } from './session-search-query-planner'
+import { orExpression, planSessionSearchQuery, quoteFtsTerm } from './session-search-query-planner'
 import { SessionSearchPostings } from './session-search-postings'
 
 const MIN_TERM_LENGTH = 4
@@ -47,9 +47,9 @@ export class SessionSearchTypoRepair {
     )
   }
 
-  private countRows(term: string, postings: SessionSearchPostings): number {
+  private countRows(expression: string, postings: SessionSearchPostings): number {
     let rows = 0
-    for (const _row of postings.matching(quoteFtsTerm(term))) {
+    for (const _row of postings.matching(expression)) {
       if (++rows >= MAX_COUNTED_ROWS) {
         break
       }
@@ -66,7 +66,8 @@ export class SessionSearchTypoRepair {
     if (lowered.length < MIN_TERM_LENGTH || lowered.length > MAX_TERM_LENGTH) {
       return null
     }
-    if (this.countRows(term, postings) > 0 || postings.exhausted) {
+    const ownExpression = orExpression(planSessionSearchQuery(term).terms)
+    if (this.countRows(ownExpression, postings) > 0 || postings.exhausted) {
       return null
     }
     // Widen cautiously: common prefix, transposed pair, then first letter.
@@ -90,7 +91,7 @@ export class SessionSearchTypoRepair {
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({
         ...candidate,
-        rows: this.countRows(candidate.term, postings)
+        rows: this.countRows(quoteFtsTerm(candidate.term), postings)
       }))
       .filter((candidate) => candidate.rows >= MIN_DOC_FREQUENCY)
     if (counted.length === 0) {

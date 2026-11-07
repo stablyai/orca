@@ -87,9 +87,11 @@ it('keeps capitalized hits when the spelling probe and OR share a crowded window
     addSyntheticSession(index.db, { id: 2, text: 'Timeout', rows: 64 })
     addSyntheticSession(index.db, { id: 3, text: 'Timeout', role: 'tool', rows: 5000 })
     index.db.exec('COMMIT')
-    const result = index.engine.search({ query: 'Timeout' })
-    expect(result.hits.map((hit) => hit.sessionId).sort()).toEqual(['1', '2'])
-    expect(result.truncated.candidates).toBe(false)
+    for (const query of ['Timeout', 'TIMEOUT']) {
+      const result = index.engine.search({ query })
+      expect(result.hits.map((hit) => hit.sessionId).sort()).toEqual(['1', '2'])
+      expect(result.truncated.candidates).toBe(false)
+    }
   } finally {
     await index.close()
   }
