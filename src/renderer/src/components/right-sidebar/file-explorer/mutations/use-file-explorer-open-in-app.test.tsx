@@ -91,7 +91,7 @@ describe('useFileExplorerOpenInApp', () => {
 
     expect(openInExternalEditor).toHaveBeenCalledTimes(1)
     expect(openInExternalEditor).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/repo/a.ts', command: 'zed' })
+      expect.objectContaining({ path: '/repo/a.ts', openInApplicationId: 'app' })
     )
     expect(openInOrca).not.toHaveBeenCalled()
   })

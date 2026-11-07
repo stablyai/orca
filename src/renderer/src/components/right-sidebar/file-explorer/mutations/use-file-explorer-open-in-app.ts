@@ -68,6 +68,7 @@ export function useFileExplorerOpenInApp(
         worktreePath: path,
         ...route,
         workspace,
+        openInApplicationId: application.id,
         command: application.command,
         subject: 'path'
       }).then(settleLaunch, () => settleLaunch(false))
