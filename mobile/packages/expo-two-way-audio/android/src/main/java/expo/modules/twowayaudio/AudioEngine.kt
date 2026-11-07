@@ -40,6 +40,8 @@ class AudioEngine (context: Context) {
     private var micEvents = 0
     private var micBytes = 0L
 
+    // Written from the main thread on focus loss and pause, and from the JS thread on start/stop.
+    @Volatile
     var isRecording = false
 
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
@@ -200,6 +202,7 @@ class AudioEngine (context: Context) {
 
     @RequiresApi(Build.VERSION_CODES.Q)
     @SuppressLint("MissingPermission")
+    @Synchronized
     private fun startRecording(){
         val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         audioRecord = AudioRecord(
@@ -261,6 +264,7 @@ class AudioEngine (context: Context) {
         }
     }
 
+    @Synchronized
     private fun stopRecording() {
         if (!isRecording) return
         isRecording = false
@@ -272,6 +276,7 @@ class AudioEngine (context: Context) {
     }
 
     // Stop for good and let JS finish with what was heard; reopening later would splice a silent gap into the dictation.
+    @Synchronized
     private fun endRecordingForInterruption(kind: String) {
         if (!isRecording) return
         Log.d("AudioEngine", "Recording interrupted: $kind")
@@ -287,8 +292,6 @@ class AudioEngine (context: Context) {
         } else {
             stopRecording()
         }
-
-        isRecording = value
         return isRecording
     }
 
