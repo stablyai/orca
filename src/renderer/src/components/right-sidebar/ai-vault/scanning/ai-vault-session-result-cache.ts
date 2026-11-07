@@ -62,7 +62,8 @@ function readPersistedCache(): Map<string, CachedSessionResult> {
         entry &&
         typeof entry.executionHostScope === 'string' &&
         (typeof entry.limit === 'number' || entry.limit === 'unlimited') &&
-        Array.isArray(entry.result?.sessions)
+        Array.isArray(entry.result?.sessions) &&
+        entry.result.sessions.every((session) => session !== null && typeof session === 'object')
       ) {
         entries.set(item[0], entry as CachedSessionResult)
       }
