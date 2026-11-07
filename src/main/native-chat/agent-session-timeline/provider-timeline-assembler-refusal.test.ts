@@ -175,7 +175,7 @@ describe('healthy long turns are independent of timeline retention', () => {
   })
 })
 
-it('a skipped timeline key creates no retry, while a genuinely refused key wakes and lands without more input', async () => {
+it('a not-yet-due timeline key and a refused key both land without more input', async () => {
   const { vi } = await import('vitest')
   vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
   const rig = await openProviderTimelineRig()
@@ -200,6 +200,10 @@ it('a skipped timeline key creates no retry, while a genuinely refused key wakes
   vi.advanceTimersByTime(60)
   expect(messageText((await rig.row(providerItemId('item', 'b')))?.body)).toBe('B')
   expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
+  vi.advanceTimersByTime(279)
+  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('P')
+  vi.advanceTimersByTime(1)
+  expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('PT')
   expect(vi.getTimerCount()).toBe(0)
   assembler.apply({ type: 'text.close', item: { id: 'a' } })
   expect(messageText((await rig.row(providerItemId('item', 'a')))?.body)).toBe('PT')

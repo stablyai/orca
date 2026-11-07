@@ -8,7 +8,7 @@ import {
   type AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
-  AGENT_SESSION_TEXT_CHECKPOINT_MS,
+  agentSessionTextCheckpointDueIn,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps,
   type AgentSessionDeltaSnapshot
@@ -50,13 +50,7 @@ export class ProviderTimelineTextStreams {
       ...(deps.schedule ? { schedule: deps.schedule } : {}),
       // Live identities must survive until the provider closes them or their turn ends.
       isProtected: () => true,
-      isDue: (id) => {
-        const acceptedAt = this.byId.get(id)?.acceptedAt
-        return (
-          acceptedAt === undefined ||
-          performance.now() - acceptedAt >= AGENT_SESSION_TEXT_CHECKPOINT_MS
-        )
-      },
+      dueIn: (id) => agentSessionTextCheckpointDueIn(this.byId.get(id)?.acceptedAt),
       emit: (id, { text }) => this.flushOnWindow(id, text)
     })
   }

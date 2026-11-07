@@ -3,6 +3,7 @@ import { createClaudeJournalTranslator } from '../../../../../claude/structured/
 import { createCodexStructuredItemStreams } from '../../../../../codex/structured/items/codex-structured-item-streams'
 import type { AgentJournalItemBody } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../../journal-ingress/structured-agent-session-event-sink'
+import { createAgentSessionDeltaCoalescer } from '../agent-session-delta-coalescer'
 
 afterEach(() => vi.useRealTimers())
 
@@ -103,7 +104,7 @@ function producer(agent: 'claude' | 'codex', role: 'assistant' | 'reasoning') {
 }
 
 it.each(['claude', 'codex'] as const)(
-  '%s uses elapsed admission, preserves pause tails at real barriers and ignores wall rollback',
+  '%s saves a paused tail at its interval without another delta and ignores wall rollback',
   (agent) => {
     for (const role of ['assistant', 'reasoning'] as const) {
       vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
@@ -116,20 +117,24 @@ it.each(['claude', 'codex'] as const)(
       expect(r.saves).toEqual([{ text: 'P', at: 60 }])
       vi.advanceTimersByTime(40)
       r.delta('T'.repeat(200))
-      vi.advanceTimersByTime(60)
+      vi.advanceTimersByTime(359)
       expect(r.saves).toHaveLength(1)
+      vi.advanceTimersByTime(1)
+      expect(r.saves.at(-1)).toEqual({ text: `P${'T'.repeat(200)}`, at: 460 })
       expect(vi.getTimerCount()).toBe(0)
-      vi.advanceTimersByTime(300)
-      expect(r.saves).toHaveLength(1)
       vi.setSystemTime(100)
       r.delta('U')
       vi.advanceTimersByTime(60)
-      expect(r.saves.at(-1)).toEqual({ text: `P${'T'.repeat(200)}U`, at: 520 })
-      r.delta(' tail')
-      vi.advanceTimersByTime(60)
       expect(r.saves).toHaveLength(2)
+      // A barrier saves early; the armed timer then finds nothing to save.
       r.flush()
-      expect(r.saves.at(-1)?.text).toBe(`P${'T'.repeat(200)}U tail`)
+      expect(r.saves.at(-1)).toEqual({ text: `P${'T'.repeat(200)}U`, at: 520 })
+      expect(vi.getTimerCount()).toBe(0)
+      r.delta(' tail')
+      vi.advanceTimersByTime(399)
+      expect(r.saves).toHaveLength(3)
+      vi.advanceTimersByTime(1)
+      expect(r.saves.at(-1)).toEqual({ text: `P${'T'.repeat(200)}U tail`, at: 920 })
       r.dispose()
       vi.useRealTimers()
     }
@@ -171,4 +176,57 @@ it('Claude observes append refusal without adding an autonomous cross-turn retry
   vi.advanceTimersByTime(60)
   expect(r.saves.at(-1)?.text).toBe('PT')
   r.dispose()
+})
+
+it('an earlier first save replaces a later armed deadline', () => {
+  vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
+  const savedAt = new Map<string, number>()
+  const emitted: string[] = []
+  const coalescer = createAgentSessionDeltaCoalescer({
+    dueIn: (key) => {
+      const at = savedAt.get(key)
+      return at === undefined ? 0 : at + 400 - performance.now()
+    },
+    emit: (key, { text }) => {
+      savedAt.set(key, performance.now())
+      emitted.push(`${key}:${text}`)
+    }
+  })
+  coalescer.append('a', 'P')
+  vi.advanceTimersByTime(60)
+  coalescer.append('a', 'T')
+  vi.advanceTimersByTime(40)
+  coalescer.append('b', 'Q')
+  vi.advanceTimersByTime(60)
+  expect(emitted).toEqual(['a:P', 'b:Q'])
+  vi.advanceTimersByTime(300)
+  expect(emitted).toEqual(['a:P', 'b:Q', 'a:PT'])
+  coalescer.dispose()
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it('a shared wake leaves another stream inside its own window', () => {
+  vi.useFakeTimers({ toFake: ['performance', 'setTimeout', 'clearTimeout'] })
+  const savedAt = new Map<string, number>()
+  const emitted: string[] = []
+  const coalescer = createAgentSessionDeltaCoalescer({
+    dueIn: (key) => {
+      const at = savedAt.get(key)
+      return at === undefined ? 0 : at + 400 - performance.now()
+    },
+    emit: (key, { text }) => {
+      savedAt.set(key, performance.now())
+      emitted.push(`${key}:${text}@${performance.now()}`)
+    }
+  })
+  coalescer.append('a', 'P')
+  vi.advanceTimersByTime(60)
+  coalescer.append('a', 'T')
+  vi.advanceTimersByTime(390)
+  coalescer.append('b', 'Q')
+  vi.advanceTimersByTime(20)
+  coalescer.append('b', 'R')
+  vi.advanceTimersByTime(40)
+  expect(emitted).toEqual(['a:P@60', 'a:PT@460', 'b:QR@510'])
+  coalescer.dispose()
 })

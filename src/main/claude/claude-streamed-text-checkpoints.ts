@@ -3,7 +3,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
-  AGENT_SESSION_TEXT_CHECKPOINT_MS,
+  agentSessionTextCheckpointDueIn,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
@@ -95,13 +95,10 @@ export function createClaudeStreamedTextCheckpoints(
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     // Gate before the coalescer joins the reply, so skipped windows cost nothing; barriers still save.
-    isDue: (key) => {
-      const previous = acceptedAt.get(key)
-      return (
-        previous === undefined || performance.now() - previous >= AGENT_SESSION_TEXT_CHECKPOINT_MS
-      )
-    },
-    emit: (key, { text }) => persist(key, text)
+    dueIn: (key) => agentSessionTextCheckpointDueIn(acceptedAt.get(key)),
+    emit: (key, { text }) => {
+      persist(key, text)
+    }
   })
 
   const drop = (key: string): void => {

@@ -323,7 +323,7 @@ describe('acquired scheduled plan delivery', () => {
         expect(bodies).toContainEqual({ kind: 'status', presentation: 'plan-document', text: 'PT' })
         expect(events.filter((event) => event.type === 'ended')).toMatchObject([
           {
-            reason: `scheduled plan admission failed (${reason})`,
+            reason: `scheduled text admission failed (${reason})`,
             cause: 'unexpected-exit',
             fence: 7,
             acquisitionGeneration: 'generation-1'
@@ -388,7 +388,7 @@ describe('acquired scheduled plan delivery', () => {
         text: 'buffered'
       })
       expect(events.filter((event) => event.type === 'ended')).toMatchObject([
-        { reason: 'scheduled plan admission failed (closed)' }
+        { reason: 'scheduled text admission failed (closed)' }
       ])
       refuse = false
       await vi.advanceTimersByTimeAsync(1000)
@@ -430,7 +430,7 @@ describe('acquired scheduled plan delivery', () => {
         delta: 'T'
       })
       vi.advanceTimersByTime(60)
-      const staleWake = timers.mock.calls.find(([, ms]) => ms === 340)?.[0]
+      const staleWake = timers.mock.calls.find(([, ms]) => ms === 400)?.[0]
       expect(typeof staleWake).toBe('function')
       await acquireReadyCodexForTest(adapter, {
         identity: identityFor('session-1'),

@@ -7,7 +7,7 @@ import type {
 } from '../session-lifecycle/codex-structured-session-state'
 import type { CodexStructuredSessionTeardown } from '../session-lifecycle/codex-structured-session-teardown'
 
-/** Scheduled plan saves run after their provider caller returns, so they re-check the owner. */
+/** Scheduled text saves run after their provider caller returns, so they re-check the owner. */
 export function codexAcquisitionScheduledOwner(
   owners: {
     input: StructuredAgentSessionAcquireInput
@@ -44,7 +44,7 @@ export function codexAcquisitionScheduledOwner(
         sessionId,
         fence,
         acquisitionGeneration,
-        new Error(`scheduled plan admission failed (${admission.reason})`)
+        new Error(`scheduled text admission failed (${admission.reason})`)
       )
     }
   }

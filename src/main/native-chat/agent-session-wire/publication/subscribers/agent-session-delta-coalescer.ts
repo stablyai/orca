@@ -1,5 +1,9 @@
-import type { AgentJournalBoundedPayload } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { AgentSessionDeltaDigest, boundedDeltaPayload } from './agent-session-delta-digest'
+import { AgentSessionDeltaDigest } from './agent-session-delta-digest'
+import {
+  type AgentSessionDeltaSnapshot,
+  type AgentSessionDeltaStream,
+  snapshotOf
+} from './agent-session-delta-snapshot'
 import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
 import type { StructuredAgentSessionSinkAdmission } from '../../journal-ingress/structured-agent-session-event-sink'
 
@@ -9,53 +13,19 @@ import type { StructuredAgentSessionSinkAdmission } from '../../journal-ingress/
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
 export const AGENT_SESSION_TEXT_CHECKPOINT_MS = 400
 
+/** Milliseconds until text last saved at `acceptedAt` may save again; never-saved text is due now. */
+export function agentSessionTextCheckpointDueIn(acceptedAt: number | undefined): number {
+  return acceptedAt === undefined
+    ? 0
+    : acceptedAt + AGENT_SESSION_TEXT_CHECKPOINT_MS - performance.now()
+}
+
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
 export const AGENT_SESSION_STREAMED_TEXT_TOTAL_MAX_BYTES = 32 * 1024 * 1024
 export { AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER } from './agent-session-delta-prefix'
+export type { AgentSessionDeltaSnapshot } from './agent-session-delta-snapshot'
 export const AGENT_SESSION_MAX_STREAMS = 256
-
-export type AgentSessionDeltaSnapshot = {
-  /** Joins the retained chunks on first read. */
-  readonly text: string
-  readonly textLength: number
-  observedBytes: number
-  truncated: boolean
-  /** Bounded preview of the text; reads only the head when the stream keeps a digest. */
-  bounded: (headBytes: number) => AgentJournalBoundedPayload
-}
-
-type AgentSessionDeltaStream = {
-  chunks: string[]
-  retainedBytes: number
-  textLength: number
-  observedBytes: number
-  truncated: boolean
-  dirty: boolean
-  digest: AgentSessionDeltaDigest | null
-}
-
-/** Text stays as of this call; bounded() reads the stream as it is when called. */
-function snapshotOf(stream: AgentSessionDeltaStream): AgentSessionDeltaSnapshot {
-  // Appends push in place; truncation swaps the array, so the captured count fixes the text.
-  const { chunks } = stream
-  const count = chunks.length
-  let text: string | undefined
-  const snapshot: AgentSessionDeltaSnapshot = {
-    get text() {
-      text ??= (count === chunks.length ? chunks : chunks.slice(0, count)).join('')
-      return text
-    },
-    textLength: stream.textLength,
-    observedBytes: stream.observedBytes,
-    truncated: stream.truncated,
-    bounded: (headBytes) => boundedDeltaPayload(stream.chunks, stream.digest, headBytes)
-  }
-  // Hidden, so snapshots still compare and serialize as text and byte counts.
-  Object.defineProperty(snapshot, 'textLength', { enumerable: false })
-  Object.defineProperty(snapshot, 'bounded', { enumerable: false })
-  return snapshot
-}
 
 export type AgentSessionDeltaCoalescerDeps = {
   /** Emit the complete snapshot, not the increment. */
@@ -64,8 +34,8 @@ export type AgentSessionDeltaCoalescerDeps = {
   digests?: (key: string) => boolean
   /** False skips this delivery attempt and marks it clean; emit reports sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
-  /** Only timer flushes check this; a skip keeps text for a later delta or barrier. */
-  isDue?: (key: string) => boolean
+  /** Milliseconds until a timer flush may emit this stream; the timer re-arms for it. Barriers ignore it. */
+  dueIn?: (key: string) => number
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -85,8 +55,8 @@ export type AgentSessionDeltaCoalescer = {
   /** Return the buffer the next nonempty append would evict, without changing it. */
   evictionFor: (key: string) => string | undefined
   flush: (key: string) => StructuredAgentSessionSinkAdmission
-  /** Lifecycle barriers flush every stream first. */
-  flushAll: () => StructuredAgentSessionSinkAdmission
+  /** Lifecycle barriers flush every stream first; `only` limits forcing, others keep dueIn. */
+  flushAll: (only?: (key: string) => boolean) => StructuredAgentSessionSinkAdmission
   /** Authoritative bodies supersede buffered text; drop it without emission. */
   forget: (key: string) => void
   dispose: () => void
@@ -116,6 +86,7 @@ export function createAgentSessionDeltaCoalescer(
   const streams = new Map<string, AgentSessionDeltaStream>()
   let totalRetainedBytes = 0
   let cancelTimer: (() => void) | null = null
+  let armedAt = Infinity
   const evictable = new Set<string>()
 
   const flushKey = (key: string): StructuredAgentSessionSinkAdmission => {
@@ -135,37 +106,74 @@ export function createAgentSessionDeltaCoalescer(
     return emitted
   }
 
-  const scheduleFlush = (): void => {
-    cancelTimer ??= schedule(() => {
-      cancelTimer = null
-      if (deps.isCurrent?.() === false) {
-        return
-      }
-      const admission = flushAll(true)
-      if (!admission.accepted && admission.reason !== 'backpressure') {
-        deps.onScheduledFailure?.(admission)
-      }
-    }, windowMs)
-  }
-
-  const flushAll = (scheduled = false): StructuredAgentSessionSinkAdmission => {
+  const cancelArmed = (): void => {
     cancelTimer?.()
     cancelTimer = null
+    armedAt = Infinity
+  }
+
+  // A stream saves one window after its oldest unsaved delta, and no sooner than dueIn allows.
+  const waitFor = (key: string, stream: AgentSessionDeltaStream): number =>
+    Math.max(stream.dirtyAt + windowMs - performance.now(), deps.dueIn?.(key) ?? 0)
+
+  // One shared timer keeps the earliest deadline.
+  const arm = (delayMs: number): void => {
+    const at = performance.now() + Math.max(0, delayMs)
+    if (streams.size === 0 || armedAt <= at) {
+      return
+    }
+    cancelArmed()
+    armedAt = at
+    cancelTimer = schedule(
+      () => {
+        cancelTimer = null
+        armedAt = Infinity
+        if (deps.isCurrent?.() === false) {
+          return
+        }
+        const admission = flushAll(at)
+        if (!admission.accepted && admission.reason !== 'backpressure') {
+          deps.onScheduledFailure?.(admission)
+        }
+      },
+      // Timers truncate fractional delays; round up so a wake is never early.
+      Math.max(0, Math.ceil(at - performance.now()))
+    )
+  }
+
+  /** `wakeAt` is the deadline a timer flush was armed for; barriers pass undefined. */
+  const flushAll = (
+    wakeAt: number | undefined,
+    only?: (key: string) => boolean
+  ): StructuredAgentSessionSinkAdmission => {
+    cancelArmed()
     let emitted: StructuredAgentSessionSinkAdmission = { accepted: true }
+    let deferredMs = Infinity
     for (const [key, stream] of streams) {
-      if (scheduled && stream.dirty && deps.isDue?.(key) === false) {
+      const forced = wakeAt === undefined && (only?.(key) ?? true)
+      // A wake saves only streams whose own window has closed by its deadline; barriers ignore windows.
+      const deferred =
+        !forced &&
+        stream.dirty &&
+        ((deps.dueIn?.(key) ?? 0) > 0 ||
+          (wakeAt !== undefined && stream.dirtyAt + windowMs > wakeAt))
+      if (deferred) {
+        deferredMs = Math.min(deferredMs, waitFor(key, stream))
         continue
       }
       const admission = flushKey(key)
       if (!admission.accepted) {
         emitted = admission
         if (admission.reason !== 'backpressure') {
-          break
+          return emitted
         }
       }
     }
-    if (!emitted.accepted && emitted.reason === 'backpressure') {
-      scheduleFlush()
+    if (!emitted.accepted) {
+      arm(windowMs)
+    }
+    if (deferredMs !== Infinity) {
+      arm(deferredMs)
     }
     return emitted
   }
@@ -206,6 +214,7 @@ export function createAgentSessionDeltaCoalescer(
           observedBytes: 0,
           truncated: false,
           dirty: false,
+          dirtyAt: 0,
           digest: deps.digests?.(key) ? new AgentSessionDeltaDigest() : null
         }
         if (!deps.isProtected?.(key)) {
@@ -238,11 +247,16 @@ export function createAgentSessionDeltaCoalescer(
         stream.chunks = next.chunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
-        stream.dirty = true
+        if (!stream.dirty) {
+          stream.dirtyAt = performance.now()
+          stream.dirty = true
+        }
       }
       streams.set(key, stream)
-      // Share one timer across streams to bound wakeups per window.
-      scheduleFlush()
+      if (stream.dirty) {
+        // Never sooner than a window: a refused retry keeps its delay.
+        arm(Math.max(windowMs, waitFor(key, stream)))
+      }
       return { accepted: true }
     },
     evictionFor: (key) => {
@@ -262,7 +276,7 @@ export function createAgentSessionDeltaCoalescer(
       return undefined
     },
     flush: flushKey,
-    flushAll: () => flushAll(),
+    flushAll: (only) => flushAll(undefined, only),
     forget: (key) => {
       const stream = streams.get(key)
       if (stream) {
@@ -272,8 +286,7 @@ export function createAgentSessionDeltaCoalescer(
       }
     },
     dispose: () => {
-      cancelTimer?.()
-      cancelTimer = null
+      cancelArmed()
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0

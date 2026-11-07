@@ -90,8 +90,8 @@ describe("a stream writes only while its row's turn runs", () => {
   })
 })
 
-it.each(['close', 'tool', 'flush-dispose', 'next-delta'])(
-  'keeps a timer-skipped full tail for the %s barrier',
+it.each(['close', 'tool', 'flush-dispose', 'timer'])(
+  'saves a paused full tail at the %s',
   async (boundary) => {
     vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
     const r = await openProviderTimelineRig({
@@ -102,23 +102,18 @@ it.each(['close', 'tool', 'flush-dispose', 'next-delta'])(
     })
     const delta = (text: string) =>
       r.assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'reasoning', text })
+    const saved = async () => messageText((await r.row(providerItemId('item', 'm')))?.body)
     delta('P')
     vi.advanceTimersByTime(60)
-    expect(messageText((await r.row(providerItemId('item', 'm')))?.body)).toBe('P')
+    expect(await saved()).toBe('P')
     vi.advanceTimersByTime(40)
     delta('T')
     vi.advanceTimersByTime(60)
-    expect(messageText((await r.row(providerItemId('item', 'm')))?.body)).toBe('P')
-    expect(vi.getTimerCount()).toBe(0)
-    vi.advanceTimersByTime(340)
-    delta('')
-    expect(vi.getTimerCount()).toBe(0)
-    expect(messageText((await r.row(providerItemId('item', 'm')))?.body)).toBe('P')
-    if (boundary === 'next-delta') {
-      vi.setSystemTime(100)
-      vi.advanceTimersByTime(300)
-      delta('U')
-      vi.advanceTimersByTime(60)
+    expect(await saved()).toBe('P')
+    if (boundary === 'timer') {
+      vi.advanceTimersByTime(299)
+      expect(await saved()).toBe('P')
+      vi.advanceTimersByTime(1)
     } else if (boundary === 'close') {
       r.assembler.apply({ type: 'text.close', item: { id: 'm' } })
     } else if (boundary === 'tool') {
@@ -131,11 +126,10 @@ it.each(['close', 'tool', 'flush-dispose', 'next-delta'])(
       r.assembler.flush()
       r.assembler.dispose()
     }
-    expect(messageText((await r.row(providerItemId('item', 'm')))?.body)).toBe(
-      boundary === 'next-delta' ? 'PTU' : 'PT'
-    )
+    expect(await saved()).toBe('PT')
     vi.advanceTimersByTime(1000)
     expect(vi.getTimerCount()).toBe(0)
+    expect(await saved()).toBe('PT')
     r.assembler.dispose()
   }
 )

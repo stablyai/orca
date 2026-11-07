@@ -432,7 +432,7 @@ it('metadata-barrier-class-confirmation', async () => {
             r.journal.snapshot().items.find((item) => item.body.kind === 'status')?.body
           ).toMatchObject({ text: 'Plan tail' })
           expect(r.journal.item(first.itemId)?.body).toMatchObject({
-            blocks: [{ type: 'text', text: prefix }]
+            blocks: [{ type: 'text', text: prefix + tail }]
           })
         }
         r.translator.flush()

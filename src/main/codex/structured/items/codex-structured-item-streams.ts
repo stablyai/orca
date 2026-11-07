@@ -58,18 +58,9 @@ export function createCodexStructuredItemStreams(
   const pendingPatches = new Map<string, CodexPendingItemPatch>()
   let retainedPatchBytes = 0
   const checkpoints = new CodexItemStreamCheckpoints({
-    pending: pendingCheckpoints,
     typeFor: (key) => states.get(key)?.item.type,
     acceptedAt,
     checkpointLengths,
-    persist: (key) => {
-      const snapshot = coalescer.snapshot(key)
-      return snapshot ? persist(key, snapshot) : { accepted: true }
-    },
-    schedule: deps.schedule,
-    windowMs: deps.coalesceMs,
-    isCurrent: deps.isCurrent,
-    onScheduledFailure: deps.onScheduledFailure,
     sink: deps.sink,
     pendingPatches,
     attributionOf,
@@ -84,9 +75,6 @@ export function createCodexStructuredItemStreams(
     checkpointLengths.delete(key)
     acceptedAt.delete(key)
     pendingCheckpoints.delete(key)
-    if (pendingCheckpoints.size === 0) {
-      checkpoints.cancel()
-    }
     producers.delete(key)
     const pending = pendingPatches.get(key)
     if (pending) {
@@ -133,9 +121,6 @@ export function createCodexStructuredItemStreams(
     }
     checkpointLengths.set(key, text.textLength)
     pendingCheckpoints.delete(key)
-    if (pendingCheckpoints.size === 0) {
-      checkpoints.cancel()
-    }
     coalescer.markFlushed(key)
     return { accepted: true }
   }
@@ -147,13 +132,11 @@ export function createCodexStructuredItemStreams(
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
     isCurrent: deps.isCurrent,
-    onScheduledFailure: (admission) => checkpoints.fail(admission),
+    onScheduledFailure: deps.onScheduledFailure,
     digests: (key) => codexKeepsRunningOutputPreview(states.get(key)?.item.type),
+    dueIn: (key) => checkpoints.dueIn(key),
     shouldEmit: (key, length) => checkpoints.shouldPersist(key, length),
-    emit: (key, snapshot) => {
-      const admission = persist(key, snapshot)
-      return states.get(key)?.item.type === 'plan' ? admission : admission.accepted
-    }
+    emit: (key, snapshot) => persist(key, snapshot)
   })
 
   const ensureState = (
@@ -183,7 +166,6 @@ export function createCodexStructuredItemStreams(
         producers,
         checkpointLengths,
         persist,
-        typeFor: (key) => states.get(key)?.item.type,
         pendingPatches,
         flushPatch: (key) => checkpoints.flushPatch(key)
       },
@@ -297,7 +279,6 @@ export function createCodexStructuredItemStreams(
     forget: (threadId, itemId) => forgetState(codexStructuredItemKey(threadId, itemId)),
     flush,
     dispose: () => {
-      checkpoints.cancel()
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()
