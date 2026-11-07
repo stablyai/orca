@@ -1,4 +1,3 @@
-import { compareQueuedRows } from '../input-order/journal-input-card-index'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import {
   journalInputAttemptEnded,
@@ -86,10 +85,10 @@ export class JournalQueuedMessages {
     const key = this.revision()
     if (this.viewed?.key !== key) {
       const state = this.inputState()
-      const cards = [...journalInputOrder(state).liveCards(state)]
+      const cards = journalInputOrder(state).cards.list()
       this.viewed = {
         key,
-        cards: cards.sort(compareQueuedRows)
+        cards
       }
     }
     return this.viewed.cards
@@ -118,6 +117,7 @@ export class JournalQueuedMessages {
       editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
       unavailable: this.mailUnavailable,
+      automatic,
       steer
     })
   }

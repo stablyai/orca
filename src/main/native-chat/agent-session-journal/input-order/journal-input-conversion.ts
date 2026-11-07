@@ -6,6 +6,7 @@ import type { JournalOutcomeFold } from '../outcomes/journal-outcome-codec'
 import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
 import type Database from '../../../sqlite/sync-database'
 import { journalInputAcceptance } from './journal-input-provenance'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
 
 export type JournalNativePrefix = {
   entries: Map<string, JournalInputEntry>
@@ -88,6 +89,17 @@ export function restoreJournalNativeState(
   }
   owner.seedPersonAcceptance(prefix.personAcceptedSequence)
   owner.restore(state)
-  owner.overlay(state, readJournalLegacyCards(db, state))
+  const legacyCards = readJournalLegacyCards(db, state)
+  owner.overlay(state, legacyCards)
+  const queue = { cards: new Map(legacyCards.map((card) => [card.messageId, card])) }
+  for (const card of legacyCards) {
+    if (state.queue.cards.has(card.messageId)) {
+      continue
+    }
+    const send = card.consumedAs === null ? undefined : state.submissions.get(card.consumedAs)
+    if (send?.dispatchState === 'accepted' && journalSubmissionIsPersonal({ queue }, send)) {
+      owner.seedPersonAcceptance(send.acceptedSequence ?? 0)
+    }
+  }
   owner.finishReconstruction(state)
 }

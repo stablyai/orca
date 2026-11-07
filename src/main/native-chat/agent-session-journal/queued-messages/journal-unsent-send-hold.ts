@@ -221,7 +221,7 @@ function currentQueuePositions(
   batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
 ): { placed: Map<string, number>; moves: { messageId: string; position: number }[] } {
   const cards = journal.queuedMessages.list()
-  let position = Math.min(0, ...cards.map((card) => card.position)) - batch.length
+  let position = cards.reduce((first, card) => Math.min(first, card.position), 0) - batch.length
   return {
     placed: new Map(
       batch
@@ -242,7 +242,7 @@ export async function recoverJournalQueue(
     hold: { cause: 'hostRestarted' }
   })
   const withdrawn = journal.queuedMessages.list().filter((row) => {
-    if (row.body.from?.orchestration?.message === 'task') {
+    if (row.body.from?.orchestration?.message === 'task' && row.deliveryMode === 'steer') {
       return true
     }
     const receipt = readCommandReceipt(db, { kind: 'global' }, row.messageId)

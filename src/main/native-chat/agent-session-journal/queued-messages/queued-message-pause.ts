@@ -152,19 +152,24 @@ export function failedQueueTurnSequence(failedAt: number, resumedSequence: numbe
   return failedAt > 0 && failedAt >= resumedSequence ? failedAt : 0
 }
 
-/** Order determines which reason a card held by multiple pauses displays. */
-export function deriveQueuePauses(input: {
-  /** Sequences compare only within the same epoch. */
+export type QueuePauseFacts = {
   epoch: string
   marks: JournalQueuePauseMarks
   latestAcceptedTurnSequence: number
   latestPersonAcceptedTurnSequence?: number
-  /** Where the newest turn settled as failed; zero when it has not. */
   failedAt?: number
-  cards: readonly QueueCard[]
-  /** Conservative boundary when this handle could not write a reopen mark. */
   reopenFloor: AgentJournalCursor | null
-}): DerivedQueuePause[] {
+}
+export type QueuePauseContext = QueuePauseFacts & {
+  pauses: readonly DerivedQueuePause[]
+  clearMembers: ReadonlySet<string>
+}
+
+/** Boundaries are independent of row revisions; exact clear membership is prepared only when changed. */
+export function createQueuePauseContext(
+  input: QueuePauseFacts,
+  clearMembers: ReadonlySet<string> = new Set(input.marks.cleared?.messageIds)
+): QueuePauseContext {
   const { epoch, marks, latestAcceptedTurnSequence } = input
   const pauses: DerivedQueuePause[] = []
   const stop = journalUserStopInForce(
@@ -178,33 +183,59 @@ export function deriveQueuePauses(input: {
   if (failed) {
     pauses.push({ reason: 'failed', since: { epoch, sequence: failed } })
   }
-  const waiting = input.cards.filter((card) => card.state === 'waiting')
   const cleared = marks.cleared
   if (cleared && !cleared.lifted) {
-    const membership = new Set(cleared.messageIds)
-    const messageIds = waiting.flatMap((card) =>
-      card.messageId && membership.has(card.messageId) && heldSince(cleared.sequence, card, input)
-        ? [card.messageId]
-        : []
-    )
-    if (messageIds.length > 0) {
-      pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence }, messageIds })
-    }
+    pauses.push({ reason: 'cleared', since: { epoch, sequence: cleared.sequence } })
   }
   const floor = input.reopenFloor?.epoch === epoch ? input.reopenFloor.sequence : 0
   const sequence = Math.max(marks.reopenedSequence, floor)
-  const reopened: DerivedQueuePause = { reason: 'restarted', since: { epoch, sequence } }
-  const held = waiting.filter(
-    (card) =>
-      sequence > 0 &&
-      card.holdReason === null &&
-      queuedBefore(reopened, card) &&
-      heldSince(sequence, card, input)
-  )
-  if (held.length > 0) {
-    pauses.push({ ...reopened, messageIds: held.flatMap((card) => card.messageId ?? []) })
+  if (sequence > 0) {
+    pauses.push({ reason: 'restarted', since: { epoch, sequence } })
   }
-  return pauses
+  return { ...input, pauses, clearMembers }
+}
+
+function contextPauseHolds(
+  context: QueuePauseContext,
+  pause: DerivedQueuePause,
+  card: QueueCard
+): boolean {
+  if (card.state !== 'waiting' || card.holdReason !== null) {
+    return false
+  }
+  if (pause.reason === 'cleared') {
+    return (
+      context.clearMembers.has(card.messageId ?? '') &&
+      heldSince(pause.since!.sequence, card, context)
+    )
+  }
+  return (
+    queuedBefore(pause, card) &&
+    (pause.reason !== 'restarted' || heldSince(pause.since!.sequence, card, context))
+  )
+}
+
+export function queuePauseHoldingInContext(
+  context: QueuePauseContext,
+  card: QueueCard
+): DerivedQueuePause | undefined {
+  return context.pauses.find((pause) => contextPauseHolds(context, pause, card))
+}
+
+/** Full membership is needed only when publishing or restating the pause. */
+export function deriveQueuePauses(
+  input: QueuePauseFacts & { cards: readonly QueueCard[] }
+): DerivedQueuePause[] {
+  const context = createQueuePauseContext(input)
+  return context.pauses.flatMap((pause) => {
+    if (pause.reason === 'stopped' || pause.reason === 'failed') {
+      return [pause]
+    }
+    const messageIds = input.cards.flatMap((card) =>
+      card.messageId && contextPauseHolds(context, pause, card) ? [card.messageId] : []
+    )
+    return messageIds.length > 0 ? [{ ...pause, messageIds }] : []
+  })
 }
 
 function heldSince(
@@ -275,11 +306,8 @@ export function nextSendableQueuedCard<T extends QueueCard & { messageId: string
     if (editHeld.has(card.messageId)) {
       return null
     }
-    if (card.state === 'returned' || queuePauseHolding(pauses, card)) {
-      continue
-    }
-    if (card.state === 'waiting' && card.holdReason === null) {
-      return editHeld.has(card.messageId) ? null : card
+    if (card.state === 'waiting' && card.holdReason === null && !queuePauseHolding(pauses, card)) {
+      return card
     }
   }
   return null

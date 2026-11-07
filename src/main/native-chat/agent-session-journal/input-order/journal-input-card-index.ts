@@ -3,22 +3,19 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { isLiveJournalQueueCard } from '../queued-messages/journal-queue-retention'
 import {
-  deriveQueuePauses,
-  queuePauseHolding,
-  type DerivedQueuePause
+  createQueuePauseContext,
+  queuePauseHoldingInContext,
+  type QueuePauseContext
 } from '../queued-messages/queued-message-pause'
 import { journalInputOrder } from './journal-input-order'
 
-export function compareQueuedRows(a: QueuedMessageRow, b: QueuedMessageRow): number {
-  return (
-    a.position - b.position || (a.messageId < b.messageId ? -1 : a.messageId > b.messageId ? 1 : 0)
-  )
-}
+import { JournalQueuedRowIndex } from './journal-queued-row-index'
+export { compareQueuedRows } from './journal-queued-row-index'
 
 /** Current rows are the entire runtime order; dispatched slots stay reserved until withdrawal. */
 export class JournalInputCardIndex {
   private initialized = false
-  private readonly current = new Map<string, QueuedMessageRow>()
+  private readonly current = new JournalQueuedRowIndex()
   private firstPosition = 0
   private lastPosition = 0
   private overlayRows: readonly QueuedMessageRow[] = []
@@ -27,7 +24,9 @@ export class JournalInputCardIndex {
   private ordered: { revision: number; rows: readonly QueuedMessageRow[] } | undefined
   private floor: AgentJournalCursor | null = null
   private pauseKey = ''
-  private pauses: readonly DerivedQueuePause[] = []
+  private pauseContext: QueuePauseContext | undefined
+  private clearIds: readonly string[] | undefined
+  private clearMembers: ReadonlySet<string> = new Set()
   private failed = false
 
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
@@ -65,7 +64,6 @@ export class JournalInputCardIndex {
     const marks = state.queuePauseMarks
     const failedAt = journalInputOrder(state).newestTurn.failure()
     const key = [
-      this.revision,
       state.latestAcceptedTurnSequence,
       journalInputOrder(state).latestPersonAcceptedSequence(),
       marks.latestStop?.sequence,
@@ -77,40 +75,50 @@ export class JournalInputCardIndex {
       this.floor?.epoch,
       this.floor?.sequence
     ].join(':')
-    if (key !== this.pauseKey) {
+    const membershipChanged = marks.cleared?.messageIds !== this.clearIds
+    if (membershipChanged) {
+      this.clearIds = marks.cleared?.messageIds
+      this.clearMembers = new Set(this.clearIds)
+    }
+    if (key !== this.pauseKey || membershipChanged) {
       this.pauseKey = key
-      this.pauses = deriveQueuePauses({
-        epoch: state.epoch,
-        marks,
-        latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-        latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
-        failedAt,
-        cards: this.list(),
-        reopenFloor: this.floor
-      })
-      this.failed = this.pauses.some((pause) => pause.reason === 'failed')
+      this.pauseContext = createQueuePauseContext(
+        {
+          epoch: state.epoch,
+          marks,
+          latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+          latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+          failedAt,
+          reopenFloor: this.floor
+        },
+        this.clearMembers
+      )
+      this.failed = this.pauseContext.pauses.some((pause) => pause.reason === 'failed')
     }
   }
   failureHolds(): boolean {
     return this.failed
   }
   paused(card: QueuedMessageRow): boolean {
-    return queuePauseHolding(this.pauses, card) !== undefined
+    return (
+      this.pauseContext !== undefined &&
+      queuePauseHoldingInContext(this.pauseContext, card) !== undefined
+    )
   }
   head(): QueuedMessageRow | undefined {
-    return this.list()[0]
+    return this.current.head()
   }
   version(): number {
     return this.revision
   }
-  live(): Iterable<QueuedMessageRow> {
-    return this.current.values()
+  live(after?: QueuedMessageRow): Iterable<QueuedMessageRow> {
+    return this.current.values(after)
   }
   list(): readonly QueuedMessageRow[] {
     if (this.ordered?.revision !== this.revision) {
       this.ordered = {
         revision: this.revision,
-        rows: [...this.current.values()].sort(compareQueuedRows)
+        rows: [...this.current.values()]
       }
     }
     return this.ordered.rows
@@ -119,12 +127,7 @@ export class JournalInputCardIndex {
     return { first: this.firstPosition, last: this.lastPosition }
   }
   indexCard(state: JournalReducerState, card: QueuedMessageRow): void {
-    const prior = this.current.get(card.messageId)
-    const live = isLiveJournalQueueCard(card, state.submissions)
-    if (live && prior !== card) {
-      this.current.set(card.messageId, card)
-      this.revision++
-    } else if (!live && this.current.delete(card.messageId)) {
+    if (this.current.set(card, isLiveJournalQueueCard(card, state.submissions))) {
       this.revision++
     }
     if (card.state !== 'withdrawn') {

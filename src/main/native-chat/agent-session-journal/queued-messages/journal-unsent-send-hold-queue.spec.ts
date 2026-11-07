@@ -1,4 +1,5 @@
 import { AgentSessionJournal } from '../journal-store'
+import { openAgentSessionJournal } from '../journal-store-factory'
 import { openTestJournalHostDatabase } from '../store-lifecycle/journal-host-database-test-support'
 import { structuredSendAnswer } from '../../agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import type { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
@@ -184,6 +185,49 @@ export function registerJournalUnsentSendHoldQueueTests(
       ).toEqual({ kind: 'waiting' })
       expect(fixture.cardOrder(journal)).toEqual(['mail'])
     })
+  })
+
+  it('retains queued and legacy chat tasks at restart while withdrawing a derived preamble', async () => {
+    const database = openTestJournalHostDatabase(fixture.root)
+    const open = async () =>
+      fixture.journals.track(
+        await openAgentSessionJournal({
+          identity: fixture.IDENTITY,
+          database,
+          now: () => (fixture.clock += 1),
+          mintEpoch: () => 'task-epoch'
+        })
+      )
+    const earlier = await open()
+    const body = {
+      ...fixture.message('dispatched task'),
+      from: {
+        ...fixture.MAIL_SOURCE,
+        orchestration: {
+          message: 'task' as const,
+          runId: 'run',
+          taskId: 'task',
+          dispatchId: 'dispatch'
+        }
+      }
+    }
+    await earlier.queuedMessages.insert({ messageId: 'legacy-task', body })
+    await earlier.queuedMessages.insert({
+      messageId: 'queued-task',
+      body,
+      deliveryMode: 'queue',
+      unattended: true
+    })
+    await earlier.queuedMessages.insert({
+      messageId: 'derived-preamble',
+      body,
+      deliveryMode: 'steer',
+      unattended: true
+    })
+    await earlier.close()
+    const reopened = await open()
+    expect(fixture.cardOrder(reopened)).toEqual(['legacy-task', 'queued-task'])
+    expect(reopened.queuedMessages.get('derived-preamble')?.state).toBe('withdrawn')
   })
 
   describe('the source a send records', () => {

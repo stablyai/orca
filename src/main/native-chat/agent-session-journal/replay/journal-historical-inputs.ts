@@ -137,14 +137,30 @@ export function restoreHistoricalPersonAcceptance(
   const cards = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
     FROM journal_outcomes WHERE generation=? AND field='queue.cards' AND entry_key=?
     AND seq<=? AND deleted=0 ORDER BY seq DESC LIMIT 1`)
-  const accepted = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
-    FROM journal_outcomes WHERE generation=? AND field='submissions' AND seq<=? AND deleted=0
-    AND json_extract(value_json, '$[1].dispatchState')='accepted' ORDER BY seq`)
   const owner = journalInputOrder(state)
-  for (const record of accepted.iterate(source.generation, source.through)) {
+  const accepted = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
+    FROM journal_outcomes WHERE generation=? AND seq>? AND seq<=? ORDER BY seq DESC`)
+  for (const record of accepted.iterate(
+    source.generation,
+    owner.latestPersonAcceptedSequence(),
+    source.through
+  )) {
+    if (typeof record.seq !== 'number') {
+      throw new JournalOutcomeDecodeError('invalid historical outcome sequence')
+    }
+    // An admission cannot be newer than its outcome; later acceptance does not change that admission.
+    if (record.seq <= owner.latestPersonAcceptedSequence()) {
+      break
+    }
+    if (record.field !== 'submissions' || record.deleted !== 0) {
+      continue
+    }
     const value = decodeJournalOutcome(record)
     const [, submission] = outcomeFormat1EntryParsers.submissions.parse(JSON.parse(value.json))
-    if ((submission.acceptedSequence ?? 0) <= owner.latestPersonAcceptedSequence()) {
+    if (
+      submission.dispatchState !== 'accepted' ||
+      (submission.acceptedSequence ?? 0) <= owner.latestPersonAcceptedSequence()
+    ) {
       continue
     }
     let card = submission.queuedMessageId

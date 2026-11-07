@@ -6,8 +6,8 @@ import { journalInputOrder } from '../input-order/journal-input-order'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
 
-type QueueWalk = { key: string; first: QueuedMessageRow | null; pastMail: QueuedMessageRow | null }
-const walks = new WeakMap<object, QueueWalk[]>()
+type QueueWalk = { key: string; first: QueuedMessageRow | null; pastMail?: QueuedMessageRow | null }
+const walks = new WeakMap<object, Map<string, QueueWalk>>()
 
 /** Automatic claim skips held rows; only an edit lease is a barrier. Mail keeps its owner's order. */
 export function nextEligibleQueuedCard(input: {
@@ -18,6 +18,7 @@ export function nextEligibleQueuedCard(input: {
   revisions: readonly unknown[]
   unavailable: ((card: QueuedMessageRow) => boolean) | undefined
   steer?: boolean
+  automatic?: boolean
 }): QueuedMessageRow | null {
   const order = journalInputOrder(input.state)
   order.cards.ensure(input.state, input.floor)
@@ -25,7 +26,6 @@ export function nextEligibleQueuedCard(input: {
   const marks = state.queuePauseMarks
   const key = [
     ...input.revisions,
-    order.version(),
     order.cards.version(),
     input.steer,
     order.cards.failureHolds(),
@@ -39,12 +39,15 @@ export function nextEligibleQueuedCard(input: {
     input.floor?.epoch,
     input.floor?.sequence
   ].join(':')
-  const prior = walks.get(order.cards) ?? []
-  let walk = prior.find((entry) => entry.key === key)
-  if (!walk) {
-    let first: QueuedMessageRow | null = null
-    let pastMail: QueuedMessageRow | null = null
-    for (const row of order.cards.list()) {
+  let modes = walks.get(order.cards)
+  if (!modes) {
+    modes = new Map()
+    walks.set(order.cards, modes)
+  }
+  const mode = `${input.steer === true}:${input.automatic !== false}`
+  let walk = modes.get(mode)
+  const find = (after?: QueuedMessageRow): QueuedMessageRow | null => {
+    for (const row of order.cards.live(after)) {
       const card = input.get(row.messageId) ?? row
       if (input.editHeld(card.messageId)) {
         break
@@ -56,24 +59,25 @@ export function nextEligibleQueuedCard(input: {
       if (input.steer && (card.body.command || (!mail && card.deliveryMode !== 'steer'))) {
         continue
       }
-      if (!first) {
-        first = card
-        if (!mail) {
-          break
-        }
-      } else if (!mail) {
-        pastMail = card
-        break
+      if (!after || !mail) {
+        return card
       }
     }
-    walk = { key, first, pastMail }
-    walks.set(order.cards, [walk, ...prior.slice(0, 1)])
+    return null
+  }
+  if (!walk || walk.key !== key) {
+    walk = { key, first: find() }
+    modes.set(mode, walk)
   }
   const first = walk.first
-  // Mail owedness is external to the journal: ask it afresh even when the row walk is memoized.
-  return first && orchestrationMailNotice(first.body.from) && input.unavailable?.(first)
-    ? walk.pastMail
-    : first
+  // Ownership is external: ask afresh, and walk past mail only when its owner cannot take it.
+  if (first && orchestrationMailNotice(first.body.from) && input.unavailable?.(first)) {
+    if (walk.pastMail === undefined) {
+      walk.pastMail = find(first)
+    }
+    return walk.pastMail
+  }
+  return first
 }
 
 /** Automatic consumption validates the same current selection on the journal write lane. */

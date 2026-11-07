@@ -10,17 +10,80 @@ import { AgentSessionSubscribers } from '../../publication/subscribers/structure
 import { readAgentSessionHistory } from '../../publication/history/agent-session-history-page'
 import { subscriberHistoryReader } from '../../publication/history/agent-session-bounded-frames'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { pinTestJournalInputMode } from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
 
 import {
   db,
   handOff,
   journalFor,
+  legacyIds,
   message,
   retainedHistoryCases,
   seedLegacy,
   threadWrite
 } from './structured-agent-session-queue-import-contract-test-fixture'
+
+it.each(['person', 'mail'] as const)(
+  'accepted table-only %s handoff keeps its Stop provenance after cleanup and another open',
+  async (sender) => {
+    let journal = journalFor(SESSION)
+    await journal.open()
+    pinTestJournalInputMode(journal)
+    await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+    await handOff(journal, 'H', 'S', 'sent', 'accepted')
+    await journal.close()
+    seedLegacy(SESSION, [
+      ['W', 'waiting', 'waiting'],
+      ['S', 'dispatched', 'sent', 'H']
+    ])
+    if (sender === 'mail') {
+      const body = {
+        ...message('sent'),
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'owner',
+            dispatchId: null,
+            messages: []
+          }
+        }
+      }
+      db()
+        .prepare('UPDATE queued_messages SET body_json=? WHERE message_id=?')
+        .run(JSON.stringify(body), 'S')
+    }
+    for (let opened = 0; opened < 2; opened++) {
+      journal = journalFor(SESSION)
+      await journal.open()
+      await journal.queuedMessages.importAtOpen()
+      expect(legacyIds()).toEqual([])
+      expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(['W'])
+      expect(journal.queuedMessages.userStopInForce() === null).toBe(sender === 'person')
+      await journal.appendSubmission({
+        clientMessageId: `unattended-${opened}`,
+        body: message('wake'),
+        payloadFingerprint: 'wake',
+        source: { kind: 'agent' },
+        origin: 'host',
+        handoverRecorded: true,
+        fence: 0
+      })
+      await journal.resolveDispatch({
+        clientMessageId: `unattended-${opened}`,
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 0
+      })
+      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
+        sender === 'person' ? 'W' : null
+      )
+      await journal.close()
+    }
+  }
+)
 
 it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adopt, proof }) => {
   const earlier = journalFor(SESSION)
