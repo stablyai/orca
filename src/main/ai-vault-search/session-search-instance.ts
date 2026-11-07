@@ -99,7 +99,7 @@ export class SessionSearchInstance {
   }
   async status(): Promise<AiVaultSearchStatus> {
     const live = this.live
-    if (!live) {
+    if (!this.settings.enabled || !live) {
       return { ...unavailableSessionSearchStatus(), enabled: this.settings.enabled }
     }
     return {
