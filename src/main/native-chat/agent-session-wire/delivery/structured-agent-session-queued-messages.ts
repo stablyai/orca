@@ -82,7 +82,7 @@ export async function maybeQueueStructuredAgentSessionSend(
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
       work: contextStructuredAgentSessionCurrentWork(ctx),
-      fromAgent: !params.userSend && !params.personsMessage && body.from !== undefined
+      fromAgent: !params.userSend && !params.personsMessage && params.body.from !== undefined
     })
   ) {
     return null
