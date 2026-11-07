@@ -104,7 +104,7 @@ export class SqlAgentSessionJournal {
       let needs: JournalHostFactsNeeded | undefined
       for (;;) {
         const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
-        const preparation = (await prepare?.(context, needs)) ?? {}
+        const preparation: JournalSqlStorePreparation = (await prepare?.(context, needs)) ?? {}
         const facts: JournalWriterHostFacts = { identity: this.identity, ...preparation.facts }
         let staged: JournalStagedReceipt | undefined
         let commit: JournalWriterCommit
