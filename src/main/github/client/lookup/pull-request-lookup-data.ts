@@ -1,5 +1,5 @@
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type {
+  GitHubOwnerRepo,
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
   PRMergeableState,
