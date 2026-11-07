@@ -564,6 +564,7 @@ it('keeps imported and local peer authority through real CLI import, settlement,
 })
 
 it('publishes a restored session peer in the first completed Crew frame', async () => {
+  const fixtureNow = 1_700_000_000_000
   const directory = mkdtempSync(join(tmpdir(), 'orca-restored-crew-'))
   const profilePath = vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
   const h = createSessionCallerHarness({ current: null })
@@ -592,10 +593,10 @@ it('publishes a restored session peer in the first completed Crew frame', async 
         probe: { outcome: 'indeterminate', reason: 'at-rest creation starts no process' },
         operation: {
           callerKey: 'private-cold',
-          operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
+          operationId: `${fixtureNow}-${randomUUID().replaceAll('-', '')}`,
           fingerprint: `found:${sessionId}`
         },
-        now: Date.now()
+        now: fixtureNow
       })
     }
     const released = await releaseAgentSessionRecordStore()
