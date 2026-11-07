@@ -265,7 +265,8 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           }
         }
         return { kind: 'loading' }
-      default:
+      case 'data':
+      case 'empty-loading':
         return { kind: 'loading' }
     }
   }, [read, names, error, isFetching, connState, t])
