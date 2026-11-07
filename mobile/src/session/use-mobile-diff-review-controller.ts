@@ -150,6 +150,8 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     connState,
     target,
     currentItem,
+    filteredQueue,
+    currentIndex,
     screenState,
     statusRevision
   })

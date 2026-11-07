@@ -53,8 +53,7 @@ export function startMobileDiffReviewSnapshot(
       compare
         ? loadMobileDiffReviewBranchCompare(client, worktreeId, compare, {
             worktreeShow,
-            head: () =>
-              status.then((read) => (read.kind === 'ready' ? read.status.head : undefined)),
+            head: () => status.then((read) => (read.kind === 'ready' ? read.status.head : null)),
             cache: input.cacheBranchCompare
           })
         : { result: null },

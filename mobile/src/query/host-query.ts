@@ -7,6 +7,7 @@ import {
   useQueries,
   useQuery,
   type QueryClient,
+  type StaleTimeFunction,
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
@@ -29,7 +30,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
     input: TInput,
     previous: TData | undefined
   ) => Promise<TData>
-  staleTime?: number
+  staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
   // Only for families the desktop sends no change signal for.
   refetchOnWindowFocus?: boolean
@@ -84,6 +85,20 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   })
   await new Promise<void>((resolve) => notifyManager.schedule(resolve))
   return data
+}
+
+// A read ahead of the user: skipped while the key holds current data, joins a read already out.
+export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput
+): Promise<void> {
+  return queryClient.prefetchQuery({
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    staleTime: Infinity
+  })
 }
 
 // Without a client the observer still reads the cached entry, but never fetches.
