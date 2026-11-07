@@ -143,13 +143,24 @@ export function formatWorktreePs(result: WithAnnotatedHostScope<RuntimeWorktreeP
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsParent(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.worktrees.length} of ${result.totalCount}`
     : bodyWithScope
+}
+
+/** The parent line, in the sidebar's precedence: worktree, then folder workspace, then another machine. */
+function formatWorktreePsParent(worktree: RuntimeWorktreePsResult['worktrees'][number]): string {
+  const parent =
+    worktree.parentWorktreeId ??
+    worktree.workspaceLineage?.parentWorkspaceKey ??
+    (worktree.crossStoreParent
+      ? `${worktree.crossStoreParent.parent.workspaceKey} on another machine`
+      : null)
+  return parent ? `\nparent: ${parent}` : ''
 }
 
 export function formatRepoList(result: RuntimeRepoList): string {

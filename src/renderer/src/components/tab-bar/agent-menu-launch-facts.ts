@@ -1,13 +1,13 @@
 import type { AppState } from '@/store/types'
-import type { AgentSessionLaunchRequest } from '@/lib/agent-session-launch-plan'
-import { resolveAgentLaunchHost } from '@/lib/agent-launch-route-input'
+import type { AgentSessionLaunchRequest } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { resolveAgentLaunchHost } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   executionHostTerminalPending,
   resolveRepoExecutionHostTarget,
   resolveWorktreeResourceTarget,
   type ExecutionHostTarget
 } from '@/lib/execution-host-facts'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { getIndexedReposById } from '@/store/worktree-repo-index'
 import {
   selectDetectedWorktreesByRepo,

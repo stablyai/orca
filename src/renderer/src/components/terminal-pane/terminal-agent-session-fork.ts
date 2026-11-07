@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -17,8 +17,8 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'
 import { translate } from '@/i18n/i18n'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 
 type ForkAgentSessionFromPaneArgs = {
   pane: ManagedPane

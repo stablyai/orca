@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import '../../orchestration/db'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import '../../orchestration/db/contract-constants'
+import '../../orchestration/db/messages/mailbox-routing-page'
+import '../../orchestration/db/dispatch-row-writer'
+import '../../orchestration/db/attempt-outcome-projection'
 
 const { getWorktreeListingMocks } = vi.hoisted(() => {
   function createWorktreeListingMocks() {

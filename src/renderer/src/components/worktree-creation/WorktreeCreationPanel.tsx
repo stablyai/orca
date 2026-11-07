@@ -1,11 +1,11 @@
 import React from 'react'
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import {
   getCreationProgressLabel,
   getVisibleCheckoutProgress
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import { Progress } from '@/components/ui/progress'
 import { translate } from '@/i18n/i18n'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'

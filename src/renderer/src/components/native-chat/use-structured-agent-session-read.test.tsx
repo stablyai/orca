@@ -160,6 +160,89 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.call).toHaveBeenCalledTimes(2)
   })
 
+  it('releases browsed history only after the last reader returns and retires its old page', async () => {
+    const corpus = Array.from({ length: 4000 }, (_, index) =>
+      message(`row-${index + 1}`, index + 1, 'assistant')
+    )
+    mocks.call.mockImplementation(
+      async (_target, _method, params: { direction: string; cursor?: AgentJournalCursor }) => {
+        const end = params.cursor ? params.cursor.sequence - 1 : 4000
+        const items = corpus.slice(Math.max(0, end - 200), end)
+        return {
+          ok: true,
+          page: {
+            ...page(params.direction === 'tail' ? 'tail' : 'before', items, true),
+            liveCursor: { epoch: 'epoch-a', sequence: 4000 }
+          }
+        }
+      }
+    )
+    const view = renderHook(
+      ({ secondVisible }) => ({
+        first: useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET }),
+        second: useStructuredAgentSessionRead({
+          sessionId: 'session-a',
+          target: LOCAL_TARGET,
+          isVisible: secondVisible
+        })
+      }),
+      { initialProps: { secondVisible: true } }
+    )
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
+    const releaseFirst = view.result.current.first.retainHistory()
+    const releaseSecond = view.result.current.second.retainHistory()
+    for (let pageIndex = 0; pageIndex < 8; pageIndex++) {
+      await act(async () => {
+        await view.result.current.first.loadOlder()
+      })
+    }
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    // Selection alone must not retire the source's initial autofill.
+    const releaseSelection = view.result.current.first.retainHistory()
+    act(() => releaseSelection())
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    expect(view.result.current.first.initialHistoryAutoLoad).toBe(true)
+    view.rerender({ secondVisible: false })
+    act(() => {
+      releaseFirst()
+      view.result.current.first.trimHistory()
+    })
+    expect(view.result.current.first.state.items).toHaveLength(2000)
+    const oldPage = Promise.withResolvers<{ ok: true; page: AgentSessionHistoryPage }>()
+    mocks.call.mockImplementationOnce(() => oldPage.promise)
+    let oldRead!: Promise<string>
+    act(() => {
+      oldRead = view.result.current.second.loadOlder()
+    })
+    act(() => releaseSecond())
+    expect(view.result.current.first.state.items).toHaveLength(1024)
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    expect(view.result.current.first.state.cursor).toEqual({ epoch: 'epoch-a', sequence: 4000 })
+    expect(view.result.current.first.state.hasOlder).toBe(true)
+    expect(view.result.current.first.loadingOlder).toBe(false)
+    const releaseAgain = view.result.current.first.retainHistory()
+    const newPage = Promise.withResolvers<{ ok: true; page: AgentSessionHistoryPage }>()
+    mocks.call.mockImplementationOnce(() => newPage.promise)
+    let newRead!: Promise<string>
+    act(() => {
+      newRead = view.result.current.first.loadOlder()
+    })
+    await act(async () => {
+      oldPage.resolve({ ok: true, page: page('before', corpus.slice(1800, 2000), true) })
+      await expect(oldRead).resolves.toBe('superseded')
+    })
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    expect(view.result.current.first.loadingOlder).toBe(true)
+    await act(async () => {
+      newPage.resolve({ ok: true, page: page('before', corpus.slice(2776, 2976), true) })
+      await expect(newRead).resolves.toBe('applied')
+    })
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2777)
+    act(() => releaseAgain())
+    expect(view.result.current.first.state.items[0]?.sequence).toBe(2977)
+    view.unmount()
+  })
+
   it('preserves cached state and resumes at the applied cursor on re-entry', async () => {
     const unsubscribe = vi.fn()
     mocks.call.mockImplementation((_target, _method, params) => {
@@ -204,7 +287,7 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(mocks.call).toHaveBeenCalledTimes(2)
     expect(mocks.subscribe.mock.calls[2]?.[1]).toEqual({
       sessionId: 'session-switch-a',
-      cursor: view.result.current.first.state.cursor
+      cursor: { epoch: 'epoch-a', sequence: 500 }
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
     const owner = getStructuredAgentSessionReadOwner('session-switch-a', LOCAL_TARGET)

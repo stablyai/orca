@@ -1,8 +1,8 @@
 // A build without ORCA_SIDEBAR_INPUTS=main (every shipped one) keeps none of main's sidebar inputs.
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { ALL_RPC_METHODS } from '../rpc/methods'
-import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
+import { ALL_RPC_METHODS } from '../rpc/methods/rpc-method-registry'
+import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs/sidebar-inputs'
 
 describe('sidebar inputs with the switch off', () => {
   it('builds no producer and registers no sidebarInputs method', () => {

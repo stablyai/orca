@@ -3,14 +3,14 @@ import {
   mockCreateTab,
   mockToastError,
   store
-} from '../../lib/launch-agent-in-new-tab-test-fixture'
+} from '../../lib/agent-session/launch/new-tab/launch-agent-in-new-tab-test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useTabAgentMenuLaunch } from './QuickLaunchButton'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import { launchOnceHostAnswered } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { launchOnceHostAnswered } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { i18n } from '@/i18n/i18n'
 import fr from '@/i18n/locales/fr.json'
 

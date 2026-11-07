@@ -9,9 +9,9 @@ import { type AppState, useAppStore } from '@/store'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { settleAgentTabLaunch } from '@/lib/launch-agent-in-new-tab-host-agents'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { getConnectionId } from '@/lib/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
@@ -30,7 +30,7 @@ import type { SourceControlLaunchActionId } from '../../../../../../shared/sourc
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control/recovery/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
-import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<AppState, 'settings'> & WorktreeAgentInventoryState
 

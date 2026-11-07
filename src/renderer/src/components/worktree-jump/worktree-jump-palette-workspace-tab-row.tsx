@@ -15,7 +15,7 @@ import {
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
-import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 

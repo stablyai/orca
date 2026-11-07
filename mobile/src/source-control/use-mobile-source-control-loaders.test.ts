@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +7,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
@@ -83,6 +89,7 @@ async function settleOldest(
   }
   const [call] = calls.splice(index, 1)
   await act(async () => call.settle(reply))
+  await settleQueryNotifications()
 }
 
 async function settleCompare(calls: PendingCall[], baseRef: string): Promise<void> {
@@ -131,6 +138,7 @@ describe('useMobileSourceControlLoaders branch compare', () => {
   ): Promise<(identityKey: string, worktreeId: string) => Promise<void>> {
     function Harness(props: { identityKey: string; worktreeId: string }): null {
       read.loaders = useMobileSourceControlLoaders({
+        hostId: 'host-1',
         client,
         connState: 'connected',
         statusIdentityKey: props.identityKey,
@@ -139,12 +147,15 @@ describe('useMobileSourceControlLoaders branch compare', () => {
       })
       return null
     }
+    const queries = documentQueryClient()
+    const render = (props: { identityKey: string; worktreeId: string }) =>
+      queries.wrap(createElement(Harness, props))
     await act(async () => {
-      renderer = create(createElement(Harness, { identityKey: IDENTITY, worktreeId: WORKTREE }))
+      renderer = create(render({ identityKey: IDENTITY, worktreeId: WORKTREE }))
     })
     return async (identityKey, worktreeId) => {
       await act(async () => {
-        renderer?.update(createElement(Harness, { identityKey, worktreeId }))
+        renderer?.update(render({ identityKey, worktreeId }))
       })
     }
   }
@@ -198,5 +209,45 @@ describe('useMobileSourceControlLoaders branch compare', () => {
 
     await settleCompare(calls, 'origin/dev')
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
+  })
+})
+
+describe('useMobileSourceControlLoaders action error', () => {
+  it('leaves the action error to the reads that actions and refreshes make', async () => {
+    const calls: PendingCall[] = []
+    const actionErrors: (string | null)[] = []
+    const queryClient = createOrcaQueryClient()
+    // Stable, as the screen's state setter is; a new identity would read as a refocus.
+    const recordActionError = (message: string | null): void => {
+      actionErrors.push(message)
+    }
+    function Harness(): null {
+      useMobileSourceControlLoaders({
+        hostId: 'host-1',
+        client: fakeClient(calls),
+        connState: 'connected',
+        statusIdentityKey: IDENTITY,
+        worktreeId: WORKTREE,
+        setActionError: recordActionError
+      })
+      return null
+    }
+    let renderer: ReactTestRenderer | null = null
+    await act(async () => {
+      renderer = create(
+        createElement(QueryClientProvider, { client: queryClient }, createElement(Harness))
+      )
+    })
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await settleQueryNotifications()
+
+    // An open, foreground or reconnect read can land after an action failed; it must not wipe that error.
+    await act(async () => {
+      void queryClient.invalidateQueries()
+    })
+    await settleOldest(calls, 'git.status', STATUS_REPLY)
+    await settleQueryNotifications()
+    expect(actionErrors).toEqual([])
+    act(() => renderer?.unmount())
   })
 })

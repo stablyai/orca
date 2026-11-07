@@ -1,5 +1,5 @@
-import { resolveIndexedRepoOwner } from '@/lib/repo-owner-index'
-import { getResourceExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveIndexedRepoOwner } from '@/lib/workspace/ownership/repo-owner-index'
+import { getResourceExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
@@ -10,7 +10,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import {
   makeFolderWorkspace,
   makeWorktree,
@@ -33,7 +34,7 @@ import {
   useNewTabAgentMenuRows,
   type AgentMenuRowsTarget
 } from './use-new-tab-agent-menu-rows'
-import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import { sourceControlRepoAgentRows } from '@/lib/source-control/ai/source-control-agent-picker'
 import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-facts'
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import { useMemo } from 'react'

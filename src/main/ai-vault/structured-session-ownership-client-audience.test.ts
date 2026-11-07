@@ -12,7 +12,7 @@ import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { assertLegacyAiVaultResumeCommandAllowed } from './structured-session-ownership'
 import { installOwnership } from './structured-session-ownership.test-support'
 

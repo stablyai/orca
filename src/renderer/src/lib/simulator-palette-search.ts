@@ -3,7 +3,7 @@ import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
   resolvePaletteRepoForWorktree
-} from './palette-repo-resolution'
+} from './workspace/search/palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from '../../../shared/locale-text-collators'

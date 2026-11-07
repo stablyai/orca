@@ -10,7 +10,7 @@ import {
 
 // Replay production events here so call-site rewiring changes only the driver, preserving scenario expectations.
 
-/** pane-pty-visibility-bind.ts onBell and parked-terminal-byte-watcher.ts onBell. */
+/** terminal-bell-completion-arbitration.ts onBell and parked-terminal-byte-watcher.ts onBell. */
 export function ringBell(store: AttentionStore, target: PaneTarget): void {
   store.getState().markTerminalBell(target)
 }

@@ -9,7 +9,7 @@ const SCAN_ROOTS = ['src/renderer/src']
 const HEADER = [
   '# Direct system-browser opens (shell.openUrl / window.open) per renderer file.',
   '# This is a RATCHET: counts may only go DOWN. Open web links with openAppHttpLink',
-  '# (src/renderer/src/lib/app-http-link-open.ts). Only sign-in, API-token and star-Orca',
+  '# (src/renderer/src/lib/browser/navigation/app-http-link-open.ts). Only sign-in, API-token and star-Orca',
   '# pages, explicit "open in default browser" actions, Orca installer recovery, port',
   '# opens that route themselves, chat links whose owner is unresolved and windows',
   '# without a workspace browser stay here.',
@@ -50,7 +50,9 @@ export function main(root = process.cwd(), arg = undefined) {
       header: HEADER,
       collect: collectDirectLinkOpenCounts,
       unit: 'direct system-browser open(s)',
-      fix: ['Open web links with openAppHttpLink (src/renderer/src/lib/app-http-link-open.ts).']
+      fix: [
+        'Open web links with openAppHttpLink (src/renderer/src/lib/browser/navigation/app-http-link-open.ts).'
+      ]
     },
     root,
     arg

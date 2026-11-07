@@ -19,7 +19,7 @@ import {
   useChecksPanelCreatedReview,
   type ChecksPanelCreatedReviewInput
 } from './use-checks-panel-created-review'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
   Pick<
@@ -47,7 +47,10 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
     | 'setIsCreatingPr'
     | 'updatePullRequestGenerationRecord'
   > &
-  Pick<ChecksPanelComposerState, 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'> &
+  Pick<
+    ChecksPanelComposerState,
+    'prImageUploadPendingRef' | 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'
+  > &
   Pick<ChecksPanelComposerState, 'handleGeneratePullRequestFields' | 'prAiGenerationEnabled'> &
   Pick<
     ChecksPanelComposerState,
@@ -75,6 +78,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     panelContextKeyRef,
     prAiGenerationEnabled,
     prBase,
+    prImageUploadPendingRef,
     prBody,
     prCreationDefaults,
     prDraft,
@@ -113,6 +117,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if (isCurrentCreateRequest()) {
           setCreatePrError(message)
         }
+      }
+      if (prImageUploadPendingRef.current) {
+        return
       }
       const fields = generated ?? { base: prBase, title: prTitle, body: prBody, draft: prDraft }
       const base = stripBaseRef(fields.base).trim()
@@ -172,6 +179,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
           draft: fields.draft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
           worktreePath,
           useTemplate: prCreationDefaults.useTemplate
+        }
+        if (prImageUploadPendingRef.current) {
+          return
         }
         const result = stacked
           ? await createStackedHostedReview(repo.path, createInput)
@@ -282,6 +292,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       model.mountedRef,
       panelContextKey,
       prBase,
+      prImageUploadPendingRef,
       prBody,
       prCreationDefaults.openAfterCreate,
       prCreationDefaults.useTemplate,

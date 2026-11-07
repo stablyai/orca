@@ -8,7 +8,7 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { managedOrcadRefusalNeedingUserCode } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
-import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {

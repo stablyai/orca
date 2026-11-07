@@ -1,4 +1,4 @@
-import type { AgentTabLaunchOutcome } from '@/lib/launch-agent-in-new-tab-host-agents'
+import type { AgentTabLaunchOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import type { StructuredLaunchTerminal } from './structured-agent-session-launch-admission'
 
 /** The terminal a declined chat's fallback opened, read from the new-tab launcher's outcome. */

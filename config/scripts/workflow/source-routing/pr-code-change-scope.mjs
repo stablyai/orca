@@ -265,12 +265,16 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
   'src/shared/orchestration-rpc-contract.ts',
-  'src/main/runtime/rpc/methods/agent-launch',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
+  'src/main/runtime/rpc/methods/agent-launch/agent-launch',
+  'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
-  'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/',
+  'src/shared/rpc-contract/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
   'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
   'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
@@ -288,14 +292,13 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
-  'src/renderer/src/lib/agent-launch-routing.ts',
+  'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
   'src/renderer/src/runtime/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
-  'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
@@ -446,7 +449,6 @@ export const DAEMON_INIT_TEST_SUPPORT =
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
-  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 
