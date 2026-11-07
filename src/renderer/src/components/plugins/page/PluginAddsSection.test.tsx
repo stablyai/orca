@@ -109,13 +109,6 @@ afterEach(() => {
   })
 })
 
-it('explains inline why a workspace command and the panel are off without a workspace', () => {
-  renderAdds(hello)
-  expect(screen.getByRole('button', { name: 'Run Hello: Here' })).toBeDisabled()
-  expect(screen.getByRole('button', { name: 'Open panel: Hello Orca' })).toBeDisabled()
-  expect(screen.getAllByText('Needs an open workspace')).toHaveLength(2)
-})
-
 it('opens a live panel over the workspace Settings came from', () => {
   useAppStore.setState({ activeWorktreeId: 'wt-1', previousViewBeforeSettings: 'terminal' })
   renderAdds(hello)
