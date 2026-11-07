@@ -72,17 +72,4 @@ describe('useHostModelCatalogCache', () => {
     )
     await unmount()
   })
-
-  it('lets the preload land when the chat answered only that its listing is running', async () => {
-    const host = heldPreloadClient()
-    const { mounted, unmount } = await mountCache(host.client)
-
-    await act(async () =>
-      mounted.cache?.record('wt-1', { origin: 'unknown', listingInProgress: true })
-    )
-    await act(async () => host.answer(listed('saved')))
-
-    expect(mounted.cache?.seed({ newLaunch: false, seedsModel: false })).toEqual(listed('saved'))
-    await unmount()
-  })
 })

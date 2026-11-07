@@ -74,6 +74,9 @@ export function withHostModelCatalogAnswer(
     if (worktree === null || !snapshot) {
       return undefined
     }
+    if (!snapshot.byWorktree.has(worktree)) {
+      return snapshot
+    }
     const retired = snapshot.byWorktree.get(worktree)
     const byWorktree = new Map(snapshot.byWorktree)
     byWorktree.delete(worktree)
