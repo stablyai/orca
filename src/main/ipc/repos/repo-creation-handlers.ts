@@ -60,7 +60,7 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
     async (
       _event,
       args: { path: string; kind?: 'git' | 'folder'; displayName?: string }
-    ): Promise<{ repo: Repo } | { error: string }> => {
+    ): Promise<{ repo: Repo; subdirectoryOf?: string } | { error: string }> => {
       const result = await addLocalRepoFromPath(store, args.path, args.kind, args.displayName)
       if ('error' in result) {
         return result
@@ -71,7 +71,10 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       emitRepoAdded('folder_picker', result.alreadyExisted, result.repo.kind === 'git')
-      return { repo: result.repo }
+      return {
+        repo: result.repo,
+        ...(result.subdirectoryOf ? { subdirectoryOf: result.subdirectoryOf } : {})
+      }
     }
   )
 
