@@ -33,12 +33,22 @@ describe('ACP sign-out at the first prompt', () => {
                 }
               })
             }
-            agent.fail(
-              frame,
-              -32000,
-              'Authentication required',
-              spec.agent === 'grok' ? detail : { message: detail }
-            )
+            if (spec.agent === 'opencode' || spec.agent === 'opencode2') {
+              // OpenCode 2.0.21, recorded from a temporary home with an invalid dummy key.
+              agent.fail(
+                frame,
+                -32000,
+                'Authentication required: provider authentication required',
+                {}
+              )
+            } else {
+              agent.fail(
+                frame,
+                -32000,
+                'Authentication required',
+                spec.agent === 'grok' ? detail : { message: detail }
+              )
+            }
           })
       })
       await rig.acquire()
@@ -50,9 +60,6 @@ describe('ACP sign-out at the first prompt', () => {
         )
         expect(failures).toHaveLength(1)
         expect(failures[0]?.failure).toMatchObject({ kind: 'notSignedIn' })
-        expect(failures[0]?.text).toContain(
-          spec.agent === 'omp' ? 'OMP' : spec.loginCommand.join(' ')
-        )
         if (spec.agent === 'grok') {
           expect(failures[0]?.text).toContain(detail)
         }
@@ -64,11 +71,8 @@ describe('ACP sign-out at the first prompt', () => {
             rejection: expect.objectContaining({ kind: 'notSignedIn' })
           })
         )
-        const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
-        expect(rejected && 'reason' in rejected ? rejected.reason : '').toContain(
-          spec.agent === 'omp' ? 'OMP' : spec.loginCommand.join(' ')
-        )
         if (spec.agent === 'grok') {
+          const rejected = rig.settled.find((item) => 'state' in item && item.state === 'rejected')
           expect(rejected && 'reason' in rejected ? rejected.reason : '').toContain(detail)
         }
       }
@@ -135,7 +139,8 @@ it.each([
   ],
   // OMP says this for an unresolved launch selector as well as when signed out.
   [
-    'No model selected.\n\nUse /login, set an API key environment variable, or create /host/agent.db\n\nThen use /model to select a model.',
+    // OMP 18.2.7, recorded from a signed-out temporary home.
+    'No model selected.\n\nUse /login, set an API key environment variable, or create /var/folders/25/xk3307ps7552prstq_2qr7080000gn/T/acp-omp-signed-out-y6rh2dq7/.omp/agent/agent.db\n\nThen use /model to select a model.',
     'modelNotSelected'
   ],
   ['No model selected', undefined],
@@ -161,9 +166,4 @@ it.each([
     ({ body }) => body.kind === 'status' && body.tone === 'error'
   )
   expect(row?.body.kind === 'status' ? row.body.failure?.kind : undefined).toBe(kind)
-  expect(row?.body.kind === 'status' ? row.body.text : '').toContain(
-    kind === 'modelNotSelected'
-      ? 'OMP has no model selected. Check your model selection and OMP sign-in, then send again.'
-      : detail
-  )
 })

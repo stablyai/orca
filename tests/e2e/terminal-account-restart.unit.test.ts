@@ -226,15 +226,15 @@ function installRestartHarness(
 import {
   createPane,
   createManager
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
-import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-deps'
-import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import { buildPaneConnectionDeps } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
 import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
-import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
+import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import type * as React from 'react'
 import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
 

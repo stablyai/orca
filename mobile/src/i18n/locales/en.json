@@ -246,7 +246,8 @@
       "pastePairingCode": "Or paste pairing code",
       "connecting": "Connecting…",
       "pairingLog": "Pairing log",
-      "tryAgain": "Try Again"
+      "tryAgain": "Try Again",
+      "codeExpiredOrReplaced": "This pairing code expired or was replaced. Show a new code on your desktop and scan again."
     },
     "pair": {
       "missingCode": "Missing pairing code",

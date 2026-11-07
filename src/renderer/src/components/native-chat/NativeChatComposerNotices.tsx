@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatActionButton } from './NativeChatActionButton'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
 /** Keep the live region mounted so screen readers announce the first notice; show errors first. */
@@ -85,17 +86,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         >
           {notice.content ?? notice.text}
         </p>
-        {notice.action ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={notice.action.disabled}
-            onClick={notice.action.onClick}
-          >
-            {notice.action.label}
-          </Button>
-        ) : null}
+        {notice.action ? <NativeChatActionButton {...notice.action} /> : null}
         {notice.onDismiss ? (
           <Button
             type="button"

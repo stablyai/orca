@@ -102,6 +102,7 @@ export const EXECUTION_HOST_METHODS = [
   'github.addPRReviewCommentReply',
   'github.countWorkItems',
   'github.createIssue',
+  'github.uploadAttachment',
   'github.listAssignableUsers',
   'github.listLabels',
   'github.listWorkItems',

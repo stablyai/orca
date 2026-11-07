@@ -1,3 +1,4 @@
+import { resolveHiddenProbeCwd } from '../../../../rate-limits/hidden-probe-cwd'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
@@ -126,7 +127,7 @@ export async function createCatalogMutationFixture(
     rig.host.deps.launchAccountHome = async () => home
     const fingerprint = agentModelCatalogScopeFingerprint(
       agentModelCatalogFingerprint({ agent, accountHome: home, wslDistro: null }),
-      rig.root
+      resolveHiddenProbeCwd()
     )
     agentModelCatalogStore.recordSuccess(
       fingerprint,

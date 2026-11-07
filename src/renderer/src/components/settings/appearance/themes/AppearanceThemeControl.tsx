@@ -24,7 +24,11 @@ import {
 import { findCodeEditorTheme } from '@/lib/code-editor-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { requestPluginBrowse } from '@/store/plugin-preview-request'
-import { useCatalogAppThemes } from './use-catalog-app-themes'
+import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
+import {
+  disambiguatedContentPluginNames,
+  disambiguatedPluginContentLabels
+} from '../../../plugins/presentation/plugin-name-disambiguation'
 
 type BuiltInTheme = GlobalSettings['theme']
 
@@ -67,19 +71,36 @@ function browseThemesActions(): SettingsSearchableSelectAction[] {
       ]
 }
 
+/** `labels` holds every theme the picker lists, so two sharing a name show their publishers. */
 function pluginThemeGroups(
-  themes: readonly PluginThemeRegistration[]
+  themes: readonly PluginThemeRegistration[],
+  labels: ReadonlyMap<string, string> = themeOptionLabels(themes)
 ): SettingsSearchableSelectGroup[] {
+  const pluginNames = disambiguatedContentPluginNames(themes)
   return [...Map.groupBy(themes, (theme) => theme.pluginKey).values()].map((group) => ({
     key: group[0].pluginKey,
-    heading: group[0].pluginName,
+    heading: pluginNames.get(group[0].pluginKey) ?? group[0].pluginName,
     options: group.map((theme) => ({
       value: theme.id,
-      label: theme.label,
+      label: labels.get(theme.id) ?? theme.label,
       keywords: [theme.base],
       icon: <PluginThemeSwatch theme={theme} />
     }))
   }))
+}
+
+function themeOptionLabels(
+  themes: readonly PluginThemeRegistration[],
+  catalogThemes: readonly CatalogAppTheme[] = []
+): ReadonlyMap<string, string> {
+  return disambiguatedPluginContentLabels([
+    ...themes,
+    ...catalogThemes.map((theme) => ({
+      id: theme.value,
+      pluginKey: theme.listing.pluginKey,
+      label: theme.label
+    }))
+  ])
 }
 
 /** System, Dark or Light; the Light theme and Dark theme slots pick the colors for each. */
@@ -158,6 +179,7 @@ export function AppearanceThemeSlotSelect({
     : undefined
   const terminalInUse =
     terminal !== undefined && isPluginTerminalThemeSelected(settings, terminal, base === 'dark')
+  const labels = themeOptionLabels(themes, catalog.themes)
   return (
     <div className="flex flex-col items-end gap-1">
       <SettingsSearchableSelect
@@ -206,7 +228,7 @@ export function AppearanceThemeSlotSelect({
               }
             ]
           },
-          ...pluginThemeGroups(themes),
+          ...pluginThemeGroups(themes, labels),
           {
             key: 'catalog',
             heading: translate(
@@ -215,7 +237,7 @@ export function AppearanceThemeSlotSelect({
             ),
             options: catalog.themes.map((theme) => ({
               value: theme.value,
-              label: theme.label,
+              label: labels.get(theme.value) ?? theme.label,
               keywords: [theme.pluginName],
               disabled: catalog.installing !== null,
               icon: <ThemeColorSwatch background={theme.background} accent={theme.accent} />
@@ -241,7 +263,7 @@ export function AppearanceThemeSlotSelect({
           {translate(
             'auto.components.settings.AppearanceThemeControl.installingTheme',
             'Installing {{value0}}…',
-            { value0: catalog.installing.label }
+            { value0: labels.get(catalog.installing.value) ?? catalog.installing.label }
           )}
         </span>
       ) : null}
