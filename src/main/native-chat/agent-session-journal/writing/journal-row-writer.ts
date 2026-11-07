@@ -6,12 +6,25 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
 import type Database from '../../../sqlite/sync-database'
+import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
   fold?: (draft: JournalReducerState) => void
   write: (db: Database.Database, row?: JournalRow) => void
   committed: () => void
+  /** The worker writer's form of `write`/`committed`; absent where the receipt is writer-local. */
+  stage?: (context: JournalReceiptStage) => Promise<JournalStagedReceipt>
+}
+
+/** One writer command's staging; receipts co-written in it build on each other. */
+export type JournalReceiptStage = { savedAt: number; row?: JournalRow['kind'] }
+
+/** Effects ride in the command's row transaction; settle runs once after the acknowledged
+ *  COMMIT with this receipt's results, or with undefined after a rollback or an unwritten receipt. */
+export type JournalStagedReceipt = {
+  effects: readonly JournalWriterEffect[]
+  settle: (results: readonly JournalWriterEffectResult[] | undefined) => void
 }
 
 export type JournalReceiptPreparation =
@@ -21,10 +34,41 @@ export type JournalReceiptPreparation =
 export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
+  const stages = receipts.flatMap((receipt) => (receipt.stage ? [receipt.stage] : []))
   return {
     fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
     write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
-    committed: () => receipts.forEach((receipt) => receipt.committed())
+    committed: () => receipts.forEach((receipt) => receipt.committed()),
+    ...(stages.length === receipts.length
+      ? { stage: (context) => stageJournalOperationReceipts(stages, context) }
+      : {})
+  }
+}
+
+/** Stage in order so later receipts build on earlier drafts; a failed stage releases the earlier ones. */
+async function stageJournalOperationReceipts(
+  stages: readonly NonNullable<JournalOperationReceipt['stage']>[],
+  context: JournalReceiptStage
+): Promise<JournalStagedReceipt> {
+  const staged: JournalStagedReceipt[] = []
+  try {
+    for (const stage of stages) {
+      staged.push(await stage(context))
+    }
+  } catch (error) {
+    staged.forEach((entry) => entry.settle(undefined))
+    throw error
+  }
+  return {
+    effects: staged.flatMap((entry) => entry.effects),
+    settle: (results) => {
+      let offset = 0
+      for (const entry of staged) {
+        const count = entry.effects.length
+        entry.settle(results?.slice(offset, offset + count))
+        offset += count
+      }
+    }
   }
 }
 

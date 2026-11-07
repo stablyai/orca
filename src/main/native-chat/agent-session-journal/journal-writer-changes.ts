@@ -17,6 +17,8 @@ export type JournalWriterCommit = {
   /** First presence before this command changed a submission key; captures ignore older cursors. */
   inputKeys: [string, boolean][]
   effects: JournalWriterEffectResult[]
+  /** The command's receipt was written in its transaction; absent when it rolled back or wrote none. */
+  receiptWritten?: true
   /** The operation's own serializable answer (a cursor, card, update or move result). */
   value?: unknown
   /** The host adopts this copy of its goal attachment proofs after COMMIT. */

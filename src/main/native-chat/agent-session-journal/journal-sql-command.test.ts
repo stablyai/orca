@@ -83,11 +83,25 @@ it('assigns revisions after preceding successes and rolls back failed command pr
   }
   const accepted: JournalWriterCommand = {
     ...command(item('first')),
-    effects: [{ kind: 'receipt', scope: { kind: 'global' }, receipt, row: 'last' }]
+    effects: [
+      {
+        kind: 'receipt',
+        scope: { kind: 'global' },
+        receipt,
+        row: { at: 'last', answer: 'journal-row' }
+      }
+    ]
   }
   const duplicate: JournalWriterCommand = {
     ...command(item('must roll back')),
-    effects: [{ kind: 'receipt', scope: { kind: 'global' }, receipt, row: 'last' }]
+    effects: [
+      {
+        kind: 'receipt',
+        scope: { kind: 'global' },
+        receipt,
+        row: { at: 'last', answer: 'journal-row' }
+      }
+    ]
   }
   const results = await batch.run(
     [accepted, duplicate, command(item('second')), command(item('stale', 0))].map((entry) => ({

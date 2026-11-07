@@ -1,12 +1,14 @@
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
+import {
+  AgentSessionStoreWriterLanes,
+  stageAgentSessionStoreReceipt,
+  wakeAdmittedRecord
+} from './agent-session-store-writer-stage'
 import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { AgentSessionJournalError } from '../../../native-chat/agent-session-journal/writing/journal-write-guards'
-import {
-  requireWritableAgentSessionRecord,
-  type AgentSessionStoreState
-} from './agent-session-store-state'
+import type { AgentSessionStoreState } from './agent-session-store-state'
 import {
   insertAgentSessionOperationRowsIfAbsent,
   writeAgentSessionStoreRows
@@ -77,7 +79,7 @@ function readOnlyStoreRefusal(): Error {
   )
 }
 
-type StagedStoreTransaction<T> = {
+export type StagedStoreTransaction<T> = {
   result: T
   draft: AgentSessionStoreState
   writes: AgentSessionStoreRowWrites | null
@@ -98,6 +100,13 @@ export class AgentSessionStoreTransactions {
   private lineage: object = {}
   /** Receipts co-written in one transaction build on each other's drafts, so adoption keeps both. */
   private staged: { transaction: number; draft: AgentSessionStoreState } | null = null
+  private readonly writerLanes = new AgentSessionStoreWriterLanes(
+    (hold) => {
+      const held = this.queue.then(hold)
+      this.queue = held.catch(() => {})
+    },
+    () => this.published
+  )
   /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
@@ -170,14 +179,7 @@ export class AgentSessionStoreTransactions {
         // The ledger and wake share one draft as well as one commit.
         staged = this.stage((draft) => {
           apply(draft)
-          const record = admitted ? requireWritableAgentSessionRecord(draft, admitted) : undefined
-          if (record?.sleptAt !== undefined) {
-            const { sleptAt: _sleptAt, ...awake } = record
-            draft.records.set(record.sessionId, {
-              ...awake,
-              updatedAt: row?.ts ?? record.updatedAt
-            })
-          }
+          wakeAdmittedRecord(draft, admitted, row?.ts)
         }, base)
         this.staged = { transaction, draft: staged.draft }
         const writes = staged.writes
@@ -200,14 +202,29 @@ export class AgentSessionStoreTransactions {
           this.staged = null
         }
         if (admitted) {
-          this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
-          for (const listener of this.acceptedSendListeners) {
-            listener(admitted)
-          }
+          this.admitSend(admitted)
         }
         staged = null
         admitted = undefined
-      }
+      },
+      stage: (context) =>
+        stageAgentSessionStoreReceipt(
+          {
+            refusal: () => (this.journalDatabase.readOnly ? readOnlyStoreRefusal() : undefined),
+            lanes: this.writerLanes,
+            stage: (run, base) => this.stage(run, base),
+            admit: (sessionId) => this.admitSend(sessionId)
+          },
+          { apply, ...options },
+          context
+        )
+    }
+  }
+
+  private admitSend(sessionId: string): void {
+    this.admittedSends.set(sessionId, this.admittedSendCount(sessionId) + 1)
+    for (const listener of this.acceptedSendListeners) {
+      listener(sessionId)
     }
   }
 

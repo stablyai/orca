@@ -22,7 +22,7 @@ export class JournalSqlCommand {
 
   /** Conservative preflight only; all authority and revision assignment are repeated in apply(). */
   streamed(command: JournalWriterCommand): boolean {
-    if (command.effects?.length || command.operation.kind !== 'item') {
+    if (command.effects || command.operation.kind !== 'item') {
       return false
     }
     try {
@@ -47,9 +47,12 @@ export class JournalSqlCommand {
     }
     const session = this.session(command, command.savedAt ?? savedAt)
     const effects: JournalWriterEffectResult[] = []
-    const receipt: JournalOperationReceipt | undefined = command.effects?.length
+    let receiptWritten = false
+    // A present (even empty) effect list is a receipt: operations branch on having one.
+    const receipt: JournalOperationReceipt | undefined = command.effects
       ? {
           write: (db) => {
+            receiptWritten = true
             const rows = session.projected(session.lastRows)
             for (const effect of command.effects!) {
               effects.push(applyJournalWriterEffect(db, this.stateDirectory, effect, rows))
@@ -64,6 +67,7 @@ export class JournalSqlCommand {
     return {
       ...commit,
       effects,
+      ...(receiptWritten ? { receiptWritten: true as const } : {}),
       ...(value === undefined ? {} : { value: plainAnswer(value) }),
       ...(command.facts?.goals ? { goals } : {})
     }

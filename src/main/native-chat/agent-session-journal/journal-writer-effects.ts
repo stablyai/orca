@@ -10,7 +10,12 @@ import {
   markUnclaimedUploadForSweep,
   type AgentSessionAttachmentClaim
 } from '../agent-session-attachments/agent-session-attachment-claims'
-import type { CommandReceipt, CommandReceiptScope } from './writing/command-receipt-schema'
+import type {
+  CommandReceipt,
+  CommandReceiptResult,
+  CommandReceiptScope
+} from './writing/command-receipt-schema'
+import { promptAnswerReceipt, promptRowAnswer } from './writing/command-receipt-prompt-answer'
 import { insertCommandReceiptIfAbsent } from './writing/command-receipt-table'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
 import type { JournalRow } from './durable-rows/journal-row-schema'
@@ -21,8 +26,8 @@ export type JournalWriterEffect =
       kind: 'receipt'
       scope: CommandReceiptScope
       receipt: CommandReceipt
-      /** Bind an accepted journal-row answer to the row assigned inside this transaction. */
-      row?: 'first' | 'last'
+      /** Derive an accepted answer from the row assigned inside this transaction. */
+      row?: JournalReceiptRowBinding
     }
   | { kind: 'claim'; claim: Omit<AgentSessionAttachmentClaim, 'stateDirectory'> }
   | { kind: 'queue-delete'; sessionId: string; messageIds: readonly string[] }
@@ -34,8 +39,17 @@ export type JournalWriterEffect =
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
     }
 
+export type JournalReceiptRowBinding = {
+  at: 'first' | 'last'
+  /** Kinds the row may have; any other row, or none, fails the command unless `absent` answers. */
+  kinds?: readonly JournalRow['kind'][]
+  answer: 'journal-row' | 'prompt-answer'
+  absent?: CommandReceiptResult
+}
+
 export type JournalWriterEffectResult =
   | { referenced: Set<string>; inserted: string[] }
+  | { receipt: CommandReceipt; row: JournalRow['kind'] | null }
   | boolean
   | number
   | null
@@ -62,22 +76,13 @@ export function applyJournalWriterEffect(
       return null
     }
     case 'receipt': {
-      let receipt = effect.receipt
-      if (effect.row) {
-        const row = effect.row === 'first' ? rows[0] : rows.at(-1)
-        if (!row || receipt.status !== 'accepted' || receipt.result.kind !== 'journal-row') {
-          throw new Error('journal receipt has no assigned row')
-        }
-        receipt = {
-          ...receipt,
-          result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
-        }
-      }
+      const row = effect.row && (effect.row.at === 'first' ? rows[0] : rows.at(-1))
+      const receipt = effect.row ? boundReceipt(effect.receipt, effect.row, row) : effect.receipt
       const result = insertCommandReceiptIfAbsent(db, effect.scope, receipt)
       if (!result.inserted) {
         throw new CommandReceiptExistsError(result)
       }
-      return null
+      return { receipt, row: row?.kind ?? null }
     }
     case 'claim':
       return claimAgentSessionAttachmentsInTransaction(db, { ...effect.claim, stateDirectory })
@@ -106,5 +111,28 @@ export function applyJournalWriterEffect(
       }
       return removed
     }
+  }
+}
+
+function boundReceipt(
+  receipt: CommandReceipt,
+  binding: JournalReceiptRowBinding,
+  row: JournalRow | undefined
+): CommandReceipt {
+  if (receipt.status !== 'accepted') {
+    throw new Error('only an accepted receipt binds its row')
+  }
+  if (!row || (binding.kinds && !binding.kinds.includes(row.kind))) {
+    if (binding.absent) {
+      return { ...receipt, result: binding.absent }
+    }
+    throw new Error(`an accepted command requires its ${binding.kinds?.join(' or ') ?? ''} row`)
+  }
+  return {
+    ...receipt,
+    result:
+      binding.answer === 'prompt-answer'
+        ? promptAnswerReceipt(promptRowAnswer(row))
+        : { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
   }
 }
