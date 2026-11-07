@@ -22,6 +22,8 @@ export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 const AGY_HOME_FOLDER = '.gemini'
 const PROBE_TIMEOUT_MS = 5_000
 const FAILED_CHECK_RETRY_MS = 5 * 60_000
+/** The token files the managed agy-acp-server writes for personal and business sign-ins. */
+const MANAGED_CHAT_TOKEN_FILES = ['acp_token.json', 'acp_business_token.json']
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
   const capabilities = initialized.agentCapabilities
@@ -94,7 +96,7 @@ export async function hasManagedAntigravityChatSignIn(managedHome: string): Prom
   ]
   for (const folder of folders) {
     const names = await readdir(folder).catch(() => [])
-    if (names.some((name) => name.endsWith('oauth-token'))) {
+    if (names.some((name) => MANAGED_CHAT_TOKEN_FILES.includes(name))) {
       return true
     }
   }
