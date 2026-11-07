@@ -1,3 +1,4 @@
+import { inheritedClaudeLaunchPreparation } from './claude-launch-inheritance'
 import { lstat } from 'node:fs/promises'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import {
@@ -15,6 +16,10 @@ export async function claudeRoutedHomeAsync(
   >,
   availability: 'checked' | 'identity' = 'checked'
 ): Promise<string | null> {
+  const inherited = inheritedClaudeLaunchPreparation(router)
+  if (inherited) {
+    return inherited.provenance === 'system' ? null : inherited.configDir
+  }
   const profile = router.selectedProfile()
   if (!profile) {
     return null

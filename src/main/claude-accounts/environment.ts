@@ -57,11 +57,14 @@ export function applyClaudeEnvPatch(
     CLAUDE_USER_CONFIG_DIR_ENV
   ] as const) {
     const value = patch[key]
-    if (value) {
+    if (value !== undefined) {
       baseEnv[key] = value
     }
   }
-  if (patch.CLAUDE_CONFIG_DIR) {
+  if (patch.CLAUDE_CONFIG_DIR === '') {
+    // An empty dir clears the key, so no child inherits a config dir the account route never chose.
+    delete baseEnv.CLAUDE_CONFIG_DIR
+  } else if (patch.CLAUDE_CONFIG_DIR !== undefined) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {

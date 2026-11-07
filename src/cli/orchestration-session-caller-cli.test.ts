@@ -500,6 +500,7 @@ describe('the orchestration envelope', () => {
 
     expect(envelope.orchestrationCompatibilityEvidence).toEqual({
       terminalHandle: 'term_inherited_pane',
+      claudeConfigDir: '',
       agentSessionId: SESSION
     })
   })

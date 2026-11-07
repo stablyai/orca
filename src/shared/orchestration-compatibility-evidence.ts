@@ -23,6 +23,8 @@ export type OrchestrationCompatibilityHostStamp =
 
 export type OrchestrationCompatibilityEvidence = {
   terminalHandle?: string
+  /** Caller home only; the host validates it against its managed accounts and live pane. */
+  claudeConfigDir?: string
   paneKey?: string
   launchToken?: string
   host?: OrchestrationCompatibilityHostStamp
@@ -53,11 +55,17 @@ export function readOrchestrationCompatibilityEvidence(
   const paneKey = boundedValue(env.ORCA_PANE_KEY)
   const launchToken = boundedValue(env.ORCA_AGENT_LAUNCH_TOKEN)
   const host = readHostStamp(env)
+  const claudeConfigDir = env.CLAUDE_CONFIG_DIR?.trim()
+    ? boundedValue(env.CLAUDE_CONFIG_DIR)
+    : terminalHandle
+      ? ''
+      : undefined
   if (!terminalHandle && !paneKey && !launchToken && !host) {
     return undefined
   }
   return {
     ...(terminalHandle ? { terminalHandle } : {}),
+    ...(!host && claudeConfigDir !== undefined ? { claudeConfigDir } : {}),
     ...(paneKey ? { paneKey } : {}),
     ...(launchToken ? { launchToken } : {}),
     ...(host ? { host } : {})

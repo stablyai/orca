@@ -15,14 +15,14 @@ export function createOrchestrationCompatibilityEnvelope(
   }
 }
 
-/** The chat an agent launch came from, so the host can show the launched agent there.
- *  Only a same-host session can be named: host-stamped (WSL) environments send nothing. */
+/** Same-host pane or chat evidence; foreign host homes must not select this host's accounts. */
 export function createAgentLaunchCallerEvidence(
   env: NodeJS.ProcessEnv
 ): RuntimeOrchestrationEnvelope['orchestrationCompatibilityEvidence'] {
   const agentSessionId = readInjectedAgentSessionId(env)
-  if (!agentSessionId || readOrchestrationCompatibilityEvidence(env)?.host) {
+  const evidence = readOrchestrationCompatibilityEvidence(env)
+  if (evidence?.host) {
     return undefined
   }
-  return { agentSessionId }
+  return agentSessionId ? { ...evidence, agentSessionId } : evidence
 }
