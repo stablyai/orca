@@ -41,7 +41,7 @@ export function recordHostModelCatalogSnapshot(
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
   const next = withHostModelCatalogAnswer(snapshots.get(key), worktree, catalog)
-  if (worktree !== null && next !== snapshots.get(key)) {
+  if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
     chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
   }
   if (next) {

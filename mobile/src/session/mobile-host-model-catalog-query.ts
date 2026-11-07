@@ -81,7 +81,10 @@ export function useHostModelCatalogCache(args: {
         }
         queryClient.setQueryData<HostModelCatalogSnapshot | null>(queryKey, next ?? null)
         // A preload sent before this list is older; cancelling it keeps the list just set.
-        if (next && queryClient.isFetching({ queryKey, exact: true }) > 0) {
+        if (
+          next?.byWorktree.has(worktree) &&
+          queryClient.isFetching({ queryKey, exact: true }) > 0
+        ) {
           void queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
         }
       }

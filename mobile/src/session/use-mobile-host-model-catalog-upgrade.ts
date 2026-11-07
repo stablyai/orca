@@ -65,6 +65,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
   } = args
   const receiver = useRef(args.receiveCatalog)
   const recordsNewChat = useRef(newLaunch && args.hasTurn !== true)
+  const recordingWait = useRef<string | null>(null)
   useEffect(() => {
     receiver.current = args.receiveCatalog
     recordsNewChat.current = newLaunch && args.hasTurn !== true
@@ -77,8 +78,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
-    // A read sent before the chat's first turn or send answers for the account a new chat pins.
-    const records = recordsNewChat.current
+    const key = `${agent}\u0000${sessionId}`
+    // A read sent before the chat's first turn or send answers for the account a new chat pins,
+    // and so does the listing it waits on, whichever later run picks that up.
+    const records =
+      recordsNewChat.current ||
+      (recordingWait.current === key && isHostModelListingWaitInFlight(key, client))
     const params = {
       agent,
       sessionId,
@@ -115,9 +120,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
         receiver.current(null, 'demand')
       }
     }
-    const key = `${agent}\u0000${sessionId}`
     let leave: (() => void) | undefined
     const wait = () => {
+      recordingWait.current = records ? key : null
       leave = joinHostModelListingWait(
         key,
         () => read(true),
