@@ -499,7 +499,6 @@
 1 src/main/speech/speech-model-files.ts
 2 src/main/speech/speech-model-http-download.ts
 2 src/main/speech/stt-gpu-failure-marker.ts
-1 src/main/speech/stt-worker-model-config.ts
 2 src/main/sqlite/harden-database-files.ts
 1 src/main/sqlite/row-cache/keyed-json-row-cache.ts
 2 src/main/sqlite/row-cache/legacy-json-source.ts
@@ -610,7 +609,7 @@
 7 src/shared/serve-bundle-park.ts
 1 src/shared/serve-user-data-path.ts
 3 src/shared/source-scan/source-tree-scan.ts
-3 src/shared/speech-recognizer-package.ts
+2 src/shared/speech-recognizer-package.ts
 5 src/shared/startup-command-staging.ts
 1 src/shared/terminal/pty/native-process/pty-process-ceiling-state.ts
 8 src/shared/windows-breakaway-launcher.ts
