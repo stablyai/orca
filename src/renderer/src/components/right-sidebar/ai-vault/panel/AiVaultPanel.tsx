@@ -377,7 +377,7 @@ export default function AiVaultPanel({
             onRevealLog={(session) => void revealAiVaultSessionPath(session, session.filePath)}
             onOpenCwd={(session) => void revealAiVaultSessionPath(session, session.cwd)}
             onRevealArtifacts={(session) =>
-              void revealAiVaultSessionPath(session, session.antigravityArtifactsDir ?? null)
+              void revealAiVaultSessionPath(session, session.antigravityArtifactPath ?? null)
             }
             onRequestDelete={(session) => void requestDelete(session)}
           />

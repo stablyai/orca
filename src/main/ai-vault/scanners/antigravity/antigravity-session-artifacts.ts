@@ -1,42 +1,52 @@
-import { dirname } from 'node:path'
+import type { Dirent } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
+import type { SessionFileDiscovery } from '../../session-scanner-types'
 import { antigravityConversationIdFromTranscriptPath } from './session-scanner-antigravity-paths'
 
-const ARTIFACT_CHECK_CONCURRENCY = 8
-
-/** `<brain>/<id>/` for a transcript under `<id>/.system_generated/logs/`. */
-function antigravityConversationDir(transcriptPath: string): string | null {
-  return antigravityConversationIdFromTranscriptPath(transcriptPath)
-    ? dirname(dirname(dirname(transcriptPath)))
-    : null
-}
-
-// Names only: artifacts are top-level files; agy's own state (.system_generated, scratch, .user_uploaded) is in subdirectories.
-async function hasTopLevelArtifactFiles(dir: string, signal?: AbortSignal): Promise<boolean> {
-  try {
-    const entries = await wslGatedReaddir(dir, 'scan', signal)
-    return entries.some((entry) => entry.isFile() && !entry.name.startsWith('.'))
-  } catch {
-    // A missing or gated folder only hides the action; it is not a scan issue.
-    throwIfAiVaultScanCancelled(signal)
-    return false
+/** Discovery already lists each `<brain>/<id>/`; remember one top-level artifact file there. */
+export function recordAntigravityArtifactPath(
+  artifactPaths: Map<string, string>,
+  brainDir: string,
+  dirPath: string,
+  entries: readonly Dirent[]
+): void {
+  if (dirPath !== join(brainDir, basename(dirPath))) {
+    return
+  }
+  // Names only: agy's own state (.system_generated, scratch, .user_uploaded) lives in subdirectories.
+  let first: string | null = null
+  for (const entry of entries) {
+    if (entry.isFile() && !entry.name.startsWith('.') && (first === null || entry.name < first)) {
+      first = entry.name
+    }
+  }
+  if (first !== null) {
+    artifactPaths.set(dirPath, join(dirPath, first))
   }
 }
 
-/** One directory listing per listed Antigravity row, so the menu never probes the disk itself. */
-export async function withAntigravityArtifactsDirs(
+export function withAntigravityArtifactPaths(
   sessions: AiVaultSession[],
-  signal?: AbortSignal
-): Promise<AiVaultSession[]> {
-  return mapWithConcurrency(sessions, ARTIFACT_CHECK_CONCURRENCY, async (session) => {
-    const dir =
-      session.agent === 'antigravity' ? antigravityConversationDir(session.filePath) : null
-    if (!dir || !(await hasTopLevelArtifactFiles(dir, signal))) {
+  discoveries: readonly SessionFileDiscovery[]
+): AiVaultSession[] {
+  const artifactPaths = discoveries.flatMap((discovery) =>
+    discovery.antigravityArtifactPaths?.size ? [discovery.antigravityArtifactPaths] : []
+  )
+  if (artifactPaths.length === 0) {
+    return sessions
+  }
+  return sessions.map((session) => {
+    if (
+      session.agent !== 'antigravity' ||
+      !antigravityConversationIdFromTranscriptPath(session.filePath)
+    ) {
       return session
     }
-    return { ...session, antigravityArtifactsDir: dir }
+    const conversationDir = dirname(dirname(dirname(session.filePath)))
+    const artifactPath = artifactPaths
+      .map((paths) => paths.get(conversationDir))
+      .find((path) => path !== undefined)
+    return artifactPath ? { ...session, antigravityArtifactPath: artifactPath } : session
   })
 }

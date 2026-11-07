@@ -1,3 +1,4 @@
+import type { Dirent } from 'node:fs'
 import type {
   AiVaultAgent,
   AiVaultScanIssue,
@@ -91,6 +92,8 @@ export type SessionFileDiscovery = {
   files: FileWithMtime[]
   // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
   scopeFiles?: FileWithMtime[]
+  // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
+  antigravityArtifactPaths?: ReadonlyMap<string, string>
 }
 
 export type SessionParseResult = {
@@ -154,4 +157,14 @@ export type CodexUsageSnapshot = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
+}
+
+export type SessionFileWalkOptions = {
+  extensions: Set<string>
+  filePredicate?: (path: string) => boolean
+  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
+  directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
+  readDirectory?: (dirPath: string) => Promise<Dirent[]>
+  signal?: AbortSignal
 }

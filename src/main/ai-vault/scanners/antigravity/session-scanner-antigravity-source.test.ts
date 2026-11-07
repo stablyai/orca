@@ -167,10 +167,12 @@ describe('Antigravity AI Vault discovery', () => {
     await writeFile(join(conversationDir, '.DS_Store'), '')
 
     const before = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    expect(before.sessions[0]?.antigravityArtifactsDir).toBeUndefined()
+    expect(before.sessions[0]?.antigravityArtifactPath).toBeUndefined()
 
     await writeFile(join(conversationDir, 'implementation_plan.md'), '# plan')
     const after = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    expect(after.sessions[0]?.antigravityArtifactsDir).toBe(conversationDir)
+    expect(after.sessions[0]?.antigravityArtifactPath).toBe(
+      join(conversationDir, 'implementation_plan.md')
+    )
   })
 })

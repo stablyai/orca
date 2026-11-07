@@ -299,7 +299,7 @@ export function AiVaultVirtualRow({
               : undefined
           }
           onRevealArtifacts={
-            searchPathAllowed && canOpenLocalSessionPaths && row.session.antigravityArtifactsDir
+            searchPathAllowed && canOpenLocalSessionPaths && row.session.antigravityArtifactPath
               ? () => onRevealArtifacts(row.session)
               : undefined
           }
