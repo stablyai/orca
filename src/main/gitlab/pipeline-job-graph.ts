@@ -59,19 +59,21 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
 /** Maps a trigger (bridge) job as a row that stands for its downstream pipeline. */
 function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelineJob {
   const childStatus = raw.downstream_pipeline?.status
+  // Bridge status may remain successful while its downstream pipeline is running or failed.
+  const status = childStatus || raw.status || ''
   return {
     // Bridges have no real job ID; prevent Checks from calling trace/retry APIs on them.
     id: 0,
     pipelineId,
     name: raw.name ?? 'bridge',
     stage: raw.stage ?? '',
-    // Bridge status may remain successful while its downstream pipeline is running or failed.
-    status: childStatus || raw.status || '',
+    status,
     webUrl: raw.downstream_pipeline?.web_url ?? raw.web_url ?? '',
     duration: typeof raw.duration === 'number' ? raw.duration : null,
     // The trigger job's own times can end long before the child pipeline it now stands for.
     ...(childStatus ? {} : gitLabRunTimes(raw)),
-    ...(raw.allow_failure === true ? { allowFailure: true } : {})
+    // allow_failure covers the trigger's own status, which mirrors the child only via `strategy`.
+    ...(raw.allow_failure === true && raw.status === status ? { allowFailure: true } : {})
   }
 }
 
