@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
-} from '@/runtime/runtime-terminal-stream'
+} from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-terminal-stream', () => ({
+vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
   getRemoteRuntimePtyEnvironmentId: vi.fn(),
   getRemoteRuntimeTerminalHandle: vi.fn()
 }))

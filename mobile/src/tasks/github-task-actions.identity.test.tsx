@@ -470,7 +470,7 @@ it.each(['comment', 'status'] as const)(
   }
 )
 
-it('keeps an unconfirmed comment with a notice until the reloaded thread shows it posted', async () => {
+it('keeps an unconfirmed comment with a notice until the reloaded thread shows the viewer posted it', async () => {
   const f = await mount()
   await act(async () => f.read().setItemCommentDraft('Ship it'))
   let pending!: Promise<void>
@@ -490,10 +490,19 @@ it('keeps an unconfirmed comment with a notice until the reloaded thread shows i
       text: 'Not confirmed. Check the thread before sending again.'
     }
   })
+  const theirs = { id: 40, body: 'Ship it', createdAt: '', author: 'alice' }
+  await act(async () => f.read().setDetailPayload({ ...details(f.a), comments: [theirs] }))
+  expect(f.read()).toMatchObject({
+    itemCommentDraft: 'Ship it',
+    commentSendNotice: { slot: 'comment' }
+  })
   await act(async () =>
     f.read().setDetailPayload({
       ...details(f.a),
-      comments: [{ id: 41, body: 'Ship it', createdAt: '', author: 'me' }]
+      comments: [
+        theirs,
+        { id: 41, body: 'Ship it', createdAt: '', author: 'me', viewerDidAuthor: true }
+      ]
     })
   )
   expect(f.read()).toMatchObject({ itemCommentDraft: '', commentSendNotice: null })

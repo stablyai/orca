@@ -34,7 +34,7 @@ export function RepositorySourceControlAiCustomCommand({
   const mode =
     hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
   return (
-    <div className="space-y-2 rounded-md border border-border px-3 py-3">
+    <div data-settings-row="" className="space-y-2 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-0.5">
           <Label className="text-xs font-medium">

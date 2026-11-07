@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/worktree-runtime-capabilities'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/task-source-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   runtimeHostConnectionState,

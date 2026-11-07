@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { localDesktopSession } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { leaf } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { applyRuntimePaneTitle } from '../hooks/ipc-events/terminal-pane-title-ipc-bridge'
 import { layoutApplyTestTransport } from './layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from './main-loaded-layout-frames.test-fixture'
@@ -15,7 +15,7 @@ import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

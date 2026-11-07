@@ -3,11 +3,11 @@ import {
   bindPaneAgentTitleMocks
 } from '../../pty-connection/test-fixtures/pty-connection-test-deps'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import type { PtyConnectionDeps } from '../../pty-connection/pty-connection-deps'
 import type { ConnectCallbacks } from '../../pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import { terminalAttachResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attach-result'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window

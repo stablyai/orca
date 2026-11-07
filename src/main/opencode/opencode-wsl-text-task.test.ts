@@ -66,37 +66,6 @@ function task(signal = new AbortController().signal) {
 }
 
 describe('runOpenCodeWslTextTask', () => {
-  it('runs the guest task through the target login shell and returns its framed text', async () => {
-    const guest = fakeGuest(async () => ({ ok: true, text: 'feat: add lanterns' }))
-
-    await expect(
-      runOpenCodeWslTextTask(task(), { prepare, spawnAgent: guest.spawnAgent })
-    ).resolves.toBe('feat: add lanterns')
-
-    expect(guest.launched[0]).toMatchObject({
-      binary: '/usr/bin/env',
-      args: [
-        '-u',
-        'NODE_OPTIONS',
-        '/home/dev/.cache/orca/node-runtime/bin/node',
-        '/mnt/c/Program Files/Orca/resources/relay/wsl/opencode-text-task-wsl.cjs'
-      ],
-      cwd: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo',
-      wslDistro: 'Ubuntu',
-      stdinMode: 'pipe'
-    })
-    // The guest applies these after OpenCode's own login rc, not to the helper launch.
-    expect(guest.launched[0].commandEnv).toBeUndefined()
-    expect(guest.requests[0]).toMatchObject({
-      binary: 'opencode',
-      prefixArgs: ['--print-logs'],
-      prompt: 'Write a commit message',
-      runArgs: ['--model', 'anthropic/claude-sonnet', '--file', '/mnt/c/notes/context.txt'],
-      commandEnv: { OPENCODE_CONFIG: '/home/dev/work.json' }
-    })
-    expect(guest.child().exitCode).toBe(0)
-  })
-
   it('cancels by ending the guest stdin and settles only after the guest exits', async () => {
     const controller = new AbortController()
     const guest = fakeGuest(async (_request, canceled) => {

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
-import { usePluginInstallCountsStore } from '@/store/plugin-install-counts'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 
 const COMPACT_OPTIONS: Intl.NumberFormatOptions = { notation: 'compact', maximumFractionDigits: 1 }

@@ -5,7 +5,7 @@ import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-pag
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
-import { findPage } from '../../store/slices/browser-page-records'
+import { findPage } from '../../store/slices/browser/pages/browser-page-records'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility

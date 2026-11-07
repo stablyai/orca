@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerAgentStatusStartupSnapshot } from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { NEWER_DAEMON_HOLD_ERROR } from '../../../../../../shared/newer-daemon-hold'
-import { newerDaemonHoldStore, reopenHeldTerminals } from '../../newer-daemon-hold-state'
+import {
+  newerDaemonHoldStore,
+  reopenHeldTerminals
+} from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import type { FreshSpawnOptions } from '../startup/fresh-spawn-types'
@@ -14,7 +17,9 @@ import { useAppStore } from '@/store/index'
 import type { PaneResumeOutcome } from '../../../../../../shared/workspace-layout/workspace-layout-published'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
-vi.mock('../../terminal-lifecycle-diagnostics', () => ({ warnTerminalLifecycleAnomaly: vi.fn() }))
+vi.mock('../../layout/reconciliation/terminal-lifecycle-diagnostics', () => ({
+  warnTerminalLifecycleAnomaly: vi.fn()
+}))
 vi.mock('../instrumentation/pty-connect-diagnostics', () => ({
   recordPtyConnectDiagnostic: vi.fn()
 }))

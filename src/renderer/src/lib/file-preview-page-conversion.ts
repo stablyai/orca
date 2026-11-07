@@ -5,8 +5,8 @@ import { activateBrowserWorkspaceTab } from './browser/workspace/browser-workspa
 import { selectWorkspaceSurface } from './workspace-surface-reveal'
 import { webClientDocPreviewRefusal } from './doc-preview-web-client'
 import { openFileInBrowserTab } from './file-preview'
-import { findPage } from '@/store/slices/browser-page-records'
-import type { BrowserPageConversionLeg } from '@/store/slices/browser-page-conversion'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
+import type { BrowserPageConversionLeg } from '@/store/slices/browser/pages/browser-page-conversion'
 import type { BrowserPageDocLocation } from '../../../shared/browser-workspace-types'
 import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
 

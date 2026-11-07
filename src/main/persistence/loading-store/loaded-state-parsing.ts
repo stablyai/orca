@@ -105,6 +105,7 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        parsed = this.cohorts.migrateKeybindings(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.
         chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
         this.runtime.originalExperimentalNativeChat =
@@ -195,7 +196,7 @@ export class LoadedStateParsingOperations {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      result = this.cohorts.migrateKeybindings(getDefaultPersistedState(homedir()), false)
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -277,10 +278,7 @@ export class LoadedStateParsingOperations {
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
         this.cohorts.keepResumeOnRestartOffForExistingProfiles(
-          this.cohorts.migrateTabSwitchKeybindings(
-            this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
-            fileExistedOnLoad
-          ),
+          this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
           parsed
         ),
         parsed,

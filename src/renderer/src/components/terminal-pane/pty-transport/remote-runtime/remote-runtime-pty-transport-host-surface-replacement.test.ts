@@ -4,8 +4,8 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -254,7 +254,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-stale')
       // Cached pixels and a known PTY id do not imply that input/output is attached.
       expect(transport.isConnected()).toBe(false)
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
 
       const listCallsAfterBound = hostListCalls

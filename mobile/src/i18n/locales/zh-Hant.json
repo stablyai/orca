@@ -111,7 +111,7 @@
       "scanCodeStep": "掃描 QR Code",
       "title": "與電腦配對",
       "tryAgain": "重試",
-      "codeExpiredOrReplaced": "此配對碼已過期或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
+      "codeNoLongerValid": "此配對碼已過期、已被使用或已被取代。請在電腦上顯示新的配對碼後重新掃描。"
     },
     "terminalSettings": {
       "defaultText": "預設（100%）",
@@ -187,6 +187,7 @@
       "sendMessage": "傳送訊息",
       "sendQueue": "加入佇列",
       "sendSteer": "引導",
+      "sendSteerQueued": "引導下一則",
       "sendQueueHint": "在目前回合結束後執行",
       "sendSteerHint": "加入代理程式目前正在進行的工作"
     },
@@ -1274,14 +1275,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "電腦或另一支手機正在使用聽寫功能。",
+      "alreadyActive": "電腦或另一支手機正在使用聽寫功能。請更新電腦上的 Orca，以便在多台裝置上同時聽寫。",
       "cloudModelNeedsKey": "需要 OpenAI 金鑰",
       "deleteFailed": "無法刪除模型",
       "desktopUpdateRequired": "請更新已配對電腦上的 Orca 桌面版，以使用行動版語音設定。",
       "downloadFailed": "無法開始下載",
       "loadFailed": "無法載入聽寫模型",
+      "modelBusy": "另一台裝置正在使用不同的語音模型聽寫。請等它結束後再試。",
       "repairRequired": "請將這支手機與電腦重新配對，以使用聽寫功能。",
       "serverUpdateRequired": "請更新此伺服器上的 Orca，以使用語音聽寫。",
+      "sessionLimit": "這台電腦上正在聽寫的裝置過多。請等其中一台結束後再試。",
       "sessionLost": "聽寫功能與電腦的連線已中斷。請再試一次。",
       "updateFailed": "無法更新聽寫設定"
     }
@@ -1293,7 +1296,6 @@
       "connecting": "正在連線至電腦…",
       "emptyState": "找不到檔案",
       "loadFailed": "無法載入檔案",
-      "loadInterrupted": "資料夾載入中斷",
       "title": "檔案",
       "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
       "waiting": "正在等待電腦…"
@@ -1465,7 +1467,10 @@
       "microphoneInitFailed": "無法初始化麥克風",
       "microphoneInterrupted": "麥克風遭中斷，語音聽寫已停止。請再試一次。",
       "microphonePermissionDenied": "麥克風權限遭拒",
-      "noSpeech": "未偵測到語音。"
+      "noSpeech": "未偵測到語音。",
+      "phoneUnavailable": "此手機上的聽寫尚未就緒。請在語音設定中下載，或選擇「自動」。",
+      "phoneFailed": "此手機上的聽寫已停止運作。請再試一次。",
+      "phoneBusy": "此手機上的聽寫仍在啟動。請稍後再試。"
     }
   },
   "host": {
@@ -1976,13 +1981,11 @@
       "saveNote": "儲存備註"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "無法載入變更",
       "committedChangesFailed": "載入已提交的變更失敗",
       "committedChangesUnavailable": "無法取得已提交的變更",
       "committedDiffUnavailable": "無法取得已提交的差異",
       "desktopUpdateRequired": "請更新 Orca 桌面版，以便在手機上審查變更。",
       "diffLoadFailed": "無法載入差異",
-      "invalidSourceControlResponse": "原始碼控制回應無效",
       "reviewNotesLoadFailed": "無法載入審查備註"
     },
     "diffReviewQueue": {
@@ -2822,6 +2825,20 @@
     },
     "agents": {
       "permissionOwnAll": "各代理程式自身的設定"
+    },
+    "voiceTranscribeOn": {
+      "heading": "轉寫位置",
+      "description": "此手機聽到的語音只會留在手機上。選擇「自動」時，若此手機無法轉寫，會改用你的電腦。",
+      "automatic": "自動",
+      "phone": "此手機",
+      "computer": "電腦",
+      "phoneReady": "已可在此手機上使用",
+      "phoneNeedsDownload": "需要下載語言",
+      "phoneDownloading": "正在下載… {{progress}}%",
+      "phoneUnsupported": "此手機不支援",
+      "download": "下載到此手機",
+      "downloadSize": "約 {{size}} MB",
+      "phoneChecking": "正在檢查…"
     }
   },
   "sourceControl": {
@@ -4071,6 +4088,7 @@
       "noRunnableHost": "此自動化沒有可供執行的主機。",
       "wslMoveInProgress": "此自動化的專案正在移至其 WSL 主機，因此 Orca 略過了此次執行。移動完成後便會恢復執行。",
       "wslMoveOwnedByHost": "此自動化的專案現在在其 WSL 主機上執行，自動化本身也由該主機執行。Orca 不再執行這個本機副本。",
+      "managedHostServer": "需要遷移到 {{host}}",
       "missedGraceWindow": "Orca 再次檢查時，此次執行的補執行寬限期已過。",
       "targetMissing": "自動化主機已不在註冊清單中，因此已無處執行此自動化。",
       "targetReplaced": "自動化主機已被移除並重新註冊，因此必須為此自動化重新建立關聯後才能執行。",

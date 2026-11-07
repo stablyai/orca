@@ -1,10 +1,10 @@
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readEditorPanelFileContent } from './editor-panel-file-reads'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
+import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
@@ -27,7 +27,7 @@ import {
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
 import { placeAbsoluteTab } from './absolute-tab-placement'
-import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import {
   applyEditorFileLoadFailure,

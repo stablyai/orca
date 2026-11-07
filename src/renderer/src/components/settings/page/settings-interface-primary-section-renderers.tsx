@@ -12,6 +12,7 @@ export function renderTerminalSettingsSection(context: SettingsRenderContext): R
   return (
     <SettingsSection
       id="terminal"
+      grouped
       title={translate('auto.components.settings.Settings.3de4bbb841', 'Terminal')}
       description={translate(
         'auto.components.settings.Settings.b79b5b31e9',
@@ -69,6 +70,7 @@ export function renderBrowserSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="browser"
+      grouped
       title={translate('auto.components.settings.Settings.c46215ea03', 'Browser')}
       description={translate(
         'auto.components.settings.Settings.ad9788036f',
@@ -94,6 +96,7 @@ export function renderMobileEmulatorSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile-emulator"
+      grouped
       title={translate('auto.components.settings.Settings.f75daf1002', 'Mobile Emulator')}
       description={translate(
         'auto.components.settings.Settings.01f9d36292',

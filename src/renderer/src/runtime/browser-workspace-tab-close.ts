@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { clearBrowserAddressBarEditSession } from '@/components/browser-pane/assemble-chrome/browser-address-bar-edit-session'
 import { clearBrowserPageDeferredNavigation } from '@/components/browser-pane/navigate/browser-page-deferred-navigation'
-import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
+import { destroyWorkspaceWebviews } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
 import { useAppStore } from '@/store'
 import {
   collectPendingClientHostedBrowserCloses,

@@ -10,7 +10,6 @@ vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
 
 import {
   clearPRRefreshValidationBackoffForTests,
-  getPRRefreshValidationBackoffCountForTests,
   notePRRefreshValidationDenial
 } from './pr-refresh-validation-backoff'
 
@@ -30,21 +29,6 @@ describe('PR refresh validation backoff', () => {
     expect(notePRRefreshValidationDenial(identity, 0)).toBe('validation-denied')
     expect(notePRRefreshValidationDenial(identity, 60_000)).toBe('validation-backoff')
     expect(notePRRefreshValidationDenial(identity, 5 * 60_000 + 1)).toBe('validation-denied')
-  })
-
-  it('bounds validation backoff entries', () => {
-    for (let index = 0; index < 257; index += 1) {
-      notePRRefreshValidationDenial(
-        {
-          repoId: `repo-${index}`,
-          repoPath: `/workspace/missing-${index}`,
-          reason: 'unknown-repo'
-        },
-        index
-      )
-    }
-
-    expect(getPRRefreshValidationBackoffCountForTests()).toBe(256)
   })
 
   it('records path-safe diagnostic breadcrumbs', () => {

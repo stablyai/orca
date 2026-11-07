@@ -61,7 +61,7 @@ export function RepositorySourceControlAiHostedReviewDefaults({
   onChange
 }: RepositorySourceControlAiHostedReviewDefaultsProps): React.JSX.Element {
   return (
-    <div className="space-y-2">
+    <div data-settings-row="" className="space-y-2 py-3">
       <Label className="text-xs font-medium">
         {translate(
           'auto.components.settings.RepositorySourceControlAiHostedReviewDefaults.aa6ee4b7d6',

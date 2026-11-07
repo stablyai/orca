@@ -5,7 +5,7 @@ import {
 } from '../../../shared/agent-status/presentation/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../shared/agent-status/presentation/agent-child-row-model'
 import { agentStateLabel } from '@/components/AgentStateDot'
-import { sayBackgroundTaskTranslated } from '@/components/native-chat/background-task-words-text'
+import { sayBackgroundTaskTranslated } from '@/components/native-chat/tools/tasks/background-task-words-text'
 import { translate } from '@/i18n/i18n'
 import { agentNoUpdateLabel } from '../../../shared/agent-status/presentation/agent-row-decay-state'
 

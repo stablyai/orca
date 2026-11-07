@@ -138,7 +138,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks3 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -186,7 +187,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks4 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -214,7 +216,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks5 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -256,7 +259,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks6 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -308,7 +312,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks7 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         const paneKey = makePaneKey('tab-1', LEAF_1)
@@ -347,7 +352,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks8 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 
@@ -424,7 +430,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks10 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -470,7 +477,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks11 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -521,7 +529,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks12 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -566,7 +575,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks13 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
         vi.useFakeTimers()
@@ -646,7 +656,8 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks15 =
           await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const handler = await import('../../terminal-side-effect-facts-handler')
+        const handler =
+          await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
         transportFactoryQueue.push(transport)
 

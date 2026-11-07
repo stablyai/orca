@@ -22,7 +22,7 @@ import {
   getChatAppearanceEntriesByKey,
   getChatWidthOptions
 } from './chat-appearance-search'
-import { writeNativeChatAppearance } from '../../../native-chat/native-chat-appearance-write'
+import { writeNativeChatAppearance } from '../../../native-chat/appearance/native-chat-appearance-write'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 export type AppearanceChatSectionProps = {

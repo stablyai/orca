@@ -28,12 +28,12 @@ import {
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
 } from '@/runtime/host-structured-agents'
-import { subscribeLocalRuntimeCapabilityObservation } from '@/runtime/local-runtime-capabilities'
+import { subscribeLocalRuntimeCapabilityObservation } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 

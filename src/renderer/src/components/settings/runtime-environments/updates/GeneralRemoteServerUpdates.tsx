@@ -86,7 +86,7 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
-      className="space-y-3"
+      className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
         <div className="text-sm font-medium">

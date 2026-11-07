@@ -2,9 +2,9 @@ import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
-} from './native-chat-appearance-style'
-import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
-import { useNativeChatRowTypography } from './use-native-chat-row-typography'
+} from './appearance/native-chat-appearance-style'
+import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
+import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -12,46 +12,47 @@ import {
   nativeChatScrollsToLatestOnSend,
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
-import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
+import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
+import { desktopStructuredTranscript } from './conversation/projection/structured-agent-session-message-projection'
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
-import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
-import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
-import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
+import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
+import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
-import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
+import { NativeChatTurnActivityLine } from './messages/reasoning/NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from './native-chat-disclosure-store'
+} from './messages/disclosure/native-chat-disclosure-store'
 import {
   NativeChatTranscriptItems,
   NativeChatWaitingTranscriptItems
-} from './NativeChatTranscriptItems'
-import { useNativeChatTranscriptRowContext } from './use-native-chat-transcript-row-context'
-import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
-import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import { splitNativeChatSlotsWaitingBehindLiveTurn } from './native-chat-transcript-slots'
-import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
-import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
-import { useNativeChatHistoryRetention } from './use-native-chat-history-retention'
-import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
-import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
-import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
-import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
-import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
-import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
-import { useNativeChatMessageRail } from './use-native-chat-message-rail'
-import { NativeChatMessageRail } from './NativeChatMessageRail'
-import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
+} from './viewport/virtualization/NativeChatTranscriptItems'
+import { useNativeChatTranscriptRowContext } from './conversation/slots/use-native-chat-transcript-row-context'
+import type { StructuredAgentSessionHostWork } from './session/structured/use-structured-agent-session-transport-state'
+import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
+import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/native-chat-transcript-slot-selection'
+import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
+import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
+import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
+import { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
+import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
+import { useNativeChatTurnMembership } from './conversation/slots/use-native-chat-turn-membership'
+import { useNativeChatTranscriptScroll } from './viewport/scroll/use-native-chat-transcript-scroll'
+import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native-chat-older-history-autoload'
+import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
+import { useNativeChatMessageRail } from './viewport/rail/use-native-chat-message-rail'
+import { NativeChatMessageRail } from './viewport/rail/NativeChatMessageRail'
+import { useNativeChatRailWake } from './viewport/rail/use-native-chat-rail-wake'
+import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
   useNativeChatNavigationRequest
-} from './use-native-chat-transcript-navigation'
-import { useNativeChatReaderScrollInput } from './native-chat-reader-scroll-input'
-import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+} from './viewport/navigation/use-native-chat-transcript-navigation'
+import { useNativeChatReaderScrollInput } from './viewport/scroll/native-chat-reader-scroll-input'
+import { useNativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 
 import type {
   AgentJournalRenderItem,
@@ -60,10 +61,10 @@ import type {
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
-import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-opened-pull-requests'
-import { NativeChatPullRequestChangeContext } from './NativeChatOpenedPullRequestCard'
-import { transcriptTailRow } from './native-chat-transcript-tail-row'
+import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
+import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
+import { NativeChatPullRequestChangeContext } from './tools/pull-requests/NativeChatOpenedPullRequestCard'
+import { transcriptTailRow } from './conversation/slots/native-chat-transcript-tail-row'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 export function NativeChatMessageList({
@@ -287,10 +288,19 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
+  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
+  const onTranscriptScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event)
+      sustainRail()
+    },
+    [onScroll, sustainRail]
+  )
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
-  }, [beginNavigation, recordReaderScroll])
+    wakeRail()
+  }, [beginNavigation, recordReaderScroll, wakeRail])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -342,7 +352,7 @@ export function NativeChatMessageList({
           <div className="relative min-h-0 flex-1">
             <div
               ref={scrollRef}
-              onScroll={onScroll}
+              onScroll={onTranscriptScroll}
               onCopy={copyChatMathSelection}
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
@@ -382,6 +392,7 @@ export function NativeChatMessageList({
             </div>
             <NativeChatMessageRail
               rail={rail}
+              railRef={railRef}
               scrollRef={scrollRef}
               onSelect={navigation.selectRailItem}
               onReaderScroll={readerInput.railWheel}

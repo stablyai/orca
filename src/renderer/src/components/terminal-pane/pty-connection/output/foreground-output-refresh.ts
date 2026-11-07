@@ -1,6 +1,6 @@
 import * as unhideCoverage from '../output-restore/hidden-unhide-snapshot-coverage'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { recordTerminalFreezeBreadcrumb } from '../../terminal-freeze-breadcrumbs'
+import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import {
   terminalRewriteOutputRenderRefreshDecision,

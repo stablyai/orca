@@ -7,7 +7,7 @@ import { Button } from '../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useAppStore } from '@/store/index'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords } from '../search/settings-search-keywords'
@@ -187,7 +187,7 @@ export function RepositoryGitHubAccountSection({
           fallback: 'github account'
         }
       ])}
-      className="space-y-3"
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="flex items-start justify-between gap-4">

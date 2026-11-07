@@ -30,7 +30,7 @@ export function SparsePresetSettingsRow({
   const isDeleting = deletingPresetId === preset.id
 
   return (
-    <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm">
+    <div data-settings-row="" className="py-3">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/30">
           <Bookmark className="size-4 text-muted-foreground" />

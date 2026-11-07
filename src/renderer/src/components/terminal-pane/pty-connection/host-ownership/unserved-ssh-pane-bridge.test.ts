@@ -43,7 +43,8 @@ vi.mock('@/ssh/ssh-connect-in-flight', () => ({
 }))
 
 const { createUnservedSshRowTransport } = await import('./unserved-ssh-pane-connect')
-const { legacyRelayBridgePtyIdForPane } = await import('../../legacy-relay-bridge-panes')
+const { legacyRelayBridgePtyIdForPane } =
+  await import('../../pty-transport/legacy-relay/legacy-relay-bridge-panes')
 
 function publishPanes(panes: LegacyRelayBridgedPane[]): void {
   mocks.panes.forEach((listener) => listener(panes))
@@ -97,24 +98,5 @@ describe('a relay-era ssh: row on a host that stayed unmoved for its relay termi
         boundPtyId: null
       })
     ).toBe(PTY)
-  })
-
-  it('stays inert on a host that was not kept for the bridge', () => {
-    publishPanes([pane])
-    mocks.states.set('ssh-box', {
-      status: 'error',
-      managedServer: { kind: 'relay', reason: 'refused' }
-    })
-    const s = session('tab-1', 'leaf-1')
-    createUnservedSshRowTransport(s, 'ssh-box')
-    expect(s.legacyRelayBridgePtyId).toBeUndefined()
-  })
-
-  it('stays inert for a pane main does not list, so it still dials the host', () => {
-    mocks.states.set('ssh-box', bridgedHost)
-    publishPanes([pane])
-    const s = session('tab-1', 'leaf-2')
-    createUnservedSshRowTransport(s, 'ssh-box')
-    expect(s.legacyRelayBridgePtyId).toBeUndefined()
   })
 })

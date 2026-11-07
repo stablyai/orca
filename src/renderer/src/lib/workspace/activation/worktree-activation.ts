@@ -37,10 +37,10 @@ import { findPendingWorktreeCreationId } from '../creation/pending-worktree-crea
 import {
   buildActivationStateTransition,
   markVisited,
-  readPreviousActive
+  readPreviousActive,
+  recordShownTabFocus
 } from './worktree-activation-visit'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 import {
   workspaceActivationResult,
@@ -101,12 +101,9 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
-  // A waiting split chooser is the surface the user left; reseeding would replace it.
-  const keepsSplitLanding = !opts?.startup && hasSplitLandingGroup(state, workspaceKey)
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
-    !keepsSplitLanding &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -114,25 +111,18 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
         )))
   if (!shouldGateAgentActivation) {
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(workspaceKey, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
-  const primaryTabId =
-    shouldGateAgentActivation || keepsSplitLanding
-      ? null
-      : ensureFolderWorkspaceInitialTerminal(
-          folderWorkspace,
-          opts?.startup,
-          providesInitialSurface,
-          {
-            seedUserDefaultSurface
-          }
-        )
+  const primaryTabId = shouldGateAgentActivation
+    ? null
+    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
+        seedUserDefaultSurface
+      })
 
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
@@ -152,6 +142,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
       agent: opts?.agent
     })
   }
+  recordShownTabFocus(useAppStore.getState(), workspaceKey)
 
   return { opened: { primaryTabId } }
 }
@@ -220,11 +211,8 @@ export function activateAndRevealWorktreeWithOutcome(
   }
 
   // Decide gate before resuming: resume consumes sleeping evidence, and late structured inventory can otherwise authorize a shell beside a pending chat (STA-1111).
-  const keepsSplitLanding =
-    !hasActivationWork && hasSplitLandingGroup(postActivationState, worktreeId)
   const shouldGateAgentActivation =
     !hasActivationWork &&
-    !keepsSplitLanding &&
     (workspaceHasSleepingAgentSessions(postActivationState, worktreeId) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -233,8 +221,7 @@ export function activateAndRevealWorktreeWithOutcome(
   if (!shouldGateAgentActivation) {
     // Resume preserved provider sessions before shell seeding; synchronous tab creation prevents an extra bare shell.
     resumeSleepingAgentSessionsForWorktree(worktreeId)
-  }
-  if (shouldGateAgentActivation) {
+  } else {
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
@@ -244,7 +231,7 @@ export function activateAndRevealWorktreeWithOutcome(
   }
 
   const primaryTabId =
-    shouldGateAgentActivation || keepsSplitLanding || (providesInitialSurface && !hasActivationWork)
+    shouldGateAgentActivation || (providesInitialSurface && !hasActivationWork)
       ? null
       : ensureWorktreeHasInitialTerminal(
           useAppStore.getState(),
@@ -285,11 +272,10 @@ export function activateAndRevealWorktreeWithOutcome(
     }
   }
 
-  if (
+  const startupAccepted =
     opts?.notifyHostRuntime !== false &&
     !opts?.backendStartupTerminalSpawned &&
-    opts?.providesInitialSurface !== true
-  ) {
+    opts?.providesInitialSurface !== true &&
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
       ...(opts && 'runtimeEnvironmentId' in opts
         ? { runtimeEnvironmentId: ownerRuntimeEnvironmentId }
@@ -297,9 +283,9 @@ export function activateAndRevealWorktreeWithOutcome(
       startup: opts?.startup,
       agent: opts?.agent
     })
-  }
+  recordShownTabFocus(useAppStore.getState(), worktreeId)
 
-  return { opened: { primaryTabId } }
+  return { opened: { primaryTabId, ...(startupAccepted ? { startupAccepted } : {}) } }
 }
 
 /** Dispatch sidebar IDs through folder/worktree entry points; folder routing enforces missing/unmounted/disconnected path guards (#10716). */

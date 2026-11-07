@@ -113,7 +113,7 @@
       "scanCodeStep": "Escanea el código QR",
       "title": "Emparejar con un escritorio",
       "tryAgain": "Reintentar",
-      "codeExpiredOrReplaced": "Este código de emparejamiento caducó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
+      "codeNoLongerValid": "Este código de emparejamiento caducó, ya se usó o se reemplazó. Muestra un código nuevo en tu ordenador y vuelve a escanear."
     },
     "terminalSettings": {
       "defaultText": "Predeterminado (100%)",
@@ -191,6 +191,7 @@
       "sendMessage": "Enviar mensaje",
       "sendQueue": "Poner en cola",
       "sendSteer": "Enviar ahora",
+      "sendSteerQueued": "Enviar el siguiente ahora",
       "sendQueueHint": "Se ejecuta después del turno actual",
       "sendSteerHint": "Entra en lo que el agente está haciendo ahora"
     },
@@ -1317,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "El dictado ya se está usando en el ordenador o en otro teléfono.",
+      "alreadyActive": "El dictado ya se está usando en el ordenador o en otro teléfono. Actualiza Orca en el ordenador para dictar desde varios dispositivos a la vez.",
       "cloudModelNeedsKey": "Requiere una clave de OpenAI",
       "deleteFailed": "No se pudo eliminar el modelo",
       "desktopUpdateRequired": "Actualiza la app de Orca en el escritorio emparejado para usar los ajustes de voz del móvil.",
       "downloadFailed": "No se pudo iniciar la descarga",
       "loadFailed": "No se pudieron cargar los modelos de dictado",
+      "modelBusy": "Otro dispositivo está dictando con un modelo de voz distinto. Inténtalo de nuevo cuando termine.",
       "repairRequired": "Vuelve a emparejar este teléfono con el ordenador para usar el dictado.",
       "serverUpdateRequired": "Actualiza Orca en este servidor para usar el dictado por voz.",
+      "sessionLimit": "Hay demasiados dispositivos dictando en este ordenador. Inténtalo de nuevo cuando termine uno.",
       "sessionLost": "El dictado perdió la conexión con el ordenador. Inténtalo de nuevo.",
       "updateFailed": "No se pudieron actualizar los ajustes de dictado"
     }
@@ -1336,7 +1339,6 @@
       "connecting": "Conectando con el escritorio…",
       "emptyState": "No se encontraron archivos",
       "loadFailed": "No se pudieron cargar los archivos",
-      "loadInterrupted": "Carga de la carpeta interrumpida",
       "title": "Archivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000",
       "waiting": "Esperando al escritorio…"
@@ -1508,7 +1510,10 @@
       "microphoneInitFailed": "No se pudo inicializar el micrófono",
       "microphoneInterrupted": "El dictado de voz se detuvo porque se interrumpió el uso del micrófono. Vuelve a intentarlo.",
       "microphonePermissionDenied": "Permiso de acceso al micrófono denegado",
-      "noSpeech": "No se detectó ninguna voz."
+      "noSpeech": "No se detectó ninguna voz.",
+      "phoneUnavailable": "El dictado en este teléfono no está listo. Descárgalo en Ajustes de voz o elige Automático.",
+      "phoneFailed": "El dictado en este teléfono dejó de funcionar. Inténtalo de nuevo.",
+      "phoneBusy": "El dictado en este teléfono aún se está iniciando. Inténtalo de nuevo en un momento."
     }
   },
   "host": {
@@ -2046,13 +2051,11 @@
       "saveNote": "Guardar nota"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "No se pudieron cargar los cambios",
       "committedChangesFailed": "No se pudieron cargar los cambios confirmados",
       "committedChangesUnavailable": "Cambios confirmados no disponibles",
       "committedDiffUnavailable": "El diff de los commits no está disponible",
       "desktopUpdateRequired": "Actualiza Orca en el escritorio para revisar los cambios en el móvil.",
       "diffLoadFailed": "No se pudo cargar el diff",
-      "invalidSourceControlResponse": "La respuesta del control de código fuente no es válida",
       "reviewNotesLoadFailed": "No se pudieron cargar las notas de revisión"
     },
     "diffReviewQueue": {
@@ -2898,6 +2901,20 @@
     },
     "agents": {
       "permissionOwnAll": "Configuración propia de los agentes"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIBIR EN",
+      "description": "Lo que escucha este teléfono se queda en él. Automático usa tu ordenador cuando este teléfono no puede transcribir.",
+      "automatic": "Automático",
+      "phone": "Este teléfono",
+      "computer": "Ordenador",
+      "phoneReady": "Listo en este teléfono",
+      "phoneNeedsDownload": "Necesita descargar el idioma",
+      "phoneDownloading": "Descargando… {{progress}} %",
+      "phoneUnsupported": "No disponible en este teléfono",
+      "download": "Descargar para este teléfono",
+      "downloadSize": "Unos {{size}} MB",
+      "phoneChecking": "Comprobando…"
     }
   },
   "sourceControl": {
@@ -4173,6 +4190,7 @@
       "noRunnableHost": "Esta automatización no tiene host donde ejecutarse.",
       "wslMoveInProgress": "El proyecto de esta automatización se está moviendo a su host WSL, por lo que Orca omitió esta ejecución. Las ejecuciones se reanudarán cuando termine el traslado.",
       "wslMoveOwnedByHost": "El proyecto de esta automatización ahora se ejecuta en su host WSL, que ejecuta allí esta automatización. Orca ya no ejecuta esta copia local.",
+      "managedHostServer": "Requiere migración a {{host}}",
       "missedGraceWindow": "Cuando Orca volvió a comprobarlo, ya había vencido el período de gracia para recuperar esta ejecución omitida.",
       "targetMissing": "El host de la automatización ya no está registrado, por lo que esta automatización no tiene dónde ejecutarse.",
       "targetReplaced": "El host de la automatización se eliminó y se volvió a registrar, por lo que hay que volver a vincular esta automatización antes de poder ejecutarla.",

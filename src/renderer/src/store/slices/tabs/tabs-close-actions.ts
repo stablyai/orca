@@ -1,27 +1,25 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
+import {
+  landsOnEmptiedWorktree,
+  emptiedWorktreeLandingPatch,
+  landOnEmptiedWorktree
+} from './tabs-empty-workspace'
+export { landOnEmptiedWorktree } from './tabs-empty-workspace'
+import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import {
-  findGroupForTab,
-  findTabAndWorktree,
-  pickNextActiveTab,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
+import { pickNextActiveTab, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import {
-  emptiedWorktreeLandingPatch,
-  landOnEmptiedWorktree,
-  landsOnEmptiedWorktree
-} from './emptied-worktree-landing'
 import { beginStructuredAgentSessionTabClose } from '@/runtime/structured-agent-session-tab-retirement'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
-import { ownsGlobalSelection } from '../../global-selection-owner'
+import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
 import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab
@@ -49,6 +47,9 @@ export function createTabsCloseActions(
         return null
       }
       const { tab, worktreeId } = found
+      const retireEditor = opts?.editorRetirementHandled
+        ? () => {}
+        : editorTabRetirement(set, get, state, tab)
       forgetDesktopCreatedServerTab(tab.id)
       forgetDesktopCreatedServerTab(tab.entityId)
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
@@ -212,7 +213,10 @@ export function createTabsCloseActions(
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         closeContentTabThroughLayoutOwner(get, tab, {
           nextActiveTabId,
-          closeHere,
+          closeHere: () => {
+            closeHere()
+            retireEditor()
+          },
           // An editor close lands through closeFile, which owns its content.
           ...(isEditorTabContentType(tab.contentType) || opts?.preserveWorktreeSelection
             ? {}
@@ -228,7 +232,8 @@ export function createTabsCloseActions(
                     { tabsBefore: state }
                   )
               }
-            : {})
+            : {}),
+          ...(isEditorTabContentType(tab.contentType) ? { closed: retireEditor } : {})
         })
       ) {
         if (opts?.recordInteraction !== false) {
@@ -237,6 +242,7 @@ export function createTabsCloseActions(
         return { closedTabId: tabId, wasLastTab, worktreeId }
       }
       closeHere()
+      retireEditor()
       if (opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

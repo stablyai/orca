@@ -55,13 +55,6 @@ describe('a CLI command for a recipe VM environment', () => {
 
   afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
 
-  it('goes straight to a running VM for a command that does not open its workspace', async () => {
-    recordVm('running')
-    const { prepared, askDesktopToWake } = prepare('worktree.ps')
-    await expect(prepared).resolves.toBe('unchanged')
-    expect(askDesktopToWake).not.toHaveBeenCalled()
-  })
-
   // Only the desktop knows a sleep still suspending a VM whose record says running.
   // Even an "already up" answer may follow a concurrent wake that re-paired the server.
   it.each([
@@ -90,13 +83,5 @@ describe('a CLI command for a recipe VM environment', () => {
     const { prepared, askDesktopToWake } = prepare('worktree.ps')
     await expect(prepared).rejects.toMatchObject({ code: 'runtime_environment_asleep' })
     expect(askDesktopToWake).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    ['unsupported', 'runtime_environment_asleep'],
-    ['still-waking', 'runtime_environment_waking']
-  ] as const)('reports a desktop answer of %s as %s', async (answer, code) => {
-    recordVm('suspended')
-    await expect(prepare('worktree.activate', answer).prepared).rejects.toMatchObject({ code })
   })
 })

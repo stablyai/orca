@@ -9,7 +9,7 @@ import type {
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
 import {
   GITHUB_EXACT_OPERATION_UNSUPPORTED,

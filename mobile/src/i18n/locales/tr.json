@@ -111,7 +111,7 @@
       "scanCodeStep": "QR kodunu tarayın",
       "title": "Masaüstüyle eşleştir",
       "tryAgain": "Tekrar Dene",
-      "codeExpiredOrReplaced": "Bu eşleştirme kodunun süresi doldu veya kod değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
+      "codeNoLongerValid": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
       "defaultText": "Varsayılan (%100)",
@@ -187,6 +187,7 @@
       "sendMessage": "Mesaj gönder",
       "sendQueue": "Sıraya al",
       "sendSteer": "Yönlendir",
+      "sendSteerQueued": "Sıradakini yönlendir",
       "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
       "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
@@ -1278,14 +1279,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Dikte şu anda bilgisayarda veya başka bir telefonda kullanılıyor.",
+      "alreadyActive": "Dikte şu anda bilgisayarda veya başka bir telefonda kullanılıyor. Aynı anda birden fazla cihazdan dikte etmek için bilgisayardaki Orca'yı güncelleyin.",
       "cloudModelNeedsKey": "OpenAI anahtarı gerekli",
       "deleteFailed": "Model silinemedi",
       "desktopUpdateRequired": "Mobil ses ayarlarını kullanmak için eşleştirilmiş bilgisayardaki Orca uygulamasını güncelleyin.",
       "downloadFailed": "İndirme başlatılamadı",
       "loadFailed": "Dikte modelleri yüklenemedi",
+      "modelBusy": "Başka bir cihaz farklı bir konuşma modeliyle dikte ediyor. O bitince tekrar deneyin.",
       "repairRequired": "Dikteyi kullanmak için bu telefonu bilgisayarla yeniden eşleştirin.",
       "serverUpdateRequired": "Sesli dikteyi kullanmak için bu sunucudaki Orca'yı güncelleyin.",
+      "sessionLimit": "Bu bilgisayarda çok fazla cihaz dikte ediyor. Biri bitince tekrar deneyin.",
       "sessionLost": "Diktenin bilgisayarla bağlantısı kesildi. Yeniden deneyin.",
       "updateFailed": "Dikte ayarları güncellenemedi"
     }
@@ -1297,7 +1300,6 @@
       "connecting": "Masaüstüne bağlanılıyor…",
       "emptyState": "Dosya bulunamadı",
       "loadFailed": "Dosyalar yüklenemedi",
-      "loadInterrupted": "Klasör yüklemesi kesintiye uğradı",
       "title": "Dosyalar",
       "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
       "waiting": "Masaüstü bekleniyor…"
@@ -1469,7 +1471,10 @@
       "microphoneInitFailed": "Mikrofon başlatılamadı",
       "microphoneInterrupted": "Mikrofon kesintisi nedeniyle sesli dikte durdu. Tekrar deneyin.",
       "microphonePermissionDenied": "Mikrofon izni reddedildi",
-      "noSpeech": "Konuşma algılanmadı."
+      "noSpeech": "Konuşma algılanmadı.",
+      "phoneUnavailable": "Bu telefonda dikte hazır değil. Ses ayarlarından indirin veya Otomatik’i seçin.",
+      "phoneFailed": "Bu telefonda dikte çalışmayı durdurdu. Tekrar deneyin.",
+      "phoneBusy": "Bu telefonda dikte hâlâ başlatılıyor. Birazdan tekrar deneyin."
     }
   },
   "host": {
@@ -1980,13 +1985,11 @@
       "saveNote": "Notu kaydet"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Değişiklikler yüklenemedi",
       "committedChangesFailed": "Commit'lenmiş değişiklikler yüklenemedi",
       "committedChangesUnavailable": "Commit'lenmiş değişiklikler kullanılamıyor",
       "committedDiffUnavailable": "Commit'lenmiş diff kullanılamıyor",
       "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için Orca masaüstü uygulamasını güncelleyin.",
       "diffLoadFailed": "Diff yüklenemedi",
-      "invalidSourceControlResponse": "Kaynak kontrolü yanıtı geçersizdi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi"
     },
     "diffReviewQueue": {
@@ -2826,6 +2829,20 @@
     },
     "agents": {
       "permissionOwnAll": "Ajanların kendi ayarları"
+    },
+    "voiceTranscribeOn": {
+      "heading": "YAZIYA DÖKME YERİ",
+      "description": "Bu telefonun duyduğu konuşma telefonda kalır. Otomatik, bu telefon yazıya dökemediğinde bilgisayarınızı kullanır.",
+      "automatic": "Otomatik",
+      "phone": "Bu telefon",
+      "computer": "Bilgisayar",
+      "phoneReady": "Bu telefonda hazır",
+      "phoneNeedsDownload": "Dil indirmesi gerekiyor",
+      "phoneDownloading": "İndiriliyor… %{{progress}}",
+      "phoneUnsupported": "Bu telefonda kullanılamıyor",
+      "download": "Bu telefona indir",
+      "downloadSize": "Yaklaşık {{size}} MB",
+      "phoneChecking": "Kontrol ediliyor…"
     }
   },
   "sourceControl": {
@@ -4075,6 +4092,7 @@
       "noRunnableHost": "Bu otomasyonun çalışacağı bir sunucu yok.",
       "wslMoveInProgress": "Bu otomasyonun projesi WSL ana makinesine taşınıyor. Bu nedenle Orca bu çalıştırmayı atladı. Taşıma tamamlandığında çalıştırmalar devam edecek.",
       "wslMoveOwnedByHost": "Bu otomasyonun projesi artık WSL ana makinesinde çalışıyor ve bu otomasyon da orada ana makine tarafından çalıştırılıyor. Orca artık bu yerel kopyayı çalıştırmıyor.",
+      "managedHostServer": "{{host}} üzerine taşınması gerekiyor",
       "missedGraceWindow": "Orca'nın bir sonraki kontrolünde bu çalıştırma, kaçırılan çalıştırmalar için tanınan tolerans süresini aşmıştı.",
       "targetMissing": "Otomasyon sunucusu artık kayıtlı olmadığından bu otomasyonun çalışacağı bir yer yok.",
       "targetReplaced": "Otomasyon sunucusu kaldırılıp yeniden kaydedildiği için bu otomasyonun çalıştırılmadan önce yeniden ilişkilendirilmesi gerekiyor.",

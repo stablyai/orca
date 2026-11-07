@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   HOST_TERMINAL_SCROLLBACK_HOLD_MS,
   startHostTerminalScrollbackHydration
-} from '@/runtime/host-terminal-scrollback-hydration'
+} from '@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration'
 import { useHostTerminalScrollbackHold } from './use-host-terminal-scrollback-hold'
 
-vi.mock('@/runtime/host-terminal-scrollback-hydration', () => ({
+vi.mock('@/runtime/hosted-terminals/hydration/host-terminal-scrollback-hydration', () => ({
   HOST_TERMINAL_SCROLLBACK_HOLD_MS: 3_000,
   startHostTerminalScrollbackHydration: vi.fn()
 }))

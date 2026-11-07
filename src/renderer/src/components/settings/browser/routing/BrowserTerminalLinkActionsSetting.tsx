@@ -2,16 +2,13 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import {
-  SettingsRow,
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../../form-controls/SettingsFormControls'
+import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { getTerminalLinkActionSearchKeywords } from '../browser-search'
 import {
   terminalLinkClickBehaviorFor,
   type TerminalLinkClickBehavior
 } from '../../../terminal-pane/links/gestures/terminal-link-click-behavior'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type BrowserTerminalLinkActionsSettingProps = {
   settings: Pick<
@@ -82,48 +79,43 @@ export function BrowserTerminalLinkActionsSetting({
       description={description}
       keywords={getTerminalLinkActionSearchKeywords({ isMac })}
     >
-      <section className="space-y-3">
-        <SettingsSubsectionHeader title={title} description={description} />
-        <div className="rounded-lg border border-border/60 bg-muted/10 px-4">
-          <div className="divide-y divide-border/40">
-            <SettingsRow
-              label={plainClickLabel}
-              description={plainClickDescription}
-              alignTop
-              control={
-                <SettingsSegmentedControl<TerminalLinkClickBehavior>
-                  value={behavior}
-                  onChange={(value) => updateSettings({ terminalLinkClickBehavior: value })}
-                  ariaLabel={plainClickAriaLabel}
-                  size="sm"
-                  options={[
-                    { value: 'actions', label: actionsLabel },
-                    { value: 'open', label: openUrlLabel },
-                    { value: 'none', label: leaveToTerminalLabel }
-                  ]}
-                />
-              }
+      <SettingsGroup title={title} description={description}>
+        <SettingsRow
+          label={plainClickLabel}
+          description={plainClickDescription}
+          alignTop
+          control={
+            <SettingsSegmentedControl<TerminalLinkClickBehavior>
+              value={behavior}
+              onChange={(value) => updateSettings({ terminalLinkClickBehavior: value })}
+              ariaLabel={plainClickAriaLabel}
+              size="sm"
+              options={[
+                { value: 'actions', label: actionsLabel },
+                { value: 'open', label: openUrlLabel },
+                { value: 'none', label: leaveToTerminalLabel }
+              ]}
             />
-            <SettingsRow
-              label={middleClickLabel}
-              description={middleClickDescription}
-              control={
-                <SettingsSegmentedControl<TerminalLinkClickBehavior>
-                  value={settings.terminalUrlMiddleClickBehavior ?? 'open'}
-                  onChange={(value) => updateSettings({ terminalUrlMiddleClickBehavior: value })}
-                  ariaLabel={middleClickAriaLabel}
-                  size="sm"
-                  options={[
-                    { value: 'actions', label: actionsLabel },
-                    { value: 'open', label: openUrlLabel },
-                    { value: 'none', label: leaveToTerminalLabel }
-                  ]}
-                />
-              }
+          }
+        />
+        <SettingsRow
+          label={middleClickLabel}
+          description={middleClickDescription}
+          control={
+            <SettingsSegmentedControl<TerminalLinkClickBehavior>
+              value={settings.terminalUrlMiddleClickBehavior ?? 'open'}
+              onChange={(value) => updateSettings({ terminalUrlMiddleClickBehavior: value })}
+              ariaLabel={middleClickAriaLabel}
+              size="sm"
+              options={[
+                { value: 'actions', label: actionsLabel },
+                { value: 'open', label: openUrlLabel },
+                { value: 'none', label: leaveToTerminalLabel }
+              ]}
             />
-          </div>
-        </div>
-      </section>
+          }
+        />
+      </SettingsGroup>
     </SearchableSetting>
   )
 }

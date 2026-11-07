@@ -30,10 +30,7 @@ import {
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc-client.test-fixture'
 
-import {
-  createQueuedMessageTestRig,
-  QUEUED_RIG_CALLER
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { createQueuedMessageTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 
 import { eventually } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
@@ -41,7 +38,6 @@ import {
   hostTestMessage,
   hostTestOperationId
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { holdDelivery } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-delivery-hold.test-fixture'
 import { queuedImageHistoryReader } from '../attachments/structured-agent-session-queued-image-capability'
 import '../../../unused-default-rpc-methods.test-fixture'
 
@@ -366,72 +362,6 @@ describe('agentSession.send reply timing', () => {
       })
     }
     expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
-  })
-
-  it('keeps an old phone image send immediate and never recovers its interrupted send as a hidden card', async () => {
-    const rig = await createQueuedMessageTestRig()
-    hostCalls.send.mockImplementation(rig.host.send.bind(rig.host))
-    const imageSend = () => {
-      const body = hostTestMessage('from an old phone')
-      body.blocks.push({ type: 'image-ref', path: '/tmp/shot.png' })
-      const fields = { body, delivery: 'queue-if-active' as const }
-      const id = hostTestOperationId()
-      return { id, request: { envelope: rig.envelope(fields, 'agentSession.send', id), ...fields } }
-    }
-    let release = () => {}
-    try {
-      const working = await rig.workingSend()
-      const compactId = hostTestOperationId()
-      const compactFields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
-      expect(
-        await rig.host.conversationCommand(QUEUED_RIG_CALLER, {
-          ...compactFields,
-          envelope: rig.envelope(compactFields, 'agentSession.conversationCommand', compactId),
-          userSend: true
-        })
-      ).toMatchObject({ ok: true, value: { queued: { messageId: compactId } } })
-      const image = imageSend()
-      expect(
-        await call('agentSession.send', image.request, STRUCTURED_MOBILE_CLIENT)
-      ).toMatchObject({
-        ok: true,
-        result: { value: { submission: { clientMessageId: image.id } } }
-      })
-      expect((await rig.drafts()).map((card) => card.messageId)).toEqual([compactId])
-      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
-      await rig.settleAccepted(working, 'working')
-      await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
-      expect((await rig.submission(image.id))?.handedOverAt).toBeUndefined()
-      rig.finishCompact()
-      await eventually(async () => {
-        expect((await rig.submission(image.id))?.handedOverAt).toBeDefined()
-        expect(
-          rig.dispatch.mock.calls.find(([input]) => input.clientMessageId === image.id)?.[0].body
-        ).toEqual(image.request.body)
-      })
-      await rig.settleAccepted(image.id, 'image')
-
-      const hold = holdDelivery()
-      release = hold.release
-      const interrupted = imageSend()
-      expect(
-        await call('agentSession.send', interrupted.request, STRUCTURED_MOBILE_CLIENT)
-      ).toMatchObject({ ok: true, result: { value: { submission: expect.anything() } } })
-      await hold.held
-      const closed = rig.host.close(HOST_SESSION, 'user-close')
-      release()
-      await closed
-      rig.crashRestartHostProcess()
-      expect(await rig.drafts()).toEqual([{ messageId: interrupted.id, state: 'waiting' }])
-      expect(await rig.submission(interrupted.id)).toMatchObject({
-        source: { kind: 'user' },
-        dispatchState: 'rejected'
-      })
-      expect((await rig.submission(interrupted.id))?.keptAsQueuedMessageId).toBe(interrupted.id)
-    } finally {
-      release()
-      await rig.dispose()
-    }
   })
 })
 

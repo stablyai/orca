@@ -101,6 +101,7 @@ export type TabsSlice = {
     /** recordFocus false skips the focus-time stamp (not a user visit); the group history still updates. */
     opts?: { preservePreview?: boolean; worktreeId?: string; recordFocus?: boolean }
   ) => void
+  closeUnifiedTabs: (tabIds: readonly string[]) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: {
@@ -108,6 +109,8 @@ export type TabsSlice = {
       preserveWorktreeSelection?: boolean
       recordInteraction?: boolean
       terminalRetirementHandled?: boolean
+      /** closeFile/close-all already own content cleanup and reopen capture. */
+      editorRetirementHandled?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (

@@ -1,7 +1,10 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
 import { useAppStore } from '@/store/index'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import {
+  guardPinnedTabClose,
+  resolvePinnedTabLabel
+} from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
@@ -10,7 +13,7 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
-import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
   isFloatingWorkspacePanelFocused,
@@ -34,8 +37,13 @@ export type WorkspaceTabCommand =
       bulk?: boolean
       floatingPanelGuestOwned?: boolean
     }
-  | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
-  | { type: 'previous-recent' }
+  | {
+      type: 'switch'
+      direction: number
+      scope: 'same-type' | 'all-types' | 'terminal'
+      floatingPanelOwned?: boolean
+    }
+  | { type: 'previous-recent'; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -187,12 +195,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     return true
   }
   if (command.type === 'previous-recent') {
-    if (isFloatingWorkspacePanelFocused()) {
+    if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
   }
-  if (isFloatingWorkspacePanelFocused()) {
+  if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)
     return true
   }
