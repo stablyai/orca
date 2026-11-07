@@ -1,4 +1,4 @@
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 
@@ -42,6 +42,9 @@ export function getEditorDisplayLabel(
     return translate('auto.components.editor.editorLabels.conflictReview', 'Conflict Review')
   }
 
+  if (file.mode === 'git-graph') {
+    return translate('gitGraph.title', 'Git Graph')
+  }
   if (file.mode === 'check-details') {
     return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }

@@ -1,8 +1,8 @@
 import type { AppState } from '../../../types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { findRepoForHost } from '../../repo-host-identity'
-import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { reuseEqualCatalogRows } from '../../../catalog-row-reconciliation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import {
   getRepoExecutionHostId,

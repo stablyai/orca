@@ -1,11 +1,12 @@
 import React from 'react'
-import { Check, Download, LoaderCircle, PackageCheck, RefreshCw, Settings, X } from 'lucide-react'
+import { Check, LoaderCircle, PackageCheck, RefreshCw, ScrollText, Settings, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getSetupScriptFirstLine } from '@/lib/setup-script-prompt'
 
 type DismissButtonProps = {
   onDismiss: () => void
@@ -42,11 +43,13 @@ export type DetectedSetupPreviewProps = {
   provenance: string | null
 }
 
-export function DetectedSetupPreview({
-  setup,
-  onSetupChange,
-  provenance
-}: DetectedSetupPreviewProps): React.JSX.Element {
+function DetectedSetupSection({
+  provenance,
+  children
+}: {
+  provenance: string | null
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
     <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -56,17 +59,7 @@ export function DetectedSetupPreview({
           'Detected setup'
         )}
       </div>
-      <textarea
-        value={setup}
-        aria-label={translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
-          'Detected setup script'
-        )}
-        onChange={(event) => onSetupChange(event.target.value)}
-        spellCheck={false}
-        rows={getDetectedSetupScriptTextareaRows(setup)}
-        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      />
+      {children}
       {provenance ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
           <Trans
@@ -81,6 +74,72 @@ export function DetectedSetupPreview({
         </p>
       ) : null}
     </div>
+  )
+}
+
+export function DetectedSetupPreview({
+  setup,
+  onSetupChange,
+  provenance
+}: DetectedSetupPreviewProps): React.JSX.Element {
+  return (
+    <DetectedSetupSection provenance={provenance}>
+      <textarea
+        value={setup}
+        aria-label={translate(
+          'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
+          'Detected setup script'
+        )}
+        onChange={(event) => onSetupChange(event.target.value)}
+        spellCheck={false}
+        rows={getDetectedSetupScriptTextareaRows(setup)}
+        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      />
+    </DetectedSetupSection>
+  )
+}
+
+export type DetectedSetupSummaryProps = {
+  setup: string
+  provenance: string | null
+}
+
+// Imported scripts can be long, so the card shows one line and the review dialog shows all of it.
+export function DetectedSetupSummary({
+  setup,
+  provenance
+}: DetectedSetupSummaryProps): React.JSX.Element {
+  const { firstLine, hasMore } = getSetupScriptFirstLine(setup)
+  return (
+    <DetectedSetupSection provenance={provenance}>
+      <code className="block truncate rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground">
+        {hasMore ? `${firstLine} …` : firstLine}
+      </code>
+    </DetectedSetupSection>
+  )
+}
+
+export type ReviewSetupActionProps = {
+  onReview: () => void
+}
+
+export function ReviewSetupAction({ onReview }: ReviewSetupActionProps): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="mt-3 h-7 w-full text-xs"
+      onClick={onReview}
+    >
+      <ScrollText className="size-3.5" />
+      <span className="truncate">
+        {translate(
+          'auto.components.sidebar.SetupScriptPromptCardViews.reviewSetupScript',
+          'Review setup script'
+        )}
+      </span>
+    </Button>
   )
 }
 
@@ -256,39 +315,6 @@ export function ConfigureOnlyAction({ onConfigure }: ConfigureOnlyActionProps): 
       <Settings className="size-3.5" />
       <span className="truncate">
         {translate('auto.components.sidebar.SetupScriptPromptCardViews.3933401d28', 'Configure')}
-      </span>
-    </Button>
-  )
-}
-
-export type SaveLocalSetupActionProps = {
-  isSaving: boolean
-  onSave: () => void
-}
-
-export function SaveLocalSetupAction({
-  isSaving,
-  onSave
-}: SaveLocalSetupActionProps): React.JSX.Element {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      className="mt-3 h-7 w-full text-xs"
-      onClick={onSave}
-      disabled={isSaving}
-    >
-      {isSaving ? (
-        <LoaderCircle className="size-3.5 animate-spin" />
-      ) : (
-        <Download className="size-3.5" />
-      )}
-      <span className={cn('truncate', isSaving && 'text-muted-foreground')}>
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.96a7f4198c',
-          'Save local setup'
-        )}
       </span>
     </Button>
   )

@@ -16,7 +16,7 @@ globalThis.window = { api: {} }
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
-} from '@/lib/workspace-session'
+} from '@/lib/workspace/persistence/workspace-session'
 import { createTestStore, makeTab, makeWorktree } from './store-test-helpers'
 
 const WORKTREE_ID = 'repo1::/path/degraded'

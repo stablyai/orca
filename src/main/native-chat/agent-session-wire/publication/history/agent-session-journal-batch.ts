@@ -1,4 +1,4 @@
-import { journalItemsById } from '../../agent-session-journal-item-index'
+import { journalItemsById } from './agent-session-journal-item-index'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type {

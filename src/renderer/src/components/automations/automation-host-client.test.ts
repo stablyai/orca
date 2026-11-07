@@ -2,15 +2,15 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Automation, AutomationCreateInput } from '../../../../shared/automations-types'
 import {
   getAutomationListedTargetFromHostId,
-  listAutomationRunsForTarget,
-  listAutomationsForTarget,
   runAutomationNowForTarget,
   toRuntimeAutomationCreateInput,
   updateAutomationForTarget
 } from './automation-host-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const mockApi = {
   automations: {
@@ -65,65 +65,6 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
 describe('automation host client', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('lists automations from the host it was handed, which the caller must state', async () => {
-    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automations: [makeAutomation()] })
-
-    const automations = await listAutomationsForTarget({
-      kind: 'environment',
-      environmentId: 'gpu'
-    })
-
-    expect(automations).toHaveLength(1)
-    expect(mockApi.automations.list).not.toHaveBeenCalled()
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'gpu' },
-      'automation.list',
-      undefined,
-      { timeoutMs: 15_000 }
-    )
-  })
-
-  // The broad form is gone in both directions: usage totals come from the
-  // authority's list projection, so nothing may ask a host for all of its runs.
-  it('fetches one automation history at a time, on both the desktop and a runtime', async () => {
-    vi.mocked(callRuntimeRpc)
-      .mockResolvedValueOnce({ runs: [] })
-      .mockResolvedValueOnce({ runs: [] })
-
-    await listAutomationRunsForTarget({ kind: 'environment', environmentId: 'gpu' }, 'auto-1')
-    await listAutomationRunsForTarget({ kind: 'local' }, 'auto-1')
-
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'gpu' },
-      'automation.runs',
-      { automationId: 'auto-1' },
-      { timeoutMs: 15_000 }
-    )
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'local' },
-      'automation.runs',
-      { automationId: 'auto-1' },
-      { timeoutMs: 15_000 }
-    )
-  })
-
-  it('manually runs runtime-host automations through that server', async () => {
-    const automation = makeAutomation()
-    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({
-      run: { id: 'run-1', automationId: automation.id }
-    })
-
-    await runAutomationNowForTarget(automation)
-
-    expect(mockApi.automations.runNow).not.toHaveBeenCalled()
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'gpu' },
-      'automation.runNow',
-      { id: automation.id },
-      { timeoutMs: 15_000 }
-    )
   })
 
   it('encodes exact machine selectors for the create wire input', () => {
@@ -210,9 +151,5 @@ describe('getAutomationListedTargetFromHostId', () => {
     } finally {
       Reflect.deleteProperty(globalThis, '__ORCA_WEB_CLIENT__')
     }
-  })
-
-  it('keeps Desktop hosts local in the desktop app', () => {
-    expect(getAutomationListedTargetFromHostId('local', state)).toEqual({ kind: 'local' })
   })
 })

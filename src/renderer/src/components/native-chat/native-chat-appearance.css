@@ -18,6 +18,12 @@
   font-size: var(--text-chat-code);
 }
 
+/* On the root only: descendants inherit it as highlight styles, which costs no per-element style work. */
+.native-chat-appearance::selection {
+  background-color: var(--chat-selection-surface);
+  color: var(--chat-selection-foreground, var(--chat-source-foreground));
+}
+
 .native-chat-appearance :is(.font-sans, textarea, [contenteditable='true']) {
   font-family: inherit;
 }
@@ -65,15 +71,17 @@
   [data-native-chat-root] {
   --chat-pane: transparent;
   /* Text-bearing surfaces keep an opaque base, as in the light scheme. */
-  --chat-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-code-mix),
-    var(--chat-canvas)
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-canvas))
   );
-  --chat-inline-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-mix),
-    var(--chat-canvas)
+  --chat-inline-code-surface: var(
+    --chat-inline-code,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-mix),
+      var(--chat-canvas)
+    )
   );
   --chat-composer-surface: color-mix(
     in srgb,
@@ -85,4 +93,31 @@
     var(--chat-canvas) calc(max(var(--orca-theme-background-surface-opacity), 0.8) * 100%),
     transparent
   );
+}
+
+[data-composer-field] {
+  --composer-atomic-width: calc(var(--spacing) * 10);
+}
+
+.native-chat-composer-gutter {
+  --composer-gutter: calc(var(--spacing) * 3);
+  padding-inline: clamp(
+    0px,
+    calc((100cqi - var(--composer-atomic-width) - 2px - var(--spacing) * 3) / 2),
+    var(--composer-gutter)
+  );
+}
+
+.native-chat-composer-card {
+  padding-inline: clamp(
+    0px,
+    calc((100cqi - var(--composer-atomic-width) - 2px) / 4),
+    calc(var(--spacing) * 1.5)
+  );
+}
+
+@media (width >= 40rem) {
+  .native-chat-composer-gutter {
+    --composer-gutter: calc(var(--spacing) * 4);
+  }
 }

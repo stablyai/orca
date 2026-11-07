@@ -8,8 +8,8 @@ import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+} from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
@@ -71,6 +71,7 @@ export const mockApi = {
   worktrees: {
     create: stubMock(),
     adoptProvisionedRoot: stubMock(),
+    runApprovedSetup: stubMock(),
     prefetchCreateBase: stubMock().mockResolvedValue(undefined),
     listDetected: listDetectedMock,
     listKnownForExecutionHost: listKnownForExecutionHostMock,
@@ -86,7 +87,7 @@ export const mockApi = {
       stubMock<[{ worktreeId: string; updates: Partial<WorktreeMeta> }]>().mockResolvedValue(
         undefined
       ),
-    updateLineage: stubMock().mockResolvedValue(null)
+    updateLineage: stubMock().mockResolvedValue({ lineage: null, workspaceLineage: null })
   },
   pty: {
     kill: stubMock().mockResolvedValue(undefined)

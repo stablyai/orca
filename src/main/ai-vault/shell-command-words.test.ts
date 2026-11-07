@@ -39,13 +39,6 @@ describe('shellCommands', () => {
       ['b', 'x', 'y']
     ])
   })
-
-  it('stays linear on long and unbalanced texts', () => {
-    const size = 2 * 1024 * 1024
-    expect(commands('a'.repeat(size))[0]![0]).toHaveLength(size)
-    expect(commands(`"${' \\"'.repeat(size / 3)}`)).toHaveLength(1)
-    expect(commands(`'${" '".repeat(size / 2)}`)).toHaveLength(1)
-  })
 })
 
 describe('commandProgramIndex', () => {

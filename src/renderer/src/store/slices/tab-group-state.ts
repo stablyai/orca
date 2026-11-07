@@ -1,6 +1,6 @@
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { workspaceRootGroupId } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
 
@@ -162,6 +162,28 @@ export function getPersistedEditFileIdsByWorktree(
       worktreeId,
       new Set(files.map((file) => file.filePath))
     ])
+  )
+}
+
+/** The active group's active tab in a worktree. */
+export function selectActiveTabForWorktree(
+  state: {
+    activeGroupIdByWorktree: Record<string, string>
+    groupsByWorktree: Record<string, TabGroup[]>
+    unifiedTabsByWorktree: Record<string, Tab[]>
+  },
+  worktreeId: string
+): Tab | null {
+  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const group = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (candidate) => candidate.id === groupId
+  )
+  if (!group?.activeTabId) {
+    return null
+  }
+  return (
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === group.activeTabId) ??
+    null
   )
 }
 

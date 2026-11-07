@@ -19,7 +19,10 @@ import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import { type ChecksListProps, useChecksListState } from '../refresh/use-checks-list-state'
-import { openAppHttpLink, openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import {
+  openAppHttpLink,
+  openAppHttpLinkFromAnchor
+} from '@/lib/browser/navigation/app-http-link-open'
 import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {

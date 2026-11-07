@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ExecutionHostHealth } from '../../execution-host-health'
 
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.

@@ -1,4 +1,4 @@
-import { readForkMarker } from '../../agent-session-fork-marker'
+import { readForkMarker } from '../history/agent-session-fork-marker'
 import { StructuredAgentSessionJournalObservers } from '../../observations/structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from '../../host/structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from '../../observations/structured-agent-session-saved-status'

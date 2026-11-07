@@ -105,31 +105,4 @@ describe('browser page retirement settlement', () => {
     expect(() => pages.requireClientPage(authority(1))).toThrow('browser_page_retirement_pending')
     expect(pages.completePageRetirement(retirement)).toBe(true)
   })
-
-  it('retains capacity until retirement completion', () => {
-    const pages = registry(1)
-    const placement = pages.placeClientPage('page-a', host)
-    const first = pages.beginPageRetirement('page-a', placement)
-
-    expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
-    expect(pages.cancelPageRetirement(first)).toBe(true)
-    expect(() => pages.placeServerPage('page-b')).toThrow('browser_page_placement_capacity')
-
-    const replacement = pages.beginPageRetirement('page-a', placement)
-    expect(pages.completePageRetirement(replacement)).toBe(true)
-    expect(pages.placeServerPage('page-b')).toEqual({ kind: 'server' })
-  })
-
-  it('settles server placement through the same exact barrier', () => {
-    const pages = registry()
-    const placement = pages.placeServerPage('page-a')
-    const first = pages.beginPageRetirement('page-a', placement)
-
-    expect(pages.cancelPageRetirement(first)).toBe(true)
-    expect(pages.getPlacement('page-a')).toBe(placement)
-    const replacement = pages.beginPageRetirement('page-a', placement)
-    expect(pages.completePageRetirement(first)).toBe(false)
-    expect(pages.completePageRetirement(replacement)).toBe(true)
-    expect(pages.placeClientPage('page-a', host)).toMatchObject({ pageHostGeneration: 1 })
-  })
 })

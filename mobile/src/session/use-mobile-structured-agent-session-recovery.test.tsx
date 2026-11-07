@@ -3,7 +3,8 @@ import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared
 import { useMobileNativeChatComposerTray } from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionSubscribeEvent,
@@ -179,7 +180,7 @@ describe('current recovery publication and normal Resume', () => {
     sessionId?: string
   ): Promise<void> {
     act(() => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Harness, { hostSupport, ...(sessionId ? { sessionId } : {}) })
       )
     })

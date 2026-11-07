@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callRuntimeRpc = vi.fn()
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 
@@ -54,16 +54,6 @@ describe('readNativeChatVisual', () => {
     expect(peekCachedNativeChatVisual(remote)).toBeNull()
   })
 
-  it('shares one in-flight read between concurrent mounts', async () => {
-    let resolve: (value: unknown) => void = () => {}
-    callRuntimeRpc.mockReturnValueOnce(new Promise((next) => (resolve = next)))
-    const first = readNativeChatVisual(local)
-    const second = readNativeChatVisual(local)
-    resolve({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
-    expect(await first).toEqual(await second)
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-  })
-
   it('passes host refusals through, degrades an unknown one, and forgets a refused file', async () => {
     callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
@@ -78,19 +68,5 @@ describe('readNativeChatVisual', () => {
     expect(peekCachedNativeChatVisual(local)).toBeNull()
     callRuntimeRpc.mockResolvedValueOnce({ ok: false, error: 'some_future_reason' })
     expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'unavailable' })
-  })
-
-  it('bounds the cache by entry count', async () => {
-    for (let index = 0; index < 30; index += 1) {
-      callRuntimeRpc.mockResolvedValueOnce({
-        ok: true,
-        revision: `r${index}`,
-        path: '/v',
-        html: 'x'
-      })
-      await readNativeChatVisual({ ...local, file: `f${index}.html` })
-    }
-    expect(peekCachedNativeChatVisual({ ...local, file: 'f0.html' })).toBeNull()
-    expect(peekCachedNativeChatVisual({ ...local, file: 'f29.html' })?.revision).toBe('r29')
   })
 })

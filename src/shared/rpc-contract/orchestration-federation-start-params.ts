@@ -31,3 +31,5 @@ export const FederationAttachStartParams = z.object({
    * advertising worktree.lineage.crossMachine. The new worktree nests under it. */
   crossStoreParent: CrossStoreParentRefSchema.optional()
 })
+
+export type FederationAttachStartInput = z.infer<typeof FederationAttachStartParams>

@@ -40,12 +40,6 @@ export type LoadStatusOptions = {
   rereadSettings?: boolean
 }
 
-export type StatusLoadInFlight = {
-  key: string
-  client: unknown
-  promise: Promise<boolean>
-}
-
 export type GitRequestError = Error & { code?: string }
 export type GitCommitResult = { success: boolean; error?: string }
 

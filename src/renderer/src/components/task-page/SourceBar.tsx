@@ -14,7 +14,7 @@ import {
   SelectContent,
   SelectItem
 } from '@/components/ui/select'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageSourceBar({
   model
 }: {

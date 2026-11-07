@@ -1,7 +1,7 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { recordLayoutApply } from '@/runtime/layout-apply-send'
 import type { AppState } from '../types'
 

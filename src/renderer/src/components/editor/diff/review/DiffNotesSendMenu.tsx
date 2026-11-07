@@ -1,7 +1,8 @@
+import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/app-state-view'
 import type { DiffCommentOwner } from '@/store/diff-comment-owner'
 import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import { useAppStore } from '@/store/index'
 import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import { translate } from '@/i18n/i18n'
@@ -42,9 +43,11 @@ export function DiffNotesSendMenu({
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
   const languageRevision = useUiLanguageRevision()
-  const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
-  const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
-  const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
+  const openRequest = useAppStateValue((s) =>
+    respondToOpenRequest && s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+      ? s.diffNotesSendMenuOpenRequest
+      : null
+  )
   // Enforce TTL when opening commits in NotesSendMenu; render-time clocks are stale or require polling.
   const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
   const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
@@ -52,8 +55,8 @@ export function DiffNotesSendMenu({
     ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
     : null
   const handleOpenRequestHandled = useCallback(
-    () => consumeOpenRequest(worktreeId),
-    [consumeOpenRequest, worktreeId]
+    () => useAppStore.getState().consumeDiffNotesSendMenuOpenRequest(worktreeId),
+    [worktreeId]
   )
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const fileNotes = useMemo(
@@ -102,7 +105,9 @@ export function DiffNotesSendMenu({
       openRequestNonce={openRequestNonce}
       openRequestExpiresAt={openRequestExpiresAt}
       onOpenRequestHandled={handleOpenRequestHandled}
-      onDelivered={(notes) => void (owner && clearDeliveredDiffComments(owner, notes))}
+      onDelivered={(notes) =>
+        void (owner && useAppStore.getState().clearDeliveredDiffComments(owner, notes))
+      }
     />
   )
 }

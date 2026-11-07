@@ -1,6 +1,7 @@
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
   getEffectiveKeybindingsForDefinition,
+  keybindingIsActiveInContext,
   keybindingMatchesInput,
   type KeybindingDefinition,
   type KeybindingMatchOptions,
@@ -53,30 +54,24 @@ export function buildPluginCommandKeybindingDefinitions(
   return commands.map(pluginCommandKeybindingDefinition)
 }
 
-export function getEffectivePluginCommandKeybindings(
-  command: ActivePluginCommand,
-  platform: NodeJS.Platform,
-  overrides?: KeybindingOverrides
-): string[] {
-  return getEffectiveKeybindingsForDefinition(
-    pluginCommandKeybindingDefinition(command),
-    platform,
-    overrides
-  )
-}
-
 export function findPluginCommandForKeybinding(
   commands: readonly ActivePluginCommand[],
   input: KeybindingInput,
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
-  hasActiveWorktree: boolean
+  hasActiveWorktree: boolean,
+  options: KeybindingMatchOptions = {}
 ): ActivePluginCommand | null {
   for (const command of commands) {
     if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
       continue
     }
-    const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(
+    const definition = pluginCommandKeybindingDefinition(command)
+    // Why: plugin chords obey the terminal shortcut policy exactly as Orca's own app shortcuts do (#15642).
+    if (!keybindingIsActiveInContext(definition, options)) {
+      continue
+    }
+    const matches = getEffectiveKeybindingsForDefinition(definition, platform, overrides).some(
       (binding) => keybindingMatchesInput(binding, input, platform)
     )
     if (matches) {

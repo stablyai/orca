@@ -229,6 +229,7 @@
   --chat-composer-mix: 0%;
   --chat-composer-base: var(--chat-canvas);
   --chat-composer-border-mix: 11%;
+  --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -350,6 +351,7 @@
   --chat-composer-mix: 4%;
   --chat-composer-base: transparent;
   --chat-composer-border-mix: 9%;
+  --chat-selection-mix: 40%;
   --chat-content-max-width: 46rem;
   --card: #171717;
   --card-foreground: #f0f0f0;
@@ -654,10 +656,13 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-strong-mix),
     var(--chat-canvas)
   );
-  --chat-foreground-faint: color-mix(
-    in srgb,
-    var(--chat-source-muted-foreground) var(--chat-faint-mix),
-    var(--chat-canvas)
+  --chat-foreground-faint: var(
+    --chat-muted-foreground,
+    color-mix(
+      in srgb,
+      var(--chat-source-muted-foreground) var(--chat-faint-mix),
+      var(--chat-canvas)
+    )
   );
   --chat-user-surface: var(
     --chat-user-message,
@@ -669,16 +674,18 @@ body[data-modal-overlay-open]
     transparent
   );
   --chat-code-foreground: color-mix(in srgb, var(--chat-source-foreground) 85%, var(--chat-canvas));
-  --chat-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-code-mix),
-    var(--chat-code-base)
+  --chat-code-surface: var(
+    --chat-code-block,
+    color-mix(in srgb, var(--chat-source-foreground) var(--chat-code-mix), var(--chat-code-base))
   );
   --chat-code-border: color-mix(in srgb, var(--chat-source-foreground) 7%, transparent);
-  --chat-inline-code-surface: color-mix(
-    in srgb,
-    var(--chat-source-foreground) var(--chat-inline-code-mix),
-    var(--chat-inline-code-base)
+  --chat-inline-code-surface: var(
+    --chat-inline-code,
+    color-mix(
+      in srgb,
+      var(--chat-source-foreground) var(--chat-inline-code-mix),
+      var(--chat-inline-code-base)
+    )
   );
   --chat-inline-code-border: color-mix(
     in srgb,
@@ -704,6 +711,15 @@ body[data-modal-overlay-open]
     in srgb,
     var(--text-link, var(--callout-note)) 70%,
     var(--chat-source-foreground)
+  );
+  /* The link hue at about the system highlight's depth; a dim theme lowers the mix (chat-selection-mix.ts). */
+  --chat-selection-surface: var(
+    --chat-selection,
+    color-mix(
+      in srgb,
+      var(--text-link, var(--callout-note)) var(--chat-selection-mix),
+      var(--chat-canvas)
+    )
   );
 }
 
@@ -942,6 +958,27 @@ body[data-modal-overlay-open]
   background-size: auto, var(--orca-theme-background-size);
   background-repeat: no-repeat, var(--orca-theme-background-repeat);
   background-position: center, var(--orca-theme-background-position);
+}
+
+/* Its video (lib/theme-background-video.ts) plays over the image once a frame is ready. The opaque
+   base and the video's opacity reproduce the image's veil; position and opacity are the image's. */
+.theme-background-video {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  visibility: hidden;
+  background-color: var(--background);
+}
+.theme-background-video[data-ready] {
+  visibility: visible;
+}
+.theme-background-video > video {
+  width: 100%;
+  height: 100%;
+  object-fit: var(--orca-theme-background-video-fit);
+  object-position: var(--orca-theme-background-position);
+  opacity: var(--orca-theme-background-opacity);
 }
 
 /* The window material (window-material-options.ts) is the backdrop; an opaque body would cover it.
@@ -2546,6 +2583,25 @@ html.native-shell .app-layout {
   ) {
   --ring: var(--code-editor-muted-foreground);
   --muted-foreground: var(--code-editor-muted-foreground);
+}
+
+/* Why: a new or deleted file keeps one line tint. The character tint would stack on it, and the empty
+   side's lone blank line is not a real removal or addition. */
+.orca-diff-whole-file-added
+  .monaco-diff-editor
+  :is(.monaco-editor, .diff-review)
+  :is(.char-insert, .char-delete, .line-delete, .gutter-delete, .inline-deleted-margin-view-zone),
+.orca-diff-whole-file-deleted
+  .monaco-diff-editor
+  :is(.monaco-editor, .diff-review)
+  :is(.char-delete, .char-insert, .line-insert, .gutter-insert, .inline-added-margin-view-zone) {
+  background-color: transparent;
+  border-color: transparent;
+}
+
+.orca-diff-whole-file-added .monaco-diff-editor .delete-sign,
+.orca-diff-whole-file-deleted .monaco-diff-editor .insert-sign {
+  visibility: hidden;
 }
 
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */

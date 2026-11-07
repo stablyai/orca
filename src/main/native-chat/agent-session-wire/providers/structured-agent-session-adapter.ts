@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionConversationCopyInput } from '../structured-agent-session-conversation-copy-input'
+import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
 import type { CodexAccountUsageRead } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'
@@ -35,11 +35,6 @@ import type {
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
-export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
-export type {
-  StructuredAgentSessionChildEndCause,
-  StructuredAgentSessionStopCause
-} from '../termination/structured-agent-session-stop-cause'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
@@ -58,23 +53,6 @@ import type {
   StructuredAgentSessionLiveOptions,
   StructuredAgentSessionOptionProjection
 } from '../options/structured-agent-session-option-models'
-export type { StructuredAgentSessionLiveOptions } from '../options/structured-agent-session-option-models'
-
-export {
-  AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError,
-  AgentSessionPromptAnswerRejectedError,
-  AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError,
-  launchPreparationFailure
-} from './structured-agent-session-adapter-errors'
-export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
-
-export {
-  AgentSessionAcquisitionExitProvenError,
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../acquisition/structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
   accountRecipe?: ClaudeAccountRecipe

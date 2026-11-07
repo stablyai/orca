@@ -4,7 +4,11 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerProcessIncarnation
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
-import { OrchestrationDb } from '../../db'
+import { OrchestrationDb } from '../orchestration-db'
+import '../contract-constants'
+import '../messages/mailbox-routing-page'
+import '../dispatch-row-writer'
+import '../attempt-outcome-projection'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId

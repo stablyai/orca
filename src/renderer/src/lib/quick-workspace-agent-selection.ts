@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   isTuiAgentEnabled,
   pickTuiAgent,

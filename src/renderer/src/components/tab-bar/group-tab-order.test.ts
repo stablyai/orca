@@ -392,7 +392,9 @@ describe('getActiveTabNavOrder', () => {
   it('falls back to the legacy reconciled order when no active group exists', () => {
     const state = makeState({
       tabBarOrderByWorktree: { wt: ['term-1', 'sim-1', 'e1', 'term-2'] },
-      unifiedTabsByWorktree: { wt: [simulatorTab('sim-1', 'g1', 3)] },
+      unifiedTabsByWorktree: {
+        wt: [simulatorTab('sim-1', 'g1', 3), editorTab('e1', 'g1', 'e1', 2)]
+      },
       tabsByWorktree: {
         wt: [
           makeTerminalTab({ id: 'term-1', worktreeId: 'wt' }),

@@ -144,6 +144,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        if (source === 'muse' && !normalized.event) {
+          this.rearmIgnoredMuseHook(aliasedBody)
+        }
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,

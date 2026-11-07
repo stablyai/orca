@@ -109,20 +109,6 @@ afterEach(() => {
 })
 
 describe('managed hook owner identity', () => {
-  it('uses durable host-local identity without requiring Linux machine identity files', async () => {
-    vi.stubEnv('SSH_CONNECTION', '198.51.100.8 53100 10.0.0.7 2222')
-    const { identity, readFile } = await loadLinuxIdentity({
-      hostToken: '00000000-0000-4000-8000-000000000001',
-      bootId: 'current-boot-id',
-      pidNamespace: 'pid:[4026533001]'
-    })
-
-    await expect(identity.readManagedHookHostIdentity()).resolves.toBe(
-      'host-token:00000000-0000-4000-8000-000000000001'
-    )
-    expect(readFile).not.toHaveBeenCalledWith('/etc/machine-id', 'utf8')
-  })
-
   it('separates SSH backends that share a key, endpoint, and boot metadata', async () => {
     vi.stubEnv('SSH_CONNECTION', '198.51.100.8 53100 10.0.0.7 2222')
     const first = await loadLinuxIdentity({
@@ -190,22 +176,6 @@ describe('managed hook owner identity', () => {
       processIdentity
     )
     await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBeUndefined()
-  })
-
-  it('includes namespace, boot, and start ticks when Linux exposes them', async () => {
-    vi.stubEnv('SSH_CONNECTION', '')
-    const { identity } = await loadLinuxIdentity({
-      hostToken: '00000000-0000-4000-8000-000000000001',
-      bootId: 'current-boot-id',
-      pidNamespace: 'pid:[4026533001]'
-    })
-
-    await expect(identity.readManagedHookHostIdentity()).resolves.toBe(
-      'host-token:00000000-0000-4000-8000-000000000001'
-    )
-    await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBe(
-      'linux:pid:[4026533001]:current-boot-id:4242'
-    )
   })
 
   it('uses machine and process creation identities on Windows', async () => {

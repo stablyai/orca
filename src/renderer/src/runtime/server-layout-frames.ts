@@ -10,7 +10,7 @@ import {
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
-} from './runtime-host-connection-state'
+} from './hosts/connections/runtime-host-connection-state'
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
 import { routingInputs, sameValues } from './server-layout-frame-routing-inputs'
 import {

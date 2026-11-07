@@ -37,6 +37,8 @@ import {
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { cn } from '@/lib/utils'
+import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
 export default function DiffViewer({
   modelKey,
@@ -389,7 +391,10 @@ export default function DiffViewer({
           <DiffEditor
             height="100%"
             // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
-            className="code-editor-backdrop"
+            className={cn(
+              'code-editor-backdrop',
+              wholeFileDiffTintClass(originalContent, modifiedContent)
+            )}
             language={language}
             original={originalContent}
             modified={modifiedContent}

@@ -4,7 +4,9 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
-vi.mock('../../../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
+vi.mock('../../../../runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
 
 import { buildCrossStoreParentRef } from './cross-store-parent-ref'
 

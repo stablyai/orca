@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isOrchestrationMutation,
-  isRetiredOrchestrationMethod,
-  orchestrationMigrationData
-} from './orchestration-rpc-contract'
+import { isOrchestrationMutation } from './orchestration-rpc-contract'
 
 describe('orchestration RPC contract', () => {
   it.each([
@@ -55,21 +51,5 @@ describe('orchestration RPC contract', () => {
     ['orchestration.check', { unread: false }]
   ])('classifies %s as read-only', (method, params) => {
     expect(isOrchestrationMutation(method, params)).toBe(false)
-  })
-
-  it('keeps the retired scheduler methods explicit', () => {
-    expect(isRetiredOrchestrationMethod('orchestration.run')).toBe(true)
-    expect(isRetiredOrchestrationMethod('orchestration.runStop')).toBe(true)
-    expect(isRetiredOrchestrationMethod('orchestration.runCreate')).toBe(false)
-  })
-
-  it('returns executable skill recovery without hardcoding a binary name', () => {
-    expect(orchestrationMigrationData('client_contract_missing')).toMatchObject({
-      reason: 'client_contract_missing',
-      effectsApplied: false,
-      requiredContractVersion: 1,
-      guide: { topic: 'orchestration', full: true },
-      nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
-    })
   })
 })

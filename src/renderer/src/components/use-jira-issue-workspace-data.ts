@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JiraComment, JiraIssue, JiraPriority } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { jiraGetIssueForTarget, jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-client'
+import {
+  jiraGetIssueForTarget,
+  jiraListPrioritiesForTarget
+} from '@/runtime/jira/runtime-jira-detail-client'
 import {
   mergeJiraIssueHydration,
   type EditableJiraIssueField

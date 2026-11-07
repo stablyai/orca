@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 
 export function formatMcpConfigSummary(configs: LoadedMcpConfigInspection[]): string {
   const detected = configs.filter((config) => config.exists).length

@@ -19,6 +19,9 @@ import {
 import { buildPRCommentConversationReplyBody } from '@/components/right-sidebar/checks-panel/comments/pr-comment-fixing-reply-body'
 import { useAppStore } from '@/store'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
@@ -286,6 +289,24 @@ export function ConversationTab({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationTabDescription
+          imageUploadAddress={() => {
+            const slug = prRepo ?? markdownGitHubRepo
+            return (item.type === 'pr' || projectOrigin) && slug
+              ? {
+                  runtime:
+                    sourceContext?.provider === 'github'
+                      ? taskSourceRuntimeTarget(sourceContext)
+                      : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  target: { kind: 'slug', ...slug, wakeWslDistro: true }
+                }
+              : githubCommentImageUploadAddress({
+                  repoPath: repoPath ?? '',
+                  repoId: item.repoId,
+                  sourceContext,
+                  type: item.type,
+                  prRepo: bodySlug
+                })
+          }}
           item={item}
           authorLabel={authorLabel}
           canEditBody={canEditBody}

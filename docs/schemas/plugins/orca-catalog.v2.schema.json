@@ -566,6 +566,7 @@
             "themes",
             "terminalThemes",
             "iconThemes",
+            "fonts",
             "syntaxes",
             "customEditors",
             "newFiles",

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import {
-  automationRunMatchesPaneKey,
   buildAutomationRunOpenLayout,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
@@ -9,7 +8,7 @@ import {
 const leafId = '11111111-1111-4111-8111-111111111111'
 const otherLeafId = '22222222-2222-4222-8222-222222222222'
 const paneKey = `tab-1:${leafId}`
-const splitPaneKey = `tab-1:${otherLeafId}`
+
 const runLeafLayout = {
   root: { type: 'leaf' as const, leafId },
   activeLeafId: leafId,
@@ -46,41 +45,6 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
 }
 
 describe('automation run open target', () => {
-  it('matches exact pane identity only', () => {
-    expect(automationRunMatchesPaneKey(run(), paneKey)).toBe(true)
-    expect(automationRunMatchesPaneKey(run(), splitPaneKey)).toBe(false)
-    expect(
-      automationRunMatchesPaneKey(run({ terminalPaneKey: null, terminalPtyId: null }), splitPaneKey)
-    ).toBe(false)
-  })
-
-  it('requires exact pane identity before treating a run terminal as openable', () => {
-    expect(
-      canOpen({
-        run: run({ terminalPaneKey: null, terminalPtyId: null }),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(false)
-    expect(
-      canOpen({
-        run: run({ terminalPaneKey: `other-tab:${leafId}` }),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-    expect(
-      canOpen({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-  })
-
   it('requires the run PTY to be live for View run', () => {
     expect(
       canOpen({

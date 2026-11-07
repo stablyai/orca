@@ -23,8 +23,8 @@ import {
 import { bindTabTerminalPanesInSession } from '../../../../main/persistence/restoring-sessions/tab-terminal-pane-binding-repair'
 import { windowViewSaveForMain } from '../../../../main/persistence/window-save-view'
 import { deriveShutdownReconnectFacts } from '../../../../main/runtime/terminal/recovery/shutdown-reconnect-facts'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { buildWorkspaceSessionHostSnapshots } from '@/lib/workspace-session-host-persistence'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { buildWorkspaceSessionHostSnapshots } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   bootWindowFromPartitions,
   type StoredPartition

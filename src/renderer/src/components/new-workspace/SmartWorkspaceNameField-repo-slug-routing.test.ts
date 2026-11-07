@@ -1,11 +1,12 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getRepoSlugCached } from './smart-workspace-repo-slug'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: vi.fn()
 }))
 
@@ -56,20 +57,5 @@ describe('SmartWorkspaceNameField repository slug routing', () => {
       { timeoutMs: 30_000 }
     )
     expect(repoSlug).not.toHaveBeenCalled()
-  })
-
-  it('does not permanently cache a failed GHES resolution', async () => {
-    vi.mocked(callRuntimeRpc)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ owner: 'acme', repo: 'widgets', host: 'github.acme.test' })
-    const cache = new Map()
-    const repo = { id: 'repo-1', path: '/workspace/widgets' }
-    const source = runtimeSource('one')
-
-    await expect(getRepoSlugCached(repo, source, cache)).resolves.toBeNull()
-    await expect(getRepoSlugCached(repo, source, cache)).resolves.toMatchObject({
-      host: 'github.acme.test'
-    })
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
   })
 })

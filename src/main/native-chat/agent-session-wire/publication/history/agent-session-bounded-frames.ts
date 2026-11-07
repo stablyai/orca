@@ -1,4 +1,4 @@
-import { withForkMarker, type ForkMarker } from '../../agent-session-fork-marker'
+import { withForkMarker, type ForkMarker } from './agent-session-fork-marker'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/agent-session-background-task-wire'

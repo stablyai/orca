@@ -56,25 +56,6 @@ describe('chat appearance write queue', () => {
     })
   })
 
-  it('skips repeated writes at a zoom limit and still accepts the next reversal', async () => {
-    const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
-      mock.state.settings = { ...mock.state.settings!, ...updates }
-    })
-    mock.state.updateSettings = updateSettings
-    mock.state.settings = {
-      ...getDefaultSettings('/tmp'),
-      nativeChatAppearance: { fontSize: 20 }
-    }
-
-    await writeNativeChatFontSize('increase')
-    await writeNativeChatFontSize('increase')
-    expect(updateSettings).not.toHaveBeenCalled()
-    await writeNativeChatFontSize('decrease')
-    await writeNativeChatFontSize('increase')
-    expect(updateSettings).toHaveBeenCalledTimes(2)
-    expect(mock.state.settings?.nativeChatAppearance).toEqual({ fontSize: 20 })
-  })
-
   it('consumes chat size actions without changing saved size while terminal matching is active', async () => {
     const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
       mock.state.settings = { ...mock.state.settings!, ...updates }

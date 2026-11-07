@@ -13,7 +13,7 @@ import {
 } from '../page/PluginContributionActionLanguage'
 import { openPluginNewFileFromSettings } from '../page/PluginContributionActionNewFile'
 import { openPluginPanelFromSettings } from '../page/PluginContributionActionPanel'
-import { languageDisplayName } from '../presentation/plugin-contributions'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 
 /** Runs `act` over the workspace Settings came from, or says why it can't. */
