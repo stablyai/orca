@@ -1,9 +1,9 @@
-import { statSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
 } from '../../node-bounded-json-stringify'
-import { writeSecureFile } from '../../secure-file'
+import { hardenExistingSecureFile, writeSecureFile } from '../../secure-file'
 import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
@@ -97,12 +97,16 @@ function fileFingerprint(path: string): string | null {
 }
 
 function environmentStoreFingerprint(userDataPath: string): string | null {
-  const parts = [
+  const parts = environmentStorePaths(userDataPath).map(fileFingerprint)
+  return parts.includes(null) ? null : `${isWslHostsServing(process.env)}|${parts.join('|')}`
+}
+
+function environmentStorePaths(userDataPath: string): string[] {
+  return [
     getEnvironmentStorePath(userDataPath),
     getRuntimeEnvironmentSidecarPath(userDataPath),
     getWslHostDeploymentStorePath(userDataPath)
-  ].map(fileFingerprint)
-  return parts.includes(null) ? null : `${isWslHostsServing(process.env)}|${parts.join('|')}`
+  ]
 }
 
 /**
@@ -121,6 +125,12 @@ export function readEnvironmentStore(
     cachedStoreRead?.userDataPath === userDataPath &&
     cachedStoreRead.fingerprint === fingerprint
   ) {
+    // Disk reads re-harden these credential files; a hit must keep that repair and its retries.
+    for (const path of environmentStorePaths(userDataPath)) {
+      if (existsSync(path)) {
+        hardenExistingSecureFile(path)
+      }
+    }
     return structuredClone(cachedStoreRead.store)
   }
   const { store, degraded } = readEnvironmentStoreFromDisk(userDataPath, options)
