@@ -461,12 +461,17 @@ function parseEdgeConfig(
     .filter((region) => region.length > 0)
     .map((region) => RelayRegionSchema.parse(region))
   const adminKey = parsed.ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY
-  if (adminKey !== undefined && adminKey === parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
+  // The deployed edge keeps host data in its objects: without the key the director could not
+  // push it, and hosts would land on an edge that holds none of their devices.
+  if (adminKey === undefined) {
+    throw new Error('ORCA_RELAY_EDGE_CELL_URL needs ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY')
+  }
+  if (adminKey === parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
     throw new Error('ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY must differ from the assignment signing key')
   }
   return {
     cellUrl,
-    ...(adminKey ? { adminSigningKey: new TextEncoder().encode(adminKey) } : {}),
+    adminSigningKey: new TextEncoder().encode(adminKey),
     rolloutPercent: parsed.ORCA_RELAY_EDGE_ROLLOUT_PERCENT,
     allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),
     denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),

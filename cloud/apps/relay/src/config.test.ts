@@ -336,12 +336,17 @@ describe('relay edge configuration', () => {
     expect(
       loadRelayConfig({ ...cellEnvironment(4_000), ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com' }).edge
     ).toBeUndefined()
+    expect(() =>
+      loadRelayConfig({ ...directorEnvironment(), ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com' })
+    ).toThrow('ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY')
     const edge = loadRelayConfig({
       ...directorEnvironment(),
-      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com'
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: 'edge-admin-key-with-at-least-32-bytes!!'
     }).edge
     expect(edge).toEqual({
       cellUrl: 'https://edge.relay.example.com',
+      adminSigningKey: new TextEncoder().encode('edge-admin-key-with-at-least-32-bytes!!'),
       rolloutPercent: 0,
       allowHosts: new Set(),
       denyHosts: new Set(),
@@ -353,6 +358,7 @@ describe('relay edge configuration', () => {
     const env = {
       ...directorEnvironment(),
       ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: 'edge-admin-key-with-at-least-32-bytes!!',
       ORCA_RELAY_EDGE_ROLLOUT_PERCENT: '10',
       ORCA_RELAY_EDGE_ALLOW_HOSTS: 'abcdefghijklmnop, ABCDEFGHIJKLMNOP',
       ORCA_RELAY_EDGE_DENY_HOSTS: 'zzzzzzzzzzzzzzzz',
