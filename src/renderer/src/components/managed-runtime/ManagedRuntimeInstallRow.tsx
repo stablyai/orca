@@ -26,6 +26,7 @@ export function ManagedRuntimeInstallRow(props: {
   children: (line: React.ReactNode, actions: React.ReactNode) => React.ReactNode
   /** A sign-in runs the installed server, so Install and Remove wait for it; Cancel does not. */
   signInRunning?: boolean
+  buttonSize?: 'xs' | 'default'
 }): React.JSX.Element {
   const { observation, agentLabel } = props
   // A click holds its button until the host answers, so a double click starts nothing twice.
@@ -121,7 +122,7 @@ export function ManagedRuntimeInstallRow(props: {
         <>
           {button ? (
             <Button
-              size="xs"
+              size={props.buttonSize ?? 'xs'}
               disabled={button.kind === 'cancel' ? pending !== null : held}
               onClick={() => act(button.kind, primary(button))}
             >
