@@ -14,8 +14,7 @@ const METER_PUBLISH_INTERVAL_MS = 1000 / 15
 export type DictationMeterPublisher = (meter: DictationMeterState) => void
 
 export function useAudioCaptureMeter(publishMeter?: DictationMeterPublisher) {
-  const analyzerRef = useRef<DictationMeterAnalyzerState>(undefined!)
-  analyzerRef.current ??= createDictationMeterAnalyzerState()
+  const analyzerRef = useRef<DictationMeterAnalyzerState>(createDictationMeterAnalyzerState())
   const publishedMeterRef = useRef(DEFAULT_DICTATION_METER)
   const lastPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
 
