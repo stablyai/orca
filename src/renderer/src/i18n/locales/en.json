@@ -21208,6 +21208,11 @@
           "scrollback": "scrollback",
           "snap": "snap",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "title": "Match Claude Code to Terminal Theme",
+          "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
+          "claude": "claude"
         }
       },
       "nativeChat": {
