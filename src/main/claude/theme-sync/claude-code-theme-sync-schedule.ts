@@ -73,20 +73,22 @@ export function startClaudeCodeThemeSync(host: {
   let lastForcedAt = Date.now()
   let restorePending = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  let retryTimers: ReturnType<typeof setTimeout>[] = []
+  // Per file, so a pass that touches one config folder keeps another folder's pending retries.
+  const retryTimers = new Map<string, ReturnType<typeof setTimeout>[]>()
   let queue = Promise.resolve()
-  const scheduleReloadRetries = (paths: readonly string[]): void => {
-    retryTimers.forEach(clearTimeout)
-    retryTimers = RELOAD_RETRY_DELAYS_MS.map((delay, attempt) =>
-      setTimeout(() => {
-        queue = queue
-          .then(async () => {
-            for (const path of paths) {
-              await republishThemeFile(path, attempt).catch(warnSyncFailed)
-            }
-          })
-          .catch(warnSyncFailed)
-      }, delay)
+  const cancelReloadRetries = (path: string): void => {
+    retryTimers.get(path)?.forEach(clearTimeout)
+    retryTimers.delete(path)
+  }
+  const scheduleReloadRetries = (path: string): void => {
+    cancelReloadRetries(path)
+    retryTimers.set(
+      path,
+      RELOAD_RETRY_DELAYS_MS.map((delay, attempt) =>
+        setTimeout(() => {
+          queue = queue.then(() => republishThemeFile(path, attempt)).catch(warnSyncFailed)
+        }, delay)
+      )
     )
   }
   const sync = (force = false): void => {
@@ -101,13 +103,13 @@ export function startClaudeCodeThemeSync(host: {
       .then(async () => {
         const result = await syncClaudeCodeThemeConfigDirs(target, host.userDataPath)
         restorePending = result.restorePending
-        if (result.replaced.length > 0) {
-          scheduleReloadRetries(result.replaced)
-        } else if (!target.enabled) {
-          // Off with nothing restored: stop touching the user's config folder.
-          retryTimers.forEach(clearTimeout)
-          retryTimers = []
+        if (!target.enabled && result.replaced.length === 0) {
+          // Off with nothing restored: stop touching the user's config folders.
+          for (const path of retryTimers.keys()) {
+            cancelReloadRetries(path)
+          }
         }
+        new Set(result.replaced).forEach(scheduleReloadRetries)
       })
       .catch(warnSyncFailed)
   }
