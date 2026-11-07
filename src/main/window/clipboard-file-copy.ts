@@ -21,6 +21,31 @@ export type ClipboardFileDeps = {
 const WINDOWS_CLIPBOARD_FILE_ENV = 'ORCA_CLIPBOARD_FILE'
 export const CLIPBOARD_FILE_RESOLUTION_TIMEOUT_MS = 5_000
 
+type ClipboardWriteFileRequest = {
+  filePath: string
+  connectionId?: string
+}
+
+export function normalizeClipboardWriteFileRequest(
+  args: unknown
+): ClipboardWriteFileRequest | null {
+  if (typeof args === 'string') {
+    return { filePath: args }
+  }
+  if (!args || typeof args !== 'object' || Array.isArray(args)) {
+    return null
+  }
+  const filePath = (args as { filePath?: unknown }).filePath
+  if (typeof filePath !== 'string') {
+    return null
+  }
+  const connectionId = (args as { connectionId?: unknown }).connectionId
+  if (typeof connectionId === 'string' && connectionId.trim() !== '') {
+    return { filePath, connectionId }
+  }
+  return { filePath }
+}
+
 // Publish local OS file references for file-manager paste; remote files are unavailable here. Return clipboard failures to the renderer.
 export async function writeFileToClipboard(
   filePath: string,
