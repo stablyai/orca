@@ -9,7 +9,8 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-import { rateLimitGuard, _resetRateLimitCache } from './rate-limit'
+import { acquire, release } from './gh-utils'
+import { getRateLimit, rateLimitGuard, _resetRateLimitCache } from './rate-limit'
 import {
   clearGhRateLimitBlock,
   getGhRateLimitBlockedUntilMs,
@@ -101,5 +102,38 @@ describe('scope-aware breaker reset probe', () => {
       host: 'github.acme-corp.com'
     })
     expect(getGhRateLimitBlockedUntilMs('core', 31_000, GHES_SCOPE)).toBeNull()
+  })
+})
+
+describe('rate-limit probe and the gh semaphore', () => {
+  let held = 0
+
+  afterEach(() => {
+    for (; held > 0; held--) {
+      release()
+    }
+    _resetRateLimitCache()
+  })
+
+  // Slot holders await the budget probe; a probe queued behind them never runs.
+  it('answers the probe while every gh slot is held', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        resources: {
+          core: { limit: 5000, remaining: 4000, reset: 2_000_000_000 },
+          search: { limit: 30, remaining: 30, reset: 2_000_000_000 },
+          graphql: { limit: 5000, remaining: 4500, reset: 2_000_000_000 }
+        }
+      })
+    })
+    for (let i = 0; i < 4; i++) {
+      await acquire()
+      held++
+    }
+
+    expect(await getRateLimit()).toMatchObject({
+      ok: true,
+      snapshot: { core: { remaining: 4000 }, graphql: { remaining: 4500 } }
+    })
   })
 })

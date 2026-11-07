@@ -5,6 +5,7 @@ import type {
   GitHubRateLimitSnapshot
 } from '../../shared/github/rate-limit-types'
 import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { ghExecFileAsync } from '../git/runner'
 import {
@@ -22,6 +23,27 @@ const RATE_LIMIT_CACHE_TTL_MS = 30_000
 let cached: GitHubRateLimitSnapshot | null = null
 // Negative-cache failures, including Enterprise hosts with rate limiting disabled.
 let probeFailure: { at: number; error: string } | null = null
+
+// gh slot holders await probes, so probes use their own limiter; probe holders acquire nothing else.
+const probeLimiter = new PrioritySemaphore(2)
+const NATIVE_PROBE_PRIORITY = 0
+const SCOPE_PROBE_PRIORITY = 1
+
+async function runRateLimitProbe(
+  priority: number,
+  options: { host: string; wslDistro?: string }
+): Promise<string> {
+  const releaseProbe = await probeLimiter.acquire(priority)
+  try {
+    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
+      encoding: 'utf-8',
+      ...options
+    })
+    return stdout
+  } finally {
+    releaseProbe()
+  }
+}
 
 type GhRateLimitPayload = {
   resources?: {
@@ -214,8 +236,7 @@ function refineBreakerForScope(scope: string): void {
   const probe = (async () => {
     try {
       // Query the tripping runtime/host, independently of the shared native snapshot.
-      const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-        encoding: 'utf-8',
+      const stdout = await runRateLimitProbe(SCOPE_PROBE_PRIORITY, {
         host: parts.host,
         ...(parts.runtime === 'wsl' ? { wslDistro: parts.wslDistro } : {})
       })
@@ -242,7 +263,7 @@ function refineBreakerForScope(scope: string): void {
 
 registerGhRateLimitResetProbe((_bucket, scope) => refineBreakerForScope(scope))
 
-// Share cold probes; TTL caching cannot dedupe calls before the first result.
+// Share in-flight probes, forced ones included: a probe already running is fresh.
 let probeInFlight: Promise<GetRateLimitResult> | null = null
 
 export async function getRateLimit(options?: { force?: boolean }): Promise<GetRateLimitResult> {
@@ -252,7 +273,7 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   if (!options?.force && probeFailure && Date.now() - probeFailure.at < RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: false, error: probeFailure.error }
   }
-  if (!options?.force && probeInFlight) {
+  if (probeInFlight) {
     return probeInFlight
   }
   const probe = fetchRateLimitSnapshot()
@@ -266,14 +287,10 @@ export async function getRateLimit(options?: { force?: boolean }): Promise<GetRa
   }
 }
 
-// Probes skip the gh semaphore: slot holders await them, so queueing would deadlock; dedupe bounds them.
 async function fetchRateLimitSnapshot(): Promise<GetRateLimitResult> {
   try {
     // Pin the shared native snapshot against ambient GH_HOST redirection.
-    const { stdout } = await ghExecFileAsync(['api', 'rate_limit'], {
-      encoding: 'utf-8',
-      host: 'github.com'
-    })
+    const stdout = await runRateLimitProbe(NATIVE_PROBE_PRIORITY, { host: 'github.com' })
     const parsed = JSON.parse(stdout) as GhRateLimitPayload
     const snapshot: GitHubRateLimitSnapshot = {
       core: parseBucket(parsed.resources?.core),
