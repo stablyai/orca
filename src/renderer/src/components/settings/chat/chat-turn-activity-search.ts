@@ -1,11 +1,12 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from './native-chat-turn-diff-setting-target'
 import { NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID } from './native-chat-opened-pull-requests-setting-target'
 
-export const getChatTurnActivityTitle = (): string =>
-  translate('components.settings.nativeChat.turnActivityTitle', 'Turn activity')
+export const getChatTurnActivityTitle = (t: Translate = translate): string =>
+  t('components.settings.nativeChat.turnActivityTitle', 'Turn activity')
 
 export const getChatTurnActivityEntriesByKey = createLocalizedCatalog(
   () =>
