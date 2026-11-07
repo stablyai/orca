@@ -23,6 +23,7 @@ export const detailCommentSchema = z.looseObject({
   authorAvatarUrl: prText('authorAvatarUrl'),
   user: salvagedOptional('user', z.looseObject({ displayName: prText('displayName') })),
   isBot: prFlag('isBot'),
+  viewerDidAuthor: prFlag('viewerDidAuthor'),
   body: z.string(),
   createdAt: prText('createdAt'),
   url: prText('url'),
