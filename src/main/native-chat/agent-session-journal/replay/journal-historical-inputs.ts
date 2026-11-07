@@ -139,7 +139,8 @@ export function restoreHistoricalPersonAcceptance(
     AND seq<=? AND deleted=0 ORDER BY seq DESC LIMIT 1`)
   const owner = journalInputOrder(state)
   const accepted = db.prepare(`SELECT seq,field,entry_key,format,ordinal,value_json,deleted
-    FROM journal_outcomes WHERE generation=? AND seq>? AND seq<=? ORDER BY seq DESC`)
+    FROM journal_outcomes WHERE generation=? AND seq>? AND seq<=?
+    AND field='submissions' AND deleted=0 ORDER BY seq DESC`)
   for (const record of accepted.iterate(
     source.generation,
     owner.latestPersonAcceptedSequence(),
