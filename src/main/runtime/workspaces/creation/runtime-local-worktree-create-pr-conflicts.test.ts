@@ -73,6 +73,7 @@ vi.mock('../../../git/worktrees/creation/worktree-base-ref-probe', () => ({
   hasLocalWorktreeBaseRef: mocks.hasBase
 }))
 vi.mock('./runtime-worktree-create-git', () => ({
+  getWorktreeCreateStartSuffix: vi.fn(async () => 1),
   resolveCreateBranchName: mocks.branchName,
   canCheckoutExistingLocalBranch: mocks.canCheckout,
   getLocalGitHubPrForBranch: mocks.githubPr,

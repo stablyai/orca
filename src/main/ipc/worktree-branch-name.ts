@@ -24,14 +24,18 @@ export function computeBranchName(
   return prefix ? `${prefix}/${sanitizedName}` : sanitizedName
 }
 
+/** Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name. */
+export function rewriteBranchLockSuffix(sanitizedWorktreeName: string): string {
+  return sanitizedWorktreeName.replace(/-?\.lock$/, '-lock')
+}
+
 /** Validate prefix settings early so creation errors identify configuration rather than opaque Git failures. */
 export function computeValidatedBranchName(
   sanitizedWorktreeName: string,
   settings: BranchPrefixSettings,
   gitUsername: string | null
 ): string {
-  // Git rejects a ref component ending in .lock; only the branch is rewritten so the folder keeps its name.
-  const sanitizedName = sanitizedWorktreeName.replace(/-?\.lock$/, '-lock')
+  const sanitizedName = rewriteBranchLockSuffix(sanitizedWorktreeName)
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
   if (prefix === null) {
     return sanitizedName

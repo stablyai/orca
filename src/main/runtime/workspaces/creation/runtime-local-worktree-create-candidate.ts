@@ -29,6 +29,7 @@ import {
   canCheckoutExistingLocalBranch,
   getLocalGitHubPrForBranch,
   getSelectedHostedReviewForBranch,
+  getWorktreeCreateStartSuffix,
   resolveCreateBranchName
 } from './runtime-worktree-create-git'
 import { runtimePathExists } from '../catalog/runtime-worktree-filesystem'
@@ -49,6 +50,7 @@ export type RuntimeLocalWorktreeCreateCandidate = {
   worktreePath: string
 }
 
+/** Probes suffixed candidates until one has a free path and a usable branch; throws a collision error when the attempt budget is exhausted. */
 export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   request: RuntimeManagedWorktreeCreateArgs
   repo: Repo
@@ -152,7 +154,10 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.pathClaim.claim(worktreePath)
     )
   }
-  for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
+  // Reuse flows must keep probing from suffix 1 so the requested branch stays first.
+  const start = await getWorktreeCreateStartSuffix(args, selectedReuseBranchName, sanitizedName)
+  let suffix = start
+  for (let attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
     effectiveSanitizedName = shouldRetireGeneratedName
       ? getGeneratedWorktreeCreateCandidate(
           sanitizedName,

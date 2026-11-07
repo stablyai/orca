@@ -6,7 +6,11 @@ import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admis
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { foldGitRefNameCase } from '../../../git/repo-branch-conflict'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { computeValidatedBranchName } from '../../../ipc/worktree-branch-name'
+import {
+  computeValidatedBranchName,
+  getConfiguredBranchPrefix,
+  rewriteBranchLockSuffix
+} from '../../../ipc/worktree-branch-name'
 import { getHostedReviewForBranch } from '../../../source-control/hosted-review'
 import {
   getSelectedReviewBranch,
@@ -14,6 +18,8 @@ import {
   type SelectedReviewBranchInput
 } from '../../integrations/reviews/selected-review-branch'
 import { hasLocalGitOptions, normalizeLocalBranchName } from '../catalog/runtime-worktree-selection'
+import { isGeneratedWorktreeCreateName } from '../../../../shared/new-workspace/worktree-create-retry-policy'
+import { getWorktreeCreateStartingSuffix } from '../../../workspaces/creation/worktree-create-candidates'
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 
 export async function resolveCreateBranchName(
@@ -152,4 +158,69 @@ export async function getSelectedHostedReviewForBranch(
         number: review.number
       }
     : null
+}
+
+/**
+ * Existing local branch names a new candidate must not collide with; scan failures return [].
+ * Branches only: the create path must not rescan the worktree inventory, and a taken directory
+ * without a branch still fails the candidate loop's own path probe one suffix later.
+ */
+export async function listExistingWorktreeCandidateNames(
+  repoPath: string,
+  gitOptions: { wslDistro?: string }
+): Promise<string[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'],
+      { cwd: repoPath, ...gitOptions }
+    )
+    return stdout.split(/\r?\n/).filter(Boolean)
+  } catch (error) {
+    console.warn('[worktree-create] could not list existing branch candidate names:', error)
+    return []
+  }
+}
+
+type WorktreeCreateStartSuffixArgs = {
+  repo: { path: string }
+  settings: { branchPrefix: string; branchPrefixCustom?: string }
+  username: string
+  localWorktreeGitOptions: { wslDistro?: string }
+  request: { branchNameOverride?: string; branchIntent?: string; nameWasGenerated?: boolean }
+}
+
+/** Reuse flows must keep probing from suffix 1 so the requested branch stays first. */
+export async function getWorktreeCreateStartSuffix(
+  args: WorktreeCreateStartSuffixArgs,
+  selectedReuseBranchName: string | null,
+  sanitizedName: string
+): Promise<number> {
+  if (
+    selectedReuseBranchName ||
+    args.request.branchNameOverride ||
+    args.request.branchIntent === 'open-existing-v2' ||
+    (args.request.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName))
+  ) {
+    return 1
+  }
+  const branchPrefix = getConfiguredBranchPrefix(args.settings, args.username)
+  const existingNames = await listExistingWorktreeCandidateNames(
+    args.repo.path,
+    args.localWorktreeGitOptions
+  )
+  return getWorktreeCreateStartingSuffix({
+    baseName: sanitizedName,
+    // Branches carry the prefix and the .lock rewrite; folders and candidates never do.
+    branchBaseName: branchPrefix
+      ? `${branchPrefix}/${rewriteBranchLockSuffix(sanitizedName)}`
+      : rewriteBranchLockSuffix(sanitizedName),
+    existingBranchNames: existingNames,
+    existingCandidateNames: existingNames.map((name) => stripBranchPrefix(name, branchPrefix))
+  })
+}
+
+function stripBranchPrefix(name: string, branchPrefix: string | null): string {
+  return branchPrefix && name.startsWith(`${branchPrefix}/`)
+    ? name.slice(branchPrefix.length + 1)
+    : name
 }
