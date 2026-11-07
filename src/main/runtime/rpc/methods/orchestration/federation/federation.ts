@@ -16,7 +16,7 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
