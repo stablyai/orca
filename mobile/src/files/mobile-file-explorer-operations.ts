@@ -5,6 +5,7 @@ import { isMobileMethodUnavailableError } from '../transport/mobile-method-unava
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant, rpcResultVariants } from '../transport/rpc-operation-result-reader'
 import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-dir-page'
+import { compareDirEntries } from '../../../src/shared/file-name-sort'
 import {
   fileDirectoryEntriesSchema,
   fileDirectoryPageSchema,
@@ -28,7 +29,8 @@ export const fileDirectoryRead = bindDeferredRpcOperation(
         fileDirectoryEntriesSchema.transform((entries) => ({
           entries,
           total: entries.length,
-          hasMore: false
+          hasMore: false,
+          whole: true
         }))
       )
     ])
@@ -46,7 +48,7 @@ export const legacyFileListRead = bindDeferredRpcOperation(
   })
 )
 
-type DirectoryPage = { entries: MobileDirEntry[]; total: number; hasMore: boolean }
+type DirectoryPage = { entries: MobileDirEntry[]; total: number; hasMore: boolean; whole?: boolean }
 
 export type DirectoryRead =
   | ({ kind: 'directory' } & DirectoryPage)
@@ -73,8 +75,11 @@ async function readDirectoryPage(
   })
   const directory = fileDirectoryRead.interpret(response)
   if (directory.accepted) {
-    const { entries, total, hasMore } = directory.value
-    return { kind: 'directory', entries, total, hasMore }
+    const { entries, total, hasMore, whole } = directory.value
+    // A host older than paging ignores the cursor and sends the whole folder; keep what follows it.
+    const rows =
+      whole && after ? entries.filter((entry) => compareDirEntries(entry, after) > 0) : entries
+    return { kind: 'directory', entries: rows, total, hasMore }
   }
   const refusal = response.ok ? undefined : response.error
   // Older desktops lack readDir in the mobile allowlist; fall back to capped files.list.

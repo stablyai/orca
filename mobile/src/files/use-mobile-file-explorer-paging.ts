@@ -43,10 +43,11 @@ export function useMobileFileExplorerPaging({
   const [revision, setRevision] = useState(0)
   const setStatus = useCallback(
     (relativePath: string, status: FolderPagingStatus | null) => {
-      if (liveScope.current !== scope) {
-        return
-      }
       setScoped((previous) => {
+        // A read that outlived its worktree may still clear its own entry, never another scope's.
+        if (liveScope.current !== scope && previous.scope !== scope) {
+          return previous
+        }
         const next = new Map(previous.scope === scope ? previous.statuses : NO_STATUS)
         if (status) {
           next.set(relativePath, status)
@@ -61,7 +62,11 @@ export function useMobileFileExplorerPaging({
 
   // `stale` when a refresh replaced the listing while the page was out; the caller reads again from it.
   const appendPage = useCallback(
-    async (relativePath: string, limit: number): Promise<'appended' | 'stale' | 'done'> => {
+    async (
+      relativePath: string,
+      limit: number,
+      read: { cancelledRefresh: boolean }
+    ): Promise<'appended' | 'stale' | 'done'> => {
       if (!client) {
         return 'done'
       }
@@ -78,7 +83,10 @@ export function useMobileFileExplorerPaging({
         return 'done'
       }
       // A refresh still out started from the shorter listing and would land over these rows.
-      await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+      if (queryClient.getQueryState(queryKey)?.fetchStatus === 'fetching') {
+        read.cancelledRefresh = true
+        await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+      }
       if (queryClient.getQueryData(queryKey) !== previous) {
         return 'stale'
       }
@@ -89,37 +97,43 @@ export function useMobileFileExplorerPaging({
     [client, hostId, queryClient, target]
   )
 
-  const showMore = useCallback(
-    async (relativePath: string) => {
-      setStatus(relativePath, 'loading')
+  // Show more reads one page; Search all reads until the folder ends. Each page lands in the cache,
+  // so the filter shows its matches as they arrive.
+  const readPages = useCallback(
+    async (relativePath: string, status: 'loading' | 'searching') => {
+      const limit = status === 'searching' ? FILE_READ_DIR_MAX_PAGE_ENTRIES : DIRECTORY_PAGE_SIZE
+      const read = { cancelledRefresh: false }
+      setStatus(relativePath, status)
       try {
-        let result = await appendPage(relativePath, DIRECTORY_PAGE_SIZE)
-        while (result === 'stale' && liveScope.current === scope) {
-          result = await appendPage(relativePath, DIRECTORY_PAGE_SIZE)
+        let result = await appendPage(relativePath, limit, read)
+        while (
+          liveScope.current === scope &&
+          (status === 'searching' ? result !== 'done' : result === 'stale')
+        ) {
+          result = await appendPage(relativePath, limit, read)
         }
         setStatus(relativePath, null)
       } catch {
         setStatus(relativePath, 'failed')
+      } finally {
+        if (read.cancelledRefresh) {
+          // The refresh these pages displaced runs again, now over the longer listing.
+          void queryClient.invalidateQueries({
+            queryKey: hostQueryKey(hostId, fileDirectoryQuery.family, target, { relativePath }),
+            exact: true
+          })
+        }
       }
     },
-    [appendPage, scope, setStatus]
+    [appendPage, hostId, queryClient, scope, setStatus, target]
   )
-
+  const showMore = useCallback(
+    (relativePath: string) => readPages(relativePath, 'loading'),
+    [readPages]
+  )
   const searchAll = useCallback(
-    async (relativePath: string) => {
-      setStatus(relativePath, 'searching')
-      try {
-        // Each page lands in the cache, so the filter shows its matches as it arrives.
-        let result = await appendPage(relativePath, FILE_READ_DIR_MAX_PAGE_ENTRIES)
-        while (result !== 'done' && liveScope.current === scope) {
-          result = await appendPage(relativePath, FILE_READ_DIR_MAX_PAGE_ENTRIES)
-        }
-        setStatus(relativePath, null)
-      } catch {
-        setStatus(relativePath, 'failed')
-      }
-    },
-    [appendPage, scope, setStatus]
+    (relativePath: string) => readPages(relativePath, 'searching'),
+    [readPages]
   )
 
   const searching = useMemo(() => [...statuses.values()].includes('searching'), [statuses])
