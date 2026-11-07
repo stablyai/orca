@@ -1294,7 +1294,6 @@
       "connecting": "デスクトップに接続中…",
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
-      "loadInterrupted": "フォルダーの読み込みが中断されました。",
       "title": "ファイル",
       "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
       "waiting": "デスクトップへの接続を待っています…"

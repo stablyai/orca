@@ -1337,7 +1337,6 @@
       "connecting": "Conectando con el escritorio…",
       "emptyState": "No se encontraron archivos",
       "loadFailed": "No se pudieron cargar los archivos",
-      "loadInterrupted": "Carga de la carpeta interrumpida",
       "title": "Archivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando los primeros 5000",
       "waiting": "Esperando al escritorio…"

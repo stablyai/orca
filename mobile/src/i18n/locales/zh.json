@@ -1294,7 +1294,6 @@
       "connecting": "正在连接桌面…",
       "emptyState": "未找到文件",
       "loadFailed": "无法加载文件",
-      "loadInterrupted": "文件夹加载中断",
       "title": "文件",
       "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
       "waiting": "等待桌面…"

@@ -1337,7 +1337,6 @@
       "connecting": "Connexion à l'ordinateur…",
       "emptyState": "Aucun fichier trouvé",
       "loadFailed": "Impossible de charger les fichiers",
-      "loadInterrupted": "Chargement du dossier interrompu",
       "title": "Fichiers",
       "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
       "waiting": "En attente de l'ordinateur…"

@@ -38,12 +38,12 @@ describe('a mounted screen', () => {
       {
         name: 'files.readDir#1',
         params: { relativePath: '', worktree: 'id:wt-files' },
-        options: { $rpc: 'absent' }
+        options: { failWhenDisconnected: true }
       },
       {
         name: 'files.list#1',
         params: { worktree: 'id:wt-files' },
-        options: { $rpc: 'absent' }
+        options: { failWhenDisconnected: true }
       }
     ])
   })

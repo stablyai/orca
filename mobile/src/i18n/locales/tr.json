@@ -1298,7 +1298,6 @@
       "connecting": "Masaüstüne bağlanılıyor…",
       "emptyState": "Dosya bulunamadı",
       "loadFailed": "Dosyalar yüklenemedi",
-      "loadInterrupted": "Klasör yüklemesi kesintiye uğradı",
       "title": "Dosyalar",
       "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
       "waiting": "Masaüstü bekleniyor…"
