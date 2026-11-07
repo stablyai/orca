@@ -1,4 +1,4 @@
-import { refuseAgentTabLaunch } from './launch-agent-tab-refusal'
+import { refuseAgentTabLaunch, refuseUnavailableAgentTabLaunch } from './launch-agent-tab-refusal'
 import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
@@ -9,7 +9,6 @@ import { toast } from 'sonner'
 import { invalidTerminalArgsMessage } from '../../../workspace/creation/work-item/launch-work-item-direct-messages'
 import {
   agentLaunchCheckSettingsMessage,
-  agentLaunchRecoveryMessage,
   notifyAgentLaunchFailure
 } from '@/lib/agent-launch-failure'
 import { planLaunchAgentStartupPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
@@ -71,6 +70,7 @@ function openAgentInNewTab(
     agentArgs,
     sessionOptions,
     initialCwd,
+    trustWorktreeId,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
@@ -151,19 +151,7 @@ function openAgentInNewTab(
     workspaceExecutionHostId: args.workspaceExecutionHostId
   })
   if ('unavailable' in executionContext) {
-    // A host still connecting is a wait, not a failure: decline like a disabled control, without a
-    // message; the caller keeps its prompt and treats the outcome as handled.
-    if (executionContext.unavailable.pending) {
-      args.focusIntent?.cancel()
-      return { refused: { delivered: false, failureNotified: true } }
-    }
-    const recovery = agentLaunchRecoveryMessage(executionContext.unavailable.recovery)
-    return refuseAgentTabLaunch(
-      args,
-      recovery,
-      () => notifyAgentLaunchFailure(agent, recovery),
-      notifyFailure
-    )
+    return refuseUnavailableAgentTabLaunch(args, executionContext.unavailable, notifyFailure)
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const terminalShell = queuedShell ?? (resolvedLaunchPlatform === 'win32' ? 'powershell' : 'posix')
@@ -202,6 +190,7 @@ function openAgentInNewTab(
       workspaceExecutionHostId: args.workspaceExecutionHostId,
       groupId,
       cwd: initialCwd,
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       buildStartup,
       sessionOptions,
       prompt: trimmedPrompt,
@@ -243,6 +232,7 @@ function openAgentInNewTab(
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(sessionOptions ? { sessionOptions } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
       ...(activate === false ? { activate: false } : {}),
@@ -262,9 +252,11 @@ function openAgentInNewTab(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(activate === false ? { activate: false } : {}),
     pendingStartup: {
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
@@ -283,10 +275,6 @@ function openAgentInNewTab(
       }
     }
   })
-  if (initialCwd?.trim()) {
-    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
-    store.queueTabInitialCwd(tab.id, initialCwd)
-  }
   // Safe for native-prefill agents: delivery skips paste when their draft already arrived at launch.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
     // Native argv prefill skips the paste callback, so seed the chat composer here.

@@ -1,5 +1,7 @@
 import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
 import { terminalPendingReason } from './new-tab-agent-menu-model'
+import { useAppStore } from '@/store'
+import { useAppStateValue } from '@/store/app-state-view'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
   agentPickerFreshLaunchInputs,
@@ -21,7 +23,6 @@ import {
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
@@ -194,15 +195,13 @@ export function ProjectedAgentMenuItems({
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
 }): React.JSX.Element {
-  const desktopDefaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
   const openAgentSettings = useCallback(() => {
-    openSettingsTarget({ pane: 'agents', repoId: null })
-    openSettingsPage()
-  }, [openSettingsPage, openSettingsTarget])
+    useAppStore.getState().openSettingsTarget({ pane: 'agents', repoId: null })
+    useAppStore.getState().openSettingsPage()
+  }, [])
   if (model.state === 'loading') {
     // Why: rows fill in once when every answer is known, instead of reshuffling under the pointer.
     return (

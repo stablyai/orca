@@ -23,42 +23,70 @@ function isPinnedServer(initialized: InitializeResponse, version: string): boole
   )
 }
 
+type ProbeLaunch = {
+  command: string
+  args: string[]
+  env: Record<string, string>
+  envToDelete: string[]
+}
+
+/** Initializes from a disposable folder; rejects unless the server's exit is proven afterwards. */
+export async function initializeAntigravityAcp(
+  launch: (folder: string) => ProbeLaunch,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<InitializeResponse> {
+  // Keep the server's working folder, and any home inside it, together for cleanup.
+  const folder = await mkdtemp(join(tmpdir(), 'orca-antigravity-probe-'))
+  const probe: { connection?: AcpAgentConnection } = {}
+  let initialized: InitializeResponse | null = null
+  let failure: unknown = null
+  try {
+    initialized = await runAgentModelCatalogSession(
+      () => {
+        probe.connection = createAcpAgentConnection({ ...launch(folder), cwd: folder })
+        return probe.connection
+      },
+      (started) => started.initialize(),
+      { label: 'Antigravity', timeoutMs, ...(signal ? { signal } : {}) }
+    )
+  } catch (error) {
+    failure = error
+  }
+  if (probe.connection && !probe.connection.exited) {
+    failure = new Error('Its exit was not proven after the check')
+  }
+  await rm(folder, { recursive: true, force: true })
+  if (failure !== null || !initialized) {
+    throw failure
+  }
+  return initialized
+}
+
 /** Require the pinned initialize response and proven exit before accepting an installation. */
 export async function probeAntigravityAcpServer(
   command: string,
   version: string,
   signal: AbortSignal
 ): Promise<void> {
-  // Keep the server’s home and extracted runtime together for cleanup.
-  const home = await mkdtemp(join(tmpdir(), 'orca-antigravity-probe-'))
-  const probe: { connection?: AcpAgentConnection } = {}
-  let answer: unknown = null
+  let failure: unknown = null
   try {
-    const initialized = await runAgentModelCatalogSession(
-      () => {
-        probe.connection = createAcpAgentConnection({
-          command,
-          args: process.platform === 'linux' ? ['--uid='] : [],
-          cwd: home,
-          env: { ...ANTIGRAVITY_ACP_ENV, GEMINI_HOME: home, TMPDIR: home, TEMP: home, TMP: home },
-          envToDelete: scrubAntigravityAcpEnvironment({}, process.env)
-        })
-        return probe.connection
-      },
-      (started) => started.initialize(),
-      { label: 'Antigravity', timeoutMs: PROBE_TIMEOUT_MS, signal }
+    const initialized = await initializeAntigravityAcp(
+      (home) => ({
+        command,
+        args: process.platform === 'linux' ? ['--uid='] : [],
+        env: { ...ANTIGRAVITY_ACP_ENV, GEMINI_HOME: home, TMPDIR: home, TEMP: home, TMP: home },
+        envToDelete: scrubAntigravityAcpEnvironment({}, process.env)
+      }),
+      PROBE_TIMEOUT_MS,
+      signal
     )
     if (!isPinnedServer(initialized, version)) {
-      answer = new Error(`It did not answer as Antigravity ${version}`)
+      failure = new Error(`It did not answer as Antigravity ${version}`)
     }
   } catch (error) {
-    answer = error
+    failure = error
   }
-  const failure =
-    probe.connection && !probe.connection.exited
-      ? new Error('Its exit was not proven after the check')
-      : answer
-  await rm(home, { recursive: true, force: true })
   if (failure !== null) {
     throw new Error('Antigravity could not start on this host.', { cause: failure })
   }

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
 import type * as RuntimeRpcClientModule from './runtime-rpc-client'
-import type * as RuntimeFileMutationClient from './runtime-file-mutation-client'
+import type * as RuntimeFileMutationClient from './files/mutations/runtime-file-mutation-client'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
@@ -112,7 +112,7 @@ vi.mock('./web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: hoisted.closeSessionTab
 }))
 
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileMutationClient>()),
   writeRuntimeFile: hoisted.writeRuntimeFile
 }))

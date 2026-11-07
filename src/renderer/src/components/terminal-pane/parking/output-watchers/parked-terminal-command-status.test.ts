@@ -370,7 +370,8 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       agentType: 'command-code'
     })
     const policy = await createPolicy(PTY_ID_LOCAL)
-    const { setCommandCodeDoneSettleExecutor } = await import('../../command-code-done-settle')
+    const { setCommandCodeDoneSettleExecutor } =
+      await import('../../agent-completion/command-code/command-code-done-settle')
 
     policy.onCommandCodeDone('Fix the spinner')
     vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
@@ -392,7 +393,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     })
     const policy = await createPolicy(PTY_ID_LOCAL)
     const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
-      await import('../../command-code-done-settle')
+      await import('../../agent-completion/command-code/command-code-done-settle')
 
     policy.onCommandCodeDone('Fix the spinner')
     const revealedPaneSettle = vi.fn()

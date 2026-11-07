@@ -19,7 +19,7 @@ import type {
   JiraIssueSortDirection,
   JiraPrioritiesBySite
 } from '../../jira-issue-sorter'
-import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-detail-client'
+import { jiraListPrioritiesForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
 import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
 import {

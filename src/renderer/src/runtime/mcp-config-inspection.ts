@@ -11,9 +11,9 @@ import {
 import { joinPath } from '../lib/path'
 import { extractIpcErrorMessage } from '../lib/ipc-error'
 
-import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 function isMissingFileError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)

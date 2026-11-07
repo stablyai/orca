@@ -26,9 +26,8 @@ import {
 import { joinPath } from '../../../../lib/path'
 import { extractIpcErrorMessage } from '../../../../lib/ipc-error'
 import { Button } from '../../../ui/button'
-import { isWindowsUserAgent } from '../../../terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '../../../../lib/user-agent-platform'
 import { McpConfigFileRow } from './McpConfigFileRow'
-
 import { McpMissingConfigList } from './McpMissingConfigList'
 import {
   type LoadedMcpConfigInspection,
@@ -37,12 +36,12 @@ import {
 import { formatMcpConfigSummary } from './mcp-config-summary'
 import { translate } from '@/i18n/i18n'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
 } from '../../../../../../shared/file-write-disk-precondition'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 

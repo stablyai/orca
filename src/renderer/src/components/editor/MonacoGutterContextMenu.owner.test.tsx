@@ -4,16 +4,16 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { StoreApi } from 'zustand'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { getRuntimeGitRemoteFileUrl } from '@/runtime/runtime-git-working-tree-client'
+import { getRuntimeGitRemoteFileUrl } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 
 const storeRef = vi.hoisted((): { current?: StoreApi<AppState> } => ({}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-git-working-tree-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-working-tree-client', () => ({
   getRuntimeGitRemoteFileUrl: vi.fn()
 }))
 

@@ -4,11 +4,17 @@ import { useAppStore } from '@/store'
 import { agentSessionSignInFor } from '../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { NativeChatActionButton } from './NativeChatActionButton'
 
+/** Links Orca's own Antigravity sign-in; chats on the host's agy (`system`) use agy's instead. */
 export function nativeChatAntigravitySignInContent(
   failureKind: string | undefined,
-  agentName: string | undefined
+  agentName: string | undefined,
+  account?: string
 ): React.JSX.Element | undefined {
-  if (failureKind !== 'notSignedIn' || agentSessionSignInFor(agentName)?.agent !== 'antigravity') {
+  if (
+    failureKind !== 'notSignedIn' ||
+    account === 'system' ||
+    agentSessionSignInFor(agentName)?.agent !== 'antigravity'
+  ) {
     return undefined
   }
   return (

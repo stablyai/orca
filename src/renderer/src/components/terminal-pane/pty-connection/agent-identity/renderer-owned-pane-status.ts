@@ -8,7 +8,7 @@ import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resolveRendererOwnedAgentStatusTiming
-} from '../../renderer-owned-agent-status-registry'
+} from '../../agent-status/renderer-owned-agent-status-registry'
 import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

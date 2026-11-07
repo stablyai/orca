@@ -4,10 +4,10 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import {
   getRelativePathInsideWorktree,
   withSshMutationExpectation
-} from '@/runtime/runtime-file-routing'
+} from '@/runtime/files/runtime-file-routing'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { assertRemoteWriteFitsOneRequest } from '@/runtime/runtime-file-mutation-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { assertRemoteWriteFitsOneRequest } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 import type { EditorFormatResult } from '../../../../../../shared/editor-formatter'

@@ -102,7 +102,7 @@ export const PR_FEATURE_AREA_E2E_SOURCE_ROUTES = [
     ['github-project-board'],
     [
       `${COMPONENTS}github-project/`,
-      'src/renderer/src/store/github/project-',
+      'src/renderer/src/store/github/projects/',
       'src/main/github/project-view/',
       'src/main/ipc/source-control/github-project-view-handlers.ts'
     ]

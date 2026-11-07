@@ -2,15 +2,20 @@ import {
   createAgentMenuTerminalPendingSelector,
   readAgentMenuLaunchFacts
 } from './agent-menu-launch-facts'
+import {
+  useAppViewExternalStore,
+  useAppStateView,
+  useAppStateViewActive,
+  useAppStateValue
+} from '@/store/app-state-view'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
-import { useMemo, useSyncExternalStore } from 'react'
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
@@ -58,18 +63,20 @@ export function useAgentMenuObservation(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ) {
+  const state = useAppStateView().getState()
+  const viewActive = useAppStateViewActive()
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
   const launchCwd = typeof target === 'string' ? undefined : target?.launchCwd
   const unresolvedTarget = Boolean(worktreeId) && detectionTarget === undefined
   // Why: hidden worktrees stay mounted, so only the shown one holds its host's streams.
-  const worktreeShown = useAppStore(
+  const shown = useAppStateValue(
     (state) => typeof target === 'string' && state.activeWorktreeId === worktreeId
   )
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
-  const acquired = useDetectedAgents(open || worktreeShown ? detectionTarget : undefined)
-  useAgentPickerRefusedWake(options?.wakeOnOpen === true && open, detectionTarget)
+  const acquired = useDetectedAgents(viewActive && (open || shown) ? detectionTarget : undefined)
+  useAgentPickerRefusedWake(viewActive && options?.wakeOnOpen === true && open, detectionTarget)
   // Closing the menu or leaving the workspace must not erase the known inventory.
-  const storedIds = useAppStore((state) =>
+  const storedIds = useAppStateValue((state) =>
     detectionTarget ? readDetectedAgentsForTarget(state, detectionTarget) : null
   )
   // No owner means no agents to offer; a later owner publication resumes normal detection.
@@ -79,18 +86,18 @@ export function useAgentMenuObservation(
     isLoading: !unresolvedTarget && acquired.isLoading
   }
   useHostStructuredAgentsVersion()
-  const localCapabilities = useSyncExternalStore(
+  const localCapabilities = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
   // The observation owns these settings; picker consumers reuse its snapshot.
-  const desktopSettings = useAppStore.getState().settings
+  const desktopSettings = state.settings
   const workspace =
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAppStore(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
+  const facts = useAppStateValue(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
   const prospective = typeof target === 'string' ? undefined : target?.workspace
   const repoId = prospective?.repoId
   const repoHostId = prospective?.executionHostId
@@ -99,16 +106,15 @@ export function useAgentMenuObservation(
       createAgentMenuTerminalPendingSelector({ worktreeId, repoId, executionHostId: repoHostId }),
     [worktreeId, repoId, repoHostId]
   )
-  const terminalPending = useAppStore(terminalPendingSelector)
-  const state = useAppStore.getState()
+  const terminalPending = useAppStateValue(terminalPendingSelector)
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
     desktopSettings,
-    open || worktreeShown,
-    open
+    viewActive && (open || shown),
+    viewActive && open
   )
-  useAppStore(
+  useAppStateValue(
     useShallow((state) => [
       state.settings?.defaultTuiAgent,
       state.settings?.disabledTuiAgents,
@@ -131,7 +137,7 @@ export function useAgentMenuObservation(
     input.hostCapabilities?.includes(AVAILABILITY) === true &&
     Boolean(structuredAgentSessionTargetForHost(facts.executionHostId))
   const availability = useHostStructuredAgentAvailability(
-    published && !plain && !unresolvedTarget
+    viewActive && published && !plain && !unresolvedTarget
       ? {
           executionHostId: facts.executionHostId,
           runtimeId: facts.runtimeId,
@@ -180,7 +186,7 @@ export function useAgentMenuObservation(
       null,
       localCapabilities.state === 'known' ? localCapabilities.capabilities : null
     )
-  const holding = (open || worktreeShown) && !plain && !unresolvedTarget
+  const holding = viewActive && (open || shown) && !plain && !unresolvedTarget
   useChatProgramFacts(workspace, holding)
   useChatProgramFacts({ kind: 'floating' }, holding && !local)
   // Only dependencies that can enable an action hold the cold fill; failed inventory ends its own.

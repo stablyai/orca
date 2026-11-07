@@ -891,13 +891,15 @@
         "keyword": {
           "windsurf": "windsurf",
           "devin": "devin",
-          "devinDesktop": "devin desktop"
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
         }
       }
     },
     "openInApp": {
       "preset": {
-        "devinDesktop": "Devin Desktop"
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
       }
     },
     "mcp": {
@@ -1911,13 +1913,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Der Zielarbeitsbereich ist nicht mehr verfügbar.",
-        "16a21d6413": "Die erneute SSH-Verbindung erfordert die interaktive Eingabe von Zugangsdaten.",
-        "386db94f3e": "Das Zielprojekt ist nicht mehr verfügbar.",
-        "3ad7d77f57": "Der Zielarbeitsbereich befindet sich auf einem anderen Host als das Ausführungsziel dieser Automatisierung.",
-        "workspaceHostUnresolved": "Der Zielarbeitsbereich erstreckt sich über mehrere Hosts, daher steht für diese Ausführung kein einzelner Host zur Verfügung."
-      },
       "useComposerState": {
         "b2ead86962": "Die PR-Basis konnte nicht ermittelt werden.",
         "3db83fc58a": "Auf diesem Host ist kein Projektpfad für Anhänge verfügbar.",
@@ -8366,7 +8361,8 @@
           "diagnosticsCopied": "Diagnosedaten kopiert",
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
           "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
-          "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten."
+          "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten.",
+          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8778,7 +8774,8 @@
           "activeLinks": "Aktive Links",
           "noActiveLinks": "Keine aktiven Links.",
           "createdAt": "Erstellt: {{value0}}",
-          "revoke": "Widerrufen"
+          "revoke": "Widerrufen",
+          "legacyEncryption": "Zuletzt mit älterer Verschlüsselung verwendet. Aktualisiere Orca dort, wo dieser Link verwendet wird."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Abbrechen",
@@ -11299,7 +11296,11 @@
               "micDefault": "Systemstandard",
               "dictationLanguageTitle": "Diktiersprache",
               "dictationLanguageDescription": "Teile dem Sprachmodell mit, welche Sprache du sprichst.",
-              "dictationLanguageKeyword": "Sprache"
+              "dictationLanguageKeyword": "Sprache",
+              "modelUnloadTitle": "Sprachmodell entladen",
+              "modelUnloadDescription": "Lege fest, wann das lokale Sprachmodell aus dem Speicher entladen wird.",
+              "modelUnloadKeyword": "entladen",
+              "modelMemoryKeyword": "speicher"
             }
           }
         },
@@ -11348,7 +11349,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Dem Ordner vertrauen, wenn Orca einen Agenten startet",
-          "description": "Von Orca gestartete Agenten überspringen die Abfrage „Do you trust this folder?“, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. Andernfalls fragt jeder Agent beim ersten Start in einem Ordner nach. Unbeaufsichtigt laufende Agenten, etwa Orchestrierungs-Worker, Automatisierungen und vom Smartphone gestartete Agenten, warten bei dieser Frage, bis sie in ihrem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
+          "description": "Von Orca gestartete Agenten können die Abfrage „Do you trust this folder?“ überspringen, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. Orca fragt einmal pro Repository beim ersten Agentenstart dort nach; die Antwort lässt sich in den Einstellungen dieses Repositorys ändern. Ausgeschaltet fragen Agenten immer selbst nach. Ein Agent, der unbeaufsichtigt läuft und nachfragt, etwa ein Orchestrierungs-Worker, eine Automatisierung oder ein vom Smartphone gestarteter Agent, wartet, bis die Frage in seinem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Tab-Titel automatisch generieren",
@@ -13555,7 +13556,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Noch keine Commits",
-            "781a8bcf7b": "Graph wird geladen…",
             "d0fb0f4bf2": "Commits aktualisieren",
             "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
             "9289ba0cb9": "Was sind Referenzen?",
@@ -13932,7 +13932,8 @@
             "clearNotesFromFile_other": "{{count}} Notizen aus {{path}} löschen?",
             "markResolved": "Als gelöst markieren",
             "keepFile": "Datei behalten",
-            "keepDeletion": "Löschung beibehalten"
+            "keepDeletion": "Löschung beibehalten",
+            "refreshAll": "Alle aktualisieren"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -14735,6 +14736,7 @@
             "openLog": "Protokoll öffnen",
             "revealLog": "Protokoll im Dateimanager anzeigen",
             "openWorkingDirectory": "Arbeitsverzeichnis öffnen",
+            "revealArtifactsFolder": "Artefaktordner im Dateimanager anzeigen",
             "copySessionId": "Sitzungs-ID kopieren",
             "copyLogPath": "Protokollpfad kopieren",
             "messageCount": "{{value0}} Nachr.",
@@ -14778,7 +14780,6 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dateien werden geladen…",
             "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
             "c3d4e5f6a7": "Alle Änderungen gemeinsam öffnen"
           },
@@ -15118,7 +15119,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Zurück",
-          "111d3f8d92": "Zur Projekteinrichtung springen"
+          "111d3f8d92": "Später einrichten"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Terminal wird gestartet…"
@@ -16955,7 +16956,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Spracherkennungsfehler: {{value0}}",
-          "7afff43472": "Diktat beendet, aber kein Textfeld war fokussiert.",
           "55127a3706": "Diktat fehlgeschlagen: {{value0}}",
           "bb7f599ee7": "Einstellungen öffnen",
           "2d5b9fabf9": "Mikrofonzugriff verweigert. Zugriff in den Systemeinstellungen erlauben und anschließend Orca neu starten.",
@@ -16966,7 +16966,13 @@
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
-          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+          "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
+          "copiedWithoutTarget": "Kein Textfeld war fokussiert, daher wurde das Diktat in die Zwischenablage kopiert.",
+          "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Diktat stoppen",
@@ -17546,7 +17552,10 @@
           "reuseLiveSession": "Laufende Sitzung wiederverwenden",
           "freshEachRun": "Bei jeder Ausführung neu",
           "precheckEnabled": "Aktiviert, {{timeout}}",
-          "precheckNone": "Keine"
+          "precheckNone": "Keine",
+          "migrate": "Migrieren",
+          "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
+          "needsMigration": "Migration erforderlich"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -18286,6 +18295,10 @@
           "actionsUnavailable": "Plugin-Aktionen sind in diesem Client nicht verfügbar.",
           "messageTooLarge": "Die Nachricht überschreitet die Größenbeschränkung.",
           "tooManyRequests": "Zu viele Anfragen."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Diesen Worktree öffnen",
+          "reconnect": "Stelle die Verbindung wieder her, um die Änderungen dieses Worktrees zu sehen."
         }
       },
       "link": {
@@ -18980,6 +18993,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "{{repo}} für Agenten vertrauen?",
+        "prompt-description": "Agenten wie Claude Code und Codex fragen „Do you trust this folder?“, bevor sie die eigenen Agenten-Einstellungen und Hooks des Projekts laden, die Befehle ausführen können. Orca kann diese Frage in jedem Worktree dieses Repositorys automatisch mit Ja beantworten.",
+        "prompt-remembered": "Orca merkt sich die Antwort für dieses Repository. Sie lässt sich in den Einstellungen des Repositorys ändern.",
+        "trust-repository": "Repository vertrauen",
+        "let-agents-ask": "Agenten fragen lassen",
+        "setting-title": "Ordnervertrauen für Agenten",
+        "setting-description": "Legt fest, ob von Orca gestartete Agenten in den Worktrees dieses Repositorys die Abfrage „Do you trust this folder?“ überspringen und die Agenten-Einstellungen und Hooks des Projekts sofort laden.",
+        "setting-undecided": "Noch nicht entschieden. Orca fragt beim nächsten Agentenstart hier nach.",
+        "setting-global-off": "Das Ordnervertrauen ist in den Agenten-Einstellungen ausgeschaltet, daher fragen Agenten immer nach.",
+        "keyword-trust": "vertrauen",
+        "keyword-hooks": "Hooks"
       }
     },
     "i18n": {
@@ -19164,17 +19190,6 @@
           "reviewStatus": "Issue-Status, Review-Status und CI-Checks für jeden Worktree anzeigen",
           "managePullRequests": "Pull Requests lesen, kommentieren und mergen, ohne Orca zu verlassen"
         }
-      },
-      "agyInstall": {
-        "open": "Installieren",
-        "title": "Antigravity installieren",
-        "description": "Drücke im Terminal die Eingabetaste, um das offizielle Installationsprogramm auszuführen. Beim Schließen dieses Terminals werden noch laufende Befehle gestoppt.",
-        "target": "Installationsort: {{location}}",
-        "thisDevice": "Dieses Gerät",
-        "terminal": "Antigravity-Installationsprogramm",
-        "detected": "Antigravity wurde in PATH gefunden. Schließe das Terminal, wenn die Installation abgeschlossen ist.",
-        "close": "Terminal schließen",
-        "recheck": "Agenten erneut prüfen"
       }
     },
     "jiraIssueAssigneeField": {
@@ -20632,6 +20647,13 @@
           "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
           "title": "Diktiersprache",
           "auto": "Automatisch erkennen"
+        },
+        "modelUnload": {
+          "title": "Sprachmodell entladen",
+          "description": "Wie lange das lokale Modell nach dem Diktieren im Speicher bleibt. Solange es geladen ist, beginnt das Diktieren sofort; „Sofort“ gibt den Speicher frei, sodass jedes Diktat auf das Laden des Modells wartet.",
+          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
+          "never": "Nie",
+          "immediately": "Sofort"
         }
       }
     },
@@ -20992,6 +21014,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "In {{value0}} gestartet",
     "actionSaveFailed": "Diese Aktion konnte nicht gespeichert werden. In den Einstellungen erneut speichern.",
     "discard": {
       "deleteUntrackedFileDescription": "Diese nicht versionierte Datei wird dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
@@ -23001,6 +23024,7 @@
       "noRunnableHost": "Dieser Automatisierung fehlt ein Host zur Ausführung.",
       "wslMoveInProgress": "Das Projekt dieser Automatisierung wird auf seinen WSL-Host verschoben. Deshalb hat Orca diese Ausführung übersprungen. Die Ausführungen werden nach Abschluss des Verschiebens fortgesetzt.",
       "wslMoveOwnedByHost": "Das Projekt dieser Automatisierung läuft jetzt auf seinem WSL-Host, der die Automatisierung dort ausführt. Orca führt diese lokale Kopie nicht mehr aus.",
+      "managedHostServer": "Migration zu {{host}} erforderlich",
       "missedGraceWindow": "Bei der nächsten Prüfung durch Orca war die Nachholfrist für diese verpasste Ausführung bereits abgelaufen.",
       "targetMissing": "Der Host der Automatisierung ist nicht mehr registriert. Daher gibt es für diese Automatisierung keinen Ausführungsort.",
       "targetReplaced": "Der Host der Automatisierung wurde entfernt und erneut registriert. Daher muss diese Automatisierung vor der Ausführung erneut zugeordnet werden.",
@@ -23429,5 +23453,32 @@
     "discussionAction": "An der Diskussion teilnehmen",
     "checkAction": "Kompatibilität prüfen",
     "settingsStatus": "Orca {{version}} benötigt macOS {{macos}} oder neuer. Dies ist die neueste Version für diesen Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Commit-Hash kopieren",
+    "parents": "Übergeordnete Commits",
+    "files": "Dateien",
+    "currentBranch": "Aktueller Branch",
+    "allBranches": "Alle Branches",
+    "chosenBranches": "Ausgewählte Branches",
+    "searchRefs": "Branches und Tags suchen",
+    "oldServer": "Diese Orca-Version auf dem Server zeigt nur den aktuellen Branch",
+    "copyBranch": "Branch-Namen kopieren",
+    "switchWorkspace": "Zum Workspace wechseln",
+    "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Workspace geöffnet.",
+    "workspaceCheckFailed": "Dieser Workspace konnte nicht überprüft werden. Versuche es erneut, wenn die Verbindung wiederhergestellt ist.",
+    "refresh": "Commits aktualisieren",
+    "branchTag": "Branch / Tag",
+    "graph": "Graph",
+    "resizeColumn": "Breite der Graphspalte ändern",
+    "message": "Nachricht",
+    "author": "Autor",
+    "date": "Datum",
+    "loadMore": "Mehr laden",
+    "noCommits": "Noch keine Commits",
+    "historyChanged": "Der Verlauf hat sich erneut geändert. Aktualisiere den Git-Graphen, um es erneut zu versuchen.",
+    "loadFailed": "Git-Verlauf konnte nicht geladen werden",
+    "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
+    "title": "Git-Graph"
   }
 }

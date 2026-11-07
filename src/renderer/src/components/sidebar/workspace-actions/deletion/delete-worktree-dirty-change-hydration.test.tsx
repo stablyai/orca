@@ -16,7 +16,7 @@ import {
   getDeleteWorktreeDirtyChangePreviews
 } from './delete-worktree-dirty-change-counts'
 
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 
 const state = vi.hoisted(() => ({
   repos: [],
@@ -30,7 +30,9 @@ vi.mock('@/store', () => ({
     getState: () => state
   })
 }))
-vi.mock('@/runtime/runtime-git-status-client', () => ({ getRuntimeGitStatus: vi.fn() }))
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
+  getRuntimeGitStatus: vi.fn()
+}))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
 
 const repoMap = new Map<string, Repo>()

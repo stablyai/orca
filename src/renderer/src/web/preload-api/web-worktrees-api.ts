@@ -108,7 +108,6 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         ...(args.comment ? { comment: args.comment } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest,
         // Switch point: the host lists this creation under the window's id only on the dark path.
         ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? { creationId: args.creationId } : {})
       })

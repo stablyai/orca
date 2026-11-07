@@ -17,7 +17,7 @@ const {
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp/orca-speech-test') },
   BrowserWindow: { fromWebContents: fromWebContentsMock },
-  ipcMain: { handle: handleMock },
+  ipcMain: { handle: handleMock, on: vi.fn() },
   safeStorage: {
     decryptString: vi.fn(),
     encryptString: vi.fn(() => Buffer.from('encrypted')),

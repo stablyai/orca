@@ -4,6 +4,7 @@ import type { MobilePushRegistration } from '../../../../../shared/mobile-push-c
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { NetworkSourceClass } from '../../network-source-class'
 
 export type DeviceEntry = {
   deviceId: string
@@ -13,6 +14,8 @@ export type DeviceEntry = {
   scope: DeviceScope
   pairedAt: number
   lastSeenAt: number
+  // Where its latest direct (non-Relay) connection came from; absent until one after this field shipped.
+  lastSourceClass?: NetworkSourceClass
   relayBinding?: RelayDeviceBinding
   mobilePairingConnectionMode?: MobilePairingConnectionMode
   // STA-2370: local-only grants prove no off-host reach for listener binding.
@@ -37,6 +40,14 @@ export type DeviceEntry = {
   ephemeral?: true
   // A never-seen offer stops authenticating here; absent (older rows, headless offers) never expires.
   offerExpiresAt?: number
+  // Last sign-in used the older E2EE framing (set then; a v2 sign-in clears it). Local-only notice data.
+  legacyE2EEAuthAt?: number
+  // Minted as a pairing offer by a host that can exchange it; clients that never exchange keep using it.
+  ticket?: true
+  // Client-chosen replacement; first sign-in with it retires the pairing token (see pairing-ticket-exchange.ts).
+  exchangeToken?: string
+  // First sign-in with a ticket; exchange is offered only shortly after it.
+  ticketFirstSeenAt?: number
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
@@ -95,7 +106,10 @@ export function isStillAuthenticated(
 ): boolean {
   return (
     (device.credentialRevision ?? 0) === principal.credentialRevision &&
-    (principal.deviceToken === undefined || device.token === principal.deviceToken) &&
+    (principal.deviceToken === undefined ||
+      device.token === principal.deviceToken ||
+      // Signed in with the replacement while retiring the pairing token failed to persist.
+      device.exchangeToken === principal.deviceToken) &&
     // A keyed socket cannot survive replacement by a bearer row.
     (principal.deviceToken !== undefined || device.credentialKind === 'device-key')
   )
@@ -129,7 +143,11 @@ export function findTokenDevice(
   seen: ReadonlySet<string> = new Set(),
   now = Date.now()
 ): DeviceEntry | null {
-  const device = token && devices.find((d) => d.credentialKind === undefined && d.token === token)
+  const device =
+    token &&
+    devices.find(
+      (d) => d.credentialKind === undefined && (d.token === token || d.exchangeToken === token)
+    )
   if (!device || (isExpiredPairingOffer(device, now) && !seen.has(device.deviceId))) {
     return null
   }

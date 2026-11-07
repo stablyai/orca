@@ -4,7 +4,7 @@ import {
   runtimeEnvironmentCall,
   installRuntimeFileClientEnvironment,
   type RuntimeRpcRequest
-} from './runtime-file-client-test-harness'
+} from './files/runtime-file-client-test-harness'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 
 installRuntimeFileClientEnvironment()

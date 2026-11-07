@@ -1,6 +1,6 @@
 import { createContext } from 'react'
 import { isWorktreeConnectionResolved } from '@/lib/connection-context'
-import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/terminal-path-existence-batch'
+import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/links/files/terminal-path-existence-batch'
 import {
   mayCheckFileLinkTargetUnprompted,
   resolveFileLinkTarget,

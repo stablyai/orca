@@ -3,6 +3,9 @@ import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../
 // Older hosts return method_not_found (mobile may see forbidden); clients retain static seeds.
 
 import { defineMethod } from '../../../core'
+import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { isFloatingWorkspaceSelector } from '../../../../../../shared/floating-workspace-worktree'
+import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../../../../native-chat/agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   requireInstalledStructuredHost,
   requireStructuredAgentAudience
@@ -99,29 +102,49 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
         }
         // A floating chat runs in the folder it was created in, not the floating setting's current one.
         const launchDirectory = record ? agentSessionPinnedLaunchDirectory(record) : undefined
+        const waits = !params.savedOnly && params.waitForListing === true
+        const deadline = Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+        // Only a floating folder touches the filesystem; a read that doesn't wait never waits on it.
+        const resolving =
+          launchDirectory || worktree === undefined
+            ? undefined
+            : ctx.runtime.resolveStructuredAgentCatalogWorkspacePath(worktree)
+        const later = !waits && isFloatingWorkspaceSelector(worktree)
         const request = {
           ...params,
           ...scope,
+          ...(waits && resolving ? { deadline } : {}),
           ...(launchDirectory
             ? { workspacePath: launchDirectory }
-            : worktree === undefined
+            : !resolving
               ? {}
               : {
-                  workspace: {
-                    selector: worktree,
-                    identity: () =>
-                      ctx.runtime.structuredAgentSessionCatalogWorkspaceIdentity(worktree),
-                    resolve: () => ctx.runtime.resolveStructuredAgentCatalogWorkspace(worktree)
-                  }
+                  // Past the read's own budget, a stalled mount reads as a workspace this host
+                  // can't inspect: no default and no exact listing.
+                  workspacePath: later
+                    ? null
+                    : await withTimeout(resolving, Math.max(0, deadline - Date.now()), null)
                 })
         }
-        if (host) {
-          return host.readModelCatalog(request)
+        const follows = later && resolving && !params.savedOnly
+        if (follows) {
+          // The listing for the folder it resolves to starts once it does, inside this read's own
+          // budget and retirement; the answer says so, so the picker follows with a waiting read.
+          const operation = catalog.captureRead({ ...request, deadline })
+          void withTimeout(resolving, Math.max(0, deadline - Date.now()), null).then(
+            (workspacePath) => {
+              if (workspacePath && operation.current()) {
+                void catalog.demand({ ...request, workspacePath, deadline, operation })
+              }
+            }
+          )
         }
-        if (!params.savedOnly) {
+        // A floating read lists the folder it resolves to (above), never the unresolved one.
+        if (!host && !params.savedOnly && !follows) {
           void catalog.demand(request)
         }
-        return catalog.read(request)
+        const result = host ? await host.readModelCatalog(request) : await catalog.read(request)
+        return follows ? { ...result, listingInProgress: true } : result
       }
       const listing = await read()
       const own = record?.provider === params.agent ? record : null

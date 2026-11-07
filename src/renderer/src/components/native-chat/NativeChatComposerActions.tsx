@@ -22,7 +22,7 @@ import { NativeChatComposerGoalChip } from './NativeChatComposerGoalChip'
 import { NativeChatContextUsageRing } from './NativeChatContextUsageRing'
 import type { NativeChatContextUsageSummary } from '../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
-import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
+import type { NativeChatSteerChordPreview } from '../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }

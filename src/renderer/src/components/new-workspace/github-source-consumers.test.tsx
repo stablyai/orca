@@ -2,7 +2,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useStore } from 'zustand'
-import { createTestStore, resetRemoteRuntimeMocks } from '@/store/slices/github-slice-test-harness'
+import { createTestStore, resetRemoteRuntimeMocks } from '@/store/github/github-slice-test-harness'
 
 import { useGitHubDuplicateIssueCandidates } from '@/components/github/github-duplicate-issue-candidates'
 

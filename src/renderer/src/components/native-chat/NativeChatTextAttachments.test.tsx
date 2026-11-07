@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useContext, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { i18n } from '@/i18n/i18n'

@@ -7,14 +7,8 @@ import type { TerminalLinkClickBehavior } from './gestures/terminal-link-click-b
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   closeLinkActionRequest,
-  type LinkAction,
-  type LinkActionKind,
   type LinkActionRequest
 } from '@/components/link-actions/link-action-request'
-
-export type TerminalLinkActionKind = LinkActionKind
-
-export type TerminalLinkAction = LinkAction
 
 export type TerminalLinkActionRequest = LinkActionRequest & { paneId: number }
 

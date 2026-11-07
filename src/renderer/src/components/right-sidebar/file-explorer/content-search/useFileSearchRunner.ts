@@ -9,8 +9,8 @@ import {
 import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField
-} from '@/runtime/runtime-file-search-bounds'
-import { searchRuntimeFiles } from '@/runtime/runtime-file-search-client'
+} from '@/runtime/files/search/runtime-file-search-bounds'
+import { searchRuntimeFiles } from '@/runtime/files/search/runtime-file-search-client'
 import { useAppStore } from '@/store/index'
 import {
   getExecutionHostIdForWorktree,

@@ -38,6 +38,7 @@ export type PtySpawnIpcArgs = {
   resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string
@@ -64,6 +65,8 @@ export type PtySpawnIpcArgs = {
   spawnIntent?: unknown
   // Only `true` counts: a window restore no user act asked for.
   wslPassiveRestore?: unknown
+  // Only `true` counts: the user just chose to let agents ask, even if saving that answer failed.
+  skipAgentWorkspaceTrust?: unknown
   // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
   // Main validates renderer telemetry; retain unknown input types at the IPC boundary.

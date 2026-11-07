@@ -22,7 +22,7 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))
 
-vi.mock('@/store/slices/browser/paired-browser-tab-creator', () => ({
+vi.mock('@/store/slices/browser/tabs/paired-browser-tab-creator', () => ({
   getRegisteredPairedBrowserTabCreator: () => null,
   loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))

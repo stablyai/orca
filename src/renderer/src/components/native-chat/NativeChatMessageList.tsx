@@ -19,7 +19,7 @@ import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/i
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
@@ -349,7 +349,7 @@ export function NativeChatMessageList({
               data-native-chat-scroll
               aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >
               {showOlderHistory ? (
                 <NativeChatOlderHistoryRow

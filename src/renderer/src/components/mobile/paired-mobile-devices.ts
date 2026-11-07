@@ -5,6 +5,8 @@ export type PairedMobileDevice = {
   name: string
   pairedAt: number
   lastSeenAt: number
+  // The device's last sign-in used the older E2EE framing.
+  usesLegacyEncryption?: boolean
 }
 
 type PairedMobileDevicesSnapshot = {

@@ -9,7 +9,7 @@ import { resolveSourceControlAiForOperation } from '../../../../../../shared/sou
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
-} from '@/store/slices/pull-request-generation'
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { resolveCreateReviewDefaultBaseRef } from './create-pull-request-base-ref-normalization'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveCreateReviewSeedText } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-seed'
@@ -232,7 +232,6 @@ export function useCreatePullRequestDialogFields({
     draft,
     worktreeId,
     worktreePath,
-    settings,
     target,
     eligibility,
     resolvedPrDefaults,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEditorTabsStore } from './editor-slice-test-harness'
-import { buildHydratedEditorSessionState } from './editor/actions/hydrated-editor-session-state'
+import { createEditorTabsStore } from './editor/editor-slice-test-harness'
+import { buildHydratedEditorSessionState } from './editor/hydration/hydrated-editor-session-state'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'

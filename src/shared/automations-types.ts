@@ -248,12 +248,6 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
   >
 >
 
-export type AutomationDispatchRequest = {
-  automation: Automation
-  run: AutomationRun
-  dispatchToken: string
-}
-
 export type AutomationDispatchResult = {
   runId: string
   sessionKind?: 'terminal' | 'chat'

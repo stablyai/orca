@@ -49,6 +49,8 @@ export type StructuredAgentAccountHomeRequest = {
   purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
+  /** The permission mode a new chat starts in, when it names one. */
+  permissionMode?: string
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -58,8 +60,14 @@ export type StructuredAgentAccountHomeServices = {
   prepareCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   readCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
+  /** The launching repo's pre-trust decision; undefined outside a repo or before one is made. */
+  workspaceTrustRepoDecision: (
+    location: AgentSessionExecutionLocation | null
+  ) => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['repoDecision']
   /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
   stateDirectory: string
+  /** The environment a chat start of `agent` on this host would launch from. */
+  hostLaunchEnvironment: (agent: string) => Promise<Record<string, string>>
 }
 
 /** What a catalog probe is built from: the same runtime resolvers its sessions launch through. */
@@ -100,6 +108,8 @@ export type StructuredAgentChatProgram = {
   resolve: StructuredAgentLaunchCheck['resolveLaunch']
   /** Whether Orca can download this program on this host when none is found. */
   installable?: () => boolean
+  /** Whether a new chat would run a compatible program the host already has instead. */
+  hostAlternative?: (env: Record<string, string>) => Promise<boolean>
 }
 
 export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {

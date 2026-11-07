@@ -105,7 +105,6 @@ function mountStart(agentArgs = '--model o3') {
           disabledTuiAgents: [],
           agentLaunchChoices: {}
         },
-        settings: null,
         repo: null,
         promptDelivery: 'submit-after-ready',
         launchPlatform: 'linux',

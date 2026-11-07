@@ -96,6 +96,7 @@ export function AutomationsPageListPanel({
       hostTargetFor={destination.automationHostTargetFor}
       hostLabelById={presentation.hostLabelById}
       isActionEnabled={destination.isAutomationRowActionEnabled}
+      needsMigration={(row) => !!destination.rowRecoveryHost(row.key)?.servedBy}
       externalActionKey={externalActionKey}
       selectAutomationRow={list.selectAutomationRow}
       selectExternalKey={local.selectExternalKey}

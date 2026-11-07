@@ -42,6 +42,7 @@ import {
   normalizeAutomationSessionReuse,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
+import { refuseManagedOrcadHost } from '../../automations/orcad-fenced-automation'
 import {
   automationProjectionContext,
   automationWorkspaceSshPin,
@@ -93,6 +94,7 @@ export function createAutomation(
     ),
     workspaceSshPin
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin)
   if (options?.destination) {
     const context = automationProjectionContext(
       operations.state,
@@ -289,6 +291,7 @@ export function updateAutomation(
     workspaceSshPin,
     workspaceSshPinMoved
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin, current, previousPin)
   if (options?.destination) {
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }

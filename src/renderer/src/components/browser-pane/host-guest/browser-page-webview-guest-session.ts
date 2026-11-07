@@ -10,7 +10,7 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findWorkspace } from '@/store/slices/browser-page-records'
+import { findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery,

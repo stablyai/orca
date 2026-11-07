@@ -673,7 +673,8 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -1110,13 +1111,15 @@
         "keyword": {
           "windsurf": "windsurf",
           "devin": "devin",
-          "devinDesktop": "devin desktop"
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
         }
       }
     },
     "openInApp": {
       "preset": {
-        "devinDesktop": "Devin Desktop"
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
       }
     },
     "network": {
@@ -2125,13 +2128,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "The target workspace is no longer available.",
-        "16a21d6413": "SSH reconnect requires interactive credentials.",
-        "386db94f3e": "The target project is no longer available.",
-        "3ad7d77f57": "The target workspace is on a different host than this automation run target.",
-        "workspaceHostUnresolved": "The target workspace spans more than one host, so this run has no single host to use."
-      },
       "useComposerState": {
         "b2ead86962": "Failed to resolve PR base.",
         "3db83fc58a": "No project path is available on this host for attachments.",
@@ -4850,7 +4846,8 @@
             "signedOutAccounts": "Signed out",
             "addAnotherAccount": "Add another account…",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
-            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
+            "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account.",
+            "museUsageMenu": "Muse Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -8641,7 +8638,8 @@
           "diagnosticsCopied": "Diagnostics copied",
           "diagnosticsCopyFailed": "Failed to copy diagnostics",
           "5e2c7a1f84": "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore or Restore all on the banner to resize manually.",
-          "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes."
+          "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes.",
+          "legacyEncryption": "Uses older encryption. Update the Orca app on this device."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -9055,7 +9053,8 @@
           "activeLinks": "Active links",
           "noActiveLinks": "No active links.",
           "createdAt": "Created {{value0}}",
-          "revoke": "Revoke"
+          "revoke": "Revoke",
+          "legacyEncryption": "Last used with older encryption. Update Orca where this link is used."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Cancel",
@@ -10153,7 +10152,11 @@
                 "cursor": "cursor"
               }
             },
-            "matchTerminal": "match terminal"
+            "matchTerminal": "match terminal",
+            "museUsageTitle": "Muse Usage",
+            "museUsageDescription": "Show Muse subscription quota in the status bar.",
+            "muse": "muse",
+            "meta": "meta"
           }
         },
         "auto": {
@@ -11592,7 +11595,11 @@
               "micDefault": "system default",
               "dictationLanguageTitle": "Dictation Language",
               "dictationLanguageDescription": "Tell the speech model which language you speak.",
-              "dictationLanguageKeyword": "language"
+              "dictationLanguageKeyword": "language",
+              "modelUnloadTitle": "Unload Speech Model",
+              "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
+              "modelUnloadKeyword": "unload",
+              "modelMemoryKeyword": "memory"
             }
           }
         },
@@ -11641,7 +11648,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Trust the folder when Orca starts an agent",
-          "description": "Agents Orca starts skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. Without this, each agent asks the first time it runs in a folder. Agents running without you watching, such as orchestration workers, automations and agents started from your phone, will wait at that question until you answer it in their terminal. Folders already trusted stay trusted."
+          "description": "Agents Orca starts can skip their \"Do you trust this folder?\" prompt, so the project's agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository's settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
@@ -13913,7 +13920,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "No commits yet",
-            "781a8bcf7b": "Loading graph...",
             "d0fb0f4bf2": "Refresh commits",
             "9f7535d22b": "Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.",
             "9289ba0cb9": "What are refs?",
@@ -14291,7 +14297,8 @@
             "clearNotesFromFile_other": "Clear {{count}} notes from {{path}}?",
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
-            "keepDeletion": "Keep deletion"
+            "keepDeletion": "Keep deletion",
+            "refreshAll": "Refresh all"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -15095,6 +15102,7 @@
             "openLog": "Open Log",
             "revealLog": "Reveal Log",
             "openWorkingDirectory": "Open Working Directory",
+            "revealArtifactsFolder": "Reveal Artifacts Folder",
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
@@ -15138,7 +15146,6 @@
             "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Loading files…",
             "b2c3d4e5f6": "No file changes in this commit",
             "c3d4e5f6a7": "Open all changes together"
           },
@@ -15480,7 +15487,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Back",
-          "111d3f8d92": "Skip to project setup"
+          "111d3f8d92": "Set up later"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Starting terminal..."
@@ -17340,7 +17347,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Speech error: {{value0}}",
-          "7afff43472": "Dictation finished, but no text field was focused.",
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
@@ -17351,7 +17357,13 @@
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
-          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit."
+          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
+          "stoppedAfterSilence": "Stopped after a minute of silence"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",
+          "copiedWithoutTarget": "No text field was focused, so dictation was copied to the clipboard.",
+          "lost": "Dictation couldn't be inserted or copied."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Stop dictation",
@@ -17936,7 +17948,10 @@
           "reuseLiveSession": "Reuse live session",
           "freshEachRun": "Fresh each run",
           "precheckEnabled": "Enabled, {{timeout}}",
-          "precheckNone": "None"
+          "precheckNone": "None",
+          "migrate": "Migrate",
+          "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
+          "needsMigration": "Needs migration"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -18685,6 +18700,10 @@
           "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
           "pluginMessage": "Message from {{value0}}: {{value1}}",
           "reloaded": "Reloaded"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Open this worktree",
+          "reconnect": "Reconnect to see this worktree’s changes."
         }
       },
       "link": {
@@ -19406,6 +19425,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "Trust {{repo}} for agents?",
+        "prompt-description": "Agents like Claude Code and Codex ask \"Do you trust this folder?\" before they load the project's own agent settings and hooks, which can run commands. Orca can answer yes for you in every worktree of this repository.",
+        "prompt-remembered": "Orca remembers your answer for this repository. You can change it in the repository's settings.",
+        "trust-repository": "Trust repository",
+        "let-agents-ask": "Let agents ask",
+        "setting-title": "Agent Folder Trust",
+        "setting-description": "Whether agents Orca starts in this repository's worktrees skip their \"Do you trust this folder?\" prompt and load the project's agent settings and hooks right away.",
+        "setting-undecided": "Not decided yet. Orca will ask the next time you start an agent here.",
+        "setting-global-off": "Folder trust is turned off in Agents settings, so agents always ask.",
+        "keyword-trust": "trust",
+        "keyword-hooks": "hooks"
       }
     },
     "i18n": {
@@ -19629,18 +19661,6 @@
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
       },
-      "agyInstall": {
-        "open": "Install",
-        "title": "Install Antigravity",
-        "description": "Press Enter in the terminal to run the official installer. Closing this terminal stops any command still running.",
-        "target": "Install location: {{location}}",
-        "thisDevice": "This device",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity installer",
-        "detected": "Antigravity is detected on PATH. Close the terminal when the installer has finished.",
-        "close": "Close terminal",
-        "recheck": "Re-check agents"
-      },
       "agentSurface": {
         "chat": {
           "label": "Chat UI",
@@ -19716,6 +19736,7 @@
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+        "antigravitySystemNotSignedIn": "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
@@ -21211,6 +21232,13 @@
           "description": "The language you speak. Auto-detect lets the model work it out each time.",
           "title": "Dictation Language",
           "auto": "Auto-detect"
+        },
+        "modelUnload": {
+          "title": "Unload Speech Model",
+          "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
+          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
+          "never": "Never",
+          "immediately": "Immediately"
         }
       }
     },
@@ -21638,6 +21666,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Started in {{value0}}",
     "actionSaveFailed": "Could not save this action. Try saving it again in Settings.",
     "discard": {
       "deleteUntrackedFileDescription": "This will permanently delete this untracked file. This cannot be undone.",
@@ -23748,6 +23777,7 @@
       "noRunnableHost": "This automation has no host to run on.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
       "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
@@ -24133,6 +24163,33 @@
   },
   "checks": {
     "rerunUnsuccessful": "Rerun unsuccessful"
+  },
+  "gitGraph": {
+    "copyHash": "Copy commit hash",
+    "parents": "Parents",
+    "files": "Files",
+    "currentBranch": "Current branch",
+    "allBranches": "All branches",
+    "chosenBranches": "Chosen branches",
+    "searchRefs": "Search branches and tags",
+    "oldServer": "This server's Orca version shows only the current branch",
+    "copyBranch": "Copy branch name",
+    "switchWorkspace": "Switch to workspace",
+    "workspaceClosed": "This branch isn't open in another workspace anymore.",
+    "workspaceCheckFailed": "Couldn't check this workspace. Try again when connected.",
+    "refresh": "Refresh commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Graph",
+    "resizeColumn": "Resize graph column",
+    "message": "Message",
+    "author": "Author",
+    "date": "Date",
+    "loadMore": "Load more",
+    "noCommits": "No commits yet",
+    "historyChanged": "History changed again. Refresh the Git Graph to try again.",
+    "loadFailed": "Failed to load Git history",
+    "updateHost": "Update Orca on {{host}} to open the Git Graph",
+    "title": "Git Graph"
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

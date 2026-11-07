@@ -1,7 +1,13 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
+import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
+import {
+  isExchangeSignIn,
+  planTicketExchange,
+  promoteExchangedTicket
+} from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
 import { DeviceRegistryStore } from './device-registry-store'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
@@ -31,6 +37,7 @@ import {
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { NetworkSourceClass } from '../../network-source-class'
 
 // Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
@@ -199,7 +206,34 @@ export class DeviceRegistry extends DeviceRegistryStore {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findTokenDevice(this.devices, token, this.seenDeviceIds)
+    const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
+    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
+  }
+
+  /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
+  exchangePairingTicket(deviceId: string, presentedToken: string, exchangeToken: string): void {
+    this.adoptExternalEdits()
+    const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
+    this.devices = this.save(next, { durable: true })
+  }
+
+  /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
+  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
+    const promoted = promoteExchangedTicket(device)
+    try {
+      this.devices = this.save(
+        this.devices.map((d) => (d === device ? promoted : d)),
+        { durable: true }
+      )
+      return this.getDevice(device.deviceId) ?? promoted
+    } catch (error) {
+      console.error('[runtime] Failed to retire an exchanged pairing token:', error)
+      return {
+        ...device,
+        token: device.exchangeToken,
+        callerFingerprint: promoted.callerFingerprint
+      }
+    }
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
@@ -245,26 +279,39 @@ export class DeviceRegistry extends DeviceRegistryStore {
     return findPrincipalDevice(this.devices, principal)
   }
 
-  updateLastSeen(deviceId: string): void {
+  updateLastSeen(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) => ({
-      ...device,
-      lastSeenAt: seenAt
-    }))
+    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) => {
+      const firstSighting =
+        device.ticket === true && device.lastSeenAt === 0
+          ? { ...device, ticketFirstSeenAt: seenAt }
+          : device
+      return withDeviceSighting(seen(firstSighting, seenAt, sourceClass), seenAt, framing)
+    })
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
    * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string): void {
+  updateLastSeenDeferred(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId) : undefined
+      return existing ? this.updateLastSeen(deviceId, sourceClass, framing) : undefined
     }
     const seenAt = Date.now()
     this.devices = this.devices.map((device) =>
-      device === existing ? { ...device, lastSeenAt: seenAt } : device
+      device === existing
+        ? withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
+        : device
     )
     if (this.pendingLastSeenFlush) {
       return
@@ -284,4 +331,8 @@ export class DeviceRegistry extends DeviceRegistryStore {
     // Failed bookkeeping must not terminate the runtime.
     this.saveOrLog({}, 'persist device lastSeen')
   }
+}
+
+function seen(device: DeviceEntry, seenAt: number, sourceClass?: NetworkSourceClass): DeviceEntry {
+  return { ...device, lastSeenAt: seenAt, ...(sourceClass ? { lastSourceClass: sourceClass } : {}) }
 }
