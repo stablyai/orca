@@ -16,11 +16,12 @@ export function MobileNativeChatOfflineQueue({
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const { hostName } = useContext(MobileNativeChatNoticeContext)
-  const { sends } = queue
+  const { sends, ready } = queue
   const { offline } = queue.composerLock
   const cards = useMemo(
     () =>
       sends.map((send, position): MobileQueuedMessageCard => {
+        const behindPaused = sends.slice(0, position).some((ahead) => ahead.paused)
         const images = send.images.map((image) => ({
           type: 'image-ref' as const,
           path: image.path
@@ -35,7 +36,9 @@ export function MobileNativeChatOfflineQueue({
                     host: hostName
                   })
                 : t('chat.offlineQueue.waiting', 'Sends when the desktop is back')
-              : null
+              : behindPaused
+                ? t('chat.offlineQueue.behind', 'Waiting — a message ahead needs attention')
+                : null
         return {
           messageId: send.id,
           position,
@@ -44,13 +47,15 @@ export function MobileNativeChatOfflineQueue({
           state: 'waiting',
           hold: send.paused ? 'paused' : 'turn',
           // Its own Send can't reach the desktop yet.
-          ...(offline ? { waitsForAgent: true as const } : {}),
+          ...(ready ? {} : { waitsForAgent: true as const }),
+          // A goal can't be taken back into the composer as a goal, so it offers no Edit.
+          ...(send.goal ? { command: true as const } : {}),
           line: line.trim() ? line : send.files.map((file) => file.name).join(', '),
           needsAttention: send.paused === 'failed',
           caption
         }
       }),
-    [hostName, offline, sends, t]
+    [hostName, offline, ready, sends, t]
   )
   if (cards.length === 0) {
     return null

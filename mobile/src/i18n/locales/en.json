@@ -2892,7 +2892,8 @@
     "offlineQueue": {
       "failed": "Couldn't send — tap Send to retry",
       "waitingFor": "Sends when {{host}} is back",
-      "waiting": "Sends when the desktop is back"
+      "waiting": "Sends when the desktop is back",
+      "behind": "Waiting — a message ahead needs attention"
     },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",

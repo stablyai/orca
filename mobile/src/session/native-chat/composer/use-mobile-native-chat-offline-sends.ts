@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
+import { useSettledMobileNativeChatInputLock } from '../use-mobile-native-chat-input-lease'
 import {
   mobileNativeChatDraftDestination,
   readMobileNativeChatDraftInputs,
@@ -28,6 +29,10 @@ type Send = (text: string, intent?: MobileNativeChatSendIntent) => Promise<boole
 
 export type MobileNativeChatOfflineQueue = {
   sends: readonly MobileNativeChatOfflineSend[]
+  /** The chat can take a queued message now. */
+  ready: boolean
+  /** The lock the composer shows, settled so a blink doesn't flash it. */
+  lockReason: MobileNativeChatInputLockReason | null
   /** The composer's lock: a chat waiting on its terminal takes no input; an offline one queues. */
   composerLock: { disabled: boolean; offline: boolean }
   /** The composer's Send: queues while offline or behind earlier queued messages, else sends. */
@@ -42,19 +47,17 @@ export type MobileNativeChatOfflineQueue = {
 /** Sends typed while the desktop is out wait here, in order, and go once the chat can send again. */
 export function useMobileNativeChatOfflineQueue(args: {
   scope: string | null
-  /** The input lock as the chat reports it and as the composer shows it (settled). */
-  lock: {
-    raw: MobileNativeChatInputLockReason | null
-    settled: MobileNativeChatInputLockReason | null
-  }
-  /** A terminal chat's prompt card owns Send, so a queued message would answer it. */
-  promptOwnsSend: boolean
+  /** The input lock as the chat reports it; the queue settles it for the composer too. */
+  inputLockReason: MobileNativeChatInputLockReason | null
+  /** A terminal chat's agent waits on a prompt (shown or folded away): queued text would answer it. */
+  promptPending: boolean
   send: Send
 }): MobileNativeChatOfflineQueue {
-  const { scope, lock, promptOwnsSend, send } = args
-  const offline = lock.raw === 'disconnected'
+  const { scope, inputLockReason, promptPending, send } = args
+  const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
+  const offline = inputLockReason === 'disconnected'
   // Wait out the settle too, so a connection that blinks back doesn't send into a stale chat.
-  const ready = lock.raw === null && lock.settled === null && !promptOwnsSend
+  const ready = inputLockReason === null && lockReason === null && !promptPending
   const sends = useMobileNativeChatOfflineSends(scope)
   const sendRef = useRef(send)
   sendRef.current = send
@@ -67,7 +70,13 @@ export function useMobileNativeChatOfflineQueue(args: {
       setDraining(true)
       // Out of the queue before it goes, so nothing can send it twice; a send that doesn't go comes back paused.
       removeMobileNativeChatOfflineSends(target, [queued.id])
-      const putBack = () => returnMobileNativeChatOfflineSend(target, queued)
+      // A tab closed meanwhile took its queue with it; a late answer must not bring one back.
+      const destination = mobileNativeChatDraftDestination(target)
+      const putBack = () => {
+        if (destination.active) {
+          returnMobileNativeChatOfflineSend(target, queued)
+        }
+      }
       let sent = false
       try {
         sent = await sendRef.current(queued.text, {
@@ -97,7 +106,8 @@ export function useMobileNativeChatOfflineQueue(args: {
 
   const queueSend = useCallback<Send>(
     async (text, intent) => {
-      const waiting = readMobileNativeChatOfflineSends(scope).some((queued) => !queued.paused)
+      // Behind anything already queued, paused or not, so messages reach the agent in the order sent.
+      const waiting = readMobileNativeChatOfflineSends(scope).length > 0
       if (!scope || !(offline || waiting || drainingRef.current)) {
         return send(text, intent)
       }
@@ -170,9 +180,11 @@ export function useMobileNativeChatOfflineQueue(args: {
 
   return {
     sends,
+    ready,
+    lockReason,
     composerLock: {
-      disabled: lock.settled === 'waiting',
-      offline: lock.settled === 'disconnected'
+      disabled: lockReason === 'waiting',
+      offline: lockReason === 'disconnected'
     },
     send: queueSend,
     sendNow,

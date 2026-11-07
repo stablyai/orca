@@ -360,7 +360,8 @@
     "offlineQueue": {
       "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
       "waitingFor": "Será enviada quando {{host}} voltar",
-      "waiting": "Será enviada quando o computador voltar"
+      "waiting": "Será enviada quando o computador voltar",
+      "behind": "Aguardando — uma mensagem anterior precisa de atenção"
     },
     "receipt": {
       "cancelled": "Cancelado",

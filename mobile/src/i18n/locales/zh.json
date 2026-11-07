@@ -356,7 +356,8 @@
     "offlineQueue": {
       "failed": "无法发送 — 点按“发送”重试",
       "waitingFor": "{{host}} 恢复连接后发送",
-      "waiting": "桌面端恢复连接后发送"
+      "waiting": "桌面端恢复连接后发送",
+      "behind": "等待中 — 前面的消息需要处理"
     },
     "receipt": {
       "cancelled": "取消",
