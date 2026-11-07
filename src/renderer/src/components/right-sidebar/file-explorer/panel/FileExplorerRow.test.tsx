@@ -67,9 +67,11 @@ describe('FileExplorerRow', () => {
     renderRow(fileName)
 
     expect(screen.getByRole('button', { name: fileName })).toBeTruthy()
-    expect(screen.getByTitle(fileName).querySelector('[aria-hidden]')?.textContent).toBe(
-      'use-combined-dialog'
-    )
+    const visibleParts = screen.getByTitle(fileName).querySelectorAll('[aria-hidden]')
+    expect(Array.from(visibleParts, (part) => part.textContent)).toEqual([
+      'use-combined-dialog',
+      '-resize.test.tsx'
+    ])
   })
 })
 
