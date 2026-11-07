@@ -1681,7 +1681,15 @@
         "platformsNotObject": "platforms deve ser um objeto com seções darwin, linux ou win32.",
         "unknownPlatform": "A plataforma desconhecida \"{{platform}}\" foi ignorada.",
         "conflictingOverrides": "Atalhos personalizados conflitantes foram ignorados: {{actions}}.",
-        "readFailed": "Não foi possível ler o arquivo de atalhos: {{reason}}"
+        "readFailed": "Não foi possível ler o arquivo de atalhos: {{reason}}",
+        "copyModeNotObject": "copyMode deve ser um objeto. Os padrões estão ativos.",
+        "copyModeUnknownField": "O campo desconhecido do modo de cópia \"{{field}}\" foi ignorado.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy deve ser um valor booleano.",
+        "copyModeBindingsNotObject": "copyMode.bindings deve ser um objeto. Os atalhos padrão estão ativos.",
+        "copyModeUnknownAction": "A ação desconhecida do modo de cópia \"{{action}}\" foi ignorada.",
+        "copyModeInvalidBindings": "Atalhos inválidos para \"{{action}}\". Use uma matriz de atalhos ou sequências de duas teclas; exit precisa de pelo menos um atalho.",
+        "copyModeDefaultYields": "O atalho padrão \"{{binding}}\" de \"{{action}}\" cede lugar a um atalho personalizado.",
+        "copyModeConflict": "O atalho do modo de cópia \"{{binding}}\" está em conflito entre \"{{previous}}\" e \"{{action}}\". Os atalhos padrão estão ativos."
       }
     },
     "network": {
@@ -19998,6 +20006,7 @@
           "noActiveWorkspace": "Não é possível executar “{{action}}” — nenhum espaço de trabalho está ativo.",
           "workspaceDisconnected": "Não é possível executar “{{action}}” — o espaço de trabalho está desconectado.",
           "noTabGroup": "Não é possível executar “{{action}}” — nenhum grupo de abas está disponível.",
+          "noActiveTerminal": "Não é possível executar “{{action}}” — nenhum painel de terminal está ativo.",
           "noMovableChat": "Não é possível executar “{{action}}” — nenhum chat que possa ser movido está ativo.",
           "clientUnsupported": "Não é possível executar “{{action}}” — este cliente e este runtime não oferecem suporte a essa ação."
         }
@@ -21948,7 +21957,10 @@
       "count_one": "{{count}} terminal em execução"
     },
     "restartedInputNotSent": "O terminal reiniciou enquanto você digitava, então parte da entrada pode não ter chegado a ele. Verifique o novo shell antes de digitar novamente.",
-    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas."
+    "typingBeforeStartNotSent": "Algumas teclas digitadas enquanto o terminal iniciava não foram enviadas.",
+    "copyMode": {
+      "openFailed": "Não foi possível abrir o modo de cópia do terminal. Tente novamente."
+    }
   },
   "fileExplorer": {
     "root": {

@@ -133,7 +133,12 @@ describe('handleInternalTerminalFileDrop', () => {
   it('pastes every selected internal file path with shell spacing', async () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -171,7 +176,12 @@ describe('handleInternalTerminalFileDrop', () => {
       return true
     })
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -207,7 +217,12 @@ describe('handleInternalTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const sendInputAccepted = vi.fn(async () => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -244,7 +259,12 @@ describe('handleInternalTerminalFileDrop', () => {
     }
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -290,7 +310,12 @@ describe('handleInternalTerminalFileDrop', () => {
     }
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -335,7 +360,12 @@ describe('handleInternalTerminalFileDrop', () => {
     mocks.storeState.sshConnectionStates = new Map([['ssh-linux', { remotePlatform: 'linux' }]])
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -369,13 +399,16 @@ describe('handleInternalTerminalFileDrop', () => {
       id: 1,
       leafId: 'leaf-active',
       terminal: { focus: activeFocus },
-      container: { contains: vi.fn(() => false) }
+      container: { contains: vi.fn(() => false), querySelector: () => null }
     }
     const targetPane = {
       id: 2,
       leafId: 'leaf-target',
       terminal: { focus: targetFocus },
-      container: { contains: vi.fn((target) => target === dropTarget) }
+      container: {
+        contains: vi.fn((target) => target === dropTarget),
+        querySelector: () => null
+      }
     }
     const manager = {
       getActivePane: () => activePane,
@@ -408,7 +441,12 @@ describe('handleInternalTerminalFileDrop', () => {
   it('rejects too many internal paths before writing terminal input', async () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
-    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+    const pane = {
+      id: 1,
+      leafId: 'leaf-1',
+      terminal: { focus },
+      container: { querySelector: () => null }
+    }
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -447,7 +485,12 @@ it('refuses an unresolvable workspace instead of using the dropped path as its r
   ]
   const sendInput = vi.fn(() => true)
   const focus = vi.fn()
-  const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+  const pane = {
+    id: 1,
+    leafId: 'leaf-1',
+    terminal: { focus },
+    container: { querySelector: () => null }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture supplies every manager method used by internal drops.
   const manager = { getPanes: () => [pane], getActivePane: () => pane } as never
   const result = await handleInternalTerminalFileDrop({

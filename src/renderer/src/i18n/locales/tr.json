@@ -906,7 +906,15 @@
         "platformsNotObject": "platforms, darwin, linux veya win32 bölümlerine sahip bir nesne olmalıdır.",
         "unknownPlatform": "Bilinmeyen platform \"{{platform}}\" yok sayıldı.",
         "conflictingOverrides": "Çakışan özel kısayollar yok sayıldı: {{actions}}.",
-        "readFailed": "Tuş atamaları dosyası okunamadı: {{reason}}"
+        "readFailed": "Tuş atamaları dosyası okunamadı: {{reason}}",
+        "copyModeNotObject": "copyMode bir nesne olmalıdır. Varsayılanlar etkin.",
+        "copyModeUnknownField": "Bilinmeyen kopyalama modu alanı \"{{field}}\" yok sayıldı.",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy bir boole değeri olmalıdır.",
+        "copyModeBindingsNotObject": "copyMode.bindings bir nesne olmalıdır. Varsayılan tuş atamaları etkin.",
+        "copyModeUnknownAction": "Bilinmeyen kopyalama modu eylemi \"{{action}}\" yok sayıldı.",
+        "copyModeInvalidBindings": "\"{{action}}\" için geçersiz tuş atamaları. Kısayollardan veya iki adımlı tuş dizilerinden oluşan bir dizi kullanın; exit en az bir tuş ataması gerektirir.",
+        "copyModeDefaultYields": "\"{{action}}\" için varsayılan \"{{binding}}\" ataması özel bir atamaya bırakıldı.",
+        "copyModeConflict": "\"{{binding}}\" kopyalama modu ataması \"{{previous}}\" ile \"{{action}}\" arasında çakışıyor. Varsayılan tuş atamaları etkin."
       }
     },
     "ssh": {
@@ -18957,6 +18965,7 @@
           "noActiveWorkspace": "“{{action}}” çalıştırılamıyor — etkin çalışma alanı yok.",
           "workspaceDisconnected": "“{{action}}” çalıştırılamıyor — çalışma alanının bağlantısı kesildi.",
           "noTabGroup": "“{{action}}” çalıştırılamıyor — kullanılabilir sekme grubu yok.",
+          "noActiveTerminal": "“{{action}}” çalıştırılamıyor — etkin terminal bölmesi yok.",
           "noMovableChat": "“{{action}}” çalıştırılamıyor — taşınabilir etkin sohbet yok.",
           "clientUnsupported": "“{{action}}” çalıştırılamıyor — bu istemci ve çalışma zamanı bunu desteklemiyor."
         }
@@ -21570,7 +21579,10 @@
       "count_other": "Çalışan {{count}} terminal"
     },
     "restartedInputNotSent": "Siz yazarken terminal yeniden başlatıldı, bu nedenle girdilerinizin bir kısmı terminale ulaşmamış olabilir. Yeniden yazmadan önce yeni kabuğu kontrol edin.",
-    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi."
+    "typingBeforeStartNotSent": "Terminal başlatılırken yazılan bazı tuşlar gönderilmedi.",
+    "copyMode": {
+      "openFailed": "Terminal kopyalama modu açılamadı. Yeniden deneyin."
+    }
   },
   "fileExplorer": {
     "root": {

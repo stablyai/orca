@@ -484,7 +484,15 @@
         "platformsNotObject": "platforms 必须是包含 darwin、linux 或 win32 部分的对象。",
         "unknownPlatform": "未知平台“{{platform}}”已被忽略。",
         "conflictingOverrides": "有冲突的自定义快捷键已被忽略：{{actions}}。",
-        "readFailed": "无法读取键绑定文件：{{reason}}"
+        "readFailed": "无法读取键绑定文件：{{reason}}",
+        "copyModeNotObject": "copyMode 必须是对象。已使用默认设置。",
+        "copyModeUnknownField": "已忽略未知的复制模式字段“{{field}}”。",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy 必须是布尔值。",
+        "copyModeBindingsNotObject": "copyMode.bindings 必须是对象。已使用默认键绑定。",
+        "copyModeUnknownAction": "已忽略未知的复制模式操作“{{action}}”。",
+        "copyModeInvalidBindings": "“{{action}}”的键绑定无效。请使用快捷键或两步按键序列组成的数组；exit 至少需要一个键绑定。",
+        "copyModeDefaultYields": "“{{action}}”的默认键绑定“{{binding}}”已让位于自定义键绑定。",
+        "copyModeConflict": "复制模式键绑定“{{binding}}”在“{{previous}}”和“{{action}}”之间冲突。已使用默认键绑定。"
       }
     },
     "network": {
@@ -18312,6 +18320,7 @@
           "noActiveWorkspace": "无法运行“{{action}}” — 没有活动的工作区。",
           "workspaceDisconnected": "无法运行“{{action}}” — 工作区已断开连接。",
           "noTabGroup": "无法运行“{{action}}” — 没有可用的标签页组。",
+          "noActiveTerminal": "无法运行“{{action}}” — 没有活动的终端窗格。",
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天。",
           "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作。"
         }
@@ -21473,6 +21482,18 @@
       "body": "此计算机上的后台工作已停滞。输入和新终端可能无法工作。重新启动终端服务会结束其正在运行的终端和命令。",
       "review": "查看重新启动选项",
       "title": "终端服务可能需要重新启动"
+    },
+    "copyMode": {
+      "selecting": "复制模式 · 选择中",
+      "active": "复制模式",
+      "move": "移动",
+      "select": "选择",
+      "copy": "复制",
+      "exit": "退出：{{keys}}",
+      "copyFailed": "无法复制终端选区，请重试。",
+      "openFailed": "无法进入终端复制模式，请重试。",
+      "enter": "进入复制模式",
+      "description": "使用键盘选择并复制终端文本。"
     },
     "claudeDiffPanelNotice": {
       "gotIt": "知道了",

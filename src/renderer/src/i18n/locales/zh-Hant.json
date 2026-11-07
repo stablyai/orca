@@ -879,7 +879,15 @@
         "platformsNotObject": "platforms 必須是包含 darwin、linux 或 win32 區段的物件。",
         "unknownPlatform": "已忽略未知的平台「{{platform}}」。",
         "conflictingOverrides": "已忽略有衝突的自訂快速鍵：{{actions}}。",
-        "readFailed": "無法讀取鍵繫結檔案：{{reason}}"
+        "readFailed": "無法讀取鍵繫結檔案：{{reason}}",
+        "copyModeNotObject": "copyMode 必須是物件。已使用預設設定。",
+        "copyModeUnknownField": "已忽略未知的複製模式欄位「{{field}}」。",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy 必須是布林值。",
+        "copyModeBindingsNotObject": "copyMode.bindings 必須是物件。已使用預設按鍵綁定。",
+        "copyModeUnknownAction": "已忽略未知的複製模式動作「{{action}}」。",
+        "copyModeInvalidBindings": "「{{action}}」的按鍵綁定無效。請使用快速鍵或兩段按鍵序列組成的陣列；exit 至少需要一個按鍵綁定。",
+        "copyModeDefaultYields": "「{{action}}」的預設按鍵綁定「{{binding}}」已讓位給自訂按鍵綁定。",
+        "copyModeConflict": "複製模式按鍵綁定「{{binding}}」在「{{previous}}」與「{{action}}」之間衝突。已使用預設按鍵綁定。"
       }
     },
     "ssh": {
@@ -18712,6 +18720,7 @@
           "noActiveWorkspace": "無法執行「{{action}}」— 沒有作用中的工作區。",
           "workspaceDisconnected": "無法執行「{{action}}」— 工作區已中斷連線。",
           "noTabGroup": "無法執行「{{action}}」— 沒有可用的分頁群組。",
+          "noActiveTerminal": "無法執行「{{action}}」— 沒有作用中的終端機窗格。",
           "noMovableChat": "無法執行「{{action}}」— 沒有作用中且可移動的聊天。",
           "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。"
         }
@@ -21266,7 +21275,10 @@
       "count_other": "{{count}} 個正在執行的終端機"
     },
     "restartedInputNotSent": "終端機在您輸入時重新啟動，部分輸入可能未送達。請先檢視新的 shell，再重新輸入。",
-    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。"
+    "typingBeforeStartNotSent": "終端機啟動期間輸入的部分按鍵未送出。",
+    "copyMode": {
+      "openFailed": "無法進入終端機複製模式，請重試。"
+    }
   },
   "fileExplorer": {
     "root": {

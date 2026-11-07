@@ -490,7 +490,15 @@
         "platformsNotObject": "platforms debe ser un objeto con secciones darwin, linux o win32.",
         "unknownPlatform": "Se ignoró la plataforma desconocida \"{{platform}}\".",
         "conflictingOverrides": "Se ignoraron los atajos personalizados en conflicto: {{actions}}.",
-        "readFailed": "No se pudo leer el archivo de combinaciones de teclas: {{reason}}"
+        "readFailed": "No se pudo leer el archivo de combinaciones de teclas: {{reason}}",
+        "copyModeNotObject": "copyMode debe ser un objeto. Se usan los valores predeterminados.",
+        "copyModeUnknownField": "Se ignoró el campo desconocido del modo de copia \"{{field}}\".",
+        "copyModeExitOnCopyNotBoolean": "copyMode.exitOnCopy debe ser un valor booleano.",
+        "copyModeBindingsNotObject": "copyMode.bindings debe ser un objeto. Se usan los atajos predeterminados.",
+        "copyModeUnknownAction": "Se ignoró la acción desconocida del modo de copia \"{{action}}\".",
+        "copyModeInvalidBindings": "Atajos no válidos para \"{{action}}\". Usa un array de atajos o secuencias de dos pulsaciones; exit necesita al menos un atajo.",
+        "copyModeDefaultYields": "El atajo predeterminado \"{{binding}}\" para \"{{action}}\" cede ante un atajo personalizado.",
+        "copyModeConflict": "El atajo del modo de copia \"{{binding}}\" entra en conflicto entre \"{{previous}}\" y \"{{action}}\". Se usan los atajos predeterminados."
       }
     },
     "network": {
@@ -18786,6 +18794,7 @@
           "noActiveWorkspace": "No se puede ejecutar «{{action}}» — no hay ningún espacio de trabajo activo.",
           "workspaceDisconnected": "No se puede ejecutar «{{action}}» — el espacio de trabajo está desconectado.",
           "noTabGroup": "No se puede ejecutar «{{action}}» — no hay ningún grupo de pestañas disponible.",
+          "noActiveTerminal": "No se puede ejecutar «{{action}}» — no hay ningún panel de terminal activo.",
           "noMovableChat": "No se puede ejecutar «{{action}}» — no hay ningún chat activo que se pueda mover.",
           "clientUnsupported": "No se puede ejecutar «{{action}}» — este cliente y este entorno de ejecución no lo admiten."
         }
@@ -21806,6 +21815,18 @@
       "body": "El trabajo en segundo plano en este equipo se ha atascado. Es posible que la escritura y las terminales nuevas no funcionen. Reiniciar el servicio de terminal finaliza sus terminales y comandos en ejecución.",
       "review": "Revisar las opciones de reinicio",
       "title": "Es posible que el servicio de terminal necesite reiniciarse"
+    },
+    "copyMode": {
+      "selecting": "Modo de copia · Seleccionando",
+      "active": "Modo de copia",
+      "move": "Mover",
+      "select": "Seleccionar",
+      "copy": "Copiar",
+      "exit": "Salir: {{keys}}",
+      "copyFailed": "No se pudo copiar la selección del terminal. Inténtalo de nuevo.",
+      "openFailed": "No se pudo abrir el modo de copia del terminal. Inténtalo de nuevo.",
+      "enter": "Entrar en modo de copia",
+      "description": "Selecciona y copia texto del terminal con el teclado."
     },
     "claudeDiffPanelNotice": {
       "gotIt": "Entendido",

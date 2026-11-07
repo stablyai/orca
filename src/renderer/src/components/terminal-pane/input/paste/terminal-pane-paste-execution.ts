@@ -21,6 +21,7 @@ import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboar
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 
 export type TerminalPanePasteExecution = ReturnType<typeof createTerminalPanePasteExecution>
 
@@ -63,6 +64,10 @@ export function createTerminalPanePasteExecution(
     text: string,
     options?: TerminalPasteTextOptions
   ): Promise<void> => {
+    // Pane chrome can hold focus while copy mode is open; its snapshot must not paste into the live PTY.
+    if (paneHasTerminalCopyMode(pane)) {
+      return
+    }
     const transport = paneTransportsRef.current.get(pane.id)
     const ptyId = transport?.getPtyId() ?? null
     const keyboardOwnedPaste =
