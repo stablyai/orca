@@ -1,5 +1,9 @@
 import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { getDefaultPersistedState } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { createInitialHomeWorkspaceState } from '../persistence/loading-store/initial-home-workspace'
+import { LoadedCohortMigrationOperations } from '../persistence/loading-store/loaded-cohort-migrations'
 import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
 import { isProfileStateSqliteAvailable } from '../persistence/profile-state/profile-state-database'
 import { migrateProfileStateToSqlite } from '../persistence/profile-state/profile-state-migration'
@@ -9,15 +13,11 @@ import {
   getProfileUserDataPath
 } from './profile-storage-paths'
 
-// Keep the active install's consent and anonymous identity when creating another profile.
-export function seedNewOrcaProfileTelemetryConsent(
+export function initializeNewOrcaProfileState(
   profileId: string,
   telemetry: GlobalSettings['telemetry'],
   userDataPath = getProfileUserDataPath()
 ): void {
-  if (!telemetry) {
-    return
-  }
   if (!isProfileStateSqliteAvailable()) {
     throw new Error('Creating profile state requires the bundled Orca runtime.')
   }
@@ -28,12 +28,24 @@ export function seedNewOrcaProfileTelemetryConsent(
     if (existsSync(dataFile) || existsSync(databaseFile)) {
       return
     }
+    const defaults = getDefaultPersistedState(homedir())
+    const cohorts = new LoadedCohortMigrationOperations({ loadNeedsSave: false })
+    const initial = cohorts.migrateTabSwitchKeybindings(
+      telemetry
+        ? { ...defaults, settings: { ...defaults.settings, telemetry } }
+        : cohorts.migrateTelemetry(defaults, false),
+      false
+    )
+    const initialState = createInitialHomeWorkspaceState(initial)
     const migrated = migrateProfileStateToSqlite({
       dataFile,
       databaseFile,
       profileId,
       expectedLegacyJson: undefined,
-      serializedState: JSON.stringify({ settings: { telemetry } })
+      serializedState: JSON.stringify({
+        ...initialState,
+        chatUiLaunchTipAudience: cohorts.captureChatUiLaunchTipAudience(undefined)
+      })
     })
     migrated.authority.close()
   } finally {

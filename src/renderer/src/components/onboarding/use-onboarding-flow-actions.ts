@@ -3,6 +3,9 @@ import { toast } from 'sonner'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { launchOnboardingCompletionAgent } from './onboarding-completion-agent-launch'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
@@ -21,7 +24,7 @@ import {
 type CloseWith = (
   outcome: 'completed' | 'dismissed',
   lastStepReached: StepNumber,
-  completedPath?: 'add_project_modal',
+  completedPath?: 'add_project_modal' | 'workspace',
   dismissedExtras?: { advancedVia: 'button' | 'keyboard'; durationMs: number }
 ) => Promise<boolean>
 
@@ -38,6 +41,7 @@ type OnboardingFlowActionsArgs = {
   ) => void
   settings: GlobalSettings | null
   persistCurrentStep: () => Promise<PersistCurrentStepResult>
+  selectedWorkspaceId: string | null
   closeWith: CloseWith
   openModal: (modal: 'add-repo') => void
   getNextStepIndex: (index: number) => number
@@ -61,6 +65,7 @@ export function useOnboardingFlowActions({
   trackTaskSourcesSnapshot,
   settings,
   persistCurrentStep,
+  selectedWorkspaceId: worktreeId,
   closeWith,
   openModal,
   getNextStepIndex,
@@ -119,20 +124,32 @@ export function useOnboardingFlowActions({
         return
       }
       nextInFlightRef.current = true
+      const agent = selectedAgent
+      const workspaceExecutionHostId = worktreeId
+        ? getExecutionHostIdForWorktree(useAppStore.getState(), worktreeId)
+        : undefined
       try {
         const result = await persistCurrentStep()
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
           if (currentStep.id === 'notifications') {
             setBusyLabel(
-              translate(
-                'components.onboarding.flow.actions.openingAddProject',
-                'Opening Add Project...'
-              )
+              worktreeId
+                ? translate('components.onboarding.flow.actions.continue', 'Continue')
+                : translate(
+                    'components.onboarding.flow.actions.openingAddProject',
+                    'Opening Add Project...'
+                  )
             )
-            const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
-            if (closed) {
+            const closed = await closeWith(
+              'completed',
+              ONBOARDING_FINAL_STEP,
+              worktreeId ? 'workspace' : 'add_project_modal'
+            )
+            if (closed && !worktreeId) {
               openModal('add-repo')
+            } else if (closed && worktreeId && agent) {
+              launchOnboardingCompletionAgent(worktreeId, agent, workspaceExecutionHostId)
             }
             return
           }
@@ -167,6 +184,8 @@ export function useOnboardingFlowActions({
       currentStep.id,
       currentStep.stepNumber,
       getNextStepIndex,
+      worktreeId,
+      selectedAgent,
       onOnboardingChange,
       openModal,
       persistCurrentStep,
