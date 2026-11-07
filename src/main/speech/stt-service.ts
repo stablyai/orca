@@ -33,36 +33,26 @@ export class SttService {
   }
 
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
-    if (this.state.stopping) {
+    const session = this.state.sessions.get(owner)
+    if (!session || session.phase === 'stopping') {
       return false
     }
-    const currentOwner = this.state.activeOwner ?? this.state.startingOwner
-    if (!currentOwner) {
-      return false
+    if (session.cloud) {
+      return session.cloud.feedAudio(samples, sampleRate)
     }
-    if (currentOwner !== owner) {
-      throw new Error('dictation_owner_mismatch')
-    }
-    if (this.state.cloudSession) {
-      return this.state.cloudSession.feedAudio(samples, sampleRate)
-    }
-    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate })
+    // postMessage copies the whole backing buffer, not just this view.
+    const whole = samples.byteOffset === 0 && samples.byteLength === samples.buffer.byteLength
+    session.engine?.worker.postMessage({
+      type: 'feed',
+      streamId: session.streamId,
+      samples: whole ? samples : samples.slice(),
+      sampleRate
+    })
     return false
   }
 
-  stopDictation(
-    owner = 'desktop',
-    options: { cancelStarting?: boolean; discard?: boolean } = { cancelStarting: true }
-  ): Promise<void> {
+  stopDictation(owner = 'desktop', options: { discard?: boolean } = {}): Promise<void> {
     return stopSttDictation(this.state, owner, options)
-  }
-
-  isActive(): boolean {
-    return this.state.worker !== null || this.state.cloudSession !== null
-  }
-
-  getActiveModelId(): string | null {
-    return this.state.activeModelId
   }
 
   prepareModelForDeletion(modelId: string): Promise<void> {

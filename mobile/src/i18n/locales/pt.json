@@ -1318,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "O ditado já está em uso no computador ou em outro celular.",
+      "alreadyActive": "O ditado já está em uso no computador ou em outro celular. Atualize o Orca no computador para ditar em vários dispositivos ao mesmo tempo.",
       "cloudModelNeedsKey": "Requer uma chave da OpenAI",
       "deleteFailed": "Falha ao excluir o modelo",
       "desktopUpdateRequired": "Atualize o app Orca no desktop pareado para usar as configurações de voz do celular.",
       "downloadFailed": "Falha ao iniciar o download",
       "loadFailed": "Falha ao carregar os modelos de ditado",
+      "modelBusy": "Outro dispositivo está ditando com um modelo de voz diferente. Tente de novo quando ele terminar.",
       "repairRequired": "Pareie este celular novamente com o computador para usar o ditado.",
       "serverUpdateRequired": "Atualize o Orca neste servidor para usar o ditado por voz.",
+      "sessionLimit": "Há dispositivos demais ditando neste computador. Tente de novo quando um deles terminar.",
       "sessionLost": "O ditado perdeu a conexão com o computador. Tente novamente.",
       "updateFailed": "Falha ao atualizar as configurações de ditado"
     }

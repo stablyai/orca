@@ -1275,14 +1275,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "電腦或另一支手機正在使用聽寫功能。",
+      "alreadyActive": "電腦或另一支手機正在使用聽寫功能。請更新電腦上的 Orca，以便在多台裝置上同時聽寫。",
       "cloudModelNeedsKey": "需要 OpenAI 金鑰",
       "deleteFailed": "無法刪除模型",
       "desktopUpdateRequired": "請更新已配對電腦上的 Orca 桌面版，以使用行動版語音設定。",
       "downloadFailed": "無法開始下載",
       "loadFailed": "無法載入聽寫模型",
+      "modelBusy": "另一台裝置正在使用不同的語音模型聽寫。請等它結束後再試。",
       "repairRequired": "請將這支手機與電腦重新配對，以使用聽寫功能。",
       "serverUpdateRequired": "請更新此伺服器上的 Orca，以使用語音聽寫。",
+      "sessionLimit": "這台電腦上正在聽寫的裝置過多。請等其中一台結束後再試。",
       "sessionLost": "聽寫功能與電腦的連線已中斷。請再試一次。",
       "updateFailed": "無法更新聽寫設定"
     }

@@ -1318,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone.",
+      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone. Mettez à jour Orca sur l'ordinateur pour dicter depuis plusieurs appareils à la fois.",
       "cloudModelNeedsKey": "Nécessite une clé OpenAI",
       "deleteFailed": "Impossible de supprimer le modèle",
       "desktopUpdateRequired": "Mettez à jour l'application Orca sur l'ordinateur appairé pour utiliser les paramètres vocaux du mobile.",
       "downloadFailed": "Impossible de démarrer le téléchargement",
       "loadFailed": "Impossible de charger les modèles de dictée",
+      "modelBusy": "Un autre appareil dicte avec un modèle vocal différent. Réessayez quand il aura terminé.",
       "repairRequired": "Appairez à nouveau ce téléphone avec l'ordinateur pour utiliser la dictée.",
       "serverUpdateRequired": "Mettez à jour Orca sur ce serveur pour utiliser la dictée vocale.",
+      "sessionLimit": "Trop d'appareils dictent sur cet ordinateur. Réessayez quand l'un d'eux aura terminé.",
       "sessionLost": "La dictée a perdu sa connexion à l'ordinateur. Réessayez.",
       "updateFailed": "Impossible de mettre à jour les paramètres de dictée"
     }
