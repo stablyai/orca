@@ -36,6 +36,8 @@ type SearchPage = {
   response: AiVaultSearchResponse | null
   error: boolean
   loading: boolean
+  /** Set when the hits came from a query other than the page's current identity. */
+  inherited?: boolean
 }
 
 export function useAiVaultSearch(
@@ -61,7 +63,7 @@ export function useAiVaultSearch(
     let pending = false
     let followUp = false
     let started = false
-    async function run(cursor?: string, revalidate = false) {
+    async function run(cursor?: string, _revalidate = false) {
       if (pending || cancelled || !request || !scope) {
         return
       }
@@ -69,13 +71,27 @@ export function useAiVaultSearch(
       started = true
       const revision = associations.getSnapshot()
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
-      setPage((previous) => ({
-        identity,
-        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
-        response: null,
-        error: false,
-        loading: true
-      }))
+      setPage((previous) => {
+        // Retain the previous query's hits on screen while this query runs; replacing them
+        // with [] makes every keystroke blank the list (#39298). Never carry hits across a
+        // host or scope change: the caller would attribute them to the new host.
+        const sameScope = previous?.identity.scope === identity.scope
+        const retained = sameScope ? (previous?.hits ?? []) : []
+        return {
+          identity,
+          hits: retained,
+          response: null,
+          error: false,
+          loading: true,
+          // Only mark as inherited when the hits came from a different query;
+          // loadMore and revalidation serve the same identity's hits.
+          inherited: Boolean(
+            retained.length > 0 &&
+            previous &&
+            (previous.identity !== identity || previous.inherited === true)
+          )
+        }
+      })
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
         let append = Boolean(cursor)
@@ -97,14 +113,24 @@ export function useAiVaultSearch(
                   ...(append && previous?.identity === identity ? previous.hits : []),
                   ...response.hits
                 ]
-              : [],
+              : (previous?.hits ?? []),
           response,
           error: false,
-          loading: false
+          loading: false,
+          // A non-results response cannot produce hits for this query; any hits shown are inherited.
+          inherited: response.kind !== 'results' && (previous?.hits.length ?? 0) > 0
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          // Keep whatever is on screen; a network hiccup should not blank the list (#39298).
+          setPage((previous) => ({
+            identity,
+            hits: previous?.hits ?? [],
+            response: null,
+            error: true,
+            loading: false,
+            inherited: (previous?.hits.length ?? 0) > 0
+          }))
         }
       } finally {
         pending = false
@@ -141,6 +167,8 @@ export function useAiVaultSearch(
     response: current?.response ?? null,
     error: current?.error ?? false,
     loading: Boolean(request && scope && (!current || current.loading)),
+    /** True while the next query runs and the hits shown are from the previous query. */
+    inherited: current?.inherited === true,
     removeHit: (hit: AiVaultSearchHit) =>
       setPage((previous) =>
         previous?.identity === identity
