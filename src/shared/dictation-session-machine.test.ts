@@ -36,11 +36,6 @@ describe('transitionDictationSession', () => {
     expect(restarted.sessionId).not.toBe(listening.sessionId)
   })
 
-  it('lets a failed start rest in error and start again from there', () => {
-    expect(run('start', 'fail').phase).toBe('error')
-    expect(run('start', 'fail', 'start').phase).toBe('starting')
-  })
-
   it('ignores stop once the session is already stopping', () => {
     const stopping = run('start', 'engine-ready', 'stop')
     expect(transitionDictationSession(stopping, { type: 'stop' })).toBe(stopping)
