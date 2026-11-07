@@ -8814,7 +8814,9 @@
           "6fa734ed95": "{{value0}} を削除",
           "openAiKeyName": "OpenAI 転写キー",
           "dictationShortcutDescription": "{{shortcut}} を押すと、フォーカスされているペインにテキストを音声入力できます。",
-          "dictationModesDescription": "トグル: {{shortcut}} を1回押すと開始し、もう一度押すと停止します。ホールド: {{shortcut}} を押している間、音声入力します。"
+          "dictationModesDescription": "トグル: {{shortcut}} を1回押すと開始し、もう一度押すと停止します。ホールド: {{shortcut}} を押している間、音声入力します。",
+          "speechGpuLabel": "GPU を使用",
+          "speechGpuDescription": "動作する場合はグラフィックカードで音声を認識し、失敗した場合は CPU で認識します。音声入力でコンピュータがフリーズしたり再起動したりする場合はオフにしてください。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",

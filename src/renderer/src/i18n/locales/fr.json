@@ -9342,7 +9342,9 @@
           "cd9fe37556": "Autorisation d'accès au micro accordée",
           "openAiKeyName": "Votre clé de transcription OpenAI",
           "dictationShortcutDescription": "Appuyez sur {{shortcut}} pour dicter du texte dans n'importe quel volet actif.",
-          "dictationModesDescription": "Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que {{shortcut}} est maintenu."
+          "dictationModesDescription": "Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que {{shortcut}} est maintenu.",
+          "speechGpuLabel": "Utiliser le GPU",
+          "speechGpuDescription": "Reconnaît la parole sur la carte graphique quand elle fonctionne, et sur le processeur en cas d’échec. Désactivez-le si la dictée fige ou redémarre votre ordinateur."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
