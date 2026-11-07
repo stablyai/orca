@@ -41,7 +41,7 @@ function Composer({
   const api = useNativeChatComposerAttachments({
     attachmentScopeKey: scopeKey,
     allowWithoutTarget: true,
-    imageReferences: true,
+    imageReferences: false,
     caret: 0,
     disabled: false,
     isComposing: () => false,
@@ -80,10 +80,6 @@ function renderComposer(scopeKey: string) {
     api: () => seen.api!,
     input: () => seen.input!.current!,
     textbox,
-    chips: () =>
-      [...view.container.querySelectorAll('[data-native-chat-image-reference]')].map(
-        (pill) => pill.textContent
-      ),
     show: (next: string) => view.rerender(<Composer scopeKey={next} onApi={onApi} />)
   }
 }
@@ -123,21 +119,17 @@ afterEach(() => {
   clearNativeChatAttachmentCacheForTests()
 })
 
-describe('composer image chips', () => {
-  it('removes every chip of a removed thumbnail, and keeps the thumbnail when a chip is deleted', async () => {
+describe('composer image attachments', () => {
+  it('keeps images outside prompt text and retains attachments when the text is cleared', () => {
+    updateNativeChatComposerDraft('tab-1:pane', { text: 'Describe these images' }, 'immediate')
     const composer = renderComposer('tab-1:pane')
     const kept = begin(composer)
     const removed = begin(composer)
-    act(() => {
-      promptEditor(composer.textbox()).commands.insertContent({
-        type: 'nativeChatImageReference',
-        attrs: { attachmentId: removed }
-      })
-    })
-    await waitFor(() => expect(composer.chips()).toHaveLength(3))
+    expect(promptValue(composer.textbox())).toBe('Describe these images')
+    expect(composer.api().imageAttachments.map(({ id }) => id)).toEqual([kept, removed])
 
     act(() => composer.api().removeImageAttachment(removed))
-    await waitFor(() => expect(composer.chips()).toEqual(['Image #1']))
+    expect(promptValue(composer.textbox())).toBe('Describe these images')
 
     act(() => promptEditor(composer.textbox()).commands.setContent({ type: 'doc', content: [] }))
     expect(composer.api().imageAttachments.map(({ id }) => id)).toEqual([kept])
@@ -176,11 +168,11 @@ describe('composer image chips', () => {
       fromA.dropPendingImageAttachment(hidden)
     })
     const stored = readNativeChatComposerDraft('chat-a')
-    expect(stored.text).toBe(`${formatNativeChatFileReference(pill)} `)
+    expect(stored.text).toBe(formatNativeChatFileReference(pill))
     expect(fileReferences(stored.document)).toEqual([pill])
   })
 
-  it('keeps one chip bound to an unavailable image attached again while it uploads', async () => {
+  it('keeps a reference bound to an unavailable image attached again while it uploads', () => {
     updateNativeChatComposerDraft(
       'tab-1:pane',
       {
@@ -194,7 +186,6 @@ describe('composer image chips', () => {
     act(() => composer.api().resolvePendingImageAttachment(upload, '/up/shot.png'))
 
     expect(composer.api().imageAttachments).toMatchObject([{ id: 'missing', path: '/up/shot.png' }])
-    await waitFor(() => expect(composer.chips()).toEqual(['Image #1']))
     expect(promptValue(composer.textbox())).toBe(`look ${chip('missing')}`)
   })
 
@@ -206,7 +197,10 @@ describe('composer image chips', () => {
       'm1',
       message(`see ${file} and [Image #1]`, ['/up/a.png'])
     )
-    expect(readNativeChatComposerDraft(scope).text).toBe(`see ${file} and ${chip('returned-m1-1')}`)
+    expect(readNativeChatComposerDraft(scope)).toMatchObject({
+      text: `see ${file} and [Image #1]`,
+      images: [{ id: 'returned-m1-1', path: '/up/a.png' }]
+    })
   })
 
   it('keeps a stored draft’s file reference when a message comes back', async () => {
@@ -220,7 +214,8 @@ describe('composer image chips', () => {
 
     const back = renderComposer(scope)
     expect(fileReferences(readNativeChatComposerDraft(scope).document)).toEqual(['/repo/a.md'])
-    await waitFor(() => expect(back.chips()).toEqual(['Image #1']))
+    await waitFor(() => expect(back.api().imageAttachments).toMatchObject([{ path: '/up/a.png' }]))
+    expect(promptValue(back.textbox())).toContain('see [Image #1]')
   })
 
   it('adds a returned message once even after typing, by its image ids', () => {
@@ -234,7 +229,7 @@ describe('composer image chips', () => {
     )
     handBackStructuredAgentSessionMessage('s1', 'm1', returned)
     expect(readNativeChatComposerDraft(scope)).toMatchObject({
-      text: `see ${chip('returned-m1-1')} and more`,
+      text: 'see [Image #1] and more',
       images: [{ id: 'returned-m1-1' }]
     })
   })
@@ -249,7 +244,7 @@ describe('composer image chips', () => {
     act(() => fromA.resolvePendingImageAttachment(upload, '/up/a.png'))
 
     expect(readNativeChatComposerDraft('chat-a')).toMatchObject({
-      text: `${chip(upload)} `,
+      text: '',
       images: [{ id: upload, path: '/up/a.png' }]
     })
     expect(promptValue(composer.textbox())).toBe('B draft')

@@ -195,12 +195,13 @@ describe('useNativeChatComposerAttachments', () => {
     }
   })
 
-  it('takes the chip of an image still on its way out of the prompt when the composer is disabled', async () => {
+  it('clears a pending image on disable without putting its marker in prompt text', async () => {
     const probe = await renderProbe('structured-1', true)
     act(() => {
       probe.latest().beginPendingImageAttachment()
     })
-    expect(readNativeChatDraftCache('structured-1')).not.toBe('')
+    expect(probe.latest().imageAttachments).toMatchObject([{ pending: true }])
+    expect(readNativeChatDraftCache('structured-1')).toBe('')
 
     await probe.rerender('structured-1', true)
     expect(probe.latest().imageAttachments).toEqual([])

@@ -19252,7 +19252,6 @@
         "imageAttachAgainLabel": "重新附加",
         "pastedImageNotKeptLabel": "未保留",
         "imageNumber": "圖片 #{{number}}",
-        "imageReferenceMissing": "圖片已移除",
         "imagePasteFailed": "圖片貼上失敗。",
         "imageSaving": "正在儲存貼上的圖片…",
         "worktreeNotReady": "工作樹未就緒 — 請稍後重試。",
@@ -19319,7 +19318,8 @@
         },
         "imageUnavailable": "無法預覽",
         "moreControls": "更多聊天控制項",
-        "exitPlanMode": "結束計畫模式"
+        "exitPlanMode": "結束計畫模式",
+        "imageReferenceMissing": "圖片已移除"
       },
       "tool": {
         "exitCode": "結束碼 {{value0}}",

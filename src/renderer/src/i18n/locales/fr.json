@@ -19430,7 +19430,6 @@
         "imageAttachAgainLabel": "Joindre à nouveau",
         "pastedImageNotKeptLabel": "Non conservée",
         "imageNumber": "Image #{{number}}",
-        "imageReferenceMissing": "Image retirée",
         "imagePasteFailed": "Échec du collage de l'image.",
         "worktreeNotReady": "Worktree pas encore prêt — réessayez dans un instant.",
         "pasteUnavailable": "Impossible de coller — ce chat n'accepte pas de saisie pour le moment.",
@@ -19496,7 +19495,8 @@
         "sessionAttachmentsFailed": "Le chat {{agent}} n'a pas pu s'ouvrir. Utilisez Réessayer dans le chat, puis joignez à nouveau les fichiers.",
         "sessionAttachmentsStarting": "Le chat de {{agent}} est encore en cours d’ouverture. Attendez qu’il soit ouvert, puis joignez à nouveau les fichiers.",
         "moreControls": "Plus de commandes de conversation",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "imageReferenceMissing": "Image retirée"
       },
       "tool": {
         "result": "Résultat",
