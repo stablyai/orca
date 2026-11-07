@@ -11,7 +11,8 @@ import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileDetectedAgents,
   MobileWorkspaceOnOtherRuntimeError,
-  type MobileAgentLaunchContext
+  type MobileAgentLaunchContext,
+  type MobileAgentRefresh
 } from './mobile-new-tab-agent-loader'
 
 type DetectionInput = { refusesOtherRuntime: boolean }
@@ -25,15 +26,14 @@ async function detectAgents(
   client: RpcClient,
   target: HostQueryTarget,
   input: DetectionInput,
-  refresh?: { onSent: () => void }
+  refresh?: MobileAgentRefresh
 ): Promise<MobileDetectedAgents> {
   try {
     const detected = await loadMobileDetectedAgents({
       client,
       worktreeId: target.worktree ?? '',
       hostRefusesOtherRuntime: input.refusesOtherRuntime,
-      refresh: refresh !== undefined,
-      onRefreshSent: refresh?.onSent
+      refresh
     })
     return { kind: 'detected', ...detected }
   } catch (error) {

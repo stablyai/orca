@@ -3,6 +3,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
+import type { SendRequestOptions } from '../transport/unvalidated-rpc-request-port'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
@@ -33,22 +34,25 @@ type FakeHost = {
 type FakeClient = RpcClient & { sendRequest: ReturnType<typeof vi.fn> }
 
 function createClient(host: FakeHost): FakeClient {
-  const sendRequest = vi.fn(async (method: string) => {
-    if (method === 'settings.get') {
-      return { ok: true, result: { settings: host.settings ?? {} } }
+  const sendRequest = vi.fn(
+    async (method: string, _params?: unknown, options?: SendRequestOptions) => {
+      options?.beforeSend?.()
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: host.settings ?? {} } }
+      }
+      if (method === 'repo.list' && host.repos) {
+        return host.repos()
+      }
+      if (method === 'preflight.detectAgents') {
+        return host.agents()
+      }
+      if (method === 'preflight.refreshAgents') {
+        const reply = await host.agents()
+        return reply.ok ? { ...reply, result: { agents: reply.result } } : reply
+      }
+      throw new Error(`unexpected request: ${method}`)
     }
-    if (method === 'repo.list' && host.repos) {
-      return host.repos()
-    }
-    if (method === 'preflight.detectAgents') {
-      return host.agents()
-    }
-    if (method === 'preflight.refreshAgents') {
-      const reply = await host.agents()
-      return reply.ok ? { ...reply, result: { agents: reply.result } } : reply
-    }
-    throw new Error(`unexpected request: ${method}`)
-  })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test double implements the members the hook and loader call.
   return {
     sendRequest,

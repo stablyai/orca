@@ -59,9 +59,12 @@ type MobileAgentLaunchContextArgs = {
   /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
   hostRefusesOtherRuntime?: boolean
   /** Re-reads the host's login-shell PATH before probing, as desktop's refresh does. */
-  refresh?: boolean
-  /** Called as the refresh request goes out; reads that fail before it never asked the host to refresh. */
-  onRefreshSent?: () => void
+  refresh?: MobileAgentRefresh
+}
+
+export type MobileAgentRefresh = {
+  /** Runs as the refresh request goes out; reads that fail before it never asked the host to refresh. */
+  onSent?: () => void
 }
 
 export async function loadMobileAgentLaunchContext(
@@ -109,14 +112,14 @@ type DetectedAgentsReply = {
 async function loadDetectedAgents(
   client: RpcClient,
   worktreeId: string,
-  host: HostProbeOptions
+  probe: HostProbeOptions
 ): Promise<DetectedAgentsReply> {
   // Floating workspaces belong to the paired host and have no repo connection.
   if (isFloatingWorkspaceWorktreeId(worktreeId)) {
-    return { ...(await probeHostAgents(client, undefined, host)), repo: null }
+    return { ...(await probeHostAgents(client, undefined, probe.refresh)), repo: null }
   }
   if (worktreeId.startsWith('folder:')) {
-    return loadFolderDetectedAgents(client, worktreeId, host)
+    return loadFolderDetectedAgents(client, worktreeId, probe)
   }
   const repoResponse = await newTabRepoListRead.request(client)
   const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
@@ -130,10 +133,10 @@ async function loadDetectedAgents(
     .map((candidate) => candidate.executionHostId?.startsWith('runtime:') === true)
   if (runtimeOwned.includes(true)) {
     // Repo ids can collide across hosts; only a host that refuses other-runtime workspaces can disambiguate them.
-    if (!host.hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
+    if (!probe.hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
       throw new MobileWorkspaceOnOtherRuntimeError()
     }
-    return { ...(await probeHostAgents(client, { worktreeId }, host)), repo }
+    return { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo }
   }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId
@@ -144,7 +147,7 @@ async function loadDetectedAgents(
       }
     : {
         // Send workspace identity for WSL/runtime resolution; older hosts ignore it and keep their default.
-        ...(await probeHostAgents(client, { worktreeId }, host)),
+        ...(await probeHostAgents(client, { worktreeId }, probe.refresh)),
         repo
       }
 }
@@ -153,14 +156,12 @@ async function loadDetectedAgents(
 async function probeHostAgents(
   client: RpcClient,
   params: { worktreeId: string } | undefined,
-  { refresh, onRefreshSent }: HostProbeOptions
+  refresh: MobileAgentRefresh | undefined
 ): Promise<Omit<DetectedAgentsReply, 'repo'>> {
   if (refresh) {
-    const request = params
-      ? preflightRefreshAgentsRead.request(client, params)
-      : preflightRefreshAgentsRead.request(client)
-    onRefreshSent?.()
-    const reply = await request
+    const reply = await preflightRefreshAgentsRead.request(client, params, {
+      beforeSend: refresh.onSent
+    })
     // Do not repeat work after disconnects or host failures.
     if (reply.ok || !isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
       return { reply, interpret: preflightRefreshAgentsRead.interpret }
@@ -191,7 +192,7 @@ async function loadFolderDetectedAgents(
   probe: HostProbeOptions
 ): Promise<DetectedAgentsReply> {
   if (probe.hostRefusesOtherRuntime) {
-    return { ...(await probeHostAgents(client, { worktreeId }, probe)), repo: null }
+    return { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo: null }
   }
   // Older hosts ignore worktreeId during detection, so resolve their folder catalog first.
   const [folders, groups, repos] = await Promise.all([
@@ -244,5 +245,5 @@ async function loadFolderDetectedAgents(
         interpret: preflightDetectRemoteAgentsRead.interpret,
         repo: null
       }
-    : { ...(await probeHostAgents(client, { worktreeId }, probe)), repo: null }
+    : { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo: null }
 }
