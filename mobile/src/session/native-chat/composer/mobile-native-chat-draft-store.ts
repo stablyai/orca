@@ -26,6 +26,7 @@ import {
   savedMobileNativeChatFiles,
   settleMobileNativeChatInFlightSend
 } from './mobile-native-chat-in-flight-sends'
+import { dropMobileNativeChatOfflineSends } from './mobile-native-chat-offline-sends'
 import {
   closeSavedMobileNativeChatDraft,
   resetMobileNativeChatDraftPersistenceForTests,
@@ -175,6 +176,7 @@ function retireTabText(scope: string): boolean {
   const changed = drafts.delete(scope)
   mobileNativeChatLaunchDraftSeeds.delete(scope)
   retireMobileNativeChatInFlightSends(scope)
+  dropMobileNativeChatOfflineSends(scope)
   return changed
 }
 
