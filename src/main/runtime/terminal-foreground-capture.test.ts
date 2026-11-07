@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { judgeTerminalForeground, readTerminalProcessRows } from './terminal-foreground-group'
+import { readPtyTerminalRows } from '../pty/process-retirement/terminal-process-rows'
 import { resolvePtyForegroundMembers } from '../pty/process-retirement/pty-master-foreground-observation'
 import { readLaunchedAgentForeground } from './terminal/wait/launched-agent-foreground'
 import { createAdapter } from '../daemon/providers/routing/testing/daemon-pty-router-test-fixture'
@@ -116,4 +117,37 @@ describe('fresh target foreground regressions', () => {
     expect(captured.map((c) => c.pid)).toEqual([90500, 90501])
     expect(judgeTerminalForeground(captured, 90500, 'claude')).toBe('agent')
   })
+
+  it.each([
+    {
+      platform: 'darwin',
+      expectedFormat: 'pid=,ppid=,pgid=,tpgid=,stat=,command=',
+      sampleOutput: '100 1 100 100 Ss -zsh\n'
+    },
+    {
+      platform: 'linux',
+      expectedFormat: 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=',
+      sampleOutput: '100 1 100 100 100 Ss -zsh\n'
+    }
+  ])(
+    'queries terminal processes with platform-appropriate ps format on $platform',
+    async ({ platform, expectedFormat, sampleOutput }) => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
+      try {
+        Object.defineProperty(process, 'platform', { value: platform })
+        mocks.runProcess.mockResolvedValueOnce(result(sampleOutput))
+        const captured = await readPtyTerminalRows('ttys001')
+        expect(mocks.runProcess).toHaveBeenCalledWith(
+          expect.objectContaining({
+            program: 'ps',
+            args: ['-ww', '-o', expectedFormat, '-t', 'ttys001']
+          })
+        )
+        expect(captured).toHaveLength(1)
+        expect(captured![0].pid).toBe(100)
+      } finally {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
+  )
 })

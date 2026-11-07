@@ -92,7 +92,15 @@ export async function readPtyTerminalRows(
     return null
   }
   const stdout = await readTerminalPs(
-    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=', '-t', normalized],
+    [
+      '-ww',
+      '-o',
+      process.platform === 'darwin'
+        ? 'pid=,ppid=,pgid=,tpgid=,stat=,command='
+        : 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=',
+      '-t',
+      normalized
+    ],
     timeoutMs
   )
   try {
