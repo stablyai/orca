@@ -11,6 +11,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { RuntimeStore } from '../runtime/runtime-store-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { resolveWorktreeMetaOwner } from '../persistence/host-qualified-worktree-meta'
+import { getPreflightWslTarget } from '../ipc/preflight-runtime-target'
 
 const ENABLE_FIRST_WORK_FOLDER_RENAME = false
 
@@ -34,12 +35,18 @@ export function firstWorkRenameDeps(
     | 'notifyFolderWorkspaceChanged'
     | 'notifyBranchRenamed'
     | 'notifyWorktreeFolderRenamed'
+    | 'resolveAgentDetectionHost'
   >
 ): FirstWorkBranchRenameDeps {
   return {
     getSettings: () => store.getSettings(),
     getRepo: (repoId) => store.getRepo(repoId),
     getAgentEnvResolvers: () => runtime.getCommitMessageAgentEnvironmentResolvers(),
+    getAgentWslDistro: async (worktreeId) => {
+      // Generate where agent detection finds the workspace's CLIs.
+      const host = await runtime.resolveAgentDetectionHost(worktreeId)
+      return host.kind === 'local' ? getPreflightWslTarget(host.context)?.distro : undefined
+    },
     getCurrentDisplayName: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
