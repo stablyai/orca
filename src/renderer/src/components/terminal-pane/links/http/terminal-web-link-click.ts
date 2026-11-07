@@ -1,5 +1,7 @@
-import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
 import type { Terminal } from '@xterm/xterm'
 import type { LinkHandlerDeps } from '../files/terminal-link-handlers'
 import { isTerminalOwnedLinkGesture } from '../gestures/terminal-link-activation'

@@ -1,12 +1,12 @@
 import type { JiraConnectionStatus, JiraIssue } from '../../../../shared/jira/jira-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { callRuntimeRpc } from '../runtime-rpc-client'
-import { rowLessSourceTarget as getJiraRuntimeTarget } from '../../lib/default-creation-host'
+import { rowLessSourceTarget } from '../../lib/default-creation-host'
 import type { RowLessSource as RuntimeJiraSettings } from '../../lib/default-creation-host'
 import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
 
 export async function jiraReadStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
-  const target = getJiraRuntimeTarget(settings)
+  const target = rowLessSourceTarget(settings)
   return parseJiraConnectionStatus(
     target.kind === 'environment'
       ? await callRuntimeRpc<unknown>(target, 'jira.readStatus', undefined, { timeoutMs: 15_000 })
@@ -20,7 +20,7 @@ export async function jiraLookupIssueSummary(
   siteId: string,
   signal?: AbortSignal
 ): Promise<JiraIssue | null> {
-  const target = getJiraRuntimeTarget(settings)
+  const target = rowLessSourceTarget(settings)
   const args = { key, siteId }
   if (target.kind === 'environment') {
     return callRuntimeRpc<JiraIssue | null>(target, 'jira.lookupIssueSummary', args, {

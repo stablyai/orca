@@ -14,14 +14,14 @@ import {
   runtimeEnvironmentSupportsCapability
 } from '../runtime-rpc-client'
 import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
-import { rowLessSourceTarget as getJiraRuntimeTarget } from '../../lib/default-creation-host'
+import { rowLessSourceTarget } from '../../lib/default-creation-host'
 import type { RowLessSource as RuntimeJiraSettings } from '../../lib/default-creation-host'
 
 export async function jiraCreateIssue(
   settings: RuntimeJiraSettings,
   args: JiraCreateIssueArgs
 ): Promise<JiraCreateIssueResult> {
-  const target = getJiraRuntimeTarget(settings)
+  const target = rowLessSourceTarget(settings)
   if (target.kind === 'environment' && (args.userFieldKeys?.length ?? 0) > 0) {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
@@ -41,7 +41,7 @@ export async function jiraListAssignableUsers(
   query?: string,
   siteId?: string | null
 ): Promise<JiraUser[]> {
-  return jiraListAssignableUsersForTarget(getJiraRuntimeTarget(settings), key, query, siteId)
+  return jiraListAssignableUsersForTarget(rowLessSourceTarget(settings), key, query, siteId)
 }
 
 export async function jiraListAssignableUsersForTarget(
@@ -69,7 +69,7 @@ export async function jiraListAssignableUsersForProject(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getJiraRuntimeTarget(settings)
+  const target = rowLessSourceTarget(settings)
   if (target.kind === 'environment') {
     return jiraSearchUsers(settings, query, siteId)
   }
@@ -88,7 +88,7 @@ export async function jiraSearchUsers(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return []
   }
-  const target = getJiraRuntimeTarget(settings)
+  const target = rowLessSourceTarget(settings)
   if (
     target.kind === 'environment' &&
     !(await runtimeEnvironmentSupportsCapability(

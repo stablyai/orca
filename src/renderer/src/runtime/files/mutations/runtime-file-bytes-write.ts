@@ -17,8 +17,8 @@ import {
   callRuntimeFileMutation,
   callRuntimeFileMutationWithCapabilities
 } from './runtime-file-mutation-rpc'
-import { localAccess } from '../runtime-file-routing'
 import {
+  localAccess,
   assertLocalFilesystemFallbackAllowed,
   getRemoteFileArgs,
   withSshMutationExpectation

@@ -8,13 +8,14 @@ import { runtimePathExists } from '../metadata/runtime-file-metadata-client'
 import {
   assertRuntimeFileMutationCapability,
   callRuntimeFileImportMutation,
-  createRuntimeImportSessionGuard
+  createRuntimeImportSessionGuard,
+  type RuntimeFileImportSession
 } from '../mutations/runtime-file-mutation-rpc'
-import type { RuntimeFileImportSession } from '../mutations/runtime-file-mutation-rpc'
 import {
   getRemoteFileArgs,
   joinRuntimeRelativePath,
-  withSshMutationExpectation
+  withSshMutationExpectation,
+  localAccess
 } from '../runtime-file-routing'
 import {
   ensureRuntimeDirectory,
@@ -23,7 +24,6 @@ import {
 } from './runtime-file-upload-client'
 import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/local-file-access'
-import { localAccess } from '../runtime-file-routing'
 
 export async function importExternalPathsToRuntime(
   context: RuntimeFileOperationArgs,

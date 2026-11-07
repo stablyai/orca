@@ -1,5 +1,7 @@
-import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { DeferredSplitPaneHandoffHandle } from '../layout/split/deferred-split-pane-handoff'
 
