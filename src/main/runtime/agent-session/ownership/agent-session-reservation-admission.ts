@@ -60,6 +60,8 @@ export type AgentSessionReserveRequest = {
   accountHome: AgentSessionAccountHome
   /** Arguments pinned on first reservation so owner replacement repeats the same launch. */
   launchArgs?: AgentSessionLaunchArgs
+  /** The continued terminal's arguments, written only when the record is founded. */
+  sourceTerminalArgs?: AgentSessionLaunchArgs
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
@@ -149,7 +151,10 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
-  if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
+  if (
+    (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) ||
+    (request.sourceTerminalArgs && !isAgentSessionLaunchArgs(request.sourceTerminalArgs))
+  ) {
     throw new Error('agent_session_launch_args_invalid')
   }
   if (request.options && !isAgentSessionOptions(request.options)) {

@@ -29,6 +29,7 @@ import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/structured-agent-create-support-reply'
+import { structuredSessionSourceTerminalArgs } from './structured-session-source-terminal-args'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
@@ -257,7 +258,12 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
               providerSessionId: input.resumeFrom.providerSessionId,
               workspaceCwd,
               conversationName: adoption.conversationName
-            })
+            }),
+            ...structuredSessionSourceTerminalArgs(
+              input.agent,
+              input.resumeFrom.agentArgs,
+              settings
+            )
           }
         : {}),
       runtimeKind: 'native'

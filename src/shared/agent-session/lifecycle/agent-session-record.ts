@@ -144,6 +144,8 @@ export type AgentSessionRecord = {
   launchArgs?: AgentSessionLaunchArgs
   /** The chat this one was forked from; the marker after its inherited history derives from it. */
   forkedFrom?: AgentSessionForkedFrom
+  /** The continued terminal's arguments; Claude launches add them to the configured ones. */
+  sourceTerminalArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -328,6 +330,8 @@ export function isPersistedAgentSessionObservationRecord(
         isAgentSessionConversationName(record.conversationName)) &&
       (record.conversationNameSource === undefined || record.conversationNameSource === 'user') &&
       (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+      (record.sourceTerminalArgs === undefined ||
+        isAgentSessionLaunchArgs(record.sourceTerminalArgs)) &&
       !Object.hasOwn(record, 'launchEnv') &&
       isPersistedAgentSessionObservationLease(record.lease) &&
       record.lease.sessionId === record.sessionId &&
