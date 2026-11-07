@@ -141,6 +141,8 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Parent workspace for in-app creates launched from a folder workspace. */
   parentWorkspace?: WorkspaceKey
+  /** The workspace note; a task id in it names the parent the same way it does for a CLI create. */
+  comment?: string
   /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
   crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */

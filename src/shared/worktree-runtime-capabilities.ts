@@ -71,12 +71,16 @@ export function assertCrossStoreLineageSupported(
 export const WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY =
   'worktree.set.folder-parent.v1' as const
 
+export function supportsFolderParent(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes(WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY) === true
+}
+
 /** Refuses before any request, so an older host's "not found" never reads as a mistyped folder. */
 export function assertFolderParentSetSupported(
   capabilities: readonly string[] | undefined,
   hostLabel: string
 ): void {
-  if (capabilities?.includes(WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY) !== true) {
+  if (!supportsFolderParent(capabilities)) {
     throw new Error(
       `Update Orca on ${hostLabel} to attach a worktree to a folder workspace. Nothing was changed.`
     )

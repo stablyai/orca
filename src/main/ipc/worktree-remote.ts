@@ -106,6 +106,7 @@ import {
   crossStoreManualLineage,
   recordCreatedWorktreeLineage
 } from '../runtime/workspaces/lineage/runtime-worktree-lineage-recording'
+import type { WorktreeLineageResolution } from '../runtime/workspaces/lineage/runtime-worktree-lineage-resolution'
 import {
   cleanupUnusedWorktreePushTargetRemoteWithExec,
   sameGitHubRemoteUrl,
@@ -248,11 +249,13 @@ const NO_CREATED_WORKTREE_LINEAGE: CreatedWorktreeLineageRecords = {
   workspaceLineage: null
 }
 
+/** `noteLineage`: the common create resolver's answer for a task id in the note, absent an explicit parent. */
 export function recordWorkspaceLineageForCreatedWorktree(
   store: Store,
   args: CreateWorktreeArgs,
   worktree: Worktree,
-  createdAt: number
+  createdAt: number,
+  noteLineage?: WorktreeLineageResolution
 ): CreatedWorktreeLineageRecords {
   if (args.crossStoreParent) {
     const { crossStoreLineage, warnings } = recordCreatedWorktreeLineage(
@@ -264,6 +267,17 @@ export function recordWorkspaceLineageForCreatedWorktree(
       console.warn(`[worktree-create] ${warning.message}`)
     }
     return { ...NO_CREATED_WORKTREE_LINEAGE, crossStoreLineage: crossStoreLineage ?? null }
+  }
+  if (!args.parentWorkspace && noteLineage) {
+    const { lineage, workspaceLineage, warnings } = recordCreatedWorktreeLineage(
+      store,
+      worktree,
+      noteLineage
+    )
+    for (const warning of warnings) {
+      console.warn(`[worktree-create] ${warning.message}`)
+    }
+    return { lineage, workspaceLineage }
   }
   if (!args.parentWorkspace || !worktree.instanceId) {
     return NO_CREATED_WORKTREE_LINEAGE
@@ -293,7 +307,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     return NO_CREATED_WORKTREE_LINEAGE
   }
 
-  // Folder parents have no WorktreeLineage row and do not create sidebar nesting.
+  // Folder parents have no WorktreeLineage row; their link is the workspace lineage record.
   let lineage: CreateWorktreeResult['lineage'] = null
   let parentOutsideLineageBoundary = false
   let lineageOwnedByTwin = false
@@ -334,7 +348,10 @@ export function recordWorkspaceLineageForCreatedWorktree(
     childWorkspaceKey,
     childInstanceId: worktree.instanceId,
     parentWorkspaceKey: args.parentWorkspace,
-    parentInstanceId: parentWorktreeMeta?.instanceId ?? null,
+    parentInstanceId:
+      parentScope.type === 'folder'
+        ? parentScope.folderWorkspaceId
+        : (parentWorktreeMeta?.instanceId ?? null),
     origin: 'manual',
     capture: {
       source: parentScope.type === 'worktree' ? 'manual-action' : 'active-workspace',
@@ -343,6 +360,7 @@ export function recordWorkspaceLineageForCreatedWorktree(
     createdAt
   }
   if (parentScope.type === 'folder') {
+    // The checkout exists by now, so a same-id twin owning the bucket only warns.
     const target = worktreeRowTarget(store, worktree)
     const workspaceLineage = (target && store.setFolderParentLineage(target, row)) ?? null
     if (!workspaceLineage) {
@@ -1010,6 +1028,13 @@ async function performLocalWorktreeCreate(
   if (args.crossStoreParent !== undefined) {
     await assertCreatableCrossStoreParent(runtime, args.crossStoreParent)
   }
+  // A task id in the note names the parent here, as it does for every other create path.
+  const noteLineage =
+    args.comment && !args.parentWorkspace && !args.crossStoreParent
+      ? await runtime
+          .resolveLineageForWorktreeCreate({ comment: args.comment }, repo)
+          .catch(() => undefined)
+      : undefined
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(
     repo,
@@ -1610,6 +1635,7 @@ async function performLocalWorktreeCreate(
   const metaUpdates: Partial<WorktreeMeta> = {
     // Path IDs can be reused after external deletion; rotate instance identity to reject stale lineage.
     instanceId: randomUUID(),
+    ...(args.comment ? { comment: args.comment } : {}),
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
@@ -1678,7 +1704,7 @@ async function performLocalWorktreeCreate(
     lineage: worktreeLineage,
     workspaceLineage,
     crossStoreLineage
-  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
+  } = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now, noteLineage)
   // Reuse complete listing roots for authorization; incomplete recovery must not replace the repo's full root set.
   if (listingComplete) {
     registerWorktreeRootsForRepo(

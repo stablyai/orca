@@ -6,7 +6,10 @@ import type {
 } from '../../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
+import type {
+  CrossStoreInferredSource,
+  CrossStoreParentRef
+} from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type {
   ClientAutomationWorkspaceProvenance,
@@ -35,6 +38,8 @@ export type CreateWorktreeCallOptions = {
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
   /** Parent picked in the composer. Sets sidebar nesting only; ignored if it no longer exists. */
   parentWorktreeId?: string
+  /** Saved with the workspace, so a task id in it nests the workspace at creation. */
+  note?: string
   provisionedRoot?: {
     runtimeId: string
     executionHostId: ExecutionHostId
@@ -64,6 +69,8 @@ export type WorktreeCreateAttempt = {
   parentWorkspace?: WorkspaceKey
   /** A parent on another machine, named by its own store before the first attempt. */
   crossStoreParent?: CrossStoreParentRef
+  /** Set when this desktop inferred `crossStoreParent` (a task id in the note) rather than a pick. */
+  crossStoreParentInferredFrom?: CrossStoreInferredSource
   manualOrder?: number
 }
 
@@ -112,6 +119,7 @@ function sharedCreateFields(
     ...(attempt.manualOrder !== undefined ? { manualOrder: attempt.manualOrder } : {}),
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
     ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
+    ...(options?.note ? { comment: options.note } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined
@@ -157,9 +165,11 @@ export function buildRuntimeWorktreeCreateParams(
     repo: request.repoId,
     ...sharedCreateFields(request, attempt),
     // Why: the host defaults a bare parent (same- or cross-store) to CLI provenance; app picks are manual.
-    ...(attempt.parentWorkspace || attempt.crossStoreParent
-      ? { parentWorkspaceOrigin: 'manual' }
-      : {}),
+    ...(attempt.crossStoreParentInferredFrom
+      ? { crossStoreParentInferredFrom: attempt.crossStoreParentInferredFrom }
+      : attempt.parentWorkspace || attempt.crossStoreParent
+        ? { parentWorkspaceOrigin: 'manual' }
+        : {}),
     // Switch point: a host lists the window's creation under its id only on the dark path.
     ...(ORCA_SIDEBAR_INPUTS_IS_MAIN && request.creationId
       ? { creationId: request.creationId }

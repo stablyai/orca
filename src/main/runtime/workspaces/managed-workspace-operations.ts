@@ -122,15 +122,17 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
     return {
       ...worktree,
       linkedItems: getWorkspaceAttachments(worktree),
+      // This row's same-store parent record (a folder parent has no worktree lineage); a same-path
+      // twin's record reads as none.
+      workspaceLineage:
+        workspaceLineage &&
+        (!workspaceLineage.childInstanceId ||
+          workspaceLineage.childInstanceId === worktree.instanceId)
+          ? workspaceLineage
+          : null,
       // A parent on another machine; the same-store lineage fields stay null for it.
       ...(crossStoreLineage && crossStoreLineage.childInstanceId === worktree.instanceId
         ? { crossStoreLineage }
-        : {}),
-      // A folder parent likewise leaves the worktree-only lineage fields null.
-      ...(workspaceLineage &&
-      workspaceLineage.childInstanceId === worktree.instanceId &&
-      parseWorkspaceKey(workspaceLineage.parentWorkspaceKey)?.type === 'folder'
-        ? { workspaceLineage }
         : {})
     }
   }

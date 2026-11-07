@@ -46,7 +46,10 @@ import {
   type WorktreeCreateRequest
 } from './worktree-create-payload'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
-import { buildCrossStoreParentRef } from '../metadata/cross-store-parent-ref'
+import {
+  resolveCreateCrossStoreParent,
+  withoutRefusedInferredParent
+} from './worktree-create-cross-store-parent'
 import {
   lostRequestedParent,
   notifyWorktreeParentDropped,
@@ -92,6 +95,10 @@ async function runCreateAttempt(
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
+    const unnested = withoutRefusedInferredParent(attempt, error)
+    if (unnested) {
+      return await runCreateAttempt(request, unnested, target, clientCreateSettings)
+    }
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
       throw error
     }
@@ -211,10 +218,12 @@ export function createCreateWorktree(
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
-      // Refuses the whole create (older Orca, unconfirmed parent) rather than create it unnested.
-      const crossStoreParent = parent.crossStoreParentRow
-        ? await buildCrossStoreParentRef(get(), target, parent.crossStoreParentRow)
-        : undefined
+      const crossStoreParent = await resolveCreateCrossStoreParent(get(), target, {
+        pick: parent,
+        requestedParentWorktreeId: options?.parentWorktreeId,
+        note: options?.note,
+        warnParentDropped: warnParentDroppedOnce
+      })
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -246,7 +255,7 @@ export function createCreateWorktree(
                 ? getClientWorktreeCreateCandidate(branchNameOverride, attempt)
                 : undefined,
               parentWorkspace: parent.parentWorkspace,
-              crossStoreParent,
+              ...crossStoreParent,
               manualOrder
             },
             target,

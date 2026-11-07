@@ -108,7 +108,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
     resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
-    listResolvedWorktrees: () => this.listResolvedWorktrees(),
     showTerminal: (handle) => this.showTerminal(handle)
   })
 
