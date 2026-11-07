@@ -79,10 +79,7 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
         'index_incarnation',
         randomUUID()
       )
-      // Sustained transcript appends make FTS rewrite whole segment levels
-      // over and over, reaching tens of GB of daily writes (#36666). Merging
-      // 8 segments at a time roughly halves the deep-level pages rewritten on
-      // this write-heavy index, at a small read fan-in cost.
+      // Each small commit adds an FTS segment; wider merges mean fewer levels rewriting it (#36666).
       db.prepare("INSERT INTO messages_fts(messages_fts, rank) VALUES ('automerge', 8)").run()
       // Older Cursor rows omitted the file-time fallback; repair metadata without rereading transcripts.
       db.exec(`
