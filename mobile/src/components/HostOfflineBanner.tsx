@@ -15,13 +15,16 @@ export function useHostOfflineBanner({
   client,
   connState,
   lastConnectedAt,
+  outage,
   hasData
 }: {
   client: RpcClient | null
   connState: ConnectionState
   lastConnectedAt: number | null
+  /** The screen's verdict that the host can't be reached; the client keeps redialing either way. */
+  outage: boolean
   hasData: boolean
-}): { state: ConnectionState; asOf: number | null } | null {
+}): { offline: boolean; asOf: number | null } | null {
   const state = useCalmConnectionState(connState, lastConnectedAt)
   const show = hasData && state !== 'connected' && state !== 'auth-failed'
   // Live data stopped at the last reply before the drop; held so reconnect attempts don't move it.
@@ -34,31 +37,27 @@ export function useHostOfflineBanner({
   } else if (!show && asOf !== null) {
     setAsOf(null)
   }
-  return show ? { state, asOf } : null
+  return show ? { offline: outage || state === 'disconnected', asOf } : null
 }
 
 /**
  * Inset at the top of a screen that still shows data while its desktop is unreachable.
- * `state` is the calm connection state; auth failures have their own banner. An empty screen says it in its body instead.
+ * Offline offers Retry; otherwise it is still redialing. An empty screen says it in its body instead.
  */
 export function HostOfflineBanner({
   hostName,
-  state,
+  offline,
   asOf,
   onRetry
 }: {
   hostName: string
-  state: ConnectionState
+  offline: boolean
   /** When the shown data was last live. */
   asOf: number | null
   onRetry: (() => void) | null
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  if (state === 'connected' || state === 'auth-failed') {
-    return null
-  }
-  const offline = state === 'disconnected'
   return (
     <View style={styles.banner} accessibilityLiveRegion="polite">
       {offline ? (

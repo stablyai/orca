@@ -14,6 +14,7 @@ import { Presence } from '../components/AutoHeight'
 import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
+import { isConnectionOutage } from '../transport/connection-health'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
@@ -92,6 +93,7 @@ export function HostWorkspaceList({
     client,
     connState,
     lastConnectedAt,
+    outage: isConnectionOutage(controller.connectionVerdict),
     // Group headers can stand with no rows under them; that list says "unreachable" in its body.
     hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0
   })
@@ -271,7 +273,7 @@ export function HostWorkspaceList({
                 <View style={styles.offlineBanner}>
                   <HostOfflineBanner
                     hostName={hostDisplay.title}
-                    state={offlineBanner.state}
+                    offline={offlineBanner.offline}
                     asOf={offlineBanner.asOf}
                     onRetry={
                       hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null
