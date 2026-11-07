@@ -1,9 +1,11 @@
+import { sha256 } from '@noble/hashes/sha256'
+import { bytesToHex } from '@noble/hashes/utils'
 import type { AsyncStorage, PersistedQuery } from '@tanstack/query-persist-client-core'
 import {
-  decodePersistedQuery,
-  encodePersistedQuery,
-  PERSISTED_QUERY_MAX_ENCODED_LENGTH
-} from './persisted-query-codec'
+  decodeDeviceStoreValue,
+  DEVICE_STORE_MAX_VALUE_LENGTH,
+  encodeDeviceStoreValue
+} from './device-store-value-codec'
 
 // The device store's cache table for one host: `native.store.rows` in a page, the store itself in native Home.
 export type OrcaQueryStoreBackend = {
@@ -33,16 +35,19 @@ const FLUSH_MAX_WAIT_MS = 2_000
 // Unchanged data is still rewritten this long after the stored copy, so its saved time stays within a minute.
 const SAME_DATA_REWRITE_MS = 60_000
 
-// `native.store.rows` refuses a longer key, and with it every other write in the call.
-const STORE_KEY_MAX_LENGTH = 512
-
 type WrittenRecord = { readonly data: unknown; readonly buster: string; readonly updatedAt: number }
 
+// The store key of a TanStack storage key. A queryHash carries worktree paths and query inputs, so it can
+// pass the verb's 512-character key limit; a hash always fits. First-paint reads (Q4) map keys the same way.
+export function orcaQueryStoreKey(storageKey: string): string {
+  return bytesToHex(sha256(storageKey))
+}
+
 // A storage key is `<prefix>-<queryHash>`, and a queryHash is the queryKey's JSON. Anything unparseable
-// is refused, so a record never lands under another host's wipe; so is a key the verb would refuse.
-function isStorableKey(storageKey: string, hostId: string): boolean {
+// is refused, so a record never lands under another host's wipe.
+function keyNamesHost(storageKey: string, hostId: string): boolean {
   const hashAt = storageKey.indexOf('-[')
-  if (hashAt === -1 || storageKey.length > STORE_KEY_MAX_LENGTH) {
+  if (hashAt === -1) {
     return false
   }
   try {
@@ -55,8 +60,8 @@ function isStorableKey(storageKey: string, hostId: string): boolean {
 
 function encodeForStore(query: PersistedQuery): string | null {
   try {
-    const value = encodePersistedQuery(query)
-    return value.length > PERSISTED_QUERY_MAX_ENCODED_LENGTH ? null : value
+    const value = encodeDeviceStoreValue(query)
+    return value.length > DEVICE_STORE_MAX_VALUE_LENGTH ? null : value
   } catch {
     return null
   }
@@ -111,7 +116,7 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
       // A record too large or unencodable removes the stored one, which is older than memory, and is
       // remembered like a write so a refetch of the same data doesn't encode it again.
       const value = query === null ? null : encodeForStore(query)
-      ops.push({ key, value })
+      ops.push({ key: orcaQueryStoreKey(key), value })
       sent.set(
         key,
         query === null
@@ -151,25 +156,27 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
       if (pending.has(key)) {
         return pending.get(key) ?? null
       }
-      const read = await backend.read([key])
+      const read = await backend.read([orcaQueryStoreKey(key)])
       const value = read.status === 'ok' ? read.values[0] : null
-      return value == null ? null : decodePersistedQuery(value)
+      if (value == null) {
+        return null
+      }
+      // TanStack checks the record's shape and removes one it can't use; an unreadable value goes too.
+      const record = decodeDeviceStoreValue(value)
+      if (record === undefined) {
+        throw new Error('[query-storage] unreadable stored record')
+      }
+      return record as PersistedQuery
     },
     setItem(key, query) {
-      if (!isStorableKey(key, backend.hostId)) {
-        console.warn(
-          '[query-storage] refused a record outside this host or over the key limit',
-          key
-        )
+      if (!keyNamesHost(key, backend.hostId)) {
+        console.warn('[query-storage] refused a record outside this host', key)
         return
       }
       pending.set(key, query)
       schedule()
     },
     removeItem(key) {
-      if (key.length > STORE_KEY_MAX_LENGTH) {
-        return
-      }
       pending.set(key, null)
       schedule()
     },

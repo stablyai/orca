@@ -12,6 +12,10 @@ function memoryBackend(hostId: string) {
     hostId,
     read: async (keys) => ({ status: 'ok', values: keys.map((key) => rows.get(key) ?? null) }),
     write: async (ops) => {
+      // Like `native.store.rows`, a key over 512 characters refuses the whole call.
+      if (ops.some((op) => op.key.length > 512)) {
+        return { written: false }
+      }
       for (const op of ops) {
         if (op.value === null) {
           rows.delete(op.key)
@@ -25,10 +29,13 @@ function memoryBackend(hostId: string) {
   return { backend, rows }
 }
 
-function persisterOver(storage: ReturnType<typeof createOrcaQueryStorage>) {
+function persisterOver(
+  storage: ReturnType<typeof createOrcaQueryStorage>,
+  prefix = 'q1|worktree.ps@1'
+) {
   return experimental_createQueryPersister<PersistedQuery>({
     storage,
-    prefix: 'q1|worktree.ps@1',
+    prefix,
     serialize: (query) => query,
     deserialize: (query) => query
   })
@@ -42,28 +49,32 @@ describe('createOrcaQueryStorage', () => {
     vi.useRealTimers()
   })
 
-  it("never writes a query whose key isn't ['orca', <bridge host>, ...]", async () => {
+  it("stores only queries keyed ['orca', <bridge host>, ...], deep paths included", async () => {
     const memory = memoryBackend('host-a')
     const storage = createOrcaQueryStorage(memory.backend)
-    const persister = persisterOver(storage)
+    const persister = persisterOver(storage, 'q1|files.dir@1')
     const client = new QueryClient()
-    const ownKey = ['orca', 'host-a', 'worktree.ps', { exec: 'local' }, {}]
-    const otherHostKey = ['orca', 'host-b', 'worktree.ps', { exec: 'local' }, {}]
-    const foreignKey = ['other', 'host-a', 'worktree.ps']
+    const relativePath = Array(12).fill('packages/very-deeply-nested-workspace-folder').join('/')
+    const ownKey = ['orca', 'host-a', 'files.dir', { exec: 'local' }, { relativePath }]
+    const otherHostKey = ['orca', 'host-b', 'files.dir', { exec: 'local' }, {}]
+    const foreignKey = ['other', 'host-a', 'files.dir']
     for (const queryKey of [ownKey, otherHostKey, foreignKey]) {
-      client.setQueryData(queryKey, { rows: ['main'] })
+      client.setQueryData(queryKey, { entries: ['README.md'] })
       await persister.persistQueryByKey(queryKey, client)
     }
     await storage.flush()
 
+    // sha256 of the 620-character storage key of `ownKey`.
     expect([...memory.rows.keys()]).toEqual([
-      'q1|worktree.ps@1-["orca","host-a","worktree.ps",{"exec":"local"},{}]'
+      '1b7af21ba777cb9df9bb4374b31946114af6196c3ec2cb1a478743c4aed03d0b'
     ])
     // A later document reads the stored record back.
-    const nextDocument = persisterOver(createOrcaQueryStorage(memory.backend))
+    const nextDocument = persisterOver(createOrcaQueryStorage(memory.backend), 'q1|files.dir@1')
     await expect(
-      nextDocument.retrieveQuery('["orca","host-a","worktree.ps",{"exec":"local"},{}]')
-    ).resolves.toEqual({ rows: ['main'] })
+      nextDocument.retrieveQuery(
+        `["orca","host-a","files.dir",{"exec":"local"},{"relativePath":"${relativePath}"}]`
+      )
+    ).resolves.toEqual({ entries: ['README.md'] })
   })
 
   it('keeps the stored copy of unchanged data until it is a minute old', async () => {
