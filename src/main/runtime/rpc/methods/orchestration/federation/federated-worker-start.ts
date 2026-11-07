@@ -32,11 +32,11 @@ import { preflightFederatedWorkerLaunch } from './federated-worker-launch-prefli
 import { withWorkerStartNext } from '../receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { resolveFederatedChildParent } from './federated-worker-child-parent'
-import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
 import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
-} from '../../../../orchestration/worker-launch-observation'
+} from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args

@@ -7,12 +7,12 @@ export type MobileDictationLeaveHold = {
   hold: () => boolean
 }
 
-// Leaving unmounts the screen and with it what was said, so recording or transcribing holds the first leave.
+// Leaving unmounts the screen and with it what was said, so starting, recording or transcribing holds the first leave.
 export function useMobileDictationLeaveHold(
   dictation: UseMobileDictationResult
 ): MobileDictationLeaveHold {
-  const { isRecording, isProcessing, stop } = dictation
-  const active = isRecording || isProcessing
+  const { isStarting, isRecording, isProcessing, stop } = dictation
+  const active = isStarting || isRecording || isProcessing
   // Hold once per dictation, then release Back, so a slow transcript can never trap the user on the screen.
   const [held, setHeld] = useState(false)
   if (held && !active) {
@@ -24,11 +24,11 @@ export function useMobileDictationLeaveHold(
       return false
     }
     setHeld(true)
-    if (isRecording) {
+    if (isStarting || isRecording) {
       void stop()
     }
     return true
-  }, [holdsLeave, isRecording, stop])
+  }, [holdsLeave, isStarting, isRecording, stop])
 
   return { holdsLeave, hold }
 }

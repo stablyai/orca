@@ -8,7 +8,7 @@ import {
   callMiniMaxCredentials,
   UsageCredentialsHostOutdatedError,
   type MiniMaxCredentialAction
-} from '@/runtime/runtime-usage-credentials-client'
+} from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 import type { UsageCredentialAccess } from './usage-credential-host'
 
 type MiniMaxCredentialActionContext = {

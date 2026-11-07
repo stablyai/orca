@@ -12,8 +12,8 @@ export function createTerminalTabAppearanceActions(
     setTabCustomTitle: (tabId, title, opts) => {
       // Why: a remote server's tab is named on that server, which republishes the name back here.
       const state = get()
-      void import('@/runtime/web-runtime-terminal-rename').then(({ renameHostTerminalTab }) =>
-        renameHostTerminalTab(state, tabId, title)
+      void import('@/runtime/hosted-terminals/actions/web-runtime-terminal-rename').then(
+        ({ renameHostTerminalTab }) => renameHostTerminalTab(state, tabId, title)
       )
       set((s) => {
         const next = { ...s.tabsByWorktree }
@@ -62,8 +62,9 @@ export function createTerminalTabAppearanceActions(
           owningWorktreeId &&
           resolveTerminalWorktreeRoute(state, owningWorktreeId)?.runtimeEnvironmentId
         ) {
-          void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-            setWebRuntimeTabProps({ worktreeId: owningWorktreeId, tabId: item.id, color })
+          void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+            ({ setWebRuntimeTabProps }) =>
+              setWebRuntimeTabProps({ worktreeId: owningWorktreeId, tabId: item.id, color })
           )
         }
       }

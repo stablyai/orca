@@ -174,6 +174,15 @@ export type TerminalBufferActionRequest = {
   }
 }
 
+// Viewers live above the daemon on orcad; an older daemon rejects this, which callers ignore.
+export type ReportFocusLostRequest = {
+  id: string
+  type: 'reportFocusLost'
+  payload: {
+    sessionId: string
+  }
+}
+
 export type ShutdownRequest = {
   id: string
   type: 'shutdown'
@@ -249,6 +258,7 @@ export type DaemonRequest =
   | ConfirmForegroundProcessRequest
   | ConfirmShellForegroundRequest
   | TerminalBufferActionRequest
+  | ReportFocusLostRequest
   | ShutdownRequest
   | PingRequest
   | SystemResolverHealthRequest

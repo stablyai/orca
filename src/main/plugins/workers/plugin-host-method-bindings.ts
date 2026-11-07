@@ -132,7 +132,10 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   ),
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
-    const terminals = context ? await services.listWorktreeTerminals(context.worktreeId) : []
+    // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
+    const terminals = context
+      ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+      : []
     return projectPluginWorkspaceContext(context, terminals)
   }),
   'agents.list': bind(api['agents.list'], async (_params, { services }) => {
@@ -140,7 +143,7 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     if (!context) {
       return { agents: [] }
     }
-    const terminals = await services.listWorktreeTerminals(context.worktreeId)
+    const terminals = await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
     return {
       agents: projectPluginWorkspaceAgents(
         context.worktreeId,

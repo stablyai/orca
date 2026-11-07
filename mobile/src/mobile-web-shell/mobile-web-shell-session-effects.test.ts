@@ -7,6 +7,8 @@ const doubles = vi.hoisted(() => ({
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+// The runner's deadlines live in the runtime module, whose foreground timer reads React Native's AppState.
+vi.mock('./foreground-timer', () => ({ setForegroundTimer: () => () => {} }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: () => doubles.manifest()
@@ -21,7 +23,7 @@ import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
-import { download } from './mobile-web-shell-session-effects'
+import { download, stageUpdate } from './mobile-web-shell-session-effects'
 
 const CLIENT: RpcClient = {
   sendRequest: async () => {
@@ -102,7 +104,7 @@ describe('a download that reuses the cached generation', () => {
         createStore: () => store,
         mintSessionId: () => 's',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       },
       startedAt: 0,
       downloads,
@@ -110,6 +112,29 @@ describe('a download that reuses the cached generation', () => {
     })
     return done.then(() => events)
   }
+
+  it('downloads nothing when another page on the host already staged that build', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeGenerationFileSystem() })
+    const NEXT = bundle(16)
+    store.deferCommit(await store.stageGeneration(HOST, NEXT))
+    let fetches = 0
+    doubles.fetch = () => {
+      fetches += 1
+      return Promise.resolve(NEXT)
+    }
+    const { events, send } = collect()
+    await stageUpdate({
+      client: CLIENT,
+      store,
+      hostKey: HOST,
+      flow: 3,
+      downloads: new Set(),
+      opened: { manifest: { ...NEXT.manifest, pageVersion: 1 }, chunkBytes: 4 },
+      send
+    })
+    expect(fetches).toBe(0)
+    expect(events).toEqual([])
+  })
 
   it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
     const fileSystem = createFakeGenerationFileSystem()

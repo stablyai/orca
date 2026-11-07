@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Reset-credit schemas match runtime status.get and accounts.consumeCodexResetCredit handlers.

@@ -25,7 +25,7 @@ import {
   finalizeWorkspaceCleanupScan,
   isLatestWorkspaceCleanupScan
 } from './workspace-cleanup-scan-progress'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 type SetState = (
   partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),

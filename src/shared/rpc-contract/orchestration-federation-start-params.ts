@@ -35,6 +35,7 @@ export const FederationAttachStartParams = z.object({
   crossStoreParent: CrossStoreParentRefSchema.optional()
 })
 
+export type FederationAttachStartInput = z.infer<typeof FederationAttachStartParams>
 export const FederationWorkerLaunchParams = FederationAttachStartParams.omit({
   runId: true,
   dispatchId: true,
@@ -45,3 +46,5 @@ export const FederationWorkerLaunchParams = FederationAttachStartParams.omit({
   timeoutMs: true,
   devMode: true
 })
+
+export type FederationWorkerLaunchInput = z.infer<typeof FederationWorkerLaunchParams>

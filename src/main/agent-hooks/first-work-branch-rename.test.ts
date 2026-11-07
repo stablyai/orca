@@ -3,7 +3,7 @@ import type { Repo } from '../../shared/repo-types'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
 import '../../shared/worktree/id'
 
@@ -59,7 +59,7 @@ import {
   workingEvent
 } from './first-work-branch-rename-test-harness'
 import { FIRST_WORK_GENERATION_RETRY_DELAYS_MS } from './first-work-generation-backoff'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const REMOTE_REPO_BASE: Repo = {
   id: REPO_ID,

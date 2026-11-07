@@ -3,7 +3,7 @@ import type {
   RpcParams
 } from '../../../shared/rpc-contract/rpc-params-catalog.generated'
 import type { RpcAnyMethodDeclaration } from './core'
-import type { ALL_RPC_METHODS } from './methods'
+import type { ALL_RPC_METHODS } from './methods/rpc-method-registry'
 
 type RegisteredMethod = (typeof ALL_RPC_METHODS)[number]
 

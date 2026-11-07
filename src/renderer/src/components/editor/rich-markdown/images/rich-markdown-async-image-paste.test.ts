@@ -2,13 +2,15 @@
 
 import { Editor } from '@tiptap/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { toast } from 'sonner'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 
-vi.mock('@/runtime/runtime-file-import-client', () => ({ importExternalPathsToRuntime: vi.fn() }))
+vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
+  importExternalPathsToRuntime: vi.fn()
+}))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
 vi.mock('@/store/index', () => ({
   useAppStore: {

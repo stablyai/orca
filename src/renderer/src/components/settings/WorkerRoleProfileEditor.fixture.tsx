@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { WorkerRoleProfileEditor } from './WorkerRoleProfileEditor'

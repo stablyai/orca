@@ -49,7 +49,7 @@ on:
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
       - 'src/main/runtime/rpc/errors.ts'
-      - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/main/runtime/rpc/methods/computer/computer*.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
@@ -112,8 +112,8 @@ jobs:
           src/cli/index.test.ts
           src/main/runtime/rpc/dispatcher-computer-errors.test.ts
           src/main/runtime/rpc/errors.test.ts
-          src/main/runtime/rpc/methods/computer.test.ts
-          src/main/runtime/rpc/methods/computer-actions.test.ts
+          src/main/runtime/rpc/methods/computer/computer.test.ts
+          src/main/runtime/rpc/methods/computer/computer-actions.test.ts
           src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native

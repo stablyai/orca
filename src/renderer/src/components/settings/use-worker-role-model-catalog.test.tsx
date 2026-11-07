@@ -17,7 +17,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (...args: unknown[]) => fixture.read(...args)
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: () => fixture.capabilities()
 }))
 vi.mock('@/store', () => ({

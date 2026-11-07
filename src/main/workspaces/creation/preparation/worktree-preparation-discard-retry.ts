@@ -3,6 +3,7 @@ import { discardPreparedWorktree } from '../../../git/worktrees/creation/worktre
 import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import { isOrphanedWorktreeError } from '../../../ipc/worktree-logic'
 import { trackPreparationWork } from '../worktree-create-concurrency'
+import type { WorktreePreparationOperation } from '../../../git/worktrees/creation/worktree-preparation-operation'
 import type { PreparationEntry } from './worktree-create-preparation-pool'
 
 // Retry live-owner discard failures on later preparations; stale cleanup only reclaims dead owners.
@@ -14,6 +15,7 @@ export type PreparationDiscardTarget = {
   preparedPath: string
   lockReason: string
   options: AddWorktreeOptions
+  operation?: WorktreePreparationOperation
 }
 
 const pendingDiscards = new Map<string, PreparationDiscardTarget & { attempts: number }>()
@@ -24,7 +26,6 @@ export function preparationHostKey(repoPathKey: string, wslDistro: string): stri
 }
 
 export async function discardPreparationEntry(entry: PreparationEntry): Promise<void> {
-  await entry.ready.catch(() => {})
   if (!entry.checkoutStarted) {
     return
   }
@@ -35,7 +36,8 @@ export async function discardPreparationEntry(entry: PreparationEntry): Promise<
     repoPath: entry.repoPath,
     preparedPath: entry.preparedPath,
     lockReason: entry.lockReason,
-    options: entry.options
+    options: entry.options,
+    operation: entry.operation
   })
 }
 
@@ -51,12 +53,9 @@ function pendingKey(target: PreparationDiscardTarget): string {
 
 async function runDiscard(target: PreparationDiscardTarget, attempts: number): Promise<void> {
   try {
-    await discardPreparedWorktree(
-      target.repoPath,
-      target.preparedPath,
-      target.options,
-      target.lockReason
-    )
+    const discard = (options: AddWorktreeOptions): Promise<void> =>
+      discardPreparedWorktree(target.repoPath, target.preparedPath, options, target.lockReason)
+    await (target.operation ? target.operation.discard() : discard(target.options))
   } catch (error) {
     // Checkout failure may already have removed the registration; do not retry missing or foreign entries.
     if (error instanceof WorktreePreparationLockOwnershipError || isOrphanedWorktreeError(error)) {

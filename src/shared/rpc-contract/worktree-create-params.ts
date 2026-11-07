@@ -117,6 +117,17 @@ export const WorktreeCreate = z
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
       .optional(),
+    // A malformed hash never matches, so the host skips setup rather than running unapproved content.
+    approvedSetupHash: z.string().max(128).optional(),
+    // Lenient: a longer list from a newer client is trimmed instead of failing the create.
+    approvedSetupHashes: z
+      .array(z.unknown())
+      .transform((hashes) =>
+        hashes
+          .filter((hash): hash is string => typeof hash === 'string' && hash.length <= 128)
+          .slice(0, 64)
+      )
+      .optional(),
     // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),

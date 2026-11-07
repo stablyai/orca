@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.call }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
 vi.mock('@/runtime/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForHost: (host: string) =>
     host === 'local' ? { kind: 'local' } : { kind: 'environment', environmentId: 'paired' }

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/CloseTerminalDialog'
+import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/layout/close/CloseTerminalDialog'
 
 /** A pending confirmation for closing a terminal tab whose shell still has a
  *  running child process. `onConfirm` performs the original close. */

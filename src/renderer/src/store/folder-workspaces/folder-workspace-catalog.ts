@@ -14,7 +14,7 @@ import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
 import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   FolderWorkspaceUpdateCoordinatorInstance,
@@ -24,7 +24,7 @@ import {
   folderWorkspaceUpdateInvalidatesPathStatus,
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
-import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
 

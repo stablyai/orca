@@ -54,10 +54,15 @@ export function withAiVaultHistoryPreviews(
   }
   return hitSessions.map((hitSession) => {
     const row = historyByIdentity.get(previewIdentity(hitSession))
-    const hydrated =
-      row && (!hitSession.filePath || hitSession.filePath === row.filePath)
-        ? withAiVaultSessionCwdAliases(hitSession, row)
-        : hitSession
+    const sameFile = row && (!hitSession.filePath || hitSession.filePath === row.filePath)
+    const hydrated = sameFile
+      ? {
+          ...withAiVaultSessionCwdAliases(hitSession, row),
+          ...(row.antigravityArtifactPath
+            ? { antigravityArtifactPath: row.antigravityArtifactPath }
+            : {})
+        }
+      : hitSession
     return row && hitSession.previewMessages.length === 0
       ? {
           ...hydrated,

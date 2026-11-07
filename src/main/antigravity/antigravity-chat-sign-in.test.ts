@@ -1,3 +1,4 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
@@ -12,7 +13,7 @@ import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { prepareAcpStructuredLaunch } from '../acp/acp-structured-launch-preparation'
@@ -20,7 +21,7 @@ import type { ConnectAcpAgent } from '../acp/acp-structured-connection'
 import { AcpScriptedAgent, deferred } from '../acp/acp-scripted-agent.test-support'
 import type { RpcContext } from '../runtime/rpc/core'
 import type { RpcCallerIdentity } from '../runtime/rpc/rpc-caller-identity'
-import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/antigravity-accounts'
+import { ANTIGRAVITY_ACCOUNT_METHODS } from '../runtime/rpc/methods/accounts/antigravity-accounts'
 import type { AntigravityChatSignInStatus } from '../../shared/antigravity-account-types'
 import { ANTIGRAVITY_BROWSER_MARKER } from './antigravity-browser-helper'
 import * as browserHelper from './antigravity-browser-helper'
@@ -95,12 +96,16 @@ async function signInAgainst(
     stream?: 'stdout' | 'stderr'
     metaCwd?: string
     sessionResult?: Record<string, unknown>
+    authConfig?: AntigravityChatAuthConfig
     realLaunchSources?: boolean
   } = {}
 ) {
   vi.spyOn(ANTIGRAVITY_LAUNCH_SPEC.managedRuntime, 'pin').mockReturnValue(PIN)
   vi.spyOn(browserHelper, 'antigravityBrowserHelperWorks').mockResolvedValue(true)
-  const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-sign-in-'))
+  // Short on POSIX so the private temp root stays in this folder, not /tmp/oacp-*.
+  const stateDirectory = await mkdtemp(
+    process.platform === 'win32' ? join(tmpdir(), 'orca-agy-sign-in-') : '/tmp/o'
+  )
   folders.push(stateDirectory)
   const folder = join(stateDirectory, 'antigravity-chat')
   const agent = new AcpScriptedAgent()
@@ -139,7 +144,8 @@ async function signInAgainst(
               requireStore: () => ({
                 getSettings: () => ({
                   nativeChatInheritShellEnvironment: true,
-                  agentDefaultEnv: {}
+                  agentDefaultEnv: {},
+                  antigravityChatAuth: options.authConfig
                 })
               }),
               resolveStructuredAgentAccountHome: async () => ({
@@ -152,7 +158,7 @@ async function signInAgainst(
       : async () => ({
           accountHome: { variable: 'GEMINI_HOME', path: folder },
           env: { PATH: bin },
-          commandSettings: {},
+          commandSettings: { antigravityChatAuth: options.authConfig },
           dataDirectory: stateDirectory
         }),
     stopLiveChats: async () => {},
@@ -412,7 +418,6 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   const prepareChat = async () =>
     prepareAcpStructuredLaunch(
       {
-        spec: ANTIGRAVITY_LAUNCH_SPEC,
         resolveLaunch: async () => ({
           ...launch,
           prefixArgs: [],
@@ -496,4 +501,25 @@ it('drops checking-session models when cancellation wins while start is pending'
     wslDistro: null
   })
   expect(agentModelCatalogStore.get(key)).toBeNull()
+})
+
+it('explicit Enterprise sign-in authenticates the host choice and verifies a usable session', async () => {
+  const state = await signInAgainst(async () => '', {
+    realLaunchSources: true,
+    authConfig: {
+      method: 'oauth-business',
+      gcpProject: 'enterprise-project',
+      gcpLocation: 'us-central1'
+    }
+  })
+  await vi.waitFor(() =>
+    expect(state.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
+      methodId: 'oauth-business'
+    })
+  )
+  state.finishBrowser()
+  state.openSession()
+  await vi.waitFor(() =>
+    expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('signedIn')
+  )
 })

@@ -1,3 +1,4 @@
+import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
@@ -19,10 +20,14 @@ export async function refreshPreparedWorktreeTip(
   preparedPath: string,
   canonicalBase: string,
   lockReason: string,
-  options: GitWorktreeExecOptions = {}
+  options: GitWorktreeExecOptions = {},
+  operation?: WorktreePreparationOperation
 ): Promise<void> {
-  const refreshOptions = { ...options, timeout: options.timeout ?? resolveWorktreeAddTimeoutMs() }
-  await withRepoRefMaintenancePaused('worktree-prepare', async () => {
+  const refreshOptions = {
+    ...(operation?.executionOptions() ?? options),
+    timeout: options.timeout ?? resolveWorktreeAddTimeoutMs()
+  }
+  const run = async (): Promise<void> => {
     const lockPath = await verifyWorktreePreparationLock(preparedPath, lockReason, refreshOptions)
     const [target, prepared] = await Promise.allSettled([
       gitExecFileAsync(
@@ -46,6 +51,10 @@ export async function refreshPreparedWorktreeTip(
       return
     }
     const checkoutWorkersArgs = await checkoutWorkersGitArgs(preparedPath, refreshOptions)
+    refreshOptions.signal?.throwIfAborted()
+    if (operation?.isClaimed) {
+      return
+    }
     try {
       // Reset preserves detached HEAD and does not run post-checkout hooks before submit.
       await runWithGitReadCacheInvalidation(() =>
@@ -64,5 +73,8 @@ export async function refreshPreparedWorktreeTip(
     } finally {
       notifyPreparedWorktreeMutation(repoPath)
     }
-  })
+  }
+  await (operation
+    ? operation.withMaintenancePaused(run)
+    : withRepoRefMaintenancePaused('worktree-prepare', run))
 }

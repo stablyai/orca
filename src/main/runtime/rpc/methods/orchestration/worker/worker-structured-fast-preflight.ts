@@ -1,5 +1,5 @@
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../native-chat/agent-session-wire/structured-agent-session-option-intent'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredAgentSessionOptionOverridesRefusal } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-intent'
 import {
   codexFastServiceTier,
   CODEX_DEFAULT_SERVICE_TIER

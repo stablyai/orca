@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTeamsLabels, useTeamsMembers, useTeamsStates } from '@/hooks/useIssueMetadata'
-import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
 import { translate } from '@/i18n/i18n'
 import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,

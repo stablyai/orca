@@ -11,8 +11,8 @@ import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
 import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
 import { basename } from '@/lib/path'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
@@ -23,7 +23,7 @@ import {
   acquireTerminalArtifactGrant,
   pinTerminalArtifactGrantTarget,
   type TerminalArtifactGrantTarget
-} from '@/runtime/runtime-terminal-artifact-grant'
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 
 /** The host a grant reads from, spelled as the editor's route for that host. */
 export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {

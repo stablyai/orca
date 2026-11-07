@@ -1,15 +1,15 @@
 import { createContext } from 'react'
 import { isWorktreeConnectionResolved } from '@/lib/connection-context'
-import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/terminal-path-existence-batch'
+import { createTerminalPathExistenceBatch } from '@/components/terminal-pane/links/files/terminal-path-existence-batch'
 import {
   mayCheckFileLinkTargetUnprompted,
   resolveFileLinkTarget,
   type FileLinkHost,
   type FileLinkPathExistence,
   type FileLinkTarget
-} from '@/components/terminal-pane/terminal-file-link-target'
-import { getTerminalFileContext } from '@/components/terminal-pane/terminal-file-path-mapping'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+} from '@/components/terminal-pane/links/files/terminal-file-link-target'
+import { getTerminalFileContext } from '@/components/terminal-pane/host-files/terminal-file-path-mapping'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence

@@ -9,7 +9,7 @@ import { withWorkerStartNext } from '../receipt-next'
 import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
-} from '../../orchestration-worker-start-mode'
+} from '../structured-workers/orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import {
   assertHelperStartScope,
@@ -18,7 +18,7 @@ import {
 } from './worker-start-authority'
 import { parseTaskDeps } from './task-deps-argument'
 import { resolveWorkerRoleParams } from '../../../../../../shared/orchestration-worker-roles'
-import { FederationWorkerLaunchParams } from '../federation/federation-start-schema'
+import { FederationWorkerLaunchParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
 import { WorkerStartParams } from '../../../../../../shared/rpc-contract/orchestration-worker-start-params'
 import {

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
-import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
+import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
 
 const PROMPT_CARD_WANTS_FOCUS_SELECTOR = '[data-native-chat-prompt-card-focus]'
 const PROMPT_CARD_FOCUS_TARGET_SELECTOR =

@@ -1,6 +1,6 @@
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
+import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
 import { useCallback, useEffect } from 'react'
@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import {
   markPRCommentThreadResolved,
   restorePRCommentThreadSnapshot
-} from '@/lib/pr-comment-thread-resolution'
+} from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
 import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
 import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
@@ -18,8 +18,8 @@ import { checksPanelReviewStableKey, clearPendingPRCommentAiAck } from './pr-com
 import type { PRComment } from '../../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
-import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/error-message'
 import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'

@@ -8,7 +8,7 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { selectExactWorkerProviderSession } from '../../worker-provider-session'
+import { selectExactWorkerProviderSession } from '../../workers/transcripts/worker-provider-session'
 import { sealedChildEnv } from '../../../agent-session/environment/structured-session-child-env.test-support'
 import {
   StructuredWorkerIdentityRegistry,

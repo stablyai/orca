@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import type { TaskPageDetailRoutingModel } from '../use-task-page-detail-routing'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { buildLinearIssueWorkspaceAttachmentIndex } from '@/lib/linear-issue-workspace-attachment'
+import { buildLinearIssueWorkspaceAttachmentIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import {
   collectLinkedLinearIssueRefsFromWorktrees,
   linkedLinearIssueRefsSignature

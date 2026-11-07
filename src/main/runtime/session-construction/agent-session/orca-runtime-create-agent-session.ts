@@ -84,6 +84,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             ? ['serviceTier', request.launchPreferences.serviceTier]
             : []),
           request.startupCwd ?? null,
+          ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
@@ -160,6 +161,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
               ? ['serviceTier', request.launchPreferences.serviceTier]
               : []),
             startupCwd ?? null,
+            ...(request.trustWorktreeId ? [request.trustWorktreeId] : []),
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
@@ -215,6 +217,7 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
           cwd: startupCwd,
+          ...(request.trustWorktreeId ? { trustWorktreeId: request.trustWorktreeId } : {}),
           presentation: request.presentation ?? 'background',
           tabId: operationTabId,
           leafId: operationLeafId,

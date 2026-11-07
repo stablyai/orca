@@ -14,8 +14,15 @@ import type {
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 import { TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS } from './terminal-interactive-probe-budget'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import {
+  activeSessionWorkspaceId,
+  activeWorkspaceSelectorScopes,
+  resolveRemoteWorkspaceContext,
+  type ActiveWorkspaceContext,
+  type PairedWorkspaceContextSource
+} from './active-worktree-context-fallback'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
-import { selectExactWorkerProviderSession } from '../../orchestration/worker-provider-session'
+import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
@@ -119,14 +126,18 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
   }
 
-  // Prefer stored workspace selection, then the current renderer graph.
-  async resolveActiveWorktreeContext(): Promise<{
-    worktreeId: string
-    path: string
-    branch: string
-    displayName: string
-  } | null> {
-    let worktreeId = this.store?.getWorkspaceSession?.()?.activeWorktreeId ?? null
+  /** Paired servers' workspace rows the desktop holds; set while relay hosts are attached. */
+  private pairedWorkspaceContexts: PairedWorkspaceContextSource | null = null
+
+  setPairedWorkspaceContextSource(source: PairedWorkspaceContextSource | null): void {
+    this.pairedWorkspaceContexts = source
+  }
+
+  /** The focused workspace, preferring stored selection, then the renderer graph. */
+  async resolveActiveWorktreeContext(): Promise<ActiveWorkspaceContext | null> {
+    const session = this.store?.getWorkspaceSession?.()
+    const hostId = session?.activeWorkspaceExecutionHostId ?? undefined
+    let worktreeId = activeSessionWorkspaceId(session)
     if (!worktreeId && this.graphStatus === 'ready') {
       for (const tab of this.tabs.values()) {
         if (tab.activeLeafId && tab.worktreeId) {
@@ -138,17 +149,25 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     if (!worktreeId) {
       return null
     }
-    try {
-      const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`)
-      return {
-        worktreeId: resolved.id,
-        path: resolved.git.path,
-        branch: resolved.git.branch,
-        displayName: resolved.displayName
+    for (const scope of activeWorkspaceSelectorScopes(hostId)) {
+      try {
+        const resolved = await this.resolveWorkspaceSelector(`id:${worktreeId}`, scope)
+        return {
+          worktreeId: resolved.id,
+          path: resolved.git.path,
+          branch: resolved.git.branch,
+          displayName: resolved.displayName
+        }
+      } catch {
+        // A remote worktree is not in the local catalog; project what the stored row knows.
       }
-    } catch {
-      return null
     }
+    return resolveRemoteWorkspaceContext(
+      this.store,
+      this.pairedWorkspaceContexts,
+      worktreeId,
+      hostId
+    )
   }
 
   getExactWorkerProviderSession(

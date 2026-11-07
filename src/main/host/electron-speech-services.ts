@@ -1,6 +1,7 @@
 import { net } from 'electron'
 import { ModelManager } from '../speech/model-manager'
 import { SttService } from '../speech/stt-service'
+import { spawnSttUtilityProcess } from '../speech/stt-worker-utility-process'
 import type { SpeechServiceFactories } from '../speech/speech-runtime-service'
 import type {
   DownloadIncomingMessage,
@@ -40,5 +41,5 @@ export const openElectronSpeechDownloadRequest: OpenSpeechDownloadRequest = (url
 export const electronSpeechServiceFactories: SpeechServiceFactories = {
   createModelManager: (customModelsDir) =>
     new ModelManager(customModelsDir, openElectronSpeechDownloadRequest),
-  createSttService: (models) => new SttService(models)
+  createSttService: (models) => new SttService(models, spawnSttUtilityProcess)
 }

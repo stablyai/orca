@@ -19,7 +19,7 @@ import type {
   JiraIssueSortDirection,
   JiraPrioritiesBySite
 } from '../../jira-issue-sorter'
-import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-detail-client'
+import { jiraListPrioritiesForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
 import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
 import {
@@ -32,7 +32,7 @@ import {
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
 import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'

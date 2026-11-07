@@ -3,7 +3,9 @@ import { getPublishedArtifactLink } from './artifact-published-link-client'
 
 const mocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()

@@ -1,11 +1,11 @@
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { retireTerminalSurfaceFromPersistence } from './terminal/surface/mobile-session-terminal-persistence-retirement'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   planLegacyWorkerTerminalRecovery,
   type LegacyWorkerTerminalRecoveryPlan
-} from './orchestration/orchestration-legacy-worker-terminal-recovery'
+} from './orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 import type { RuntimeStore } from './runtime-store-contract'
 import type {
   LegacyWorkerRecoveryCandidate,

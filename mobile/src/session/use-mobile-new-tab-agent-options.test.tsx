@@ -1,5 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -8,17 +9,23 @@ import {
 } from '../../../src/shared/protocol-version'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
+import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
+import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 
 const claude: RpcResponse = { id: '1', ok: true, result: ['claude'] }
-const codex: RpcResponse = { id: '1', ok: true, result: ['codex'] }
 
 type FakeHost = {
   agents: () => RpcResponse | Promise<RpcResponse>
   settings?: unknown
+  connectedAt?: number
 }
 
-function createClient(host: FakeHost): RpcClient & { sendRequest: ReturnType<typeof vi.fn> } {
+type FakeClient = RpcClient & { sendRequest: ReturnType<typeof vi.fn> }
+
+function createClient(host: FakeHost): FakeClient {
   const sendRequest = vi.fn(async (method: string) => {
     if (method === 'settings.get') {
       return { ok: true, result: { settings: host.settings ?? {} } }
@@ -32,126 +39,156 @@ function createClient(host: FakeHost): RpcClient & { sendRequest: ReturnType<typ
     }
     throw new Error(`unexpected request: ${method}`)
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test double implements the two members the loader calls.
-  return { sendRequest, subscribe: vi.fn(() => () => {}) } as unknown as RpcClient & {
-    sendRequest: ReturnType<typeof vi.fn>
-  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test double implements the members the hook and loader call.
+  return {
+    sendRequest,
+    subscribe: vi.fn(() => () => {}),
+    getState: () => 'connected',
+    onStateChange: () => () => {},
+    getLastConnectedAt: () => host.connectedAt ?? null
+  } as unknown as FakeClient
 }
 
-function probes(client: { sendRequest: ReturnType<typeof vi.fn> }): unknown[] {
+function probes(client: FakeClient): unknown[] {
   return client.sendRequest.mock.calls
     .map(([method]) => method)
     .filter((method) => method !== 'settings.get')
 }
 
-function mountDrawer(hostId: string) {
-  const setLoadState = vi.fn()
-  const setOptions = vi.fn()
-  function Probe({ client, open }: { client: RpcClient; open: boolean }) {
+type DrawerProps = {
+  client: RpcClient
+  open: boolean
+  prefetch?: boolean
+  executionHost?: ExecutionHostId
+}
+
+// One page document: every mount shares its query client, as screens in one document do.
+function mountDrawer(queryClient: QueryClient) {
+  const states: MobileNewTabAgentLoadState[] = []
+  let options: MobileNewTabAgentOption[] = []
+  function Probe({ client, open, prefetch = false }: DrawerProps) {
     useMobileNewTabAgentOptions({
       client,
       connState: 'connected',
-      hostId,
+      hostId: 'host-1',
       hostCapabilities: [PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY],
       worktreeId: 'folder:fw-1',
       open,
-      setLoadState,
-      setOptions
+      prefetch,
+      setLoadState: (state) => states.push(state),
+      setOptions: (next) => {
+        options = next
+      }
     })
     return null
   }
   let renderer: ReactTestRenderer | undefined
-  const render = async (
-    client: RpcClient,
-    open: boolean,
-    executionHost?: ExecutionHostId
-  ): Promise<void> => {
-    const tree = (
-      <WorkspaceExecutionHostContext.Provider value={executionHost}>
-        <Probe client={client} open={open} />
-      </WorkspaceExecutionHostContext.Provider>
-    )
-    await act(async () => {
-      if (renderer) {
-        renderer.update(tree)
-      } else {
-        renderer = create(tree)
-      }
-    })
+  return {
+    async render(props: DrawerProps): Promise<void> {
+      const tree = (
+        <QueryClientProvider client={queryClient}>
+          <WorkspaceExecutionHostContext.Provider value={props.executionHost}>
+            <Probe {...props} />
+          </WorkspaceExecutionHostContext.Provider>
+        </QueryClientProvider>
+      )
+      act(() => {
+        if (renderer) {
+          renderer.update(tree)
+        } else {
+          renderer = create(tree)
+        }
+      })
+      await settleQueryNotifications()
+    },
+    state: () => states.at(-1),
+    states,
+    options: () => options,
+    unmount: () => act(() => renderer?.unmount())
   }
-  const states = (): unknown[] => setLoadState.mock.calls.map(([state]) => state)
-  const reset = (): void => {
-    setLoadState.mockClear()
-    setOptions.mockClear()
-  }
-  return { render, states, reset, setOptions, unmount: () => renderer?.unmount() }
 }
 
+let queryClient: QueryClient
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000_000)
+  queryClient = createOrcaQueryClient()
+})
+
+afterEach(() => {
+  queryClient.clear()
+  vi.useRealTimers()
+})
+
 describe('useMobileNewTabAgentOptions', () => {
-  it('#21856: reopening the drawer shows the last agents at once and does not detect again', async () => {
-    const drawer = mountDrawer('host-reopen')
+  it('#21856: reopening the drawer shows the last agents at once and reads settings again', async () => {
     const host: FakeHost = { agents: () => ({ id: '1', ok: true, result: ['claude', 'codex'] }) }
     const client = createClient(host)
-    await drawer.render(client, true)
-    expect(drawer.states()).toEqual(['loading', 'loaded'])
-
-    await drawer.render(client, false)
-    host.settings = { disabledTuiAgents: ['codex'] }
-    drawer.reset()
-    await drawer.render(client, true)
-
-    expect(drawer.states()).toEqual(['loaded', 'loaded'])
-    expect(drawer.setOptions.mock.calls[0]?.[0]).toEqual([
+    const drawer = mountDrawer(queryClient)
+    await drawer.render({ client, open: true })
+    expect(drawer.options()).toEqual([
       { agent: 'claude', label: 'Claude' },
       { agent: 'codex', label: 'Codex' }
     ])
-    expect(drawer.setOptions.mock.lastCall?.[0]).toEqual([{ agent: 'claude', label: 'Claude' }])
+
+    await drawer.render({ client, open: false })
+    host.settings = { disabledTuiAgents: ['codex'] }
+    drawer.states.length = 0
+    await drawer.render({ client, open: true })
+
+    expect(drawer.states).not.toContain('loading')
+    expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
     expect(probes(client)).toEqual(['preflight.detectAgents'])
     drawer.unmount()
   })
 
   it("does not offer one relayed server's agents for another's workspace with the same id", async () => {
-    const drawer = mountDrawer('host-relay')
+    const drawer = mountDrawer(queryClient)
     const answered = createClient({ agents: () => claude })
-    await drawer.render(answered, true, 'runtime:vm-a')
-    await drawer.render(answered, false, 'runtime:vm-a')
-    drawer.reset()
+    await drawer.render({ client: answered, open: true, executionHost: 'runtime:vm-a' })
+    await drawer.render({ client: answered, open: false, executionHost: 'runtime:vm-a' })
 
-    await drawer.render(
-      createClient({ agents: () => new Promise<RpcResponse>(() => {}) }),
-      true,
-      'runtime:vm-b'
-    )
+    await drawer.render({
+      client: createClient({ agents: () => new Promise<RpcResponse>(() => {}) }),
+      open: true,
+      executionHost: 'runtime:vm-b'
+    })
 
-    expect(drawer.states()).toEqual(['loading'])
-    expect(drawer.setOptions.mock.calls).toEqual([[[]]])
+    expect(drawer.state()).toBe('loading')
+    expect(drawer.options()).toEqual([])
     drawer.unmount()
   })
 
-  it("refreshes the host's agents on a new screen, and shows a refusal over the cached ones", async () => {
-    const first = mountDrawer('host-refusal')
-    const host: FakeHost = { agents: () => claude }
+  it('refreshes a list an earlier screen loaded once per connection, and shows a refusal over it', async () => {
+    const host: FakeHost = { agents: () => claude, connectedAt: 1 }
     const client = createClient(host)
-    await first.render(client, true)
-    first.unmount()
+    for (let screen = 0; screen < 3; screen++) {
+      vi.advanceTimersByTime(1_000)
+      const earlier = mountDrawer(queryClient)
+      await earlier.render({ client, open: true })
+      earlier.unmount()
+    }
+    expect(probes(client)).toEqual(['preflight.detectAgents', 'preflight.refreshAgents'])
+
+    host.connectedAt = 2
     host.agents = () => ({
       id: '1',
       ok: false,
       error: { code: 'runtime_error', message: WORKSPACE_ON_OTHER_RUNTIME },
       _meta: { runtimeId: 'r' }
     })
+    vi.advanceTimersByTime(1_000)
+    const drawer = mountDrawer(queryClient)
+    await drawer.render({ client, open: true })
 
-    const drawer = mountDrawer('host-refusal')
-    await drawer.render(client, true)
-
-    expect(probes(client)).toEqual(['preflight.detectAgents', 'preflight.refreshAgents'])
-    expect(drawer.states()).toEqual(['loaded', 'other-runtime'])
-    expect(drawer.setOptions.mock.lastCall?.[0]).toEqual([])
-    host.agents = () => codex
-    await drawer.render(client, false)
-    drawer.reset()
-    await drawer.render(client, true)
-    expect(drawer.states()[0]).toBe('loading')
+    expect(probes(client)).toEqual([
+      'preflight.detectAgents',
+      'preflight.refreshAgents',
+      'preflight.refreshAgents'
+    ])
+    expect(drawer.states).toEqual(['loaded', 'other-runtime'])
+    expect(drawer.options()).toEqual([])
     drawer.unmount()
   })
 })

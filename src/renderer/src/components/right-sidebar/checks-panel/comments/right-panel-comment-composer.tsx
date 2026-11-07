@@ -1,3 +1,8 @@
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import {
+  useGitHubImagePending,
+  type GitHubImageIntake
+} from '@/components/github/use-github-image-uploads'
 import { ImeTextarea } from '@/lib/ime-text-field'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
@@ -22,6 +27,7 @@ export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: s
 type MarkdownAction = 'bold' | 'italic' | 'code' | 'quote' | 'list'
 
 type RightPanelCommentComposerProps = {
+  imageUploadAddress?: GitHubImageIntake['address']
   placeholder: string
   submitLabel: string
   onSubmit: (body: string) => Promise<RightPanelCommentSubmitResult>
@@ -73,6 +79,7 @@ function applyMarkdownAction(value: string, start: number, end: number, action: 
 }
 
 export function RightPanelCommentComposer({
+  imageUploadAddress,
   placeholder,
   submitLabel,
   onSubmit,
@@ -83,9 +90,15 @@ export function RightPanelCommentComposer({
   onCancel
 }: RightPanelCommentComposerProps): React.JSX.Element {
   const [body, setBody] = useState('')
+  const imagePending = useGitHubImagePending()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const images = useGitHubTextareaImages(textareaRef, body, setBody, {
+    address: imageUploadAddress,
+    onPending: imagePending.onPending,
+    enabled: !!imageUploadAddress && !disabled && !submitting
+  })
   const autoFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isMac = navigator.userAgent.includes('Mac')
@@ -108,13 +121,23 @@ export function RightPanelCommentComposer({
     return () => clearRightPanelCommentFocusTimer(autoFocusTimerRef)
   }, [autoFocus])
 
-  const setTextareaRef = useCallback((node: HTMLTextAreaElement | null) => {
-    textareaRef.current = node
-    if (node === null) {
-      // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
-      clearRightPanelCommentFocusTimer(selectionTimerRef)
-    }
-  }, [])
+  const { attachDrop, change: changeImageBody, value: imageDisplayValue } = images
+  const { pendingRef: imagePendingRef } = imagePending
+  const hasImageUpload = !!imageUploadAddress
+  const setTextareaRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      if (hasImageUpload) {
+        attachDrop(node)
+      } else {
+        textareaRef.current = node
+      }
+      if (node === null) {
+        // Cancel selection restoration on unmount so toolbar callbacks cannot focus a stale textarea.
+        clearRightPanelCommentFocusTimer(selectionTimerRef)
+      }
+    },
+    [attachDrop, hasImageUpload]
+  )
 
   const stopPropagation = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -126,8 +149,13 @@ export function RightPanelCommentComposer({
       if (!textarea) {
         return
       }
-      const next = applyMarkdownAction(body, textarea.selectionStart, textarea.selectionEnd, action)
-      setBody(next.value)
+      const next = applyMarkdownAction(
+        imageDisplayValue,
+        textarea.selectionStart,
+        textarea.selectionEnd,
+        action
+      )
+      changeImageBody(next.value)
       scheduleRightPanelCommentFocusTimer(selectionTimerRef, () => {
         if (!textarea.isConnected) {
           return
@@ -136,12 +164,12 @@ export function RightPanelCommentComposer({
         textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
       })
     },
-    [body]
+    [imageDisplayValue, changeImageBody]
   )
 
   const submit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
-    if (bodyState.status === 'empty' || submitting || disabled) {
+    if (bodyState.status === 'empty' || submitting || disabled || imagePendingRef.current) {
       return
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
@@ -168,7 +196,7 @@ export function RightPanelCommentComposer({
     } finally {
       setSubmitting(false)
     }
-  }, [body, disabled, onCancel, onSubmit, submitting])
+  }, [body, disabled, onCancel, onSubmit, submitting, imagePendingRef])
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   const handleKeyDown = useCallback(
@@ -240,14 +268,16 @@ export function RightPanelCommentComposer({
     >
       <ImeTextarea
         ref={setTextareaRef}
-        value={body}
+        value={imageDisplayValue}
+        onPaste={images.onPaste}
+        onBeforeInput={images.onBeforeInput}
         rows={3}
         className="block max-h-44 min-h-20 w-full min-w-0 resize-none bg-transparent px-2.5 py-2 text-[12px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-60"
         placeholder={placeholder}
         disabled={disabled || submitting}
         aria-invalid={Boolean(error)}
         title={disabled ? disabledReason : undefined}
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => changeImageBody(event.target.value)}
         onKeyDown={handleKeyDown}
         onClick={stopPropagation}
       />
@@ -292,7 +322,7 @@ export function RightPanelCommentComposer({
               type="button"
               size="xs"
               aria-label={submitLabel}
-              disabled={disabled || submitting || !canSubmitComment}
+              disabled={disabled || submitting || imagePending.pending || !canSubmitComment}
               onClick={() => void submit()}
             >
               {submitting
