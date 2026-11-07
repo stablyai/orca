@@ -77,7 +77,6 @@ type ProviderUsageSlice<
   Record<`set${Name}UsageScope`, (scope: T['scope']) => Promise<void>> &
   Record<`set${Name}UsageRange`, (range: T['range']) => Promise<void>> &
   Record<`fetch${Name}Usage`, (opts?: { forceRefresh?: boolean }) => Promise<void>> &
-  Record<`enable${Name}Usage`, () => Promise<void>> &
   Record<`refresh${Name}Usage`, () => Promise<void>>
 
 type UsageProviderConfig<
@@ -144,6 +143,13 @@ function createUsageProviderSlice<
     const fetchUsage = async (opts?: { forceRefresh?: boolean }): Promise<void> => {
       try {
         const api = config.getApi()
+        // Why: the user can disable tracking while this fetch awaits; a stale
+        // enabled snapshot must not flip the toggle back on.
+        const readEnabledSnapshot = async (): Promise<T['snapshot'] | null> => {
+          const { scope, range } = read()
+          const snapshot = await api.getSnapshot({ scope, range, limit: 10 })
+          return read().scanState?.enabled === true ? snapshot : null
+        }
         const scanState = (await api.getScanState()) as T['snapshot']['scanState'] | undefined
         // Desktop-only usage APIs resolve undefined in paired web clients.
         if (!scanState) {
@@ -169,12 +175,10 @@ function createUsageProviderSlice<
           return
         }
 
-        const selection = read()
-        const snapshot = await api.getSnapshot({
-          scope: selection.scope,
-          range: selection.range,
-          limit: 10
-        })
+        const snapshot = await readEnabledSnapshot()
+        if (!snapshot) {
+          return
+        }
         if (
           snapshot.scanState.lastScanCompletedAt !== null ||
           config.hasCachedData(snapshot.scanState)
@@ -191,14 +195,10 @@ function createUsageProviderSlice<
         }
 
         await api.refresh({ force: opts?.forceRefresh ?? false })
-        const refreshedSelection = read()
-        update(
-          await api.getSnapshot({
-            scope: refreshedSelection.scope,
-            range: refreshedSelection.range,
-            limit: 10
-          })
-        )
+        const refreshedSnapshot = await readEnabledSnapshot()
+        if (refreshedSnapshot) {
+          update(refreshedSnapshot)
+        }
       } catch (error) {
         console.error(`Failed to fetch ${config.name} usage:`, error)
       }
@@ -258,7 +258,6 @@ function createUsageProviderSlice<
         await fetchUsage()
       },
       [`fetch${config.name}Usage`]: fetchUsage,
-      [`enable${config.name}Usage`]: () => setEnabled(true),
       [`refresh${config.name}Usage`]: () => fetchUsage({ forceRefresh: true })
     } as ProviderUsageSlice<Prefix, Name, T>
   }
