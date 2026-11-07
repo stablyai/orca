@@ -132,6 +132,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
       onSettingsChanged: (listener) => store.onSettingsChanged(listener),
       systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
       onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+      onAppFocused: (listener) => app.on('browser-window-focus', listener),
       userDataPath: app.getPath('userData')
     })
   }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
