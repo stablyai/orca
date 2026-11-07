@@ -3,7 +3,7 @@ import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { makePRRefreshWorktree } from '@/store/slices/github-slice-test-harness'
 import { describe, expect, it } from 'vitest'
 
-import { visibleReviewCardIds } from './use-visible-review-refresh'
+import { visibleGitWorktreeCards, visibleReviewCardIds } from './use-visible-review-refresh'
 
 function row(id: string): WorktreeItemRow {
   return {
@@ -40,5 +40,23 @@ describe('actual visible review cards', () => {
         viewportHeight: 100
       })
     ).toEqual(['visible'])
+  })
+  it('keeps branchless checkouts for change reads but not for review refresh', () => {
+    const detached = row('detached')
+    detached.worktree = makePRRefreshWorktree({ id: 'detached', branch: '' })
+    const folder = row('folder')
+    folder.repo = folder.repo && { ...folder.repo, kind: 'folder' }
+    const args = {
+      enabled: true,
+      renderRows: [row('branch'), detached, folder],
+      virtualItems: [0, 1, 2].map(virtualItem),
+      viewportTop: 0,
+      viewportHeight: 300
+    }
+    expect(visibleGitWorktreeCards(args).map((worktree) => worktree.id)).toEqual([
+      'branch',
+      'detached'
+    ])
+    expect(visibleReviewCardIds(args)).toEqual(['branch'])
   })
 })
