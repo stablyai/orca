@@ -382,8 +382,16 @@ internal class OrcaMobileWebShellView(
 
     /** Return true to avoid killing the app; destroy the dead WebView and leave retry policy to the caller. */
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+      // Android ends every WebView's renderer together; off-screen or low-memory losses are the OS's doing, not the page's.
+      val background = !isShown || windowVisibility != View.VISIBLE
       destroyWebView()
-      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+      emit(
+        loadState.failed(
+          MobileWebShellFailureReason.RENDER_PROCESS_GONE,
+          background = background,
+          crashed = detail.didCrash()
+        )
+      )
       return true
     }
   }

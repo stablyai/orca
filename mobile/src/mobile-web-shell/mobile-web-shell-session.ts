@@ -256,7 +256,7 @@ export function reduceMobileWebShellSession(
         ? onUpdateFailed(session, event.cause)
         : onDownloadFailed(session, event.cause)
     case 'shell-failed':
-      return reduceShellFailed(session, event.reason, refetchAfterDelete)
+      return reduceShellFailed(session, event.reason, refetchAfterDelete, event.reclaimed === true)
     case 'remounted':
     case 'document-started':
     case 'document-loaded':

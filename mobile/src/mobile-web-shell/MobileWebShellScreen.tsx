@@ -344,7 +344,7 @@ export function MobileWebShellScreen({
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {
-            reportShellFailure(parsed.reason)
+            reportShellFailure(parsed.reason, parsed.reclaimed === true)
             return
           }
           // Load completion proves only response commit; start waiting for the page’s own first paint here.
