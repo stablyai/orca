@@ -99,6 +99,7 @@ export function captureNativeChatDraftRemovalScopes(
     [...scopes].map((scope) => {
       const record = records.get(scope)
       const edit = submissionsOnly ? undefined : ephemeralDrafts.get(scope)
+      const derivedJournal: unknown[] = []
       const operations = submissionsOnly
         ? []
         : [
@@ -172,7 +173,7 @@ export function captureNativeChatDraftRemovalScopes(
           ),
           foreignRead: nativeChatComposerDraftForeignRead(scope),
           attempts,
-          derivedJournal: [] as unknown[],
+          derivedJournal,
           transfers: transfersByDestination.get(scope) ?? [],
           pastes: pastesByScope.get(scope) ?? [],
           journalHosts: new Set(

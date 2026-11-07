@@ -2,15 +2,25 @@
 export function nativeChatDraftTestDatabase(): IDBFactory {
   const rows = new Map<string, unknown>()
   const request = (result: unknown) => {
-    const pending = { result, onsuccess: null as (() => void) | null }
+    const pending: { result: unknown; onsuccess: (() => void) | null } = { result, onsuccess: null }
     queueMicrotask(() => pending.onsuccess?.())
     return pending
   }
   const database = {
     objectStoreNames: { contains: () => true },
     transaction: () => {
-      const transaction = {
-        oncomplete: null as (() => void) | null,
+      const transaction: {
+        oncomplete: (() => void) | null
+        commit: () => void
+        objectStore: () => {
+          get: (key: string) => ReturnType<typeof request>
+          getAllKeys: () => ReturnType<typeof request>
+          getAll: () => ReturnType<typeof request>
+          put: (value: unknown, key: string) => Map<string, unknown>
+          delete: (key: string) => boolean
+        }
+      } = {
+        oncomplete: null,
         commit: () => queueMicrotask(() => transaction.oncomplete?.()),
         objectStore: () => ({
           get: (key: string) => request(structuredClone(rows.get(key))),
