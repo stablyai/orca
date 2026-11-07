@@ -45,6 +45,7 @@ import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-histo
 import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
+import { useNativeChatRailWake } from './use-native-chat-rail-wake'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
@@ -287,10 +288,12 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
+  const { railRef, wake: wakeRail } = useNativeChatRailWake()
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
-  }, [beginNavigation, recordReaderScroll])
+    wakeRail()
+  }, [beginNavigation, recordReaderScroll, wakeRail])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -382,6 +385,7 @@ export function NativeChatMessageList({
             </div>
             <NativeChatMessageRail
               rail={rail}
+              railRef={railRef}
               scrollRef={scrollRef}
               onSelect={navigation.selectRailItem}
               onReaderScroll={readerInput.railWheel}
