@@ -51,7 +51,7 @@ export async function addIssueComment(
       ],
       { ...ghOptions, stdin: JSON.stringify({ body }) }
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       id?: number
       node_id?: string | null
       user: { login: string; avatar_url: string; type?: string } | null
@@ -59,7 +59,7 @@ export async function addIssueComment(
       body_html?: string | null
       created_at?: string
       html_url?: string
-    }
+    } = JSON.parse(stdout)
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return codeHostFailure('github.unexpectedResponse')
     }

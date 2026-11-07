@@ -89,7 +89,7 @@ it.each([true, false])(
     )
     fireEvent.click(image.closest('button')!)
     const editor = screen.getByRole('textbox')
-    expect((editor as HTMLTextAreaElement).value).toBe(body)
+    expect(editor).toHaveProperty('value', body)
     fireEvent.change(editor, { target: { value: edited } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() =>

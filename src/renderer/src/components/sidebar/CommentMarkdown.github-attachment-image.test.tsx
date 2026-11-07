@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, startTransition, Suspense } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
@@ -18,6 +18,13 @@ const attachmentUrl =
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
+
+function PendingRender({ waitFor }: { waitFor: Promise<void> | null }): null {
+  if (waitFor) {
+    throw waitFor
+  }
+  return null
+}
 
 function renderCommentMarkdown(
   content: string,
@@ -186,6 +193,31 @@ describe('CommentMarkdown GitHub attachment images', () => {
       )
     }
   )
+  it('retains the committed image when a new candidate render suspends', () => {
+    const first = 'https://private-user-images.githubusercontent.com/1/image.png?jwt=FIRST'
+    const fresh = 'https://private-user-images.githubusercontent.com/1/image.png?jwt=FRESH'
+    const pending = new Promise<void>(() => {})
+    const mounted = renderCommentMarkdown('')
+    const body = (source: string, waitFor: Promise<void> | null) => (
+      <Suspense fallback={null}>
+        <CommentMarkdown
+          variant="document"
+          content={`![shot](${attachmentUrl})`}
+          bodyImageUrls={{ [attachmentUrl]: source }}
+        />
+        <PendingRender waitFor={waitFor} />
+      </Suspense>
+    )
+    act(() => root?.render(body(first, null)))
+    const image = mounted.querySelector('img')!
+    act(() => startTransition(() => root?.render(body(fresh, pending))))
+    expect(mounted.querySelector('img')).toBe(image)
+    act(() => image.dispatchEvent(new window.Event('load')))
+    act(() => root?.render(body(fresh, null)))
+    expect(mounted.querySelector('img')).toBe(image)
+    expect(image.src).toBe(first)
+  })
+
   it('preserves in-app image clicks for unrelated asset URLs', () => {
     const mounted = renderCommentMarkdown('')
     const onLinkClick = vi.fn()

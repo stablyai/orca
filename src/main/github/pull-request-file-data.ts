@@ -72,12 +72,12 @@ export async function getPRMetadata(
       ['api', '--cache', '60s', `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}`],
       ghOptions
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       node_id?: string
       body?: string | null
       head?: { sha?: string }
       base?: { sha?: string }
-    }
+    } = JSON.parse(stdout)
     const metadata = {
       body: data.body ?? '',
       ...(data.head?.sha ? { headSha: data.head.sha } : {}),

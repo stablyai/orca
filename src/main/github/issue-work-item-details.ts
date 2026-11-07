@@ -188,11 +188,11 @@ export async function getIssueBodyAndComments(
         ),
         getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
       ])
-      const issue = JSON.parse(issueResult.stdout) as {
+      const issue: {
         node_id?: string
         body?: string | null
         assignees?: { login: string }[]
-      }
+      } = JSON.parse(issueResult.stdout)
       type RESTComment = {
         node_id?: string
         id: number

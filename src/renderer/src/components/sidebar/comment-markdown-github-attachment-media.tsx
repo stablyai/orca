@@ -103,7 +103,9 @@ function AttachmentImage({
   const [failedSource, setFailedSource] = React.useState<string | null>(null)
   const displaySrc = loadedSource ?? candidate
   const activeSource = React.useRef(displaySrc)
-  activeSource.current = displaySrc
+  React.useLayoutEffect(() => {
+    activeSource.current = displaySrc
+  }, [displaySrc])
   const label = alt?.trim() || src
 
   if (failedSource === displaySrc || (!loadedSource && failedSource && candidate === src)) {
