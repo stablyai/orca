@@ -9,8 +9,9 @@ import {
 } from './claude-code-theme-sync'
 
 const SYNC_DEBOUNCE_MS = 250
-// Why: Claude Code reloads a theme only on a file event, and a congested macOS event stream drops some.
-const RELOAD_RETRY_DELAYS_MS = [1_500, 5_000, 15_000, 45_000]
+// Why: Claude Code reloads a theme only on a file event, and macOS drops some of them under load;
+// each later replace is another chance, spaced out to outlast a stalled event stream.
+const RELOAD_RETRY_DELAYS_MS = [1_500, 5_000, 15_000, 45_000, 120_000, 300_000]
 // Catches a theme picked in Claude Code, a new account home, or a pass that failed, without polling.
 const FOCUS_RESYNC_MS = 60_000
 
