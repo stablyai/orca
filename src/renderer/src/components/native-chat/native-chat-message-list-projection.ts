@@ -5,7 +5,10 @@ import {
   type NativeChatTranscriptProjection
 } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatTurnJournal } from '../../../../shared/native-chat/transcript/native-chat-turn-membership'
-import { compareMessages, orderMessages } from './native-chat-session-assembler'
+import {
+  compareNativeChatDisplayMessages as compareMessages,
+  orderNativeChatDisplayMessages as orderMessages
+} from '../../../../shared/native-chat/transcript/native-chat-message-order'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {
   // Most rows retain input identity; only folded assistant runs need field comparison.

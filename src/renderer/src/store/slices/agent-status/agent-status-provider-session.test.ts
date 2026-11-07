@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import '../../../../../shared/sleeping-record-legacy-pane-key'
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import '../../../../../shared/workspace-layout/stable-pane-id'
 
 const PI_COMPATIBLE_CASES = [

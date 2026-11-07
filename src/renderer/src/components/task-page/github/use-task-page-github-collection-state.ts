@@ -3,8 +3,8 @@ import type { TaskPageProviderStateModel } from '../use-task-page-provider-state
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { sortWorkItemsByNumber } from '../../../../../shared/work-items'
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import type { GitHubSourceCollections } from '@/store/github/source-collections'
-import { githubCollectionScope } from '@/store/github/source-collections'
+import type { GitHubSourceCollections } from '@/store/github/sources/source-collections'
+import { githubCollectionScope } from '@/store/github/sources/source-preference-ownership'
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 import { buildTaskPageGitHubResumeContextKey } from './task-page-github-resume-cache'
 

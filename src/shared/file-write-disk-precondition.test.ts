@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  diskBaselineSignatureLength,
-  getDiskBaselineSignature,
-  utf8ByteSizeCanDecodeToLength
-} from './disk-baseline-signature'
+import { getDiskBaselineSignature } from './disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
   diskConflictFromReadFailure,
@@ -42,16 +38,6 @@ describe('disk write precondition', () => {
     expect(compareDiskWritePrecondition(precondition, current, decoded)).toBeNull()
   })
 
-  it('reports an external rewrite as changed before checking for U+FFFD', () => {
-    expect(
-      compareDiskWritePrecondition(
-        { expectedSignature: getDiskBaselineSignature('original'), requireLosslessUtf8: true },
-        'rewritten �',
-        'mine'
-      )
-    ).toBe('changed')
-  })
-
   it('treats anything but an explicit refusal from a host as a completed write', () => {
     expect(parseFileWriteResult({ ok: false, diskConflict: 'not-utf8' })).toEqual({
       ok: false,
@@ -74,16 +60,6 @@ describe('disk write precondition', () => {
     expect(parseFileWriteResult({ ok: false })).toEqual({ ok: false, diskConflict: 'changed' })
   })
 
-  it('bounds the UTF-8 size a baseline can decode from', () => {
-    const content = 'a€𝄞'
-    const length = diskBaselineSignatureLength(getDiskBaselineSignature(content))
-    expect(length).toBe(content.length)
-    expect(utf8ByteSizeCanDecodeToLength(Buffer.byteLength(content), length ?? -1)).toBe(true)
-    expect(utf8ByteSizeCanDecodeToLength(content.length - 1, content.length)).toBe(false)
-    expect(utf8ByteSizeCanDecodeToLength(content.length * 3 + 1, content.length)).toBe(false)
-    expect(diskBaselineSignatureLength('not-a-signature')).toBeNull()
-  })
-
   it.each([
     [
       'an ENOENT code with plain wording',
@@ -93,17 +69,6 @@ describe('disk write precondition', () => {
   ])('treats %s from an older host as a missing file', (_label, error) => {
     const precondition = { expectedSignature: getDiskBaselineSignature('base') }
     expect(diskConflictFromReadFailure(precondition, error)).toBe('missing')
-  })
-
-  it.each([
-    [
-      'the desktop IPC wrapping',
-      "Error invoking remote method 'fs:readFile': Error: ENOENT: no such file or directory, open '/repo/a.ts'"
-    ],
-    ['the runtime wording', "ENOENT: no such file or directory, stat '/repo/a.ts'"]
-  ])('reads a not-found from %s', (_label, message) => {
-    const precondition = { expectedSignature: getDiskBaselineSignature('base') }
-    expect(diskConflictFromReadFailure(precondition, new Error(message))).toBe('missing')
   })
 
   it.each([

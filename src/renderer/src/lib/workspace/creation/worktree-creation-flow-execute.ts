@@ -19,7 +19,9 @@ import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/work
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import {
+  recoverWorktreeLegacyPreparation,
   hostPlannableAgentLaunch,
+  worktreeCreationAgentLaunchOptions,
   windowStartupAfterCreate
 } from '@/lib/workspace/creation/worktree-creation-host-agent-launch'
 import {
@@ -54,7 +56,6 @@ export async function executeWorktreeCreation(
   const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
   const creationHostId =
     preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
-  // Named to later steps, so a same-path twin on another host can't blur the owner (L277).
   const onCreationHost = creationHostId ? { executionHostId: creationHostId } : {}
   const hostAgentLaunch = hostPlannableAgentLaunch(preparedRequest)
   let result: CreatedWorktreeResult
@@ -94,6 +95,7 @@ export async function executeWorktreeCreation(
           ...setupCreateArgs(preparedRequest),
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
+          ...worktreeCreationAgentLaunchOptions(preparedRequest),
           executionHostId: creationHostId,
           ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
           ...(preparedRequest.displayNameKind
@@ -126,6 +128,9 @@ export async function executeWorktreeCreation(
     }
     if (preparedRequest.ephemeralVmRuntimeId) {
       await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+    }
+    if (recoverWorktreeLegacyPreparation(creationId, preparedRequest, error)) {
+      return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     showWorktreeCreationError(
@@ -162,7 +167,6 @@ export async function executeWorktreeCreation(
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
-  // Contain post-create follow-ups independently; fire-and-forget throws otherwise strand creation UI over a completed workspace.
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null = null
   if (shouldActivateOnCompletion && !structuredLaunch) {
@@ -216,11 +220,7 @@ export async function executeWorktreeCreation(
             unknownHostCountIsEmpty: true
           })
         } catch (recoveryError) {
-          console.error(
-            'worktree create: activation recovery after-wake seeding failed',
-            worktree.id,
-            recoveryError
-          )
+          console.error('worktree create: after-wake recovery failed', worktree.id, recoveryError)
         }
       }
     }
@@ -299,11 +299,7 @@ export async function executeWorktreeCreation(
   }
 
   if (!shouldActivateOnCompletion && useAppStore.getState().pendingWorktreeCreations[creationId]) {
-    try {
-      showWorktreeCreationReadyToast(worktree, creationHostId)
-    } catch (error) {
-      console.error('worktree create: ready toast failed', worktree.id, error)
-    }
+    showWorktreeCreationReadyToast(worktree, creationHostId)
   }
 
   await completeWorktreeCreation({
@@ -314,6 +310,7 @@ export async function executeWorktreeCreation(
     activation,
     primaryTabId,
     startupTerminalTabId: result.startupTerminal?.tabId,
+    startupAgent: result.worktree.createdWithAgent ?? undefined,
     backendSpawned,
     hostPlannedStartup: result.hostPlannedStartup === true,
     focusOnCompletion: shouldActivateOnCompletion

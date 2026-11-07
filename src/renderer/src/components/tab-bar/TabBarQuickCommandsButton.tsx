@@ -24,7 +24,7 @@ import {
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { useProjectHostSetupProjection } from '@/store/selectors'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 
 type TabBarQuickCommandsButtonProps = {

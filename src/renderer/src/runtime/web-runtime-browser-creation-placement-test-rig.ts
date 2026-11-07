@@ -6,7 +6,12 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { ENV, NOW, WT, makeSnapshot } from './web-session-tabs-sync-test-harness'
+import {
+  ENV,
+  NOW,
+  WT,
+  makeSnapshot
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 export const HOST: ExecutionHostId = `runtime:${ENV}`
 export const G1 = 'group-1'

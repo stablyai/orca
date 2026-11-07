@@ -61,3 +61,24 @@ describe.each(['GraphQL', 'REST'] as const)('%s review summaries', (source) => {
     expect(reviews?.map((review) => review.body)).toEqual(visibleBodies)
   })
 })
+
+it('marks only the conversation comments GitHub says the viewer wrote', () => {
+  const node = (databaseId: number, viewerDidAuthor: boolean) => ({
+    id: `IC_${databaseId}`,
+    databaseId,
+    author: { login: viewerDidAuthor ? 'me' : 'alice', avatarUrl: '' },
+    body: 'LGTM',
+    createdAt: '2026-11-07T08:00:00Z',
+    url: `https://github.com/acme/widgets/pull/7#issuecomment-${databaseId}`,
+    viewerDidAuthor
+  })
+  const { issueComments } = parsePRConversationResponse(
+    JSON.stringify({
+      data: {
+        repository: { pullRequest: { comments: { nodes: [node(1, false), node(2, true)] } } }
+      }
+    })
+  )
+
+  expect(issueComments?.map((comment) => comment.viewerDidAuthor)).toEqual([undefined, true])
+})

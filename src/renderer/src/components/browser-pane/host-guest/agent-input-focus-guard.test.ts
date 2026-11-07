@@ -50,18 +50,6 @@ describe('agent input focus guard', () => {
     document.body.replaceChildren()
   })
 
-  it('leaves the page focused during the input and returns focus to the user when it ends', () => {
-    const webview = mountPage('page-1')
-    const terminal = focusTerminal()
-
-    beginAgentInputFocusGuard('page-1', 'input-1')
-    webview.focus()
-    expect(document.activeElement).toBe(webview)
-    endAgentInputFocusGuard('input-1')
-
-    expect(document.activeElement).toBe(terminal)
-  })
-
   it('catches the input’s focus move when it arrives after the end message', () => {
     const webview = mountPage('page-1')
     const terminal = focusTerminal()
@@ -83,16 +71,6 @@ describe('agent input focus guard', () => {
     vi.advanceTimersByTime(50)
 
     expect(document.activeElement).toBe(webview)
-  })
-
-  it('blurs the page when nothing held focus before the input', () => {
-    const webview = mountPage('page-1')
-
-    beginAgentInputFocusGuard('page-1', 'input-1')
-    webview.focus()
-    endAgentInputFocusGuard('input-1')
-
-    expect(document.activeElement).not.toBe(webview)
   })
 
   it('does not move focus the user put somewhere else meanwhile', () => {

@@ -15,7 +15,10 @@ import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-sessio
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import {
+  useMobileHostModelCatalogUpgrade,
+  type HostModelCatalogCache
+} from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
   acceptedStructuredSessionSelectionOutcome,
@@ -29,6 +32,8 @@ const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
 export function useMobileStructuredAgentOptions(args: {
   agent: string | null
+  /** This world's last host lists for the chat's agent; absent, the picker waits for the host. */
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -52,6 +57,7 @@ export function useMobileStructuredAgentOptions(args: {
 }) {
   const {
     agent,
+    modelCatalogCache,
     client,
     enabled,
     fence,
@@ -96,6 +102,7 @@ export function useMobileStructuredAgentOptions(args: {
     sessionId,
     turnId,
     unloadedTurnRevisions,
+    modelCatalogCache,
     client,
     optionStamp,
     sendSelection: hostSupport?.sendSelection === true,
@@ -160,6 +167,7 @@ export function useMobileStructuredAgentOptions(args: {
       hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
         ? modelOption.kind.currentValue
         : undefined,
+    modelCatalogCache,
     client,
     sessionId,
     enabled,

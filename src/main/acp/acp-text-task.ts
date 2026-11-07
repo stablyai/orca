@@ -9,6 +9,7 @@ import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisit
 import { removeAntigravitySignInSessionFiles } from '../antigravity/antigravity-sign-in-session-files'
 import { SOURCE_CONTROL_GENERATION_TIMEOUT_MS } from '../text-generation/source-control-generation-limits'
 import { resolveAcpLaunchInvocation } from './acp-structured-launch-resolution'
+import { acpLaunchSpecForAccount } from './acp-launch-command'
 import { prepareAcpLaunch } from './acp-structured-launch-preparation'
 import { acpPrivateTempConnect } from './acp-private-temp'
 import {
@@ -117,9 +118,12 @@ export class AcpTextTasks {
       if (!invocation) {
         throw new Error('Native text task launch is unavailable')
       }
+      // A naming session would stay in the user's own agent history.
+      if (acpLaunchSpecForAccount(spec, input.accountHome).keepsEverySession) {
+        return null
+      }
       const launch = await waitForPromiseWithSignal(
         prepareAcpLaunch(
-          this.deps,
           () => resolveAcpLaunchInvocation(spec, input.accountHome, invocation),
           () => signal.throwIfAborted()
         ),
@@ -154,12 +158,8 @@ export class AcpTextTasks {
           {
             clientInfo: { name: 'orca-chat-naming', version: '1' },
             signIn: spec.signIn,
-            onPermission: (request) => {
-              if (spec.agent !== 'antigravity') {
-                return reject()
-              }
-              return denyAcpTextTaskPermission(request)
-            },
+            onPermission: (request) =>
+              spec.agent === 'antigravity' ? denyAcpTextTaskPermission(request) : reject(),
             onRequest: reject,
             onExtensionNotification: notification
           }

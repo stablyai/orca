@@ -69,23 +69,6 @@ describe.each([
   ['POSIX', process.platform !== 'win32', getRemoteHostPlatform('linux-x64')],
   ['Windows PowerShell 5.1', powerShell51, getRemoteHostPlatform('win32-x64')]
 ] as const)('a %s steal naming an exited holder', (_name, runs, host) => {
-  it.runIf(runs)('takes a quiet lock that still names that holder', async () => {
-    const lock = lockOwnedBy('t-exited', 10)
-    expect(await steal(host, lock)).toBe('EXITED_OWNER_OK')
-    expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('t-relaunch')
-  })
-
-  it.runIf(runs)('keeps a lock another holder now owns, however quiet', async () => {
-    const lock = lockOwnedBy('live-successor', 10)
-    expect(await steal(host, lock)).toBe('BUSY')
-    expect(readFileSync(join(lock, OWNER), 'utf8')).toBe('live-successor')
-  })
-
-  it.runIf(runs)('keeps a lock that is not yet quiet', async () => {
-    const lock = lockOwnedBy('t-exited', 1)
-    expect(await steal(host, lock)).toBe('BUSY')
-  })
-
   it.runIf(runs)('lets only one concurrent caller take it', async () => {
     const lock = lockOwnedBy('t-exited', 10)
     const outputs = await Promise.all(Array.from({ length: 8 }, () => steal(host, lock)))

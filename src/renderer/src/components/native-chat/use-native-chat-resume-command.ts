@@ -8,7 +8,7 @@ import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault/scope/ai-
 import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
-import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
+import { findNativeChatTabOwnerWorktreeId } from './pane/ownership/native-chat-tab-owner'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
@@ -17,10 +17,14 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
-/** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
+const FORK_DRAFT = /^\/fork(?:\s+([\s\S]*))?$/i
+
+/** Replace the agent’s /resume catalog entry with Orca’s Session History command, and its /usage
+ *  and /fork with Orca’s where this chat runs them. */
 export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[],
-  accountUsage = false
+  accountUsage = false,
+  fork = false
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
@@ -42,6 +46,19 @@ export function withNativeChatResumeCommand(
         orcaOwned: true
       },
       ...commands.filter((command) => command.name !== 'usage')
+    ]
+  }
+  if (fork) {
+    commands = [
+      {
+        name: 'fork',
+        description: translate(
+          'components.native-chat.fork.commandDescription',
+          'Fork this chat from its latest response'
+        ),
+        orcaOwned: true
+      },
+      ...commands.filter((command) => command.name !== 'fork')
     ]
   }
   const at = commands.findIndex(({ name }) => name === NATIVE_CHAT_RESUME_COMMAND)
@@ -69,10 +86,11 @@ export type NativeChatResumeCommand = {
   ) => (item: TItem) => void
 }
 
-/** In a structured chat, `/resume [search]` opens its Session History and never reaches the agent. */
+/** In a structured chat, `/resume [search]` opens its Session History and `/fork` forks it; neither
+ *  reaches the agent. */
 export function useNativeChatResumeCommand(args: {
   structuredTransport:
-    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage'>
+    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage' | 'fork'>
     | undefined
   agent: AgentType
   terminalTabId: string
@@ -93,6 +111,7 @@ export function useNativeChatResumeCommand(args: {
   const structured = structuredTransport !== undefined
   const structuredWorktreeId = structuredTransport?.worktreeId
   const usage = structuredTransport?.accountUsage
+  const fork = structuredTransport?.fork
   const openUsage = useCallback(
     (draft: string): void => {
       const rest = draft.replace(/^\/\S+\s*/, '')
@@ -110,6 +129,30 @@ export function useNativeChatResumeCommand(args: {
       }
     },
     [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+  )
+
+  const runFork = useCallback(
+    (draft: string): void => {
+      // Why: a message after /fork has nowhere to go yet; dropping it silently would lose it.
+      const notice = FORK_DRAFT.exec(draft.trim())?.[1]?.trim()
+        ? translate(
+            'components.native-chat.fork.commandTakesNoText',
+            'Send /fork on its own, then write in the new chat.'
+          )
+        : (fork?.run() ?? null)
+      setNotice(notice)
+      if (notice !== null) {
+        return
+      }
+      setDraft('')
+      setCaret(0)
+      setActiveSuggestion(0)
+      const input = textareaRef.current
+      if (input) {
+        writeNativeChatComposerText(input, '', 0)
+      }
+    },
+    [fork, setActiveSuggestion, setCaret, setDraft, setNotice, textareaRef]
   )
 
   const open = useCallback(
@@ -166,8 +209,9 @@ export function useNativeChatResumeCommand(args: {
       structured &&
       !isPickedSkill(draft) &&
       (parseNativeChatResumeDraft(draft) !== null ||
-        (usage !== undefined && /^\/usage\s*$/i.test(draft))),
-    [isPickedSkill, structured, usage]
+        (usage !== undefined && /^\/usage\s*$/i.test(draft)) ||
+        (fork !== undefined && FORK_DRAFT.test(draft.trim()))),
+    [fork, isPickedSkill, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
@@ -176,12 +220,14 @@ export function useNativeChatResumeCommand(args: {
       }
       if (/^\/usage\s*$/i.test(draft)) {
         openUsage(draft)
+      } else if (fork && FORK_DRAFT.test(draft.trim())) {
+        runFork(draft)
       } else {
         open(parseNativeChatResumeDraft(draft) ?? '')
       }
       return true
     },
-    [matchesDraft, open, openUsage]
+    [fork, matchesDraft, open, openUsage, runFork]
   )
 
   const interceptPick = useCallback(
@@ -190,7 +236,11 @@ export function useNativeChatResumeCommand(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable
         // An explicit Orca command pick overrides an earlier same-named skill pick.
         if (leading && item.kind === 'command' && item.orcaOwned) {
-          if (item.name !== 'resume' && !(item.name === 'usage' && usage)) {
+          if (
+            item.name !== 'resume' &&
+            !(item.name === 'usage' && usage) &&
+            !(item.name === 'fork' && fork)
+          ) {
             pick(item)
             return
           }
@@ -199,13 +249,17 @@ export function useNativeChatResumeCommand(args: {
             openUsage(textareaRef.current?.value ?? '')
             return
           }
+          if (item.name === 'fork') {
+            runFork('/fork')
+            return
+          }
           // The caret can sit right after `/resume` with a search already typed past it.
           open(parseNativeChatResumeDraft(textareaRef.current?.value ?? '') ?? '')
           return
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, open, openUsage, textareaRef, usage]
+    [autocomplete, clearSkillOrigin, fork, open, openUsage, runFork, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }

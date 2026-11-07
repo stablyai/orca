@@ -1,4 +1,4 @@
-import type * as LocalRuntimeCapabilities from '@/runtime/local-runtime-capabilities'
+import type * as LocalRuntimeCapabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { completePRCheckGraphQLResponse } from '../../../../../shared/github/complete-pr-check-test-fixture'
 import type * as GitRunner from '../../../../../main/git/command-runner/gh-exec-file'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
@@ -42,7 +42,9 @@ type Published = {
   appendOptimisticComment: (comment: PRComment) => void
 }
 const published = vi.hoisted(() => new Map<string, Published>())
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
 vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: () => null,
   findGithubIssueWorkspaceAttachment: () => null
@@ -143,11 +145,13 @@ vi.mock('@/store', () => {
     })
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: io.rpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: io.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => io.capable
 }))
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalRuntimeCapabilities>()),
   ensureLocalRuntimeCapabilities: async () => ['github.exact-work-item-target.v1']
 }))

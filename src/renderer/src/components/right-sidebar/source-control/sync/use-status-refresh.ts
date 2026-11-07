@@ -17,7 +17,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
-import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 
 export type SourceControlStatusRefresh = {

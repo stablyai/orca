@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-history'
+import type { WorktreeNavHistoryViewEntry } from '@/store/slices/ui/workspace-navigation-history'
 
 // Replay via setActiveView: open*Page would mutate previousViewBefore* or duplicate history (navigateToIndex).
 export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): void {

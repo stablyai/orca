@@ -6,10 +6,10 @@ import {
   mockCreateSupport,
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
-  structuredLaunchIntent,
   launchErrorMocks,
   mockToastError
 } from './launch-agent-structured-chat-test-fixture'
+import { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
@@ -360,8 +360,8 @@ import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent
 import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/workspace/ownership/worktree-runtime-owner'
-import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as terminalCreate from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
+import * as runtimeRpc from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 
 it.each([

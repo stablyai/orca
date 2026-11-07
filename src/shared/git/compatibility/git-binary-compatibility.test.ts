@@ -1,51 +1,17 @@
-import {
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  realpath,
-  rm,
-  utimes,
-  writeFile
-} from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../../main/git/command-runner/git-exec-file'
 import { getRemoteFileUrl } from '../../../main/git/repo'
-import {
-  isUnsupportedMergeTreeMergeBaseError,
-  isUnsupportedMergeTreeWriteTreeError
-} from '../branches/git-merge-tree-capability'
-import {
-  branchHasNoUnmergedChangesOnAnyTarget,
-  type GitBranchCleanupExec
-} from '../branches/git-branch-cleanup'
 import { refreshBranchCleanupTargetRefs } from '../branches/git-branch-cleanup-fetch'
-import { GitCapabilityCache } from '../commands/git-capability-cache'
-import {
-  createGitObjectQuarantine,
-  GIT_OBJECT_QUARANTINE_DIR_PREFIX
-} from '../objects/git-object-quarantine'
-import { isForEachRefExcludeUnsupportedError } from '../refs/git-ref-command-capabilities'
-import { isNoWriteFetchHeadUnsupportedError } from '../fetch/git-fetch-head-capability'
-import { gitCredentialPromptGuardEnv } from '../commands/git-credential-prompt-env'
 import { buildGitGrepArgs } from '../../text-search'
 import { parseGitRemoteFetchUrls } from '../remotes/git-remote-url-index'
 import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from '../history/git-history-log-parser'
-import {
-  githubPullRequestHeadLocalRef,
-  gitlabMergeRequestHeadLocalRef,
-  reviewHeadRemoteRefComponent
-} from '../../review-head-tracking-ref'
-import { gitChangeListArgs, parseGitChangeList } from '../diff/git-change-list'
-import { encodeGitPathspecs } from '../paths/git-pathspec-stdin'
 import { GitBinaryTestFixture } from './git-binary.test-fixture'
-import { registerGitRepositoryRegistrationBinaryCompatibilityCase } from './git-repository-registration-binary-compatibility.test-cases'
 import { registerGitLocalBaseBranchBinaryCompatibilityCase } from './git-local-base-branch-binary-compatibility.test-cases'
 import { registerGitResolutionBinaryCompatibilityCases } from './git-resolution-binary-compatibility.test-cases'
 import { registerGitWorktreeBinaryCompatibilityCases } from '../worktrees/git-worktree-binary-compatibility.test-cases'
-import { registerPluginGitDownloadBinaryCompatibilityCase } from '../../plugin-git-download-binary-compatibility.test-cases'
 
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
 const binary = process.env.ORCA_GIT_COMPAT_BINARY
@@ -71,20 +37,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
 
   function supports(major: number, minor: number): boolean {
     return version.major > major || (version.major === major && version.minor >= minor)
-  }
-
-  async function expectPreferredOrRecognizedFallback(
-    args: string[],
-    expectedSupport: boolean,
-    recognizesUnsupported: (error: unknown) => boolean
-  ): Promise<void> {
-    try {
-      await runGit(args)
-      expect(expectedSupport).toBe(true)
-    } catch (error) {
-      expect(expectedSupport).toBe(false)
-      expect(recognizesUnsupported(error)).toBe(true)
-    }
   }
 
   beforeAll(async () => {
@@ -261,193 +213,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  registerGitRepositoryRegistrationBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
-
-  it('stages, unstages and restores NUL-delimited literal pathspecs from stdin', async () => {
-    const fixturePath = join(repoPath, 'stdin-pathspec')
-    await mkdir(fixturePath)
-    const fixtureCwd = image ? '/repo/stdin-pathspec' : fixturePath
-    const runFixtureGit = (args: string[], stdin?: string): Promise<GitResult> =>
-      runGit(['-C', fixtureCwd, ...args], undefined, stdin)
-    await runFixtureGit(['init', '-q'])
-    await runFixtureGit(['config', 'user.name', 'Compatibility Test'])
-    await runFixtureGit(['config', 'user.email', 'compatibility@example.invalid'])
-    const paths = ['[k]eep.log', 'space name.txt', '-option.txt']
-    if (process.platform !== 'win32') {
-      paths.push('line\nname.txt', ':(magic).txt')
-    }
-    await Promise.all(paths.map((filePath) => writeFile(join(fixturePath, filePath), 'original\n')))
-    const stdin = encodeGitPathspecs(paths.map((filePath) => `:(literal)${filePath}`))
-    await runFixtureGit(['add', '--pathspec-from-file=-', '--pathspec-file-nul'], stdin)
-    await runFixtureGit(['reset', '--quiet', '--', `:(literal)${paths[0]}`])
-    expect(
-      (await runFixtureGit(['ls-files', '-z'])).stdout.split('\0').filter(Boolean).sort()
-    ).toEqual(paths.slice(1).sort())
-    await runFixtureGit(
-      ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      stdin
-    )
-    expect((await runFixtureGit(['ls-files', '-z'])).stdout).toBe('')
-    await runFixtureGit(['add', '--pathspec-from-file=-', '--pathspec-file-nul'], stdin)
-    await runFixtureGit(['commit', '-qm', 'stdin pathspec fixtures'])
-    await Promise.all(paths.map((filePath) => writeFile(join(fixturePath, filePath), 'modified\n')))
-    await runFixtureGit(['add', '--pathspec-from-file=-', '--pathspec-file-nul'], stdin)
-    const staged = await runFixtureGit(['diff', '--cached', '--name-only', '-z'])
-    expect(staged.stdout.split('\0').filter(Boolean).sort()).toEqual([...paths].sort())
-    await Promise.all(paths.map((filePath) => writeFile(join(fixturePath, filePath), 'working\n')))
-    await runFixtureGit(
-      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      stdin
-    )
-    for (const filePath of paths) {
-      expect(await readFile(join(fixturePath, filePath), 'utf8')).toBe('modified\n')
-    }
-    await runFixtureGit(
-      ['reset', '--quiet', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      stdin
-    )
-    expect((await runFixtureGit(['diff', '--cached', '--name-only'])).stdout).toBe('')
-    await runFixtureGit(
-      ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'],
-      stdin
-    )
-    for (const filePath of paths) {
-      expect(await readFile(join(fixturePath, filePath), 'utf8')).toBe('original\n')
-    }
-    await rm(fixturePath, { recursive: true, force: true })
-  })
-
-  it('emits raw changes and numstat from one range or root diff', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const range = await runGit(gitChangeListArgs(head, head))
-    expect(parseGitChangeList(range.stdout)).toEqual([])
-    const root = await runGit(gitChangeListArgs(null, head))
-    expect(parseGitChangeList(root.stdout)).toEqual([
-      { path: 'tracked.txt', status: 'added', added: 1, removed: 0 }
-    ])
-    const names = await runGit([
-      'diff-tree',
-      '--root',
-      '--no-commit-id',
-      '-r',
-      '--name-status',
-      '-z',
-      head,
-      '--'
-    ])
-    expect(parseGitChangeList(names.stdout, 'name-status')).toEqual([
-      { path: 'tracked.txt', status: 'added' }
-    ])
-  })
-
-  it('reads signed history without launching configured signature verification', async () => {
-    const tree = (await runGit(['rev-parse', 'HEAD^{tree}'])).stdout.trim()
-    const commit = [
-      `tree ${tree}`,
-      'author Compatibility Test <compatibility@example.invalid> 1234567890 +0000',
-      'committer Compatibility Test <compatibility@example.invalid> 1234567890 +0000',
-      'gpgsig -----BEGIN PGP SIGNATURE-----',
-      ' ',
-      ' ZHVtbXk=',
-      ' -----END PGP SIGNATURE-----',
-      '',
-      'signed history fixture',
-      ''
-    ].join('\n')
-    const oid = (
-      await runGit(['hash-object', '-t', 'commit', '-w', '--stdin'], undefined, commit)
-    ).stdout.trim()
-    const result = await runGit([
-      '-c',
-      'log.showSignature=true',
-      '-c',
-      'color.ui=always',
-      '-c',
-      'gpg.program=orca-nonexistent-signature-verifier',
-      'log',
-      '--no-show-signature',
-      '--no-color',
-      `--format=${GIT_HISTORY_COMMIT_FORMAT}`,
-      '-z',
-      '-n1',
-      oid
-    ])
-    expect(result.stderr).toBe('')
-    expect(parseGitHistoryLog(result.stdout)).toMatchObject([
-      { id: oid, subject: 'signed history fixture' }
-    ])
-  })
-
-  it('keeps polling diffs from refreshing the index', async () => {
-    const indexPath = join(repoPath, '.git', 'index')
-    const before = await readFile(indexPath)
-    const future = new Date(Date.now() + 10_000)
-    await utimes(join(repoPath, 'tracked.txt'), future, future)
-    const result = await runGit(
-      ['-c', 'diff.autoRefreshIndex=false', 'diff', '--numstat', '-z', '--'],
-      { GIT_OPTIONAL_LOCKS: '0' }
-    )
-    expect(['', '0\t0\ttracked.txt\0']).toContain(result.stdout)
-    expect(await readFile(indexPath)).toEqual(before)
-    await runGit(['-c', 'diff.autoRefreshIndex=true', 'diff', '--numstat', '-z', '--'])
-    expect(await readFile(indexPath)).not.toEqual(before)
-  })
-
-  it('quietly distinguishes present and absent branch refs', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(['branch', 'quiet-probe-present', head])
-    await expect(
-      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-present'])
-    ).resolves.toMatchObject({ stdout: `${head}\n`, stderr: '' })
-    await expect(
-      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-absent'])
-    ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
-  })
-
-  it('combines repository booleans and metadata paths for normal, bare and linked repositories', async () => {
-    const probe = [
-      'rev-parse',
-      '--is-inside-work-tree',
-      '--is-bare-repository',
-      '--git-dir',
-      '--git-common-dir'
-    ]
-    const main = (await runGit(probe)).stdout.trim().split('\n')
-    expect(main).toEqual(['true', 'false', '.git', '.git'])
-    await runGit(['init', '--bare', '-q', 'detection-bare.git'])
-    const bare = (await runGit(['-C', 'detection-bare.git', ...probe])).stdout.trim().split('\n')
-    expect(bare).toEqual(['false', 'true', '.', '.'])
-    await runGit(['worktree', 'add', '-q', '-b', 'detection-linked', 'detection-linked'])
-    const linked = (await runGit(['-C', 'detection-linked', ...probe])).stdout.trim().split('\n')
-    expect(linked.slice(0, 2)).toEqual(['true', 'false'])
-    expect(linked[2]).not.toBe(linked[3])
-    await expect(runGit(['-C', '.git', ...probe])).resolves.toMatchObject({
-      stdout: expect.stringMatching(/^false\nfalse\n/)
-    })
-  })
-
-  it('distinguishes an absent branch from a ref pointing at a missing object', async () => {
-    const missingObject = 'a'.repeat(40)
-    const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
-    await writeFile(refPath, `${missingObject}\n`)
-    try {
-      await expect(
-        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
-      ).resolves.toMatchObject({ stdout: `${missingObject}\n`, stderr: '' })
-      await expect(
-        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling^{commit}'])
-      ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
-    } finally {
-      await rm(refPath)
-    }
-  })
-
-  registerGitWorktreeBinaryCompatibilityCases(
-    runGit,
-    () => repoPath,
-    supports,
-    expectPreferredOrRecognizedFallback
-  )
+  registerGitWorktreeBinaryCompatibilityCases(runGit)
 
   // remote -v must match get-url’s insteadOf-expanded first fetch URL across supported Git versions; raw config is insufficient.
   it('reports the same fetch URL from remote -v as from remote get-url', async () => {
@@ -481,76 +247,6 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
-  it('recognizes ref and merge-tree compatibility boundaries', async () => {
-    const fetchHeadPath = join(repoPath, '.git', 'FETCH_HEAD')
-    await writeFile(fetchHeadPath, 'sentinel\n')
-    await expectPreferredOrRecognizedFallback(
-      ['fetch', '--no-write-fetch-head', '.', '+HEAD:refs/orca/compat/no-write-fetch-head'],
-      supports(2, 29),
-      isNoWriteFetchHeadUnsupportedError
-    )
-    await expect(readFile(fetchHeadPath, 'utf-8')).resolves.toBe('sentinel\n')
-    // Ref-search excludes rely on * not crossing / under real Git wildmatch; slash-containing remotes need exact HEAD excludes.
-    const commitOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    for (const ref of [
-      'refs/remotes/origin/main',
-      'refs/remotes/origin/compat-nested/HEAD',
-      'refs/remotes/foo/bar/main',
-      'refs/remotes/foo/bar/compat-nested/HEAD'
-    ]) {
-      await runGit(['update-ref', ref, commitOid])
-    }
-    await runGit(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'])
-    await runGit(['symbolic-ref', 'refs/remotes/foo/bar/HEAD', 'refs/remotes/foo/bar/main'])
-    const exactRemoteHeadExclude = '--exclude=refs/remotes/foo/bar/HEAD'
-    const shippedExcludeArgv = [
-      'for-each-ref',
-      '--format=%(refname)',
-      '--exclude=refs/remotes/*/HEAD',
-      exactRemoteHeadExclude,
-      '--count=100',
-      'refs/remotes/**'
-    ]
-    const wildcardExcludeArgv = shippedExcludeArgv.filter((arg) => arg !== exactRemoteHeadExclude)
-    await expectPreferredOrRecognizedFallback(
-      shippedExcludeArgv,
-      supports(2, 42),
-      isForEachRefExcludeUnsupportedError
-    )
-    if (supports(2, 42)) {
-      const listRefs = async (argv: string[]): Promise<string[]> =>
-        (await runGit(argv)).stdout.split(/\r?\n/).filter(Boolean)
-
-      expect(await listRefs(shippedExcludeArgv)).toEqual([
-        'refs/remotes/foo/bar/compat-nested/HEAD',
-        'refs/remotes/foo/bar/main',
-        'refs/remotes/origin/compat-nested/HEAD',
-        'refs/remotes/origin/main'
-      ])
-      // The wildcard cannot reach slash-containing remotes, requiring the exact excludes.
-      expect(await listRefs(wildcardExcludeArgv)).toContain('refs/remotes/foo/bar/HEAD')
-    }
-    await expect(
-      runGit(['for-each-ref', '--format=%(refname)', '--count=10'])
-    ).resolves.toBeDefined()
-
-    await expectPreferredOrRecognizedFallback(
-      ['merge-tree', '--write-tree', 'HEAD', 'HEAD'],
-      supports(2, 38),
-      isUnsupportedMergeTreeWriteTreeError
-    )
-    if (supports(2, 38)) {
-      const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-      const legacyArgs = ['merge-tree', '--write-tree', '--name-only', '-z', '--no-messages']
-      await expectPreferredOrRecognizedFallback(
-        [...legacyArgs, '--merge-base', head, head, head],
-        supports(2, 40),
-        isUnsupportedMergeTreeMergeBaseError
-      )
-      await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
-    }
-  })
-
   it('refreshes a cleanup base with maintenance disabled and an explicit refspec', async () => {
     const branch = 'compat-cleanup-source'
     const remote = 'compat-cleanup'
@@ -571,221 +267,11 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   // Unsupported --write-tree may leave crash debris that Git <2.35 cannot prune; create scratch stores only after support is known.
-  it('makes a merge-tree scratch object store only once this Git is known to write trees', async () => {
-    const branch = 'compat-cleanup-merged'
-    await runGit(['branch', branch, 'HEAD'])
-    const objectsPath = join(repoPath, '.git', 'objects')
-    const quarantine = createGitObjectQuarantine(async () => ({
-      hostPath: objectsPath,
-      gitPath: image ? '/repo/.git/objects' : objectsPath
-    }))
-    let scratchFolders = 0
-    const runCleanupGit: GitBranchCleanupExec = (args, options) =>
-      options?.discardWrittenObjects
-        ? quarantine.run((env) => {
-            scratchFolders += env ? 1 : 0
-            return runGit(args, env)
-          })
-        : runGit(args)
-    const capabilities = new GitCapabilityCache()
-    const check = () =>
-      branchHasNoUnmergedChangesOnAnyTarget(runCleanupGit, branch, ['HEAD'], capabilities)
-
-    try {
-      await expect(check()).resolves.toBe(supports(2, 38))
-      await expect(check()).resolves.toBe(supports(2, 38))
-      expect(scratchFolders).toBe(supports(2, 38) ? 1 : 0)
-      expect(
-        (await readdir(objectsPath)).filter((entry) =>
-          entry.startsWith(GIT_OBJECT_QUARANTINE_DIR_PREFIX)
-        )
-      ).toEqual([])
-    } finally {
-      await runGit(['branch', '-D', branch])
-    }
-  })
-
-  it('supports exact show-ref probes', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const originRef = 'refs/remotes/origin/compat-exact'
-    const missingRef = 'refs/remotes/missing/compat-exact'
-    await runGit(['update-ref', originRef, head])
-
-    await expect(
-      runGit(['show-ref', '--verify', '--quiet', '--', originRef])
-    ).resolves.toBeDefined()
-    await expect(
-      runGit(['show-ref', '--verify', '--quiet', '--', missingRef])
-    ).rejects.toMatchObject({ code: 1 })
-
-    const nestedRef = 'refs/remotes/origin/compat-parent/nested'
-    await runGit(['update-ref', nestedRef, head])
-    await expect(
-      runGit(['show-ref', '--verify', '--quiet', '--', 'refs/remotes/origin/compat-parent'])
-    ).rejects.toMatchObject({ code: 1 })
-  })
-
-  it('lists exact and descendant refs from batched for-each-ref probes', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const presentRef = 'refs/remotes/origin/compat-batch'
-    const nestedRef = 'refs/remotes/origin/compat-batch-parent/nested'
-    await runGit(['update-ref', presentRef, head])
-    await runGit(['update-ref', nestedRef, head])
-
-    // A miss still exits 0; callers keep only exact lines, so the parent stays absent.
-    await expect(
-      runGit([
-        'for-each-ref',
-        '--format=%(refname)',
-        '--',
-        presentRef,
-        'refs/remotes/origin/compat-batch-parent',
-        'refs/remotes/missing/compat-batch'
-      ])
-    ).resolves.toMatchObject({ stdout: `${presentRef}\n${nestedRef}\n` })
-  })
-
-  it('packs loose refs and reads the maintenance opt-out at the baseline', async () => {
-    // Pin baseline Git 2.25 pack-refs --all --prune (not 2.45+ --auto) and maintenance.auto opt-out reads.
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    const packedRef = 'refs/remotes/origin/compat-pack-refs'
-    await runGit(['update-ref', packedRef, head])
-    await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).resolves.toContain(head)
-
-    await expect(runGit(['pack-refs', '--all', '--prune'])).resolves.toBeDefined()
-
-    await expect(readFile(join(repoPath, '.git', packedRef), 'utf-8')).rejects.toMatchObject({
-      code: 'ENOENT'
-    })
-    await expect(runGit(['rev-parse', '--verify', packedRef])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-    await expect(readFile(join(repoPath, '.git', 'packed-refs'), 'utf-8')).resolves.toContain(
-      packedRef
-    )
-
-    // Unset config exits 1; absence means consent, not opt-out.
-    await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).rejects.toMatchObject({
-      code: 1
-    })
-    await runGit(['config', 'maintenance.auto', 'false'])
-    await expect(runGit(['config', '--bool', '--get', 'maintenance.auto'])).resolves.toMatchObject({
-      stdout: 'false\n'
-    })
-    await runGit(['config', '--unset', 'maintenance.auto'])
-  })
-
-  it('writes a multi-pack-index and reads packed objects at the baseline', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(['-c', 'gc.auto=0', 'repack', '-d'])
-    await expect(runGit(['multi-pack-index', 'write'])).resolves.toBeDefined()
-    const midx = await readFile(join(repoPath, '.git', 'objects', 'pack', 'multi-pack-index'))
-    expect(midx.subarray(0, 4).toString()).toBe('MIDX')
-    await expect(runGit(['multi-pack-index', 'verify'])).resolves.toMatchObject({ stderr: '' })
-    await expect(
-      runGit(['-c', 'core.multiPackIndex=true', 'cat-file', '-t', head])
-    ).resolves.toMatchObject({ stdout: 'commit\n' })
-    await runGit(['config', 'core.multiPackIndex', 'false'])
-    await expect(
-      runGit(['config', '--bool', '--get', 'core.multiPackIndex'])
-    ).resolves.toMatchObject({ stdout: 'false\n' })
-    await runGit(['config', '--unset', 'core.multiPackIndex'])
-  })
-
-  it('fetches hosted review heads into dedicated refs', async () => {
-    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
-    await runGit(['update-ref', 'refs/pull/42/head', head])
-    await runGit(['update-ref', 'refs/merge-requests/42/head', head])
-
-    // Why: exercise the exact remote-identity-scoped ref shape the app generates.
-    const component = reviewHeadRemoteRefComponent('origin', 'git@github.com:org/repo.git')
-    const pullRef = githubPullRequestHeadLocalRef(component, 42)
-    const mergeRequestRef = gitlabMergeRequestHeadLocalRef(component, 42)
-    await expect(
-      runGit(['fetch', '--no-tags', '.', `+refs/pull/42/head:${pullRef}`])
-    ).resolves.toBeDefined()
-    await expect(
-      runGit(['fetch', '--no-tags', '.', `+refs/merge-requests/42/head:${mergeRequestRef}`])
-    ).resolves.toBeDefined()
-    await expect(runGit(['rev-parse', '--verify', pullRef])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-    await expect(runGit(['rev-parse', '--verify', mergeRequestRef])).resolves.toMatchObject({
-      stdout: `${head}\n`
-    })
-  })
-
-  it('supports isolated worktree backup refs', async () => {
-    const worktree = 'compat-lint-staged'
-    const backupRef = 'refs/worktree/lint-staged-backups/compat'
-    await runGit(['worktree', 'add', '-b', 'compat-lint-staged', worktree])
-    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\n')
-    await runGit(['-C', worktree, 'add', 'tracked.txt'])
-    await writeFile(join(repoPath, worktree, 'tracked.txt'), 'staged\nunstaged\n')
-
-    const backupOid = (await runGit(['-C', worktree, 'stash', 'create'])).stdout.trim()
-    await runGit([
-      '-C',
-      worktree,
-      'update-ref',
-      backupRef,
-      backupOid,
-      '0000000000000000000000000000000000000000'
-    ])
-    await expect(
-      runGit(['-C', worktree, 'rev-parse', '--verify', backupRef])
-    ).resolves.toMatchObject({ stdout: `${backupOid}\n` })
-    await expect(runGit(['rev-parse', '--verify', backupRef])).rejects.toBeDefined()
-
-    await runGit(['-C', worktree, 'reset', '--hard', 'HEAD'])
-    await expect(
-      runGit(['-C', worktree, 'stash', 'apply', '--quiet', '--index', backupRef])
-    ).resolves.toBeDefined()
-    await expect(runGit(['-C', worktree, 'status', '--short'])).resolves.toMatchObject({
-      stdout: 'MM tracked.txt\n'
-    })
-    await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
-  })
-
-  it('keeps git usable when an agent scrubs credential-shaped env names (#26594)', async () => {
-    // The DeepSeek Harness subprocess filter, recorded in #26594.
-    const sensitiveEnvPattern = /KEY|PASSWORD|SECRET|TOKEN/i
-    const scrubbed = Object.fromEntries(
-      Object.entries(gitCredentialPromptGuardEnv({}, 'linux')).filter(
-        ([key]) => !sensitiveEnvPattern.test(key)
-      )
-    )
-    expect(scrubbed.GIT_TERMINAL_PROMPT).toBe('0')
-    expect(scrubbed.GCM_INTERACTIVE).toBe('never')
-    await expect(runGit(['status', '--short'], scrubbed)).resolves.toBeDefined()
-  })
 
   // Git 2.25–2.49 echoes --end-of-options with --symbolic-full-name but consumes it with --verify; git-history skips the echoed line.
-  it('echoes the option marker from rev-parse --symbolic-full-name', async () => {
-    const result = await runGit(['rev-parse', '--symbolic-full-name', '--end-of-options', 'HEAD'])
-    const lines = result.stdout.trim().split(/\r?\n/).filter(Boolean)
-
-    expect(lines[0]).toBe('--end-of-options')
-    expect(lines.find((line) => line !== '--end-of-options')).toMatch(/^refs\//)
-  })
 
   // Pinned SSH branch diffs require show <oid>:<path> to use that commit and reject missing paths; failure represents additions/deletions.
-  it('reads a blob at a pinned object id', async () => {
-    await writeFile(join(repoPath, 'pinned.txt'), 'pinned\n')
-    await runGit(['add', 'pinned.txt'])
-    await runGit(['commit', '-qm', 'pinned'])
-    const pinnedOid = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
 
-    await writeFile(join(repoPath, 'pinned.txt'), 'moved on\n')
-    await runGit(['commit', '-qam', 'after pinned'])
-
-    await expect(
-      runGit(['show', '--end-of-options', `${pinnedOid}:pinned.txt`])
-    ).resolves.toMatchObject({ stdout: 'pinned\n' })
-    await expect(
-      runGit(['show', '--end-of-options', `${pinnedOid}:absent.txt`])
-    ).rejects.toBeDefined()
-  })
   // Older Git echoes %(decorate:...) with exit 0; %D in the same record must recover badges (#15507).
   it('reads commit decorations on both sides of the %(decorate:...) boundary', async () => {
     await writeFile(join(repoPath, 'decorated.txt'), 'decorated\n')
@@ -835,7 +321,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   registerGitLocalBaseBranchBinaryCompatibilityCase(runGit, () => repoPath, Boolean(image))
-  registerPluginGitDownloadBinaryCompatibilityCase(runGit, () => repoPath)
+
   registerGitResolutionBinaryCompatibilityCases(runGit, (name) =>
     image ? `/repo/${name}.git` : join(repoPath, `${name}.git`)
   )

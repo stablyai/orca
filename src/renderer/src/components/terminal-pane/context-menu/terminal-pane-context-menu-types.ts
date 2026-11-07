@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
-import type { PreparedAgentSessionFork } from '../terminal-agent-session-fork'
+import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 
 export type UseTerminalPaneContextMenuDeps = {

@@ -11,15 +11,6 @@ import { i18n, translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { cn } from '@/lib/utils'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
-import { useAppStore } from '@/store'
-import {
-  ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID,
-  resolveAntigravityInstallTarget,
-  type AntigravityInstallTarget
-} from './antigravity-install-target'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { AgentPickerButton, AgentSectionHeader } from './AgentPickerButton'
 import { YoloPermissionsControl } from './YoloPermissionsControl'
@@ -50,7 +41,6 @@ type AgentStepProps = {
   nativeChatProviders?: GlobalSettings['nativeChatProviders']
   yoloPermissions?: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
-  onInstallAntigravity?: (target: AntigravityInstallTarget) => void
 }
 
 export function AgentStep({
@@ -65,25 +55,9 @@ export function AgentStep({
   chatDetected = null,
   nativeChatProviders,
   yoloPermissions = true,
-  onYoloPermissionsChange,
-  onInstallAntigravity
+  onYoloPermissionsChange
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
-  // Offer the installer only where its terminal spawns on this computer, the host detection reads.
-  const installerSpawnsLocally = useAppStore(
-    (state) =>
-      resolveTerminalPtyOwner(state, ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID, 'spawn').kind ===
-      'non-runtime'
-  )
-  // Chat never runs in WSL, so Chat UI installs natively; Terminal follows agent detection.
-  const detectionContext = useAppStore((state) =>
-    agentSurface === 'chat' ? undefined : getLocalAgentPreflightContext(state)
-  )
-  const antigravityInstallTarget = resolveAntigravityInstallTarget(
-    getRendererAppPlatform(),
-    detectionContext,
-    installerSpawnsLocally
-  )
   const gridFades = useScrollEdgeFades<HTMLElement>()
   const chatMode = agentSurface === 'chat'
   // Chat runs only on native installs; an agent found only in WSL opens in a terminal.
@@ -201,28 +175,16 @@ export function AgentStep({
               components={{ agent: <span className="font-medium text-foreground" /> }}
             />
           </span>
-          <div className="flex shrink-0 items-center gap-2">
-            {selectedEntry.id === 'antigravity' &&
-              antigravityInstallTarget &&
-              onInstallAntigravity && (
-                <Button
-                  type="button"
-                  size="xs"
-                  onClick={() => onInstallAntigravity(antigravityInstallTarget)}
-                >
-                  {translate('components.onboarding.agyInstall.open', 'Install')}
-                </Button>
-              )}
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
-            >
-              {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
-              <ExternalLink className="size-3" />
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="shrink-0"
+            onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
+          >
+            {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
+            <ExternalLink className="size-3" />
+          </Button>
         </div>
       )}
       <section

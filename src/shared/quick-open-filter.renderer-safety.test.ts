@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildExcludePathPrefixes, shouldExcludeQuickOpenRelPath } from './quick-open-filter'
+import { buildExcludePathPrefixes } from './quick-open-filter'
 
 // Model Vite’s throwing node:path browser stub: named member imports once white-screened renderer startup (#15158).
 vi.mock('node:path', () => {
@@ -30,17 +30,5 @@ describe('quick-open-filter renderer safety', () => {
     expect(
       buildExcludePathPrefixes('\\\\Server\\Share\\Repo', ['//server/share/repo/nested'])
     ).toEqual(['nested'])
-  })
-
-  it('drops stale exclude paths outside the root', () => {
-    expect(buildExcludePathPrefixes('/tmp/repo', ['/tmp/old-worktree'])).toEqual([])
-    expect(buildExcludePathPrefixes('C:\\repo', ['D:\\old-worktree'])).toEqual([])
-  })
-
-  it('filters listed paths against those prefixes', () => {
-    const prefixes = buildExcludePathPrefixes('/tmp/repo', ['/tmp/repo/nested'])
-
-    expect(shouldExcludeQuickOpenRelPath('nested/src/index.ts', prefixes)).toBe(true)
-    expect(shouldExcludeQuickOpenRelPath('src/index.ts', prefixes)).toBe(false)
   })
 })

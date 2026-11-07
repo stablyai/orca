@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { useOwnedDiffComments } from '../../../diff-comments/use-diff-comment-owner'
 import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'

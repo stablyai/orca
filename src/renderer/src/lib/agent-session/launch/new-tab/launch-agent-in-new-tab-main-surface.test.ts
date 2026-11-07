@@ -4,17 +4,15 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultSettings
 } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import {
-  makeWorktree,
-  makeFolderWorkspace
-} from '../../../../store/slices/worktrees-slice-test-fixtures'
-import { resolveQueuedInitialCwd } from '@/components/terminal-pane/terminal-pane-lifecycle-primitives'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
+import { resolveQueuedInitialCwd } from '@/components/terminal-pane/mounting/queued-initial-cwd'
 import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -49,7 +47,7 @@ vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () =>
 createStoreCascadesMockApi()
 
 import { makeFolderWorkspace as makeLaunchFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 afterEach(() => {
   vi.unstubAllGlobals()

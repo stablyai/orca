@@ -3,7 +3,8 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import {
   getExplorerDisplayRootOptions,
   resolveExplorerDisplayRootChoice,
@@ -39,7 +40,7 @@ import { useFileExplorerVisibleRowProjection } from '../tree/useFileExplorerVisi
 import { useFileExplorerBackgroundMenu } from './use-file-explorer-background-menu'
 import { useFileExplorerNameFilter } from './use-file-explorer-name-filter'
 import { useFileExplorerTreePaneState } from '../tree/use-file-explorer-tree-pane-state'
-import { useWslHostUnavailableReason } from '../../../terminal-pane/use-wsl-host-unavailable-reason'
+import { useWslHostUnavailableReason } from '../../../../lib/wsl-host-availability'
 import { useStoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

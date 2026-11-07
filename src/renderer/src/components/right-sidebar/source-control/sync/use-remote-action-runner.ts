@@ -231,6 +231,7 @@ export function useSourceControlRemoteActionRunner({
       } finally {
         if (!options?.target) {
           refreshSourceControlAfterRemoteAction({
+            worktreeId: target.worktreeId,
             refreshGitStatus: refreshActiveGitStatusAfterMutation,
             refreshBranchCompare: refreshBranchCompareRef.current,
             refreshGitHistory: refreshGitHistoryRef.current

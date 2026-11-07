@@ -27,7 +27,9 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-prompt', () 
 vi.mock('./structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeSession
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntime }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntime
+}))
 vi.mock('./local-session-tab-close-owner', () => ({
   withLocalSessionTabCloseOwner: async (_w: string, _t: string, close: () => Promise<unknown>) =>
     close()

@@ -1,3 +1,4 @@
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
@@ -75,7 +76,10 @@ export function shouldQueueStructuredAgentSessionSend(
     // Return immediate refusal; queueing behind a blocked session would strand the draft.
     return false
   }
-  if (hold !== null) {
+  if (!input.fromAgent && pendingPromptsAllUnanswerableHere(input.work.actionablePrompts())) {
+    return false
+  }
+  if (hold !== null || input.journal.inputOrder.firstQueued() !== undefined) {
     return true
   }
   if (input.fromAgent) {

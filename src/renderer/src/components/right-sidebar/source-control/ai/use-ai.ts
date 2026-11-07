@@ -1,5 +1,5 @@
 import { useSourceControlScope } from '../panel/worktree-scope'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   captureSourceControlActionSelection,
@@ -12,7 +12,7 @@ import { useSavedSourceControlActionStart } from './use-saved-source-control-act
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import { useCallback, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {

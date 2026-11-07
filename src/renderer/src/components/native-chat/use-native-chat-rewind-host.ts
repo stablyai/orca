@@ -1,7 +1,7 @@
 import { useCallback, type RefObject } from 'react'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useStructuredAgentSessionRewindBlockedReason } from './StructuredAgentSessionStatusBridge'
+import { useStructuredAgentSessionRewindBlockedReason } from './session/status/structured-agent-session-status-hooks'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 

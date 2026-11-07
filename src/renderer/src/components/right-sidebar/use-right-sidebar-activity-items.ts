@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
@@ -16,7 +16,7 @@ import {
   usePluginPanels,
   usePluginPanelsStore,
   type PluginPanelsFetchStatus
-} from '@/store/plugin-panels'
+} from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

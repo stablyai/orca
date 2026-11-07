@@ -6,7 +6,7 @@ import {
 import { editorTabsRetirement } from '../editor/tabs/editor-tab-retirement'
 import { editorTabWorkspace } from '../editor/tabs/workspace-editor-files'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { findGroupForTab, findTabAndWorktree } from '../tab-group-state'
+import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
 
 export function createTabsBulkCloseActions(
   set: TabsSliceSet,

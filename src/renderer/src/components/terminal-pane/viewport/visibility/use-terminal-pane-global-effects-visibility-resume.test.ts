@@ -84,10 +84,7 @@ vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
 }))
 
 vi.mock('../../input/paste/terminal-bracketed-paste', () => ({
-  BRACKETED_PASTE_END: '\u001b[201~',
-  BRACKETED_PASTE_START: '\u001b[200~',
-  pasteTerminalText: mocks.pasteTerminalText,
-  sanitizeTerminalPasteText: (text: string) => text.split('\u001b').join('\u241b')
+  pasteTerminalText: mocks.pasteTerminalText
 }))
 
 vi.mock('../../input/terminal-input-activity', () => ({

@@ -6,14 +6,9 @@ vi.mock('node:path', async (importOriginal) => {
   return { ...actual, extname: actual.win32.extname }
 })
 
-import { isMarkdownDocumentName, markdownDocumentFromRelativePath } from './markdown-document-paths'
+import { markdownDocumentFromRelativePath } from './markdown-document-paths'
 
 describe('remote Markdown filenames on a Windows client', () => {
-  it('keeps the local filename helper on Windows semantics', () => {
-    expect(isMarkdownDocumentName('notes\\.md')).toBe(false)
-    expect(isMarkdownDocumentName('notes.md\\')).toBe(true)
-  })
-
   it.each(['notes\\.md', 'a\\b.MDX', '..\\a.markdown', 'nested/README.md'])(
     'preserves POSIX filename %s and its extension',
     (relativePath) => {

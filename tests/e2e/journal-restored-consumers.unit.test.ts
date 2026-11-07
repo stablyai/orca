@@ -68,11 +68,14 @@ import { NativeChatMessageList } from '../../src/renderer/src/components/native-
 import { render } from '../../src/renderer/src/components/native-chat/native-chat-tooltip-test-harness'
 import { installNativeChatMessageListTestViewport } from '../../src/renderer/src/components/native-chat/native-chat-message-list-test-viewport'
 
-vi.mock('../../src/renderer/src/components/native-chat/NativeChatInlineVisual', () => ({
-  NativeChatInlineVisual: () => {
-    throw new Error('Unexpected inline visual')
-  }
-}))
+vi.mock(
+  '../../src/renderer/src/components/native-chat/media/visuals/NativeChatInlineVisual',
+  () => ({
+    NativeChatInlineVisual: () => {
+      throw new Error('Unexpected inline visual')
+    }
+  })
+)
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: () => {
     throw new Error('Unexpected sender navigation')

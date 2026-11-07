@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type {

@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
-import { compareMessages } from './native-chat-session-assembler'
+import { compareNativeChatDisplayMessages as compareMessages } from '../../../../shared/native-chat/transcript/native-chat-message-order'
 
 export type NativeChatSubagentRosterPlace = {
   rowId: string

@@ -22,7 +22,7 @@ import {
   copyNativeChatImage,
   readNativeChatCopyImage,
   type NativeChatCopyImage
-} from './native-chat-image-copy'
+} from './media/images/native-chat-image-copy'
 import { isMacPlatform } from './native-chat-shortcut'
 import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
@@ -37,8 +37,8 @@ import {
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import { AgentSessionContinuationMenuItem } from '@/components/terminal-pane/AgentSessionContinuationMenuItem'
-import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/AgentSessionContextCopyMenuItem'
+import { AgentSessionContinuationMenuItem } from '@/components/agent-session-continuation/AgentSessionContinuationMenuItem'
+import { AgentSessionContextCopyMenuItem } from '@/components/terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import {
   noNativeChatContextMenuTarget,
   readNativeChatContextMenuTarget,
@@ -48,7 +48,7 @@ import {
   NativeChatContextMenuTargetItems,
   NativeChatFindMenuItem
 } from './NativeChatContextMenuItems'
-import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { useNativeChatStandaloneMenu } from './use-native-chat-standalone-menu'

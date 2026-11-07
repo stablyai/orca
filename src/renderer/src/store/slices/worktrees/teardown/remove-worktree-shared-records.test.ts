@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { makeWorktree } from '../worktree.test-fixture'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 

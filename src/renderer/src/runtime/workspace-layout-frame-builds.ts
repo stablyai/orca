@@ -2,15 +2,15 @@
 
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
-import type { WorkspaceLayoutCache } from '@/store/workspace-layout-cache'
-import { buildLayoutFrameSlices } from '@/store/workspace-layout-frame-slices'
+import type { WorkspaceLayoutCache } from '@/store/workspace-layout/workspace-layout-cache'
+import { buildLayoutFrameSlices } from '@/store/workspace-layout/frames/workspace-layout-frame-slices'
 import {
   buildLayoutFrameStorePatch,
   terminalLayoutsPatch
-} from '@/store/workspace-layout-frame-store-patch'
+} from '@/store/workspace-layout/frames/workspace-layout-frame-store-patch'
 import { terminalLayoutsWithFrameBindings } from './workspace-layout-frame-bindings'
-import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
-import { layoutViewAndFactsOfStore } from '@/store/workspace-layout-frame-store-view'
+import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
+import { layoutViewAndFactsOfStore } from '@/store/workspace-layout/frames/workspace-layout-frame-store-view'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-split'

@@ -3,7 +3,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
 const PTY_ID_SSH = 'ssh:target-1@@pty-9'
@@ -370,7 +370,8 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       agentType: 'command-code'
     })
     const policy = await createPolicy(PTY_ID_LOCAL)
-    const { setCommandCodeDoneSettleExecutor } = await import('../../command-code-done-settle')
+    const { setCommandCodeDoneSettleExecutor } =
+      await import('../../agent-completion/command-code/command-code-done-settle')
 
     policy.onCommandCodeDone('Fix the spinner')
     vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
@@ -392,7 +393,7 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     })
     const policy = await createPolicy(PTY_ID_LOCAL)
     const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
-      await import('../../command-code-done-settle')
+      await import('../../agent-completion/command-code/command-code-done-settle')
 
     policy.onCommandCodeDone('Fix the spinner')
     const revealedPaneSettle = vi.fn()

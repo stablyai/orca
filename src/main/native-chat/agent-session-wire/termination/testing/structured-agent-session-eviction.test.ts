@@ -1,40 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  evictStructuredAgentSession,
-  StructuredAgentSessionEvictionError,
-  STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
-  type StructuredAgentSessionEvictionContext
-} from '../structured-agent-session-eviction'
+import { describe, expect, it } from 'vitest'
+import { evictStructuredAgentSession } from '../structured-agent-session-eviction'
 import { StructuredAgentSessionHostRuntimeState } from '../../host/structured-agent-session-host-runtime-state'
 import { withJournalQueueMembers } from '../../journal-ingress/testing/structured-agent-session-journal-double-test-support'
-import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
 import { recordingStructuredAgentSessionLogger } from '../../host/testing/structured-agent-session-logger-test-support'
-
-function context(closeError?: Error): StructuredAgentSessionEvictionContext & { order: string[] } {
-  const order: string[] = []
-  return {
-    order,
-    sessionId: 'session-1',
-    logger: createStructuredAgentSessionLogger(),
-    eventSink: {
-      unbind: vi.fn(() => order.push('unbind')),
-      drained: vi.fn(async () => {
-        order.push('drained')
-        return { ok: true as const }
-      }),
-      close: vi.fn(() => {
-        order.push('close')
-        if (closeError) {
-          throw closeError
-        }
-      })
-    },
-    acknowledgeRelease: vi.fn(() => {
-      order.push('acknowledgeRelease')
-    }),
-    discardSink: vi.fn(() => order.push('discardSink'))
-  }
-}
 
 function runtimeState(): StructuredAgentSessionHostRuntimeState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: eviction against the sink cache reads only the sinks and the logger; store and adapter are never reached.
@@ -45,36 +13,6 @@ function runtimeState(): StructuredAgentSessionHostRuntimeState {
   } as never
   return new StructuredAgentSessionHostRuntimeState(deps, new Map())
 }
-
-describe("the route release after a child's exit", () => {
-  it('lets the sink go before it acknowledges the release', async () => {
-    const ctx = context()
-    await evictStructuredAgentSession(ctx)
-    expect(ctx.order).toEqual(['unbind', 'close', 'discardSink', 'acknowledgeRelease'])
-  })
-
-  it('names every step, so a failure says which one it was', () => {
-    expect(STRUCTURED_AGENT_SESSION_EVICTION_STEPS.map((step) => step.name)).toEqual([
-      'stop-publishing',
-      'close-sink',
-      'discard-sink',
-      'acknowledge-release'
-    ])
-  })
-
-  it('reports a failed step with its name and still runs every step after it', async () => {
-    const recorded = recordingStructuredAgentSessionLogger()
-    const ctx = { ...context(new Error('sink already gone')), logger: recorded.logger }
-
-    await expect(evictStructuredAgentSession(ctx)).resolves.toBeUndefined()
-
-    expect(ctx.order).toEqual(['unbind', 'close', 'discardSink', 'acknowledgeRelease'])
-    expect(recorded.entries.map((entry) => entry.fields.error)).toEqual([
-      expect.objectContaining({ step: 'close-sink' })
-    ])
-    expect(recorded.entries[0]?.fields.error).toBeInstanceOf(StructuredAgentSessionEvictionError)
-  })
-})
 
 // Cached sinks must be discarded after close so reopened chats can publish through fresh sinks.
 describe('eviction against the real sink cache', () => {

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { useMeasuredWidth } from '../right-sidebar/right-sidebar-measured-width'
-import { nativeChatColumnWidthBucket } from './native-chat-appearance-style'
-import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
+import { nativeChatColumnWidthBucket } from './appearance/native-chat-appearance-style'
+import { useNativeChatStoreAppearanceStyle } from './appearance/use-native-chat-store-appearance-style'
 
 export function useNativeChatRowTypography(contentRef: RefObject<HTMLDivElement | null>) {
   const [columnWidthPx, setColumnWidthPx] = useState<number | null>(null)

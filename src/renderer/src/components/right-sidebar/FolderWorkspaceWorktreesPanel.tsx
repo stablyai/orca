@@ -1,7 +1,7 @@
 import {
   selectSidebarLineageParentIdentities,
   selectCrossStoreFolderChildrenById
-} from '@/store/cross-store-lineage-parents'
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import WorktreeCard from '@/components/sidebar/workspace-card/surface/WorktreeCard'
 import { stopNestedWorktreeCardBubble } from '@/components/sidebar/worktree-list/rows/header-event-guards'
 import {
@@ -15,7 +15,10 @@ import { resolveReviewRepository } from '@/lib/review-owner'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { useState } from 'react'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export default function FolderWorkspaceWorktreesPanel(): React.JSX.Element {
   const executionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)

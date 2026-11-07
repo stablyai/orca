@@ -10,7 +10,7 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '../../../../store/index'
-import { getProjectHostSetupProjectionFromState } from '../../../../store/project-host-setup-selector'
+import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
 import { cn } from '../../../../lib/utils'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -25,8 +25,8 @@ import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
-} from '@/store/slices/runtime-environment-ssh-selectors'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {

@@ -30,7 +30,7 @@ import {
 } from './editor-artifact-upload'
 import { useEditorPanelSave } from './save/commands/useEditorPanelSave'
 import { isMarkdownReviewNotesEnabled } from '@/lib/markdown-review-notes-setting'
-import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { editorPanelFileActions } from './editor-panel-file-actions'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'

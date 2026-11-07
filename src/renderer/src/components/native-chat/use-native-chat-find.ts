@@ -13,7 +13,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '../../store'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
-import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
+import { focusNativeChatPromptCard } from './prompts/use-native-chat-prompt-card-focus'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 // Keep open state/query with the retained chat so reopen preserves its last search.

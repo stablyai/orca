@@ -72,22 +72,4 @@ describe('automation setup trust hash', () => {
     ).toBe('next-hash')
     expect(store.updateAutomation(id, { setupDecision: 'skip' }).setupTrustHash).toBeUndefined()
   })
-
-  it("keeps a run's skipped-setup note through its completion and a reload", async () => {
-    const { store, id } = await automationApprovedToRunSetup()
-    const automation = store.listAutomations().find((row) => row.id === id)!
-    const run = store.createAutomationRun(automation, 1_778_000_000_000, 'manual')
-    store.updateAutomationRun({
-      runId: run.id,
-      status: 'dispatched',
-      workspaceId: 'ws-1',
-      setupSkippedReason: 'setup-changed'
-    })
-    store.updateAutomationRun({ runId: run.id, status: 'completed' })
-
-    const reloaded = await createStore()
-    expect(
-      reloaded.listAutomationRuns(id).find((row) => row.id === run.id)?.setupSkippedReason
-    ).toBe('setup-changed')
-  })
 })

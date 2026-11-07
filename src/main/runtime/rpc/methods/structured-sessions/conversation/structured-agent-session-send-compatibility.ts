@@ -30,7 +30,7 @@ export async function sendStructuredAgentSessionForClient(
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||
-    // A queued answer only ever reaches a capable client, which renders it as-is.
+    // Queue receipts replay unchanged, including to older clients.
     agentSessionSendSubmission(result.value)?.dispatchState !== 'pending' ||
     context.clientKind === undefined ||
     capabilities.includes(AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY)

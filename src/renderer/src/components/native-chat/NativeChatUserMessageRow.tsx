@@ -1,24 +1,22 @@
-import { NativeChatSignInButton } from './NativeChatSignInButton'
-import { NativeChatTextAttachments } from './NativeChatTextAttachments'
+import { NativeChatSignInButton } from './host-access/NativeChatSignInButton'
+import { NativeChatTextAttachments } from './media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
 import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
-import {
-  NativeChatDetailsDisclosure,
-  NativeChatImageAttachments
-} from './NativeChatTranscriptChrome'
+import { NativeChatDetailsDisclosure } from './messages/diagnostics/NativeChatProviderDetails'
+import { NativeChatImageAttachments } from './media/images/NativeChatImageAttachments'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 
 const USER_META_REVEAL =
