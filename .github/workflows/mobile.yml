@@ -313,9 +313,9 @@ jobs:
         run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
 
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
+      # Host declaration emission and the test ratchet each load the desktop graph; keep their peaks separate.
       - name: Typecheck
         id: production-types
-        background: true
         run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
@@ -461,9 +461,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Host declaration emission and the test ratchet each load the desktop graph; keep their peaks separate.
       - name: Typecheck
         id: production-types
-        background: true
         run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json --project=config/tsconfig.test.mobile-project-controls.json --mobile-host-declarations
 
       - name: Typecheck tests (ratchet)
