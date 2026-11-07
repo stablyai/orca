@@ -1,4 +1,4 @@
-import type { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
+import { AUTH_REJECTED, type RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import type { RpcClientConnectionState } from './rpc-client-connection-state'
 import type { RpcClientReconnectSchedule } from './rpc-client-reconnect-schedule'
 import type { RpcClientRequestTracker } from './rpc-client-request-tracker'
@@ -52,7 +52,7 @@ export class RpcClientSocketCloseController {
           UNAUTHORIZED_CLOSE_CODE
         )
       ) {
-        this.options.authenticationRetry.reject('Unauthorized — pairing may be revoked', true)
+        this.options.authenticationRetry.reject(AUTH_REJECTED, true)
         return
       }
       console.log('[net] handleSocketClosed STALE — ignoring (ws already swapped)', {
@@ -77,7 +77,7 @@ export class RpcClientSocketCloseController {
       console.log('[net] handleSocketClosed — unauthorized close code', {
         attempt: this.options.reconnect.getAttempt()
       })
-      this.options.authenticationRetry.reject('Unauthorized — pairing may be revoked')
+      this.options.authenticationRetry.reject(AUTH_REJECTED)
       return
     }
     console.log('[net] handleSocketClosed → reconnect', {

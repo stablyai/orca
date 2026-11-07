@@ -2,7 +2,7 @@ import type { FileOpenFailure } from './terminal-file-open-failure'
 import {
   readTerminalPathExistence,
   type TerminalPathExistsCache
-} from '../../terminal-path-exists-cache'
+} from './terminal-path-exists-cache'
 import type { IBufferLine } from '@xterm/xterm'
 import { findTerminalFileLinksAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { terminalLogicalLinkHasOscLink } from '../../../../../../shared/terminal/links/terminal-osc-link-cells'
@@ -17,7 +17,7 @@ import {
   type FileLinkHost,
   type FileLinkTarget
 } from './terminal-file-link-target'
-import { createTerminalPathExistenceBatch } from '../../terminal-path-existence-batch'
+import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 

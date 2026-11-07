@@ -4,7 +4,8 @@ import {
   mobileCreatedStructuredSession
 } from './mobile-created-structured-sessions'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
@@ -96,7 +97,7 @@ async function mountOptions(props: ProbeProps) {
       await Promise.resolve()
     })
   await act(async () => {
-    renderer = create(createElement(Probe, props))
+    renderer = createWithQueryClient(createElement(Probe, props))
   })
   await settle()
   return {

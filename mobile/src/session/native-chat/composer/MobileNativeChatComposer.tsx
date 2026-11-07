@@ -24,21 +24,19 @@ import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment
 import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
 import {
   MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatPickerPresentation,
   type MobileNativeChatSessionOptionPickersProps
 } from '../input/MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatPickerPresentation } from '../input/use-mobile-native-chat-picker-presentation'
+import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import {
   mobileNativeChatComposerPasteHandler,
   type MobilePastedImages
 } from './mobile-native-chat-composer-paste'
 import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
-import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
-import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
 import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
-import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
+import { MobileNativeChatComposerSendSlot } from './MobileNativeChatComposerSendSlot'
 import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
 import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
@@ -73,6 +71,8 @@ type Props = MobileNativeChatMicProps & {
   onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
   /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
   sendFollowUp?: NativeChatSendFollowUp | null
+  /** Cmd/Ctrl+Enter on an empty composer: steers the head queued card, or with no turn running sends it. */
+  steerHead?: MobileNativeChatSteerHead
   /** Changes whenever the route focuses a different chat composer surface. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation without forcing a screen render. */
@@ -140,7 +140,8 @@ export function MobileNativeChatComposer({
   skillDiscovery,
   onNeedSkills,
   stop = null,
-  sendFollowUp = null
+  sendFollowUp = null,
+  steerHead
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -148,13 +149,9 @@ export function MobileNativeChatComposer({
   const fieldRef = inputRef ?? fallbackInputRef
   const groupRef = useRef<View>(null)
   const [focused, setFocused] = useState(false)
-  const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
-  const request = sessionOptions?.controller.optionPickerRequest
-  const [lastRequest, setLastRequest] = useState(request)
-  if (request && lastRequest !== request) {
-    setLastRequest(request)
-    setPicker({ page: request.id, refocus: false })
-  }
+  const [picker, setPicker] = useMobileNativeChatPickerPresentation(
+    sessionOptions?.controller.optionPickerRequest
+  )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
     disabled: disabled || editSession?.locked === true,
@@ -231,14 +228,6 @@ export function MobileNativeChatComposer({
     !isAttaching &&
     !filesUploading &&
     !sessionOptionDispatching
-  const showsStop = mobileNativeChatComposerShowsStop({
-    canStop: stop !== null,
-    sendBlocked: sendDisabled,
-    canSend,
-    editing: isAttaching || filesUploading || micActive,
-    draft: value,
-    attachmentCount
-  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -284,6 +273,8 @@ export function MobileNativeChatComposer({
     }
   }
 
+  const followUp = goal.sendFollowUp(sendFollowUp)
+  const headChord = goal.holdsFollowUp ? undefined : steerHead
   const content = (
     <View ref={groupRef} testID="native-chat-composer-group">
       <MobileNativeChatComposerSuggestions
@@ -310,9 +301,12 @@ export function MobileNativeChatComposer({
               const first = menu.rows[0]
               if (first) {
                 menu.pick(first)
-                return
+              } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
+                void handleSend(editSession ? undefined : { alternate: true }, true)
+              } else {
+                // Nothing of its own to send, so the head card goes; the queue decides whether it may.
+                headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
               }
-              void handleSend(editSession ? undefined : { alternate: true }, true)
             }}
             onFocus={() => {
               setFocused(true)
@@ -391,18 +385,25 @@ export function MobileNativeChatComposer({
                 onSave={() => void handleSend()}
               />
             ) : (
-              <MobileNativeChatControlSwap swapKey={showsStop && stop ? 'stop' : 'send'}>
-                {showsStop && stop ? (
-                  // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-                  <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-                ) : (
-                  <MobileNativeChatSendButton
-                    canSend={canSend}
-                    sendFollowUp={goal.sendFollowUp(sendFollowUp)}
-                    onSend={(intent) => void handleSend(intent)}
-                  />
-                )}
-              </MobileNativeChatControlSwap>
+              <MobileNativeChatComposerSendSlot
+                {...{
+                  fieldRef,
+                  value,
+                  draftScopeKey,
+                  attachmentCount,
+                  structured,
+                  agent,
+                  followUp,
+                  canSend,
+                  stop
+                }}
+                snapshot={sessionOptions?.controller.snapshot}
+                steerHead={headChord}
+                pickerOpen={menu.rows.length > 0}
+                sendDisabled={sendDisabled}
+                attaching={isAttaching || filesUploading || micActive}
+                onSend={(intent, keepFocus) => void handleSend(intent, keepFocus)}
+              />
             )}
           </View>
         </View>

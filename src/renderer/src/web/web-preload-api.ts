@@ -49,6 +49,7 @@ import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environm
 import { webRuntimeState } from './preload-api/web-runtime-session'
 import { createWebSettingsApi } from './preload-api/web-settings-api'
 import { createShellApi } from './preload-api/web-shell-api'
+import { createWebSpeechApi } from './preload-api/web-speech-api'
 import { createWebStarNagApi } from './preload-api/web-star-nag-api'
 import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
 import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
@@ -67,9 +68,10 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'> & {
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
   settings: Partial<PreloadApi['settings']>
   plugins: Partial<PreloadApi['plugins']>
+  speech: Partial<PreloadApi['speech']>
 } {
   return {
     ...createWebAppApi(),
@@ -90,6 +92,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
+    speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),

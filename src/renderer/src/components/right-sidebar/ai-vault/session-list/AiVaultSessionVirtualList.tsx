@@ -73,6 +73,7 @@ export function AiVaultSessionVirtualList({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHits,
   searchHitHostLabels,
@@ -112,6 +113,7 @@ export function AiVaultSessionVirtualList({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  onRevealArtifacts: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
   /** Set only when search hits span several hosts. */
@@ -321,6 +323,7 @@ export function AiVaultSessionVirtualList({
                 onOpenLog={onOpenLog}
                 onRevealLog={onRevealLog}
                 onOpenCwd={onOpenCwd}
+                onRevealArtifacts={onRevealArtifacts}
                 onRequestDelete={onRequestDelete}
                 selected={keyboardRef ? virtualRow.index === selectedIndex : undefined}
                 onSelect={keyboardRef ? () => selection.select(virtualRow.index) : undefined}

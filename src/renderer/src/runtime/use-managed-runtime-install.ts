@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import {
+  useAppStateViewActive,
+  useAppViewExternalStore,
+  useAppStateValue
+} from '@/store/app-state-view'
+import { useCallback, useEffect, useMemo } from 'react'
 import { isAgentSessionHandleProvider } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -7,7 +12,6 @@ import {
 } from '../../../shared/managed-runtime-install'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { useAppStore } from '@/store'
 import {
   hostStructuredAgentsReadFailed,
   loadHostStructuredAgents,
@@ -61,31 +65,32 @@ export function useManagedRuntimeInstall(
   agent: string,
   shown: boolean
 ): ManagedRuntimeInstallObservation {
+  const viewActive = useAppStateViewActive()
   const record = useHostStructuredAgent(target, agent)
   const managed = record?.managedRuntime === true
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const remote = useAppStore((state) =>
+  const remote = useAppStateValue((state) =>
     environmentId === null
       ? null
       : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
   )
   // The entry's own status clears on a lost contact; the verified one above outlives it.
-  const reachable = useAppStore(
+  const reachable = useAppStateValue(
     (state) =>
       environmentId === null ||
       Boolean(state.runtimeStatusByEnvironmentId.get(environmentId)?.status)
   )
-  const contactEpoch = useAppStore((state) =>
+  const contactEpoch = useAppStateValue((state) =>
     environmentId === null
       ? 0
       : (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
   )
-  const localCapable = useSyncExternalStore(
+  const localCapable = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilitiesKnown,
     localInstallCapable,
     localInstallCapable
   )
-  const localRemovable = useSyncExternalStore(
+  const localRemovable = useAppViewExternalStore(
     subscribeLocalRuntimeCapabilitiesKnown,
     localRemoveCapable,
     localRemoveCapable
@@ -110,7 +115,7 @@ export function useManagedRuntimeInstall(
           : null,
     [executionHostId, runtimeId]
   )
-  const list = useSyncExternalStore(subscribeHostStructuredAgents, readList, readList)
+  const list = useAppViewExternalStore(subscribeHostStructuredAgents, readList, readList)
   const subject = useMemo((): ManagedRuntimeInstallSubject | null => {
     if (!capable || (environmentId !== null && runtimeId === null)) {
       return null
@@ -120,17 +125,18 @@ export function useManagedRuntimeInstall(
     return { target: host, runtimeId, agent }
   }, [agent, capable, environmentId, runtimeId])
   useEffect(
-    () => (subject && managed && shown ? observeManagedRuntimeInstall(subject) : undefined),
-    [subject, managed, shown]
+    () =>
+      viewActive && subject && managed && shown ? observeManagedRuntimeInstall(subject) : undefined,
+    [subject, managed, shown, viewActive]
   )
   // The host answering again after an outage resubscribes at once, not after its backoff.
   useEffect(() => {
-    if (subject) {
+    if (viewActive && subject) {
       wakeManagedRuntimeInstall(subject)
     }
-  }, [subject, contactEpoch])
+  }, [subject, contactEpoch, viewActive])
   const read = useCallback(() => (subject ? readManagedRuntimeInstall(subject) : null), [subject])
-  const snapshot = useSyncExternalStore(subscribeManagedRuntimeInstalls, read, read)
+  const snapshot = useAppViewExternalStore(subscribeManagedRuntimeInstalls, read, read)
   const observation = useMemo((): ManagedRuntimeInstallObservation => {
     if (capable === false || (list === 'loaded' && !managed)) {
       return INACTIVE
@@ -149,13 +155,13 @@ export function useManagedRuntimeInstall(
   const hostCapabilities = remote?.capabilities
   // The slot waits on the host's answer, so make sure it was asked.
   useEffect(() => {
-    if (pending && list === null) {
+    if (viewActive && pending && list === null) {
       void (
         environmentId === null
           ? ensureLocalRuntimeCapabilities()
           : Promise.resolve(hostCapabilities)
       ).then((capabilities) => loadHostStructuredAgents(executionHostId, capabilities, runtimeId))
     }
-  }, [environmentId, executionHostId, hostCapabilities, list, pending, runtimeId])
+  }, [environmentId, executionHostId, hostCapabilities, list, pending, runtimeId, viewActive])
   return observation
 }

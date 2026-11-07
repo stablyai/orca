@@ -4,24 +4,16 @@ import type { AppState } from '../../types'
 export type WorktreeTabModelReconciliationBatch = {
   /** Top-level `AppState` keys this fold already cloned and therefore owns. */
   readonly ownedStateKeys: Set<string>
-  readonly liveEditorIdsByWorktree: ReadonlyMap<string, Set<string>>
+  readonly liveEditorIds: ReadonlySet<string>
 }
-
-export const EMPTY_LIVE_EDITOR_IDS: ReadonlySet<string> = new Set<string>()
 
 export function createWorktreeTabModelReconciliationBatch(
   state: Pick<AppState, 'openFiles'>
 ): WorktreeTabModelReconciliationBatch {
-  const liveEditorIdsByWorktree = new Map<string, Set<string>>()
-  for (const file of state.openFiles) {
-    let ids = liveEditorIdsByWorktree.get(file.worktreeId)
-    if (!ids) {
-      ids = new Set<string>()
-      liveEditorIdsByWorktree.set(file.worktreeId, ids)
-    }
-    ids.add(file.id)
+  return {
+    ownedStateKeys: new Set<string>(),
+    liveEditorIds: new Set(state.openFiles.map((file) => file.id))
   }
-  return { ownedStateKeys: new Set<string>(), liveEditorIdsByWorktree }
 }
 
 /** Mutate only batch-owned maps; preserve spread insertion order (existing keys keep their slot, new keys append). */

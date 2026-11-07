@@ -3,8 +3,11 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
-import type { RuntimeFileSnapshot } from '../runtime/runtime-file-range-client'
-import { pagedTextFileResult, readFileInChunks } from '../runtime/runtime-paged-file-read'
+import type { RuntimeFileSnapshot } from '../runtime/files/reads/runtime-file-range-client'
+import {
+  pagedTextFileResult,
+  readFileInChunks
+} from '../runtime/files/reads/runtime-paged-file-read'
 import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
 import {
   compareDiskWritePrecondition,

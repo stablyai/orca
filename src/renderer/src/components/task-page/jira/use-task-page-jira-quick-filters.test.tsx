@@ -8,7 +8,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host'
 const { read, write } = vi.hoisted(() => ({ read: vi.fn(), write: vi.fn() }))
-vi.mock('@/runtime/runtime-jira-quick-filter-state', () => ({
+vi.mock('@/runtime/jira/runtime-jira-quick-filter-state', () => ({
   readJiraQuickFilterState: read,
   writeJiraQuickFilterState: write
 }))

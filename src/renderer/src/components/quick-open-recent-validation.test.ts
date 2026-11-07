@@ -1,13 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ list: vi.fn(), cancel: vi.fn() }))
-vi.mock('@/runtime/runtime-file-request-debounce', () => ({
+vi.mock('@/runtime/files/runtime-file-request-debounce', () => ({
   debounceRuntimeFileRequest: (
     _delay: number,
     _signal: AbortSignal,
     request: () => Promise<unknown>
   ) => request()
 }))
-vi.mock('@/runtime/runtime-file-search-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   listRuntimeFiles: mocks.list,
   cancelRuntimeFileList: mocks.cancel
 }))

@@ -1,3 +1,4 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React from 'react'
 import { ExternalLink, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ export function ConversationCommentCard({
   comment,
   isReply = false,
   repoPath,
+  itemType,
   repoId,
   sourceContext,
   prNumber,
@@ -41,6 +43,7 @@ export function ConversationCommentCard({
 }: {
   comment: PRComment
   isReply?: boolean
+  itemType: 'issue' | 'pr'
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
@@ -162,6 +165,13 @@ export function ConversationCommentCard({
         <CommentReactions reactions={comment.reactions} />
         {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
+            imageUploadAddress={githubCommentImageUploadAddress({
+              repoPath: repoPath ?? '',
+              repoId,
+              sourceContext,
+              type: itemType,
+              prRepo
+            })}
             className="mt-3"
             placeholder={
               comment.path

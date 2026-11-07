@@ -12,6 +12,7 @@ import { terminalLayoutsWithFrameBindings } from './workspace-layout-frame-bindi
 import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
 import { layoutViewAndFactsOfStore } from '@/store/workspace-layout-frame-store-view'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { buildUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { splitWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-split'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
@@ -65,8 +66,9 @@ export function fullLayoutFrameBuildPatch(
   holds: LayoutFrameBuildHolds
 ): LayoutFrameBuildPatch {
   const built = new Set(keys)
-  const own = splitWorkspaceSessionByHost(buildWorkspaceSessionPayload(state), (key) =>
-    built.has(key) ? LOCAL_EXECUTION_HOST_ID : OTHER_WORKSPACES
+  const own = splitWorkspaceSessionByHost(
+    { ...buildWorkspaceSessionPayload(state), ...buildUnifiedTabSessionData(state) },
+    (key) => (built.has(key) ? LOCAL_EXECUTION_HOST_ID : OTHER_WORKSPACES)
   )[LOCAL_EXECUTION_HOST_ID]!
   const { facts, desktopView } = loadWorkspaceLayoutWithoutReport(
     LOCAL_EXECUTION_HOST_ID,

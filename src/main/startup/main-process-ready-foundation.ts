@@ -54,7 +54,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
 import { syncMacMenuBarIcon } from './main-window-actions'
-import { syncNotchStatus } from './notch-status-wiring'
+import { syncNotchStatusSettingUpdate } from './notch-status-wiring'
 import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
@@ -161,6 +161,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'desktop',
+    initializeHomeWorkspace: !state.isServeMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure,
     onPersistenceSaveDelayChanged: reportProfileStateSaveDelay
@@ -273,9 +274,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
-    if ('showNotchStatus' in updates) {
-      syncNotchStatus(settings.showNotchStatus === true)
-    }
+    syncNotchStatusSettingUpdate(updates, settings)
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
       // The ensure gate blocks only new relays; stop live guests/timers on disable and resume on enable for existing panes.

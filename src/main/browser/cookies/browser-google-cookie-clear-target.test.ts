@@ -88,7 +88,7 @@ const { replaceRuntimeEnvironmentRevisions } = await vi.importActual<{
 }>('../../../renderer/src/runtime/runtime-environment-revision')
 const { createTestStore } = await vi.importActual<{
   createTestStore(): BrowserTestStore
-}>('../../../renderer/src/store/slices/browser-slice-test-harness')
+}>('../../../renderer/src/store/slices/browser/browser-slice-test-harness')
 const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await vi.importActual<{
   captureGoogleCookieClearTarget(
     hostId: string,

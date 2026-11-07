@@ -84,6 +84,8 @@ export type RecognizerConfigInput = {
   files: string[]
   hotwordsFilePath?: string
   modelingUnit?: string
+  // Absent = auto-detect; only Whisper and SenseVoice read it.
+  language?: string
 }
 
 // The user waits on offline decode at stop (and per 30 s chunk); 4 threads cut it ~35% at equal memory.
@@ -147,7 +149,8 @@ export function buildRecognizerConfig(msg: RecognizerConfigInput): {
       modelConfig: {
         whisper: {
           encoder: resolveFile(files, 'encoder', modelDir),
-          decoder: resolveFile(files, 'decoder', modelDir)
+          decoder: resolveFile(files, 'decoder', modelDir),
+          language: msg.language ?? ''
         },
         tokens,
         numThreads: OFFLINE_NUM_THREADS,
@@ -180,8 +183,7 @@ export function buildRecognizerConfig(msg: RecognizerConfigInput): {
       modelConfig: {
         senseVoice: {
           model: resolveFile(files, 'model', modelDir),
-          // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
-          language: '',
+          language: msg.language ?? '',
           useInverseTextNormalization: 1
         },
         tokens,

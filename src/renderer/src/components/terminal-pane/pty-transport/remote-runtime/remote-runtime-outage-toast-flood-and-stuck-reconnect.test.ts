@@ -249,7 +249,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     const { retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./recovery/remote-runtime-pty-recovery-state')
     const { updateTerminalRemoteRuntimeRecoveryUiState } =
-      await import('../../terminal-remote-runtime-recovery-ui-state')
+      await import('./recovery/terminal-remote-runtime-recovery-ui-state')
     const onError = vi.fn()
     let bannerUiState: Parameters<typeof updateTerminalRemoteRuntimeRecoveryUiState>[0] = {}
     const transport = createRemoteRuntimePtyTransport('env-1', {

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ getRuntimeGitSubmoduleStatus: vi.fn() }))
 
-vi.mock('@/runtime/runtime-git-status-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitSubmoduleStatus: mocks.getRuntimeGitSubmoduleStatus
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))

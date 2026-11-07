@@ -5,7 +5,7 @@ import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/selectors'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {

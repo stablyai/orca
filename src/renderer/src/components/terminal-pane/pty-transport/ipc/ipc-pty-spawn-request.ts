@@ -19,7 +19,9 @@ export type IpcPtySpawnResponse = PtyConnectResult & {
 export async function spawnIpcPty(
   transportOptions: IpcPtyTransportOptions,
   connectOptions: PtyConnectOptions,
-  admittedSessionId?: string
+  admittedSessionId?: string,
+  /** The user's "let agents ask" answer for this launch. */
+  skipAgentWorkspaceTrust = false
 ): Promise<IpcPtySpawnResponse> {
   if (
     !admittedSessionId &&
@@ -50,6 +52,9 @@ export async function spawnIpcPty(
           agentArgs: transportOptions.agentArgsOverride,
           launchPreferences: transportOptions.agentLaunchPreferences,
           startupCwd: transportOptions.cwd,
+          ...(transportOptions.trustWorktreeId
+            ? { trustWorktreeId: transportOptions.trustWorktreeId }
+            : {}),
           placement: { tabId, leafId },
           presentation: 'background',
           ...(transportOptions.terminalKittyKeyboardProtocol === true
@@ -133,11 +138,15 @@ export async function spawnIpcPty(
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
     ...(connectOptions.attachOnlyView ? { attachOnlyView: true } : {}),
     worktreeId,
+    ...(transportOptions.trustWorktreeId
+      ? { trustWorktreeId: transportOptions.trustWorktreeId }
+      : {}),
     ...(tabId ? { tabId } : {}),
     ...(leafId ? { leafId } : {}),
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
     ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
+    ...(skipAgentWorkspaceTrust ? { skipAgentWorkspaceTrust: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

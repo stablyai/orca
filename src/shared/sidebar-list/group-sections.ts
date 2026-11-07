@@ -13,10 +13,10 @@ import {
   getProjectHeaderHostRepos
 } from './host-labels'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { ProjectGroupingIndex } from '../project-section-grouping'
 import {
   appendWorktreeRows,
-  buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
@@ -48,6 +48,7 @@ export type SectionAppendContext = {
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
+  folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
 }
 
 function getProjectHeaderHostScope(
@@ -216,11 +217,9 @@ export function appendOrderedGroups(
         groupDepth: projectGroupDepth,
         sectionKey: key,
         hostContextLabelByRepoId,
-        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+        folderPairByIdentity: ctx.folderPairByIdentity
       })
-      for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
-      }
     }
   }
 }

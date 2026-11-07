@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { NativeChatSignInContext } from './native-chat-sign-in'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { render } from './native-chat-tooltip-test-harness'
@@ -41,6 +42,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
 }))
 
 afterEach(cleanup)
+const signInView = { signingIn: false, signIn: vi.fn() }
 
 function renderMessage(
   role: NativeChatMessage['role'],
@@ -132,6 +134,29 @@ describe('what a user message says about its delivery', () => {
       />
     )
   }
+
+  it('lets a user sign in from the refused message when no composer notice is shown', () => {
+    const { signIn } = signInView
+    render(
+      <NativeChatSignInContext.Provider value={signInView}>
+        <RecordedMessage
+          submission={{
+            clientMessageId: 'signed-out',
+            fence: 1,
+            payloadFingerprint: 'signed-out',
+            dispatchState: 'rejected',
+            rejection: { kind: 'notSignedIn' },
+            providerItemId: null,
+            reason: 'Sign in to Pi.',
+            submittedAt: 1,
+            resolvedAt: 2
+          }}
+        />
+      </NativeChatSignInContext.Provider>
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(signIn).toHaveBeenCalledOnce()
+  })
 
   it.each(['accepted', 'rejected', 'unknown'] as const)(
     'keeps a recorded steer Sending through handoff until it becomes %s',

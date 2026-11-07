@@ -14,7 +14,8 @@ import {
 import {
   buildMobileSessionAgentStatusByWorktree,
   buildMobileSessionWorktreeInputs,
-  getOpenFileIndexes
+  getOpenFileIndexes,
+  excludeCrossPlacedEditorFiles
 } from './mobile-session-inputs'
 import { getEditorDraftVersionByFileId } from './sync-projections'
 import { getMobileTerminalTheme } from './mobile-terminal-theme'
@@ -43,7 +44,10 @@ export function buildMobileSessionTabSnapshots(
     state.tabsByWorktree
   )
 ): RuntimeMobileSessionTabsSnapshot[] {
-  const openFileIndexes = getOpenFileIndexes(state.openFiles)
+  const openFileIndexes = excludeCrossPlacedEditorFiles(
+    getOpenFileIndexes(state.openFiles),
+    state.unifiedTabsByWorktree
+  )
   const browserTabsByWorktree = state.browserTabsByWorktree ?? {}
   const publicationInputs: MobileSessionPublicationInputs = {
     browserTabsByWorktree,
@@ -202,8 +206,12 @@ export function buildMobileSessionTabSnapshots(
       tabGroups && tabGroups.length > 0
         ? pruneTabGroupLayout(inputs.tabGroupLayout, new Set(tabGroups.map((group) => group.id)))
         : groupProjection.tabGroupLayout
+    const hasCrossPlacedTabs = openFileIndexes.crossPlacedWorkspaces.has(worktreeId)
     const content = {
-      activeGroupId: inputs.activeGroupId,
+      activeGroupId:
+        hasCrossPlacedTabs && !tabGroups?.some((group) => group.id === inputs.activeGroupId)
+          ? null
+          : inputs.activeGroupId,
       activeTabId: active?.id ?? null,
       activeTabType: active?.type ?? null,
       ...(tabGroups && tabGroups.length > 0 ? { tabGroups } : {}),

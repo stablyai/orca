@@ -4,6 +4,19 @@ const isProductSource = (file) => !/\.test\.tsx?$/.test(file) && !isUnitTestSupp
 
 export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
   {
+    // Rich Markdown Find owns focus handoff and selection preservation between its inputs and the editor.
+    id: 'editor.rich-markdown-find',
+    specs: [
+      'tests/e2e/markdown-find-adversarial.spec.ts',
+      'tests/e2e/markdown-find-editing.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      (file.startsWith('src/renderer/src/components/editor/rich-markdown/search/') ||
+        file ===
+          'src/renderer/src/components/editor/rich-markdown/instance/RichMarkdownEditorSurface.tsx')
+  },
+  {
     // Same-path files on two hosts must keep separate Monaco models, and each tab reads from its captured owner.
     id: 'editor.host-model-identity',
     specs: ['tests/e2e/editor-model-host-isolation.spec.ts'],
@@ -40,8 +53,8 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
           'src/main/ipc/filesystem/filesystem-read-handlers.ts',
           'src/main/startup/privileged-custom-schemes.ts',
           'src/preload/api/fs-bridge.ts',
-          'src/renderer/src/runtime/runtime-file-range-preview.ts',
-          'src/renderer/src/runtime/runtime-file-read-client.ts',
+          'src/renderer/src/runtime/files/reads/runtime-file-range-preview.ts',
+          'src/renderer/src/runtime/files/reads/runtime-file-read-client.ts',
           'src/shared/file-preview-kind.ts'
         ].includes(file))
   },

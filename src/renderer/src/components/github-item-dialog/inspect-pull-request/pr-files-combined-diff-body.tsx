@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
@@ -16,6 +17,7 @@ import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-di
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 
 export function PRFilesCombinedDiffBody({
+  imageUploadAddress,
   files,
   repoPath,
   repoId,
@@ -49,6 +51,7 @@ export function PRFilesCombinedDiffBody({
   handleSectionSaveRef,
   getCommentableLineNumbers
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
   files: GitHubPRFile[]
   repoPath: string
   repoId: string
@@ -147,6 +150,7 @@ export function PRFilesCombinedDiffBody({
                       'Open files on GitHub'
                     )}
                     renderHeaderTrailingContent={renderViewedCheckbox}
+                    imageUploadAddress={imageUploadAddress}
                     onAddLineComment={handleAddLineComment}
                     addLineCommentLabel={translate(
                       'auto.components.GitHubItemDialog.bf43425540',

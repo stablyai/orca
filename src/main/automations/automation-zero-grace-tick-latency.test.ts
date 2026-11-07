@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import { AutomationService } from './service'
+import { startedAutomationService } from './automation-service-tick.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -60,15 +60,16 @@ describe('AutomationService zero-grace tick latency', () => {
     at: number
   ): Promise<void> => {
     vi.setSystemTime(at)
-    const service = new AutomationService(store, { tickMs: 60_000 })
-    service.setWebContents({ isDestroyed: () => false, send: vi.fn() })
-    service.start()
-    service.setRendererReady()
+    const service = startedAutomationService(store)
     await vi.waitFor(() => {
-      if (store.listAutomations().some((automation) => automation.nextRunAt <= at)) {
+      if (
+        store.listAutomations().some((automation) => automation.nextRunAt <= at) ||
+        store.listAutomationRuns().some((run) => run.status === 'pending')
+      ) {
         throw new Error('Automation evaluation is still saving its next occurrence')
       }
     })
+    await service.runInAutomationLane(store.listAutomations()[0]!.id, async () => undefined)
     service.stop()
   }
 
@@ -85,7 +86,7 @@ describe('AutomationService zero-grace tick latency', () => {
     ['1ms late', 1],
     ['45s late', 45_000]
   ])('dispatches a zero-grace occurrence only the tick was late for (%s)', async (_l, lateMs) => {
-    expect(await statusAt(lateMs)).toBe('dispatching')
+    expect(await statusAt(lateMs)).toBe('dispatched')
   })
 
   it('still skips a zero-grace occurrence that came due during a long sleep', async () => {
@@ -104,6 +105,6 @@ describe('AutomationService zero-grace tick latency', () => {
     await evaluateAt(store, DUE - 30_000)
     expect(store.listAutomationRuns(automation.id)).toHaveLength(0)
     await evaluateAt(store, DUE + 30_000)
-    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatched')
   })
 })

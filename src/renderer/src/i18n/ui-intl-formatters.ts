@@ -2,11 +2,17 @@ import { getIntlLocale } from './i18n'
 import { supportedIntlLocale } from './intl-locale-support'
 
 type CachedFormatter<T> = { locale: string; formatter: T }
-type FormatterOptions = Intl.DateTimeFormatOptions | Intl.NumberFormatOptions | Intl.CollatorOptions
+type FormatterOptions =
+  | Intl.DateTimeFormatOptions
+  | Intl.NumberFormatOptions
+  | Intl.CollatorOptions
+  | Intl.DisplayNamesOptions
 
 const dateTimeFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.DateTimeFormat>>()
 const numberFormats = new WeakMap<FormatterOptions, CachedFormatter<Intl.NumberFormat>>()
 const collators = new WeakMap<FormatterOptions, CachedFormatter<Intl.Collator>>()
+const displayNames = new WeakMap<FormatterOptions, CachedFormatter<Intl.DisplayNames>>()
+const LANGUAGE_NAMES: Intl.DisplayNamesOptions = { type: 'language' }
 
 // Module-level formatters would freeze the language active at import; key by options object and rebuild on switches.
 function cachedFormatter<T>(
@@ -44,6 +50,25 @@ export function uiNumberFormat(options: Intl.NumberFormatOptions): Intl.NumberFo
   )
 }
 
+// Intl formatter caches key on option identity, so these must be module constants.
+const MINUTE_UNIT_FORMAT: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'minute',
+  unitDisplay: 'long'
+}
+const HOUR_UNIT_FORMAT: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'hour',
+  unitDisplay: 'long'
+}
+
+/** "45 minutes", or "2 hours" for whole hours, in the UI language. */
+export function formatMinutesDuration(minutes: number): string {
+  return minutes % 60 === 0
+    ? uiNumberFormat(HOUR_UNIT_FORMAT).format(minutes / 60)
+    : uiNumberFormat(MINUTE_UNIT_FORMAT).format(minutes)
+}
+
 export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
   return cachedFormatter(
     collators,
@@ -51,4 +76,19 @@ export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {
     Intl.Collator,
     (locale) => new Intl.Collator(locale, options)
   )
+}
+
+export function languageDisplayName(locale: string): string {
+  try {
+    return (
+      cachedFormatter(
+        displayNames,
+        LANGUAGE_NAMES,
+        Intl.DisplayNames,
+        (uiLocale) => new Intl.DisplayNames(uiLocale, LANGUAGE_NAMES)
+      ).of(locale) ?? locale
+    )
+  } catch {
+    return locale
+  }
 }

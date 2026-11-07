@@ -18,7 +18,7 @@ import {
 import { verifyPreviewLinkPopulation } from './dashboard-preview-link-population-test-fixture'
 
 import { toast } from 'sonner'
-import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
+import { runtimeStatuses } from '@/store/slices/browser/browser-slice-test-harness'
 import type { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 
 import { getDefaultSettings } from '../../../../shared/constants'

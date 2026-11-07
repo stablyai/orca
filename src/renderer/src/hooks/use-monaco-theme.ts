@@ -19,8 +19,15 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
     }
     let current = true
     // Why lazy: surfaces that never show an editor must not load Monaco for a theme.
-    void import('monaco-editor').then((monaco) => {
-      monaco.editor.defineTheme(pluginTheme.name, pluginTheme.data)
+    void Promise.all([
+      import('monaco-editor'),
+      import('@/lib/monaco-languages/markdown-monaco-theme-rules').then(
+        ({ monacoThemeDataWithMarkdown }) => monacoThemeDataWithMarkdown(pluginTheme.data),
+        // Why: markdown colors are extra; a failed chunk must not keep the theme undefined.
+        () => pluginTheme.data
+      )
+    ]).then(([monaco, data]) => {
+      monaco.editor.defineTheme(pluginTheme.name, data)
       definedThemes.add(pluginTheme.name)
       if (current) {
         setDefined(new Set(definedThemes))

@@ -73,6 +73,19 @@ export function useStructuredAgentSessionHostExecutionPhase(
   )
 }
 
+/** Whether the host says this chat runs a program the host already has; an older host never does. */
+export function useStructuredAgentSessionHostProgram(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.hostProgram === true,
+    () => false
+  )
+}
+
 /** Whether the host says a person's Stop is still ending the work; an older host never does. */
 export function useStructuredAgentSessionHostStopping(
   sessionId: string,

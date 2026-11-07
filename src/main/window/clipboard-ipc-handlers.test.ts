@@ -727,22 +727,27 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('rejects oversized clipboard image dimensions before PNG conversion', async () => {
-    const toPNG = vi.fn(() => Buffer.from([0, 1, 2, 3]))
+  it('downscales a clipboard image whose PNG outgrows the byte limit instead of rejecting it', async () => {
+    const fittedPng = Buffer.from([0, 1, 2, 3])
+    const resize = vi.fn(() => ({ toPNG: () => fittedPng }))
     clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
+      getSize: () => ({ height: 4000, width: 6000 }),
       isEmpty: () => false,
-      toPNG
+      resize,
+      toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES * 4)
     })
 
     registerClipboardHandlers({} as never)
 
-    const handlers = getRegisteredHandlers()
     await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
-    ).rejects.toThrow('Clipboard image is too large')
-    expect(toPNG).not.toHaveBeenCalled()
-    expect(fsWriteFileMock).not.toHaveBeenCalled()
+      getRegisteredHandlers().get('clipboard:saveImageAsTempFile')?.(
+        makeClipboardEvent(),
+        undefined
+      )
+    ).resolves.toMatch(/\.png$/)
+    expect(resize).toHaveBeenCalledTimes(1)
+    expect(resize).toHaveBeenCalledWith({ height: 1800, quality: 'best', width: 2700 })
+    expect(fsWriteFileMock).toHaveBeenCalledWith(expect.any(String), fittedPng)
   })
 
   it('rejects oversized clipboard PNG bytes before SSH provider lookup', async () => {
