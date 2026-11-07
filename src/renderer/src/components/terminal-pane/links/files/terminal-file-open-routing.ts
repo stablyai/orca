@@ -29,7 +29,7 @@ import {
   type HostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
-import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
 
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
