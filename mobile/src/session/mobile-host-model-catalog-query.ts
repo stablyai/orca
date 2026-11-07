@@ -72,11 +72,16 @@ export function useHostModelCatalogCache(args: {
           launch
         ),
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      record: (worktree, catalog) =>
+      record: (worktree, catalog) => {
         queryClient.setQueryData<HostModelCatalogSnapshot | null>(
           queryKey,
           (snapshot) => withHostModelCatalogAnswer(snapshot ?? undefined, worktree, catalog) ?? null
         )
+        // A preload sent before this answer is older; cancelling it keeps the data just set.
+        if (queryClient.isFetching({ queryKey, exact: true }) > 0) {
+          void queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+        }
+      }
     }
   }, [agent, exec, hostId, queryClient])
 }

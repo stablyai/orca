@@ -83,6 +83,16 @@ describe('host model catalog snapshots', () => {
     recordHostModelCatalogSnapshot(LOCAL, 'grok', 'wt-1', { origin: 'unknown' })
     expect(readHostModelCatalogSnapshot(LOCAL, 'grok', NEW_CHAT)).toBe(worldwide)
   })
+
+  it('keeps a held list through an answer whose listing is still running', () => {
+    const held = list(true)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', held)
+    recordHostModelCatalogSnapshot(LOCAL, 'claude', 'wt-1', {
+      origin: 'unknown',
+      listingInProgress: true
+    })
+    expect(readHostModelCatalogSnapshot(LOCAL, 'claude', NEW_CHAT)).toBe(held)
+  })
 })
 
 const SAVED_ONLY = 'agent-session.model-catalog.saved-only.v1'
