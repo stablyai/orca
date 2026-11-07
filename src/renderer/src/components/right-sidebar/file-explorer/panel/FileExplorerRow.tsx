@@ -19,6 +19,7 @@ import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { createMultiSelectDragGhost } from '../mutations/file-explorer-multi-drag-image'
 import { FileExplorerRowContextMenu } from './file-explorer-row-context-menu'
+import { splitFileExplorerRowName } from './file-explorer-row-name-split'
 
 export type FileExplorerRowProps = {
   node: TreeNode
@@ -116,6 +117,7 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const showLoadError = node.isDirectory && isExpanded && !isLoading && loadError !== null
   const rowDropDir = node.isDirectory ? node.path : targetDir
+  const [nameHead, nameTail] = React.useMemo(() => splitFileExplorerRowName(node.name), [node.name])
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -227,8 +229,9 @@ export function FileExplorerRow({
             </>
           )}
           <span
+            title={node.name}
             className={cn(
-              'truncate',
+              nameTail ? 'flex min-w-0' : 'truncate',
               isSelected && !nodeStatus && !isIgnored && 'text-accent-foreground',
               // Reserve space for italic overhang so truncation does not clip the final letter.
               isIgnored && 'italic pr-0.5'
@@ -241,7 +244,32 @@ export function FileExplorerRow({
                   : undefined
             }
           >
-            {node.name}
+            {nameTail ? (
+              <>
+                <span className="sr-only">{node.name}</span>
+                {/* whitespace-pre: a space at the split would collapse at the edge of a flex item. */}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'min-w-0 overflow-hidden text-ellipsis whitespace-pre',
+                    isIgnored && 'pr-0.5 -mr-0.5'
+                  )}
+                >
+                  {nameHead}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'max-w-full shrink-0 overflow-hidden text-ellipsis whitespace-pre',
+                    isIgnored && 'pr-0.5'
+                  )}
+                >
+                  {nameTail}
+                </span>
+              </>
+            ) : (
+              node.name
+            )}
           </span>
           {showLoadError ? (
             <span className="w-0 flex-1 truncate text-destructive" title={loadError}>
