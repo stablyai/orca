@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { ChevronDown, Send, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
@@ -34,6 +34,7 @@ export function DashboardAgentRowTrailingControls({
   onToggleExpanded,
   onSendTargetClick
 }: DashboardAgentRowTrailingControlsProps): React.JSX.Element {
+  const t = useTranslate()
   // Nested controls must not activate the agent row or enclosing worktree card.
   const stopMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
@@ -91,17 +92,14 @@ export function DashboardAgentRowTrailingControls({
             'worktree-agent-send-target-button z-10 inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity] whitespace-nowrap',
             sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.dashboard.DashboardAgentRow.0272969e28',
             'Send to this agent'
           )}
-          title={translate(
-            'auto.components.dashboard.DashboardAgentRow.0272969e28',
-            'Send to this agent'
-          )}
+          title={t('auto.components.dashboard.DashboardAgentRow.0272969e28', 'Send to this agent')}
         >
           <Send className="size-3" />
-          <span>{translate('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
+          <span>{t('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
         </button>
       )}
       {!hasChildDisclosure && !sendTargetStatus && hideDismiss && relativeTimestamp !== null && (
@@ -135,11 +133,11 @@ export function DashboardAgentRowTrailingControls({
               'can-hover:opacity-0 transition-opacity duration-150',
               'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
               'Dismiss agent'
             )}
-            title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+            title={t('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
           >
             <X className="size-3.5" />
           </button>
@@ -156,11 +154,8 @@ export function DashboardAgentRowTrailingControls({
             'can-hover:opacity-0 transition-opacity duration-150',
             'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
           )}
-          aria-label={translate(
-            'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
-            'Dismiss agent'
-          )}
-          title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+          aria-label={t('auto.components.dashboard.DashboardAgentRow.b06e13fcf7', 'Dismiss agent')}
+          title={t('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
         >
           <X className="size-3.5" />
         </button>
@@ -186,14 +181,8 @@ export function DashboardAgentRowTrailingControls({
           className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
           aria-label={
             expanded
-              ? translate(
-                  'auto.components.dashboard.DashboardAgentRow.a41fb5376e',
-                  'Collapse details'
-                )
-              : translate(
-                  'auto.components.dashboard.DashboardAgentRow.a743da52ff',
-                  'Expand details'
-                )
+              ? t('auto.components.dashboard.DashboardAgentRow.a41fb5376e', 'Collapse details')
+              : t('auto.components.dashboard.DashboardAgentRow.a743da52ff', 'Expand details')
           }
           aria-expanded={expanded}
         >

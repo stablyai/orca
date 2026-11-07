@@ -28,6 +28,7 @@ import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import { emulatorStartErrorText, noEmulatorDevicesError } from './emulator-pane-error-copy'
 import { SIMULATOR_DEFAULT_TAB_LABEL, formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+import { useTranslate } from '@/i18n/use-translate'
 
 type UseEmulatorPaneSessionArgs = {
   worktreeId: string
@@ -40,6 +41,7 @@ export function useEmulatorPaneSession({
   tabId,
   autoAttachOnMount
 }: UseEmulatorPaneSessionArgs) {
+  const t = useTranslate()
   const configuredDefaultUdid = useAppStore((state) =>
     state.settings && getEmulatorOpeningMode(state.settings) === 'specific'
       ? (state.settings.mobileEmulatorDefaultDeviceUdid ?? null)
@@ -307,7 +309,7 @@ export function useEmulatorPaneSession({
     sendGesture,
     sendRotate,
     visualOrientation,
-    displayName: formatSimulatorTabLabel(view.displayName),
+    displayName: formatSimulatorTabLabel(view.displayName, t),
     previewUrl: view.previewUrl,
     wsUrl: view.wsUrl,
     streamKey: streamKey ?? undefined,

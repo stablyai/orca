@@ -19,9 +19,9 @@ function remoteServerScopeLabel(name: string, t: Translate = translate): string 
   )
 }
 
-function providerHostScopeLabel(target: RuntimeClientTarget): string {
+function providerHostScopeLabel(target: RuntimeClientTarget, t?: Translate): string {
   return target.kind === 'environment'
-    ? remoteServerScopeLabel(target.environmentId)
+    ? remoteServerScopeLabel(target.environmentId, t)
     : getLocalExecutionHostLabel()
 }
 
@@ -44,18 +44,19 @@ export function getRemoteAccountsPaneScope(
 }
 
 export function getProviderAccountScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  t: Translate = translate
 ): ProviderHostScope {
   const target = defaultScopeHost(settings)
   return {
-    label: providerHostScopeLabel(target),
+    label: providerHostScopeLabel(target, t),
     description:
       target.kind === 'environment'
-        ? translate(
+        ? t(
             'auto.components.settings.providerAccountScope.remoteServerCredentialsNewProjects',
             'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
           )
-        : translate(
+        : t(
             'auto.components.settings.providerAccountScope.localCredentialsNewProjects',
             'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
           )
@@ -64,18 +65,19 @@ export function getProviderAccountScope(
 
 export function getProviderRateLimitScope(
   target: RuntimeClientTarget,
-  providerLabel: string
+  providerLabel: string,
+  t: Translate = translate
 ): ProviderHostScope {
   return {
-    label: providerHostScopeLabel(target),
+    label: providerHostScopeLabel(target, t),
     description:
       target.kind === 'environment'
-        ? translate(
+        ? t(
             'auto.components.settings.providerAccountScope.remoteServerRateLimit',
             '{{value0}} API budget is fetched from the CLI on this remote server. Choose another host in the Host menu at the top of Settings to see its budget.',
             { value0: providerLabel }
           )
-        : translate(
+        : t(
             'auto.components.settings.providerAccountScope.localRateLimit',
             '{{value0}} API budget is fetched from the CLI on this desktop client. Choose a server in the Host menu at the top of Settings to see its budget.',
             { value0: providerLabel }
