@@ -12,7 +12,7 @@ import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
 /** Normalize Pi/OMP/Prime lifecycle, question waits and live roster/model evidence; ignore events with no status. */
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'prime-agent' | 'omo',
   eventName: unknown,
   promptText: string,
   paneKey: string,
@@ -140,7 +140,7 @@ const OMP_APPROVAL_RELEASE_EVENTS: ReadonlySet<unknown> = new Set([
 /** OMP tool_execution_start may precede the human decision; only approval resolution/new turn clears it. ask waits end with their own tool. */
 function holdsOmpApproval(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'prime-agent' | 'omo',
   eventName: unknown,
   paneKey: string
 ): boolean {
@@ -156,7 +156,7 @@ function holdsOmpApproval(
 /** Earlier async children can emit agent_end under an open plan overlay; only review resolution/new session clears it. */
 function holdsOmpPlanReview(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'prime-agent' | 'omo',
   hookPayload: Record<string, unknown>,
   paneKey: string
 ): boolean {

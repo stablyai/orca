@@ -30,10 +30,13 @@ export function getPiOmpRuntimeDetectionSourceLines(configuredHookPath: string):
   ]
 }
 
-export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): string[] {
+export function getPiAgentStatusRuntimeDetectionSourceLines(
+  kind: PiAgentKind,
+  hookKind: PiAgentKind
+): string[] {
   if (kind === 'prime-agent') {
     return [
-      `const CONFIGURED_HOOK_PATH = '/hook/${kind}'`,
+      `const CONFIGURED_HOOK_PATH = '/hook/${hookKind}'`,
       '',
       'function isOmpRuntime(): boolean {',
       '  return false',
@@ -46,7 +49,7 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(kind: PiAgentKind): 
   }
 
   return [
-    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`),
+    ...getPiOmpRuntimeDetectionSourceLines(`/hook/${hookKind}`),
     '',
     'function resolveHookPath(ompRuntime: boolean): string {',
     '  // Bare-shell OMP may run inside a configured Pi pane.',

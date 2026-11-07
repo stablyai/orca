@@ -277,10 +277,7 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionId', 'session_id'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'devin': {
-      const id = readSessionId(payload, ['session_id', 'sessionId'])
-      return id ? { key: 'session_id', id } : null
-    }
+    case 'devin':
     case 'jcode': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
@@ -300,6 +297,7 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['conversation_id'])
       return id ? { key: 'conversation_id', id } : null
     }
+    case 'omo': // Why: omo resume is not wired yet, so restarts must not attempt it.
     case 'amp':
     case 'command-code':
       return null

@@ -235,5 +235,28 @@ describe('PiTitlebarExtensionService', () => {
         rmSync(fakeHome, { recursive: true, force: true })
       }
     })
+
+    it('installs only the omo status extension into an existing ~/.omo/agent', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-omo-agent-home-'))
+      homedirOverride.current = fakeHome
+      try {
+        const svc = new PiTitlebarExtensionService()
+        expect(
+          svc.buildPtyEnv('pty-bare-omo', undefined, 'omo', { materializeDefaultHome: false })
+        ).toEqual({})
+        expect(existsSync(join(fakeHome, '.omo'))).toBe(false)
+
+        const omoDir = join(fakeHome, '.omo', 'agent')
+        mkdirSync(omoDir, { recursive: true })
+        const env = svc.buildPtyEnv('pty-omo', undefined, 'omo', { materializeDefaultHome: false })
+        expect(env).toEqual({ ORCA_OMO_SOURCE_AGENT_DIR: omoDir })
+        const status = readFileSync(join(omoDir, 'extensions', 'orca-agent-status.ts'), 'utf8')
+        expect(status).toContain("CONFIGURED_HOOK_PATH = '/hook/omo'")
+        expect(existsSync(join(omoDir, 'extensions', 'orca-prefill.ts'))).toBe(false)
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
   })
 })

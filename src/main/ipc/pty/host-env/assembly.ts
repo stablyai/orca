@@ -82,6 +82,8 @@ export function buildPtyHostEnv(
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('omp', opts.disabledTuiAgents)
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
+  const shouldInstallOmoExtensions =
+    opts.agentStatusHooksEnabled && isTuiAgentEnabled('omo', opts.disabledTuiAgents)
   // Pi/OMP source shadows are agent-scoped to avoid cross-agent extension state.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
@@ -92,6 +94,7 @@ export function buildPtyHostEnv(
     piAgentKind === 'prime-agent'
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
+  const preexistingOmoAgentDir = resolvePiAgentSourceDir(baseEnv, 'omo')
 
   const openCodeAgent = applyOpenCodeStatusPluginEnv(
     id,
@@ -174,6 +177,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'omo')
     // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
@@ -211,6 +215,15 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
+
+    // Why: users type `omo` in bare shells, so install into an existing omo home there too.
+    if (shouldInstallOmoExtensions && (piAgentKind === 'omo' || !hasLaunchCommand) && !opts.isWsl) {
+      const omoEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingOmoAgentDir, 'omo', {
+        materializeDefaultHome: explicitPiAgentKind === 'omo'
+      })
+      Object.assign(baseEnv, omoEnv)
+      exposePiManagedExtensionEnv(baseEnv, 'omo', omoEnv)
+    }
   } else {
     // Nested PTYs must not inherit another agent's source/overlay state.
     restoreOrStripOverlayEnv(baseEnv, {
@@ -229,6 +242,7 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {

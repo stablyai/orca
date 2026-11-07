@@ -4,6 +4,7 @@ const PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 
 const STATIC_INTERPRETER_PROCESS_NAMES = new Set([
   'node',
+  'bun',
   'python',
   'python3',
   'bash',

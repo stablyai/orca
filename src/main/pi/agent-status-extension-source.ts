@@ -9,7 +9,9 @@ import { getPiSubagentSnapshotSourceLines } from './agent-status-subagent-roster
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 /** Self-contained source runs inside Pi-family agents without Orca module imports. */
-export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
+export function getPiAgentStatusExtensionSource(agentKind: PiAgentKind = 'pi'): string {
+  // Why: omo runs senpi, a Pi fork; it gets Pi's extension and reports on its own route.
+  const kind = agentKind === 'omo' ? 'pi' : agentKind
   // OMP resumes by id; its persistent file path lets native chat skip discovery.
   const sessionMetadataSourceLines =
     kind !== 'omp'
@@ -173,7 +175,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  }',
     '}',
     '',
-    ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
+    ...getPiAgentStatusRuntimeDetectionSourceLines(kind, agentKind),
     '',
     'function post(hookEventName: string, extra: Record<string, unknown> = {}, final = false): void {',
     '  const ompRuntime = isOmpRuntime()',
