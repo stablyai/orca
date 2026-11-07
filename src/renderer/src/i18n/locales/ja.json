@@ -12929,7 +12929,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "まだコミットはありません",
-            "781a8bcf7b": "グラフを読み込んでいます…",
             "d0fb0f4bf2": "コミットを更新する",
             "9f7535d22b": "Ref は、そのコミットそのものを指すブランチ名またはタグ名です。これらは、Git にコミットの名前付き参照がある場合にのみ表示されます。",
             "9289ba0cb9": "リファレンスとは何ですか?",
@@ -14131,7 +14130,6 @@
             "f8a2c4d1e0": "エクスプローラー検索モード"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "ファイルを読み込み中…",
             "b2c3d4e5f6": "このコミットにはファイルの変更がありません",
             "c3d4e5f6a7": "すべての変更をまとめて開く"
           },
@@ -23176,5 +23174,32 @@
     "discussionAction": "ディスカッションに参加",
     "checkAction": "互換性を確認",
     "settingsStatus": "Orca {{version}} には macOS {{macos}} 以降が必要です。この Mac ではこのバージョンが最新です。"
+  },
+  "gitGraph": {
+    "copyHash": "コミットハッシュをコピー",
+    "parents": "親コミット",
+    "files": "ファイル",
+    "currentBranch": "現在のブランチ",
+    "allBranches": "すべてのブランチ",
+    "chosenBranches": "選択したブランチ",
+    "searchRefs": "ブランチとタグを検索",
+    "oldServer": "このサーバーのOrcaは現在のブランチのみ表示します",
+    "copyBranch": "ブランチ名をコピー",
+    "switchWorkspace": "ワークスペースに切り替え",
+    "workspaceClosed": "このブランチは別のワークスペースで開かれていません。",
+    "workspaceCheckFailed": "このワークスペースを確認できませんでした。接続後にもう一度お試しください。",
+    "refresh": "コミットを更新",
+    "branchTag": "ブランチ / タグ",
+    "graph": "グラフ",
+    "resizeColumn": "グラフ列の幅を変更",
+    "message": "メッセージ",
+    "author": "作成者",
+    "date": "日付",
+    "loadMore": "さらに読み込む",
+    "noCommits": "コミットはまだありません",
+    "historyChanged": "履歴が再び変更されました。Gitグラフを更新して再試行してください。",
+    "loadFailed": "Git履歴を読み込めませんでした",
+    "updateHost": "Gitグラフを開くには{{host}}のOrcaを更新してください",
+    "title": "Gitグラフ"
   }
 }

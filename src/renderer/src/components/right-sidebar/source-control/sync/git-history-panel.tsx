@@ -1,3 +1,5 @@
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { GitGraphOpenButton } from './git-graph-open-button'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -45,6 +47,7 @@ function clampGitHistoryPanelHeight(height: number): number {
 
 export function GitHistoryPanel({
   state,
+  worktreeId,
   collapsed,
   onToggle,
   onRefresh,
@@ -53,6 +56,7 @@ export function GitHistoryPanel({
   onOpenCommitFile,
   onCommitAction
 }: {
+  worktreeId?: string
   state: GitHistoryPanelState
   collapsed: boolean
   onToggle: () => void
@@ -90,20 +94,28 @@ export function GitHistoryPanel({
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
-  // Avoid duplicate/in-flight expansion fetches; clear errors to permit retry.
-  const loadedCommitsRef = useRef<{
-    result: GitHistoryResult | undefined
-    ids: Set<string>
-  }>(undefined!)
-  loadedCommitsRef.current ??= { result, ids: new Set() }
-
-  // New history can replace rows; discard expansions and cached files to avoid stale associations.
-  const [historyResult, setHistoryResult] = useState(result)
-  if (historyResult !== result) {
-    setHistoryResult(result)
-    setExpanded(new Set())
-    setFilesByCommit({})
+  const loadedCommitsRef = useRef(new Set<string>())
+  const [previousResult, setPreviousResult] = useState(result)
+  if (result !== previousResult) {
+    setPreviousResult(result)
+    const ids = new Set(result?.items.map((item) => item.id))
+    setExpanded(new Set([...expanded].filter((id) => ids.has(id))))
+    setFilesByCommit(
+      Object.fromEntries(Object.entries(filesByCommit).filter(([id]) => ids.has(id)))
+    )
   }
+  useEffect(() => {
+    const ids = new Set(result?.items.map((item) => item.id))
+    loadedCommitsRef.current = new Set([...loadedCommitsRef.current].filter((id) => ids.has(id)))
+  }, [result])
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const virtualizer = useVirtualizer({
+    count: collapsed ? 0 : viewModels.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 28,
+    overscan: 8,
+    getItemKey: (index) => `${viewModels[index]!.kind}:${viewModels[index]!.historyItem.id}`
+  })
 
   const handleToggleExpand = useCallback(
     (item: GitHistoryItem): void => {
@@ -118,23 +130,17 @@ export function GitHistoryPanel({
         }
         return next
       })
-      // Reset the in-flight lock in the click handler, not render; new results can reuse commit IDs with different files.
-      if (loadedCommitsRef.current.result !== result) {
-        loadedCommitsRef.current = { result, ids: new Set() }
-      }
-      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.ids.has(id)) {
+      if (!willExpand || !onLoadCommitFiles || loadedCommitsRef.current.has(id)) {
         return
       }
-      loadedCommitsRef.current.ids.add(id)
+      loadedCommitsRef.current.add(id)
       setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'loading' } }))
       onLoadCommitFiles(item)
         .then((entries) => {
           setFilesByCommit((prev) => ({ ...prev, [id]: { status: 'ready', entries } }))
         })
         .catch((error: unknown) => {
-          if (loadedCommitsRef.current.result === result) {
-            loadedCommitsRef.current.ids.delete(id)
-          }
+          loadedCommitsRef.current.delete(id)
           setFilesByCommit((prev) => ({
             ...prev,
             [id]: {
@@ -150,7 +156,7 @@ export function GitHistoryPanel({
           }))
         })
     },
-    [expanded, onLoadCommitFiles, result]
+    [expanded, onLoadCommitFiles]
   )
 
   const stopResize = useCallback((): void => {
@@ -261,6 +267,7 @@ export function GitHistoryPanel({
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
+          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} />}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -327,21 +334,7 @@ export function GitHistoryPanel({
         </div>
       )}
       {!collapsed && (state.status === 'idle' || state.status === 'loading') && !result && (
-        <div
-          className={cn(
-            expandedBodyClassName,
-            'flex items-start gap-2 px-6 py-2 text-[11px] text-muted-foreground'
-          )}
-          style={expandedBodyStyle}
-        >
-          <RefreshCw className="size-3 animate-spin" />
-          <span>
-            {translate(
-              'auto.components.right.sidebar.GitHistoryPanel.781a8bcf7b',
-              'Loading graph...'
-            )}
-          </span>
-        </div>
+        <div className={expandedBodyClassName} style={expandedBodyStyle} />
       )}
       {!collapsed && result && viewModels.length === 0 && (
         <div
@@ -352,45 +345,54 @@ export function GitHistoryPanel({
         </div>
       )}
       {!collapsed && viewModels.length > 0 && (
-        <div className={expandedBodyClassName} style={expandedBodyStyle}>
-          {viewModels.map((viewModel) => {
-            const item = viewModel.historyItem
-            const isBoundaryNode =
-              viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
-            const canExpand =
-              !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
-            const isExpanded = canExpand && expanded.has(item.id)
-            const row = (
-              <GitHistoryRow
-                viewModel={viewModel}
-                expanded={isExpanded}
-                preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
-                onOpenCommit={onOpenCommit}
-                onToggleExpand={canExpand ? handleToggleExpand : undefined}
-              />
-            )
-            return (
-              <React.Fragment key={`${viewModel.kind}:${item.id}`}>
-                {onCommitAction && !isBoundaryNode ? (
-                  <ContextMenu>
-                    <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-                    <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
-                  </ContextMenu>
-                ) : (
-                  row
-                )}
-                {isExpanded && (
-                  <GitHistoryCommitFiles
-                    state={filesByCommit[item.id] ?? { status: 'loading' }}
-                    author={item.author}
-                    timestamp={item.timestamp}
-                    onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
-                    onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
-                  />
-                )}
-              </React.Fragment>
-            )
-          })}
+        <div ref={scrollRef} className={expandedBodyClassName} style={expandedBodyStyle}>
+          <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const viewModel = viewModels[virtualRow.index]!
+              const item = viewModel.historyItem
+              const isBoundaryNode =
+                viewModel.kind === 'incoming-changes' || viewModel.kind === 'outgoing-changes'
+              const canExpand =
+                !isBoundaryNode && Boolean(onLoadCommitFiles) && Boolean(onOpenCommitFile)
+              const isExpanded = canExpand && expanded.has(item.id)
+              const row = (
+                <GitHistoryRow
+                  viewModel={viewModel}
+                  expanded={isExpanded}
+                  preserveRefIds={result?.baseRef ? [result.baseRef.id] : undefined}
+                  onOpenCommit={onOpenCommit}
+                  onToggleExpand={canExpand ? handleToggleExpand : undefined}
+                />
+              )
+              return (
+                <div
+                  key={`${viewModel.kind}:${item.id}`}
+                  data-index={virtualRow.index}
+                  ref={virtualizer.measureElement}
+                  className="absolute left-0 top-0 w-full"
+                  style={{ transform: `translateY(${virtualRow.start}px)` }}
+                >
+                  {onCommitAction && !isBoundaryNode ? (
+                    <ContextMenu>
+                      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+                      <GitHistoryCommitContextMenu item={item} onAction={onCommitAction} />
+                    </ContextMenu>
+                  ) : (
+                    row
+                  )}
+                  {isExpanded && (
+                    <GitHistoryCommitFiles
+                      state={filesByCommit[item.id] ?? { status: 'loading' }}
+                      author={item.author}
+                      timestamp={item.timestamp}
+                      onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
+                      onOpenAll={onOpenCommit ? () => onOpenCommit(item) : undefined}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
