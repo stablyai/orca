@@ -44,7 +44,10 @@ export async function addLocalRepoFromPath(
   ): { repo: Repo; alreadyExisted: true; subdirectoryOf?: string } => ({
     repo,
     alreadyExisted: true,
-    ...(subdirectoryOf ? { subdirectoryOf } : {})
+    // Only the resolved root itself contains the pick; aliases and main checkouts would misname it.
+    ...(subdirectoryOf && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+      ? { subdirectoryOf }
+      : {})
   })
   const existing = store
     .getRepos()

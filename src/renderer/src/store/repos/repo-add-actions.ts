@@ -151,7 +151,7 @@ export function createRepoAddActions(
                     'Open as Folder'
                   ),
                   onClick: () => {
-                    void get().addNonGitFolder(path)
+                    void get().addNonGitFolder(path, { runtimeEnvironmentId: null })
                   }
                 }
               }
