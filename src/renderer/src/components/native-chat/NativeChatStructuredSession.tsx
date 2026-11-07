@@ -289,7 +289,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           ) : viewState.kind === 'empty' ? (
             <NativeChatEmptyPane slot={install.slot} agent={props.agent} />
           ) : (
-            <NativeChatRowActionsProvider pane={props} chat={controller}>
+            <NativeChatRowActionsProvider pane={props} chat={controller} actions={transport}>
               <NativeChatUsageLimitActionsProvider
                 recovery={controller}
                 pane={props}

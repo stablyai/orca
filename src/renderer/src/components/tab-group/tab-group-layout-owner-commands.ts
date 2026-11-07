@@ -21,13 +21,24 @@ export type TabDrop =
   | { kind: 'move'; tabId: string; groupId: string; index?: number }
   | { kind: 'split'; tabId: string; groupId: string; direction: TabSplitDirection }
 
+/** A caller that selects the moved tab itself: it hears main refuse, and decides whether a move main
+ *  hands back is still wanted. It watches the store for the drawn move. */
+export type TabDropCompletion = {
+  refused: () => void
+  moveHere: (move: () => void) => void
+}
+
 /** Send drops to main; refusal leaves tabs in place, while false delegates skipped or paired-server drops to the caller. */
-export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): boolean {
+export function dropTabThroughLayoutOwner(
+  worktreeId: string,
+  drop: TabDrop,
+  completion?: TabDropCompletion
+): boolean {
   const command = commandFor(worktreeId, drop)
   if (!command) {
     return false
   }
-  const forget = expectSelectionAfterMove(worktreeId, drop)
+  const forget = completion ? () => {} : expectSelectionAfterMove(worktreeId, drop)
   const sent = sendLayoutCommandToOwner(worktreeId, command, {
     // Forget after the answering frame; without a stream, retain selection intent for the reconnect snapshot.
     apply: (_result, origin) => {
@@ -37,9 +48,16 @@ export function dropTabThroughLayoutOwner(worktreeId: string, drop: TabDrop): bo
     },
     asToday: () => {
       forget()
-      moveAsToday(worktreeId, drop)
+      if (completion) {
+        completion.moveHere(() => moveAsToday(worktreeId, drop))
+      } else {
+        moveAsToday(worktreeId, drop)
+      }
     },
-    refused: forget
+    refused: () => {
+      forget()
+      completion?.refused()
+    }
   })
   if (!sent) {
     forget()

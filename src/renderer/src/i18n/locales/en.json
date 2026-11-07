@@ -20776,7 +20776,19 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "sideChat": {
+        "description": "Ask a side question in a fork beside this chat",
+        "argumentHint": "<question>",
+        "notReady": "Side chats are not ready yet. Try again in a moment.",
+        "replyRunning": "Available when this reply finishes.",
+        "noReply": "Available after the first reply.",
+        "textOnly": "Side chats take text only. Remove attachments, then send it again.",
+        "questionNotSent": "{{agent}} didn't get your question",
+        "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
+        "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
+        "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      }
     },
     "tab": {
       "bar": {

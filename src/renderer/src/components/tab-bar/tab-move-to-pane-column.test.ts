@@ -95,7 +95,7 @@ describe('tab-move-to-pane-column', () => {
 
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-b', groupId: 'group-1', direction: 'right' })
-    ).toBe(true)
+    ).toBe('moved')
     expect(dropUnifiedTab).toHaveBeenCalledWith('tab-b', {
       groupId: 'group-1',
       splitDirection: 'right'

@@ -177,7 +177,7 @@ describe('a tab move drawn from main’s frame', () => {
   it('moves a tab to a split from its menu where main placed it', async () => {
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-shell', groupId: 'group-a', direction: 'down' })
-    ).toBe(true)
+    ).toBe('owner')
     await settle()
 
     expect(layoutApplyTestTransport.sentOfType('splitGroup')).toEqual([
@@ -201,5 +201,45 @@ describe('a tab move drawn from main’s frame', () => {
 
     expect(groupOf('group-a')!.tabOrder).toEqual(['tab-agent', 'tab-shell', 'editor:src/app.ts'])
     expect(windowTabWrites()).toBe(0)
+  })
+
+  describe('for a caller that selects the moved tab itself', () => {
+    const completion = () => ({ refused: vi.fn(), moveHere: vi.fn() })
+
+    it('draws the move from main’s frame and leaves selecting it to the caller', async () => {
+      const caller = completion()
+      expect(
+        moveTabToNewPaneColumn({
+          unifiedTabId: 'tab-shell',
+          groupId: 'group-a',
+          direction: 'right',
+          completion: caller
+        })
+      ).toBe('owner')
+      await settle()
+
+      expect(tabOf('tab-shell').groupId).toBe(mainGroupOf('tab-shell').id)
+      expect(tabOf('tab-shell').groupId).not.toBe('group-a')
+      expect(caller.refused).not.toHaveBeenCalled()
+      expect(caller.moveHere).not.toHaveBeenCalled()
+      expect(windowTabWrites()).toBe(0)
+    })
+
+    it('tells the caller when main refuses, and leaves the tab where it was', async () => {
+      layoutApplyTestTransport.answerWith({ refuse: 'group_not_found' })
+      const caller = completion()
+
+      moveTabToNewPaneColumn({
+        unifiedTabId: 'tab-shell',
+        groupId: 'group-a',
+        direction: 'right',
+        completion: caller
+      })
+      await settle()
+
+      expect(caller.refused).toHaveBeenCalledTimes(1)
+      expect(tabOf('tab-shell').groupId).toBe('group-a')
+      expect(windowTabWrites()).toBe(0)
+    })
   })
 })

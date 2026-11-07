@@ -1,17 +1,15 @@
 import { useMemo } from 'react'
 import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
-import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import {
   NativeChatForkContext,
   NativeChatForkedFromContext,
-  NativeChatForkSlotContext
+  NativeChatForkSlotContext,
+  NativeChatSideChatForkPointContext
 } from './native-chat-fork-context'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
-import { useNativeChatFork } from './use-native-chat-fork'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 
 /** What the pane's transcript rows offer: rewind on prompts, fork on responses, and the chat a
@@ -19,30 +17,16 @@ import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
 export function NativeChatRowActionsProvider({
   pane,
   chat,
+  actions,
   children
 }: {
-  pane: Pick<NativeChatStructuredViewProps, 'sessionId' | 'tabId' | 'agent' | 'target'>
-  chat: {
-    rewind: { surface: NativeChatRewindSurface | undefined }
-    journalItems: readonly AgentJournalRenderItem[]
-    epoch: string | null
-    contextFloor: AgentJournalCursor | undefined
-    forkSupport: AgentSessionOptionsResult['forkSupport']
-  }
+  pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
+  chat: { rewind: { surface: NativeChatRewindSurface | undefined } }
+  /** The composer's fork and `/btw`, which share it. */
+  actions: Pick<NativeChatStructuredComposerTransport, 'fork' | 'sideChat'>
   children: React.ReactNode
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
-  const fork = useNativeChatFork({
-    sessionId: pane.sessionId,
-    tabId: pane.tabId,
-    agent: pane.agent,
-    target: pane.target,
-    worktreeId,
-    items: chat.journalItems,
-    epoch: chat.epoch,
-    contextFloor: chat.contextFloor,
-    sessionForkSupport: chat.forkSupport
-  })
   const { agent, target } = pane
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
@@ -62,10 +46,14 @@ export function NativeChatRowActionsProvider({
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
-      <NativeChatForkContext.Provider value={fork}>
-        <NativeChatForkedFromContext.Provider value={openSource}>
-          <NativeChatForkSlotContext.Provider value>{children}</NativeChatForkSlotContext.Provider>
-        </NativeChatForkedFromContext.Provider>
+      <NativeChatForkContext.Provider value={actions.fork}>
+        <NativeChatSideChatForkPointContext.Provider value={actions.sideChat?.reportForkPoint}>
+          <NativeChatForkedFromContext.Provider value={openSource}>
+            <NativeChatForkSlotContext.Provider value>
+              {children}
+            </NativeChatForkSlotContext.Provider>
+          </NativeChatForkedFromContext.Provider>
+        </NativeChatSideChatForkPointContext.Provider>
       </NativeChatForkContext.Provider>
     </NativeChatRewindContext.Provider>
   )
