@@ -115,47 +115,68 @@ it('keeps nested SSH inventory, capability transport and quoting on the owning s
   ).toBe('linux')
 })
 
-it('keeps the selected local WSL runtime when a remote twin is listed first', () => {
-  const store = setup()
-  const local = makeWorktree({
-    id,
-    repoId: 'repo1',
-    hostId: 'local',
-    path: String.raw`\\wsl.localhost\Ubuntu\repo`
-  })
-  store.setState((state) => ({
-    repos: [
-      {
-        ...state.repos[0],
-        id: 'repo1',
-        path: 'C:\\repo',
-        executionHostId: 'local',
-        connectionId: null
-      }
-    ],
-    worktreesByRepo: {
-      repo1: [
-        makeWorktree({
-          id,
-          repoId: 'repo1',
-          hostId: 'runtime:env-1',
-          runtimeOwnerEnvironmentId: 'env-1'
-        }),
-        local
-      ]
-    }
-  }))
-  const platform = vi.spyOn(rendererPlatform, 'getRendererAppPlatform').mockReturnValue('win32')
-  try {
-    const input = buildAgentLaunchRouteInput(store.getState(), {
-      agent: 'codex',
-      workspace: worktreeLaunchWorkspace(id, 'local')
+it.each(['listed', 'detected', 'unstamped'] as const)(
+  'keeps the selected local WSL runtime with a remote twin first (%s)',
+  (publication) => {
+    const store = setup()
+    const local = makeWorktree({
+      id,
+      repoId: 'repo1',
+      hostId: publication === 'unstamped' ? undefined : 'local',
+      path: String.raw`\\wsl.localhost\Ubuntu\repo`
     })
-    expect(input.projectRuntime).toMatchObject({ runtime: { kind: 'wsl', distro: 'Ubuntu' } })
-  } finally {
-    platform.mockRestore()
+    store.setState((state): Partial<ReturnType<typeof store.getState>> => ({
+      repos: [
+        {
+          ...state.repos[0],
+          id: 'repo1',
+          path: 'C:\\repo',
+          executionHostId: 'local',
+          connectionId: null
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id,
+            repoId: 'repo1',
+            hostId: 'runtime:env-1',
+            runtimeOwnerEnvironmentId: 'env-1'
+          }),
+          ...(publication === 'listed' ? [local] : [])
+        ]
+      },
+      detectedWorktreesByRepo:
+        publication === 'listed'
+          ? {}
+          : {
+              repo1: {
+                repoId: 'repo1',
+                authoritative: true,
+                source: 'git',
+                worktrees: [
+                  {
+                    ...local,
+                    ownership: 'external',
+                    selectedCheckout: false,
+                    visible: false
+                  }
+                ]
+              }
+            }
+    }))
+    const platform = vi.spyOn(rendererPlatform, 'getRendererAppPlatform').mockReturnValue('win32')
+    try {
+      const input = buildAgentLaunchRouteInput(store.getState(), {
+        agent: 'codex',
+        workspace: worktreeLaunchWorkspace(id, 'local')
+      })
+      expect(input.projectRuntime).toMatchObject({ runtime: { kind: 'wsl', distro: 'Ubuntu' } })
+    } finally {
+      platform.mockRestore()
+    }
   }
-})
+)
 
 it('compares a folder custom cwd with the selected copy root', () => {
   const store = setup()

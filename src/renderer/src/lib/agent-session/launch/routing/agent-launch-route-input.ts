@@ -6,7 +6,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store/types'
-import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
@@ -33,8 +33,7 @@ import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capab
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
-  selectWorktreesByRepo,
-  selectWorkspaceByHostTarget
+  selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { authorityKey } from '../../../../../../shared/host-authority'
@@ -62,6 +61,7 @@ export type AgentLaunchRouteStore = {
   runtimeStatusByEnvironmentId?: AppState['runtimeStatusByEnvironmentId']
   /** Workspace roots distinguish a root cwd from a custom one; place these first so intersection lookups retain full records. */
   worktreesByRepo?: AppState['worktreesByRepo']
+  detectedWorktreesByRepo?: AppState['detectedWorktreesByRepo']
   folderWorkspaces?: AppState['folderWorkspaces']
 } & Parameters<typeof getExecutionHostIdForWorktree>[0] &
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
@@ -268,13 +268,16 @@ export function buildAgentLaunchRouteInput(
   const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
   const selectedWorkspace =
     workspace.worktreeId && workspace.hostId
-      ? selectWorkspaceByHostTarget(
+      ? findKnownWorktreeById(
           {
             ...store,
             worktreesByRepo: selectWorktreesByRepo(store) ?? {},
-            folderWorkspaces: selectFolderWorkspaces(store) ?? []
+            folderWorkspaces: selectFolderWorkspaces(store) ?? [],
+            detectedWorktreesByRepo: selectDetectedWorktreesByRepo(store) ?? {},
+            floatingWorkspacePath: null
           },
-          hostWorktreeTarget({ id: workspace.worktreeId, hostId: workspace.hostId })
+          workspace.worktreeId,
+          workspace.hostId
         )
       : undefined
   return {
