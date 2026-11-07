@@ -225,6 +225,7 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     if (status.payload.lastAssistantMessage) {
       state.lastToolByPaneKey.set(paneKey, {
         lastAssistantMessage: status.payload.lastAssistantMessage,
+        lastAssistantMessageTruncated: status.payload.lastAssistantMessageTruncated,
         lastAssistantMessageIsToolOutput: status.payload.lastAssistantMessageIsToolOutput
       })
     }
@@ -248,6 +249,7 @@ export function clearClaudePendingWaitForAgent(
     previousTool?.lastAssistantMessage
       ? {
           lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageTruncated: previousTool.lastAssistantMessageTruncated,
           lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
         }
       : {}
@@ -280,6 +282,7 @@ export function clearClaudeAnsweredQuestionWait(
     previousTool?.lastAssistantMessage
       ? {
           lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageTruncated: previousTool.lastAssistantMessageTruncated,
           lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
         }
       : {}

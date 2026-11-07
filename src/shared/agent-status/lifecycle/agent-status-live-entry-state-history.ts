@@ -8,12 +8,14 @@ export function resolveAgentStatusLiveEntryStateHistory(
   payload: Pick<ParsedAgentStatusPayload, 'state' | 'sessionBoundary'>,
   updatedAt: number
 ): {
-  history: AgentStateHistoryEntry[]
-  lastCompletedAssistantMessage: string | undefined
+  stateHistory: AgentStateHistoryEntry[]
+  lastCompletedAssistantMessage?: string
+  lastCompletedAssistantMessageTruncated?: boolean
   stateObservedAt: number | undefined
 } {
   let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
   let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
+  let lastCompletedAssistantMessageTruncated = existing?.lastCompletedAssistantMessageTruncated
   const boundaryLandsOnRealDone =
     existing?.state === 'done' &&
     existing.sessionBoundary !== true &&
@@ -40,11 +42,14 @@ export function resolveAgentStatusLiveEntryStateHistory(
     }
     if (existing.state === 'done') {
       lastCompletedAssistantMessage = existing.lastAssistantMessage
+      lastCompletedAssistantMessageTruncated = existing.lastAssistantMessageTruncated
     }
   }
   return {
-    history,
-    lastCompletedAssistantMessage,
+    stateHistory: history,
+    ...(lastCompletedAssistantMessage
+      ? { lastCompletedAssistantMessage, lastCompletedAssistantMessageTruncated }
+      : {}),
     stateObservedAt: switchesState ? updatedAt : existing?.stateObservedAt
   }
 }

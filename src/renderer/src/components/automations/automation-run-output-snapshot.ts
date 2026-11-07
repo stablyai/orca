@@ -31,10 +31,14 @@ export function createAutomationRunOutputSnapshotFromText(
 
 export function selectAutomationRunOutputSnapshot(
   assistantMessage: string | null | undefined,
-  terminalSnapshot: AutomationRunOutputSnapshot | null
+  terminalSnapshot: AutomationRunOutputSnapshot | null,
+  assistantMessageTruncated = false
 ): AutomationRunOutputSnapshot | null {
   // Prefer hook transcript text over hidden-PTY captures containing full-screen TUI redraws.
-  return createAutomationRunOutputSnapshotFromText(assistantMessage ?? '') ?? terminalSnapshot
+  return (
+    createAutomationRunOutputSnapshotFromText(assistantMessage ?? '', assistantMessageTruncated) ??
+    terminalSnapshot
+  )
 }
 
 function stripTerminalControls(value: string): string {

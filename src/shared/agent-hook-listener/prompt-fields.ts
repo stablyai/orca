@@ -145,6 +145,11 @@ export function resolveToolState(
     lastAssistantMessage: update.clearLastAssistantMessage
       ? undefined
       : (update.lastAssistantMessage ?? previous.lastAssistantMessage),
+    lastAssistantMessageTruncated: update.clearLastAssistantMessage
+      ? undefined
+      : update.lastAssistantMessage === undefined
+        ? previous.lastAssistantMessageTruncated
+        : update.lastAssistantMessageTruncated,
     // Inherit output provenance only with the message, or later prose remains wrongly suppressed.
     lastAssistantMessageIsToolOutput: update.clearLastAssistantMessage
       ? undefined

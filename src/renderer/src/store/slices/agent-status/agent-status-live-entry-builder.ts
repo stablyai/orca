@@ -85,8 +85,6 @@ export function buildAgentStatusLiveEntry(
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
-  const { history, lastCompletedAssistantMessage, stateObservedAt } =
-    resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt)
   const identity = resolveAgentStatusIdentity({
     existing:
       existing &&
@@ -223,7 +221,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
-    stateObservedAt,
+    ...resolveAgentStatusLiveEntryStateHistory(existing, payload, updatedAt),
     ...(turnStartedAt !== undefined ? { turnStartedAt } : {}),
     ...turnEnd,
     agentType: identity.agentType,
@@ -246,13 +244,12 @@ export function buildAgentStatusLiveEntry(
           : {}),
     tabId: statusTabId,
     terminalTitle: effectiveTitle,
-    stateHistory: history,
     toolName: payload.toolName,
     toolInput: payload.toolInput,
     interactivePrompt: payload.interactivePrompt,
     lastAssistantMessage: payload.lastAssistantMessage,
+    lastAssistantMessageTruncated: payload.lastAssistantMessageTruncated,
     lastAssistantMessageIsToolOutput: payload.lastAssistantMessageIsToolOutput,
-    ...(lastCompletedAssistantMessage ? { lastCompletedAssistantMessage } : {}),
     orchestration,
     ...(payload.subagentObservation ? { subagentObservation: payload.subagentObservation } : {}),
     ...liveEntryChildFields(existing, payload),

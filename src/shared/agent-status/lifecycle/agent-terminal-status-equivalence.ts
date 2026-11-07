@@ -20,7 +20,9 @@ export function terminalStatusPayloadMatchesHook(
     cachedHookPayload.toolName === terminalPayload.toolName &&
     cachedHookPayload.toolInput === terminalPayload.toolInput &&
     cachedHookPayload.interactivePrompt === terminalPayload.interactivePrompt &&
-    (cachedHookPayload.lastAssistantMessage === terminalPayload.lastAssistantMessage ||
+    ((cachedHookPayload.lastAssistantMessage === terminalPayload.lastAssistantMessage &&
+      cachedHookPayload.lastAssistantMessageTruncated ===
+        terminalPayload.lastAssistantMessageTruncated) ||
       (preserveActiveTurnStamp && terminalPayload.lastAssistantMessage === undefined)) &&
     cachedHookPayload.interrupted === terminalPayload.interrupted &&
     // A session-boundary done must never dedupe against a real done (STA-3386).

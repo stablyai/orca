@@ -31,8 +31,19 @@ export function createAutomationDispatchCompletion(args: {
 }) {
   const outputSnapshotBuffer = createAutomationRunOutputSnapshotBuffer()
   let latestAssistantMessage: string | null = null
+  let latestAssistantMessageTruncated = false
+  const captureAssistantMessage = (message: string | null | undefined, truncated = false): void => {
+    if (message?.trim()) {
+      latestAssistantMessage = message.trim()
+      latestAssistantMessageTruncated = truncated
+    }
+  }
   const getOutputSnapshot = () =>
-    selectAutomationRunOutputSnapshot(latestAssistantMessage, outputSnapshotBuffer.snapshot())
+    selectAutomationRunOutputSnapshot(
+      latestAssistantMessage,
+      outputSnapshotBuffer.snapshot(),
+      latestAssistantMessageTruncated
+    )
   let dispatchMarked = false
   let pendingExitCode: number | null = null
   let pendingDone: { interrupted: boolean } | null = null
@@ -201,8 +212,10 @@ export function createAutomationDispatchCompletion(args: {
           (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
         ) {
           // The done edge left live history; only the entry’s completed slot retains its output.
-          latestAssistantMessage =
-            entry.lastCompletedAssistantMessage?.trim() || latestAssistantMessage
+          captureAssistantMessage(
+            entry.lastCompletedAssistantMessage,
+            entry.lastCompletedAssistantMessageTruncated
+          )
           handleAgentDone(historicalState)
           return
         }
@@ -217,7 +230,7 @@ export function createAutomationDispatchCompletion(args: {
         entry.sessionBoundary !== true &&
         (!options?.requireWorkingAfterStart || sawWorkingAfterStart)
       ) {
-        latestAssistantMessage = entry.lastAssistantMessage?.trim() || latestAssistantMessage
+        captureAssistantMessage(entry.lastAssistantMessage, entry.lastAssistantMessageTruncated)
         handleAgentDone(entry)
       }
     }
@@ -228,9 +241,7 @@ export function createAutomationDispatchCompletion(args: {
 
   return {
     appendOutput: (chunk: string) => outputSnapshotBuffer.append(chunk),
-    captureAssistantMessage: (message: string | null | undefined) => {
-      latestAssistantMessage = message?.trim() || latestAssistantMessage
-    },
+    captureAssistantMessage,
     cleanupRunObservers,
     handleAgentDone,
     handleExit,

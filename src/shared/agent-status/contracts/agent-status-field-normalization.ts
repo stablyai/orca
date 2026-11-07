@@ -87,15 +87,19 @@ function normalizeSingleLinePreview(value: string, maxLength: number): string {
 }
 
 // Preserve pre-wrap paragraph structure; normalize CRLF and cap paragraph gaps at one blank line.
-function normalizeMultilineField(value: unknown, maxLength: number): string {
+export function normalizeMultilineFieldWithTruncation(
+  value: unknown,
+  maxLength: number
+): { text: string; truncated: boolean } {
   if (typeof value !== 'string') {
-    return ''
+    return { text: '', truncated: false }
   }
   // Fold U+2028/U+2029 before capping blank lines: pre-wrap renders them as breaks, otherwise paragraph-separator runs bypass the cap. Order: CRLF, bare CR, Unicode separators, blank-line collapse.
   const { start, end } = getTrimmedStringBounds(value)
   let normalized = ''
   let newlineRun = 0
-  for (let index = start; index < end && normalized.length < maxLength; index++) {
+  let index = start
+  for (; index < end && normalized.length < maxLength; index++) {
     const code = value.charCodeAt(index)
     if (code === 13 || code === 10 || code === 0x2028 || code === 0x2029) {
       if (code === 13 && value.charCodeAt(index + 1) === 10) {
@@ -111,7 +115,8 @@ function normalizeMultilineField(value: unknown, maxLength: number): string {
     normalized += value[index]
     newlineRun = 0
   }
-  return truncatePreservingSurrogates(normalized, maxLength)
+  const text = truncatePreservingSurrogates(normalized, maxLength)
+  return { text, truncated: index < end || text.length < normalized.length }
 }
 
 function getTrimmedStringBounds(value: string): { start: number; end: number } {
@@ -248,7 +253,7 @@ export function normalizeOptionalMultilineField(
   if (typeof value !== 'string') {
     return undefined
   }
-  const normalized = normalizeMultilineField(value, maxLength)
+  const { text: normalized } = normalizeMultilineFieldWithTruncation(value, maxLength)
   return normalized.length > 0 ? normalized : undefined
 }
 
