@@ -31,7 +31,7 @@ import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatSteerChordPreview } from './use-native-chat-steer-chord-preview'
+import type { NativeChatSteerChordPreview } from '../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 function noop(): void {}
 

@@ -187,6 +187,7 @@
       "sendMessage": "Mesaj gönder",
       "sendQueue": "Sıraya al",
       "sendSteer": "Yönlendir",
+      "sendSteerQueued": "Sıradakini yönlendir",
       "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
       "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
