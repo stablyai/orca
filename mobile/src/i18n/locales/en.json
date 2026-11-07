@@ -1897,7 +1897,13 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
-      "unavailable": "Unavailable on mobile"
+      "unavailable": "Unavailable on mobile",
+      "showMore": "Show {{rows}} more",
+      "loadedOfTotal": "{{loaded}} of {{total}}",
+      "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
+      "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
+      "searchAll": "Search all",
+      "searchAllIn": "Search all of {{folder}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
