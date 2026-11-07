@@ -16,7 +16,9 @@ export function MobileNativeChatOfflineQueue({
 }): React.JSX.Element | null {
   const t = useMobileTranslation()
   const { hostName } = useContext(MobileNativeChatNoticeContext)
-  const { sends, ready } = queue
+  const { ready } = queue
+  // A message on its way leaves the box; it comes back paused only if it didn't go.
+  const sends = useMemo(() => queue.sends.filter((send) => !send.sending), [queue.sends])
   const { offline } = queue.composerLock
   const cards = useMemo(
     () =>
@@ -30,15 +32,17 @@ export function MobileNativeChatOfflineQueue({
         const caption =
           send.paused === 'failed'
             ? t('chat.offlineQueue.failed', "Couldn't send — tap Send to retry")
-            : offline
-              ? hostName
-                ? t('chat.offlineQueue.waitingFor', 'Sends when {{host}} is back', {
-                    host: hostName
-                  })
-                : t('chat.offlineQueue.waiting', 'Sends when the desktop is back')
-              : behindPaused
-                ? t('chat.offlineQueue.behind', 'Waiting — a message ahead needs attention')
-                : null
+            : send.paused === 'closed'
+              ? t('chat.offlineQueue.closed', 'Not sent before Orca closed')
+              : offline
+                ? hostName
+                  ? t('chat.offlineQueue.waitingFor', 'Sends when {{host}} is back', {
+                      host: hostName
+                    })
+                  : t('chat.offlineQueue.waiting', 'Sends when the desktop is back')
+                : behindPaused
+                  ? t('chat.offlineQueue.behind', 'Waiting — a message ahead needs attention')
+                  : null
         return {
           messageId: send.id,
           position,

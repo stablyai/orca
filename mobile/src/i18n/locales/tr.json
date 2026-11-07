@@ -357,7 +357,8 @@
       "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
       "waitingFor": "{{host}} geri geldiğinde gönderilecek",
       "waiting": "Masaüstü geri geldiğinde gönderilecek",
-      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor"
+      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor",
+      "closed": "Orca kapanmadan önce gönderilmedi"
     },
     "receipt": {
       "cancelled": "İptal edildi",

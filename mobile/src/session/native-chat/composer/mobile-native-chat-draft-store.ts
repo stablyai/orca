@@ -1,7 +1,6 @@
 import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
-import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
 import {
   resetMobileNativeChatDraftInputsForTests,
   returnMobileNativeChatDraftAttachments,
@@ -15,18 +14,24 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import {
   readMobileNativeChatInFlightSend,
   readMobileNativeChatInFlightSendsByScope,
   registerSavedMobileNativeChatInFlightSends,
   resetMobileNativeChatInFlightSendsForTests,
   retireMobileNativeChatInFlightSends,
+  restoredImages,
+  restoredFiles,
   savedMobileNativeChatFiles,
   settleMobileNativeChatInFlightSend
 } from './mobile-native-chat-in-flight-sends'
-import { dropMobileNativeChatOfflineSends } from './mobile-native-chat-offline-sends'
+import {
+  dropMobileNativeChatOfflineSends,
+  mobileNativeChatOfflineSendScopes,
+  resetMobileNativeChatOfflineSendsForTests,
+  restoreMobileNativeChatOfflineSends,
+  savedMobileNativeChatOfflineSends
+} from './mobile-native-chat-offline-sends'
 import {
   closeSavedMobileNativeChatDraft,
   resetMobileNativeChatDraftPersistenceForTests,
@@ -36,9 +41,7 @@ import {
 } from './mobile-native-chat-draft-persistence'
 import {
   isSavedDraftKept,
-  type MobileNativeChatSavedDraft,
-  type MobileNativeChatSavedFile,
-  type MobileNativeChatSavedImage
+  type MobileNativeChatSavedDraft
 } from './mobile-native-chat-saved-drafts'
 
 // Text and its edit revision outlive the screen while its tab remains open.
@@ -200,15 +203,6 @@ export function returnMobileNativeChatInFlightSend(id: string): void {
   settleMobileNativeChatInFlightSend(id)
 }
 
-// Phone previews die with the page; a restored image chip shows its file name instead.
-function restoredImages(images: readonly MobileNativeChatSavedImage[]): PendingNativeChatImage[] {
-  return images.map(({ path }) => ({ id: createUuidV4(), path, previewUri: '' }))
-}
-
-function restoredFiles(files: readonly MobileNativeChatSavedFile[]): PendingNativeChatFile[] {
-  return files.map((file) => ({ ...file, id: createUuidV4() }))
-}
-
 function notifyDrafts(): void {
   for (const listener of listeners) {
     listener()
@@ -251,7 +245,8 @@ setMobileNativeChatDraftSource({
     const scopes = [
       ...drafts.keys(),
       ...mobileNativeChatDraftInputScopes(),
-      ...inFlightByScope.keys()
+      ...inFlightByScope.keys(),
+      ...mobileNativeChatOfflineSendScopes()
     ]
     for (const scope of new Set(scopes)) {
       const inFlight = inFlightByScope.get(scope) ?? []
@@ -267,7 +262,8 @@ setMobileNativeChatDraftSource({
         skillOrigin: text === '' ? undefined : drafts.get(scope)?.skillOrigin,
         images: inputs.images.flatMap(({ path }) => (sending.has(path) ? [] : [{ path }])),
         files: savedMobileNativeChatFiles(inputs.files).filter((file) => !sending.has(file.path)),
-        inFlight
+        inFlight,
+        queued: savedMobileNativeChatOfflineSends(scope, inFlight)
       }
       if (isSavedDraftKept(draft)) {
         saved.set(scope, draft)
@@ -277,6 +273,7 @@ setMobileNativeChatDraftSource({
   },
   restore: (scope, saved) => {
     registerSavedMobileNativeChatInFlightSends(scope, saved.inFlight)
+    restoreMobileNativeChatOfflineSends(scope, saved.queued ?? [])
     const current = drafts.get(scope)
     const inputs = readMobileNativeChatDraftInputs(scope)
     // Any write before the load finished, a clear or send included, outranks the saved draft; only untouched prefill yields.
@@ -313,6 +310,7 @@ export function resetMobileNativeChatDraftStoreForTests(): void {
   resetMobileNativeChatDraftInputsForTests()
   drafts.clear()
   resetMobileNativeChatInFlightSendsForTests()
+  resetMobileNativeChatOfflineSendsForTests()
   mobileNativeChatLaunchDraftSeeds.clear()
   resetMobileNativeChatDraftPersistenceForTests()
 }

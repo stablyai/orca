@@ -27,6 +27,17 @@ export type MobileNativeChatInFlightSend = {
   command?: boolean
 }
 
+// A message queued while the desktop was out; it comes back paused, never sent by itself.
+export type MobileNativeChatSavedQueuedSend = {
+  text: string
+  alternate?: true
+  goal?: true
+  skills: readonly AgentJournalSkillRef[]
+  skillOrigin: string | null
+  images: readonly MobileNativeChatSavedImage[]
+  files: readonly MobileNativeChatSavedFile[]
+}
+
 export type MobileNativeChatSavedDraft = {
   text: string
   skills: readonly AgentJournalSkillRef[]
@@ -34,6 +45,7 @@ export type MobileNativeChatSavedDraft = {
   images: readonly MobileNativeChatSavedImage[]
   files: readonly MobileNativeChatSavedFile[]
   inFlight: readonly MobileNativeChatInFlightSend[]
+  queued?: readonly MobileNativeChatSavedQueuedSend[]
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,6 +103,21 @@ function parseInFlight(send: Record<string, unknown>): MobileNativeChatInFlightS
   }
 }
 
+function parseQueued(send: Record<string, unknown>): MobileNativeChatSavedQueuedSend | null {
+  if (typeof send.text !== 'string') {
+    return null
+  }
+  return {
+    text: send.text,
+    ...(send.alternate === true ? { alternate: true } : {}),
+    ...(send.goal === true ? { goal: true } : {}),
+    skills: parseList(send.skills, parseSkill),
+    skillOrigin: typeof send.skillOrigin === 'string' ? send.skillOrigin : null,
+    images: parseList(send.images, parseImage),
+    files: parseList(send.files, parseFile)
+  }
+}
+
 // Anything else, including an older build's terminal drafts, reads as no drafts.
 export function parseSavedDrafts(value: unknown): Map<string, MobileNativeChatSavedDraft> {
   const saved = new Map<string, MobileNativeChatSavedDraft>()
@@ -107,7 +134,8 @@ export function parseSavedDrafts(value: unknown): Map<string, MobileNativeChatSa
       skillOrigin: typeof draft.skillOrigin === 'string' ? draft.skillOrigin : undefined,
       images: parseList(draft.images, parseImage),
       files: parseList(draft.files, parseFile),
-      inFlight: parseList(draft.inFlight, parseInFlight)
+      inFlight: parseList(draft.inFlight, parseInFlight),
+      queued: parseList(draft.queued, parseQueued)
     }
     if (isSavedDraftKept(parsed)) {
       saved.set(tabId, parsed)
@@ -121,7 +149,8 @@ export function isSavedDraftKept(draft: MobileNativeChatSavedDraft): boolean {
     draft.text !== '' ||
     draft.images.length > 0 ||
     draft.files.length > 0 ||
-    draft.inFlight.length > 0
+    draft.inFlight.length > 0 ||
+    (draft.queued?.length ?? 0) > 0
   )
 }
 

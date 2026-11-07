@@ -35,6 +35,10 @@ import {
   settleMobileNativeChatInFlightSend
 } from './mobile-native-chat-in-flight-sends'
 import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
+import {
+  queueMobileNativeChatOfflineSend,
+  readMobileNativeChatOfflineSends
+} from './mobile-native-chat-offline-sends'
 
 const storage = vi.hoisted(() => new Map<string, string>())
 // A host-area page reads the key over the bridge, so its load can land after the user acts.
@@ -148,6 +152,30 @@ describe('mobile native-chat draft persistence', () => {
     expect(readMobileNativeChatPickedSkills(TAB_A)).toEqual([
       { name: 'review', path: '/skills/review/SKILL.md' }
     ])
+  })
+
+  it('brings back a message queued offline, paused, after a relaunch', async () => {
+    vi.useFakeTimers()
+    publishPageDeviceStore(deviceStore)
+    await loadMobileNativeChatDrafts('host-1', 'wt-1')
+    queueMobileNativeChatOfflineSend(TAB_A, {
+      text: 'also check the PR tab',
+      images: [{ id: 'chip-1', path: '/host/shot.png', previewUri: 'file:///shot.png' }],
+      files: [],
+      skills: [],
+      skillOrigin: null
+    })
+    await settle()
+
+    await relaunch()
+
+    expect(
+      readMobileNativeChatOfflineSends(TAB_A).map(({ text, paused, images }) => ({
+        text,
+        paused,
+        paths: images.map((image) => image.path)
+      }))
+    ).toEqual([{ text: 'also check the PR tab', paused: 'closed', paths: ['/host/shot.png'] }])
   })
 
   it('keeps a send made before the saved drafts finished loading', async () => {
