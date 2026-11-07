@@ -57,8 +57,35 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
 }
 
 describe('createEditorSlice editor drafts', () => {
+  it('preserves the foreground reveal when a background preview record was already replaced', () => {
+    const store = createEditorTabsStore()
+    store.getState().createUnifiedTab('wt-2', 'diff', {
+      id: 'old-preview',
+      entityId: 'removed-content',
+      isPreview: true,
+      activate: false,
+      executionHostId: 'local'
+    })
+    const reveal = { filePath: '/repo/next.ts', line: 7, column: 3, matchLength: 4 }
+    store.setState({ pendingEditorReveal: reveal })
+
+    store.getState().createUnifiedTab('wt-2', 'diff', {
+      id: 'new-preview',
+      entityId: 'new-content',
+      isPreview: true,
+      activate: false,
+      executionHostId: 'local'
+    })
+
+    expect(store.getState().pendingEditorReveal).toBe(reveal)
+    expect(store.getState().activeWorktreeId).toBe('wt-1')
+    expect(store.getState().unifiedTabsByWorktree['wt-2']?.map((tab) => tab.id)).toEqual([
+      'new-preview'
+    ])
+  })
+
   it('drops replaced preview drafts so hidden preview state cannot linger', () => {
-    const store = createEditorStore()
+    const store = createEditorTabsStore()
 
     store.getState().openFile(
       {

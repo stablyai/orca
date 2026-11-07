@@ -19,6 +19,7 @@
     "scanTooLarge": "A varredura da Abertura rápida é grande demais ({{reason}})."
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado em {{value0}}",
     "unlinkedPr": {
       "status": "PR #{{number}} desvinculado"
     },
@@ -9948,7 +9949,8 @@
             "clearNotesFromFile_many": "Limpar {{count}} notas de {{path}}?",
             "markResolved": "Marcar como resolvido",
             "keepFile": "Manter arquivo",
-            "keepDeletion": "Manter exclusão"
+            "keepDeletion": "Manter exclusão",
+            "refreshAll": "Atualizar tudo"
           },
           "checks": {
             "panel": {
@@ -18319,6 +18321,10 @@
           "actionsUnavailable": "As ações de plugin não estão disponíveis neste cliente.",
           "messageTooLarge": "A mensagem excede o limite de tamanho.",
           "tooManyRequests": "Muitas requisições."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Abrir este worktree",
+          "reconnect": "Reconecte para ver as alterações deste worktree."
         }
       },
       "cmd": {

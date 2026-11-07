@@ -109,6 +109,7 @@ describe('useTerminalCreateActions creation gates', () => {
     mocks.state = {
       ...mocks.state,
       tabsByWorktree: { [WORKTREE_ID]: terminals },
+      unifiedTabsByWorktree: {},
       openFiles: [],
       tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
       setTabBarOrder

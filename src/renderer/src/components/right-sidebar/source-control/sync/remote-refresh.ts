@@ -50,31 +50,15 @@ function remoteActionErrorMatchesSettledConflictOperation(
   return false
 }
 
-export function clearRemoteActionErrorsForCompletedConflictOperations({
-  remoteActionErrors,
-  previousConflictOperations,
-  currentConflictOperations
-}: {
-  remoteActionErrors: Record<string, SourceControlActionError | null>
-  previousConflictOperations: Record<string, GitConflictOperation>
-  currentConflictOperations: Record<string, GitConflictOperation>
-}): Record<string, SourceControlActionError | null> {
-  let next: Record<string, SourceControlActionError | null> | null = null
-  for (const [worktreeId, error] of Object.entries(remoteActionErrors)) {
-    if (!error) {
-      continue
-    }
-    const previousOperation = previousConflictOperations[worktreeId] ?? 'unknown'
-    const currentOperation = currentConflictOperations[worktreeId] ?? 'unknown'
-    if (
-      previousOperation === 'unknown' ||
-      currentOperation !== 'unknown' ||
-      !remoteActionErrorMatchesSettledConflictOperation(error.kind, previousOperation)
-    ) {
-      continue
-    }
-    next ??= { ...remoteActionErrors }
-    next[worktreeId] = null
-  }
-  return next ?? remoteActionErrors
+/** True once status shows the conflict operation behind this failure has ended. */
+export function remoteActionErrorSettledByConflictOperation(
+  error: SourceControlActionError,
+  previousOperation: GitConflictOperation,
+  currentOperation: GitConflictOperation
+): boolean {
+  return (
+    previousOperation !== 'unknown' &&
+    currentOperation === 'unknown' &&
+    remoteActionErrorMatchesSettledConflictOperation(error.kind, previousOperation)
+  )
 }

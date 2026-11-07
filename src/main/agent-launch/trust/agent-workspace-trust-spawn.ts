@@ -12,6 +12,7 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   shouldPreTrustAgentWorkspace,
+  resolveAgentWorkspaceTrustOwner,
   type AgentWorkspaceTrustDecision
 } from '../../../shared/agent-workspace-trust-decision'
 
@@ -44,8 +45,10 @@ export function applyAgentWorkspaceTrustToSpawn(
     launchAgent: unknown
     /** The user chose "let agents ask" for this launch; it wins even if saving that answer failed. */
     skipForThisLaunch?: boolean
-    /** Worktree or folder workspace id; its root is the folder the agent is trusted in. */
+    /** Placement workspace id; its root may differ from the agent’s starting folder. */
     worktreeId: string | undefined
+    /** Section root to pre-trust for this launch; never part of the terminal identity. */
+    trustWorktreeId?: string
     /** The resolved folder the agent starts in; floating terminals have only this. */
     cwd: string | undefined
     store:
@@ -58,12 +61,13 @@ export function applyAgentWorkspaceTrustToSpawn(
     spawnOptions: AgentTrustSpawnFields
   } & AgentTrustLaunchContext
 ): Promise<void> | null {
+  const trustWorkspaceId = resolveAgentWorkspaceTrustOwner(args)
   if (
     !args.isFreshLaunch ||
     args.skipForThisLaunch === true ||
     !shouldPreTrustAgentWorkspace(
       args.settings?.agentWorkspaceTrustEnabled,
-      agentWorkspaceTrustDecisionForWorkspace(args.worktreeId, args.store)
+      agentWorkspaceTrustDecisionForWorkspace(trustWorkspaceId, args.store)
     )
   ) {
     return null
@@ -75,7 +79,7 @@ export function applyAgentWorkspaceTrustToSpawn(
     return null
   }
   const workspaceRoot = resolveTerminalWorkspacePath(
-    args.worktreeId,
+    trustWorkspaceId,
     (folderWorkspaceId) => args.store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
   )
   const workspacePath = AGENT_TRUST_KEYED_BY_START_FOLDER[preset]

@@ -55,6 +55,7 @@ export function createModelLifetimeFixture(register = true) {
     const file = modelLifetimeFile(id)
     const model = modelLifetimeEditorModel(file.filePath, `${id}\n${'x'.repeat(256 * 1024)}`)
     store.setState({ openFiles: [...store.getState().openFiles, file], activeFileId: id })
+    store.getState().createUnifiedTab(workspace, 'editor', { entityId: id, label: id })
     return { file, model }
   }
   return { store, bridge, attach, add }

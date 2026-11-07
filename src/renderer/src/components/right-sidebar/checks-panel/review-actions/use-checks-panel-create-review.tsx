@@ -39,7 +39,6 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
     | 'createPrInFlightRef'
     | 'createStackedHostedReview'
     | 'mountedRef'
-    | 'ownerSettings'
     | 'panelContextKey'
     | 'panelContextKeyRef'
     | 'setCreatePrError'
@@ -73,7 +72,6 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
-    ownerSettings,
     panelContextKey,
     panelContextKeyRef,
     prAiGenerationEnabled,
@@ -319,8 +317,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     generatePullRequestFields: handleGeneratePullRequestFields,
     generationKey: activePullRequestGenerationKey,
-    repo,
-    settings: ownerSettings
+    repo
   })
   return { handlePullRequestCreated, handleCreatePullRequest }
 }
