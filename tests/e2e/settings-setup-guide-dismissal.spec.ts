@@ -43,6 +43,7 @@ async function expectChecklistHidden(page: Page): Promise<void> {
 
 test('remembers hidden and restored Settings checklist across restarts', async (// oxlint-disable-next-line no-empty-pattern -- this test owns each Electron launch.
 {}, testInfo) => {
+  // Launches Orca three times to prove the choice survives each restart.
   test.setTimeout(300_000)
   const session = createRestartSession(testInfo, { ORCA_BACKGROUND_LAUNCH: '1' })
   const profile = getE2ECompletedOnboardingProfile()

@@ -17,6 +17,7 @@ import { normalizeFeatureInteractions } from '../../../../shared/feature-interac
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
   clipboardHasImage,
   readClipboardImageThumbnail,
@@ -28,7 +29,7 @@ import { mergeWebUIState } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-local-ui-state'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
-import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+import { UI_STORAGE_KEY, noopUnsubscribe, readJson, writeJson } from './web-storage'
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
@@ -106,10 +107,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           environmentId === requireActiveEnvironmentOrNull()?.id &&
           acceptChecklistVisibilityWrite(checklistWrite, setupGuideSettingsDismissed)
         ) {
-          writeJson(
-            UI_STORAGE_KEY,
-            mergeWebUIState(readLocalWebUIState(), { setupGuideSettingsDismissed })
-          )
+          // Raw merge keeps this cache write off the settings read path; local reads normalize it.
+          writeJson(UI_STORAGE_KEY, {
+            ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
+            setupGuideSettingsDismissed
+          })
         }
       } catch {
         // A browser cache failure cannot undo the host's successful save.

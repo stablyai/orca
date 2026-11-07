@@ -11,6 +11,23 @@ import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progre
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
 
+async function saveChecklistDismissal(dismissed: boolean): Promise<boolean> {
+  try {
+    const save = window.api.ui.setWithAck ?? window.api.ui.set
+    await save({ setupGuideSettingsDismissed: dismissed })
+    return true
+  } catch (error) {
+    console.error('Failed to update onboarding checklist visibility:', error)
+    toast.error(
+      translate(
+        'auto.components.settings.SettingsSetupGuidePane.saveFailedDescription',
+        'Could not save checklist visibility. Try again.'
+      )
+    )
+    return false
+  }
+}
+
 export function SettingsSetupGuidePane(): React.JSX.Element {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
@@ -62,22 +79,11 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const handleChecklistDismissal = async (dismissed: boolean): Promise<void> => {
     dismissalIntentRef.current = dismissed
     setDismissalUpdating(true)
-    try {
-      const save = window.api.ui.setWithAck ?? window.api.ui.set
-      await save({ setupGuideSettingsDismissed: dismissed })
+    if (await saveChecklistDismissal(dismissed)) {
       setChecklistHidden(dismissed)
       setChecklistVisibilityLoaded(true)
-    } catch (error) {
-      console.error('Failed to update onboarding checklist visibility:', error)
-      toast.error(
-        translate(
-          'auto.components.settings.SettingsSetupGuidePane.saveFailedDescription',
-          'Could not save checklist visibility. Try again.'
-        )
-      )
-    } finally {
-      setDismissalUpdating(false)
     }
+    setDismissalUpdating(false)
   }
 
   if (checklistHidden) {
