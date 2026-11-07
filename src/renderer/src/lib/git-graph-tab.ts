@@ -20,6 +20,7 @@ import {
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
 import {
   readCachedRuntimeEnvironmentCapability,
@@ -106,7 +107,7 @@ export async function probeGitGraphSupport(worktreeId: string): Promise<boolean 
     : runtimeEnvironmentSupportsCapability(scope.target.environmentId, GIT_GRAPH_TAB_CAPABILITY)
 }
 
-export function gitGraphUpdateMessage(worktreeId: string): string {
+export function gitGraphUpdateMessage(worktreeId: string, t: Translate = translate): string {
   const scope = gitGraphScope(worktreeId)
   const state = useAppStore.getState()
   const environmentId =
@@ -115,7 +116,7 @@ export function gitGraphUpdateMessage(worktreeId: string): string {
     scope?.target.kind === 'environment'
       ? state.runtimeEnvironments?.find((entry) => entry.id === environmentId)
       : undefined
-  return translate('gitGraph.updateHost', 'Update Orca on {{host}} to open the Git Graph', {
+  return t('gitGraph.updateHost', 'Update Orca on {{host}} to open the Git Graph', {
     host: environment?.name ?? scope?.route.executionHostId ?? ''
   })
 }
