@@ -220,7 +220,9 @@
       "historyRepaired": "此聊天的部分歷史記錄無法載入。"
     },
     "message": {
-      "copyMessage": "複製訊息"
+      "copyMessage": "複製訊息",
+      "forkFromResponse": "從此回覆建立分支",
+      "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
     },
     "messageActionsSheet": {
       "clipboardRejected": "無法將文字複製到剪貼簿。",
@@ -302,7 +304,8 @@
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
       "signIn": "登入",
-      "signInHint": "在執行此聊天的電腦上開啟終端機"
+      "signInHint": "在執行此聊天的電腦上開啟終端機",
+      "forkedFrom": "分支來源"
     },
     "orcaStop": {
       "canContinue": "您可以在此對話中繼續。",
@@ -544,7 +547,15 @@
       "windowCredits": "額外用量",
       "windowSession": "工作階段",
       "windowWeekly": "每週",
-      "windowWeeklyModel": "模型每週"
+      "windowWeeklyModel": "模型每週",
+      "switchAccount": "切換帳戶",
+      "autoContinueCancelFailed": "無法取消自動繼續。請再試一次。",
+      "autoContinueCancel": "不要繼續",
+      "statusResetAt": "已於 {{time}} 重設",
+      "statusResetsAt": "將於 {{time}} 重設",
+      "statusContinuesShortly": "Orca 即將繼續",
+      "statusContinuesThen": "Orca 屆時會繼續",
+      "statusWontContinue": "Orca 不會自動繼續"
     },
     "useImageUpload": {
       "attachFailed": "附加失敗",
@@ -614,6 +625,12 @@
       "outcomeUnknownReturned": "Orca 無法確認對話是否已返回到此訊息。您的訊息已回到輸入框中，Orca 會在傳送您的下一則訊息前檢查對話。",
       "timeout": "返回到此訊息後聊天未更新。請重新開啟以檢視最新內容。",
       "pending": "請等待對話回溯到更早的訊息。"
+    },
+    "fork": {
+      "busy": "另一個聊天或終端機正在開啟。請稍候，再次從 {{agent}} 聊天建立分支。",
+      "unconfirmed": "{{agent}} 無法確認是否已建立分支。它可能已經開啟；請先檢查工作階段歷史記錄，再試一次。",
+      "failed": "{{agent}} 無法從此聊天建立分支。{{detail}}",
+      "unsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。"
     }
   },
   "common": {
@@ -1061,6 +1078,12 @@
     "mermaidDiagram": {
       "expand": "展開圖表",
       "label": "Mermaid 圖表"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "計畫",
+        "exitPlanMode": "結束計畫模式"
+      }
     }
   },
   "connection": {
@@ -1490,7 +1513,8 @@
       "removeHost": "移除主機",
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "sleep": "休眠",
-      "unpin": "取消固定"
+      "unpin": "取消固定",
+      "rename": "重新命名"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "檢查：未通過",
@@ -1572,6 +1596,12 @@
       "thisComputer": "本機",
       "waitingForDesktop": "仍在等待電腦回應",
       "workspaceOptions": "工作區選項"
+    },
+    "workspaceRenameSheet": {
+      "title": "重新命名工作區",
+      "emptyUsesBranch": "留空以使用分支名稱。",
+      "emptyUsesFolder": "留空以使用資料夾名稱。",
+      "failed": "無法重新命名工作區。{{reason}}"
     }
   },
   "navigation": {
@@ -2087,7 +2117,8 @@
       "usageLimitWindowWeeklyModel": "模型每週",
       "waitForBackgroundTasks": "請等待背景任務完成。",
       "waitForStart": "請等待代理程式完成啟動。",
-      "writeFailed": "Orca 無法將此訊息交給代理程式，因此訊息未傳送。"
+      "writeFailed": "Orca 無法將此訊息交給代理程式，因此訊息未傳送。",
+      "pluginInputRequired": "{{agent}} 已停止，因為「{{plugin}}」外掛正在終端機窗格中等待輸入。請在聊天工作階段中停用此外掛，或在 {{agent}} 終端機中執行任務。"
     },
     "fileReader": {
       "copyReviewNotes": "複製審查備註",
@@ -2318,7 +2349,8 @@
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
-      "allowAutoClose": "允許自動關閉"
+      "allowAutoClose": "允許自動關閉",
+      "renameTerminalFailed": "無法重新命名終端機。{{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作區主機上未偵測到已啟用的 AI 代理程式。",
@@ -4017,7 +4049,11 @@
       "notReported": "未回報",
       "searchOptions": "搜尋選項",
       "task": "任務",
-      "review": "檢查"
+      "review": "檢查",
+      "discardChangesTitle": "捨棄變更？",
+      "discardChangesMessage": "對此自動化所做的未儲存編輯將會遺失。",
+      "discard": "捨棄",
+      "keepEditing": "繼續編輯"
     },
     "orphanIssues": {
       "hostReselection": "執行此自動化之前，請先編輯它並重新選擇主機。",
