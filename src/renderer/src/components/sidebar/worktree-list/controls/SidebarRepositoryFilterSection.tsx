@@ -6,16 +6,20 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { SidebarProjectFilterPanel } from './SidebarProjectFilterPanel'
-import type { Repo } from '../../../../../../shared/repo-types'
+import {
+  getSidebarProjectFilterGroups,
+  isSidebarProjectGroupSelected,
+  type SidebarProjectFilterGroup
+} from './sidebar-project-filter-groups'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function getProjectFilterVisibilityLabel({
   selectedCount,
-  selectedRepos
+  selectedGroups
 }: {
   selectedCount: number
-  selectedRepos: readonly Repo[]
+  selectedGroups: readonly SidebarProjectFilterGroup[]
 }): string {
   if (selectedCount === 0) {
     return translate(
@@ -23,8 +27,8 @@ function getProjectFilterVisibilityLabel({
       'All projects'
     )
   }
-  if (selectedCount === 1 && selectedRepos[0]) {
-    return selectedRepos[0].displayName
+  if (selectedCount === 1 && selectedGroups[0]) {
+    return selectedGroups[0].repo.displayName
   }
   return translate(
     'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjects',
@@ -52,7 +56,8 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const filterRepoIds = filterRepoIdsProp ?? workspaceFilterRepoIds
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 
-  const canFilterRepos = repos.length > 1
+  const projectGroups = useMemo(() => getSidebarProjectFilterGroups(repos), [repos])
+  const canFilterRepos = projectGroups.length > 1
   // Ignore removed repo IDs so counts cannot imply a stale active filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
@@ -63,17 +68,17 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
     }
     return set
   }, [repos, filterRepoIds])
-  const selectedCount = selectedRepoIdSet.size
+  const selectedGroups = useMemo(
+    () => projectGroups.filter((group) => isSidebarProjectGroupSelected(group, selectedRepoIdSet)),
+    [projectGroups, selectedRepoIdSet]
+  )
+  const availableGroups = useMemo(
+    () => projectGroups.filter((group) => !isSidebarProjectGroupSelected(group, selectedRepoIdSet)),
+    [projectGroups, selectedRepoIdSet]
+  )
+  const selectedCount = selectedGroups.length
   const hasRepoFilter = selectedCount > 0
-  const selectedRepos = useMemo(
-    () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),
-    [repos, selectedRepoIdSet]
-  )
-  const availableRepos = useMemo(
-    () => repos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
-    [repos, selectedRepoIdSet]
-  )
-  const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedRepos })
+  const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedGroups })
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])
 
@@ -124,8 +129,8 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
         </div>
 
         <SidebarProjectFilterPanel
-          availableRepos={availableRepos}
-          selectedRepos={selectedRepos}
+          availableGroups={availableGroups}
+          selectedGroups={selectedGroups}
           hasRepoFilter={hasRepoFilter}
           filterRepoIds={filterRepoIds}
           setFilterRepoIds={setFilterRepoIds}
