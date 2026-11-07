@@ -3,7 +3,7 @@ import './native-chat-find.css'
 import { ChevronDown, ChevronUp, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ImeInput } from '@/lib/ime-text-field'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatFind } from './use-native-chat-find'
 import { useNativeChatFindMatches } from './use-native-chat-find-matches'
 
@@ -14,6 +14,7 @@ export function NativeChatFindBar({
   find: NativeChatFind
   isVisible: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { query, setQuery, close, rootRef, barRef, inputRef, revealMatch } = find
   const { matchCount, activeIndex, step } = useNativeChatFindMatches({
     rootRef,
@@ -30,11 +31,11 @@ export function NativeChatFindBar({
 
   const status =
     query && matchCount === 0
-      ? translate('components.native-chat.find.noResults', 'No results')
+      ? t('components.native-chat.find.noResults', 'No results')
       : `${activeIndex + 1}/${matchCount}`
-  const previousLabel = translate('components.native-chat.find.previousMatch', 'Previous match')
-  const nextLabel = translate('components.native-chat.find.nextMatch', 'Next match')
-  const closeLabel = translate('components.native-chat.find.close', 'Close')
+  const previousLabel = t('components.native-chat.find.previousMatch', 'Previous match')
+  const nextLabel = t('components.native-chat.find.nextMatch', 'Next match')
+  const closeLabel = t('components.native-chat.find.close', 'Close')
 
   return (
     <div
@@ -64,8 +65,8 @@ export function NativeChatFindBar({
         type="text"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
-        placeholder={translate('components.native-chat.find.label', 'Find in chat')}
-        aria-label={translate('components.native-chat.find.label', 'Find in chat')}
+        placeholder={t('components.native-chat.find.label', 'Find in chat')}
+        aria-label={t('components.native-chat.find.label', 'Find in chat')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
       />
       <span

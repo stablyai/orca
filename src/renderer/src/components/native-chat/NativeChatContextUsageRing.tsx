@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Progress } from '@/components/ui/progress'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   contextUsageRingReadout,
@@ -68,8 +68,9 @@ export function NativeChatContextUsageRing({
 }: {
   usage: NativeChatContextUsageSummary
 }): React.JSX.Element {
+  const t = useTranslate()
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
-  const label = translate(
+  const label = t(
     'components.native-chat.contextUsage.label',
     'Context {{used}} of {{window}} tokens, {{percent}}% used',
     { used, window, percent: String(usage.percentage) }
@@ -154,7 +155,7 @@ export function NativeChatContextUsageRing({
           <div className="p-4">
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="font-medium text-foreground">
-                {translate('components.native-chat.contextUsage.title', 'Context')}
+                {t('components.native-chat.contextUsage.title', 'Context')}
               </span>
               <span className="tabular-nums text-muted-foreground">
                 {used}/{window}
@@ -175,7 +176,7 @@ export function NativeChatContextUsageRing({
             ) : null}
             {usage.estimated ? (
               <p className="mt-3 text-2xs text-muted-foreground">
-                {translate(
+                {t(
                   'components.native-chat.contextUsage.estimated',
                   'Estimated from the last response.'
                 )}

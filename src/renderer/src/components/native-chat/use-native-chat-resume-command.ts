@@ -1,5 +1,6 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { SlashCommandSuggestion } from '../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -20,22 +21,23 @@ export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command. */
 export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[],
-  accountUsage = false
+  accountUsage = false,
+  t: Translate = translate
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
-    description: translate(
+    description: t(
       'components.native-chat.resumeCommand.description',
       'Open Agent Session History'
     ),
-    argumentHint: translate('components.native-chat.resumeCommand.argumentHint', '[search]'),
+    argumentHint: t('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
   }
   if (accountUsage) {
     commands = [
       {
         name: 'usage',
-        description: translate(
+        description: t(
           'components.native-chat.usage.description',
           'Show usage for this chat’s Codex account'
         ),

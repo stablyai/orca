@@ -19,10 +19,11 @@ function cachedFormatter<T>(
   cache: WeakMap<FormatterOptions, CachedFormatter<T>>,
   options: FormatterOptions,
   intl: { supportedLocalesOf(locale: string): string[] },
-  create: (locale: string) => T
+  create: (locale: string) => T,
+  intlLocale: string = getIntlLocale()
 ): T {
   // getIntlLocale checks DateTimeFormat support; an unsupported collator/number tag would use the OS locale.
-  const locale = supportedIntlLocale(getIntlLocale(), intl)
+  const locale = supportedIntlLocale(intlLocale, intl)
   const cached = cache.get(options)
   if (cached?.locale === locale) {
     return cached.formatter
@@ -41,12 +42,16 @@ export function uiDateTimeFormat(options: Intl.DateTimeFormatOptions): Intl.Date
   )
 }
 
-export function uiNumberFormat(options: Intl.NumberFormatOptions): Intl.NumberFormat {
+export function uiNumberFormat(
+  options: Intl.NumberFormatOptions,
+  intlLocale?: string
+): Intl.NumberFormat {
   return cachedFormatter(
     numberFormats,
     options,
     Intl.NumberFormat,
-    (locale) => new Intl.NumberFormat(locale, options)
+    (locale) => new Intl.NumberFormat(locale, options),
+    intlLocale
   )
 }
 
@@ -63,10 +68,10 @@ const HOUR_UNIT_FORMAT: Intl.NumberFormatOptions = {
 }
 
 /** "45 minutes", or "2 hours" for whole hours, in the UI language. */
-export function formatMinutesDuration(minutes: number): string {
+export function formatMinutesDuration(minutes: number, intlLocale?: string): string {
   return minutes % 60 === 0
-    ? uiNumberFormat(HOUR_UNIT_FORMAT).format(minutes / 60)
-    : uiNumberFormat(MINUTE_UNIT_FORMAT).format(minutes)
+    ? uiNumberFormat(HOUR_UNIT_FORMAT, intlLocale).format(minutes / 60)
+    : uiNumberFormat(MINUTE_UNIT_FORMAT, intlLocale).format(minutes)
 }
 
 export function uiCollator(options: Intl.CollatorOptions): Intl.Collator {

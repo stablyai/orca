@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
@@ -248,6 +248,7 @@ export function NativeChatUsageLimitActionsProvider({
 }
 
 export function NativeChatUsageLimitActions(): React.JSX.Element | null {
+  const t = useTranslate()
   const actions = useContext(UsageLimitActionsContext)
   if (!actions || (!actions.account && !actions.handOff)) {
     return null
@@ -255,7 +256,7 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
   return (
     <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
       <p className="text-xs">
-        {translate(
+        {t(
           'components.native-chat.usageLimitActions.leadIn',
           'Continue this chat without waiting:'
         )}
@@ -270,7 +271,7 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
           onClick={actions.handOff}
         >
           <MessageSquarePlus />
-          {translate(
+          {t(
             'components.agentSessionContinuation.handOffToAnotherAgent',
             'Hand Off to Another Agent'
           )}

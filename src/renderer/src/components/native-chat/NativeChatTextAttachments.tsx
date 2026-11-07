@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { createContext, useCallback, useContext, useState, useMemo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
@@ -73,6 +73,7 @@ function AttachmentButton({
   path: string
   runtimeContext?: RuntimeFileOperationArgs | null
 }) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   const opener = useContext(NativeChatTextAttachmentOpener)
@@ -90,7 +91,7 @@ function AttachmentButton({
       >
         {chatTextAttachmentName(
           path,
-          translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+          t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
         )}
       </Button>
       {open && visible ? (

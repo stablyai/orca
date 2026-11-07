@@ -17,7 +17,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   copyNativeChatImage,
   readNativeChatCopyImage,
@@ -156,6 +156,7 @@ export function useNativeChatContextMenu({
   onPointerDownCapture: PointerEventHandler<HTMLElement>
   menu: React.JSX.Element
 } {
+  const t = useTranslate()
   const menuOpenedAtRef = useRef(0)
   const [state, setState] = useState<NativeChatContextMenuState>({
     open: false,
@@ -278,7 +279,7 @@ export function useNativeChatContextMenu({
           {image ? (
             <DropdownMenuItem onSelect={() => void copyNativeChatImage(image)}>
               <ImageIcon />
-              {translate('components.native-chat.composer.copyImage', 'Copy image')}
+              {t('components.native-chat.composer.copyImage', 'Copy image')}
             </DropdownMenuItem>
           ) : null}
           {hasSelection ? (
@@ -286,7 +287,7 @@ export function useNativeChatContextMenu({
               onSelect={() => void window.api.ui.writeClipboardText(state.selectedText)}
             >
               <Copy />
-              {translate('auto.components.nativeChat.contextMenu.copy', 'Copy')}
+              {t('auto.components.nativeChat.contextMenu.copy', 'Copy')}
               <DropdownMenuShortcut>{isMacPlatform() ? '⌘C' : 'Ctrl+C'}</DropdownMenuShortcut>
             </DropdownMenuItem>
           ) : null}
@@ -301,7 +302,7 @@ export function useNativeChatContextMenu({
           {state.canPaste ? (
             <DropdownMenuItem onSelect={() => actions.onPaste()}>
               <Clipboard />
-              {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
+              {t('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
             </DropdownMenuItem>
           ) : null}
           {hasEditItems && hasSessionItems ? <DropdownMenuSeparator /> : null}
@@ -316,7 +317,7 @@ export function useNativeChatContextMenu({
               {onSwitchToTerminal ? (
                 <DropdownMenuItem onSelect={onSwitchToTerminal}>
                   <SquareTerminal />
-                  {translate(
+                  {t(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
                     'Continue with Terminal Agent'
                   )}

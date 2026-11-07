@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   managedRuntimeInstallCard,
   type ManagedRuntimeInstallLayout
@@ -38,6 +39,7 @@ export function useNativeChatInstallSlot(
   sendBlockedReason: string | null
   unavailableHint: string | undefined
 } {
+  const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
   const slot = nativeChatInstallSlotState(
     useManagedRuntimeInstall(props.target, props.agent, props.isVisible && !hostProgram),
@@ -46,11 +48,11 @@ export function useNativeChatInstallSlot(
   )
   const unavailableHint =
     slot.kind === 'install'
-      ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout).title
+      ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
       : undefined
   return {
     slot,
-    sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel),
+    sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint
   }
 }
@@ -82,11 +84,12 @@ export function nativeChatInstallSlotState(
 /** Send stays held until the host says it can run this agent. */
 function installSlotSendBlockedReason(
   slot: NativeChatInstallSlotState,
-  agentLabel: string
+  agentLabel: string,
+  t: Translate = translate
 ): string | null {
   return slot.kind === 'none'
     ? null
-    : translate(
+    : t(
         'components.native-chat.install.checking',
         'Checking whether {{agent}} is ready on this host…',
         { agent: agentLabel }

@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -32,8 +32,9 @@ export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
   truncate?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const Icon = NATIVE_CHAT_PERMISSION_MODE_ICONS[props.mode]
-  const label = nativeChatPermissionModeLabel(props.mode)
+  const label = nativeChatPermissionModeLabel(props.mode, t)
   const body = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
@@ -62,6 +63,7 @@ export function NativeChatPermissionModeItems({
   NativeChatPermissionModePickerProps,
   'modes' | 'agent' | 'disabled' | 'onSelect'
 >): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {modes.map((mode) => (
@@ -74,7 +76,7 @@ export function NativeChatPermissionModeItems({
           <div className="min-w-0 py-0.5">
             <NativeChatPermissionModeName mode={mode} />
             <div className="text-xs font-normal text-muted-foreground">
-              {nativeChatPermissionModeDescription(mode, agent)}
+              {nativeChatPermissionModeDescription(mode, agent, t)}
             </div>
           </div>
         </DropdownMenuRadioItem>
@@ -101,12 +103,13 @@ function NativeChatPermissionModePickerInner({
   onSelect,
   currentLabel
 }: NativeChatPermissionModePickerProps): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
-  const title = nativeChatPermissionPickerTitle()
+  const title = nativeChatPermissionPickerTitle(t)
   const label = isAgentChatPermissionMode(current)
-    ? nativeChatPermissionModeLabel(current)
+    ? nativeChatPermissionModeLabel(current, t)
     : current === 'own'
-      ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
       : (currentLabel ?? title)
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
@@ -118,7 +121,7 @@ function NativeChatPermissionModePickerInner({
               type="button"
               variant="ghost"
               size="xs"
-              aria-label={translate(
+              aria-label={t(
                 'components.native-chat.composer.pillAccessibleName',
                 '{{value0}} {{value1}}',
                 { value0: title, value1: label }

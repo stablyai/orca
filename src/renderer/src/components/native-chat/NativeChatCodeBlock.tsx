@@ -1,6 +1,6 @@
 import React, { useContext } from 'react'
 import { WrapText } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -22,6 +22,7 @@ export function NativeChatCodeBlock({
   sourceLine?: number
   plain?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const code = extractCodeText(children)
   const rowKey = useContext(NativeChatMarkdownRowKeyContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
@@ -34,10 +35,7 @@ export function NativeChatCodeBlock({
   const actions = code ? (
     <>
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
-      <NativeChatCopyButton
-        text={code}
-        label={translate('components.native-chat.copyCode', 'Copy code')}
-      />
+      <NativeChatCopyButton text={code} label={t('components.native-chat.copyCode', 'Copy code')} />
     </>
   ) : null
 
@@ -89,9 +87,10 @@ function NativeChatCodeWrapButton({
   wrapped: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label = wrapped
-    ? translate('components.native-chat.disableLineWrap', 'Disable line wrap')
-    : translate('components.native-chat.wrapLines', 'Wrap lines')
+    ? t('components.native-chat.disableLineWrap', 'Disable line wrap')
+    : t('components.native-chat.wrapLines', 'Wrap lines')
   return (
     <button
       type="button"

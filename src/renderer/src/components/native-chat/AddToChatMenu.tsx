@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { Quote } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,11 +38,12 @@ function AddToChatTargets({ worktreeId, quote, launchSource }: AddToChatSource):
 }
 
 export function AddToChatSubmenu(props: AddToChatSource): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <Quote />
-        {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
+        {t('components.native-chat.addSelectionToChat', 'Add to chat')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="min-w-[220px]">
         <AddToChatTargets {...props} />

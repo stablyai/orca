@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -86,6 +86,7 @@ function TranscriptImagePreview({
   block: Extract<NativeChatBlock, { type: 'image-ref' }>
   runtimeContext: RuntimeFileOperationArgs | null | undefined
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [near, setNear] = useState(false)
   const [thumbnailErrorSrc, setThumbnailErrorSrc] = useState<string | null>(null)
@@ -104,7 +105,7 @@ function TranscriptImagePreview({
   const displaySrc = external && leaseActive ? source : localSrc
   const copySrc = copyableNativeChatImageSrc(displaySrc)
   const label = nativeChatImageLabel(block)
-  const viewImageLabel = translate('components.native-chat.composer.viewAttachment', 'View image')
+  const viewImageLabel = t('components.native-chat.composer.viewAttachment', 'View image')
   const fallback = (
     <div
       className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-chat-canvas px-2 py-1 text-xs text-chat-foreground-faint"
@@ -187,6 +188,7 @@ export function NativeChatImageAttachments({
   enablePreview?: boolean
   className?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const images = blocks.filter((block) => block.type === 'image-ref')
   if (images.length === 0) {
     return null
@@ -200,13 +202,13 @@ export function NativeChatImageAttachments({
             image.alt ??
             image.path ??
             image.url ??
-            translate('components.native-chat.transcript.imageFallback', 'Image')
+            t('components.native-chat.transcript.imageFallback', 'Image')
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
           const name =
             image.path && isNativeChatPastedImagePath(image.path)
-              ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+              ? t('components.native-chat.composer.pastedImageLabel', 'Pasted image')
               : image.path
                 ? basename(image.path)
                 : label
@@ -231,7 +233,7 @@ export function NativeChatImageAttachments({
           image.alt ??
           image.path ??
           image.url ??
-          translate('components.native-chat.transcript.imageFallback', 'Image')
+          t('components.native-chat.transcript.imageFallback', 'Image')
         const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)
@@ -262,6 +264,7 @@ export function NativeChatAgentControls({
   action?: React.ReactNode
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     // Hover-only row chrome: find skips it rather than counting what the mouse happens to show.
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
@@ -274,11 +277,8 @@ export function NativeChatAgentControls({
       <button
         type="button"
         onClick={onScrollToTop}
-        aria-label={translate(
-          'components.native-chat.scrollMessageToTop',
-          'Scroll this message to top'
-        )}
-        title={translate('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        aria-label={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        title={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
         className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ArrowUp className="size-3.5" />
@@ -297,6 +297,7 @@ export function ProviderFrameRow({
   summary?: string
   detail?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (block.type !== 'text' || (!block.providerFrame && !detail)) {
     return null
   }
@@ -313,7 +314,7 @@ export function ProviderFrameRow({
         frame?.payload.truncated ? (
           <span>
             ·{' '}
-            {translate('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
+            {t('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
               count: frame.payload.byteLength,
               defaultValue_one: '{{count}} byte'
             })}
