@@ -1,8 +1,8 @@
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
@@ -16,7 +16,7 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {

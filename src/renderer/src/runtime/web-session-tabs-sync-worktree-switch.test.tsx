@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeMobileSessionTabsResult, RuntimeStatus } from '../../../shared/runtime-types'
-import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
+import type * as WebRuntimeTerminalCreationModule from './hosted-terminals/creation/web-runtime-terminal-creation'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 
@@ -19,21 +19,24 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
 
-vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+vi.mock('./hosted-terminals/creation/web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
-  return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
+  return {
+    ...actual,
+    createWebRuntimeSessionTerminal: mocks.createTerminal
+  }
 })
 
 import { useAppStore } from '@/store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { clearHostLiveTerminalProbesForTests } from './hosted-terminals/inventory/host-live-terminal-probe'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import './web-session-tabs-sync/tracking'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
-import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/terminal-hidden-view-parking'
-import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
+import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
+import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
+import { publicRuntimeEnvironment } from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
 const WORKTREE_A = 'repo-a::worktree-a'

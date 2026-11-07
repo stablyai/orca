@@ -1,8 +1,5 @@
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
-import type {
-  AgentModelCatalogReadParams,
-  AgentModelCatalogService
-} from './agent-model-catalog-service-contract'
+import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
 import {
   independentAgentModelCatalog,
@@ -10,6 +7,7 @@ import {
 } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import type { AgentModelCatalogRefresh } from './agent-model-catalog-refresh'
 
 export const AGENT_MODEL_CATALOG_PICKER_WAIT_MS = 30_000
 
@@ -22,12 +20,14 @@ export class AgentModelCatalogListingWaiters {
     private readonly listing: (fingerprint: string) => boolean
   ) {}
 
+  /** `signal` ends the wait (and its subscription) when its reader leaves. */
   wait(
     fingerprint: string,
     waitForChange = false,
-    terminal = false
+    terminal = false,
+    signal?: AbortSignal
   ): Promise<AgentModelCatalogEntry | null> | null {
-    if (!this.listing(fingerprint)) {
+    if (!this.listing(fingerprint) || signal?.aborted) {
       return null
     }
     const previous = this.read(fingerprint)
@@ -40,6 +40,7 @@ export class AgentModelCatalogListingWaiters {
         }
         settled = true
         clearTimeout(deadline)
+        signal?.removeEventListener('abort', leave)
         waiters.delete(check)
         if (waiters.size === 0) {
           this.waiters.delete(fingerprint)
@@ -58,6 +59,8 @@ export class AgentModelCatalogListingWaiters {
       const deadline = terminal
         ? undefined
         : setTimeout(() => finish(this.read(fingerprint)), AGENT_MODEL_CATALOG_PICKER_WAIT_MS)
+      const leave = (): void => finish(this.read(fingerprint))
+      signal?.addEventListener('abort', leave, { once: true })
       waiters.add(check)
       this.waiters.set(fingerprint, waiters)
       check()
@@ -71,23 +74,41 @@ export class AgentModelCatalogListingWaiters {
   }
 }
 
-/** Compatibility discovery waits share the deadline captured before any scope resolution. */
+/** A reader waits on shared work only until its own deadline or cancellation; it ends nothing. */
+export function waitWithinAgentModelCatalogRead(
+  reader: { deadline?: number; signal: AbortSignal },
+  work: Promise<unknown> | undefined
+): Promise<void> {
+  const remaining = reader.deadline === undefined ? undefined : reader.deadline - Date.now()
+  if (!work || reader.signal.aborted || (remaining !== undefined && remaining <= 0)) {
+    return Promise.resolve()
+  }
+  const cancelled = Promise.withResolvers<void>()
+  const cancel = (): void => cancelled.resolve()
+  reader.signal.addEventListener('abort', cancel, { once: true })
+  const waited = Promise.race([work.then(noop, noop), cancelled.promise])
+  return (remaining === undefined ? waited : withTimeout(waited, remaining, undefined)).finally(
+    () => reader.signal.removeEventListener('abort', cancel)
+  )
+}
+
+const noop = (): void => {}
+
+/** A waiting read follows the refresh it joined, then the listing its scope names. */
 export async function waitForAgentModelCatalogRead(input: {
-  params: AgentModelCatalogReadParams & { deadline: number }
+  params: AgentModelCatalogReadParams
+  reader: { deadline: number; signal: AbortSignal }
   store: AgentModelCatalogStore
-  resolve: (params: AgentModelCatalogReadParams) => Promise<void>
-  claim: () => { ready: Promise<void>; promise: Promise<void> } | undefined
+  refresh: AgentModelCatalogRefresh | undefined
   binding: () => AgentModelCatalogBinding | undefined
 }): Promise<void> {
-  const { params, store } = input
+  const { params, store, refresh } = input
+  // Once the reader stops waiting, nothing it left behind subscribes to or holds a listing wait.
+  const left = new AbortController()
   const wait = async (): Promise<void> => {
-    void input.resolve(params)
-    await input.claim()?.ready
-    const bound = input.binding()
-    await bound?.projecting
-    if (Date.now() >= params.deadline) {
-      return
-    }
+    await refresh?.listing
+    await (refresh?.defaults ?? input.binding()?.projecting)
+    const bound = left.signal.aborted ? undefined : input.binding()
     if (
       bound &&
       (!store.get(bound.fingerprint) ||
@@ -98,17 +119,16 @@ export async function waitForAgentModelCatalogRead(input: {
       await store.pendingListing(
         bound.fingerprint,
         true,
-        params.legacy || usesModelSpecificAcpEfforts(params.agent)
+        params.legacy || usesModelSpecificAcpEfforts(params.agent),
+        left.signal
       )
     }
     if (bound && !store.isListing(bound.fingerprint)) {
-      await input.claim()?.promise
+      await refresh?.done
     }
   }
-  const remaining = params.deadline - Date.now()
-  if (remaining > 0) {
-    await withTimeout(wait(), remaining, undefined)
-  }
+  await waitWithinAgentModelCatalogRead(input.reader, wait())
+  left.abort()
 }
 
 /** The operation owns its original budget even while a resolver cannot be cancelled. */
@@ -125,26 +145,17 @@ export function runAgentModelCatalogOperation(
     .finally(() => {
       settled = true
     })
-  return withTimeout(operation, remaining, undefined).finally(() => {
-    if (!settled) {
-      controller.abort()
+  // Cancelling the operation ends its wait at once, whatever its resolver is still doing.
+  const cancelled = Promise.withResolvers<void>()
+  const cancel = (): void => cancelled.resolve()
+  controller.signal.addEventListener('abort', cancel, { once: true })
+  return withTimeout(Promise.race([operation, cancelled.promise]), remaining, undefined).finally(
+    () => {
+      controller.signal.removeEventListener('abort', cancel)
+      if (!settled) {
+        controller.abort()
+      }
+      finished()
     }
-    finished()
-  })
-}
-
-export async function readAgentModelCatalogWithListing(
-  input: Omit<Parameters<typeof waitForAgentModelCatalogRead>[0], 'params'> & {
-    params: AgentModelCatalogReadParams
-    snapshot: AgentModelCatalogService['snapshot']
-  }
-) {
-  const { params } = input
-  if (params.requireConfiguredDefault && !params.savedOnly) {
-    await input.resolve(params)
-  } else if (!params.savedOnly && params.waitForListing) {
-    const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
-    await waitForAgentModelCatalogRead({ ...input, params: { ...params, deadline } })
-  }
-  return input.snapshot(params)
+  )
 }

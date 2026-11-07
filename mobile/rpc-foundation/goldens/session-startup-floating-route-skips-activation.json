@@ -28,6 +28,22 @@
         "allowEmptyLoaded": true
       }
     },
+    "854cb236952a": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "sessionTabs": [],
+      "terminalsLoaded": false
+    },
     "95c8385db422": {
       "name": "clear-delayed-action-timers",
       "ordinal": 4,
@@ -49,21 +65,6 @@
       "name": "diagnostics-reset-route",
       "ordinal": 2,
       "value": {}
-    },
-    "acf0370bfacc": {
-      "actionSheetRequestSeq": 1,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "terminalsLoaded": false
     },
     "bc94d6f00eeb": {
       "name": "clear-pending-live-input-commit",
@@ -95,7 +96,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -114,7 +115,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -135,7 +136,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",

@@ -12,7 +12,11 @@ export function startOrcadAutomations(
   store: Store,
   registerCleanup: (cleanup: () => void) => void
 ): void {
-  const service = createRuntimeAutomationService({ store, runtime, headless: true })
+  const service = createRuntimeAutomationService({
+    store,
+    runtime,
+    allowRemoteHostScheduling: true
+  })
   stopScheduler = () => service.stop()
   // Stop before final profile flush so runs cannot persist afterward.
   registerCleanup(() => service.stop())

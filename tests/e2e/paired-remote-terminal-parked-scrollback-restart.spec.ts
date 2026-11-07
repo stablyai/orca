@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/leaf-scrollback-resolution'
+import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/snapshots/leaf-scrollback-resolution'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,

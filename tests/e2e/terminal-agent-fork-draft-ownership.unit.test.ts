@@ -46,8 +46,9 @@ it.each(['local', 'web'] as const)(
     vi.mocked(pasteDraftWhenAgentReady).mockReturnValueOnce(paste.promise)
     const focusSource = vi.fn()
     const { startAgentSessionFork } =
-      await import('../../src/renderer/src/components/terminal-pane/terminal-agent-session-fork')
-    const launcher = await import('../../src/renderer/src/lib/launch-agent-in-new-tab')
+      await import('../../src/renderer/src/components/terminal-pane/session-fork/terminal-agent-session-fork')
+    const launcher =
+      await import('../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
     const launched = vi.spyOn(launcher, 'launchAgentInNewTab')
     const forking = startAgentSessionFork({ prompt, agent, worktreeId: 'wt-1', focusSource })
     await vi.waitFor(() => expect(pasteDraftWhenAgentReady).toHaveBeenCalledOnce())
@@ -122,8 +123,8 @@ it.skipIf(process.platform === 'win32')(
     })
     const focusSource = vi.fn()
     const { startAgentSessionFork } =
-      await import('@/components/terminal-pane/terminal-agent-session-fork')
-    const launcher = await import('@/lib/launch-agent-in-new-tab')
+      await import('@/components/terminal-pane/session-fork/terminal-agent-session-fork')
+    const launcher = await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab')
     const launched = vi.spyOn(launcher, 'launchAgentInNewTab')
     const forking = startAgentSessionFork({
       prompt,

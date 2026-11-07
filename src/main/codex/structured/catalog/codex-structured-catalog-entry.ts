@@ -1,4 +1,4 @@
-import { structuredAgentSessionCapabilityView } from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+import { structuredAgentSessionCapabilityView } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import type { AgentModelCatalogEntry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import type {
   CodexSession,

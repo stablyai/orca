@@ -8,8 +8,8 @@ import {
 import {
   CALLER,
   envelope
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import type { AcpScriptedAgent, FakeFrame } from './acp-scripted-agent.test-support'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {

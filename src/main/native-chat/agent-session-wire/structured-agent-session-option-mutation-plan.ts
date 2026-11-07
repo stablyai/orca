@@ -1,7 +1,7 @@
 import type { AgentSessionOptionResult } from '../../../shared/agent-session/options/agent-session-options-result'
-import type { MutationPlan } from './structured-agent-session-mutation-plans'
-import { readNoChoiceOptionResult } from './structured-agent-session-option-observation'
-import type { TurnOutcome } from './structured-agent-session-turns'
+import type { MutationPlan } from './operations/structured-agent-session-mutation-plans'
+import { readNoChoiceOptionResult } from './options/structured-agent-session-option-observation'
+import type { TurnOutcome } from './operations/structured-agent-session-turns'
 
 export function setOptionPlan(params: { key: string; value: string | null }) {
   return {

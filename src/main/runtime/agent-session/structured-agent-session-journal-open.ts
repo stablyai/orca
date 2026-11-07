@@ -1,7 +1,7 @@
-import { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import { journalOpenRefusalError } from '../../native-chat/agent-session-journal/journal-open-failure'
+import { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { journalOpenRefusalError } from '../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { recordStructuredAgentSessionHostInstallRefusal } from './structured-agent-session-host-refusal'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 // Repeated requests retry journal open; log each distinct failure once, including its stack.
 let lastLoggedOpenFailure: string | null = null

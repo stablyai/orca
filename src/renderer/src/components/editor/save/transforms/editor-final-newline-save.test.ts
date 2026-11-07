@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { usePluginPanelsStore } from '@/store/plugin-panels'
@@ -22,7 +22,9 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.curren
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const PATH = '/repo/pnpm-workspace.yaml'
 const BASELINE = 'packages: []\n'

@@ -66,12 +66,6 @@ export type AgentModelCatalogReadParams = {
   operation?: AgentModelCatalogReadOperation
   /** Original explicit operation budget, shared with compatibility saved-scope continuation. */
   deadline?: number
-  /** Internal selector resolution; never part of the wire contract. */
-  workspace?: {
-    selector: string
-    identity: () => unknown
-    resolve: () => Promise<string | null | { path: string | null; identity: unknown }>
-  }
   sessionId?: string
   /** Capability observation only; never changes the chat's selected input. */
   selectedModel?: string
@@ -90,29 +84,4 @@ export type AgentModelCatalogReadParams = {
   legacy?: boolean
   /** Old options readers need account-default presentation, never launch or admission proof. */
   legacyOptionsDisplay?: true
-}
-
-export type AgentModelCatalogBinding = {
-  identity: string
-  params: AgentModelCatalogReadParams
-  workspaceId?: string
-  current: () => boolean
-  cancel: () => void
-  fingerprint: string
-  base: string
-  exact: boolean
-  folder?: string
-  cwd?: string
-  workspacePath?: string | null
-  keepDefault: boolean
-  projecting?: Promise<void>
-}
-
-export type AgentModelCatalogClaim = Pick<
-  AgentModelCatalogBinding,
-  'identity' | 'params' | 'current'
-> & {
-  controller: AbortController
-  promise: Promise<void>
-  ready: Promise<void>
 }

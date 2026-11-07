@@ -10,7 +10,8 @@ import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-r
 import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
 import {
   observeStructuredAgentLaunch,
-  resolveHostStructuredAgentLaunchEnvironment
+  resolveHostStructuredAgentLaunchEnvironment,
+  type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
   STRUCTURED_AGENT_RUNTIME_METADATA,
@@ -19,6 +20,7 @@ import {
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../runtime-store-contract'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -32,6 +34,8 @@ const HEALTH_SETTINGS = [
   'agentDefaultEnv',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
+  // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
+  'antigravityChatAuth',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -50,7 +54,10 @@ async function observeHostAgent(
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
   if (!supportsLocation(HOST_LOCATION)) {
-    return { agent, state: 'refused', reason: 'agent' }
+    const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
+      ? 'windows'
+      : 'agent'
+    return { agent, state: 'refused', reason }
   }
   // A failed probe or an unrunnable Command setting says nothing about the installed release.
   const seen = await observeStructuredAgentLaunch(
@@ -69,15 +76,17 @@ async function observeHostAgent(
 
 /** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
 async function observeChatProgram(
-  { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, chatProgram, supportsLocation }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<NonNullable<AgentSessionAgentAvailability['chatProgram']>> {
   if (!chatProgram) {
     return 'unknown'
   }
+  let shellEnv: Record<string, string>
+  let settings: LaunchEnvironmentSettings
   try {
-    const settings = runtime.requireStore().getSettings()
-    const shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    settings = runtime.requireStore().getSettings()
+    shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = chatProgram.resolve(shellEnv, settings)
     if (isAbsolute(command)) {
       return 'available'
@@ -88,6 +97,12 @@ async function observeChatProgram(
     }
   } catch {
     return 'unknown'
+  }
+  if (
+    supportsLocation(HOST_LOCATION) &&
+    (await chatProgram.hostAlternative?.(shellEnv, settings))
+  ) {
+    return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'
 }

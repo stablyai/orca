@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { AttachmentTextRead } from '../../../../shared/attachment-text-source'

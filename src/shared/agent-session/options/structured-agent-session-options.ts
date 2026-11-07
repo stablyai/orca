@@ -64,6 +64,7 @@ export type StructuredAgentSessionOptionState = {
   defaultsUnsent?: true
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
+  interactionModeSupported?: boolean
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
   reportedModel?: string
@@ -193,7 +194,8 @@ export function applyStructuredAgentSessionOptions(
       ...(current.model ? { model: current.model } : {}),
       ...(!policyEffort && current.effort ? { effort: current.effort } : {}),
       ...(current.fastMode !== undefined ? { fastMode: current.fastMode } : {}),
-      ...(current.serviceTier ? { serviceTier: current.serviceTier } : {})
+      ...(current.serviceTier ? { serviceTier: current.serviceTier } : {}),
+      ...(current.interactionMode ? { interactionMode: current.interactionMode } : {})
     },
     (id) =>
       current.defaulted?.some((key) => key === id)
@@ -208,6 +210,7 @@ export function applyStructuredAgentSessionOptions(
   return {
     ...state,
     optionsAnswerPresent: true,
+    interactionModeSupported: current.interactionMode !== undefined,
     sessionNeverStarted: result.sessionNeverStarted,
     reportedModel: current.reportedModel,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
@@ -254,7 +257,7 @@ export function commitStructuredAgentSessionOption(
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
     return { ...state, permissionMode: value, reportedPermissionMode: undefined }
   }
-  if (!state.catalog) {
+  if (!state.catalog && id !== 'interactionMode') {
     return state
   }
   const decoded = decodeStructuredAgentSessionOptionValue(id, value)

@@ -9,7 +9,13 @@ export type StructuredAgentSessionOptionRecord = {
   values: Record<string, TrackedNativeChatSessionOption>
 }
 
-const ANSWERED_VALUE_IDS = ['model', 'effort', 'fastMode', 'serviceTier'] as const
+const ANSWERED_VALUE_IDS = [
+  'model',
+  'effort',
+  'fastMode',
+  'serviceTier',
+  'interactionMode'
+] as const
 
 export function createStructuredAgentSessionOptionRecord(
   agent: AgentType
@@ -79,6 +85,7 @@ export function structuredAgentSessionOptionStamp(
         | 'effort'
         | 'fastMode'
         | 'serviceTier'
+        | 'interactionMode'
         | 'modelDefault'
       >
     | undefined
@@ -90,6 +97,7 @@ export function structuredAgentSessionOptionStamp(
     summary?.effort,
     summary?.fastMode,
     summary?.serviceTier,
+    summary?.interactionMode,
     summary?.modelDefault === true
   ]
     .map((value) => value ?? '')

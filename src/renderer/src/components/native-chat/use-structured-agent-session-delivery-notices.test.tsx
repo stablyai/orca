@@ -1,14 +1,19 @@
 // @vitest-environment happy-dom
 import { memo } from 'react'
-import { cleanup, render } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
+import { NativeChatSignInContext } from './native-chat-sign-in'
+import { NativeChatSignInButton } from './NativeChatSignInButton'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
+import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
 afterEach(cleanup)
 const EMPTY: readonly never[] = []
+const signInView = { signingIn: false, signIn: vi.fn() }
 
 it('bounds submission work and renders only rows whose delivery notice changes at N and 10N', () => {
   for (const size of [32, 320]) {
@@ -93,4 +98,54 @@ it('bounds submission work and renders only rows whose delivery notice changes a
     expect(fingerprintReads).toBe(0)
     view.unmount()
   }
+})
+
+it('keeps one usable sign-in owner as typed rejection and visible failure rows arrive', () => {
+  const failure: SubmissionRejectionFact = { kind: 'notSignedIn' }
+  const { signIn } = signInView
+  signIn.mockClear()
+  const words = agentSessionFailureWords(failure, { agentName: 'Pi', surface: 'rejection' })
+  const submission: AgentJournalSubmission = {
+    clientMessageId: 'refused',
+    fence: 1,
+    payloadFingerprint: 'refused',
+    dispatchState: 'rejected',
+    providerItemId: null,
+    reason: words.reason,
+    submittedAt: 1,
+    resolvedAt: 2
+  }
+  const observed: { notice?: NativeChatDeliveryNotice } = {}
+  function Chat({ typed, stated = false }: { typed: boolean; stated?: boolean }) {
+    const notices = useStructuredAgentSessionDeliveryNotices({
+      pending: EMPTY,
+      submissions: [{ ...submission, ...(typed ? { rejection: failure } : {}) }],
+      journalItems: EMPTY,
+      startFailures: stated ? [failure] : EMPTY,
+      agentName: 'Pi'
+    })
+    const notice = notices.get(agentJournalSubmissionKey('refused'))
+    observed.notice = notice
+    return (
+      <NativeChatSignInContext.Provider value={signInView}>
+        <NativeChatSignInButton failureKind={notice?.failureKind} />
+        {stated ? <NativeChatSignInButton failureKind="notSignedIn" /> : null}
+      </NativeChatSignInContext.Provider>
+    )
+  }
+  const view = render(<Chat typed={false} />)
+  const originalText = observed.notice?.text
+  expect(originalText).toEqual(expect.any(String))
+  expect(screen.queryByRole('button', { name: 'Sign in' })).toBeNull()
+  // The typed fact adds the action while the existing host-authored sentence stays identical.
+  view.rerender(<Chat typed />)
+  expect(observed.notice?.text).toBe(originalText)
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  expect(signIn).toHaveBeenCalledOnce()
+  view.rerender(<Chat typed stated />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  expect(signIn).toHaveBeenCalledTimes(2)
+  view.rerender(<Chat typed />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+  expect(signIn).toHaveBeenCalledTimes(3)
 })

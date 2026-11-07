@@ -207,9 +207,12 @@ export function useMobileNativeChatController(args: {
     agent: activeChatResolution?.agent,
     sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
+    isModelWritePending: structuredNativeChat.isModelWritePending,
+    optionSnapshot: structuredNativeChat.optionSnapshot,
     captureSendOrigin,
     clearDraftForSend,
     restoreRejectedDraft,
+    holdUnconfirmed: structuredNativeChat.holdUnconfirmed,
     onSendError
   })
 
@@ -303,6 +306,7 @@ export function useMobileNativeChatController(args: {
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
+    nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
     nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
   }
 }

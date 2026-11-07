@@ -23,8 +23,8 @@ import {
   retireStructuredAgentSessionLaunchCancellationTombstone,
   type StructuredLaunchState
 } from './structured-agent-session-launch-registry'
-import { recordUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
-import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
+import { recordUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (deleteStructuredLaunchStateIfCurrent(state)) {

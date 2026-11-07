@@ -6,8 +6,8 @@ import {
   waitForNativeChatPtyIdle
 } from './native-chat-pty-send-queue'
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
-import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import type { AskAnswerKeyGroup } from '../../../../shared/native-chat/input/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,

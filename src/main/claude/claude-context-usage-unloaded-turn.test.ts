@@ -17,11 +17,11 @@ import {
   type StructuredAgentSessionState
 } from '../../shared/agent-session/structured-agent-session-reducer'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/structured-agent-session-host-mutations'
-import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { readAgentSessionHistory } from '../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionMutationContext } from '../native-chat/agent-session-wire/operations/structured-agent-session-mutation-context'
+import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/options/structured-agent-session-options-read'
 import {
   assistantFrame,
   initFrame,
@@ -29,10 +29,10 @@ import {
   userFrame
 } from './claude-context-usage-test-support'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
+import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
 
 const SESSION = 'orca-session'
 const journals = createTrackedJournalOpener()

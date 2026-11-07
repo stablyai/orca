@@ -6,13 +6,15 @@ import type {
 } from '../../../src/shared/native-chat/input/native-chat-session-options'
 
 export function useMobileStructuredOptionSurface(args: {
+  admits: NonNullable<SessionOptionsSurface['admits']>
   demandModelCatalog: () => void
   optionSnapshot: SessionOptionDescriptor[]
   resetOption?: SessionOptionsSurface['resetOption']
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   readOptionSnapshot: () => SessionOptionDescriptor[]
 }) {
-  const { optionSnapshot, readOptionSnapshot, setStructuredOption, demandModelCatalog } = args
+  const { admits, optionSnapshot, readOptionSnapshot, setStructuredOption, demandModelCatalog } =
+    args
   const snapshotRef = useRef(readOptionSnapshot)
   useLayoutEffect(() => {
     snapshotRef.current = readOptionSnapshot
@@ -45,12 +47,13 @@ export function useMobileStructuredOptionSurface(args: {
     () => ({
       ...(args.resetOption ? { resetOption: args.resetOption } : {}),
       getSnapshot: () => optionSnapshot,
+      admits,
       demandModelCatalog,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [optionSnapshot, setOption, demandModelCatalog, args.resetOption]
+    [optionSnapshot, setOption, demandModelCatalog, admits, args.resetOption]
   )
 
   return { optionPickerRequest, invokeStructuredOption, optionSurface }

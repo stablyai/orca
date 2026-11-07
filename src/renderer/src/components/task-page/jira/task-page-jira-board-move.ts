@@ -13,7 +13,7 @@ import {
 import {
   jiraGetIssueForTarget,
   jiraUpdateIssueForTarget
-} from '@/runtime/runtime-jira-detail-client'
+} from '@/runtime/jira/runtime-jira-detail-client'
 
 export async function getJiraBoardMoveTransitions(
   target: RuntimeClientTarget,

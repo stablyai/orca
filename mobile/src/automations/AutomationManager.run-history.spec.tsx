@@ -1,18 +1,22 @@
-import { act, type ReactTestInstance } from 'react-test-renderer'
-import { expect, it } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { expect, it, vi } from 'vitest'
 import { AutomationEditor } from './AutomationEditor'
 import { AutomationRunList } from './AutomationRunList'
+import { AutomationRunDetails } from './AutomationRunDetails'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import type { automationClient } from './automation-test-fixtures'
+import { automationClient, savedRun } from './automation-test-fixtures'
 
 export function registerAutomationRunHistoryTests({
   mount,
   root,
-  press
+  press,
+  setTree
 }: {
   mount: () => Promise<ReturnType<typeof automationClient>>
   root: () => ReactTestInstance
   press: (label: string) => Promise<void>
+  setTree: (tree: ReactTestRenderer) => void
 }): void {
   it('observes history only while a history consumer is visible', async () => {
     const port = await mount()
@@ -54,5 +58,56 @@ export function registerAutomationRunHistoryTests({
     await tab('runs')
     expect(historyReads()).toHaveLength(2)
     expect(root().findByType(AutomationRunList).props.history.runs[0]).toEqual(original)
+  })
+
+  it('retries a failed full-row read when history re-reads the row', async () => {
+    const preview = {
+      ...savedRun(),
+      outputSnapshot: { content: 'START', capturedAt: 1700000000003, truncated: true }
+    }
+    let reachable = false
+    const port = automationClient(() => {
+      if (!reachable) {
+        throw new Error('offline')
+      }
+      return {
+        run: {
+          ...preview,
+          outputSnapshot: { content: 'START END', capturedAt: 1700000000003, truncated: false }
+        }
+      }
+    })
+    const details = (run: typeof preview) =>
+      createElement(AutomationRunDetails, {
+        run,
+        client: port.client,
+        hostId: 'paired',
+        connected: true,
+        history: {
+          runs: [run],
+          selected: run,
+          unavailable: false,
+          cursor: null,
+          loading: false,
+          error: null,
+          loadMore: vi.fn(),
+          reload: vi.fn(),
+          scope: null
+        },
+        onBack: vi.fn()
+      })
+    const shows = (content: string) =>
+      root()
+        .findAll((node) => String(node.type) === 'Text')
+        .some((node) => JSON.stringify(node.props.children) === JSON.stringify(content))
+    const tree = create(details(preview))
+    setTree(tree)
+    await act(async () => {})
+    expect(shows('START')).toBe(true)
+    reachable = true
+    await act(async () => {
+      tree.update(details({ ...preview }))
+    })
+    expect(shows('START END')).toBe(true)
   })
 }

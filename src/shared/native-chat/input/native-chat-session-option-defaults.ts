@@ -57,6 +57,7 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
 /** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */
 export const STRUCTURED_LAUNCH_OPTION_IDS = [
   ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  'interactionMode',
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
 
@@ -244,6 +245,7 @@ export function structuredLaunchRequestedOptions(selection: {
     explicit[AGENT_CHAT_PERMISSION_MODE_OPTION_ID] ?? seed?.[AGENT_CHAT_PERMISSION_MODE_OPTION_ID]
   return {
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {}),
+    ...(explicit.interactionMode ? { interactionMode: explicit.interactionMode } : {}),
     ...(changed ? {} : explicit),
     ...held
   }

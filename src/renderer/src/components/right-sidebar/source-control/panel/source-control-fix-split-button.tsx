@@ -1,3 +1,4 @@
+import { useSourceControlScope, useSourceControlScopeOwner } from './worktree-scope'
 import React, { useState } from 'react'
 import { ChevronDown, RefreshCw, SlidersHorizontal, Sparkle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -87,6 +88,8 @@ export function SourceControlFixSplitButton({
   onFixWithDefaultAgent,
   onPromptDelivered
 }: SourceControlFixSplitButtonProps): React.JSX.Element {
+  const scope = useSourceControlScope()
+  const owner = useSourceControlScopeOwner()
   const [composerOpen, setComposerOpen] = useState(false)
   const canLaunch = Boolean(worktreeId && groupId && prompt && !disabledReason)
   const dividerClass = variant === 'default' ? 'border-primary-foreground/20' : 'border-border'
@@ -151,6 +154,8 @@ export function SourceControlFixSplitButton({
           title={dialogTitle}
           description={dialogDescription}
           baseCommandInput={prompt}
+          placementWorkspaceId={scope?.placementWorkspaceId}
+          initialCwd={scope ? owner?.worktree.path : undefined}
           worktreeId={worktreeId}
           groupId={groupId}
           connectionId={connectionId}

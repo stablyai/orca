@@ -5,8 +5,11 @@ import type {
 } from '../../../shared/agent-session/options/agent-session-options-result'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 
-import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
-import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+import type {
+  AgentSessionTurnContext,
+  TurnOutcome
+} from './operations/structured-agent-session-turns'
+import type { StructuredAgentSessionHostDeps } from './host/structured-agent-session-host-types'
 
 /** Passive verified configuration reads never launch a probe or substitute the current model. */
 export async function readStructuredAgentSessionDefaultModel(

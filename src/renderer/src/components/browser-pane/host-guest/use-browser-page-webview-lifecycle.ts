@@ -10,7 +10,7 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
 import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 import type {

@@ -1,18 +1,18 @@
+import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { SetOptionParams } from '../../../shared/rpc-contract/structured-agent-session-params'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
-} from './structured-agent-session-queued-message-rig.test-fixture'
+} from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import {
   hostTestCatalogReadOperation,
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
-import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { createTestParams } from './structured-agent-session-create-test-fixture'
+} from './host/testing/structured-agent-session-host-test-data'
+import { openRigTurnFor } from './host/testing/structured-agent-session-queued-rig-turn.test-fixture'
+import { createTestParams } from './host/testing/structured-agent-session-create-test-fixture'
 import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'

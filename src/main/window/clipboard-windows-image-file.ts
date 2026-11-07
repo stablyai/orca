@@ -5,6 +5,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit
 } from '../../shared/clipboard-image'
+import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 
 type ClipboardImageFileHandle = Pick<FileHandle, 'close' | 'read' | 'stat'>
 
@@ -226,7 +227,5 @@ export async function readWindowsClipboardImageFileAsPng(
     return null
   }
   assertClipboardImageDimensionsWithinLimit(image.getSize())
-  const png = image.toPNG()
-  assertClipboardImageByteLengthWithinLimit(png.byteLength)
-  return png
+  return encodeClipboardNativeImagePng(image)
 }

@@ -11,7 +11,7 @@ import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/agent-launch/catalog
 import {
   boundPayload,
   PROVIDER_FRAME_PAYLOAD_LIMITS
-} from '../../../native-chat/agent-session-journal/journal-payload-bounds'
+} from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import {
   readCodexErrorAdditionalDetails,

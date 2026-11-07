@@ -1,5 +1,5 @@
 import type { ArtifactCloudOperation, ArtifactPublishedLink } from '../../../../shared/artifacts'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
 

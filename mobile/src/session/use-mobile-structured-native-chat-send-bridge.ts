@@ -1,3 +1,4 @@
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useCallback } from 'react'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
@@ -14,6 +15,10 @@ import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
 } from './native-chat/composer/mobile-native-chat-draft-store'
+import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
+
+const EMPTY_OPTIONS: readonly SessionOptionDescriptor[] = []
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
@@ -27,9 +32,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   isModelWritePending?: () => boolean
+  optionSnapshot?: readonly SessionOptionDescriptor[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   onSendError: (message: string) => void
 }): {
   send: (text: string, images?: string[]) => Promise<boolean>
@@ -46,7 +53,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     agent,
     captureSendOrigin,
     clearDraftForSend,
+    holdUnconfirmed,
     isModelWritePending,
+    optionSnapshot = EMPTY_OPTIONS,
     onSendError,
     restoreRejectedDraft,
     sendStructured,
@@ -61,7 +70,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       _sentAt?: number,
       intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
-      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, sessionCommands)
+      const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent, optionSnapshot)
       if (!isHostCommand && isModelWritePending?.()) {
         onSendError('Message not sent (model selection is still updating)')
         return 'rejected'
@@ -73,13 +82,27 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome = await (intent
-        ? sendStructured(text, images, deadline, attachments, skills, intent)
-        : sendStructured(text, images, deadline, attachments, skills))
-      // Only a definite refusal returns input; uncertainty remains ordinary transcript content.
-      if (outcome === 'rejected') {
+      const created: { clientMessageId?: string } = {}
+      const outcome = await sendStructured(text, images, deadline, attachments, skills, {
+        ...intent,
+        onCreated: (id) => {
+          created.clientMessageId = id
+          intent?.onCreated?.(id)
+        }
+      })
+      const handBack = () => {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
+      }
+      if (outcome === 'rejected') {
+        handBack()
+      } else if (outcome === 'unknown' && created.clientMessageId) {
+        // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
+        holdUnconfirmed(created.clientMessageId, () => {
+          handBack()
+          intent?.onHandBack?.()
+          onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+        })
       }
       return outcome
     },
@@ -87,7 +110,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       agent,
       captureSendOrigin,
       clearDraftForSend,
+      holdUnconfirmed,
       isModelWritePending,
+      optionSnapshot,
       onSendError,
       restoreRejectedDraft,
       sendStructured,
