@@ -1,3 +1,7 @@
+import { getAppEnvironment } from '../../../../shared/app-environment'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { orcadMigrationCutoverFixture } from '../../../ssh/orcad-migration-cutover-fixture'
+import { writeOrcadMigrationSourceCutover } from '../../../ssh/orcad-migration-cutover-journal'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -125,5 +129,58 @@ describe('worktree.ps host coverage', () => {
       `ssh:${SSH_CONNECTION_ID}`
     )
     expect(result.hostScope?.hostIds).toEqual(['local', `ssh:${SSH_CONNECTION_ID}`])
+  })
+  it('hides retained folder sources and their host after conversion without losing visible host labels', async () => {
+    const sourceFolder: FolderWorkspace = {
+      id: 'converted-notes',
+      projectGroupId: 'notes',
+      name: 'Notes',
+      folderPath: '/srv/notes',
+      connectionId: 'converted-box',
+      executionHostId: 'ssh:converted-box',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const store = {
+      ...makeStore(),
+      getFolderWorkspaces: () => [
+        sourceFolder,
+        { ...sourceFolder, id: 'local-notes', connectionId: null, executionHostId: 'local' },
+        { ...sourceFolder, id: 'other-notes', connectionId: 'box-1', executionHostId: 'ssh:box-1' }
+      ],
+      getProjectGroups: () => [{ id: 'notes', name: 'Notes', parentPath: '/srv' }],
+      getSshTargets: () => [{ id: 'converted-box', orcadFence: { environmentId: 'env-1' } }]
+    }
+    const cutover = orcadMigrationCutoverFixture('ps-conversion', 'converted-box')
+    const userData = getAppEnvironment().getPath('userData')
+    writeOrcadMigrationSourceCutover(userData, cutover)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only the catalog and metadata methods supplied by this fixture.
+    const runtime = new OrcaRuntimeService(store as never)
+    const before = await runtime.getWorktreePs(10_000)
+    expect(
+      before.worktrees.find((row) => row.worktreeId === 'folder:converted-notes')?.hostId
+    ).toBe('ssh:converted-box')
+
+    writeOrcadMigrationSourceCutover(userData, { ...cutover, phase: 'destination-committed' })
+    const after = await runtime.getWorktreePs(10_000)
+    expect(
+      after.worktrees
+        .filter((row) => row.workspaceKind === 'folder-workspace')
+        .map((row) => ({ id: row.worktreeId, hostId: row.hostId }))
+    ).toEqual([
+      { id: 'folder:local-notes', hostId: 'local' },
+      { id: 'folder:other-notes', hostId: 'ssh:box-1' }
+    ])
+    expect(after.hostScope).toEqual({
+      hostIds: ['local', 'ssh:box-1'],
+      omittedHostIds: []
+    })
   })
 })

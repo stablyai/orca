@@ -110,13 +110,15 @@ function folderHostId(folder: FolderWorkspace): ExecutionHostId | null {
 }
 
 /** Exclude hosts known only through hidden rows from not-covered listings, or clients would be directed to intentionally hidden sources. */
-export function runtimeHiddenHostIds(store: CatalogSource | null): ReadonlySet<ExecutionHostId> {
+export function runtimeHiddenHostIds(
+  store: CatalogSource | null,
+  visibleFolders = runtimeVisibleFolderWorkspaces(store)
+): ReadonlySet<ExecutionHostId> {
   const hiddenRepos = runtimeHiddenRepos(store)
   if (!store) {
     return new Set()
   }
   const folders = store.getFolderWorkspaces?.() ?? []
-  const visibleFolders = runtimeVisibleFolderWorkspaces(store)
   if (hiddenRepos.size === 0 && visibleFolders.length === folders.length) {
     return new Set()
   }
