@@ -1,7 +1,12 @@
 import type { IpcRenderer } from 'electron'
 import type { PreloadApi } from './api-types'
 
-type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
+type UsageProviderApiKey =
+  | 'claudeUsage'
+  | 'codexUsage'
+  | 'openCodeUsage'
+  | 'museUsage'
+  | 'zcodeUsage'
 type UsageProviderApi = PreloadApi[UsageProviderApiKey]
 type UsageRangeArgs = { scope: string; range: string }
 

@@ -24,6 +24,7 @@ vi.mock('../usage/usage-scan-worker-spawn', () => ({
   scanCodexUsageFilesViaWorker: vi.fn(),
   scanOpenCodeUsageDatabasesViaWorker: vi.fn(),
   scanMuseUsageFilesViaWorker: vi.fn(),
+  scanZcodeUsageDatabasesViaWorker: vi.fn(),
   splitUsageCacheFileViaWorker: vi.fn()
 }))
 
@@ -31,6 +32,7 @@ import { ClaudeUsageStore, initClaudeUsagePath } from '../claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from '../codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from '../opencode-usage/store'
 import { MuseUsageStore, initMuseUsagePath } from '../muse-usage/store'
+import { ZcodeUsageStore } from '../zcode-usage/store'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
@@ -79,7 +81,8 @@ function createProviders(): Parameters<typeof registerUsageProviderHandlers>[0] 
     claudeUsage: new ClaudeUsageStore(backingStore),
     codexUsage: new CodexUsageStore(backingStore),
     openCodeUsage: new OpenCodeUsageStore(backingStore),
-    museUsage: new MuseUsageStore(backingStore)
+    museUsage: new MuseUsageStore(backingStore),
+    zcodeUsage: new ZcodeUsageStore(backingStore)
   }
   stores.push(...Object.values(providers))
   registerUsageProviderHandlers(providers)

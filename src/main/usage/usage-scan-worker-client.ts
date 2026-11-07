@@ -4,6 +4,7 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-us
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
+import type { ZcodeUsageDailyAggregate, ZcodeUsageSession } from '../zcode-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
@@ -144,6 +145,25 @@ export async function scanMuseUsageOnWorker(
   const value = await scan({ operation: 'scan', providerId: 'muse', worktrees, sourceCache })
   if (value.operation !== 'scan' || value.providerId !== 'muse') {
     throw wrongProvider('muse', value)
+  }
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
+}
+
+/**
+ * Scan ZCode usage databases on the shared worker.
+ * @param scan - Dispatch function, injected so tests need no real thread.
+ * @param worktrees - Worktree refs used to attribute usage.
+ * @param sourceCache - Where the worker reads and writes that provider's per-source cache.
+ * @returns The session and daily projections.
+ */
+export async function scanZcodeUsageOnWorker(
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<ZcodeUsageSession, ZcodeUsageDailyAggregate>> {
+  const value = await scan({ operation: 'scan', providerId: 'zcode', worktrees, sourceCache })
+  if (value.operation !== 'scan' || value.providerId !== 'zcode') {
+    throw wrongProvider('zcode', value)
   }
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }

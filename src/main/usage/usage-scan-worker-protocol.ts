@@ -2,6 +2,7 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-us
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
+import type { ZcodeUsageDailyAggregate, ZcodeUsageSession } from '../zcode-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -11,8 +12,7 @@ import type {
 
 // #20940: synchronous history/SQLite scans share one worker. Keep this boundary Electron-free and structured-cloneable plain data.
 
-/** Plugin providers supply their own scan functions and cannot be named in this bundled-worker protocol. */
-export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'muse'
+export type UsageScanWorkerProviderId = 'claude' | 'codex' | 'opencode' | 'muse' | 'zcode'
 
 /** Worker-owned sourceCache records never cross to main. */
 export type UsageScanWorkerScanBody =
@@ -38,6 +38,12 @@ export type UsageScanWorkerScanBody =
   | {
       operation: 'scan'
       providerId: 'muse'
+      worktrees: UsageScanWorktreeRef[]
+      sourceCache: UsageSourceCacheRef
+    }
+  | {
+      operation: 'scan'
+      providerId: 'zcode'
       worktrees: UsageScanWorktreeRef[]
       sourceCache: UsageSourceCacheRef
     }
@@ -73,6 +79,12 @@ export type UsageScanWorkerScanValue =
       providerId: 'muse'
       sessions: MuseUsageSession[]
       dailyAggregates: MuseUsageDailyAggregate[]
+    }
+  | {
+      operation: 'scan'
+      providerId: 'zcode'
+      sessions: ZcodeUsageSession[]
+      dailyAggregates: ZcodeUsageDailyAggregate[]
     }
 
 export type UsageScanWorkerValue =
