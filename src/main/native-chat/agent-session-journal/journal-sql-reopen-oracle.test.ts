@@ -4,22 +4,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './projection/journal-reducer'
 import {
   closeTestJournalHostDatabase,
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
   publishTestJournalEpoch
-} from './journal-host-database-test-support'
+} from './store-lifecycle/journal-host-database-test-support'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlCommand } from './journal-sql-command'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { beginJournalSqlConversion, markJournalSqlReady } from './journal-sql-meta'
-import { journalInputOrder } from './journal-input-order'
-import { persistJournalOutcomeTransition } from './journal-outcome-table'
-import { advanceJournalOutcomeSource, startJournalOutcomeLog } from './journal-outcome-format'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import { advanceJournalOutcomeSource, startJournalOutcomeLog } from './outcomes/journal-outcome-format'
 import { openAgentSessionJournal } from './journal-store-factory'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'

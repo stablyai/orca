@@ -26,7 +26,7 @@ function keyDown(key: string, code: string): Electron.Input {
   } as Electron.Input
 }
 
-function pluginGuestHarness() {
+function pluginGuestHarness(browserPage = false) {
   const send = vi.fn()
   const handlers = new Map<string, Handler>()
   const guest = {
@@ -42,7 +42,7 @@ function pluginGuestHarness() {
     resolveRenderer: () => ({ send }) as unknown as Electron.WebContents,
     // Orca's settings chord is the person's own binding here; the menu owns the default.
     getKeybindings: () => ({ 'app.settings': ['Mod+Comma'] }),
-    browserPage: false
+    browserPage
   })
   const press = (input: Electron.Input) => {
     const preventDefault = vi.fn()
@@ -53,6 +53,20 @@ function pluginGuestHarness() {
 }
 
 describe('Orca shortcuts while a plugin guest has focus', () => {
+  it.each([false, true])('forwards collapse-all with browserPage=%s', (browserPage) => {
+    const { send, press } = pluginGuestHarness(browserPage)
+    const consumed = press({
+      ...keyDown(
+        process.platform === 'darwin' ? 'з' : 'р',
+        process.platform === 'darwin' ? 'KeyP' : 'KeyH'
+      ),
+      alt: process.platform === 'darwin',
+      shift: process.platform !== 'darwin'
+    })
+    expect(send).toHaveBeenCalledWith('ui:toggleProjectsCollapse')
+    expect(consumed).toHaveBeenCalled()
+  })
+
   it('forwards app shortcuts to Orca and keeps them from the guest', () => {
     const { send, press } = pluginGuestHarness()
     const consumed = press(keyDown(',', 'Comma'))

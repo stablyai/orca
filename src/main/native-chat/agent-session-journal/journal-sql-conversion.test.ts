@@ -6,10 +6,10 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
   publishTestJournalEpoch
-} from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { restoreJournal } from './journal-open'
+} from './store-lifecycle/journal-host-database-test-support'
+import type { JournalHostDatabase } from './database/journal-host-database'
+import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
+import { restoreJournal } from './replay/journal-open'
 import { memoryJournalMap } from './journal-memory-collections'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'

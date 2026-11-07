@@ -5,7 +5,7 @@ import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
-import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
+import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   startOrcadWithHost,
@@ -67,7 +67,7 @@ async function startOrcadRuntime(
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   // The daemon and its PTYs inherit the adopted login env and nothing later startup writes, so it
-  // spawns as soon as that lands, in parallel with the imports, stores and hook server. Never rejects.
+  // spawns as soon as that lands, alongside imports, stores and hooks. Rejects only when supervised.
   const daemonStartup = loginEnvironment.then(() => timed('daemon', () => startOrcadDaemon()))
   // Observed now: an early abort may never reach the await below.
   void daemonStartup.catch(() => {})

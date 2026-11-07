@@ -1,5 +1,4 @@
 import { basename, dirname, join } from 'node:path'
-import { existsSync } from 'node:fs'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 
 /** Keep this reachable from plain-Node entries; the build guard rejects Electron imports here. */
@@ -18,9 +17,7 @@ export function resolveWorkerThreadEntryPath(
   if (layout.isPackaged && layout.resourcesPath) {
     return join(layout.resourcesPath, 'app.asar', 'out', 'main', entryFileName)
   }
-  const built = join(layout.moduleDir, entryFileName)
-  const source = built.replace(/\.js$/, '.ts')
-  return !existsSync(built) && existsSync(source) ? source : built
+  return join(layout.moduleDir, entryFileName)
 }
 
 // The build's `chunkFileNames` folder; worker entries sit one level up, beside the main entry.

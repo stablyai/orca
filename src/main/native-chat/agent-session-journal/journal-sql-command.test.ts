@@ -1,9 +1,9 @@
 import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { advanceJournalOutcomeSource, ensureJournalOutcomeTables } from './journal-outcome-format'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './journal-outcome-table'
-import { createJournalReducerState } from './journal-reducer'
+import { advanceJournalOutcomeSource, ensureJournalOutcomeTables } from './outcomes/journal-outcome-format'
+import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import { createJournalReducerState } from './projection/journal-reducer'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlCommand } from './journal-sql-command'
@@ -14,10 +14,10 @@ import type {
   JournalWriterCoreOperation,
   JournalWriterOperation
 } from './journal-writer-command'
-import { journalInputOrder } from './journal-input-order'
+import { journalInputOrder } from './input-order/journal-input-order'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { CommandReceipt } from './command-receipt-schema'
-import { readCommandReceipt } from './command-receipt-table'
+import type { CommandReceipt } from './writing/command-receipt-schema'
+import { readCommandReceipt } from './writing/command-receipt-table'
 
 const databases: Database.Database[] = []
 afterEach(() => {

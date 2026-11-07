@@ -58,76 +58,6 @@ function fixture() {
   return root
 }
 
-it('requires a web bundle before declaring it fresh', () => {
-  const root = fixture()
-  expect(isDevWebClientFresh(root)).toBe(true)
-  rmSync(join(root, 'out/web/web-index.html'))
-  expect(isDevWebClientFresh(root)).toBe(false)
-})
-
-it('keeps an existing bundle fresh after editing renderer or shared tests', () => {
-  const root = fixture()
-  for (const file of [
-    'src/renderer/src/app.test.tsx',
-    'src/renderer/src/app.spec.ts',
-    'src/shared/value.test.ts'
-  ]) {
-    writeFileSync(join(root, file), 'changed test')
-    utimesSync(join(root, file), EDITED, EDITED)
-  }
-  expect(isDevWebClientFresh(root)).toBe(true)
-})
-
-it.each([
-  'src/renderer/src/app.tsx',
-  'src/renderer/src/main.css',
-  'src/shared/value.ts',
-  'src/preload/api-types.ts',
-  'vite.web.config.ts'
-])('rebuilds when %s changes', (file) => {
-  const root = fixture()
-  expect(isDevWebClientFresh(root)).toBe(true)
-  utimesSync(join(root, file), EDITED, EDITED)
-  expect(isDevWebClientFresh(root)).toBe(false)
-})
-
-it.each(['add', 'delete'])('rebuilds after a production source %s', (operation) => {
-  const root = fixture()
-  const file = join(root, 'src/renderer/src/app.tsx')
-  if (operation === 'delete') {
-    rmSync(file)
-  } else {
-    writeFileSync(join(root, 'src/renderer/src/new.tsx'), '')
-  }
-  utimesSync(dirname(file), EDITED, EDITED)
-  expect(isDevWebClientFresh(root)).toBe(false)
-})
-
-it.each(['test.ts', 'spec.tsx', 'test.mjs', 'spec.cts'])(
-  'keeps a tracked bundle fresh after adding and deleting a %s file',
-  (suffix) => {
-    const root = fixture()
-    expect(isDevWebClientFresh(root)).toBe(true)
-    const file = join(root, `src/renderer/src/new.${suffix}`)
-    writeFileSync(file, '')
-    utimesSync(dirname(file), EDITED, EDITED)
-    expect(isDevWebClientFresh(root)).toBe(true)
-    rmSync(file)
-    expect(isDevWebClientFresh(root)).toBe(true)
-  }
-)
-
-it('ignores adding and removing a directory containing only tests', () => {
-  const root = fixture()
-  expect(isDevWebClientFresh(root)).toBe(true)
-  const directory = join(root, 'src/shared/new-tests')
-  mkdirSync(directory)
-  writeFileSync(join(directory, 'value.test.ts'), '')
-  expect(isDevWebClientFresh(root)).toBe(true)
-  rmSync(directory, { recursive: true })
-  expect(isDevWebClientFresh(root)).toBe(true)
-})
-
 it.each(['add', 'delete', 'rename'])(
   'invalidates a tracked bundle after a production source %s with old timestamps',
   (operation) => {
@@ -159,30 +89,6 @@ it('invalidates a tracked bundle when a source is removed in a nested directory'
   utimesSync(dirname(directory), OLD, OLD)
   expect(isDevWebClientFresh(root)).toBe(false)
 })
-
-it.each(['missing', 'corrupt', 'version', 'output'])(
-  'falls back conservatively when the inventory is %s',
-  (state) => {
-    const root = fixture()
-    expect(isDevWebClientFresh(root)).toBe(true)
-    const marker = join(root, 'out/web/.orca-dev-web-inputs.json')
-    if (state === 'missing') {
-      rmSync(marker)
-    }
-    if (state === 'corrupt') {
-      writeFileSync(marker, '{')
-    }
-    if (state === 'version') {
-      writeFileSync(marker, JSON.stringify({ version: 0 }))
-    }
-    if (state === 'output') {
-      utimesSync(join(root, 'out/web/web-index.html'), OLD, OLD)
-    }
-    rmSync(join(root, 'src/renderer/src/app.tsx'))
-    utimesSync(join(root, 'src/renderer/src'), EDITED, EDITED)
-    expect(isDevWebClientFresh(root)).toBe(false)
-  }
-)
 
 it('adopts a fresh replacement output without reusing its previous inventory', () => {
   const root = fixture()

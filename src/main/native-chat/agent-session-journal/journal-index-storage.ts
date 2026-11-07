@@ -1,9 +1,9 @@
-import type { JournalInputPlaceIndex } from './journal-input-place-index'
-import type { JournalInputDomainIndex } from './journal-input-domain-index'
-import type { JournalInputReleasedPositions } from './journal-input-released-positions'
-import type { JournalInputCandidates } from './journal-input-candidates'
-import type { JournalSubmissionIndex } from './journal-submission-index'
-import type { TurnSource } from './journal-newest-turn-tree'
+import type { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
+import type { JournalInputDomainIndex } from './input-order/journal-input-domain-index'
+import type { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
+import type { JournalInputCandidates } from './input-order/journal-input-candidates'
+import type { JournalSubmissionIndex } from './input-order/journal-submission-index'
+import type { TurnSource } from './input-order/journal-newest-turn-tree'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import type {
   JournalInputOrderFacts,
@@ -13,7 +13,7 @@ import type {
   JournalSubmissionLinkFacts,
   JournalInputLineageFacts
 } from './journal-input-facts-storage'
-import type { JournalInputCard } from './journal-input-lineage'
+import type { JournalInputCard } from './input-order/journal-input-lineage'
 import type { JournalStateQueries } from './journal-state-queries'
 
 // Expose named queries, so a SQL implementation cannot accidentally become a collection scan.

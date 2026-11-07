@@ -8,7 +8,7 @@ import { checkDirectMailbox } from './check-direct'
 import { checkedMailboxes } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
-import { hasRunBindingKey } from '../../../../orchestration/orchestration-caller-identity'
+import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
   callerHoldsDispatchPane,

@@ -4,12 +4,12 @@ import {
   queryInputContext,
   type JournalInputCard,
   type JournalInputContext
-} from './journal-input-lineage'
+} from './input-order/journal-input-lineage'
 import {
   mergeInputPlaces,
   type InputPlaceQuery,
   type JournalInputPlaceEntry
-} from './journal-input-place-index'
+} from './input-order/journal-input-place-index'
 import {
   compareJournalSqlPlaces,
   journalSqlCardFlags,
@@ -18,7 +18,7 @@ import {
   journalSqlPlaceSummary
 } from './journal-sql-place-index'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 /** The same introduction-prefix decomposition as the memory index, with SQL block ranges. */
 export class JournalSqlDomainIndex implements JournalInputDomainStorage {

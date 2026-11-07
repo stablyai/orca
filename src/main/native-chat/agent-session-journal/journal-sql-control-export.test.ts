@@ -1,17 +1,17 @@
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
-import { ensureJournalOutcomeTables } from './journal-outcome-format'
+import { createJournalReducerState, type JournalReducerState } from './projection/journal-reducer'
+import { ensureJournalOutcomeTables } from './outcomes/journal-outcome-format'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
-import { journalInputOrder } from './journal-input-order'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './journal-outcome-table'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { exportJournalControlState } from './journal-sql-control-export'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 
 const databases: Database.Database[] = []
 afterEach(() => {

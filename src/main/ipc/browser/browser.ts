@@ -132,8 +132,7 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
       const { requireLocalSshBrowserRouteTarget } =
         await import('../../browser/routing/local-host-partitions/local-ssh-browser-route')
       requireLocalSshBrowserRouteTarget(
-        getSshConnectionStore()?.listTargets(),
-        args.targetId,
+        getSshConnectionStore()?.getTarget(args.targetId),
         args.expectedSshTargetGeneration
       )
       const { prepareLocalSshBrowserPartition } =

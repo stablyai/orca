@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   toastInfo: vi.fn(),
   toastError: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focusRenderer,
   focusRuntimeTerminalHandle: mocks.focusRuntime
 }))

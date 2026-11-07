@@ -24,8 +24,9 @@ import type { FileDocState, MarkdownDocState, MobileSessionTab } from './mobile-
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, connState, markdownDocsRef, setMarkdownDocs, setFileDocs } = scope
-  const { diffShowWhitespace } = useMobileSourceControlSettings(client, connState).settings
+  const { hostId, worktreeId, client, connState, markdownDocsRef, setMarkdownDocs, setFileDocs } =
+    scope
+  const { diffShowWhitespace } = useMobileSourceControlSettings(hostId, client, connState).settings
   const markdownReadSeqRef = useRef(new Map<string, number>())
   // Diffs built or loading under the old whitespace choice are dropped so the open tab reads them again.
   const builtWhitespaceRef = useRef(diffShowWhitespace)

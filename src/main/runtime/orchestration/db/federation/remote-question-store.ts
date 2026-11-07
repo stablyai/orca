@@ -1,4 +1,4 @@
-import { importedAnswerSenderSnapshot } from '../../answer-sender-relay-report'
+import { importedAnswerSenderSnapshot } from '../../mailbox/senders/answer-sender-relay-report'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

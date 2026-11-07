@@ -2,7 +2,7 @@ import { memoryJournalMap } from '../native-chat/agent-session-journal/journal-m
 import { vi, type Mock, type MockInstance } from 'vitest'
 import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 
 export type AutomationChatRunMeasurement = {
   measure: () => number[]

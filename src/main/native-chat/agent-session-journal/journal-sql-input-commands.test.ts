@@ -10,34 +10,34 @@ import Database from '../../sqlite/sync-database'
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from './journal-host-database-test-support'
+} from './store-lifecycle/journal-host-database-test-support'
 import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
 import {
   createJournalStoreCollaborators,
   type JournalStoreCollaborators
-} from './journal-store-collaborators'
-import type { JournalHostDatabase } from './journal-host-database'
-import { JournalWriteQueue } from './journal-write-queue'
-import { prepareJournalOutcomeWrite } from './journal-outcome-write'
-import { persistJournalOutcomeRows } from './journal-outcome-table'
-import { ensureJournalOutcomeTables, startJournalOutcomeLog } from './journal-outcome-format'
-import { createJournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
-import { journalContextCursor, physicalJournalCursor } from './journal-context-cursor'
-import type { JournalRecoveryJournal } from './journal-pending-submission-recovery'
+} from './store-lifecycle/journal-store-collaborators'
+import type { JournalHostDatabase } from './database/journal-host-database'
+import { JournalWriteQueue } from './writing/journal-write-queue'
+import { prepareJournalOutcomeWrite } from './outcomes/journal-outcome-write'
+import { persistJournalOutcomeRows } from './outcomes/journal-outcome-table'
+import { ensureJournalOutcomeTables, startJournalOutcomeLog } from './outcomes/journal-outcome-format'
+import { createJournalReducerState } from './projection/journal-reducer'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { journalContextCursor, physicalJournalCursor } from './context-epochs/journal-context-cursor'
+import type { JournalRecoveryJournal } from './submissions/journal-pending-submission-recovery'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
   rejectJournalQueuedSubmissions
-} from './journal-pending-submission-recovery'
-import { holdUnsentSends } from './journal-unsent-send-hold'
-import { journalTombstoneRowBuilder } from './journal-row-builders'
+} from './submissions/journal-pending-submission-recovery'
+import { holdUnsentSends } from './queued-messages/journal-unsent-send-hold'
+import { journalTombstoneRowBuilder } from './writing/journal-row-builders'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalSubmissionSelected } from './journal-submission-selector'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
-import { createJournalTablesSql } from './journal-database-schema'
+import { createJournalTablesSql } from './database/journal-database-schema'
 import { JournalSqlCommand } from './journal-sql-command'
 import { JournalSqlBatch } from './journal-sql-batch'
 import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
@@ -46,7 +46,7 @@ import {
   journalMailSenderKey,
   type JournalWriterHostFacts
 } from './journal-writer-host-facts'
-import { QueuedMessageNotConsumableError } from './queued-message-consume-error'
+import { QueuedMessageNotConsumableError } from './queued-messages/queued-message-consume-error'
 import { journalSqlFailure, restoreJournalSqlFailure } from './journal-sql-failure'
 
 const identity: AgentSessionJournalIdentity = {

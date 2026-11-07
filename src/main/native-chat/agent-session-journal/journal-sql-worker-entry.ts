@@ -2,14 +2,14 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './journal-database'
-import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { openJournalDatabase } from './database/journal-database'
+import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
 import { applyJournalWriterEffect } from './journal-writer-effects'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
-import { assertJournalWritable } from './journal-write-guards'
+import { assertJournalWritable } from './writing/journal-write-guards'
 
 if (
   !parentPort ||

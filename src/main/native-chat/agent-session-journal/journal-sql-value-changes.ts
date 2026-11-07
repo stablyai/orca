@@ -1,4 +1,4 @@
-import type { JournalEntryChange } from './journal-transition-collections'
+import type { JournalEntryChange } from './projection/journal-transition-collections'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import type { JournalSqlValueLocation } from './journal-sql-value-codec'
 

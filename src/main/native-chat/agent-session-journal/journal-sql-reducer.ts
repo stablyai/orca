@@ -1,4 +1,4 @@
-import { createJournalReducerState, type JournalReducerState } from './journal-reducer'
+import { createJournalReducerState, type JournalReducerState } from './projection/journal-reducer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlValueContext } from './journal-sql-value-context'
@@ -9,9 +9,9 @@ import { JournalSqlPauseMarks } from './journal-sql-pause-marks'
 import { JournalSqlQueryFacts } from './journal-sql-query-facts'
 import { sqlJournalStateQueries } from './journal-sql-state-queries'
 import { sqlJournalIndexStorage } from './journal-sql-index-storage'
-import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
+import { JournalDerivedTurnScope } from './projection/journal-derived-turn-scope'
 import { setJournalOutcomeScalarReader } from './journal-outcome-scalars'
-import type { JournalOutcomeTransition } from './journal-outcome-table'
+import type { JournalOutcomeTransition } from './outcomes/journal-outcome-table'
 
 /** A SAVEPOINT owns this shell and its decoded values; the writer discards it after every command. */
 export class JournalSqlReducer {

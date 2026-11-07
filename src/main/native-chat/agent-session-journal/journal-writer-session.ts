@@ -7,42 +7,42 @@ import {
   type JournalWriterHostFacts
 } from './journal-writer-host-facts'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
-import type { JournalTransactionalDatabase } from './journal-host-database'
-import type { JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalTransactionalDatabase } from './database/journal-host-database'
+import type { JournalReducerState } from './projection/journal-reducer'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 import type { JournalWriterTarget } from './journal-writer-command'
-import type { QueuedMessageOwed } from './queued-message-consume-error'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import {
   createJournalStoreCollaborators,
   type JournalStoreCollaborators
-} from './journal-store-collaborators'
+} from './store-lifecycle/journal-store-collaborators'
 import {
   JournalGoalAttachmentInverse,
   type JournalGoalAttachmentSnapshot
-} from './journal-goal-attachment-inverse'
-import { JournalWriteQueue } from './journal-write-queue'
+} from './writing/journal-goal-attachment-inverse'
+import { JournalWriteQueue } from './writing/journal-write-queue'
 import { JournalWriterChanges, type JournalWriterCommit } from './journal-writer-changes'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { readJournalSqlMeta } from './journal-sql-meta'
 import { publishJournalWriterEpoch } from './journal-writer-epoch'
-import { journalInputOrder } from './journal-input-order'
-import { journalInputAcceptance } from './journal-input-provenance'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { journalInputAcceptance } from './input-order/journal-input-provenance'
 import {
   advanceJournalOutcomeSource,
   journalOutcomeSource,
   startJournalOutcomeLog
-} from './journal-outcome-format'
-import { persistJournalOutcomeTransition } from './journal-outcome-table'
-import { journalStoppedUsageLimitCut } from './journal-stopped-usage-limit-cut'
+} from './outcomes/journal-outcome-format'
+import { persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import { journalStoppedUsageLimitCut } from './context-epochs/journal-stopped-usage-limit-cut'
 import { applyJournalWriterEffect } from './journal-writer-effects'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import {
   journalContextCursor,
   physicalJournalCursor,
   projectJournalRows
-} from './journal-context-cursor'
-import type { JournalRecoveryJournal } from './journal-pending-submission-recovery'
+} from './context-epochs/journal-context-cursor'
+import type { JournalRecoveryJournal } from './submissions/journal-pending-submission-recovery'
 
 /** One command's collaborators: today's planning code over SQL state that each write reloads. */
 export class JournalWriterSession {

@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterTarget } from './journal-writer-command'
-import { AgentSessionJournalError } from './journal-write-guards'
-import { readJournalSessionEpoch } from './journal-row-table'
+import { AgentSessionJournalError } from './writing/journal-write-guards'
+import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
 
 /** Bumped whenever a projection table's meaning changes; a different version reconverts. */
 export const JOURNAL_SQL_PROJECTION_VERSION = 1

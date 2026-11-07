@@ -1,5 +1,5 @@
 import type { JournalTurnSourceStorage } from './journal-index-storage'
-import { compareTurnSources, type TurnSource } from './journal-newest-turn-tree'
+import { compareTurnSources, type TurnSource } from './input-order/journal-newest-turn-tree'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 export class JournalSqlTurnSources implements JournalTurnSourceStorage {

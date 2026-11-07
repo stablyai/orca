@@ -10,10 +10,10 @@ import {
   markUnclaimedUploadForSweep,
   type AgentSessionAttachmentClaim
 } from '../agent-session-attachments/agent-session-attachment-claims'
-import type { CommandReceipt, CommandReceiptScope } from './command-receipt-schema'
-import { insertCommandReceiptIfAbsent } from './command-receipt-table'
-import { CommandReceiptExistsError } from './command-receipt-transaction'
-import type { JournalRow } from './journal-row-schema'
+import type { CommandReceipt, CommandReceiptScope } from './writing/command-receipt-schema'
+import { insertCommandReceiptIfAbsent } from './writing/command-receipt-table'
+import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 
 export type JournalWriterEffect =
   | { kind: 'store'; writes: AgentSessionStoreRowWrites; insertOperationsIfAbsent: boolean }

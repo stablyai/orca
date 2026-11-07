@@ -20,3 +20,6 @@ config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-co
 config/tsconfig.node.json src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts
 config/tsconfig.node.json src/renderer/src/components/native-chat/structured-agent-question-projection.ts
 tests/e2e/capture-opencode-tui-repro.mjs src/cli/cmd/tui/ui/spinner
+tests/e2e/cross-version-wire/released-chat-writers.ts src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts
+# Released source trees retain this actual registry; the current registry is checked first.
+tests/e2e/cross-version-wire/release-module-locations.ts src/main/runtime/rpc/methods/index.ts

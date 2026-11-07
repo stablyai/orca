@@ -2,22 +2,22 @@ import type Database from '../../sqlite/sync-database'
 import {
   createAgentSessionRecordTablesSql,
   createJournalTablesSql
-} from './journal-database-schema'
+} from './database/journal-database-schema'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { beginJournalSqlConversion, markJournalSqlReady } from './journal-sql-meta'
-import { publishJournalSessionEpoch } from './journal-row-table'
+import { publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import {
   advanceJournalOutcomeSource,
   ensureJournalOutcomeTables,
   startJournalOutcomeLog
-} from './journal-outcome-format'
-import { persistJournalOutcomeTransition } from './journal-outcome-table'
+} from './outcomes/journal-outcome-format'
+import { persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
-import { journalInputOrder } from './journal-input-order'
-import { ensureCommandReceiptsTable } from './command-receipt-schema'
-import { ensureQueuedMessagesTable } from './queued-message-schema'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { ensureCommandReceiptsTable } from './writing/command-receipt-schema'
+import { ensureQueuedMessagesTable } from './queued-messages/queued-message-schema'
 
 /** Seeds a published projection without pretending to exercise actual-open reconstruction. */
 export function seedJournalSqlCommands(db: Database.Database) {

@@ -3,7 +3,7 @@ import { journalSqlIndexScope } from './journal-sql-index-values'
 import { clearJournalSqlCollection } from './journal-sql-keyed-values'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalEntryChange } from './journal-transition-collections'
+import type { JournalEntryChange } from './projection/journal-transition-collections'
 import {
   encodeJournalSqlValue,
   journalSqlLocationKey,

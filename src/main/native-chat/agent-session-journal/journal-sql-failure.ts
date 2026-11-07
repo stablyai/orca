@@ -1,6 +1,6 @@
-import { AgentSessionJournalError, JournalOutcomeDecodeError } from './journal-write-guards'
-import { JournalDamageError, JournalUnreleasedSchemaError } from './journal-open-failure'
-import { CommandReceiptExistsError } from './command-receipt-transaction'
+import { AgentSessionJournalError, JournalOutcomeDecodeError } from './writing/journal-write-guards'
+import { JournalDamageError, JournalUnreleasedSchemaError } from './replay/journal-open-failure'
+import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
 import { JournalProjectionStaleError } from './journal-sql-meta'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import {
@@ -10,7 +10,7 @@ import {
 import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
-} from './queued-message-consume-error'
+} from './queued-messages/queued-message-consume-error'
 import {
   AgentSessionRefusalError,
   type AgentSessionWireRefusal

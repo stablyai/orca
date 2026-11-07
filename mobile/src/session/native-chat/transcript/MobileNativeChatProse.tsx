@@ -11,6 +11,7 @@ import {
 import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
+import { MobileNativeChatMarkdownRowKeyContext } from './mobile-native-chat-disclosure-store'
 import {
   isRenderableImageUri,
   readHostChatImage,
@@ -57,6 +58,7 @@ function markdownImageBlock(href: string, alt: string): NativeChatImageRefBlock 
 }
 
 export function Prose({
+  rowKey,
   block,
   text,
   userMessage,
@@ -66,6 +68,8 @@ export function Prose({
   growing = false,
   revealing = false
 }: {
+  /** The transcript row, so a code block's wrap choice outlives the row's mount. */
+  rowKey?: string
   block: NativeChatBlock
   text: string
   userMessage?: boolean
@@ -113,19 +117,22 @@ export function Prose({
       )
     }
     return (
-      <MobileNativeChatMarkdown
-        content={
-          renderVisual && (growing || revealing)
-            ? withoutPendingNativeChatVisualDirectiveTail(text)
-            : text
-        }
-        growing={revealing}
-        renderVisual={renderVisual}
-        rangeSelectable
-        textScale={CHAT_PROSE_SCALE * fontScale}
-        onLongPress={onLongPress}
-        renderImage={renderImage}
-      />
+      <MobileNativeChatMarkdownRowKeyContext.Provider value={rowKey}>
+        <MobileNativeChatMarkdown
+          content={
+            renderVisual && (growing || revealing)
+              ? withoutPendingNativeChatVisualDirectiveTail(text)
+              : text
+          }
+          growing={revealing}
+          streaming={growing || revealing}
+          renderVisual={renderVisual}
+          rangeSelectable
+          textScale={CHAT_PROSE_SCALE * fontScale}
+          onLongPress={onLongPress}
+          renderImage={renderImage}
+        />
+      </MobileNativeChatMarkdownRowKeyContext.Provider>
     )
   }
   if (isImageRefBlock(block)) {

@@ -4,7 +4,7 @@ import type {
   JournalLifecycleBatchInput,
   ResolveDispatchInput
 } from './journal-store-contracts'
-import type { JournalStopEvent } from './journal-row-schema'
+import type { JournalStopEvent } from './durable-rows/journal-row-schema'
 import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterInputOperation } from './journal-writer-operations'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'

@@ -3,15 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './journal-database'
+import { openJournalDatabase } from './database/journal-database'
 import { seedJournalSqlCommands } from './journal-sql-command.test-fixture'
 import { JournalSqlOwner } from './journal-sql-owner'
+import { journalSqlWorkerPath } from './journal-sql-worker-bundle.test-fixture'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import type { JournalWriterCommand } from './journal-writer-command'
-import type { CommandReceipt } from './command-receipt-schema'
-import { CommandReceiptExistsError } from './command-receipt-transaction'
-import { AgentSessionJournalError } from './journal-write-guards'
+import type { CommandReceipt } from './writing/command-receipt-schema'
+import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
+import { AgentSessionJournalError } from './writing/journal-write-guards'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 
@@ -30,7 +31,7 @@ async function fixture() {
   seedJournalSqlCommands(db)
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('session', '{}')
   db.close()
-  const owner = new JournalSqlOwner(filename, root)
+  const owner = new JournalSqlOwner(filename, root, journalSqlWorkerPath())
   owners.push(owner)
   expect(await owner.opened()).toBe(false)
   return { root, filename, owner }

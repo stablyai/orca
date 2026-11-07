@@ -1,13 +1,13 @@
-import { federationRelayWireItem } from '../../../../orchestration/federation-relay-wire'
+import { federationRelayWireItem } from '../../../../orchestration/federation/relay/federation-relay-wire'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
-import { importFederatedControlMessage } from '../../../../orchestration/federation-control-message'
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
+import { importFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   areFederatedLifecycleSettlementsEqual,
   publishFederatedLifecycleSettlement,
   type FederatedLifecycleSettlement
-} from '../../../../orchestration/federation-lifecycle-settlement'
+} from '../../../../orchestration/federation/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../../../core'
 import {
   FederationAckParams,

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { track } from '@/lib/telemetry'
 import type {
   AddRepoDefaultCheckoutHandoffSource,

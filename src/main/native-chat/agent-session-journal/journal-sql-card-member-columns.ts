@@ -1,5 +1,5 @@
-import type { JournalIndexedInputCard } from './journal-input-domain-index'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation, JournalSqlValueReference } from './journal-sql-value-codec'
 

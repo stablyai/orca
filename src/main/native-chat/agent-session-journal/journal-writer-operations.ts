@@ -1,8 +1,8 @@
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { JournalRow, JournalStopEvent } from './journal-row-schema'
-import { composeJournalOperationReceipts, type JournalOperationReceipt } from './journal-row-writer'
+import type { JournalRow, JournalStopEvent } from './durable-rows/journal-row-schema'
+import { composeJournalOperationReceipts, type JournalOperationReceipt } from './writing/journal-row-writer'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity
@@ -20,24 +20,24 @@ import {
   journalQueueReopenRowBuilder,
   journalQueueResumeRowBuilder,
   journalStopEventRowBuilder
-} from './journal-stop-and-resume-rows'
-import { journalTombstoneRowBuilder } from './journal-row-builders'
+} from './context-epochs/journal-stop-and-resume-rows'
+import { journalTombstoneRowBuilder } from './writing/journal-row-builders'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { QueuedMessageHoldReason } from './queued-message-table'
+import type { QueuedMessageHoldReason } from './queued-messages/queued-message-table'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
   rejectJournalQueuedSubmissions
-} from './journal-pending-submission-recovery'
-import { holdUnsentSends } from './journal-unsent-send-hold'
+} from './submissions/journal-pending-submission-recovery'
+import { holdUnsentSends } from './queued-messages/journal-unsent-send-hold'
 import { openJournalWriterSession } from './journal-writer-open'
 import {
   journalSubmissionSelected,
   type JournalSubmissionSelector
 } from './journal-submission-selector'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
-import type { QueuedMessageUpdate } from './queued-message-update'
+import type { QueuedMessageUpdate } from './queued-messages/queued-message-update'
 
 /** Operations that run today's collaborator code; every host callback became data. */
 export type JournalWriterInputOperation =

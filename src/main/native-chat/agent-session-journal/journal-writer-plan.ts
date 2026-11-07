@@ -1,19 +1,19 @@
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalWriterCoreOperation } from './journal-writer-command'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 import {
   journalDispatchRowBuilder,
   journalItemRowBuilder,
   journalTombstoneRowBuilder
-} from './journal-row-builders'
+} from './writing/journal-row-builders'
 import {
   journalQueueReopenRowBuilder,
   journalQueueResumeRowBuilder,
   journalStopEventRowBuilder
-} from './journal-stop-and-resume-rows'
-import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
-import { journalDispatchRowApplies } from './journal-dispatch-settlement'
+} from './context-epochs/journal-stop-and-resume-rows'
+import { JournalLifecycleBatchAppender } from './writing/journal-lifecycle-batch-appender'
+import { journalDispatchRowApplies } from './projection/journal-dispatch-settlement'
 
 /** State-dependent planning runs inside the command SAVEPOINT, after earlier surviving commands. */
 export function planJournalWriterRows(

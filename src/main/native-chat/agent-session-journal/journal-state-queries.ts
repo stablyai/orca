@@ -3,9 +3,9 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalReducerState } from './journal-reducer'
-import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { JournalReducerState } from './projection/journal-reducer'
+import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 /** Each live range query names its population; whole-state restore/export remains memory-only. */
 export type JournalStateQueries = {

@@ -3,8 +3,8 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalDispatchRow } from './journal-row-schema'
-import type { JournalInputSource } from './journal-input-source-schema'
+import type { JournalDispatchRow } from './durable-rows/journal-row-schema'
+import type { JournalInputSource } from './input-order/journal-input-source-schema'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import { journalSqlEntryKey } from './journal-sql-keyed-values'
 

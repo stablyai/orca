@@ -1,8 +1,8 @@
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
-import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type {
   NativeChatComposerSendIntent,
@@ -20,19 +20,28 @@ import {
   isStructuredAgentSessionHostCommand,
   structuredAgentSessionGoalObjective
 } from '../../../../shared/agent-session/view/structured-agent-session-composer'
+import {
+  structuredAgentSessionModePickDraft,
+  structuredAgentSessionPickEntersGoalMode
+} from '../../../../shared/agent-session/view/structured-agent-session-goal-mode'
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { promptHasInteractionModeSkill } from './native-chat-prompt-document'
+import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import {
+  writeNativeChatComposerText,
+  type NativeChatComposerInput
+} from './native-chat-composer-input'
 
 import {
   admitNativeChatPastedText,
   resolveNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 
-const GOAL_COMMAND = 'goal'
-
 export type NativeChatComposerGoalMode = {
   /** True while the draft is an objective rather than a message. */
   active: boolean
   exit: () => void
-  /** Wraps a picker action so picking `/goal` enters goal mode instead. */
+  /** Mode commands apply immediately instead of becoming draft text. */
   interceptPick: <TItem extends NativeChatPickerItem>(
     pick: (item: TItem) => void
   ) => (item: TItem) => void
@@ -41,9 +50,11 @@ export type NativeChatComposerGoalMode = {
 /** Reuse goal entry for host controls and native commands, preserving each submission path. */
 export function useNativeChatComposerSubmit(args: {
   structuredTransport?: NativeChatStructuredComposerTransport
+  agent?: AgentType
   draftScopeKey: string
   draft: string
   caret: number
+  textareaRef: RefObject<NativeChatComposerInput | null>
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
   /** An optional-prompt action still passes the shared paste and attachment admission. */
@@ -61,7 +72,15 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const { consumeOrcaCommand, setCaret, setDraft, structuredTransport, submitEmpty } = args
+  const {
+    agent,
+    consumeOrcaCommand,
+    setCaret,
+    setDraft,
+    structuredTransport,
+    submitEmpty,
+    textareaRef
+  } = args
   const threadGoal = structuredTransport?.threadGoal
   const [entered, setEntered] = useState(false)
   const active = entered && structuredTransport !== undefined
@@ -69,24 +88,50 @@ export function useNativeChatComposerSubmit(args: {
   const interceptPick = useCallback(
     <TItem extends NativeChatPickerItem>(pick: (item: TItem) => void) =>
       (item: TItem) => {
-        // Without host goals only the provider's built-in /goal opens the chip; a namesake keeps its invocation.
+        const mode =
+          item.kind === 'command' && item.orcaOwned
+            ? agentSessionInteractionCommand(agent ?? '', item.token)
+            : null
+        const modePick =
+          mode !== null &&
+          structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode')
         if (
           !structuredTransport ||
-          item.kind !== 'command' ||
-          item.name !== GOAL_COMMAND ||
-          (!threadGoal && item.builtin !== true)
+          (!modePick && !structuredAgentSessionPickEntersGoalMode(item, threadGoal !== undefined))
         ) {
           pick(item)
           return
         }
-        // Drop the `/goal ` token the pick would have inserted; the chip replaces it.
-        const inserted = applyPickerSuggestion(draft, caret, item)
-        const tokenStart = inserted.caret - item.token.length - 1
-        setDraft(inserted.draft.slice(0, tokenStart) + inserted.draft.slice(inserted.caret))
-        setCaret(tokenStart)
-        setEntered(true)
+        const input = textareaRef.current
+        const next = structuredAgentSessionModePickDraft(
+          input?.value ?? draft,
+          input?.selectionStart ?? caret,
+          item
+        )
+        if (!next) {
+          return
+        }
+        if (modePick && mode !== null) {
+          if (!structuredTransport.optionsSurface.admits?.('interactionMode', mode)) {
+            input?.focus()
+            return
+          }
+          runSessionOptionSurfaceCall(
+            mode,
+            () => undefined,
+            () => structuredTransport.optionsSurface.setOption('interactionMode', mode)
+          )
+        }
+        setDraft(next.draft)
+        if (input) {
+          writeNativeChatComposerText(input, next.draft, next.caret)
+        }
+        setCaret(next.caret)
+        if (!modePick) {
+          setEntered(true)
+        }
       },
-    [caret, draft, setCaret, setDraft, structuredTransport, threadGoal]
+    [agent, caret, draft, setCaret, setDraft, structuredTransport, textareaRef, threadGoal]
   )
 
   // Native goals keep the ordinary sender's paste admission and clearing; host goals clear only an unchanged draft.
@@ -208,14 +253,24 @@ export function useNativeChatComposerSubmit(args: {
 
   const exit = useCallback(() => setEntered(false), [])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])
+  const commandText = structuredTransport
+    ? resolveNativeChatPastedText(draftScopeKey, draft)
+    : draft
   const messageDelivery =
     !(active && threadGoal !== undefined) &&
     !args.matchesOrcaCommand?.(draft) &&
     !(
       structuredTransport &&
+      !promptHasInteractionModeSkill(
+        args.agent ?? '',
+        commandText,
+        readNativeChatComposerDraft(draftScopeKey).document
+      ) &&
       isStructuredAgentSessionHostCommand(
-        resolveNativeChatPastedText(draftScopeKey, draft),
-        threadGoal !== undefined
+        commandText,
+        threadGoal !== undefined,
+        args.agent,
+        structuredTransport.optionSnapshot
       )
     )
   return { send, goalMode, messageDelivery }

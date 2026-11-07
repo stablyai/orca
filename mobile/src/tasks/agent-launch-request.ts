@@ -2,6 +2,8 @@
 // Build from existing create params and strip reserved agent fields so the legacy fallback stays equivalent.
 
 import {
+  isAgentLaunchChatFallback,
+  isAgentLaunchModeReceipt,
   withoutReservedAgentCreateFields,
   type AgentLaunchPlacement,
   type AgentLaunchPrompt,
@@ -91,15 +93,21 @@ export function readAgentLaunchCreateOutcome(result: unknown): AgentLaunchCreate
   if (typeof worktreeId !== 'string' || !worktreeId.trim()) {
     return null
   }
-  const warning = readTrimmedWarning(result)
+  const warning = readAgentLaunchNotice(result)
   return { worktreeId, ...(warning ? { warning } : {}) }
 }
 
-function readTrimmedWarning(source: unknown): string {
-  if (!source || typeof source !== 'object' || !('warning' in source)) {
+/** The launch reply's warning plus, when a chat-capable agent fell back to a terminal, the host's reason. */
+export function readAgentLaunchNotice(source: unknown): string {
+  if (!source || typeof source !== 'object') {
     return ''
   }
-  return typeof source.warning === 'string' ? source.warning.trim() : ''
+  const warning =
+    'warning' in source && typeof source.warning === 'string' ? source.warning.trim() : ''
+  const receipt =
+    'receipt' in source && isAgentLaunchModeReceipt(source.receipt) ? source.receipt : null
+  const fallback = receipt && isAgentLaunchChatFallback(receipt) ? receipt.detail.trim() : ''
+  return [warning, fallback].filter(Boolean).join(' ')
 }
 
 // Capability probing can beat this client’s advertisement; method refusal permits legacy create fallback.

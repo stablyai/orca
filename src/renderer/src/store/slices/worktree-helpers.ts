@@ -1,4 +1,4 @@
-import { findFirstIndexedWorktree } from '@/lib/worktree-runtime-owner-index'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { WorkspaceReferenceObservationContext } from '@/lib/workspace-attachment-observed-origin'
 import type {
@@ -45,7 +45,7 @@ import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AppState } from '../types'
 import type { WorktreeRefreshAllOptions } from './worktree-refresh-options'
 import type { WorktreeRefreshResult } from './worktrees/listing/worktree-refresh-result'
@@ -107,6 +107,10 @@ export type WorktreeSlice = {
   worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
+  /** Each store's saved cross-store parents as it keeps them, by lineage store key (OWN_LINEAGE_STORE_KEY or a paired environment id). */
+  crossStoreLineageByStoreKey: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  /** This desktop store's installationId; undefined until its lineage list answers. */
+  ownLineageInstallationId: string | undefined
   activeWorktreeId: string | null
   activeWorkspaceKey: WorkspaceKey | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
@@ -147,12 +151,19 @@ export type WorktreeSlice = {
   fetchWorktreeLineage: (options?: {
     forceLocalOwner?: boolean
     executionHostId?: ExecutionHostId
+    /** Hosts whose other stores also load their cross-machine links. */
+    crossStoreHostIds?: Iterable<ExecutionHostId>
   }) => Promise<void>
+  /** `executionHostId` names the clicked row's host, so a same-id twin elsewhere is never the target. */
   updateWorktreeLineage: (
     worktreeId: string,
-    args: { parentWorktreeId?: string; noParent?: boolean }
+    args: { parentWorktreeId?: string; noParent?: boolean; executionHostId?: ExecutionHostId }
   ) => Promise<void>
-  assignWorktreeParent: (worktreeId: string, args: { parentWorktreeId: string }) => Promise<void>
+  assignWorktreeParent: (
+    worktreeId: string,
+    args: { parentWorktreeId: string; executionHostId?: ExecutionHostId }
+  ) => Promise<void>
+  assignCrossStoreWorktreeParent: (children: readonly Worktree[], parent: Worktree) => Promise<void>
   createWorktree: (
     repoId: string,
     name: string,

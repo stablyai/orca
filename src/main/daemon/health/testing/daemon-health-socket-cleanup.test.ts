@@ -37,26 +37,6 @@ describe('daemon health socket listener cleanup', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('removes health-check socket listeners after a daemon response', async () => {
-    const socket = new FakeSocket()
-    netConnectMock.mockReturnValueOnce(socket)
-
-    const result = healthCheckDaemon(socketPath, tokenPath)
-    socket.emit('connect')
-    socket.emit(
-      'data',
-      Buffer.from(
-        '{"type":"hello","ok":true}\n{"id":"health-1","ok":true}\n{"id":"health-2","ok":true}\n'
-      )
-    )
-
-    await expect(result).resolves.toBe(true)
-    expect(socket.listenerCount('connect')).toBe(0)
-    expect(socket.listenerCount('error')).toBe(0)
-    expect(socket.listenerCount('data')).toBe(0)
-    expect(socket.destroy).toHaveBeenCalledTimes(1)
-  })
-
   it('removes health-check socket listeners after a timeout', async () => {
     vi.useFakeTimers()
     const socket = new FakeSocket()

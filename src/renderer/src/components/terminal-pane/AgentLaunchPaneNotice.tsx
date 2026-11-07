@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { agentLaunchPanePrompt } from '@/lib/agent-launch-pane-prompt'
+import { agentLaunchPanePrompt } from '@/lib/agent-session/launch/pane/agent-launch-pane-prompt'
 import { createPortal } from 'react-dom'
 import type { AgentLaunchPaneOutcome } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { agentLaunchPaneNoticeText } from './agent-launch-pane-notice-text'

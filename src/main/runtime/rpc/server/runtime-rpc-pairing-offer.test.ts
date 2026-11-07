@@ -10,7 +10,7 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import { DEVICE_REGISTRY_FILENAME } from './pairing/mobile-pairing-files'
 import { E2EE_KEYPAIR_FILENAME } from '../../../../shared/remote-runtime/host-store/runtime-e2ee-keypair-file'
-import { STATUS_METHODS } from '../methods/status'
+import { STATUS_METHODS } from '../methods/host-management/status'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

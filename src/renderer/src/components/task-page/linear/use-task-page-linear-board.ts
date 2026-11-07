@@ -1,5 +1,5 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { TaskPageLinearListProjectionModel } from './use-task-page-linear-list-projection'
 import React, { useMemo, useCallback } from 'react'

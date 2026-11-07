@@ -14,13 +14,13 @@ import {
   resolveHistoryLimit,
   submissionBytesByItemId,
   type HistoryReader
-} from '../agent-session-wire/agent-session-history-page-bounds'
-import { CLIENT_HISTORY_READER } from '../agent-session-wire/agent-session-item-wire-form'
+} from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import { currentJournalSqlEpoch, JournalProjectionStaleError } from './journal-sql-meta'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import { JournalSqlHistoryValues } from './journal-sql-history-values'
-import { journalContextEpoch } from './journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 
 export type JournalSqlHistoryRequest = Omit<AgentSessionHistoryRequest, 'direction'> & {
   direction: 'tail' | 'before' | 'hydrate'

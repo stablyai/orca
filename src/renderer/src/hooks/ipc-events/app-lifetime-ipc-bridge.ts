@@ -3,7 +3,7 @@ import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pendin
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
-import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
+import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
 import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'

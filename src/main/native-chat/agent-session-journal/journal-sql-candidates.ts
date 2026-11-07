@@ -1,7 +1,7 @@
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { JournalInputCandidateStorage } from './journal-index-storage'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 export class JournalSqlCandidates implements JournalInputCandidateStorage {
   private revision = 0

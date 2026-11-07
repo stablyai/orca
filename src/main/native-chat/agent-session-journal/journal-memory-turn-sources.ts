@@ -4,7 +4,7 @@ import {
   putTurnSource,
   type TurnSource,
   type TurnSourceNode
-} from './journal-newest-turn-tree'
+} from './input-order/journal-newest-turn-tree'
 
 export class MemoryJournalTurnSources implements JournalTurnSourceStorage {
   private root: TurnSourceNode | undefined

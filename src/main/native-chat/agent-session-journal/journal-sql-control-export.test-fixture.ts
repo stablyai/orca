@@ -1,6 +1,6 @@
-import type { JournalReducerState } from './journal-reducer'
-import { journalInputOrder } from './journal-input-order'
-import { journalOutcomeScalars } from './journal-outcome-codec'
+import type { JournalReducerState } from './projection/journal-reducer'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { journalOutcomeScalars } from './outcomes/journal-outcome-codec'
 import { journalOutcomeScalarJson } from './journal-outcome-scalars'
 
 export function journalSqlControlSnapshot(state: JournalReducerState) {

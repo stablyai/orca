@@ -6,7 +6,9 @@ const { dispatchMock, closeBrowserPageMock, storeState } = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState.value } }))
-vi.mock('@/lib/workspace-tab-commands', () => ({ dispatchWorkspaceTabCommand: dispatchMock }))
+vi.mock('@/lib/workspace/tabs/workspace-tab-commands', () => ({
+  dispatchWorkspaceTabCommand: dispatchMock
+}))
 
 import {
   handleGuestWindowCloseMessage,

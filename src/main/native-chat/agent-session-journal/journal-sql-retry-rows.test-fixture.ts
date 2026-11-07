@@ -8,7 +8,7 @@ import {
   agentSessionJournalProviderHandle,
   codexProviderHandle
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 
 export function journalSqlRetryRows(legacy: boolean): JournalRow[] {

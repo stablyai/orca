@@ -1,12 +1,12 @@
 import type { JournalInputReleasedStorage } from './journal-index-storage'
-import type { JournalInputReleasedPositions } from './journal-input-released-positions'
-import type { JournalIndexedInputCard } from './journal-input-domain-index'
-import type { JournalInputCard } from './journal-input-lineage'
-import type { JournalInputPlace } from './journal-input-order-state'
-import { mergeInputPlaces, type InputPlaceQuery } from './journal-input-place-index'
+import type { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
+import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
+import type { JournalInputCard } from './input-order/journal-input-lineage'
+import type { JournalInputPlace } from './input-order/journal-input-order-state'
+import { mergeInputPlaces, type InputPlaceQuery } from './input-order/journal-input-place-index'
 import { JournalSqlDomainIndex } from './journal-sql-domain-index'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 export class JournalSqlReleasedPositions implements JournalInputReleasedStorage {
   private readonly domains: JournalSqlDomainIndex

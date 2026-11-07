@@ -4,27 +4,28 @@ import {
   fixture,
   item,
   body
-} from '../agent-session-wire/agent-session-history-contract-test-fixture'
+} from '../agent-session-wire/publication/history/testing/agent-session-history-contract-test-fixture'
 import {
   readAgentSessionHistory,
   readAgentSessionHydrationPage
-} from '../agent-session-wire/agent-session-history-page'
-import { measureHistoryItem } from '../agent-session-wire/agent-session-history-page-bounds'
+} from '../agent-session-wire/publication/history/agent-session-history-page'
+import { measureHistoryItem } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import {
   openTestJournalHostDatabase,
   publishTestJournalEpoch
-} from './journal-host-database-test-support'
+} from './store-lifecycle/journal-host-database-test-support'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { JournalProjectionStaleError } from './journal-sql-meta'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
 import { join } from 'node:path'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { restoreJournal } from './journal-open'
-import { renderJournalState } from './journal-reducer'
+import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
+import { restoreJournal } from './replay/journal-open'
+import { renderJournalState } from './projection/journal-reducer'
 
 function convert() {
   const database = openTestJournalHostDatabase(fixture.root)
@@ -63,7 +64,10 @@ it('preserves default, clamped, backward, hydration and reset wire pages from a 
       readAgentSessionHistory(fixture.journal, request)
     )
   }
-  const pool = new JournalSqlReaderPool(join(fixture.root, 'agent-session-journal.db'))
+  const pool = new JournalSqlReaderPool(
+    join(fixture.root, 'agent-session-journal.db'),
+    journalSqlReaderPath()
+  )
   try {
     const request = { sessionId: 'session-1', direction: 'tail', limit: 2 } as const
     expect(await Promise.all(Array.from({ length: 5 }, () => pool.read(request)))).toEqual(

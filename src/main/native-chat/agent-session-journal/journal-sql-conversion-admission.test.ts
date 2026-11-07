@@ -6,9 +6,9 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
   publishTestJournalEpoch
-} from './journal-host-database-test-support'
-import type { JournalHostDatabase } from './journal-host-database'
-import { restoreJournal } from './journal-open'
+} from './store-lifecycle/journal-host-database-test-support'
+import type { JournalHostDatabase } from './database/journal-host-database'
+import { restoreJournal } from './replay/journal-open'
 import { JournalSqlTurnSources } from './journal-sql-turn-sources'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
@@ -16,14 +16,14 @@ import { exportJournalControlState } from './journal-sql-control-export'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
-import { publishJournalOutcomeEpoch } from './journal-outcome-write'
-import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './journal-outcome-table'
-import { journalOutcomeSource } from './journal-outcome-format'
+import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
+import { persistJournalOutcomeRows, persistJournalOutcomeTransition } from './outcomes/journal-outcome-table'
+import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { memoryJournalMap } from './journal-memory-collections'
-import { journalInputOrder } from './journal-input-order'
-import { encodeJournalState } from './journal-state-codec'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { encodeJournalState } from './outcomes/journal-state-codec'
 
 let root: string
 let database: JournalHostDatabase

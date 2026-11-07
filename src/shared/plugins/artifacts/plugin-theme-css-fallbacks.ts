@@ -27,6 +27,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--tab-active-indicator': ['--tab-active-foreground'],
   '--tab-inactive': { light: { mixForeground: 4, into: '--tab-bar' }, dark: ['--tab-bar'] },
   '--tab-inactive-foreground': ['--muted-foreground'],
+  '--worktree-sidebar-active': tint('--worktree-sidebar-foreground', 8, 10),
   '--host-badge': { light: ['--accent'], dark: { tint: '--accent', percent: 80 } },
   '--host-badge-foreground': ['--muted-foreground'],
   '--diff-added': ['--git-decoration-added'],
@@ -39,6 +40,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--diff-removed-gutter': tint('--diff-removed', 22, 32),
   '--chat-diff-added': { mixForeground: 30, into: '--diff-added' },
   '--chat-diff-removed': { mixForeground: 30, into: '--diff-removed' },
+  '--chat-link': { mixForeground: 30, into: '--text-link' },
   // At the default chat contrast setting.
   '--chat-canvas': { light: ['--background'], dark: { mixForeground: 5 } },
   '--chat-foreground-strong': {

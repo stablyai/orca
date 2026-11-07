@@ -67,6 +67,16 @@ describe('pluginReadmePageUrl', () => {
 describe('pluginListingRepositoryUrl', () => {
   const mirror = { url: 'https://github.com/stablyai/orca-community-mirror.git' }
 
+  it('keeps recorded repository links for normalized GitLab publisher slugs', () => {
+    expect(
+      pluginListingRepositoryUrl({
+        pluginKey: 'acme-tools.notes',
+        source: mirror,
+        release: { repository: 'https://gitlab.com/acme.tools/notes' }
+      })
+    ).toBe('https://gitlab.com/acme.tools/notes')
+  })
+
   it("never links a recorded repository outside the publisher's namespace or linkable hosts", () => {
     for (const repository of [
       'https://github.com/someone-else/notes',

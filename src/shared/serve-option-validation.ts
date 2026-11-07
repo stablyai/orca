@@ -1,6 +1,8 @@
 import { levenshtein } from './edit-distance'
 
 export type ServeOptionValidationInput = {
+  /** Explicit --bind value; undefined/null means the host's default listener. */
+  bind?: string | null
   noPairing: boolean
   mobilePairing: boolean
   grantDesktopControl?: boolean
@@ -11,6 +13,10 @@ export type ServeOptionValidationInput = {
 export function getServeOptionValidationError(options: ServeOptionValidationInput): string | null {
   if (options.noPairing && options.mobilePairing) {
     return 'Use either --mobile-pairing or --no-pairing, not both.'
+  }
+  if (options.mobilePairing && options.bind && options.bind !== '0.0.0.0') {
+    // Mobile offers widen the listener to all interfaces, which a pinned --bind refuses, so the QR could never be served.
+    return '--mobile-pairing needs --bind 0.0.0.0 (or no --bind); a narrower --bind cannot serve the mobile pairing offer.'
   }
   if (options.grantDesktopControl && (options.noPairing || options.mobilePairing)) {
     return '--grant-desktop-control applies only to the default runtime pairing offer.'
@@ -37,12 +43,16 @@ const SERVE_SECURITY_FLAG_NAMES = [
   '--recipe-json',
   '--serve-recipe-json',
   '--pairing-address',
-  '--serve-pairing-address'
+  '--serve-pairing-address',
+  '--bind',
+  '--serve-bind'
 ] as const
 
 const SERVE_VALUE_FLAG_NAMES = new Set([
   '--port',
   '--serve-port',
+  '--bind',
+  '--serve-bind',
   '--pairing-address',
   '--serve-pairing-address',
   '--project-root',

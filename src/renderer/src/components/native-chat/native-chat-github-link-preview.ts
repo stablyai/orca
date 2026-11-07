@@ -1,4 +1,4 @@
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import type { GitHubIssueOrPRLink } from '../../../../shared/github/links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -55,4 +55,13 @@ export function loadGitHubLinkPreview(
   link: GitHubIssueOrPRLink
 ): Promise<GitHubWorkItem | null> {
   return previews.load(githubLinkPreviewKey(repo, link), () => fetchPreview(repo, link))
+}
+
+/** Asks again even while the last answer is fresh: the pull request may have just changed. */
+export function reloadGitHubLinkPreview(
+  repo: Repo,
+  link: GitHubIssueOrPRLink
+): Promise<GitHubWorkItem | null> {
+  previews.expire(githubLinkPreviewKey(repo, link))
+  return loadGitHubLinkPreview(repo, link)
 }

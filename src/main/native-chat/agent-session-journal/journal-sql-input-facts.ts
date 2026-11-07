@@ -1,5 +1,5 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type {
   JournalInputOrderFacts,
   JournalInputCardFacts,
@@ -9,7 +9,7 @@ import type {
   JournalInputLineageFacts
 } from './journal-input-facts-storage'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
-import type { JournalInputCard } from './journal-input-lineage'
+import type { JournalInputCard } from './input-order/journal-input-lineage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import {
   JournalSqlKeyedMap,

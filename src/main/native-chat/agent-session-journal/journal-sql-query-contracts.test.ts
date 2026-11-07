@@ -9,8 +9,8 @@ import Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
-import { journalInputOrder } from './journal-input-order'
-import { encodeJournalOutcomes, journalOutcomeScalars } from './journal-outcome-codec'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { encodeJournalOutcomes, journalOutcomeScalars } from './outcomes/journal-outcome-codec'
 import { journalOutcomeScalarJson } from './journal-outcome-scalars'
 
 const databases: Database.Database[] = []

@@ -19,7 +19,7 @@ export function usePluginUpdateDialog({
   ready: boolean
   updates: readonly PluginListEntry[]
   /** Left for the list when the Updates list is asked for from a plugin's page. */
-  page: Pick<PluginPageNavigation, 'openKey' | 'back'>
+  page: Pick<PluginPageNavigation, 'openKey' | 'toCatalog'>
   showUpdates: () => void
   /** Re-reads main's catalogs, which the update pass refreshed after this pane loaded them. */
   reloadCatalogs: () => Promise<void>
@@ -58,7 +58,7 @@ export function usePluginUpdateDialog({
       handlers.current.open([entry])
     } else {
       if (handlers.current.page.openKey) {
-        handlers.current.page.back()
+        handlers.current.page.toCatalog()
       }
       handlers.current.showUpdates()
     }

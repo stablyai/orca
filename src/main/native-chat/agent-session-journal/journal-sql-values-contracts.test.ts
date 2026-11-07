@@ -5,7 +5,7 @@ import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap, JournalSqlKeyedSet } from './journal-sql-keyed-values'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
-import type { QueuedMessageRow } from './queued-message-table'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 const databases: Database.Database[] = []
 afterEach(() => {

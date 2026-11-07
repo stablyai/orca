@@ -1,5 +1,5 @@
-import type { JournalQueuePauseMarks } from './queued-message-pause'
-import { createJournalQueuePauseMarks } from './queued-message-pause'
+import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause'
+import { createJournalQueuePauseMarks } from './queued-messages/queued-message-pause'
 import { JournalEncodedScalar } from './journal-outcome-scalars'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'

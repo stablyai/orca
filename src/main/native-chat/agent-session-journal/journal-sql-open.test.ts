@@ -6,12 +6,12 @@ import { JournalSqlCommand } from './journal-sql-command'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
-import { advanceJournalOutcomeSource } from './journal-outcome-format'
+import { advanceJournalOutcomeSource } from './outcomes/journal-outcome-format'
 import { currentJournalSqlEpoch, JournalProjectionStaleError } from './journal-sql-meta'
 import type { JournalWriterCommand, JournalWriterOperation } from './journal-writer-command'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readJournalSessionEpoch } from './journal-row-table'
+import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
 
 const databases: Database.Database[] = []
 afterEach(() => {

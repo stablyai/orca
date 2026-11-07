@@ -8,7 +8,7 @@ import {
   codexProviderHandle
 } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalRow } from './durable-rows/journal-row-schema'
 
 const message = (text: string): AgentJournalMessageItem => ({
   kind: 'message',

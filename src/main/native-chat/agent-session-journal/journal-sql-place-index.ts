@@ -5,8 +5,8 @@ import {
   mergeInputPlaces,
   type InputPlaceQuery,
   type JournalInputPlaceEntry
-} from './journal-input-place-index'
-import type { QueuedMessageRow } from './queued-message-table'
+} from './input-order/journal-input-place-index'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 export function journalSqlPlaceSummary(scope: JournalSqlScope, row: SqliteRow): InputPlaceQuery {

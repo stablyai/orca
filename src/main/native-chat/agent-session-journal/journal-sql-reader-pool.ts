@@ -21,7 +21,13 @@ export class JournalSqlReaderPool {
   private closed = false
   private closing?: Promise<void>
 
-  constructor(private readonly filename: string) {}
+  constructor(
+    private readonly filename: string,
+    private readonly workerPath = resolveWorkerThreadEntryPath(
+      currentWorkerEntryLayout(__dirname),
+      'journal-sql-reader-entry.js'
+    )
+  ) {}
 
   read(request: JournalSqlHistoryRequest): Promise<AgentSessionHistoryResult> {
     if (this.closed) {
@@ -36,7 +42,7 @@ export class JournalSqlReaderPool {
     }
     let slot = this.slots.toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
     if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
-      slot = new ReaderSlot(this.filename)
+      slot = new ReaderSlot(this.filename, this.workerPath)
       this.slots.push(slot)
     }
     return slot!.read(request)
@@ -70,14 +76,8 @@ class ReaderSlot {
     return this.pending.size
   }
 
-  constructor(filename: string) {
-    this.worker = spawnWorkerThread(
-      resolveWorkerThreadEntryPath(
-        currentWorkerEntryLayout(__dirname),
-        'journal-sql-reader-entry.js'
-      ),
-      { workerData: { filename }, execArgv: [] }
-    )
+  constructor(filename: string, workerPath: string) {
+    this.worker = spawnWorkerThread(workerPath, { workerData: { filename }, execArgv: [] })
     const startup = setTimeout(() => {
       this.fail(new Error('journal SQL reader did not open within 10000 ms'))
       void this.close()

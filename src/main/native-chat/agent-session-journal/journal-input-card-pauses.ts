@@ -3,7 +3,7 @@ import {
   journalQueueStopHolds,
   type JournalQueuePauseMarks,
   type DerivedQueuePause
-} from './queued-message-pause'
+} from './queued-messages/queued-message-pause'
 
 export function journalInputCardPauseInputs(
   epoch: string,

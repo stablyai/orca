@@ -1,7 +1,12 @@
 import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  folderWorkspaceKey,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
@@ -19,16 +24,19 @@ import {
   wslMoveProjectRefForWorkspace
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { RuntimeLineageError } from '../lineage/runtime-worktree-lineage-resolution'
+import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-check'
+import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
-  lineage?: { parentWorktree?: string; noParent?: boolean }
+  lineage?: { parentWorktree?: string; crossStoreParent?: CrossStoreParentRef; noParent?: boolean }
 }
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
   validateParent: (worktree: ResolvedWorktree, parent: ResolvedWorktree) => void
+  readStoreInstallationId?: () => Promise<string | undefined>
   invalidateResolved: () => void
   invalidateScan: (repoId: string) => void
   notifyChanged: (repoId: string) => void
@@ -43,6 +51,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
+  const folderParentKey = getFolderParentKey(lineage?.parentWorktree)
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
     : undefined
@@ -62,7 +71,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (!target) {
     throw new Error('selector_ambiguous')
   }
-  if (lineage?.parentWorktree) {
+  if (lineage?.parentWorktree && !folderParentKey) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
   }
@@ -85,6 +94,71 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   }
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(target)
+  } else if (lineage?.crossStoreParent) {
+    // Trusted like any paired mutation, unverified here: a forged ref only nests falsely and readers drop cycles.
+    await assertParentInAnotherStore(
+      lineage.crossStoreParent,
+      async () => await args.ports.readStoreInstallationId?.()
+    )
+    if (!worktree.instanceId || !args.store.setCrossStoreWorkspaceLineage) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'Worktree instance identity or lineage storage was unavailable.'
+      )
+    }
+    const recorded = args.store.setCrossStoreWorkspaceLineage(
+      {
+        childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+        childInstanceId: worktree.instanceId,
+        parent: lineage.crossStoreParent,
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: Date.now()
+      },
+      target.hostId
+    )
+    if (!recorded) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'A same-id workspace on another host owns this lineage.'
+      )
+    }
+  } else if (folderParentKey) {
+    if (!worktree.instanceId) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'Worktree instance identity was unavailable.'
+      )
+    }
+    if (!args.store.setFolderParentLineage) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_MISSING',
+        'Worktree lineage storage was unavailable.'
+      )
+    }
+    // Same rule as create: the folder must exist; folder parents have no host boundary.
+    if (
+      !args.store
+        .getFolderWorkspaces?.()
+        .some((folder) => folderWorkspaceKey(folder.id) === folderParentKey)
+    ) {
+      throw new Error('selector_not_found')
+    }
+    const recorded = args.store.setFolderParentLineage(target, {
+      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+      childInstanceId: worktree.instanceId,
+      parentWorkspaceKey: folderParentKey,
+      parentInstanceId: null,
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: Date.now()
+    })
+    if (!recorded) {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        'A same-id workspace on another host owns this lineage.'
+      )
+    }
   } else if (lineage?.parentWorktree) {
     const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
     args.ports.validateParent(worktree, parent)
@@ -101,7 +175,6 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'Worktree lineage storage was unavailable.'
       )
     }
-    const createdAt = Date.now()
     const recorded = args.store.setWorktreeLineage(target, {
       worktreeId: worktree.id,
       worktreeInstanceId: worktree.instanceId,
@@ -109,7 +182,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       parentWorktreeInstanceId: parent.instanceId,
       origin: 'manual',
       capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
+      createdAt: Date.now()
     })
     if (!recorded) {
       throw new RuntimeLineageError(
@@ -117,15 +190,6 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'A same-id workspace on another host owns this lineage.'
       )
     }
-    args.store.setWorkspaceLineage?.({
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId: worktree.instanceId,
-      parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
-      parentInstanceId: parent.instanceId,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt
-    })
   }
   const metadataUpdates = stripOrcaProvenanceMetaUpdates(persisted)
   // Recheck removal: an earlier resolution snapshot may still contain this workspace (#22712).
@@ -177,6 +241,12 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     args.notifyChanged(repoId, isTwin ? undefined : sortOrders)
   }
   return { updated: updates.length }
+}
+
+function getFolderParentKey(selector: string | undefined): WorkspaceKey | undefined {
+  const raw = selector?.startsWith('id:') ? selector.slice('id:'.length) : selector
+  const parsed = raw ? parseWorkspaceKey(raw) : null
+  return parsed?.type === 'folder' ? folderWorkspaceKey(parsed.folderWorkspaceId) : undefined
 }
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {

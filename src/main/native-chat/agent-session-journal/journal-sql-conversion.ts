@@ -1,12 +1,12 @@
 import Database from '../../sqlite/sync-database'
-import { restoreJournal } from './journal-open'
-import { failLoadOnUnloadableJournal } from './journal-open-failure'
+import { restoreJournal } from './replay/journal-open'
+import { failLoadOnUnloadableJournal } from './replay/journal-open-failure'
 import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
 import { exportJournalControlState } from './journal-sql-control-export'
-import { journalInputAcceptance } from './journal-input-provenance'
+import { journalInputAcceptance } from './input-order/journal-input-provenance'
 import {
   beginJournalSqlConversion,
   markJournalSqlReady,

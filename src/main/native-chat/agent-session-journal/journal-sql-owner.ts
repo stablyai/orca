@@ -34,14 +34,18 @@ export class JournalSqlOwner {
   private closed: Promise<void> | undefined
   onFault: (error: Error) => void = () => {}
 
-  constructor(filename: string, stateDirectory: string) {
-    this.worker = spawnWorkerThread(
-      resolveWorkerThreadEntryPath(
-        currentWorkerEntryLayout(__dirname),
-        'journal-sql-worker-entry.js'
-      ),
-      { workerData: { filename, stateDirectory }, execArgv: [] }
+  constructor(
+    filename: string,
+    stateDirectory: string,
+    workerPath = resolveWorkerThreadEntryPath(
+      currentWorkerEntryLayout(__dirname),
+      'journal-sql-worker-entry.js'
     )
+  ) {
+    this.worker = spawnWorkerThread(workerPath, {
+      workerData: { filename, stateDirectory },
+      execArgv: []
+    })
     this.worker.on('message', (response: JournalSqlResponse) => this.receive(response))
     this.worker.on('error', (error) => this.fail(error))
     this.worker.once('exit', (code) => {

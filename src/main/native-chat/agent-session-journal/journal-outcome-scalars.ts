@@ -1,4 +1,4 @@
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './projection/journal-reducer'
 
 /** A saved scalar can be reused without decoding a growing value unchanged by this command. */
 export class JournalEncodedScalar {

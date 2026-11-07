@@ -1,10 +1,10 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalEntryChange } from './journal-transition-collections'
+import type { JournalEntryChange } from './projection/journal-transition-collections'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalWriterEffectResult } from './journal-writer-effects'
-import type { JournalGoalAttachmentSnapshot } from './journal-goal-attachment-inverse'
+import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState } from './projection/journal-reducer'
 
 export type JournalWriterCommit = {
   cursor: AgentJournalCursor

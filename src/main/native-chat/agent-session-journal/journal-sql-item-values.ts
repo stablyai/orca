@@ -2,9 +2,9 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { decodeJournalOutcomeItem } from './journal-outcome-codec'
-import { lostLiveWorkJournalBody } from './journal-subagent-liveness'
-import { isSubagentRow } from '../agent-session-wire/agent-session-history-page-bounds'
+import { decodeJournalOutcomeItem } from './outcomes/journal-outcome-codec'
+import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
+import { isSubagentRow } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import {
   namedSubagents,
   subagentFoldKey,

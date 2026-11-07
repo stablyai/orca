@@ -5,14 +5,14 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemSubagentId } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { offPageSubagentRoster } from '../agent-session-wire/agent-session-history-subagent-roster'
+import { offPageSubagentRoster } from '../agent-session-wire/publication/history/agent-session-history-subagent-roster'
 import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlItemValues } from './journal-sql-item-values'
 import { JournalSqlValueReader } from './journal-sql-value-reader'
 import { JournalSqlValueObjects } from './journal-sql-value-objects'
 import { parseJournalSqlValue, type JournalSqlValueLocation } from './journal-sql-value-codec'
-import { projectJournalStopNote } from './journal-stop-note-projection'
+import { projectJournalStopNote } from './context-epochs/journal-stop-note-projection'
 import type { JournalSqlHistoryWork } from './journal-sql-history-page'
 
 // A reader never edits loaded values; keeping them plain also permits worker structured cloning.

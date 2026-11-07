@@ -6,8 +6,8 @@ import { applyJournalWriterEffect, type JournalWriterEffectResult } from './jour
 import { JournalWriterSession } from './journal-writer-session'
 import { runJournalWriterOperation } from './journal-writer-operations'
 import { planJournalWriterRows } from './journal-writer-plan'
-import type { JournalOperationReceipt } from './journal-row-writer'
-import { isJournalStreamedTextRevision } from './journal-streamed-text-revision'
+import type { JournalOperationReceipt } from './writing/journal-row-writer'
+import { isJournalStreamedTextRevision } from './writing/journal-streamed-text-revision'
 import {
   claimJournalSqlProjection,
   journalLogNeedsFounding,

@@ -2,6 +2,8 @@ import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/termina
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
+import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
+import type { DaemonClient } from '../../transport/client/daemon-client'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
@@ -9,6 +11,8 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
+  private focusLossUnsupportedBy: DaemonClient | null = null
+
   async getBufferSnapshot(
     id: string,
     opts: { scrollbackRows?: number } = {}
@@ -179,6 +183,22 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async resetInputModes(id: string): Promise<void> {
     await this.client.request('resetInputModes', { sessionId: id })
     this.markSessionDirty(id)
+  }
+
+  async reportFocusLost(id: string): Promise<void> {
+    const client = this.client
+    if (this.focusLossUnsupportedBy === client) {
+      return
+    }
+    try {
+      await client.request('reportFocusLost', { sessionId: id })
+    } catch (error) {
+      if (!isUnknownRequestTypeError(error)) {
+        throw error
+      }
+      // Shipped without a protocol bump; recheck once a new client reaches a replacement daemon.
+      this.focusLossUnsupportedBy = client
+    }
   }
 
   acknowledgeDataEvent(_id: string, _charCount: number): void {}

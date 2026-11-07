@@ -1,11 +1,11 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalIndexedInputCard } from './journal-input-domain-index'
+import type { JournalIndexedInputCard } from './input-order/journal-input-domain-index'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
-import type { QueuedMessageRow } from './queued-message-table'
-import type { JournalInputCard, JournalInputEntry } from './journal-input-lineage'
-import type { DerivedQueuePause } from './queued-message-pause'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
+import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
+import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
 
 export type JournalInputOrderFacts = {
   recoveryOwed: JournalKeyedSet<string>

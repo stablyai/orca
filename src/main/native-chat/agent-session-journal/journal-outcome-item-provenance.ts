@@ -1,5 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalOutcome } from './journal-outcome-codec'
+import type { JournalOutcome } from './outcomes/journal-outcome-codec'
 
 export type JournalOutcomeItemSource = Readonly<{
   generation: number
