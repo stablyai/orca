@@ -107,10 +107,10 @@ describe('removeWorktree state cleanup', () => {
 
     // Only the orphaned runtime-owned project setup is purged; the user's SSH project is untouched.
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
-    expect(deleteProjectHostSetup).toHaveBeenCalledWith({
-      setupId: 'setup-runtime-ssh',
-      hostId: 'ssh:runtime-ssh-orca-1'
-    })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith(
+      { setupId: 'setup-runtime-ssh', hostId: 'ssh:runtime-ssh-orca-1' },
+      expect.objectContaining({ capture: expect.any(Function), finish: expect.any(Function) })
+    )
   })
 
   it('cleans up markdownFrontmatterVisible for preview-only source files in the removed worktree', async () => {

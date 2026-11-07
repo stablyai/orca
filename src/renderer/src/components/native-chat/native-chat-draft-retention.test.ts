@@ -13,13 +13,14 @@ import {
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 import { records } from './native-chat-composer-draft-memory'
-import { deleteWorkspaceChatDrafts } from '@/store/slices/worktrees/teardown/removed-worktree-chat-drafts'
+import { createChatDraftRemovalReceipt } from '@/store/slices/worktrees/teardown/chat-draft-removal-receipt'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   clearNativeChatComposerDraftsForTests()
 })
-it('hydrates and explicitly deletes retained closed drafts with linear saved-record work at N and 10N', async () => {
+it('hydrates and removes verified closed members with one saved census at N and 10N', async () => {
   for (const count of [100, 1000]) {
     clearNativeChatComposerDraftsForTests()
     localStorage.clear()
@@ -35,45 +36,107 @@ it('hydrates and explicitly deletes retained closed drafts with linear saved-rec
         savedAt: i + 1
       })
     }
-    let visits = 0
+    const inventories: { copies: number; entries: number; keys: number; gets: number }[] = []
     class SavedRecords extends Map<string, StoredNativeChatComposerDraft> {
-      override *[Symbol.iterator](): Generator<
-        [string, StoredNativeChatComposerDraft],
-        undefined,
-        unknown
-      > {
+      constructor(readonly visits: (typeof inventories)[number]) {
+        super()
+        for (const [key, value] of storage.drafts) {
+          visits.copies++
+          super.set(key, value)
+        }
+      }
+      override *[Symbol.iterator](): Generator<[string, StoredNativeChatComposerDraft]> {
         for (const entry of super[Symbol.iterator]()) {
-          visits++
+          this.visits.entries++
           yield entry
         }
-        return undefined
+      }
+      override *keys(): MapIterator<string> {
+        for (const key of super.keys()) {
+          this.visits.keys++
+          yield key
+        }
+      }
+      override get(key: string) {
+        this.visits.gets++
+        return super.get(key)
       }
     }
-    const load = vi.fn(async () => new SavedRecords(storage.drafts))
+    const load = vi.fn(async () => {
+      const visits = { copies: 0, entries: 0, keys: 0, gets: 0 }
+      inventories.push(visits)
+      return new SavedRecords(visits)
+    })
     const write = vi.fn(storage.write)
     const remove = vi.fn(storage.remove)
-    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: load, write, remove })
+    let applies = 0
+    const update = vi.fn(async (key: string, apply: Parameters<typeof storage.update>[1]) => {
+      await storage.update(key, (stored) => {
+        applies++
+        return apply(stored)
+      })
+    })
+    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: load, write, remove, update })
     await hydrateNativeChatComposerDrafts()
     expect(load).toHaveBeenCalledOnce()
-    expect(visits).toBe(count)
+    // Hydration retains each installed row's exact loaded input for later conditional cleanup.
+    expect(inventories).toEqual([{ copies: count, entries: count, keys: 0, gets: count }])
     expect(records.size).toBe(count)
+    const expectedIds = new Set(Array.from({ length: count / 2 }, (_, i) => `closed-${i * 2}`))
+    let active = 0
+    let peak = 0
+    const locate = vi.fn(
+      async ({ method, params }: { method: string; params: { address: string } }) => {
+        expect(method).toBe('orchestration.partyLocation')
+        const sessionId = params.address.slice('orca_session_id:'.length)
+        expect(params.address).toBe(`orca_session_id:${sessionId}`)
+        expect(expectedIds.has(sessionId)).toBe(true)
+        active++
+        peak = Math.max(peak, active)
+        await Promise.resolve()
+        active--
+        return {
+          ok: true,
+          result: { location: { kind: 'chat', sessionId, worktreeId: 'folder-workspace:kept' } }
+        }
+      }
+    )
+    vi.stubGlobal('window', { api: { runtime: { call: locate } } })
     const gets = vi.spyOn(records, 'get')
     const affected = vi.fn(),
       otherHost = vi.fn()
     const off = subscribeToNativeChatComposerDraft('agent-session:closed-0', affected)
     const offOther = subscribeToNativeChatComposerDraft('agent-session:closed-1', otherHost)
-    deleteWorkspaceChatDrafts({
-      owners: [{ workspaceId: 'folder-workspace:kept', executionHostId: 'local' }],
-      conversations: [],
-      terminalTabIds: []
-    })
-    // Owner selection reads each saved record once; persistence may read the selected keys again.
-    expect(gets.mock.calls.length).toBeLessThanOrEqual(count * 2)
+    const receipt = createChatDraftRemovalReceipt(() => ({ unifiedTabsByWorktree: {} }))
+    receipt.capture({ executionHostId: 'local' })({ workspaceId: 'folder-workspace:kept' })
+    await receipt.finish()
     await nativeChatComposerDraftWritesSettled()
+    const lookupCount = gets.mock.calls.length
+    gets.mockRestore()
+    // One census plus four localized reads per positively selected destination.
+    expect(lookupCount).toBeLessThanOrEqual(count * 3)
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(inventories[1].copies).toBe(count)
+    expect(inventories[1].keys + inventories[1].entries).toBeLessThanOrEqual(count)
+    expect(inventories[1].gets).toBeLessThanOrEqual(count * 2)
+    expect(locate).toHaveBeenCalledTimes(count / 2)
+    expect(new Set(locate.mock.calls.map(([call]) => call.params.address))).toEqual(
+      new Set([...expectedIds].map((id) => `orca_session_id:${id}`))
+    )
+    expect(peak).toBeLessThanOrEqual(8)
+    expect(active).toBe(0)
     expect(records.size).toBe(count / 2)
     expect(storage.drafts.size).toBe(count / 2)
-    expect(remove.mock.calls.flatMap(([keys]) => keys)).toHaveLength(count / 2)
+    expect(update).toHaveBeenCalledTimes(count / 2)
+    expect(applies).toBe(count / 2)
+    expect(new Set(update.mock.calls.map(([key]) => key))).toEqual(
+      new Set([...expectedIds].map((id) => `agent-session:${id}`))
+    )
+    expect(remove).not.toHaveBeenCalled()
     expect(write).not.toHaveBeenCalled()
+    process.stdout.write(
+      `${JSON.stringify({ metric: 'closed-member-removal', count, inventories, lookupCount, locators: locate.mock.calls.length, peak, commits: applies })}\n`
+    )
     expect(affected).toHaveBeenCalledOnce()
     expect(otherHost).not.toHaveBeenCalled()
     expect(readNativeChatComposerDraft('agent-session:closed-1').text).toBe(
@@ -81,6 +144,14 @@ it('hydrates and explicitly deletes retained closed drafts with linear saved-rec
     )
     off()
     offOther()
-    gets.mockRestore()
+    clearNativeChatComposerDraftsForTests()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+    await nativeChatComposerDraftWritesSettled()
+    for (let i = 0; i < count; i++) {
+      expect(readNativeChatComposerDraft(`agent-session:closed-${i}`).text).toBe(
+        i % 2 ? `retained context ${i}\n${'text '.repeat(40)}` : ''
+      )
+    }
   }
 })

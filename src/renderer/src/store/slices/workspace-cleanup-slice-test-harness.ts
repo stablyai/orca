@@ -68,6 +68,7 @@ export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> 
     (...a) =>
       ({
         tabsByWorktree: {},
+        unifiedTabsByWorktree: {},
         ptyIdsByTabId: {},
         openFiles: [],
         editorDrafts: {},
