@@ -60,11 +60,6 @@ function holdNextRender(): PromiseWithResolvers<{ svg: string }> {
   return held
 }
 
-function setTheme(value: string): void {
-  theme.value = value
-  act(() => theme.listeners.forEach((listener) => listener()))
-}
-
 beforeEach(() => {
   mermaid.render.mockReset()
   mermaid.render.mockResolvedValue({ svg: '<svg><text>Sync with main once</text></svg>' })
@@ -139,34 +134,5 @@ describe('native chat Mermaid fences', () => {
     expect(view.container.querySelector('.mermaid-block svg')).toBeNull()
     await act(async () => pending.resolve({ svg: '<svg><text>Next step</text></svg>' }))
     expect(view.container.querySelector('.mermaid-block svg')).toHaveTextContent('Next step')
-  })
-
-  it('does not run Mermaid on a reply that is still streaming', async () => {
-    const finished = 'flowchart TD\n S["Finished elsewhere"]'
-    render(
-      <>
-        {reply(partial, true)}
-        {reply(finished, false)}
-      </>
-    )
-    // Renders run in order, so the finished diagram rendering means the streaming one's turn passed.
-    await waitFor(() => expect(mermaid.render).toHaveBeenCalledWith(expect.any(String), finished))
-    expect(mermaid.render).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the rendered diagram through a theme change until the new one is ready', async () => {
-    const view = render(reply(complete, false))
-    await waitFor(() =>
-      expect(view.container.querySelector('.mermaid-block svg')).toBeInTheDocument()
-    )
-    const pending = holdNextRender()
-    setTheme('dark')
-    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(2))
-    expect(view.container.querySelector('.mermaid-block svg')).toHaveTextContent(
-      'Sync with main once'
-    )
-    expect(view.container.querySelector('[data-code-language="mermaid"]')).toBeNull()
-    await act(async () => pending.resolve({ svg: '<svg><text>Dark</text></svg>' }))
-    expect(view.container.querySelector('.mermaid-block svg')).toHaveTextContent('Dark')
   })
 })

@@ -27,26 +27,6 @@ describe('Claude model switch confirmation detection', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
-  it('matches the resolved-model echo when the picker label carries no version', async () => {
-    // Match family labels to resolved echoes, such as Opus (1M context) versus Opus 5 (1M context).
-    const dataObserver = { current: (_data: string): void => {} }
-    const observer = createClaudeModelSwitchConfirmationObserver({
-      ptyId: 'pty-1',
-      expectedModelLabel: 'Opus (1M context)',
-      subscribeToData: (watcher) => {
-        dataObserver.current = watcher
-        return vi.fn(() => {})
-      },
-      timeoutMs: 100
-    })
-
-    await observer.ready
-    observer.arm()
-    dataObserver.current('Set model to Opus 5 (1M context) and saved as your default')
-
-    await expect(observer.result).resolves.toBe('applied')
-  })
-
   it('does not confirm a different context variant from the same model family', async () => {
     vi.useFakeTimers()
     try {

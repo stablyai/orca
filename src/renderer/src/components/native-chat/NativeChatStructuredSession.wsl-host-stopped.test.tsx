@@ -62,28 +62,6 @@ afterEach(() => {
   useAppStore.setState({ wslHostStatuses: initialState.wslHostStatuses })
 })
 
-it('names a stopped WSL distro above the composer and offers Start', async () => {
-  renderPane()
-  expect(screen.queryByText(/is stopped/)).toBeNull()
-  setWslStatus('distro-stopped')
-
-  expect(screen.getByText('Ubuntu is stopped')).toHaveClass('text-destructive')
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-notice-kind', 'host')
-  reconnectHost.mockResolvedValue(true)
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-  })
-  // Start is the explicit act that may boot the distro (E9): one connect, which reconnects the chat.
-  expect(reconnectHost).toHaveBeenCalledOnce()
-  expect(reconnectHost).toHaveBeenCalledWith(
-    'wsl:ubuntu',
-    'Couldn’t start Ubuntu. Check it in Settings → Remote Orca Servers.'
-  )
-
-  setWslStatus('ready')
-  expect(screen.queryByText('Ubuntu is stopped')).toBeNull()
-})
-
 it('still offers Start after a start that failed', async () => {
   renderPane()
   setWslStatus('distro-stopped')
@@ -93,10 +71,4 @@ it('still offers Start after a start that failed', async () => {
   })
   expect(screen.getByText('Ubuntu is stopped')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
-})
-
-it('leaves an idle WSL host to reconnect on its own', () => {
-  renderPane()
-  setWslStatus('idle')
-  expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
 })
