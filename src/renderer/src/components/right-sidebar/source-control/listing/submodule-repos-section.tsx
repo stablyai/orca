@@ -20,8 +20,9 @@ export function submoduleRepoActionsEnabled(
     fetch: true,
     // Pull needs a branch that tracks something.
     pull: hasBranch && repo.upstream?.hasUpstream === true,
-    // A branch with no upstream is published by the first push.
-    push: hasBranch && (repo.upstream?.hasUpstream !== true || repo.upstream.ahead > 0)
+    // A branch with no upstream is published by the first push; an unreadable upstream disables it.
+    push:
+      hasBranch && repo.upstream !== null && (!repo.upstream.hasUpstream || repo.upstream.ahead > 0)
   }
 }
 
@@ -81,9 +82,9 @@ function SubmoduleRepoRow({
         icon={CloudDownload}
         title={translate(
           'auto.components.right.sidebar.SourceControl.submoduleFetch',
-          'Fetch {{value0}}',
+          'Fetch {{name}}',
           {
-            value0: name
+            name
           }
         )}
         disabled={anyBusy || !enabled.fetch}
@@ -93,9 +94,9 @@ function SubmoduleRepoRow({
         icon={ArrowDownToLine}
         title={translate(
           'auto.components.right.sidebar.SourceControl.submodulePull',
-          'Pull {{value0}}',
+          'Pull {{name}}',
           {
-            value0: name
+            name
           }
         )}
         disabled={anyBusy || !enabled.pull}
@@ -105,9 +106,9 @@ function SubmoduleRepoRow({
         icon={ArrowUp}
         title={translate(
           'auto.components.right.sidebar.SourceControl.submodulePush',
-          'Push {{value0}}',
+          'Push {{name}}',
           {
-            value0: name
+            name
           }
         )}
         disabled={anyBusy || !enabled.push}

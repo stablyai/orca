@@ -146,7 +146,7 @@ describe('resolveInitializedSubmodulePath', () => {
 describe('remote actions on a resolved submodule path', () => {
   it('reads the upstream the first push just created', async () => {
     const sub = await resolveInitializedSubmodulePath(parent, 'libs/sub')
-    await git(sub, 'checkout', '-q', '-b', 'topic')
+    await git(sub, 'checkout', '-q', '--no-track', '-b', 'topic')
     await commitFile(sub, 'topic.txt')
     const before = await listSubmoduleRepos(parent)
     expect(before.find((repo) => repo.path === 'libs/sub')?.upstream?.hasUpstream).toBe(false)
