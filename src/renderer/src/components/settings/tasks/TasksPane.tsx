@@ -149,7 +149,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       )}
     >
       {stalledVisible.length > 0 ? (
-        <div className="my-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3.5 py-3 text-xs text-muted-foreground">
+        <div className="my-4 rounded-xl border border-status-warning-border bg-status-warning-background px-3.5 py-3 text-xs text-muted-foreground">
           <p className="font-medium text-amber-800 dark:text-amber-200">
             {translate(
               'auto.components.settings.TasksPane.incompleteBannerTitle',
