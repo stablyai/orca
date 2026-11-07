@@ -54,6 +54,15 @@ export function journalInputClaimsReceipt(
         !isLiveGoal(item.itemId)
       ) {
         bodies.push(item.body)
+      } else if (item.kind === 'item' && item.body.kind === 'tool-call') {
+        // Stored snapshots of what a tool showed the agent live as long as the chat does.
+        const blocks = (item.body.resultImagePaths ?? []).map((path) => ({
+          type: 'image-ref' as const,
+          path
+        }))
+        if (blocks.length > 0) {
+          bodies.push({ kind: 'message', role: 'tool', blocks })
+        }
       }
     }
   }

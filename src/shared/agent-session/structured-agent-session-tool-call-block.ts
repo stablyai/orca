@@ -41,6 +41,7 @@ export function structuredAgentSessionToolCallBlock(
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),
     ...(action.durationMs !== undefined ? { durationMs: action.durationMs } : {}),
-    ...(action.webSearchResults !== undefined ? { webSearchResults: action.webSearchResults } : {})
+    ...(action.webSearchResults !== undefined ? { webSearchResults: action.webSearchResults } : {}),
+    ...(action.resultImagePaths !== undefined ? { resultImagePaths: action.resultImagePaths } : {})
   }
 }
