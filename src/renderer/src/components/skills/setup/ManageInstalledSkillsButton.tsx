@@ -12,6 +12,7 @@ export function ManageInstalledSkillsButton({
   target?: BundledSkillTarget | null
 }): React.JSX.Element | null {
   const openSkillsPage = useAppStore((state) => state.openSkillsPage)
+  const closeModal = useAppStore((state) => state.closeModal)
   const { bundledSkillTarget: active, managerRuntimeTarget: manager } =
     useActiveProjectSkillRuntime()
   const unavailable = useAppStore((state) => {
@@ -34,7 +35,15 @@ export function ManageInstalledSkillsButton({
     return null
   }
   return (
-    <Button type="button" variant="ghost" size="sm" onClick={openSkillsPage}>
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        closeModal()
+        openSkillsPage()
+      }}
+    >
       <BookOpen className="size-3.5" />
       {translate('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
     </Button>

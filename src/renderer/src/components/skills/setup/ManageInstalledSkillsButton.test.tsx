@@ -23,13 +23,24 @@ let root: Root | null = null
 let container: HTMLDivElement | null = null
 const originalStatuses = useAppStore.getState().runtimeStatusByEnvironmentId
 const originalOpen = useAppStore.getState().openSkillsPage
+const originalModal = useAppStore.getState().activeModal
+const originalModalData = useAppStore.getState().modalData
 const open = vi.fn()
 
 beforeEach(() => {
   runtime.target = { kind: 'local' }
   runtime.manager = { kind: 'local' }
-  open.mockClear()
-  useAppStore.setState({ openSkillsPage: open, runtimeStatusByEnvironmentId: new Map() })
+  open.mockReset()
+  open.mockImplementation(() => ({
+    activeModal: useAppStore.getState().activeModal,
+    modalData: useAppStore.getState().modalData
+  }))
+  useAppStore.setState({
+    openSkillsPage: open,
+    activeModal: 'none',
+    modalData: {},
+    runtimeStatusByEnvironmentId: new Map()
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -39,6 +50,8 @@ afterEach(async () => {
   container?.remove()
   useAppStore.setState({
     openSkillsPage: originalOpen,
+    activeModal: originalModal,
+    modalData: originalModalData,
     runtimeStatusByEnvironmentId: originalStatuses
   })
 })
@@ -48,18 +61,26 @@ async function render(target?: BundledSkillTarget | null): Promise<void> {
 }
 
 describe('installed skill management navigation', () => {
-  it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'server' }] as const)(
-    'opens the existing skill manager for the active $kind host',
-    async (target) => {
-      runtime.target = target
-      runtime.manager = target
-      await render(target)
-      const button = container?.querySelector('button')
-      expect(button).not.toBeNull()
-      await act(async () => button?.click())
-      expect(open).toHaveBeenCalledOnce()
-    }
-  )
+  describe.each(['none', 'feature-wall', 'feature-tips'] as const)('%s navigation', (modal) => {
+    it.each([{ kind: 'local' }, { kind: 'environment', environmentId: 'server' }] as const)(
+      'opens the existing skill manager for the active $kind host after dismissing the modal',
+      async (target) => {
+        runtime.target = target
+        runtime.manager = target
+        useAppStore.setState({
+          activeModal: modal,
+          modalData: modal === 'none' ? {} : { source: 'fixture' }
+        })
+        await render(target)
+        const button = container?.querySelector('button')
+        expect(button).not.toBeNull()
+        await act(async () => button?.click())
+        expect(open).toHaveBeenCalledOnce()
+        expect(open.mock.results[0]?.value).toEqual({ activeModal: 'none', modalData: {} })
+        expect(useAppStore.getState().activeModal).toBe('none')
+      }
+    )
+  })
 
   it('does not route a different or unresolved host to the active host manager', async () => {
     await render({ kind: 'environment', environmentId: 'other' })
