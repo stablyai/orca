@@ -4,7 +4,7 @@ import { expect, it, vi } from 'vitest'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
 
-function sideChatCommand(draft: string) {
+function sideChatCommand() {
   const open = vi.fn().mockResolvedValue({ started: true })
   const completeItem = vi.fn()
   const transport = {
@@ -21,10 +21,7 @@ function sideChatCommand(draft: string) {
         isPickedSkill: () => false,
         completeItem
       },
-      editor: {
-        textareaRef: { current: { value: draft } },
-        setCaret: vi.fn()
-      }
+      editor: { setCaret: vi.fn() }
     })
   )
   const btw: NativeChatPickerItem = {
@@ -40,16 +37,11 @@ function sideChatCommand(draft: string) {
   return { open, completeItem, pick }
 }
 
-it('sends a fully typed /btw on Enter instead of completing the row', () => {
-  const { open, completeItem } = sideChatCommand('/btw')
-
-  expect(open).toHaveBeenCalledWith('')
-  expect(completeItem).not.toHaveBeenCalled()
-})
-
-it('completes a partly typed command so the question can follow', () => {
-  const { open, completeItem } = sideChatCommand('/b')
+// As the common pattern does: a pick, by Enter or click, leaves `/btw ` to add a question to.
+it('completes the row on a pick, even when the command is already typed', () => {
+  const { open, completeItem, pick } = sideChatCommand()
 
   expect(completeItem).toHaveBeenCalled()
+  expect(pick).not.toHaveBeenCalled()
   expect(open).not.toHaveBeenCalled()
 })

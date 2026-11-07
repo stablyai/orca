@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
@@ -10,7 +10,6 @@ import {
 } from '../../../../shared/native-chat/input/native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
-import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { nativeChatPendingAttachmentSnapshot } from './native-chat-pending-attachment-cache'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from './native-chat-pasted-text-reference'
 import {
@@ -58,14 +57,11 @@ export function useNativeChatSideChatCommand(args: {
   picker: Pick<NativeChatPickerState, 'isPickedSkill' | 'completeItem'> & {
     autocomplete: { mode: string; dispatchable?: boolean }
   }
-  editor: {
-    textareaRef: RefObject<Pick<NativeChatComposerInput, 'value'> | null>
-    setCaret: Dispatch<SetStateAction<number>>
-  }
+  editor: { setCaret: Dispatch<SetStateAction<number>> }
 }): NativeChatSideChatCommand {
   const { structuredTransport } = args
   const { autocomplete, isPickedSkill, completeItem } = args.picker
-  const { setCaret, textareaRef } = args.editor
+  const { setCaret } = args.editor
   const sideChat = structuredTransport?.sideChat
   const matchesDraft = useCallback(
     (draft: string) =>
@@ -124,18 +120,12 @@ export function useNativeChatSideChatCommand(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable === true
         const name = item.kind === 'command' && item.orcaOwned ? item.name : null
         if (leading && sideChat && isNativeChatSideChatCommand(name)) {
-          const draft = textareaRef.current?.value ?? ''
-          // The whole command is already typed: Enter sends it, as Send would.
-          if (draft.trim().toLowerCase() === `/${name}`) {
-            consume(draft)
-          } else {
-            completeItem(item)
-          }
+          completeItem(item)
         } else {
           pick(item)
         }
       },
-    [autocomplete, completeItem, consume, sideChat, textareaRef]
+    [autocomplete, completeItem, sideChat]
   )
   return { matchesDraft, consume, interceptPick }
 }
