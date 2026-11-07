@@ -356,7 +356,8 @@
     "offlineQueue": {
       "failed": "無法傳送 — 點按「傳送」重試",
       "waitingFor": "{{host}} 恢復連線後傳送",
-      "waiting": "桌面端恢復連線後傳送"
+      "waiting": "桌面端恢復連線後傳送",
+      "behind": "等待中 — 前面的訊息需要處理"
     },
     "receipt": {
       "cancelled": "已取消",

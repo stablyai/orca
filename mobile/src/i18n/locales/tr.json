@@ -356,7 +356,8 @@
     "offlineQueue": {
       "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
       "waitingFor": "{{host}} geri geldiğinde gönderilecek",
-      "waiting": "Masaüstü geri geldiğinde gönderilecek"
+      "waiting": "Masaüstü geri geldiğinde gönderilecek",
+      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor"
     },
     "receipt": {
       "cancelled": "İptal edildi",

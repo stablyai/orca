@@ -7,6 +7,8 @@ import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment
 /** A message sent while the desktop was out: it waits on the phone and never sat in the composer. */
 export type MobileNativeChatOfflineSend = {
   readonly id: string
+  /** Send order, kept so messages that come back late line up as they were sent. */
+  readonly seq: number
   readonly text: string
   readonly alternate?: true
   readonly goal?: true
@@ -21,6 +23,7 @@ export type MobileNativeChatOfflineSend = {
 const NO_SENDS: readonly MobileNativeChatOfflineSend[] = []
 const queues = new Map<string, readonly MobileNativeChatOfflineSend[]>()
 const listeners = new Set<() => void>()
+let nextSeq = 0
 
 function write(
   scope: string,
@@ -49,9 +52,9 @@ export function readMobileNativeChatOfflineSends(
 
 export function queueMobileNativeChatOfflineSend(
   scope: string,
-  send: Omit<MobileNativeChatOfflineSend, 'id'>
+  send: Omit<MobileNativeChatOfflineSend, 'id' | 'seq'>
 ): void {
-  write(scope, (current) => [...current, { ...send, id: createUuidV4() }])
+  write(scope, (current) => [...current, { ...send, id: createUuidV4(), seq: nextSeq++ }])
 }
 
 export function removeMobileNativeChatOfflineSends(scope: string, ids: readonly string[]): void {
@@ -63,15 +66,17 @@ export function removeMobileNativeChatOfflineSends(scope: string, ids: readonly 
   )
 }
 
-/** Puts a send that didn't go back at the head, paused: the rest wait behind it, in order. */
+/** Puts a send that didn't go back, paused, in its original place: the ones after it wait behind it. */
 export function returnMobileNativeChatOfflineSend(
   scope: string,
   send: MobileNativeChatOfflineSend
 ): void {
-  write(scope, (current) => [
-    { ...send, paused: 'failed' },
-    ...current.filter((queued) => queued.id !== send.id)
-  ])
+  write(scope, (current) => {
+    const rest = current.filter((queued) => queued.id !== send.id)
+    const at = rest.findIndex((queued) => queued.seq > send.seq)
+    const returned = { ...send, paused: 'failed' as const }
+    return at === -1 ? [...rest, returned] : [...rest.slice(0, at), returned, ...rest.slice(at)]
+  })
 }
 
 /** A closed tab's queue goes with it, as its draft does. */

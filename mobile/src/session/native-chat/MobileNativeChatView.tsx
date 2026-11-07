@@ -34,10 +34,7 @@ import { useMobileNativeChatRowKeys } from './transcript/mobile-native-chat-row-
 import { useMobileNativeChatPinchGesture } from './transcript/use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTailFollow } from './transcript/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/use-mobile-native-chat-turn-disclosure'
-import {
-  mobileNativeChatComposerPlaceholder,
-  useSettledMobileNativeChatInputLock
-} from './use-mobile-native-chat-input-lease'
+import { mobileNativeChatComposerPlaceholder } from './use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/MobileNativeChatAwaitingInputRow'
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
@@ -227,16 +224,18 @@ export function MobileNativeChatView({
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
-  const lockReason = useSettledMobileNativeChatInputLock(inputLockReason)
   // Lock only terminal-backed Send: it can answer an agent prompt, while drafting is harmless and structured sends queue.
   const promptShown = !collapsedPrompt && (ask ?? permission ?? question) != null
   const expandedPromptOwnsSend = !structuredActivityUi && promptShown
   const offlineQueue = useMobileNativeChatOfflineQueue({
     scope: draftKey,
-    lock: { raw: inputLockReason ?? null, settled: lockReason },
-    promptOwnsSend: expandedPromptOwnsSend,
+    inputLockReason: inputLockReason ?? null,
+    promptPending:
+      !structuredActivityUi &&
+      (ask ?? permission ?? question ?? collapsedPrompt ?? awaitingInput) != null,
     send: onSend
   })
+  const { lockReason } = offlineQueue
   const handleSend = useCallback(
     async (...send: Parameters<typeof onSend>): Promise<boolean> => {
       // Retire the previous notice before this action can report a new one.

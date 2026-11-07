@@ -32,8 +32,8 @@ describe('useMobileNativeChatOfflineQueue', () => {
   function Harness({ lock, send }: { lock: MobileNativeChatInputLockReason | null; send: Send }) {
     queue = useMobileNativeChatOfflineQueue({
       scope: SCOPE,
-      lock: { raw: lock, settled: lock },
-      promptOwnsSend: false,
+      inputLockReason: lock,
+      promptPending: false,
       send
     })
     return null
@@ -84,7 +84,7 @@ describe('useMobileNativeChatOfflineQueue', () => {
     expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
   })
 
-  it('pauses a queued message whose send fails, and sends it again only on Resume', async () => {
+  it('pauses a queued message whose send fails and holds later sends behind it until Resume', async () => {
     const send = vi.fn<Send>().mockResolvedValue(false)
     await mount('disconnected', send)
     await act(async () => {
@@ -102,12 +102,17 @@ describe('useMobileNativeChatOfflineQueue', () => {
       { text: 'second', paused: undefined }
     ])
 
+    await act(async () => {
+      await queue?.send('third')
+    })
+    expect(send).toHaveBeenCalledOnce()
+
     send.mockResolvedValue(true)
     await act(async () => {
       await queue?.resume()
     })
 
-    expect(send.mock.calls.map(([text]) => text)).toEqual(['first', 'first', 'second'])
+    expect(send.mock.calls.map(([text]) => text)).toEqual(['first', 'first', 'second', 'third'])
     expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
   })
 
