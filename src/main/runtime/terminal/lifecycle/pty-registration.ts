@@ -3,9 +3,11 @@ import {
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
+import { OrcaRuntimeWithDaemonLaunchNote } from './daemon-launch-note'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -20,7 +22,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import { mainTerminalRegistered } from '../surface/main-terminal-surfaces'
 import { assertPaneBoundAtRegistration, isRuntimeHostedWorkspace } from './bind-first-registration'
 
-export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLaunchNote {
   protected abstract ensurePtyBackedMobileSurfaceForRendererTab(
     worktreeId: string,
     tabId: string
@@ -42,13 +44,20 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       incarnationId?: PtyIncarnationId
       /** Handle allocated for the replacement incarnation, when one is known. */
       terminalHandle?: string
-      agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
+      agentLaunchAuthority?: {
+        launchToken: string
+        launchAgent: TuiAgent
+        launchConfig?: SleepingAgentLaunchConfig
+      }
       /** The agent a fresh spawn's launch command starts, whose submits wait for its composer. */
       launchedAgent?: TuiAgent
       providerReattachLaunchIdentity?: {
         incarnationId: PtyIncarnationId
         launchAgent: TuiAgent
+        launchNote?: DaemonLaunchNote | null
       }
+      /** The reattached host keeps no launch notes, so main can't tell whose launch runs here. */
+      launchUndecided?: boolean
     },
     isWsl?: boolean
   ): void {
@@ -151,10 +160,22 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
       isTuiAgent(agentLaunchAuthority.launchAgent)
     ) {
       pty.launchToken = agentLaunchAuthority.launchToken
+      pty.launchUndecided = false
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
+      // Why: a restart that runs in main (wake, worker reopen) replays the recipe; drop it and it comes back bare.
+      pty.launchConfig = agentLaunchAuthority.launchConfig ?? null
+      this.armDaemonLaunchNote(ptyId, pty)
     }
     this.watchLaunchComposer(ptyId, binding?.launchedAgent ?? null)
+    if (
+      binding?.launchUndecided &&
+      pty.launchToken === null &&
+      // An older relay reports no incarnation; that still can't prove the launch gone.
+      (pty.incarnationId ?? undefined) === binding.incarnationId
+    ) {
+      pty.launchUndecided = true
+    }
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
     if (
       providerReattachLaunchIdentity &&
@@ -166,6 +187,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalida
     ) {
       // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
       pty.launchAgent = providerReattachLaunchIdentity.launchAgent
+      void this.rearmReattachedLaunch(ptyId, pty, providerReattachLaunchIdentity)
     }
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)?.incarnationId
     if (

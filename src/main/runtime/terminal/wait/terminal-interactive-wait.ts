@@ -1,3 +1,4 @@
+import { attestedLaunchConfig } from '../launch/attested-launch-config'
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from '../adoption/adopt-terminal-orphans-from-inventory'
@@ -181,9 +182,10 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     let connectionId: string | null | undefined
     let launchToken: string | null | undefined
     let wslDistro: string | undefined
+    let pty: RuntimePtyWorktreeRecord | undefined
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
-      const pty = this.ptysById.get(ptyId)
+      pty = this.ptysById.get(ptyId)
       connectionId = pty?.connectionId ?? null
       launchToken = pty?.launchToken ?? null
       // A WSL pane's PTY is local, so its hook events only match once the distro is supplied.
@@ -193,7 +195,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
     }
-    return selectExactWorkerProviderSession({
+    const session = selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
       connectionId,
@@ -202,6 +204,8 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
+    const launchConfig = session ? attestedLaunchConfig(pty, session.agent) : undefined
+    return session && launchConfig ? { ...session, launchConfig } : session
   }
 
   resolveOrchestrationAgentLauncher(

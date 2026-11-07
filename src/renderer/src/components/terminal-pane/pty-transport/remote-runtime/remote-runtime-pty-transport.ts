@@ -7,7 +7,10 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-clie
 import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/agent-session-keyboard-capability'
-import { agentProviderSessionForHostEnsure } from '@/runtime/agent-session-ensure-provider-session'
+import {
+  agentProviderSessionForHostEnsure,
+  restoreSourcePaneOptions
+} from '@/runtime/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './input/remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -231,6 +234,7 @@ export function createRemoteRuntimePtyTransport(
     launchConfig,
     resumeProviderSession,
     resumeOrigin,
+    resumeSourcePaneKey,
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
@@ -3683,6 +3687,10 @@ export function createRemoteRuntimePtyTransport(
               resumeProviderSessionToSend
             )
           : undefined
+        const sourcePaneOptions =
+          ensureProviderSession && originOptions.resumeOrigin && resumeSourcePaneKey
+            ? await restoreSourcePaneOptions(createEnvironmentId, resumeSourcePaneKey)
+            : {}
         return createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
@@ -3694,6 +3702,7 @@ export function createRemoteRuntimePtyTransport(
                     kind: 'explicit',
                     ...keyboardOptions,
                     ...originOptions,
+                    ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                     agent: launchAgentToSend!,
                     providerSession: ensureProviderSession,

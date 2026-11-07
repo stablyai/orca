@@ -1,3 +1,4 @@
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -13,7 +14,7 @@ export function admitRendererAgentLaunchAuthority(args: {
   isReattach: boolean
   hasStablePaneOwner: boolean
   incarnationId: unknown
-}): { launchToken: string; launchAgent: TuiAgent } | null {
+}): { launchToken: string; launchAgent: TuiAgent; launchConfig: SleepingAgentLaunchConfig } | null {
   if (
     args.isReattach ||
     args.hasStablePaneOwner ||
@@ -27,14 +28,31 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
-  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+  return {
+    launchToken: args.launchToken,
+    launchAgent: args.launchAgent,
+    launchConfig: args.launchConfig
+  }
+}
+
+/** A reattach whose host keeps no launch notes (an older daemon, SSH) leaves main unable to tell whose launch runs. */
+export function reattachLeavesLaunchUndecided(result: {
+  isReattach?: boolean
+  launchNote?: DaemonLaunchNote | null
+}): boolean {
+  return result.isReattach === true && result.launchNote === undefined
 }
 
 export function admitProviderReattachLaunchIdentity(args: {
   isReattach?: boolean
   launchAgent?: unknown
+  launchNote?: DaemonLaunchNote | null
   incarnationId?: unknown
-}): { incarnationId: string; launchAgent: TuiAgent } | null {
+}): {
+  incarnationId: string
+  launchAgent: TuiAgent
+  launchNote?: DaemonLaunchNote | null
+} | null {
   if (
     !args.isReattach ||
     !isTuiAgent(args.launchAgent) ||
@@ -42,7 +60,11 @@ export function admitProviderReattachLaunchIdentity(args: {
   ) {
     return null
   }
-  return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
+  return {
+    incarnationId: args.incarnationId,
+    launchAgent: args.launchAgent,
+    ...(args.launchNote !== undefined ? { launchNote: args.launchNote } : {})
+  }
 }
 
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {

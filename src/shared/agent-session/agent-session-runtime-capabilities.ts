@@ -118,10 +118,14 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
 // Strict subscribe params refuse `capabilities` on older hosts; a client sends it only when advertised.
 export const AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY = 'agent-session.text-append.v1' as const
+// Why: a saved restore into a new tab names the pane that ran it; older hosts' strict schema rejects it.
+export const AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY =
+  'agent-session.restore-source-pane.v1' as const
 
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,

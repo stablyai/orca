@@ -135,6 +135,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.resumeOrigin
       ? { resumeOrigin: session.paneStartup.resumeOrigin }
       : {}),
+    ...(session.paneStartup?.resumeSource?.record?.paneKey
+      ? { resumeSourcePaneKey: session.paneStartup.resumeSource.record.paneKey }
+      : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
           agentPrompt:

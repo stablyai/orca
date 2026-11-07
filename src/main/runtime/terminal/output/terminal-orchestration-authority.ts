@@ -183,18 +183,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return
-    }
+    const pty = this.settleReattachedLaunch(ptyId)
     const receipt = this.restoredOrchestrationAuthorityByPtyId.get(ptyId)
-    if (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent) {
+    if (!pty || (!pty.launchToken && !receipt && !pty.launchAgent && !pty.launchCommandAgent)) {
       return
     }
     // Why: collect before the delete below, which drops the restored-authority receipt a
     // receipt-only pane's key comes from.
     const paneKeys = this.collectPaneKeysForPty(ptyId)
     const changed = Boolean(pty.launchToken || pty.launchIncarnationId)
+    if (pty.launchToken) {
+      // The daemon outlives main, so a reattach must not re-arm a finished launch.
+      this.ptyController?.setLaunchNote?.(ptyId, { retire: pty.launchToken })
+    }
     this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
     pty.launchToken = null
     pty.launchIncarnationId = null

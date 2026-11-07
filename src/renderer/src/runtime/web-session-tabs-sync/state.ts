@@ -242,6 +242,7 @@ export type WebSessionTabsSyncState = Pick<
       | 'localOnlyScrollbackByTabId'
       | 'pendingStartupByTabId'
       | 'runtimePaneTitlesByTabId'
+      | 'sleepingAgentSessionsByPaneKey'
     >
   >
 

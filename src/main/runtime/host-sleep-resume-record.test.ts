@@ -123,23 +123,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     expect(spawnCommand(spawn, 1)).not.toContain('--dangerously-skip-permissions')
   })
 
-  it('resumes an Orca-launched session with the recipe its launch recorded', async () => {
-    const { runtime, spawn, reportAgent } = makeRuntime(null)
-    await userActivate(runtime)
-    reportAgent()
-    const launchConfig = { agentArgs: '--dangerously-skip-permissions', agentEnv: {} }
-    const pty = [...runtime['ptysById'].values()][0]!
-    pty.launchAgent = 'claude'
-    pty.launchConfig = launchConfig
-
-    await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    await userActivate(runtime)
-
-    expect(spawnCommand(spawn, 1)).toContain('--dangerously-skip-permissions')
-    expect(spawnCommand(spawn, 1)).toContain(SESSION_ID)
-    expect(spawn.mock.calls[1]?.[0]).toHaveProperty('resumeOrigin', 'saved')
-  })
-
   it.each([
     ['exited', true],
     ['unverifiable', false]
@@ -175,29 +158,6 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       expect(spawnCommand(spawn, 2).includes(SESSION_ID)).toBe(resumes)
     }
   )
-
-  it.each([
-    ['claude', true],
-    ['codex', false]
-  ] as const)('keeps a %s-launched PTY recipe: %s', async (launchAgent, kept) => {
-    const config = { agentCommand: '/opt/claude-custom', agentArgs: '--x', agentEnv: {} }
-    const launchedRow = hookRow({
-      paneKey: PANE_KEY,
-      agentType: 'claude',
-      providerSession: { key: 'session_id', id: SESSION_ID },
-      prompt: '',
-      receivedAt: 1
-    })
-    const capture = await captureWorktreeSleepResumeRecords({
-      worktreeId: TEST_WORKTREE_ID,
-      paneKeysByPtyId: new Map([['pty', [PANE_KEY]]]),
-      launchByPtyId: new Map([['pty', { agent: launchAgent, config }]]),
-      readRows: () => [launchedRow],
-      checkAgentPresence: null,
-      capturedAt: 2
-    })
-    expect(capture.get('pty')?.records[0]?.launchConfig).toEqual(kept ? config : undefined)
-  })
 
   it('retires an older capture when the hook store names a non-resumable agent in the pane', async () => {
     const row = hookRow({
@@ -241,8 +201,11 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
     expect(capture.get('pty')?.records[0]?.connectionId).toBe(stamped)
   })
 
-  it('stamps the SSH host and keeps the saved recipe a reattached PTY forgot', () => {
-    const launchConfig = { agentArgs: '--x', agentEnv: {} }
+  // An earlier recipe may belong to another launch; only a terminal main can't tell about keeps it, as before.
+  it.each([
+    [false, undefined],
+    [true, { agentArgs: '--x', agentEnv: {} }]
+  ])('stamps the SSH host; undecided %s keeps the earlier recipe %j', (launchUndecided, kept) => {
     const record = {
       paneKey: PANE_KEY,
       worktreeId: TEST_WORKTREE_ID,
@@ -255,17 +218,19 @@ describe('host-driven worktree sleep keeps the slept agent resumable', () => {
       connectionId: 'ssh-target'
     }
     const session = makeWorkspaceSessionWithHeadlessTerminal({
-      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: { ...record, launchConfig } }
+      sleepingAgentSessionsByPaneKey: {
+        [PANE_KEY]: { ...record, launchConfig: { agentArgs: '--x', agentEnv: {} } }
+      }
     })
     const next = applyWorktreeSleepResumeRecords(
       session,
-      new Map([['pty', { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }] }]]),
+      new Map([
+        ['pty', { retiredPaneKeys: [], records: [{ ...record, capturedAt: 2 }], launchUndecided }]
+      ]),
       ['pty']
     )
-    expect(next?.sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
-      capturedAt: 2,
-      connectionId: 'ssh-target',
-      launchConfig
-    })
+    const saved = next?.sleepingAgentSessionsByPaneKey?.[PANE_KEY]
+    expect(saved).toMatchObject({ capturedAt: 2, connectionId: 'ssh-target' })
+    expect(saved?.launchConfig).toEqual(kept)
   })
 })

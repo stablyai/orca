@@ -1,7 +1,11 @@
 import type { ChildProcessVerdictRead, SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
+import { SessionLaunchNote } from './session-launch-note'
 
 export class SessionProcessInspection {
+  /** Main's launch note for this process; Session feeds it the output that can retire it. */
+  readonly launchNote = new SessionLaunchNote()
+
   constructor(protected readonly subprocess: SubprocessHandle) {}
 
   inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {

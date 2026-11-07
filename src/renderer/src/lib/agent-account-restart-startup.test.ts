@@ -438,8 +438,8 @@ it.each(['claude', 'codex'] as const)(
     expect(startup?.command).toContain(SESSION_ID)
     expect(startup?.command).not.toContain('fresh-only')
     expect(startup?.command).not.toContain('high')
-    // The established hand-started Claude path has no configured fallback; Codex retains it.
-    expect(startup?.command.includes('literal')).toBe(agent === 'codex')
+    // An unrecorded launch gets no configured Arguments, for any agent.
+    expect(startup?.command).not.toContain('literal')
     useAppStore.getState().registerAgentLaunchConfig(makePaneKey(TAB_ID, LEAF_ID), {
       agentArgs: '--model recorded',
       agentEnv: { RECORDED: 'yes' }
