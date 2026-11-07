@@ -57,6 +57,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   })
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  const activePaneRuntimeEnvironmentId = activePane
+    ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
+    : undefined
   const showSshReconnectOverlay = isActive && isVisible && sshReconnectOwnsTerminalErrors
 
   useSshReconnectErrorOwnership({
@@ -121,6 +124,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     hiddenStartupStyle,
     terminalContainerStyle,
     activePane,
+    activePaneRuntimeEnvironmentId,
     managedPanes,
     showSshReconnectOverlay,
     visibleLaunchRefusal,
