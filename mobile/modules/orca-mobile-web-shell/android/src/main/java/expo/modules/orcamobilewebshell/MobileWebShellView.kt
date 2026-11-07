@@ -61,6 +61,8 @@ internal class OrcaMobileWebShellView(
 
   init {
     addView(webView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    // Why: Chromium reports an unpaused, never-attached WebView as visible, and a screen pushed under another never attaches.
+    webView?.onPause()
   }
 
   fun setGenerationDirectory(value: String) {
@@ -184,6 +186,17 @@ internal class OrcaMobileWebShellView(
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
     proxy.postMessage(json)
+  }
+
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    webView?.onResume()
+  }
+
+  // Stay paused whenever off-window so the page reads hidden, as a buried WKWebView does on iOS.
+  override fun onDetachedFromWindow() {
+    webView?.onPause()
+    super.onDetachedFromWindow()
   }
 
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
