@@ -8235,7 +8235,8 @@
           "diagnosticsCopied": "Diagnostics copiés",
           "diagnosticsCopyFailed": "Échec de la copie des diagnostics",
           "5e2c7a1f84": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à l'écran de votre téléphone. Lorsque vous fermez l'application ou si vous la quittez, cela contrôle si elle reste à la taille du téléphone (afin que les outils CLI interactifs ne soient pas redistribués) ou si elle est redimensionnée sur votre bureau. Vous pouvez toujours utiliser Restaurer ou Tout restaurer sur la bannière pour la redimensionner manuellement.",
-          "codeRefreshesAutomatically": "Le code se renouvelle automatiquement. Un code copié fonctionne jusqu’à 10 minutes."
+          "codeRefreshesAutomatically": "Le code se renouvelle automatiquement. Un code copié fonctionne jusqu’à 10 minutes.",
+          "legacyEncryption": "Utilise un ancien chiffrement. Mettez à jour l’app Orca sur cet appareil."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8648,7 +8649,8 @@
           "activeLinks": "Liens actifs",
           "noActiveLinks": "Aucun lien actif.",
           "createdAt": "Créé le {{value0}}",
-          "revoke": "Révoquer"
+          "revoke": "Révoquer",
+          "legacyEncryption": "Utilisé la dernière fois avec un ancien chiffrement. Mettez à jour Orca là où ce lien est utilisé."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Annuler",
@@ -11218,7 +11220,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Faire confiance au dossier quand Orca lance un agent",
-          "description": "Les agents lancés par Orca ignorent leur question « Do you trust this folder? » : les hooks et paramètres d'agent du projet s'exécutent donc tout de suite. Sans cette option, chaque agent pose la question la première fois qu'il s'exécute dans un dossier. Les agents qui tournent sans que vous les surveilliez, comme les workers d'orchestration, les automatisations et les agents lancés depuis votre téléphone, attendront à cette question jusqu'à ce que vous y répondiez dans leur terminal. Les dossiers déjà approuvés le restent."
+          "description": "Les agents lancés par Orca peuvent ignorer leur question « Do you trust this folder? » : les hooks et paramètres d'agent du projet s'exécutent donc tout de suite. Orca pose la question une fois par dépôt, la première fois que vous y lancez un agent, et vous pouvez modifier la réponse dans les paramètres de ce dépôt. Désactivez cette option pour que les agents posent toujours la question. Un agent qui pose la question alors qu'il tourne sans que vous le surveilliez, comme un worker d'orchestration, une automatisation ou un agent lancé depuis votre téléphone, attend que vous répondiez dans son terminal. Les dossiers déjà approuvés le restent."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Générer automatiquement les titres des onglets",
@@ -15058,7 +15060,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Retour",
-          "111d3f8d92": "Passer à la configuration du projet"
+          "111d3f8d92": "Configurer plus tard"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Démarrage du terminal..."
@@ -19022,6 +19024,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "Faire confiance à {{repo}} pour les agents ?",
+        "prompt-description": "Les agents comme Claude Code et Codex demandent « Do you trust this folder? » avant de charger les paramètres et hooks d'agent propres au projet, qui peuvent exécuter des commandes. Orca peut répondre oui à votre place dans chaque worktree de ce dépôt.",
+        "prompt-remembered": "Orca mémorise votre réponse pour ce dépôt. Vous pouvez la modifier dans les paramètres du dépôt.",
+        "trust-repository": "Faire confiance au dépôt",
+        "let-agents-ask": "Laisser les agents demander",
+        "setting-title": "Confiance des dossiers pour les agents",
+        "setting-description": "Indique si les agents lancés par Orca dans les worktrees de ce dépôt ignorent leur question « Do you trust this folder? » et chargent tout de suite les paramètres et hooks d'agent du projet.",
+        "setting-undecided": "Pas encore décidé. Orca posera la question la prochaine fois que vous lancerez un agent ici.",
+        "setting-global-off": "La confiance des dossiers est désactivée dans les paramètres Agents : les agents posent donc toujours la question.",
+        "keyword-trust": "confiance",
+        "keyword-hooks": "hooks"
       }
     },
     "i18n": {

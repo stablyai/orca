@@ -7718,7 +7718,8 @@
           "diagnosticsCopied": "診断がコピーされました",
           "diagnosticsCopyFailed": "診断情報のコピーに失敗しました",
           "5e2c7a1f84": "スマートフォンでターミナルを使用している間、Orca はスマートフォンの画面に合わせてターミナルを縮小します。アプリを閉じるか別のアプリに切り替えるときに、アプリをスマートフォンサイズのままにするか (インタラクティブ CLI ツールがリフローしないように)、サイズを変更してデスクトップに戻るかを制御します。バナーの [復元] または [すべて復元] を使用すると、いつでも手動でサイズを変更できます。",
-          "codeRefreshesAutomatically": "コードは自動的に更新されます。コピーしたコードは最大10分間有効です。"
+          "codeRefreshesAutomatically": "コードは自動的に更新されます。コピーしたコードは最大10分間有効です。",
+          "legacyEncryption": "古い暗号化方式を使用しています。このデバイスの Orca アプリを更新してください。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "アプリストア",
@@ -8124,7 +8125,8 @@
           "activeLinks": "有効なリンク",
           "noActiveLinks": "有効なリンクはありません。",
           "createdAt": "作成 {{value0}}",
-          "revoke": "取り消す"
+          "revoke": "取り消す",
+          "legacyEncryption": "前回は古い暗号化方式で使用されました。このリンクを使用している環境の Orca を更新してください。"
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "キャンセル",
@@ -10709,7 +10711,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca が Agent を起動するときにフォルダーを信頼する",
-          "description": "Orca が起動した Agent は「Do you trust this folder?」の確認を省略するため、プロジェクトの Agent のフックと設定がすぐに実行されます。この設定がオフの場合、各 Agent はフォルダーで初めて実行されるときに確認します。オーケストレーションのワーカー、オートメーション、スマートフォンから起動した Agent など、あなたが見ていない間に動く Agent は、そのターミナルで応答するまでこの確認で待機します。すでに信頼済みのフォルダーは信頼されたままです。"
+          "description": "Orca が起動した Agent は「Do you trust this folder?」の確認を省略できるため、プロジェクトの Agent のフックと設定がすぐに実行されます。Orca はリポジトリごとに、初めて Agent を起動したときに一度だけ確認します。回答はそのリポジトリの設定で変更できます。オフにすると Agent は常に確認します。オーケストレーションのワーカー、オートメーション、スマートフォンから起動した Agent など、あなたが見ていない間に動く Agent が確認を求めた場合は、そのターミナルで応答するまで待機します。すでに信頼済みのフォルダーは信頼されたままです。"
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "タブタイトルを自動生成",
@@ -14458,7 +14460,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "戻る",
-          "111d3f8d92": "プロジェクトのセットアップにスキップ"
+          "111d3f8d92": "後で設定する"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "ターミナルを起動しています…"
@@ -18327,6 +18329,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "{{repo}} を Agent 用に信頼しますか？",
+        "prompt-description": "Claude Code や Codex などの Agent は、プロジェクト独自の Agent 設定とフック（コマンドを実行できます）を読み込む前に「Do you trust this folder?」と確認します。Orca がこのリポジトリのすべてのワークツリーで代わりに「はい」と答えることができます。",
+        "prompt-remembered": "Orca はこのリポジトリへの回答を記憶します。リポジトリの設定で変更できます。",
+        "trust-repository": "リポジトリを信頼",
+        "let-agents-ask": "Agent に確認させる",
+        "setting-title": "Agent のフォルダー信頼",
+        "setting-description": "このリポジトリのワークツリーで Orca が起動した Agent が「Do you trust this folder?」の確認を省略し、プロジェクトの Agent 設定とフックをすぐに読み込むかどうかを指定します。",
+        "setting-undecided": "まだ決めていません。次にここで Agent を起動したときに Orca が確認します。",
+        "setting-global-off": "Agent 設定でフォルダーの信頼がオフになっているため、Agent は常に確認します。",
+        "keyword-trust": "信頼",
+        "keyword-hooks": "フック"
       }
     },
     "i18n": {

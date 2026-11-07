@@ -8351,7 +8351,8 @@
           "diagnosticsCopied": "Tanılama bilgileri kopyalandı",
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
           "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
-          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır."
+          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır.",
+          "legacyEncryption": "Eski şifreleme kullanıyor. Bu cihazdaki Orca uygulamasını güncelleyin."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8763,7 +8764,8 @@
           "activeLinks": "Etkin bağlantılar",
           "noActiveLinks": "Etkin bağlantı yok.",
           "createdAt": "Oluşturulma: {{value0}}",
-          "revoke": "İptal et"
+          "revoke": "İptal et",
+          "legacyEncryption": "En son eski şifrelemeyle kullanıldı. Bu bağlantının kullanıldığı yerde Orca'yı güncelleyin."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "İptal",
@@ -11333,7 +11335,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Orca bir ajan başlattığında klasöre güven",
-          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlar; böylece projenin ajan kancaları ve ayarları hemen çalışır. Bu seçenek kapalıyken her ajan bir klasörde ilk çalıştığında sorar. Orkestrasyon çalışanları, otomasyonlar ve telefonunuzdan başlatılan ajanlar gibi gözetiminiz dışında çalışan ajanlar, terminallerinde yanıt verene kadar bu soruda bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
+          "description": "Orca'nın başlattığı ajanlar \"Bu klasöre güveniyor musunuz?\" sorusunu atlayabilir; böylece projenin ajan kancaları ve ayarları hemen çalışır. Orca her repository için orada ilk kez bir ajan başlattığınızda bir kez sorar; yanıtı o repository'nin ayarlarından değiştirebilirsiniz. Ajanların her zaman sorması için bunu kapatın. Orkestrasyon çalışanı, otomasyon veya telefonunuzdan başlatılan bir ajan gibi gözetiminiz dışında çalışırken soru soran bir ajan, terminalinde yanıt verene kadar bekler. Zaten güvenilen klasörlere güvenilmeye devam edilir."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Sekme başlıklarını otomatik oluştur",
@@ -15105,7 +15107,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Geri",
-          "111d3f8d92": "Proje kurulumuna geç"
+          "111d3f8d92": "Daha sonra ayarla"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Terminal başlatılıyor..."
@@ -18972,6 +18974,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "{{repo}} ajanlar için güvenilir olsun mu?",
+        "prompt-description": "Claude Code ve Codex gibi ajanlar, projenin komut çalıştırabilen kendi ajan ayarlarını ve kancalarını yüklemeden önce \"Bu klasöre güveniyor musunuz?\" diye sorar. Orca, bu repository'nin tüm worktree'lerinde sizin yerinize evet diyebilir.",
+        "prompt-remembered": "Orca bu repository için verdiğiniz yanıtı hatırlar. Yanıtı repository ayarlarından değiştirebilirsiniz.",
+        "trust-repository": "Repository'ye güven",
+        "let-agents-ask": "Ajanlar sorsun",
+        "setting-title": "Ajan Klasör Güveni",
+        "setting-description": "Orca'nın bu repository'nin worktree'lerinde başlattığı ajanların \"Bu klasöre güveniyor musunuz?\" sorusunu atlayıp projenin ajan ayarlarını ve kancalarını hemen yükleyip yüklemeyeceği.",
+        "setting-undecided": "Henüz karar verilmedi. Burada bir sonraki ajan başlatışınızda Orca soracak.",
+        "setting-global-off": "Klasör güveni Ajanlar ayarlarında kapalı olduğundan ajanlar her zaman sorar.",
+        "keyword-trust": "güven",
+        "keyword-hooks": "kancalar"
       }
     },
     "i18n": {

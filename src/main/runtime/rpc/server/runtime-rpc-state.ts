@@ -37,6 +37,8 @@ import {
 } from './runtime-rpc-pairing-types'
 import { DeclaredDesktopClients } from '../../declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
+import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
+import type { WebSocketSourceGuard } from '../ws-network-source-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -50,6 +52,8 @@ export class RuntimeRpcState {
   protected readonly requirePinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
+  protected readonly serveNetworkSources: ServeNetworkSourceOptions | null
+  protected webSocketSourceGuard: WebSocketSourceGuard | null = null
   protected readonly webClientRoot: string | undefined
   // Track actual WS bind host for pairing exposure transitions (STA-2370).
   protected wsBoundHost: string | null = null
@@ -121,6 +125,7 @@ export class RuntimeRpcState {
     requirePinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
+    serveNetworkSources,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -138,6 +143,7 @@ export class RuntimeRpcState {
     this.requirePinnedWsPort = requirePinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
+    this.serveNetworkSources = serveNetworkSources ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap

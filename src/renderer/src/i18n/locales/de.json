@@ -886,13 +886,15 @@
         "keyword": {
           "windsurf": "windsurf",
           "devin": "devin",
-          "devinDesktop": "devin desktop"
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
         }
       }
     },
     "openInApp": {
       "preset": {
-        "devinDesktop": "Devin Desktop"
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
       }
     },
     "mcp": {
@@ -8365,7 +8367,8 @@
           "diagnosticsCopied": "Diagnosedaten kopiert",
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
           "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
-          "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten."
+          "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten.",
+          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8777,7 +8780,8 @@
           "activeLinks": "Aktive Links",
           "noActiveLinks": "Keine aktiven Links.",
           "createdAt": "Erstellt: {{value0}}",
-          "revoke": "Widerrufen"
+          "revoke": "Widerrufen",
+          "legacyEncryption": "Zuletzt mit älterer Verschlüsselung verwendet. Aktualisiere Orca dort, wo dieser Link verwendet wird."
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Abbrechen",
@@ -11347,7 +11351,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Dem Ordner vertrauen, wenn Orca einen Agenten startet",
-          "description": "Von Orca gestartete Agenten überspringen die Abfrage „Do you trust this folder?“, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. Andernfalls fragt jeder Agent beim ersten Start in einem Ordner nach. Unbeaufsichtigt laufende Agenten, etwa Orchestrierungs-Worker, Automatisierungen und vom Smartphone gestartete Agenten, warten bei dieser Frage, bis sie in ihrem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
+          "description": "Von Orca gestartete Agenten können die Abfrage „Do you trust this folder?“ überspringen, sodass die Agenten-Hooks und Einstellungen des Projekts sofort ausgeführt werden. Orca fragt einmal pro Repository beim ersten Agentenstart dort nach; die Antwort lässt sich in den Einstellungen dieses Repositorys ändern. Ausgeschaltet fragen Agenten immer selbst nach. Ein Agent, der unbeaufsichtigt läuft und nachfragt, etwa ein Orchestrierungs-Worker, eine Automatisierung oder ein vom Smartphone gestarteter Agent, wartet, bis die Frage in seinem Terminal beantwortet wird. Bereits als vertrauenswürdig eingestufte Ordner bleiben vertrauenswürdig."
         },
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Tab-Titel automatisch generieren",
@@ -15119,7 +15123,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Zurück",
-          "111d3f8d92": "Zur Projekteinrichtung springen"
+          "111d3f8d92": "Später einrichten"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Terminal wird gestartet…"
@@ -18986,6 +18990,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "{{repo}} für Agenten vertrauen?",
+        "prompt-description": "Agenten wie Claude Code und Codex fragen „Do you trust this folder?“, bevor sie die eigenen Agenten-Einstellungen und Hooks des Projekts laden, die Befehle ausführen können. Orca kann diese Frage in jedem Worktree dieses Repositorys automatisch mit Ja beantworten.",
+        "prompt-remembered": "Orca merkt sich die Antwort für dieses Repository. Sie lässt sich in den Einstellungen des Repositorys ändern.",
+        "trust-repository": "Repository vertrauen",
+        "let-agents-ask": "Agenten fragen lassen",
+        "setting-title": "Ordnervertrauen für Agenten",
+        "setting-description": "Legt fest, ob von Orca gestartete Agenten in den Worktrees dieses Repositorys die Abfrage „Do you trust this folder?“ überspringen und die Agenten-Einstellungen und Hooks des Projekts sofort laden.",
+        "setting-undecided": "Noch nicht entschieden. Orca fragt beim nächsten Agentenstart hier nach.",
+        "setting-global-off": "Das Ordnervertrauen ist in den Agenten-Einstellungen ausgeschaltet, daher fragen Agenten immer nach.",
+        "keyword-trust": "vertrauen",
+        "keyword-hooks": "Hooks"
       }
     },
     "i18n": {

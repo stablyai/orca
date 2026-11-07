@@ -2895,7 +2895,7 @@
         },
         "OnboardingFooter": {
           "ba58547306": "Voltar",
-          "111d3f8d92": "Pular para a configuração do projeto"
+          "111d3f8d92": "Configurar mais tarde"
         },
         "OnboardingInlineCommandTerminal": {
           "4123609efd": "Iniciando terminal..."
@@ -6984,7 +6984,8 @@
           "diagnosticsCopied": "Diagnósticos copiados",
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
-          "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos."
+          "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -8110,7 +8111,8 @@
           "activeLinks": "Links ativos",
           "noActiveLinks": "Nenhum link ativo.",
           "createdAt": "Criado {{value0}}",
-          "revoke": "Revogar"
+          "revoke": "Revogar",
+          "legacyEncryption": "Usado pela última vez com uma criptografia mais antiga. Atualize o Orca onde este link é usado."
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agente",
@@ -8750,7 +8752,7 @@
         },
         "agent-workspace-trust-copy": {
           "title": "Confiar na pasta quando o Orca iniciar um agente",
-          "description": "Os agentes iniciados pelo Orca pulam a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. Sem isso, cada agente pergunta na primeira vez que é executado em uma pasta. Os agentes executados sem sua supervisão, como workers de orquestração, automações e agentes iniciados pelo celular, esperarão nessa pergunta até você respondê-la no terminal deles. As pastas já confiáveis continuam confiáveis."
+          "description": "Os agentes iniciados pelo Orca podem pular a pergunta “Você confia nesta pasta?”, para que os hooks e configurações de agentes do projeto sejam executados imediatamente. O Orca pergunta uma vez por repositório, na primeira vez que você inicia um agente nele, e você pode alterar a resposta nas configurações desse repositório. Desative para que os agentes sempre perguntem. Um agente que pergunta enquanto é executado sem sua supervisão, como um worker de orquestração, uma automação ou um agente iniciado pelo celular, espera até você responder no terminal dele. As pastas já confiáveis continuam confiáveis."
         },
         "MachineNameField": {
           "label": "Nome da máquina",
@@ -20013,6 +20015,19 @@
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}} ({{value1}})"
         }
+      },
+      "agent-workspace-trust-decision": {
+        "prompt-title": "Confiar em {{repo}} para agentes?",
+        "prompt-description": "Agentes como Claude Code e Codex perguntam “Você confia nesta pasta?” antes de carregar as configurações e hooks de agentes do próprio projeto, que podem executar comandos. O Orca pode responder sim por você em todas as worktrees deste repositório.",
+        "prompt-remembered": "O Orca lembra sua resposta para este repositório. Você pode alterá-la nas configurações do repositório.",
+        "trust-repository": "Confiar no repositório",
+        "let-agents-ask": "Deixar os agentes perguntarem",
+        "setting-title": "Confiança de Pasta para Agentes",
+        "setting-description": "Define se os agentes que o Orca inicia nas worktrees deste repositório pulam a pergunta “Você confia nesta pasta?” e carregam imediatamente as configurações e hooks de agentes do projeto.",
+        "setting-undecided": "Ainda não decidido. O Orca vai perguntar na próxima vez que você iniciar um agente aqui.",
+        "setting-global-off": "A confiança de pasta está desativada nas configurações de Agentes, então os agentes sempre perguntam.",
+        "keyword-trust": "confiança",
+        "keyword-hooks": "hooks"
       }
     },
     "startup": {

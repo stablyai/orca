@@ -40,6 +40,8 @@ export type DeviceEntry = {
   ephemeral?: true
   // A never-seen offer stops authenticating here; absent (older rows, headless offers) never expires.
   offerExpiresAt?: number
+  // Last sign-in used the older E2EE framing (set then; a v2 sign-in clears it). Local-only notice data.
+  legacyE2EEAuthAt?: number
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }
