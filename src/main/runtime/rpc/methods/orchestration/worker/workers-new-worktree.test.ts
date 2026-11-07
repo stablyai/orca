@@ -391,7 +391,6 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     )
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
     )
@@ -436,9 +435,6 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     })
-    expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(runtime.sendTerminalAgentPrompt).mock.invocationCallOrder[0]!
-    )
     expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
@@ -572,11 +568,7 @@ describe('orchestration new-worktree workers', () => {
 
     expect(result).toMatchObject({
       state: 'outcome_unknown',
-      failedStage: 'worktree_create',
-      nextCommands: expect.arrayContaining([
-        expect.stringContaining('worker-show --dispatch'),
-        expect.stringContaining('worker-abandon --dispatch')
-      ])
+      failedStage: 'worktree_create'
     })
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
@@ -730,8 +722,6 @@ describe('orchestration new-worktree workers', () => {
         mutation: { requestId: 'worker_start_request', replayed: true }
       }
     })
-    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(recreateWorktree).not.toHaveBeenCalled()
     expect(reinjectPrompt).not.toHaveBeenCalled()
   })

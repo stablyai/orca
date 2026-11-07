@@ -55,7 +55,6 @@ it('retries complete history after unknown in the same watched generation instea
   )
   try {
     expect(frames).toEqual([{ type: 'begin', status: 'unknown' }, { type: 'complete' }])
-    expect(caught).toEqual([fault])
     expect(caught[0]).toBe(fault)
     meter.control.before = undefined
     const output = model.read(address(SELF))

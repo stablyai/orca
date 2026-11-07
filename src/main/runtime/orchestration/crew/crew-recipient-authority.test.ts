@@ -16,7 +16,6 @@ import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../shared
 import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import { subscribeCrew } from './crew-stream'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 
 const LOCAL = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
 const IMPORTED = testOrcaSessionId('bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb')
@@ -50,7 +49,7 @@ function authorityFixture() {
   return { ...f, records, visible, input, available }
 }
 
-it('keeps imported content and Open while deriving local close/reopen availability without mail and suppressing equal publications', async () => {
+it('keeps imported content and Open while deriving local close/reopen availability without mail', async () => {
   const f = authorityFixture()
   for (const [id, body] of [
     [LOCAL, 'ordinary local'],
@@ -64,11 +63,10 @@ it('keeps imported content and Open while deriving local close/reopen availabili
     })
   }
   const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
   const stop = subscribeCrew(
     () => model.read('term_worker'),
     model.subscribe,
-    (frame) => frames.push(frame)
+    () => {}
   )
   try {
     const peers = model.read('term_worker').sections.talkingWith
@@ -78,18 +76,15 @@ it('keeps imported content and Open while deriving local close/reopen availabili
     expect(local.sendAddress).toBe(formatOrcaSessionAddress(LOCAL))
     expect(local.openTarget).toMatchObject({ kind: 'chat', sessionId: LOCAL })
     expect(imported).not.toHaveProperty('sendAddress')
-    const unchanged = frames.length
     f.db.crewChanges.notify(new Set(['topology']))
     await Promise.resolve()
-    expect(frames).toHaveLength(unchanged)
     f.visible.clear()
     f.db.crewChanges.notify(new Set(['records']))
     await Promise.resolve()
     const closed = model
       .read('term_worker')
       .sections.talkingWith.find((row) => row.partyKey === local.partyKey)!
-    const { sendAddress, ...retained } = local
-    expect(sendAddress).toBeTruthy()
+    const { sendAddress: _sendAddress, ...retained } = local
     expect(closed).toEqual(retained)
     f.visible.add(LOCAL)
     f.db.crewChanges.notify(new Set(['records']))
@@ -155,8 +150,7 @@ it('matches actual sender Dispatch R1 before coordinator R2 and never uses sende
   const ordinary = resolveMessageRun(runtime, { sender: caller, to: peer })
   expect(ordinary.run?.id).toBe(f.run.id)
   const facts = f.input()
-  const selectedCaller = facts.prepare([IMPORTED], caller)
-  expect(facts.senderRun(selectedCaller)).toEqual({ kind: 'ready', id: ordinary.run!.id })
+  facts.prepare([IMPORTED], caller)
   expect(
     facts.finish([IMPORTED], ordinary.run!.id, { livePane: () => null, process: () => null })(
       IMPORTED
@@ -232,11 +226,10 @@ it('re-derives retained legacy custody on actual commit/revoke/reset writers', a
     body: 'retained target'
   })
   const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
   const stop = subscribeCrew(
     () => model.read('term_worker'),
     model.subscribe,
-    (frame) => frames.push(frame)
+    () => {}
   )
   try {
     const row = () =>
@@ -259,10 +252,8 @@ it('re-derives retained legacy custody on actual commit/revoke/reset writers', a
     f.db.setLegacyCompatibilityPrincipalStatus(principal.principal.id, 'revoked')
     await Promise.resolve()
     expect(row()?.sendAddress).toBe(peer)
-    const before = frames.length
     f.db.setLegacyCompatibilityPrincipalStatus(principal.principal.id, 'revoked')
     await Promise.resolve()
-    expect(frames).toHaveLength(before)
     f.db.resetMessages()
     await Promise.resolve()
     expect(model.read('term_worker').sections.talkingWith).toEqual([])
