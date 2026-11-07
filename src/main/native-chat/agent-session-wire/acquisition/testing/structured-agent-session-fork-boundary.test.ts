@@ -18,6 +18,10 @@ import {
   item
 } from '../../publication/history/testing/agent-session-history-contract-test-fixture'
 import { structuredAgentSessionForkBoundary } from '../structured-agent-session-fork-boundary'
+import {
+  continuedOutsideNotice,
+  continuedOutsideRecordId
+} from '../structured-agent-session-history-catch-up'
 
 it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {
   await appendItems(2)
@@ -340,6 +344,10 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
         parentAgentId: 'tool-child',
         producerKind: 'agent'
       },
+      {
+        ...row(l(continuedOutsideRecordId('T2')), continuedOutsideNotice(false)),
+        turnScope: { kind: 'thread' }
+      },
       row(k(4), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'second' }] }),
       row(
         l('late'),
@@ -427,4 +435,62 @@ it('freezes the selected mixed root, includes its late rows, and drops unfinishe
     ownerFence: 0,
     turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:root1' }
   })
+})
+
+it('cuts before a Claude continuation notice attributed to the next imported prompt', () => {
+  const key = (uuid: string) =>
+    agentJournalItemKey({ provider: 'claude', sessionId: 'source', uuid })
+  const turn = (recordId: string) =>
+    agentJournalItemKey({ provider: 'legacy', agent: 'claude', sessionId: 'chat', recordId })
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: 'chat',
+    cursor: { epoch: 'epoch', sequence: 6 },
+    submissions: [],
+    items: (
+      [
+        { itemId: turn('T1'), body: { kind: 'turn', turnId: 'T1', state: 'completed' } },
+        {
+          itemId: key('answer'),
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'FOXTROT' }] },
+          turnScope: { kind: 'turn', turnItemId: turn('T1') }
+        },
+        {
+          itemId: turn(continuedOutsideRecordId(key('terminal-user'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
+          itemId: turn('T2'),
+          body: { kind: 'turn', turnId: 'T2', state: 'completed', userItemId: key('terminal-user') }
+        },
+        {
+          itemId: key('terminal-user'),
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'later terminal prompt' }]
+          },
+          turnScope: { kind: 'turn', turnItemId: turn('T2') }
+        },
+        {
+          itemId: key('late-detail'),
+          body: { kind: 'status', text: 'retained detail' },
+          turnScope: { kind: 'turn', turnItemId: turn('T1') }
+        }
+      ] satisfies Omit<
+        AgentJournalSnapshot['items'][number],
+        'sequence' | 'revision' | 'observedAt'
+      >[]
+    ).map((item, index) => ({
+      ...item,
+      sequence: index + 1,
+      revision: 1,
+      observedAt: 123
+    }))
+  }
+  expect(
+    prepareForkSnapshot({ snapshot, nextItemId: turn('T2') }).map((item) =>
+      agentJournalItemKey(item.identity)
+    )
+  ).toEqual(['legacy:claude:chat:T1', 'claude:source:answer', 'claude:source:late-detail'])
 })

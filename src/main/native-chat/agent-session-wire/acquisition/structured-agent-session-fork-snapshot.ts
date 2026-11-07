@@ -15,6 +15,7 @@ import { turnMembership } from '../rewind/structured-rewind-cut'
 import { namedSubagents } from '../../../../shared/native-chat/transcript/native-chat-subagent-items'
 import { isTerminalSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { isSettledBackgroundTaskState } from '../../../../shared/native-chat/input/native-chat-background-task-row'
+import { continuedOutsideRecordId } from './structured-agent-session-history-catch-up'
 
 /** Freeze presentation once; native history supplies context and coverage, never the copied bodies. */
 export function prepareForkSnapshot(input: {
@@ -26,10 +27,10 @@ export function prepareForkSnapshot(input: {
   const { snapshot } = input
   const { items } = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   const keys = savedRewindKeys(snapshot.submissions)
-  const bodies = new Map(items.map((item) => [item.itemId, item.body]))
+  const rowsById = new Map(items.map((item) => [item.itemId, item]))
   const member = input.sourceThreadId
     ? turnMembership(
-        { itemBody: (id) => bodies.get(id) ?? null },
+        { itemBody: (id) => rowsById.get(id)?.body ?? null },
         items,
         input.sourceThreadId,
         keys.providerKey
@@ -40,12 +41,34 @@ export function prepareForkSnapshot(input: {
           : readAgentJournalTurn(item.body)
             ? item.itemId
             : undefined
-  const end =
+  let end =
     input.nextItemId === null
       ? items.length
       : items.findIndex((item) => item.itemId === input.nextItemId)
   if (end < 0) {
     throw new Error('agent_session_fork:missing-boundary')
+  }
+  const next = items[end]
+  if (next) {
+    const nextTurn = member(next)
+    const anchors = new Set([next.itemId, nextTurn, readAgentJournalTurn(next.body)?.userItemId])
+    const prefix = continuedOutsideRecordId('')
+    // Catch-up notices name their following turn (Codex) or first imported row (Claude).
+    end = items.findIndex((item) => {
+      if (item === next || (nextTurn !== undefined && member(item) === nextTurn)) {
+        return true
+      }
+      const identity = parseAgentJournalItemKey(keys.providerKey(item.itemId))
+      if (identity?.provider !== 'legacy' || !identity.recordId.startsWith(prefix)) {
+        return false
+      }
+      const anchor = identity.recordId.slice(prefix.length)
+      const row = rowsById.get(anchor)
+      return (
+        anchors.has(anchor) ||
+        (nextTurn !== undefined && row !== undefined && member(row) === nextTurn)
+      )
+    })
   }
   const keptTurns = new Set(items.slice(0, end).flatMap((item) => member(item) ?? []))
   const candidates = items.filter((item, index) => index < end || keptTurns.has(member(item) ?? ''))
