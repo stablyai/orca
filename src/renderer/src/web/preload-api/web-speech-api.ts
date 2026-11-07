@@ -15,10 +15,13 @@ import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import { errorMessage } from '../../../../shared/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
+import { withTimeout } from '../../../../shared/promise-timeout-fallback'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE
 // Matches the phone: a long recording can take a while to transcribe on the host.
 const FINISH_TIMEOUT_MS = 75_000
+// A slow link can leave a backlog of chunks behind Stop; past this, keep the text so far instead.
+const STOP_DRAIN_TIMEOUT_MS = 10_000
 
 type HostDictation = {
   sessionId: string
@@ -122,9 +125,12 @@ export function createWebSpeechApi(): Pick<
           emit(partialListeners, { sessionId: dictation.sessionId, text: reply.text })
         }
       } catch (error) {
-        dictation.failed = true
-        dictation.pending = []
-        fail(dictation, error)
+        // A stop that gave up on the backlog has already reported this session.
+        if (!dictation.failed) {
+          dictation.failed = true
+          dictation.pending = []
+          fail(dictation, error)
+        }
       }
     }
     dictation.sending = null
@@ -171,7 +177,18 @@ export function createWebSpeechApi(): Pick<
           return
         }
         active = null
-        await dictation.sending
+        const drained = dictation.sending
+          ? await withTimeout(
+              dictation.sending.then(() => true),
+              STOP_DRAIN_TIMEOUT_MS,
+              false
+            )
+          : true
+        if (!drained) {
+          dictation.failed = true
+          dictation.pending = []
+          throw new Error('dictation_stream_closing')
+        }
         if (dictation.failed) {
           await cancelOnHost(dictation)
           return
