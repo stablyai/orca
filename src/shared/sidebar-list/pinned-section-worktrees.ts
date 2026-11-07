@@ -10,24 +10,33 @@ import {
 
 export function getSidebarLineageRowsByIdentity(
   worktrees: readonly Worktree[],
-  worktreeMap: ReadonlyMap<string, Worktree>
+  worktreeMap: ReadonlyMap<string, Worktree>,
+  folderRows: readonly Worktree[] = []
 ): Map<string, Worktree> {
   return new Map(
-    [...worktreeMap.values(), ...worktrees].map((worktree) => [
+    [...worktreeMap.values(), ...worktrees, ...folderRows].map((worktree) => [
       getWorktreeHostIdentity(worktree),
       worktree
     ])
   )
 }
 
+/** Children by parent identity. Folder workspace rows parent only through resolved identities, and a
+ * shown folder is never hidden by the project filter, which names repos. */
 export function getSidebarLineageChildren(
   worktrees: readonly Worktree[],
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   worktreeMap: ReadonlyMap<string, Worktree>,
   filterRepoIds: readonly string[] = [],
-  lineageParentIdentities?: SidebarLineageParentIdentities
+  lineageParentIdentities?: SidebarLineageParentIdentities,
+  folderRows: readonly Worktree[] = []
 ): Map<string, Worktree[]> {
-  const rowsByIdentity = getSidebarLineageRowsByIdentity(worktrees, worktreeMap)
+  const rowsByIdentity = getSidebarLineageRowsByIdentity(
+    worktrees,
+    worktreeMap,
+    lineageParentIdentities ? folderRows : []
+  )
+  const folderIdentities = new Set(folderRows.map(getWorktreeHostIdentity))
   const matchesRepo = projectRepoFilterMatcher(filterRepoIds)
   const parentByIdentity = getSidebarLineageParentsByIdentity(
     lineageById,
@@ -40,7 +49,8 @@ export function getSidebarLineageChildren(
     if (
       !parent ||
       !matchesRepo(child.repoId, child.hostId ?? 'local') ||
-      !matchesRepo(parent.repoId, parent.hostId ?? 'local')
+      (!matchesRepo(parent.repoId, parent.hostId ?? 'local') &&
+        !folderIdentities.has(getWorktreeHostIdentity(parent)))
     ) {
       continue
     }

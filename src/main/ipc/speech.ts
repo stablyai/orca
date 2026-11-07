@@ -207,7 +207,8 @@ export function registerSpeechHandlers(store: Store): void {
             }
           },
           resolvedHotwordsPath,
-          owner
+          owner,
+          store.getSettings().voice?.dictationLanguage
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {

@@ -1,7 +1,6 @@
 import type { ExecutionHostId } from '../execution-host'
 import { ALL_GROUP_KEY, getWorktreeLineageGroupKey } from './group-keys'
 import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
-import { compareFolderWorkspacesForDisplay } from './folder-workspace-lanes'
 import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
@@ -12,6 +11,7 @@ import {
 import { getFolderWorkspaceHostIdentity } from '../folder-workspaces/folder-workspace-worktree'
 import {
   getExpandedWorktreeOccurrences,
+  type WorktreeOccurrence,
   type WorktreeOccurrencePlan
 } from '../worktree-occurrence-plan'
 import type { NoticeHostContext } from './host-labels'
@@ -88,6 +88,8 @@ export function appendWorktreeRows(
     hostContextLabelByHostId?: ReadonlyMap<ExecutionHostId, string>
     defaultHostId?: ExecutionHostId
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+    /** Occurrences that are folder workspaces render as folder rows. */
+    folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   }
 ): void {
   const sectionOccurrences = plan.bySection.get(options.sectionKey) ?? []
@@ -104,6 +106,16 @@ export function appendWorktreeRows(
   )
   for (const occurrence of occurrences) {
     const worktree = occurrence.row
+    const folderPair = options.folderPairByIdentity?.get(getWorktreeHostIdentity(worktree))
+    if (folderPair) {
+      result.push(
+        buildFolderWorkspaceRow(folderPair, options.groupDepth, occurrence, {
+          collapsedGroups: options.collapsedGroups,
+          childWorktreeIds: childIdsByParent.get(occurrence.key)
+        })
+      )
+      continue
+    }
     result.push({
       type: 'item',
       occurrence,
@@ -135,15 +147,27 @@ export function appendWorktreeRows(
 /** One host-keyed folder row constructor for all emitters; IDs can collide across hosts. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  occurrence?: WorktreeOccurrence<Worktree>,
+  options?: { collapsedGroups: ReadonlySet<string>; childWorktreeIds?: readonly string[] }
 ): FolderWorkspaceRow {
+  const lineageGroupKey =
+    occurrence && occurrence.childCount > 0 ? getWorktreeLineageGroupKey(occurrence.row) : undefined
   return {
     type: 'folder-workspace',
     key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
-    depth: 0,
-    groupDepth
+    depth: occurrence?.depth ?? 0,
+    groupDepth,
+    ...(occurrence && occurrence.childCount > 0 && lineageGroupKey
+      ? {
+          lineageChildCount: occurrence.childCount,
+          lineageChildWorktreeIds: options?.childWorktreeIds,
+          lineageGroupKey,
+          lineageCollapsed: options?.collapsedGroups.has(lineageGroupKey) === true
+        }
+      : {})
   }
 }
 
@@ -155,6 +179,7 @@ export function appendUngroupedWorkspaceRows({
   collapsedGroups,
   occurrencePlan,
   mixedWorktreeHostContextLabels,
+  folderPairByIdentity,
   result
 }: {
   naturalWorktrees: readonly Worktree[]
@@ -164,6 +189,7 @@ export function appendUngroupedWorkspaceRows({
   collapsedGroups: Set<string>
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
   mixedWorktreeHostContextLabels?: ReadonlyMap<string, string>
+  folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   result: Row[]
 }): void {
   // Folder-only accounts must still render flat rows (#15362).
@@ -192,13 +218,9 @@ export function appendUngroupedWorkspaceRows({
         collapsedGroups,
         groupDepth: 0,
         sectionKey: ALL_GROUP_KEY,
-        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+        folderPairByIdentity
       })
-      for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
-        compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
-      )) {
-        result.push(buildFolderWorkspaceRow(pair, 0))
-      }
     }
   }
 }

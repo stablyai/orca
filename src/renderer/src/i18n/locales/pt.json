@@ -6184,8 +6184,8 @@
           "editingPrefix": "Editando",
           "reconnectOnLaunch": "Reconectar ao iniciar",
           "reconnectOnLaunchHelp": "Quando desativado, o Orca deixa este host, e qualquer servidor Orca acessado por ele, desconectado ao iniciar até você conectá-lo.",
-          "allowRemoteCliControl": "Permitir que a CLI orca deste host controle o Orca",
-          "allowRemoteCliControlHelp": "Ativado por padrão para novos hosts. Permite que comandos orca executados neste host abram e controlem abas do navegador Orca neste computador, apenas nos espaços de trabalho deste host e enquanto ele estiver conectado. Também permite que terminais iniciados por um Orca mais antigo neste host executem comandos de orquestração (check, inbox, send, ask, reply) para seu próprio trabalho supervisionado. Eles não podem ler seus arquivos, área de transferência ou cookies. Quando desativado, eles acessam apenas o próprio servidor Orca deste host.",
+          "allowRemoteCliControl": "Permitir que este host controle abas do navegador Orca nos espaços de trabalho dele",
+          "allowRemoteCliControlHelp": "Ativado por padrão para novos hosts. Agentes e comandos orca neste host podem abrir, ler e usar abas do navegador Orca neste computador, apenas nos espaços de trabalho deste host e enquanto ele estiver conectado. As abas que ele controla mostram o nome dele. Terminais iniciados neste host por um Orca mais antigo também precisam disto ativado para executar comandos de orquestração do orca. Ele não pode ler seus arquivos, área de transferência ou cookies.",
           "addHost": "Adicionar host",
           "proxyConnectionReuse": "Reutilizar uma única conexão de proxy",
           "proxyConnectionReuseHelp": "Conexões mais rápidas por hosts ProxyCommand ou ProxyJump lentos. Ative somente se o seu ssh_config não depender de regras Match ou %h específicas de host."
@@ -6561,7 +6561,10 @@
               "micInput": "entrada",
               "micDevice": "dispositivo",
               "micAirpods": "airpods",
-              "micDefault": "padrão do sistema"
+              "micDefault": "padrão do sistema",
+              "dictationLanguageTitle": "Idioma do ditado",
+              "dictationLanguageDescription": "Informe ao modelo de voz qual idioma você fala.",
+              "dictationLanguageKeyword": "idioma"
             }
           }
         },
@@ -19946,6 +19949,9 @@
           "cancel": "Cancelar",
           "add": "Adicionar catálogo",
           "body": "Um link pediu para mostrar {{value0}} deste catálogo. Adicione catálogos apenas de pessoas em quem você confia."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -21480,6 +21486,15 @@
         "idleStopSearchTimeout": "tempo limite",
         "idleStopSearchKeepAlive": "manter ativo",
         "idleStopNever": "Nunca"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} só transcreve os idiomas para os quais foi criado, por isso ignora esta configuração.",
+          "unsupported": "{{model}} não suporta {{language}}, por isso detecta o idioma sozinho.",
+          "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
+          "title": "Idioma do ditado",
+          "auto": "Detectar automaticamente"
+        }
       }
     },
     "jiraIssueAssigneeField": {
@@ -22579,7 +22594,8 @@
     "restartLocal": "Reiniciar daemon local"
   },
   "browserTab": {
-    "agentDriving": "Um agente está usando esta página"
+    "agentDriving": "Um agente está usando esta página",
+    "controlledByHost": "Controlada por {{host}}"
   },
   "quitAndStopAllSessions": {
     "title": "Sair Completamente",
@@ -23619,5 +23635,14 @@
   "wslDistroHold": {
     "terminalStopped": "A distribuição WSL {{distro}} está parada, então o Orca não iniciou este terminal. Inicie a distribuição e tente novamente.",
     "terminalUnverifiable": "O Orca não conseguiu verificar se a distribuição WSL {{distro}} está em execução, então não iniciou este terminal. Inicie a distribuição e tente novamente."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} está controlando uma aba do navegador",
+    "description": "Agentes neste host SSH podem abrir e usar abas do navegador Orca nos espaços de trabalho dele. As abas que ele controla mostram o nome dele. Você pode alterar isso em Configurações > SSH.",
+    "stop": "Parar",
+    "disallow": "Não permitir",
+    "stopped": "{{host}} parou de controlar abas do navegador até o Orca reiniciar.",
+    "disallowed": "{{host}} não pode mais controlar abas do navegador. Ative novamente em Configurações > SSH.",
+    "failed": "Não foi possível parar {{host}}. Desative o controle do navegador em Configurações > SSH."
   }
 }

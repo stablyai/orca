@@ -25,3 +25,52 @@ export const openingRetry = defineFixture({
     </div>
   )
 })
+
+export const claudeSignIn = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices
+        notices={structuredSessionNotices({
+          launch: {
+            lifecycle: 'failed',
+            failure: {
+              kind: 'refused',
+              code: 'agent_session_operation_invalid',
+              details: { reason: 'notSignedIn' }
+            },
+            retry: () => {}
+          },
+          agentLabel: 'Claude',
+          sessionError: null,
+          composerError: null,
+          signIn: { signingIn: false, signIn: () => {} }
+        })}
+      />
+    </div>
+  )
+})
+
+export const antigravitySignIn = defineFixture({
+  width: 720,
+  render: () => (
+    <div className="native-chat-appearance p-4">
+      <NativeChatComposerNotices
+        notices={structuredSessionNotices({
+          launch: {
+            lifecycle: 'failed',
+            failure: {
+              kind: 'refused',
+              code: 'agent_session_operation_invalid',
+              details: { reason: 'notSignedIn' }
+            },
+            retry: () => {}
+          },
+          agentLabel: 'Antigravity',
+          sessionError: null,
+          composerError: null
+        })}
+      />
+    </div>
+  )
+})

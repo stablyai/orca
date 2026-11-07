@@ -48,6 +48,24 @@ describe('paired HTML preview E2E routing', () => {
   })
 })
 
+describe('preview address-bar convergence E2E routing', () => {
+  const spec = 'tests/e2e/paired-preview-address-bar-convergence.spec.ts'
+  it.each([
+    'src/renderer/src/components/browser-pane/workspace-doc/doc-preview-address-edit.tsx',
+    'src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.ts',
+    'src/renderer/src/lib/workspace-doc-address-input.ts',
+    'src/renderer/src/store/slices/browser/browser-page-conversion-actions.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it.each([
+    'src/renderer/src/store/slices/browser-page-conversion.test.ts',
+    'src/renderer/src/components/browser-pane/assemble-chrome/BrowserAddressBar.tsx'
+  ])('does not route %s', (path) => {
+    expect(selectPrE2eSpecs([path])).not.toContain(spec)
+  })
+})
+
 describe('PR E2E gate contract', () => {
   it('routes only core xterm patches to both IME lanes across version updates', () => {
     for (const file of [
@@ -99,6 +117,25 @@ describe('GitHub Projects E2E routing', () => {
   })
 })
 
+describe('Terminal pane geometry E2E routing', () => {
+  const specs = [
+    'tests/e2e/issue-12656-terminal-link-tooltip.spec.ts',
+    'tests/e2e/terminal-pane-padding-edges.spec.ts'
+  ]
+  it.each([
+    'src/renderer/src/assets/terminal.css',
+    'src/renderer/src/lib/pane-manager/pane-divider.ts',
+    'src/renderer/src/lib/pane-manager/pane-dom-creation.ts',
+    'src/renderer/src/lib/pane-manager/terminal-linkifier-hover-reset-on-mouseleave.ts'
+  ])('routes %s to the pane geometry specs', (file) => {
+    expect(selectPrE2eSpecs([file])).toEqual(expect.arrayContaining(specs))
+  })
+  it('skips the pane geometry specs for their unit tests', () => {
+    const selected = selectPrE2eSpecs(['src/renderer/src/lib/pane-manager/pane-divider.test.ts'])
+    expect(selected).not.toContain(specs[0])
+  })
+})
+
 describe('Daemon mock modified-only source routing', () => {
   const helper = 'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
   const verified = { allowDaemonInitTestSupport: true }
@@ -119,5 +156,70 @@ describe('Daemon mock modified-only source routing', () => {
     { files: [helper, helper] }
   ])('retains existing routes for an uncertain or mixed vector $files', ({ files }) => {
     expect(selectPrE2eSpecs(files, undefined, verified)).toEqual(selectPrE2eSpecs(files))
+  })
+})
+
+describe('runtime host status E2E routing', () => {
+  const spec = 'tests/e2e/runtime-host-status-recovery.spec.ts'
+  it.each([
+    'src/shared/remote-runtime/host-store/runtime-environment-pairing-replace-guards.ts',
+    'src/main/ipc/runtime-environments/runtime-environment-status-probe.ts',
+    'src/renderer/src/store/slices/runtime-status-refresh.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it('does not route unit tests of those sources', () => {
+    expect(
+      selectPrE2eSpecs(['src/renderer/src/store/slices/runtime-status-refresh.test.ts'])
+    ).not.toContain(spec)
+  })
+})
+
+describe('startup exec readiness E2E routing', () => {
+  const spec = 'tests/e2e/paired-startup-exec-readiness.spec.ts'
+  it.each([
+    'src/main/daemon/sessions/session-shell-ready-barrier.ts',
+    'src/main/daemon/shell-readiness/post-ready-flush-gate.ts',
+    'src/main/pty/shell-startup/shell-templates.ts',
+    'tests/e2e/helpers/startup-exec-readiness-oracle.ts'
+  ])('routes %s', (path) => {
+    expect(selectPrE2eSpecs([path])).toContain(spec)
+  })
+  it('does not route unit tests of those sources', () => {
+    expect(
+      selectPrE2eSpecs(['src/main/daemon/shell-readiness/testing/shell-ready.test.ts'])
+    ).not.toContain(spec)
+  })
+})
+
+describe('agent descendant kill E2E routing', () => {
+  const spec = 'tests/e2e/agent-descendant-process-kill.spec.ts'
+  it.each([
+    'src/main/pty/process-retirement/pty-descendant-termination.ts',
+    'src/main/daemon/sessions/terminal-descendant-shutdown.ts',
+    'src/main/claude/agent-view/agent-view-service.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/main/pty/process-retirement/pty-descendant-termination.test.ts'])
+    ).not.toContain(spec)
+  })
+})
+
+describe('agent permission settings E2E routing', () => {
+  const spec = 'tests/e2e/agent-auto-permissions.spec.ts'
+  it.each([
+    'src/renderer/src/components/agent/launch-settings/AgentPermissionChoiceControls.tsx',
+    'src/renderer/src/components/settings/agents/permissions/AgentPermissionModeMenu.tsx',
+    'src/shared/agent-launch/permissions/tui-agent-permission-choice.ts'
+  ])('routes %s', (file) => {
+    expect(selectPrE2eSpecs([file])).toContain(spec)
+  })
+  it('skips unit tests', () => {
+    expect(
+      selectPrE2eSpecs(['src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts'])
+    ).not.toContain(spec)
   })
 })

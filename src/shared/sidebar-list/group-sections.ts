@@ -27,7 +27,6 @@ import {
 
 import {
   appendWorktreeRows,
-  buildFolderWorkspaceRow,
   buildImportedWorktreesCardRow,
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
@@ -297,11 +296,9 @@ export function appendOrderedGroups(
         sectionKey: key,
         hostContextLabelByHostId,
         defaultHostId,
-        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+        folderPairByIdentity: ctx.folderPairByIdentity
       })
-      for (const pair of folderPairs) {
-        result.push(buildFolderWorkspaceRow(pair, projectGroupDepth))
-      }
     }
   }
 }

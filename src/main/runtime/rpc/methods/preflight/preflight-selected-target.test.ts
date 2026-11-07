@@ -267,15 +267,18 @@ describe('qualified discovery at the runtime RPC boundary', () => {
         params: { worktreeId: 'copy::C:\\same', worktreeHostId: 'local' }
       })
     ).toMatchObject({ ok: true })
-    expect(refresh).toHaveBeenCalledWith({
-      kind: 'local',
-      context: {
-        projectRuntime: expect.objectContaining({
-          status: 'resolved',
-          runtime: expect.objectContaining({ kind: 'wsl', distro: 'ProjectDistro' })
-        })
-      }
-    })
+    expect(refresh).toHaveBeenCalledWith(
+      {
+        kind: 'local',
+        context: {
+          projectRuntime: expect.objectContaining({
+            status: 'resolved',
+            runtime: expect.objectContaining({ kind: 'wsl', distro: 'ProjectDistro' })
+          })
+        }
+      },
+      undefined
+    )
   })
   it.each([false, true])(
     'uses the actual cold and warm folder-project instance in either repo order (reverse=%s)',
@@ -315,7 +318,10 @@ describe('qualified discovery at the runtime RPC boundary', () => {
           await call('preflight.refreshAgents', { worktreeId, worktreeHostId: 'local' })
         ).toMatchObject({ ok: true, result: { agents: ['codex'] } })
       }
-      expect(refresh).toHaveBeenLastCalledWith({ kind: 'local', context: expect.anything() })
+      expect(refresh).toHaveBeenLastCalledWith(
+        { kind: 'local', context: expect.anything() },
+        undefined
+      )
       const probes = detectInstalledAgentsWithShellPathHydrationMock.mock.calls.length
       for (const params of [
         { worktreeId: 'copy::/missing', worktreeHostId: 'local' },

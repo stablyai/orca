@@ -1,6 +1,7 @@
 import type { Worktree } from '../worktree/types'
 import type { WorktreeOccurrenceSection } from '../worktree-occurrence-plan'
 import type { WorktreeGroupEntry, OrderedGroupEntry } from './worktree-group-entry'
+import { isFolderLaneSectionKey } from './folder-workspace-occurrences'
 import { PINNED_GROUP_KEY } from './group-keys'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
@@ -25,7 +26,7 @@ export function getOrderedOccurrenceGroups(
   const pinnedSectionWorktrees =
     sections.find((section) => section.key === PINNED_GROUP_KEY)?.group.items ?? []
   const orderedGroups: OrderedGroupEntry[] = sections
-    .filter((section) => section.key !== PINNED_GROUP_KEY)
+    .filter((section) => section.key !== PINNED_GROUP_KEY && !isFolderLaneSectionKey(section.key))
     .map((section) => [section.key, section.group])
   const naturalWorktrees = orderedGroups.flatMap(([, group]) => group.items)
   return { pinnedSectionWorktrees, orderedGroups, naturalWorktrees }

@@ -8491,8 +8491,8 @@
           "editingPrefix": "編集中",
           "reconnectOnLaunch": "起動時に再接続",
           "reconnectOnLaunchHelp": "オフにすると、Orca は起動時にこのホストと、それを経由する Orca サーバーを、接続するまで切断したままにします。",
-          "allowRemoteCliControl": "このホストの orca CLI による Orca の操作を許可する",
-          "allowRemoteCliControlHelp": "新しいホストではデフォルトでオンです。このホストで実行される orca コマンドが、このホストのワークスペース内に限り、接続中のみ、このデスクトップの Orca ブラウザのタブを開いて操作できるようにし、このホストで古い Orca が起動したターミナルが自身の監督下の作業についてオーケストレーションコマンド（check、inbox、send、ask、reply）を実行できるようにします。ファイル、クリップボード、Cookie は読み取れません。オフの場合、このホスト自身の Orca サーバーにのみアクセスします。",
+          "allowRemoteCliControl": "このホストにワークスペース内の Orca ブラウザのタブの操作を許可する",
+          "allowRemoteCliControlHelp": "新しいホストではデフォルトでオンです。このホストの Agent と orca コマンドは、このホストのワークスペース内に限り、接続中のみ、このデスクトップの Orca ブラウザのタブを開いて読み取り、操作できます。操作中のタブにはホスト名が表示されます。このホストで古い Orca が起動したターミナルで orca オーケストレーションコマンドを実行する場合も、この設定をオンにする必要があります。ファイル、クリップボード、Cookie は読み取れません。",
           "addHost": "ホストを追加",
           "proxyConnectionReuse": "1 つのプロキシ接続を再利用",
           "proxyConnectionReuseHelp": "低速な ProxyCommand や ProxyJump ホスト経由の接続が速くなります。ssh_config がホスト固有の Match や %h ルールに依存していない場合にのみ有効にしてください。"
@@ -10621,7 +10621,10 @@
               "micInput": "入力",
               "micDevice": "デバイス",
               "micAirpods": "エアポッド",
-              "micDefault": "システムのデフォルト"
+              "micDefault": "システムのデフォルト",
+              "dictationLanguageTitle": "音声入力の言語",
+              "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
+              "dictationLanguageKeyword": "言語"
             }
           }
         },
@@ -18266,6 +18269,9 @@
           "cancel": "キャンセル",
           "add": "カタログを追加",
           "body": "リンクがこのカタログの {{value0}} の表示を求めています。カタログは信頼できる相手からのものだけを追加してください。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },
@@ -19819,6 +19825,15 @@
         "idleStopSearchTimeout": "タイムアウト",
         "idleStopSearchKeepAlive": "キープアライブ",
         "idleStopNever": "しない"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} は対応する言語しか文字起こしできないため、この設定は使われません。",
+          "unsupported": "{{model}} は{{language}}に対応していないため、言語を自動で判定します。",
+          "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
+          "title": "音声入力の言語",
+          "auto": "自動検出"
+        }
       }
     },
     "agentChildRow": {
@@ -21928,7 +21943,8 @@
     "rowActions": "{{name}} の操作"
   },
   "browserTab": {
-    "agentDriving": "Agent がこのページを使用中です"
+    "agentDriving": "Agent がこのページを使用中です",
+    "controlledByHost": "{{host}} が操作中"
   },
   "quitAndStopAllSessions": {
     "title": "完全に終了",
@@ -22957,5 +22973,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL ディストリビューション {{distro}} が停止しているため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。",
     "terminalUnverifiable": "WSL ディストリビューション {{distro}} が実行中か確認できなかったため、Orca はこのターミナルを起動しませんでした。ディストリビューションを起動してから、もう一度お試しください。"
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} がブラウザのタブを操作しています",
+    "description": "この SSH ホストの Agent は、ホストのワークスペース内の Orca ブラウザのタブを開いて操作できます。操作中のタブにはホスト名が表示されます。この設定は 設定 > SSH で変更できます。",
+    "stop": "停止",
+    "disallow": "許可しない",
+    "stopped": "Orca を再起動するまで、{{host}} はブラウザのタブを操作しません。",
+    "disallowed": "{{host}} はブラウザのタブを操作できなくなりました。設定 > SSH で再度オンにできます。",
+    "failed": "{{host}} を停止できませんでした。設定 > SSH でブラウザの操作をオフにしてください。"
   }
 }

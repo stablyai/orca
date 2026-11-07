@@ -9014,8 +9014,8 @@
           "editingPrefix": "Modification",
           "reconnectOnLaunch": "Se reconnecter au lancement",
           "reconnectOnLaunchHelp": "Si désactivé, Orca laisse cet hôte, et tout serveur Orca joint par son intermédiaire, déconnecté au démarrage jusqu'à ce que vous le connectiez.",
-          "allowRemoteCliControl": "Autoriser l'orca CLI de cet hôte à contrôler Orca",
-          "allowRemoteCliControlHelp": "Activé par défaut pour les nouveaux hôtes. Permet aux commandes orca exécutées sur cet hôte d'ouvrir et de piloter des onglets du navigateur Orca sur ce bureau, uniquement dans les espaces de travail de cet hôte et uniquement tant qu'il est connecté, et aux terminaux lancés par une ancienne version d'Orca sur cet hôte d'exécuter des commandes d'orchestration (check, inbox, send, ask, reply) pour leur propre travail supervisé. Elles ne peuvent pas lire vos fichiers, votre presse-papiers ni vos cookies. Lorsque cette option est désactivée, elles n'atteignent que le serveur Orca de cet hôte.",
+          "allowRemoteCliControl": "Autoriser cet hôte à contrôler les onglets du navigateur Orca dans ses espaces de travail",
+          "allowRemoteCliControlHelp": "Activé par défaut pour les nouveaux hôtes. Les agents et commandes orca de cet hôte peuvent ouvrir, lire et utiliser des onglets du navigateur Orca sur ce bureau, uniquement dans les espaces de travail de cet hôte et uniquement tant qu'il est connecté. Les onglets qu'il contrôle affichent son nom. Les terminaux lancés sur cet hôte par une ancienne version d'Orca ont aussi besoin de cette option pour exécuter les commandes d'orchestration orca. Il ne peut pas lire vos fichiers, votre presse-papiers ni vos cookies.",
           "addHost": "Ajouter un hôte",
           "proxyConnectionReuse": "Réutiliser une seule connexion proxy",
           "proxyConnectionReuseHelp": "Connexions plus rapides via des hôtes ProxyCommand ou ProxyJump lents. Activez-le uniquement si votre ssh_config ne dépend pas de règles Match ou %h propres à chaque hôte."
@@ -11144,7 +11144,10 @@
               "micInput": "entrée",
               "micDevice": "appareil",
               "micAirpods": "airpods",
-              "micDefault": "système par défaut"
+              "micDefault": "système par défaut",
+              "dictationLanguageTitle": "Langue de dictée",
+              "dictationLanguageDescription": "Indiquez au modèle vocal la langue que vous parlez.",
+              "dictationLanguageKeyword": "langue"
             }
           }
         },
@@ -18959,6 +18962,9 @@
           "cancel": "Annuler",
           "add": "Ajouter le catalogue",
           "body": "Un lien a demandé d’afficher {{value0}} depuis ce catalogue. N’ajoutez des catalogues que de personnes de confiance."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20625,6 +20631,15 @@
         "idleStopSearchTimeout": "délai",
         "idleStopSearchKeepAlive": "maintenir actif",
         "idleStopNever": "Jamais"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} ne transcrit que les langues pour lesquelles il a été conçu et ignore donc ce réglage.",
+          "unsupported": "{{model}} ne prend pas en charge {{language}} et détecte donc la langue lui-même.",
+          "description": "La langue que vous parlez. Avec la détection automatique, le modèle la devine à chaque fois.",
+          "title": "Langue de dictée",
+          "auto": "Détection automatique"
+        }
       }
     },
     "agentChildRow": {
@@ -22607,7 +22622,8 @@
     "rowActions": "Actions pour {{name}}"
   },
   "browserTab": {
-    "agentDriving": "Un agent utilise cette page"
+    "agentDriving": "Un agent utilise cette page",
+    "controlledByHost": "Contrôlé par {{host}}"
   },
   "quitAndStopAllSessions": {
     "title": "Quitter complètement",
@@ -23647,5 +23663,14 @@
   "wslDistroHold": {
     "terminalStopped": "La distribution WSL {{distro}} est arrêtée, donc Orca n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez.",
     "terminalUnverifiable": "Orca n'a pas pu vérifier si la distribution WSL {{distro}} est en cours d'exécution, donc il n'a pas démarré ce terminal. Démarrez la distribution, puis réessayez."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} contrôle un onglet du navigateur",
+    "description": "Les agents de cet hôte SSH peuvent ouvrir et utiliser des onglets du navigateur Orca dans ses espaces de travail. Les onglets qu'il contrôle affichent son nom. Vous pouvez modifier ce réglage dans Paramètres > SSH.",
+    "stop": "Arrêter",
+    "disallow": "Ne pas autoriser",
+    "stopped": "{{host}} ne contrôle plus les onglets du navigateur jusqu'au redémarrage d'Orca.",
+    "disallowed": "{{host}} ne peut plus contrôler les onglets du navigateur. Réactivez-le dans Paramètres > SSH.",
+    "failed": "Impossible d'arrêter {{host}}. Désactivez son contrôle du navigateur dans Paramètres > SSH."
   }
 }

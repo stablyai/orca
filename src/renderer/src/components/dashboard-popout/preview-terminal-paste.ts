@@ -5,6 +5,7 @@ import { planTerminalPasteWithYield } from '@/components/terminal-pane/input/pas
 import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/input/paste/terminal-paste-runtime'
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/input/paste/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
+import { isTerminalPanePasteFocusCurrent } from '@/components/terminal-pane/input/paste/terminal-paste-target-state'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
@@ -35,8 +36,11 @@ export function createPreviewClipboardPaster(deps: {
       !deps.isDisposed() &&
       deps.getTerminal() === pasteTerminal &&
       activeElementAtDispatch !== null &&
-      document.activeElement === activeElementAtDispatch &&
-      deps.container.contains(activeElementAtDispatch)
+      isTerminalPanePasteFocusCurrent({
+        requireSameFocusedElement: true,
+        activeElementAtDispatch,
+        paneContainer: deps.container
+      })
     if (!targetIsCurrent()) {
       return
     }

@@ -89,7 +89,7 @@ describe('issue source operations', () => {
     }))
   })
 
-  it('recovers issue 7704 oversized inline-image creation', async () => {
+  it.each(['stderr', 'stdout'])('recovers a long issue body reported on %s', async (stream) => {
     const imagePrefix = 'data:image/png;base64,'
     const body = imagePrefix + 'x'.repeat(133596 - imagePrefix.length)
     expect(body).toContain('data:image')
@@ -97,7 +97,12 @@ describe('issue source operations', () => {
 
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('HTTP 422: body is too long (maximum is 65536 characters)'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error('gh failed'), {
+          stderr: 'gh: Validation Failed (HTTP 422)',
+          [stream]: 'body is too long (maximum is 65536 characters)'
+        })
+      )
       .mockResolvedValueOnce({
         stdout: JSON.stringify({
           number: 926,

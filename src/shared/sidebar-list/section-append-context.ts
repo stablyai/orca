@@ -8,6 +8,7 @@ import type {
 } from './row-types'
 
 import type { ProjectGroupingIndex } from '../project-section-grouping'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type { NoticeHostContext } from './host-labels'
 import type { ExecutionHostId } from '../execution-host'
 import type { Worktree, WorkspaceStatusDefinition } from '../worktree/types'
@@ -32,5 +33,6 @@ export type SectionAppendContext = {
   pendingByRepo: ReadonlyMap<string, PendingCreationRef[]>
   mixedWorktreeHostContextLabels: Map<string, string> | undefined
   noticeHostContextLabelByRepoId: Map<string, NoticeHostContext> | undefined
+  folderPairByIdentity?: ReadonlyMap<string, RenderableFolderWorkspace>
   occurrencePlan: WorktreeOccurrencePlan<Worktree>
 }

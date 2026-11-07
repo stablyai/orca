@@ -25,9 +25,10 @@ export class SttService {
     modelId: string,
     sink: SttEventSink,
     hotwordsFilePath?: string,
-    owner = 'desktop'
+    owner = 'desktop',
+    language?: string
   ): Promise<void> {
-    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner)
+    return startSttDictation(this.state, modelId, sink, hotwordsFilePath, owner, language)
   }
 
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): void {

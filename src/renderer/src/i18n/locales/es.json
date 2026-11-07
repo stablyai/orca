@@ -8748,8 +8748,8 @@
           "editingPrefix": "Editando",
           "reconnectOnLaunch": "Reconectar al iniciar",
           "reconnectOnLaunchHelp": "Si está desactivado, Orca deja este host, y cualquier servidor de Orca al que se llegue a través de él, desconectado al iniciarse hasta que lo conectes.",
-          "allowRemoteCliControl": "Permitir que la orca CLI de este host controle Orca",
-          "allowRemoteCliControlHelp": "Activado de forma predeterminada en los hosts nuevos. Permite que los comandos orca ejecutados en este host abran y controlen pestañas del navegador de Orca en este escritorio, solo en los espacios de trabajo de este host y solo mientras esté conectado, y que las terminales iniciadas por una versión anterior de Orca en este host ejecuten comandos de orquestación (check, inbox, send, ask, reply) para su propio trabajo supervisado. No pueden leer tus archivos, tu portapapeles ni tus cookies. Cuando está desactivado, solo llegan al propio servidor de Orca de este host.",
+          "allowRemoteCliControl": "Permitir que este host controle pestañas del navegador de Orca en sus espacios de trabajo",
+          "allowRemoteCliControlHelp": "Activado de forma predeterminada en los hosts nuevos. Los agentes y comandos orca de este host pueden abrir, leer y usar pestañas del navegador de Orca en este escritorio, solo en los espacios de trabajo de este host y solo mientras esté conectado. Las pestañas que controla muestran su nombre. Las terminales iniciadas en este host por una versión anterior de Orca también necesitan esto activado para ejecutar comandos de orquestación de orca. No puede leer tus archivos, tu portapapeles ni tus cookies.",
           "addHost": "Añadir host",
           "proxyConnectionReuse": "Reutilizar una sola conexión proxy",
           "proxyConnectionReuseHelp": "Conexiones más rápidas a través de hosts ProxyCommand o ProxyJump lentos. Actívalo solo si tu ssh_config no depende de reglas Match o %h específicas de cada host."
@@ -10878,7 +10878,10 @@
               "micInput": "aporte",
               "micDevice": "dispositivo",
               "micAirpods": "airpods",
-              "micDefault": "valor predeterminado del sistema"
+              "micDefault": "valor predeterminado del sistema",
+              "dictationLanguageTitle": "Idioma de dictado",
+              "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
+              "dictationLanguageKeyword": "idioma"
             }
           }
         },
@@ -18739,6 +18742,9 @@
           "cancel": "Cancelar",
           "add": "Añadir catálogo",
           "body": "Un enlace pidió mostrar {{value0}} de este catálogo. Añade catálogos solo de personas en las que confíes."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20325,6 +20331,15 @@
           "scrollback": "historial",
           "snap": "ajustar",
           "position": "posición"
+        }
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} solo transcribe los idiomas para los que fue creado, así que ignora este ajuste.",
+          "unsupported": "{{model}} no admite {{language}}, así que detecta el idioma por sí mismo.",
+          "description": "El idioma que hablas. Con Detectar automáticamente, el modelo lo deduce cada vez.",
+          "title": "Idioma de dictado",
+          "auto": "Detectar automáticamente"
         }
       }
     },
@@ -22606,7 +22621,8 @@
     "rowActions": "Acciones para {{name}}"
   },
   "browserTab": {
-    "agentDriving": "Un agente está usando esta página"
+    "agentDriving": "Un agente está usando esta página",
+    "controlledByHost": "Controlada por {{host}}"
   },
   "quitAndStopAllSessions": {
     "title": "Salir por completo",
@@ -23646,5 +23662,14 @@
   "wslDistroHold": {
     "terminalStopped": "La distribución WSL {{distro}} está detenida, así que Orca no inició esta terminal. Inicia la distribución y vuelve a intentarlo.",
     "terminalUnverifiable": "Orca no pudo comprobar si la distribución WSL {{distro}} está en ejecución, así que no inició esta terminal. Inicia la distribución y vuelve a intentarlo."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} está controlando una pestaña del navegador",
+    "description": "Los agentes de este host SSH pueden abrir y usar pestañas del navegador de Orca en sus espacios de trabajo. Las pestañas que controla muestran su nombre. Puedes cambiarlo en Configuración > SSH.",
+    "stop": "Detener",
+    "disallow": "No permitir",
+    "stopped": "{{host}} dejó de controlar pestañas del navegador hasta que Orca se reinicie.",
+    "disallowed": "{{host}} ya no puede controlar pestañas del navegador. Vuelve a activarlo en Configuración > SSH.",
+    "failed": "No se pudo detener {{host}}. Desactiva su control del navegador en Configuración > SSH."
   }
 }
