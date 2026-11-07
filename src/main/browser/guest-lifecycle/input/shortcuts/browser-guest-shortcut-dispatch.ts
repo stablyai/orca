@@ -92,6 +92,8 @@ export function forwardGuestShortcutInput(
     if (
       forwardsDictation ||
       matchesPlugins ||
+      action?.type === 'toggleLeftSidebar' ||
+      action?.type === 'toggleRightSidebar' ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
