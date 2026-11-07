@@ -17,6 +17,7 @@ import { handleMockTerminalRequest } from './mock-server-terminal-stream'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 import { MOCK_ACTIVITY_VIEW, withActivityScenario } from './mock-server-activity-scenario'
+import { handleMockActivityRead } from './mock-server-activity-read'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
 const MOCK_WORKTREE_COUNT = readScenarioNumber('MOCK_WORKTREE_COUNT', 2)
@@ -126,6 +127,14 @@ export function handleRequest(
 
   // Each returns false for methods it does not own; first owner wins.
   if (
+    handleMockActivityRead(
+      request,
+      respond,
+      success,
+      error,
+      ws,
+      fakeWorktrees[0]?.worktreeId ?? ''
+    ) ||
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||

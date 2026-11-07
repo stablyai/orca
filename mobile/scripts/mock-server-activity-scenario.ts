@@ -6,6 +6,7 @@ import type {
 
 export const MOCK_ACTIVITY_VIEW = process.env.MOCK_ACTIVITY_VIEW === '1'
 const LEAF = 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+const SCENARIO_STARTED_AT = Date.now()
 const names = [
   'Approve deployment',
   'Answer engineering question',
@@ -44,7 +45,7 @@ export function activityScenarioAgents(now = Date.now()): RuntimeWorktreeAgentRo
     toolInput: null,
     interrupted: false,
     structuredHostOwned: true,
-    stateStartedAt: now - (i + 1) * 60_000,
+    stateStartedAt: SCENARIO_STARTED_AT - (i + 1) * 60_000,
     updatedAt: now
   }))
 }

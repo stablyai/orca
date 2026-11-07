@@ -38,6 +38,7 @@ import {
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { changedActiveGroups } from './active-group-publication'
+import { buildAgentActivitySubjects } from './agent-activity-subjects'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -78,6 +79,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     : undefined
   const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
   const graph: RuntimeRendererSyncWindowGraph = {
+    agentActivitySubjects: buildAgentActivitySubjects(state),
     tabs: [],
     leaves: [],
     rendererGeneration: mobilePublicationEpoch,

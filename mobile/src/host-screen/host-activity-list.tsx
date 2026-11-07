@@ -15,6 +15,8 @@ import {
   type HostActivityRow
 } from './host-activity-sections'
 import type { HostScreenController } from './use-host-screen-controller'
+import { HostActivityReadBell } from './host-activity-read-bell'
+import { agentActivitySubjectKey } from '../../../src/shared/agent-activity-read-state'
 
 export function HostActivityList({
   controller,
@@ -69,6 +71,18 @@ export function HostActivityList({
             </Text>
           ) : null}
           {state.catalogError ? <Text style={styles.meta}>{state.catalogError}</Text> : null}
+          {controller.activityRead.snapshot.status === 'unsupported' ? (
+            <Text style={styles.meta}>
+              {t(
+                'hostScreen.activity.updateHost',
+                'Update Orca on your computer to synchronize notification read status.'
+              )}
+            </Text>
+          ) : controller.activityRead.snapshot.status !== 'ready' ? (
+            <Text style={styles.meta}>
+              {t('hostScreen.activity.readLoading', 'Notification read status unavailable')}
+            </Text>
+          ) : null}
         </View>
       }
       ListEmptyComponent={
@@ -110,7 +124,14 @@ export function HostActivityList({
         <HostActivityCard
           item={item}
           controller={controller}
-          onPress={() => actions.openWorktreeSession(item.worktree, item.agent.paneKey)}
+          onPress={() => {
+            if (
+              actions.openWorktreeSession(item.worktree, item.agent.paneKey) &&
+              controller.activityRead.get(item)?.unread
+            ) {
+              void controller.activityRead.setRead(item, true)
+            }
+          }}
         />
       )}
     />
@@ -129,6 +150,7 @@ function HostActivityCard({
   const { agent, worktree, title, dotState } = item
   const message = withoutNativeChatVisualDirectiveLines(agent.lastAssistantMessage ?? '').trim()
   const hostContext = controller.hostContextOf(worktree)
+  const readState = controller.activityRead.get(item)
   return (
     <Pressable
       onPress={onPress}
@@ -139,7 +161,7 @@ function HostActivityCard({
     >
       <View style={styles.row}>
         <AgentStateDot state={dotState} />
-        <Text numberOfLines={1} style={[styles.sessionTitle, worktree.unread && styles.unread]}>
+        <Text numberOfLines={1} style={[styles.sessionTitle, readState?.unread && styles.unread]}>
           {title}
         </Text>
         <Text style={styles.meta}>{formatTimeAgo(agentRowTimeAt(agent), controller.now)}</Text>
@@ -152,6 +174,21 @@ function HostActivityCard({
         <Text style={styles.meta} numberOfLines={1}>
           {worktree.repo} · {worktree.displayName || worktree.branch}
         </Text>
+        <HostActivityReadBell
+          unread={readState?.unread}
+          pending={
+            readState
+              ? controller.activityRead.snapshot.pending.has(agentActivitySubjectKey(readState))
+              : false
+          }
+          disabled={
+            controller.connState !== 'connected' ||
+            controller.activityRead.snapshot.status !== 'ready'
+          }
+          onChange={(read) => {
+            void controller.activityRead.setRead(item, read)
+          }}
+        />
       </View>
       {hostContext?.hostContextLabel ? (
         <Text style={styles.meta} numberOfLines={1}>

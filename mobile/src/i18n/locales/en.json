@@ -757,7 +757,13 @@
       "showWorkspaces": "Show workspaces",
       "showActivity": "View activity",
       "sessionCount_one": "{{count}} session",
-      "sessionCount_other": "{{count}} sessions"
+      "sessionCount_other": "{{count}} sessions",
+      "updateHost": "Update Orca on your computer to synchronize notification read status.",
+      "readLoading": "Notification read status unavailable",
+      "readUnavailable": "Notification read status unavailable",
+      "markRead": "Mark activity read",
+      "markUnread": "Mark activity unread",
+      "readError": "Could not update notification read status. Try again."
     }
   },
   "webShell": {

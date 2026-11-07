@@ -14,6 +14,7 @@ import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-fe
 import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 
 export type RuntimeClientEvent =
+  | { type: 'agentActivityReadStateChanged' }
   | {
       type: 'notificationAttentionAcknowledged'
       acknowledgement: NotificationAttentionAcknowledgement
