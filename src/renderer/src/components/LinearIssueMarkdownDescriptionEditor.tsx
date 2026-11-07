@@ -22,6 +22,7 @@ import {
   getRichMarkdownSpellcheckAttribute,
   useRichMarkdownSpellcheckAttribute
 } from '@/components/editor/rich-markdown/instance/rich-markdown-spellcheck'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type LinearIssueMarkdownDescriptionEditorProps = {
   value: string
@@ -64,15 +65,15 @@ export function LinearIssueMarkdownDescriptionEditor({
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
   // Recreate the private Marked registry with Tiptap on language changes to avoid accumulating tokenizers.
-  const codec = useMemo(() => {
-    void language
-    return createRichMarkdownEditorCodec()
-  }, [language])
-  const linearIssueMarkdownExtensions = useMemo(() => {
-    // Language keys editor recreation because Tiptap freezes translated extension options.
-    void language
-    return createLinearIssueMarkdownExtensions(codec)
-  }, [codec, language])
+  const codec = useMemo(
+    () => recomputeOn([language], () => createRichMarkdownEditorCodec()),
+    [language]
+  )
+  // Language keys editor recreation because Tiptap freezes translated extension options.
+  const linearIssueMarkdownExtensions = useMemo(
+    () => recomputeOn([language], () => createLinearIssueMarkdownExtensions(codec)),
+    [codec, language]
+  )
 
   const editor = useEditor(
     {
