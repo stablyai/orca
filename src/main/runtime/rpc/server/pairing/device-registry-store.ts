@@ -3,7 +3,11 @@ import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { withoutEphemeralRows } from './ephemeral-device-rows'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
-import type { DeviceEntry } from './device-entry'
+import type { DeviceEntry, TokenDeviceEntry } from './device-entry'
+import { mintTokenDevice } from './device-credential'
+import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
+import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
 
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
@@ -40,6 +44,20 @@ export class DeviceRegistryStore {
     } catch (error) {
       console.error(`[runtime] Failed to ${action}:`, error)
     }
+  }
+
+  protected createAndPersistDevice(
+    existingDevices: DeviceEntry[],
+    name: string,
+    scope: DeviceScope,
+    pairingReach: RuntimePairingReach,
+    grants: readonly RuntimeDeviceGrant[],
+    offerTtlMs: number | undefined
+  ): TokenDeviceEntry {
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, offerTtlMs)
+    // Credentials become valid only after durable persistence.
+    this.devices = this.save([...existingDevices, entry])
+    return entry
   }
 
   protected cancelPendingLastSeenFlush(): void {

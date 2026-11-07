@@ -1,7 +1,6 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
 import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
 import {
   isExchangeSignIn,
@@ -58,21 +57,6 @@ export class DeviceRegistry extends DeviceRegistryStore {
     offerTtlMs?: number
   ): TokenDeviceEntry {
     return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, offerTtlMs)
-  }
-
-  private createAndPersistDevice(
-    existingDevices: DeviceEntry[],
-    name: string,
-    scope: DeviceScope,
-    pairingReach: RuntimePairingReach,
-    grants: readonly RuntimeDeviceGrant[],
-    offerTtlMs: number | undefined
-  ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants, offerTtlMs)
-    const nextDevices = [...existingDevices, entry]
-    // Credentials become valid only after durable persistence.
-    this.devices = this.save(nextDevices)
-    return entry
   }
 
   /** Coalesce re-advertisement onto one unused token so repeated QR requests cannot orphan credentials. */
