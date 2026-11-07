@@ -123,14 +123,9 @@ export function readEnvironmentStore(
   if (
     fingerprint &&
     cachedStoreRead?.userDataPath === userDataPath &&
-    cachedStoreRead.fingerprint === fingerprint
+    cachedStoreRead.fingerprint === fingerprint &&
+    rehardenEnvironmentStoreFiles(userDataPath)
   ) {
-    // Disk reads re-harden these credential files; a hit must keep that repair and its retries.
-    for (const path of environmentStorePaths(userDataPath)) {
-      if (existsSync(path)) {
-        hardenExistingSecureFile(path)
-      }
-    }
     return structuredClone(cachedStoreRead.store)
   }
   const { store, degraded } = readEnvironmentStoreFromDisk(userDataPath, options)
@@ -138,6 +133,21 @@ export function readEnvironmentStore(
     cachedStoreRead = { userDataPath, fingerprint, store: structuredClone(store) }
   }
   return store
+}
+
+// Disk reads re-harden these credential files; a hit must keep that repair and its retries.
+// A failure goes to the disk read, which owns the error handling and degraded fallback.
+function rehardenEnvironmentStoreFiles(userDataPath: string): boolean {
+  try {
+    for (const path of environmentStorePaths(userDataPath)) {
+      if (existsSync(path)) {
+        hardenExistingSecureFile(path)
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 function readEnvironmentStoreFromDisk(
