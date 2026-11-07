@@ -31,6 +31,7 @@ export function useSmartWorkspaceGithubSearch({
     repoBackedSearchTargets,
     selectedRepo,
     githubSourceContext,
+    workItemsInvalidationNonce,
     repos,
     getCachedWorkItems,
     fetchWorkItems,
@@ -241,6 +242,10 @@ export function useSmartWorkspaceGithubSearch({
     repoBackedSearchTargets,
     githubSourceContext,
     selectedRepo,
+    selectedRepo?.issueSourcePreference,
+    // Why: preference flips evict the work-items cache and bump this nonce; re-run so
+    // the smart picker lists issues from the newly selected origin/upstream (#9281).
+    workItemsInvalidationNonce,
     crossRepoSwitchTarget,
     shouldQueryGithub,
     handledCrossRepoUrlRef,
