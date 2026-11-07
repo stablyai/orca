@@ -1,5 +1,5 @@
 import type { SettingsSearchEntry } from '../search/settings-search'
-import { isMacUserAgent } from '../../terminal-pane/pane-helpers'
+import { isMacUserAgent } from '../../../lib/user-agent-platform'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { getBrowserUserAgentSearchEntry } from './browser-user-agent-search'

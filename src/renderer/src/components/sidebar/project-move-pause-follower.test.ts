@@ -30,8 +30,10 @@ vi.mock('@/lib/worktree-sleep-intent', () => ({
   markWorktreeSleepIntent: vi.fn(),
   withWorktreeSleepTeardown: (_id: string, action: () => Promise<void>) => action()
 }))
-vi.mock('@/lib/workspace-session', () => ({ buildWorkspaceSessionPayload: mocks.payload }))
-vi.mock('@/lib/workspace-session-host-persistence', () => ({
+vi.mock('@/lib/workspace/persistence/workspace-session', () => ({
+  buildWorkspaceSessionPayload: mocks.payload
+}))
+vi.mock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
   persistWorkspaceSessionByHost: mocks.persist
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }))

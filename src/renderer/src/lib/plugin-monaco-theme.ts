@@ -8,7 +8,7 @@ export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneT
 // The inherited built-in syntax colors are checked against the plugin's editor background.
 // Why 3:1 for them: Monaco's own dark comment color is 4.2:1 on its own background.
 const MIN_TEXT_CONTRAST = 4.5
-const MIN_SYNTAX_CONTRAST = 3
+export const MIN_SYNTAX_CONTRAST = 3
 const BUILT_IN_SYNTAX: Record<'light' | 'dark', readonly string[]> = {
   // comment, string, keyword, type, number in vs / vs-dark.
   light: ['#008000', '#a31515', '#0000ff', '#008080', '#098658'],

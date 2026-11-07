@@ -11,8 +11,8 @@ import {
   type StructuredAgentSessionAcquireInput,
   type StructuredAgentSessionAdapter as SessionAdapter,
   type StructuredAgentSessionSetOptionInput as SetOptionInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { withObservedProviderExit } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { acquireAcpStructuredSession } from './acp-structured-acquire'
 import { rejectedAcpDispatch, type AcpStructuredSession } from './acp-structured-session'
@@ -21,7 +21,7 @@ import { waitForAcpExit, type AcpStructuredConnection } from './acp-structured-c
 import { AcpConnectionClosedError } from './acp-errors'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { applyAcpMessageOptions } from './acp-message-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from './acp-structured-stop'
 import { acpDispatchPrompt } from './acp-prompt-content'
 import {
@@ -39,7 +39,7 @@ import { AcpTextTasks } from './acp-text-task'
 import { supportsAcpStructuredLocation } from './acp-structured-location-support'
 import { acpAcquireFailure, acpRefusedStart } from './acp-startup-outcome'
 import { openAcpStart } from './acp-structured-start-open'
-import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/structured-agent-session-input-admission'
+import { admitStructuredAgentSessionInput } from '../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 
 export class AcpStructuredSessionAdapter implements SessionAdapter {
   readonly atRestCommands: AcpStructuredSessionAdapterDeps['atRestCommands']
@@ -272,8 +272,10 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   canSetOptionWhileIdle = (input: SetOptionInput): boolean =>
     childState.canSetAcpOptionWhileIdle(this.children.sessions.get(input.sessionId), input)
 
-  readOptions = async (input: { sessionId: string; fence: number }) =>
-    readAcpLiveOptions(this.live(input.sessionId), this.deps.spec.permissionModeConfig?.values)
+  readOptions = async (input: { sessionId: string; fence: number }) => {
+    const session = this.live(input.sessionId)
+    return readAcpLiveOptions(session, session.spec.permissionModeConfig?.values)
+  }
 
   readCommands = (sessionId: string) => {
     const session = this.children.sessions.get(sessionId)

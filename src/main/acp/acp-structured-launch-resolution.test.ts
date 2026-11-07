@@ -12,18 +12,18 @@ import {
   replayJournal,
   restoreJournal,
   type JournalLoad
-} from '../native-chat/agent-session-journal/journal-open'
+} from '../native-chat/agent-session-journal/replay/journal-open'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase,
   publishTestJournalEpoch,
   insertTestJournalRow,
   insertTestJournalRowJson
-} from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
-import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/journal-outcome-format'
-import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
-import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/outcomes/journal-outcome-write'
+import { JOURNAL_OUTCOME_FORMAT } from '../native-chat/agent-session-journal/outcomes/journal-outcome-format'
+import type { JournalRow } from '../native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import { createJournalReducerState } from '../native-chat/agent-session-journal/projection/journal-reducer'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   createLegacyProviderTimelineIdentityScheme,

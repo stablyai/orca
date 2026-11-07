@@ -3,6 +3,7 @@ import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
+import { SessionFocusReport } from './session-focus-report'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import { SessionTerminationController } from './session-termination-controller'
@@ -41,6 +42,7 @@ export class Session extends SessionProcessInspection {
   private readonly termination: SessionTerminationController
   readonly startupIngress: PtyStartupIngress
   private readonly recoveryBarrier: TerminalShellRecoveryBarrier
+  private readonly focusReport = new SessionFocusReport()
 
   constructor(opts: SessionOptions) {
     super(opts.subprocess)
@@ -139,7 +141,19 @@ export class Session extends SessionProcessInspection {
   write(data: string): void {
     // Human input must reach rc-file readers while automatic startup commands wait for readiness.
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
+      this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.subprocess.write(data)
+    }
+  }
+
+  /** No viewer is left to blur, so tell a ?1004 program focus is gone unless it already heard so. */
+  reportFocusLost(): void {
+    if (!this.isAlive || this._disposed) {
+      return
+    }
+    const focusOut = this.focusReport.takeFocusLoss(this.recoveryBarrier.focusReportingArming)
+    if (focusOut) {
+      this.subprocess.write(focusOut)
     }
   }
 
@@ -197,6 +211,7 @@ export class Session extends SessionProcessInspection {
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
       this.producerPause.release({ resume: true })
+      this.reportFocusLost()
     }
   }
 

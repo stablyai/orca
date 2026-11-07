@@ -338,8 +338,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   disabledTuiAgents: TuiAgent[]
   /** One-shot guard: start Claude Agent Teams hidden for existing profiles without overriding later opt-ins. */
   claudeAgentTeamsDefaultDisabledMigrated?: boolean
-  /** One-shot guard: hosts saved before the remote CLI control default flip were pinned off. */
-  sshRemoteCliControlExistingHostsMigrated?: boolean
   /** Why: closing a terminal with child processes kills foreground work; keep this skip separate from other confirmations. */
   skipCloseTerminalWithRunningProcessConfirm: boolean
   /** Why: deleting an automation also deletes its run history; keep this skip separate from worktree deletion. */
@@ -400,8 +398,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   agentStateRulesPath?: string | null
   /** Off ignores downloads/cache and uses bundled rules or local override; absent means on. */
   agentStateRulesLiveUpdates?: boolean
-  /** Pre-trust the worktree or folder Orca starts an agent in, so its "trust this folder?" prompt is skipped. Defaults on. */
-  agentWorkspaceTrustEnabled: boolean
   /** Why: Codex's shared server runs every tab's hooks with the first tab's env; off opts new terminals back into it. Absent reads as on. */
   codexTerminalServerIsolation?: boolean
   /** Off hides the banner on a typed `codex` that joined Codex's shared server. Absent reads as on. */

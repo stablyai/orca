@@ -25,6 +25,7 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   /** The Windows shell the terminal runs as, never typed into the host default shell. */
   shell?: string
   cwd?: string
+  trustWorktreeId?: string
   env?: Record<string, string>
   envToDelete?: string[]
   startupCommandDelivery?: StartupCommandDelivery
@@ -54,6 +55,10 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
+}
+
+export type CreateWebRuntimeSessionTerminalOnHostArgs = CreateWebRuntimeSessionTerminalArgs & {
+  environmentId: string | null
 }
 
 export type CreatedWebRuntimeSessionTerminal = {

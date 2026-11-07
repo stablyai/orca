@@ -1,6 +1,6 @@
-import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../../types'
+import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { ensureMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { federatedStubHomeRunId } from '../contract-constants'
 import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'

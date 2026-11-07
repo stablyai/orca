@@ -4,14 +4,16 @@ import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-pr
 import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import type { DispatchContextRow, RunRow, TaskRow } from '../../../../orchestration/types'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type {
-  OrchestrationCallerIdentity,
-  OrchestrationSessionCaller
-} from '../../../../orchestration/orchestration-caller-identity'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import { resolveWorkerStartModeOnHost } from '../../orchestration-worker-start-mode'
+  DispatchContextRow,
+  RunRow,
+  TaskRow
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
+import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
@@ -25,7 +27,7 @@ import {
 } from './worker-setup-gate'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
 import { assertExplicitWorkerUsable } from './explicit-worker-terminal-validation'
-import { resolveDispatchAssigneeParty } from '../../../../orchestration/orchestration-party'
+import { resolveDispatchAssigneeParty } from '../../../../orchestration/addressing/orchestration-party'
 import { chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
@@ -33,8 +35,8 @@ import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
 import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
-import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
-import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
+import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
+import { rebindReusedStructuredWorker } from '../structured-workers/orchestration-structured-worker-session'
 import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-placement'
 
 export async function startLocalWorker(args: {

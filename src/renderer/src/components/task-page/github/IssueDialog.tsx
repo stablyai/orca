@@ -1,4 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { useRef, useState } from 'react'
+import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import {
   Dialog,
   DialogContent,
@@ -51,10 +53,19 @@ export function TaskPageGitHubIssueDialog({
     newIssueRepoId,
     setNewIssueRepoId,
     newIssueTargetRepo,
+    newIssueRuntimeTarget,
+    newIssueSourceContext,
     newIssueRepoLabels,
     newIssueRepoAssignees,
     handleCreateNewIssue
   } = model
+  const [uploading, setUploading] = useState(false)
+  const uploadPending = useRef(false)
+  const submit = () => {
+    if (!uploadPending.current) {
+      void handleCreateNewIssue()
+    }
+  }
   return (
     <Dialog
       open={newIssueOpen}
@@ -69,7 +80,7 @@ export function TaskPageGitHubIssueDialog({
         onKeyDown={(event) => {
           if (isScreenSubmitShortcut(event)) {
             event.preventDefault()
-            void handleCreateNewIssue()
+            submit()
           }
         }}
       >
@@ -180,7 +191,7 @@ export function TaskPageGitHubIssueDialog({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                   e.preventDefault()
-                  void handleCreateNewIssue()
+                  submit()
                 }
               }}
               placeholder={translate('auto.components.TaskPage.578f730c16', 'Short summary')}
@@ -192,12 +203,29 @@ export function TaskPageGitHubIssueDialog({
               {translate('auto.components.TaskPage.7f3f7b4c18', 'Description (optional, markdown)')}
             </label>
             <GitHubMarkdownComposer
+              key={newIssueTargetRepo?.id}
+              imageUploadAddress={
+                newIssueTargetRepo
+                  ? {
+                      runtime: newIssueRuntimeTarget ?? { kind: 'local' },
+                      target: {
+                        kind: 'repo',
+                        repo: getGitHubRuntimeRepoId(newIssueSourceContext, newIssueTargetRepo.id),
+                        source: 'issue'
+                      }
+                    }
+                  : undefined
+              }
+              onImageUploadPendingChange={(pending) => {
+                uploadPending.current = pending
+                setUploading(pending)
+              }}
               value={newIssueBody}
               onChange={setNewIssueBody}
               placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
               disabled={newIssueSubmitting}
               minHeightClassName="min-h-40"
-              onSubmitShortcut={() => void handleCreateNewIssue()}
+              onSubmitShortcut={submit}
             />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -233,8 +261,10 @@ export function TaskPageGitHubIssueDialog({
             {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
-            onClick={() => void handleCreateNewIssue()}
-            disabled={!newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting}
+            onClick={submit}
+            disabled={
+              !newIssueTargetRepo || !newIssueTitle.trim() || newIssueSubmitting || uploading
+            }
           >
             {newIssueSubmitting ? (
               <>

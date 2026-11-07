@@ -2,14 +2,14 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPaneController } from '../terminal-pane/use-terminal-pane-controller'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { TerminalPaneController } from '../terminal-pane/controller/use-terminal-pane-controller'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   captureTerminalDropTarget,
   getCurrentTerminalDropTransport
-} from '../terminal-pane/terminal-drop-target'
-import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
+} from '../terminal-pane/input/file-drop/terminal-drop-target'
+import { insertTerminalCrewMention } from '../terminal-pane/input/paste/terminal-crew-mention'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'

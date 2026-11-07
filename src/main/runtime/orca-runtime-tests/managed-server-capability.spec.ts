@@ -20,7 +20,8 @@ describe('managed server capability', () => {
       recover: unusedAction,
       stop: unusedAction,
       cancelStop: unusedAction,
-      forget: unusedAction
+      forget: unusedAction,
+      forgetRedundant: unusedAction
     }
     registerManagedServerActions(actions)
     try {

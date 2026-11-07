@@ -1,7 +1,7 @@
 import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 import type { RuntimeHostConnectionState } from '../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/paired-runtime-parking-capabilities'
+import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
 
 type RuntimeStatusState = {
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>

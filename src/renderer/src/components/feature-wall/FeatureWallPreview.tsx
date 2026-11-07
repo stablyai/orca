@@ -9,7 +9,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import { getLocalizedFeatureWallTileTitle } from './feature-wall-tour-localized-copy'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PreviewMedia(props: {
   posterUrl: string | null

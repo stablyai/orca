@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
-import { createSessionWriteSubscriber } from './session-write-subscriber'
-import { SESSION_RELEVANT_FIELDS } from './workspace-session'
-import { buildWorkspaceSessionPatch } from './workspace-session-patch'
+import { createSessionWriteSubscriber } from './workspace/persistence/session-write-subscriber'
+import { SESSION_RELEVANT_FIELDS } from './workspace/persistence/workspace-session'
+import { buildWorkspaceSessionPatch } from './workspace/persistence/workspace-session-patch'
 
 /** Inject a store to count Array.filter allocations: each changed-field list shares the block allocating its 35-field snapshot, so one count observes both costs. */
 function makeSessionState(overrides: Partial<AppState> = {}): AppState {

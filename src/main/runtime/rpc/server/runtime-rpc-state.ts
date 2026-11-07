@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from '../methods/index'
+import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -36,6 +36,9 @@ import {
   DEFAULT_WS_PORT
 } from './runtime-rpc-pairing-types'
 import { DeclaredDesktopClients } from '../../declared-desktop-clients'
+import { AuthenticatedSourceRecorder } from './network-source-policy-store'
+import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
+import type { WebSocketSourceGuard } from '../ws-network-source-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -49,6 +52,8 @@ export class RuntimeRpcState {
   protected readonly requirePinnedWsPort: boolean
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
+  protected readonly serveNetworkSources: ServeNetworkSourceOptions | null
+  protected webSocketSourceGuard: WebSocketSourceGuard | null = null
   protected readonly webClientRoot: string | undefined
   // Track actual WS bind host for pairing exposure transitions (STA-2370).
   protected wsBoundHost: string | null = null
@@ -82,6 +87,7 @@ export class RuntimeRpcState {
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
   protected readonly declaredDesktopClients = new DeclaredDesktopClients()
+  protected readonly authenticatedSourceRecorder: AuthenticatedSourceRecorder
   // Why: lets an automatic mint install a provider whose launch-time construction failed.
   protected mobileRelayPairingProviderInstaller: (() => Promise<unknown>) | null = null
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
@@ -119,6 +125,7 @@ export class RuntimeRpcState {
     requirePinnedWsPort = false,
     exposeNetworkByDefault = false,
     pinnedBindHost,
+    serveNetworkSources,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
@@ -136,6 +143,7 @@ export class RuntimeRpcState {
     this.requirePinnedWsPort = requirePinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
+    this.serveNetworkSources = serveNetworkSources ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
@@ -150,6 +158,7 @@ export class RuntimeRpcState {
     this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
+    this.authenticatedSourceRecorder = new AuthenticatedSourceRecorder(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
   }
 

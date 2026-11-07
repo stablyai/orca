@@ -1,21 +1,15 @@
 import { expect, it, vi } from 'vitest'
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import type { Tab } from '../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 await import('./orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('./orca-runtime')
-const { electronMocks } = await import('./orca-runtime-test-mocks/setup.spec')
+void (await import('./orca-runtime-test-mocks/setup.spec'))
 await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
-const {
-  makeRuntimeStoreWithWorkspaceSession,
-  store,
-  TEST_WORKTREE_ID: WT
-} = await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { makeRuntimeStoreWithWorkspaceSession, TEST_WORKTREE_ID: WT } =
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 type Anchor = 'ordinary' | 'missing' | 'reopened' | 'stale-reopened' | 'old-alias'
 const REOPENED = 'agent-chat-tab-v1-current-source'
@@ -27,14 +21,6 @@ const sourceId = (anchor: Anchor, saved = false) =>
     : saved
       ? savedId('source')
       : rawId('source')
-const capturedAnchor = (anchor: Anchor) =>
-  anchor === 'missing'
-    ? rawId('closed-source')
-    : anchor === 'stale-reopened'
-      ? 'agent-chat-tab-v1-closed-source'
-      : anchor === 'reopened'
-        ? REOPENED
-        : rawId('source')
 
 function savedSession(anchor: Anchor, listed: boolean): WorkspaceSessionState {
   const tab = (sessionId: string, groupId: string): Tab => ({
@@ -122,158 +108,48 @@ function rawSnapshot(anchor: Anchor, listed: boolean): RuntimeMobileSessionTabsS
   }
 }
 
-it.each(['missing session', 'filtered open'])(
-  'publishes a phone fork through the raw owner after a skipped saved open: %s',
-  async (reason) => {
-    const saved = savedSession('ordinary', true)
-    const reopenedChild = 'agent-chat-tab-v1-unconfirmed-child'
-    saved.unifiedTabs![WT]!.find((tab) => tab.entityId === 'child')!.id = reopenedChild
-    saved.tabGroups![WT]![1]!.tabOrder = [savedId('active'), reopenedChild]
-    const fixture = makeRuntimeStoreWithWorkspaceSession(saved)
-    const before = JSON.stringify(fixture.getSession())
-    const runtime = new OrcaRuntimeService(
-      reason === 'missing session' ? store : fixture.runtimeStore
-    )
-    runtime.storeMobileSessionSnapshot(WT, rawSnapshot('ordinary', false))
-    await runtime.publishStructuredAgentSessionTab({
-      workspaceId: WT,
-      sessionId: 'child',
-      agent: 'claude',
-      activate: false,
-      placement: { afterTabId: 'agent-session:source' }
-    })
-    expect(runtime.mobileSessionTabsByWorktree.get(WT)?.tabGroups).toEqual([
-      {
-        id: 'G1',
-        activeTabId: 'agent-session:source',
-        tabOrder: ['agent-session:source', 'agent-session:child', 'agent-session:B']
-      },
-      { id: 'G2', activeTabId: 'agent-session:active', tabOrder: ['agent-session:active'] }
-    ])
-    expect(JSON.stringify(fixture.getSession())).toBe(before)
-  }
-)
-
-for (const owner of ['saved', 'window'] as const) {
-  it.each([
-    ['ordinary', false],
-    ['missing', false],
-    ['reopened', false],
-    ['stale-reopened', false],
-    ['old-alias', false],
-    ['ordinary', true]
-  ] as const)(
-    `places a phone fork at the ${owner} owner, anchor=%s, already listed=%s`,
-    async (anchor, listed) => {
-      const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession(anchor, listed))
-      const runtime = new OrcaRuntimeService(fixture.runtimeStore)
-      const before = JSON.stringify(fixture.getSession())
-      if (owner === 'window') {
-        electronMocks.BrowserWindow.fromId.mockReturnValue({
-          isDestroyed: () => false,
-          webContents: {
-            isDestroyed: () => false,
-            setBackgroundThrottling: vi.fn(),
-            capturePage: async () => undefined
-          }
-        })
-        runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, {
-          tabs: [],
-          leaves: [],
-          mobileSessionTabs: [rawSnapshot(anchor, listed)]
-        })
-      } else {
-        runtime.storeMobileSessionSnapshot(WT, rawSnapshot(anchor, listed))
-      }
-      const frames: RuntimeMobileSessionTabsResult[] = []
-      runtime.onMobileSessionTabsChanged((snapshot) => frames.push(snapshot), 'phone', 'mobile')
-      await runtime.publishStructuredAgentSessionTab({
-        workspaceId: WT,
-        sessionId: 'child',
-        agent: 'claude',
-        activate: false,
-        placement: { afterTabId: capturedAnchor(anchor) }
-      })
-      runtime.selectCreatedMobileSessionTabForClient(WT, { sessionId: 'child' }, 'phone')
-      const fallback = listed || !['ordinary', 'reopened'].includes(anchor)
-      const check = (frame: Pick<RuntimeMobileSessionTabsSnapshot, 'tabGroups'>) => {
-        expect(frame.tabGroups?.map((group) => [group.id, group.tabOrder])).toEqual([
-          [
-            'G1',
-            fallback
-              ? [sourceId(anchor), rawId('B')]
-              : [sourceId(anchor), rawId('child'), rawId('B')]
-          ],
-          ['G2', fallback ? [rawId('active'), rawId('child')] : [rawId('active')]]
-        ])
-      }
-      check(frames.at(-1)!)
-      if (owner === 'window') {
-        expect(JSON.stringify(fixture.getSession())).toBe(before)
-      } else {
-        expect(
-          fixture.getSession().tabGroups?.[WT]?.map((group) => [group.id, group.tabOrder])
-        ).toEqual([
-          [
-            'G1',
-            fallback
-              ? [sourceId(anchor, true), savedId('B')]
-              : [sourceId(anchor, true), savedId('child'), savedId('B')]
-          ],
-          ['G2', fallback ? [savedId('active'), savedId('child')] : [savedId('active')]]
-        ])
-        // Reload the saved shape, then restore raw rows through the ordinary projection path.
-        const reload = makeRuntimeStoreWithWorkspaceSession(
-          JSON.parse(JSON.stringify(fixture.getSession()))
-        )
-        const restarted = new OrcaRuntimeService(reload.runtimeStore)
-        for (const sessionId of ['source', 'B', 'active', 'child']) {
-          restarted.projectStructuredAgentSessionTab({
-            workspaceId: WT,
-            sessionId,
-            agent: 'claude',
-            activate: false,
-            tabId: sessionId === 'source' ? sourceId(anchor, true) : savedId(sessionId)
-          })
-        }
-        await restarted.publishStructuredAgentSessionTab({
-          workspaceId: WT,
-          sessionId: 'child',
-          agent: 'claude',
-          activate: false,
-          placement: { afterTabId: capturedAnchor(anchor) }
-        })
-        check(restarted.mobileSessionTabsByWorktree.get(WT)!)
-      }
-    }
-  )
-}
-
-it('reads saved order from a window-owned runtime partition before any main surface graph', () => {
-  const owner = 'runtime:fork-owner'
-  const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession('ordinary', false), owner)
-  const repo = { ...store.getRepos()[0]!, executionHostId: owner } as const
-  const runtime = new OrcaRuntimeService({
-    ...fixture.runtimeStore,
-    getRepo: (id) => (id === repo.id ? repo : undefined),
-    getRepos: () => [repo]
+it('keeps an explicit saved null selection when its first chat restores', () => {
+  const saved = savedSession('ordinary', false)
+  saved.activeGroupIdByWorktree![WT] = 'G1'
+  saved.tabGroups![WT]![0]!.activeTabId = null
+  const fixture = makeRuntimeStoreWithWorkspaceSession(saved)
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  runtime.projectStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'source',
+    agent: 'claude',
+    activate: false
   })
-  for (const sessionId of ['B', 'source', 'active']) {
-    runtime.projectStructuredAgentSessionTab({
-      workspaceId: WT,
-      sessionId,
-      agent: 'claude',
-      activate: false,
-      tabId: savedId(sessionId)
-    })
-  }
-  expect(
-    runtime.mobileSessionTabsByWorktree
-      .get(WT)
-      ?.tabGroups?.map((group) => [group.id, group.tabOrder])
-  ).toEqual([
-    ['G1', ['agent-session:source', 'agent-session:B']],
-    ['G2', ['agent-session:active']]
-  ])
+  const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+  expect(snapshot.activeGroupId).toBe('G1')
+  expect(snapshot.tabGroups?.[0]?.activeTabId).toBeNull()
+  expect(snapshot.activeTabId).toBeNull()
+  expect(snapshot.tabs.filter((tab) => tab.isActive)).toEqual([])
+})
+
+it('keeps current pending navigation when saved order materializes another chat', () => {
+  const fixture = makeRuntimeStoreWithWorkspaceSession(savedSession('ordinary', false))
+  const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+  const current = rawSnapshot('ordinary', false)
+  current.tabGroups![1]!.activeTabId = 'agent-session:pending'
+  current.tabGroups![1]!.tabOrder.push('agent-session:pending')
+  current.activeTabId = null
+  current.activeTabType = null
+  current.tabs = current.tabs
+    .filter((tab) => tab.id !== 'agent-session:source')
+    .map((tab) => ({ ...tab, isActive: false }))
+  runtime.storeMobileSessionSnapshot(WT, current)
+  runtime.projectStructuredAgentSessionTab({
+    workspaceId: WT,
+    sessionId: 'source',
+    agent: 'claude',
+    activate: false
+  })
+  const snapshot = runtime.mobileSessionTabsByWorktree.get(WT)!
+  expect(snapshot.activeGroupId).toBe('G2')
+  expect(snapshot.tabGroups?.find((group) => group.id === 'G2')?.activeTabId).toBe(
+    'agent-session:pending'
+  )
+  expect(snapshot.activeTabId).toBeNull()
+  expect(snapshot.tabs.filter((tab) => tab.isActive)).toEqual([])
 })

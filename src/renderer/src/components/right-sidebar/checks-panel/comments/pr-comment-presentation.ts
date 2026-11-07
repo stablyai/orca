@@ -1,4 +1,4 @@
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import { cn } from '@/lib/utils'
 
 /** PR comment sidebar typography and layout variants. */

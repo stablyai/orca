@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
@@ -75,6 +75,16 @@ export const automationRunsRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('runs-page', runsPageSchema)
+  })
+)
+// An old host ignores `runId` and lists instead, which reads as no `run`.
+export const automationRunRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'automation.mobile-run',
+    method: 'automation.runs',
+    acceptance: 'require-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('run', z.object({ run: runSchema.optional() }))
   })
 )
 export const automationProjectsRead = bindDeferredRpcOperation(

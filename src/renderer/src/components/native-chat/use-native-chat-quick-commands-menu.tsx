@@ -8,8 +8,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import { TerminalQuickCommandsSubmenu } from '../terminal-pane/TerminalQuickCommandsSubmenu'
-import { TerminalQuickCommandEditorDialog } from '../terminal-pane/TerminalQuickCommandEditorDialog'
+import { TerminalQuickCommandsSubmenu } from '../terminal-pane/quick-commands/TerminalQuickCommandsSubmenu'
+import { TerminalQuickCommandEditorDialog } from '../terminal-pane/quick-commands/TerminalQuickCommandEditorDialog'
 import { createTerminalQuickCommandDraft } from '../terminal-quick-commands/TerminalQuickCommandDialog'
 
 type QuickCommandEditor = { hostId: ExecutionHostId; command: TerminalQuickCommand }

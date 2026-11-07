@@ -10,7 +10,7 @@ import {
 import { callRuntimeRpc } from './runtime-rpc-client'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { assertRemoteWriteFitsOneRequest } from './runtime-file-mutation-client'
+import { assertRemoteWriteFitsOneRequest } from './files/mutations/runtime-file-mutation-client'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
@@ -19,11 +19,9 @@ import {
   isRenewableGrantError,
   pinTerminalArtifactGrantTarget,
   renewTerminalArtifactGrant,
+  TERMINAL_ARTIFACT_WRITE_MAX_BYTES,
   type TerminalArtifactGrantTarget
 } from './runtime-terminal-artifact-grant'
-
-// Why: hosts cap a grant write at their mobile read budget; refuse before sending the bytes.
-const TERMINAL_ARTIFACT_WRITE_MAX_BYTES = 512 * 1024
 
 type GrantTarget = TerminalArtifactGrantTarget
 

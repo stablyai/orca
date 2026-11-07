@@ -1,8 +1,19 @@
+import { useAppStateValue, useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
 import { toast } from 'sonner'
+import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import {
-  useStructuredChatTabNames,
+  selectLiveAgentStatusEntriesForWorktree,
+  selectTerminalLayoutsForWorktree
+} from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import {
+  selectRuntimePaneTitlesForWorktree,
+  selectLivePtyIdsForWorktree
+} from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
+import { useAppStore } from '@/store/index'
+import { selectKnownWorktreeById } from '@/store/selectors'
+import {
+  useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
@@ -30,7 +41,6 @@ import { track } from '@/lib/telemetry'
 import { useNow } from '@/hooks/use-now'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
-import { selectLivePtyIdsForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/useWorktreeAgentRows'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
@@ -69,43 +79,52 @@ export function ReviewNotesSendMenuContent({
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
 
-  // Include every workspace agent, not just the focused pane; memoize slice-derived targets to avoid fresh selector arrays.
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
-  const ptyIdsByTabId = useAppStore(useShallow((s) => selectLivePtyIdsForWorktree(s, worktreeId)))
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const viewActive = useAppStateViewActive()
+  const store = useAppStateView()
   const agentRows = useWorktreeAgentRows(worktreeId)
-  const now = useNow(30_000)
-  const chatNames = useStructuredChatTabNames()
-  const sendTargets = useMemo(() => {
-    void agentStatusEpoch
-    return deriveNotesSendAgentTargets(
-      {
-        agentStatusByPaneKey,
-        tabsByWorktree,
-        unifiedTabsByWorktree,
-        terminalLayoutsByTabId,
-        ptyIdsByTabId,
-        runtimePaneTitlesByTabId
-      },
-      worktreeId,
-      chatNames
-    )
-  }, [
-    // Freshness timers can change eligibility through this epoch without replacing the status map.
-    agentStatusEpoch,
-    chatNames,
-    agentStatusByPaneKey,
-    tabsByWorktree,
-    unifiedTabsByWorktree,
-    terminalLayoutsByTabId,
-    runtimePaneTitlesByTabId,
-    ptyIdsByTabId,
-    worktreeId
-  ])
+  const now = useNow(30_000, viewActive)
+  const worktree = useAppStateValue(
+    useShallow((state) => {
+      const row = selectKnownWorktreeById(state, worktreeId)
+      return row
+        ? {
+            id: row.id,
+            hostId: row.hostId,
+            runtimeOwnerEnvironmentId: row.runtimeOwnerEnvironmentId
+          }
+        : null
+    })
+  )
+  const tabsKey = useAppStateValue((state) => state.unifiedTabsByWorktree[worktreeId])
+  const chatNames = useWorktreeStructuredChatTabNames(worktree, tabsKey, true)
+  const selectTargets = useMemo(() => {
+    let inputs: unknown[] = []
+    let previous: NotesSendAgentTarget[] = []
+    return (state: ReturnType<typeof store.getState>) => {
+      const nextInputs = [
+        state.tabsByWorktree[worktreeId],
+        state.unifiedTabsByWorktree[worktreeId],
+        selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
+        selectTerminalLayoutsForWorktree(state, worktreeId),
+        selectLivePtyIdsForWorktree(state, worktreeId),
+        selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        state.agentStatusEpoch
+      ]
+      if (shallow(inputs, nextInputs)) {
+        return previous
+      }
+      inputs = nextInputs
+      const next = deriveNotesSendAgentTargets(state, worktreeId, chatNames)
+      if (
+        next.length !== previous.length ||
+        next.some((target, i) => !shallow(target, previous[i]))
+      ) {
+        previous = next
+      }
+      return previous
+    }
+  }, [worktreeId, chatNames])
+  const sendTargets = useAppStateValue(selectTargets)
   const orderedSendTargets = useMemo(
     () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
     [agentRows, sendTargets]

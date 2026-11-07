@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import { GitMerge } from 'lucide-react-native'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -12,7 +12,7 @@ import { SheetPrimaryButton } from '../SheetPrimaryButton'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { ConfirmModal } from '../ConfirmModal'
 import { presentPrMerge } from './pr-actions-state'
-import { PrCreateSheet } from './PrCreateSheet'
+import { PrCreateSheet, type PrCreateKept } from './PrCreateSheet'
 import { PrReviewersSheet } from './PrReviewersSheet'
 import {
   livePrDetails,
@@ -23,10 +23,16 @@ import {
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
 
+type PrEditKept = { key: string; base: string; text: string }
+
 // Sheets for the PR tab's decisions; one Modal swaps between them so iOS never stacks presentations.
 export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  // Each sheet unmounts on Cancel; typed text waits here for the next open.
+  const [createKept, setCreateKept] = useState<PrCreateKept | null>(null)
+  const [titleKept, setTitleKept] = useState<PrEditKept | null>(null)
+  const [bodyKept, setBodyKept] = useState<PrEditKept | null>(null)
   return (
     <>
       <KeyedBottomDrawer
@@ -49,11 +55,27 @@ export function MobilePrTabSheets({ tab }: { tab: MobilePrTab }) {
             case 'reviewers':
               return <PrReviewersSheet tab={tab} request={request} />
             case 'editTitle':
-              return <PrEditTextSheet tab={tab} request={request} field="title" />
+              return (
+                <PrEditTextSheet
+                  tab={tab}
+                  request={request}
+                  field="title"
+                  kept={titleKept}
+                  onKeep={setTitleKept}
+                />
+              )
             case 'editDescription':
-              return <PrEditTextSheet tab={tab} request={request} field="body" />
+              return (
+                <PrEditTextSheet
+                  tab={tab}
+                  request={request}
+                  field="body"
+                  kept={bodyKept}
+                  onKeep={setBodyKept}
+                />
+              )
             case 'createPr':
-              return <PrCreateSheet tab={tab} />
+              return <PrCreateSheet tab={tab} kept={createKept} onKeep={setCreateKept} />
           }
         }}
       </KeyedBottomDrawer>
@@ -160,11 +182,15 @@ function PrMergeSheet({ tab, request }: { tab: MobilePrTab; request: PrTabSheetR
 function PrEditTextSheet({
   tab,
   request,
-  field
+  field,
+  kept,
+  onKeep
 }: {
   tab: MobilePrTab
   request: PrTabSheetRequest
   field: 'title' | 'body'
+  kept: PrEditKept | null
+  onKeep: (kept: PrEditKept | null) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -172,13 +198,39 @@ function PrEditTextSheet({
   const details = livePrDetails(data?.details ?? null)
   const current =
     field === 'title' ? (details?.item.title ?? data?.pr.title ?? '') : (details?.body ?? '')
-  const [draft, setDraft] = useState(current)
+  const keepKey = request.scope.resource
+  // An edit typed against text the PR still has comes back; once the PR text changes it would revert someone's edit.
+  const [base] = useState(current)
+  const [draft, setDraft] = useState(() =>
+    kept && kept.key === keepKey && kept.base === current ? kept.text : current
+  )
+  // Closing keeps a changed, unsaved draft for the next open, and drops this PR's kept one otherwise.
+  const savedRef = useRef(false)
+  const closeRef = useRef({ keepKey, base, draft, kept, onKeep })
+  useLayoutEffect(() => {
+    closeRef.current = { keepKey, base, draft, kept, onKeep }
+  })
+  useEffect(
+    () => () => {
+      const close = closeRef.current
+      if (!close.keepKey) {
+        return
+      }
+      if (!savedRef.current && close.draft !== close.base) {
+        close.onKeep({ key: close.keepKey, base: close.base, text: close.draft })
+      } else if (close.kept?.key === close.keepKey) {
+        close.onKeep(null)
+      }
+    },
+    []
+  )
   const { textAction } = tab
   const save = async () => {
     if (!tab.ownsSheet(request)) {
       return
     }
     if (await textAction.save(field, draft, current)) {
+      savedRef.current = true
       tab.closeSheetIf(request)
     }
   }

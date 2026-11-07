@@ -58,8 +58,9 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../src/main/runtime/rpc/methods', async () => ({
-  ALL_RPC_METHODS: (await import('../../src/main/runtime/rpc/methods/accounts')).ACCOUNT_METHODS
+vi.mock('../../src/main/runtime/rpc/methods/rpc-method-registry', async () => ({
+  ALL_RPC_METHODS: (await import('../../src/main/runtime/rpc/methods/accounts/accounts'))
+    .ACCOUNT_METHODS
 }))
 
 type AccountStreamDesktopRuntime = Pick<

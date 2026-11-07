@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
 import '../../../editor-buffer-record-lifecycle'
 
-import '../actions/editor-draft-state'
+import './editor-draft-state'
 
 import './editor-buffer-record'
 

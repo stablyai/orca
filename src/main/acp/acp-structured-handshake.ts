@@ -6,8 +6,8 @@ import { observeAcpForkSupport } from './acp-fork-support'
 // except context usage, and afterwards the turns of it the chat never saw are added once.
 
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
   ACP_REOPEN_FAILED,
   acpReopenTakeover,
@@ -55,7 +55,7 @@ export async function initializeAcpStructuredSession(
   input: AcpHandshakeInput
 ): Promise<StructuredAgentSessionProviderOpenResult> {
   const { acquire, deps, launch, connection, options, prompts, child, onSettled } = input
-  const { spec } = deps
+  const { spec } = launch
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const assertStarting = () => assertAcpStartingSession(child, input.abandoned)
@@ -68,24 +68,40 @@ export async function initializeAcpStructuredSession(
   // Choose authentication using the execution host's launch environment.
   const authMethodId = spec.authMethod?.({
     advertised: (initialized.authMethods ?? []).map((method) => method.id),
-    env: launch.env
+    env: launch.env,
+    antigravityChatAuth: launch.antigravityChatAuth
   })
-  const setup = { authMethodId, resumePreference: spec.resumePreference }
+  const setup = {
+    authMethodId,
+    authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
+    resumePreference: spec.resumePreference
+  }
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
   let takeover: ReturnType<typeof acpReopenTakeover> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
+  const acceptSession = (accepted: NonNullable<typeof started>): void => {
+    assertStarting()
+    if (accepted.kind === 'new') {
+      liveLane = input.lanes.create(accepted.sessionId)
+      assertStarting()
+    }
+    options.adoptSession(accepted.response, accepted.kind === 'new' ? 'new' : 'loaded')
+  }
   if (resume) {
     const attaching = input.lanes.create(resume.sessionId, true)
     liveLane = attaching
     try {
-      started = await connection.start({
-        cwd: launch.cwd,
-        mcpServers: [],
-        sessionId: resume.sessionId,
-        ...setup
-      })
+      started = await connection.start(
+        {
+          cwd: launch.cwd,
+          mcpServers: [],
+          sessionId: resume.sessionId,
+          ...setup
+        },
+        acceptSession
+      )
       assertStarting()
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
@@ -101,9 +117,11 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup })
+    started = await connection.start({ cwd: launch.cwd, mcpServers: [], ...setup }, acceptSession)
     assertStarting()
-    liveLane = input.lanes.create(started.sessionId)
+  }
+  if (!liveLane) {
+    throw new Error('ACP session did not open')
   }
   // Only a load that reopened the chat's own conversation catches up, and only from what that
   // conversation replayed; a replacement session has no history of the chat's to add.
@@ -130,22 +148,24 @@ export async function initializeAcpStructuredSession(
   }
   const childStops = await probeAcpChildStops(connection, spec.dialect)
   assertStarting()
-  options.adoptSession(started.response, started.kind === 'new' ? 'new' : 'loaded')
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
   if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.
-    const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
-    const configId = options.modeConfigId()
-    const { configOptions } = await connection.setConfigOption(configId, requested)
-    assertStarting()
-    if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
-      throw new Error('Permission mode could not be confirmed')
+    const wanted = acquire.permissionMode ?? 'ask'
+    const requested = mode.values[wanted]
+    if (requested === undefined) {
+      throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
     }
-    options.adoptSession(
-      { ...started.response, configOptions },
-      started.kind === 'new' ? 'new' : 'loaded'
-    )
+    const configId = options.modeConfigId()
+    await connection.setConfigOption(configId, requested, undefined, ({ configOptions }) => {
+      assertStarting()
+      if (configOptions.find((option) => option.id === configId)?.currentValue !== requested) {
+        throw new Error('Permission mode could not be confirmed')
+      }
+      options.adoptConfigOptions(configOptions)
+    })
+    assertStarting()
   }
   // A load restores the conversation's own model, so only a new session runs the launch choice.
   if (started.kind === 'new' && launch.launchModel) {

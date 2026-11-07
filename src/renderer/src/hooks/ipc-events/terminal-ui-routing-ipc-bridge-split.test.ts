@@ -36,7 +36,7 @@ import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   hasTerminalPaneSplitMountLease,
   registerTerminalPaneSplitRequestHandler
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import { routeRuntimeTerminalSplitRequest } from './terminal-ui-routing-ipc-bridge'
 
 beforeEach(() => {

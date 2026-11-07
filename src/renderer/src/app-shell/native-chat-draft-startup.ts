@@ -1,5 +1,5 @@
 import { useAppStore } from '../store'
-import { resolveNativeChatDraftOwner } from '../lib/native-chat-draft-owner'
+import { resolveNativeChatDraftOwner } from '../components/native-chat/drafts/native-chat-draft-owner'
 import {
   hydrateNativeChatComposerDrafts,
   setNativeChatComposerDraftOwnerResolver,

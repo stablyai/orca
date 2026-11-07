@@ -54,16 +54,16 @@ export function PluginsSettingsSection({
   const mountedRef = useRef(false)
   const listRequestRef = useRef(0)
   const review = usePluginReviewQueue()
-  const page = usePluginPageNavigation(review.pause)
+  const page = usePluginPageNavigation(review.navigate)
   const clearReviews = review.clear
   const installedKeysRef = useRef<ReadonlySet<string>>(new Set())
   const openPage = page.open
   // Why: review happens on the plugin's own page, where the consent sits above its one button.
   useEffect(() => {
     if (review.reviewKey) {
-      openPage(review.reviewKey)
+      openPage(review.reviewKey, { replace: review.replacePage })
     }
-  }, [review.reviewKey, openPage])
+  }, [review.reviewKey, review.replacePage, openPage])
 
   const applyPluginList = (nextPlugins: PluginHostListEntry[]): void => {
     const installedPluginKeys = new Set(nextPlugins.map((plugin) => plugin.pluginKey))
@@ -237,7 +237,7 @@ export function PluginsSettingsSection({
         void applyPluginThemesNow(pluginKey).catch(() => false)
       }
       if (mountedRef.current) {
-        review.advance(nextPlugins)
+        review.advance(pluginKey, nextPlugins)
       }
     } finally {
       clearBusy(pluginKey)

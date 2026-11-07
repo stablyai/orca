@@ -1,11 +1,10 @@
-import { createStore, type StoreApi } from 'zustand/vanilla'
+import type { StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 
 import './store-session-test-harness'
-import { emptyTabLayoutState } from './editor-slice-test-harness'
+import { createEditorTabsStore } from './editor/editor-slice-test-harness'
 import '@/runtime/layout-apply-test-transport.test-fixture'
 import '../../../../shared/layout-owner-switch'
 
@@ -16,18 +15,9 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 )
 
 function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
-  // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
-  return createStore<any>()((...args: any[]) => ({
-    ...emptyTabLayoutState(),
-    activeWorktreeId: 'wt-1',
-    tabsByWorktree: {},
-    browserTabsByWorktree: {},
-    activeBrowserTabId: null,
-    activeBrowserTabIdByWorktree: {},
-    tabBarOrderByWorktree: {},
-    ...overrides,
-    ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
-  })) as unknown as StoreApi<AppState>
+  const store = createEditorTabsStore()
+  store.setState(overrides ?? {})
+  return store
 }
 
 function makeBrowserTab(id: string): BrowserTab {

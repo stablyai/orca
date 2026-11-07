@@ -112,6 +112,11 @@ export type PluginHostListEntry = {
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string
+    /** Structured install location; absent on older hosts and non-Git installs. */
+    url?: string
+    path?: string
+    /** The catalog's repository claim for this release; not verified authorship. */
+    authorRepository?: string
     resolvedCommit: string | null
     contentHash: string
     /** `ref` is the catalog's ref, so a client can join to the exact catalog source. */
