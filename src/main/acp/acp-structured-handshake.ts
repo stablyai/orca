@@ -8,11 +8,7 @@ import { observeAcpForkSupport } from './acp-fork-support'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import {
-  ACP_REOPEN_FAILED,
-  acpReopenTakeover,
-  acpSessionNotRestoredRow
-} from './acp-session-reopen-failure'
+import { acpReopenFailure, acpSessionNotRestoredRow } from './acp-session-reopen-failure'
 import { catchUpAcpHistory } from './history/acp-history-catch-up'
 import type { AcpLoadHistoryFrame } from './history/acp-history-replay'
 import { ACP_HANDLE_TRANSPORT, acpAgentName } from './acp-structured-agent-definitions'
@@ -79,7 +75,6 @@ export async function initializeAcpStructuredSession(
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null
   let liveLane: AcpStructuredLane | null = null
-  let takeover: ReturnType<typeof acpReopenTakeover> | null = null
   let replayed: AcpLoadHistoryFrame[] | null = null
   const acceptSession = (accepted: NonNullable<typeof started>): void => {
     assertStarting()
@@ -106,12 +101,12 @@ export async function initializeAcpStructuredSession(
       replayed = input.lanes.finishLoad()
       attaching.translator.finishLoad()
     } catch (error) {
-      takeover = acpReopenTakeover(error, resume, {
-        // An agent already exited, its output still draining, has no session to take over in.
-        over: connection.closed || connection.exited || input.abandoned(),
-        now: now(),
-        warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
-      })
+      // An agent already exited, its output still draining, has no session to reopen.
+      acpReopenFailure(
+        error,
+        resume.sessionId,
+        connection.closed || connection.exited || input.abandoned()
+      )
     }
   }
   if (!started || !liveLane) {
@@ -123,12 +118,10 @@ export async function initializeAcpStructuredSession(
   if (!liveLane) {
     throw new Error('ACP session did not open')
   }
-  // Only a load that reopened the chat's own conversation catches up, and only from what that
-  // conversation replayed; a replacement session has no history of the chat's to add.
+  // Only a load that reopened the chat's own conversation catches up, from what it replayed.
   if (
     replayed &&
     spec.historyCatchUp &&
-    !takeover &&
     started.kind !== 'new' &&
     started.sessionId === resume?.sessionId &&
     acquire.events
@@ -177,8 +170,7 @@ export async function initializeAcpStructuredSession(
     handle: { transport: ACP_HANDLE_TRANSPORT, agent: spec.agent, nativeId: started.sessionId },
     origin: started.kind === 'new' ? 'created' : 'resumed',
     mintedAtFence: acquire.fence,
-    observedAt: now(),
-    ...takeover
+    observedAt: now()
   }
   const reading = liveLane
   const unbind = acquire.events?.bindReadingControl?.({
@@ -195,11 +187,7 @@ export async function initializeAcpStructuredSession(
     throw new Error(connection.stderrTail() || `${spec.command} exited while starting`)
   }
   // Include warning rows missed by earlier failed starts.
-  const lost = [
-    ...(launch.resume?.unannouncedLosses() ?? []),
-    ...(takeover?.replaces ? [takeover.replaces.key] : [])
-  ]
-  for (const key of lost) {
+  for (const key of launch.resume?.unannouncedLosses() ?? []) {
     liveLane.apply(acpSessionNotRestoredRow(key, started.sessionId, agentName))
   }
   assertStarting()

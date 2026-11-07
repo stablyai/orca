@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-create-capabilities'
 import { createServer, type Server } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -177,6 +178,10 @@ describe('CLI remote WebSocket transport', () => {
 
     expect(runtime.connectionCount()).toBe(1)
     expect(runtime.authFrames).toHaveLength(1)
+    // The host opens CLI-launched chats at rest only for callers that advertise this.
+    expect(runtime.authFrames[0]?.clientCapabilities).toContain(
+      AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+    )
     expect(runtime.requestMethods).toEqual(['status.get', 'repo.list'])
   })
 

@@ -31,7 +31,6 @@ import {
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
-import { nothingExchangedOn } from './acp-structured-resume-history'
 import { acpUnannouncedLosses } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
@@ -49,8 +48,6 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   resume: {
     sessionId: string
     key: string
-    /** A chat-created session with no exchanged turn may never have been saved. */
-    mayBeUnsaved: () => boolean
     /** Lost conversations whose warning rows are missing; read after startup succeeds. */
     unannouncedLosses: () => string[]
   } | null
@@ -200,9 +197,6 @@ export function acpStructuredLaunchPart(
           ? {
               sessionId: head.handle.nativeId,
               key: agentSessionProviderHandleKey(head.handle),
-              mayBeUnsaved: () =>
-                head.origin === 'created' &&
-                nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
               unannouncedLosses: () =>
                 acpUnannouncedLosses(
                   deps.readJournal,

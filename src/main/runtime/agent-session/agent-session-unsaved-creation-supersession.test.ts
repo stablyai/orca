@@ -8,8 +8,18 @@ import { codexProviderHandleLink } from '../../codex/structured/acquisition/code
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from './ownership/agent-session-reservation-admission'
+import {
+  agentSessionProviderHandleKey,
+  codexProviderHandle
+} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
+
+// Earlier builds wrote this shape.
+const supersedingLink = (threadId: string, superseded: string, fence: number) => ({
+  ...codexProviderHandleLink({ threadId, resumed: false, fence, observedAt: NOW }),
+  supersedesKey: agentSessionProviderHandleKey(codexProviderHandle(superseded))
+})
 const SESSION = 'session-codex'
 let directory: string
 let operations = 0
@@ -108,14 +118,7 @@ describe('a Codex thread started in place of one Codex never saved', () => {
       prove(
         third,
         reserveRequest({ expectedFence: third.getRecord(SESSION)?.lease.runtimeFence ?? 0 }),
-        (fence) =>
-          codexProviderHandleLink({
-            threadId: 'thread-new',
-            resumed: false,
-            supersedesThreadId: 'thread-saved',
-            fence,
-            observedAt: NOW
-          })
+        (fence) => supersedingLink('thread-new', 'thread-saved', fence)
       )
     ).rejects.toThrow('agent_session_provider_handle_invalid')
     expect(third.getRecord(SESSION)?.providerHandleChain).toHaveLength(2)

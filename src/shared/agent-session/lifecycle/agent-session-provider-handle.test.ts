@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   agentSessionProviderHandlesEqual,
   appendAgentSessionProviderHandleLink,
+  decodePersistedAgentSessionProviderHandleChain,
+  encodePersistedAgentSessionProviderHandleChain,
   isAgentSessionProviderHandleChain,
   type AgentSessionProviderHandle,
   type AgentSessionProviderHandleLink
@@ -128,6 +130,31 @@ describe('replacing a conversation the provider could not restore', () => {
     ).toThrow('agent_session_provider_handle_invalid')
     expect(() =>
       appendAgentSessionProviderHandleLink(chain, { ...superseding, handle: acp('s-1') })
+    ).toThrow('agent_session_provider_handle_invalid')
+  })
+
+  it('preserves and reads the original Codex source beside its replacement', () => {
+    const original = link({ handle: codexProviderHandle('t-1') })
+    const replacement = fresh({
+      handle: codexProviderHandle('t-2'),
+      replaces: {
+        key: agentSessionProviderHandleKey(original.handle),
+        reason: 'restore-failed',
+        replacedAt: 3_000
+      }
+    })
+    const chain = appendAgentSessionProviderHandleLink([original], replacement)
+    expect(chain).toEqual([original, replacement])
+    expect(
+      decodePersistedAgentSessionProviderHandleChain(
+        encodePersistedAgentSessionProviderHandleChain(chain)
+      )
+    ).toEqual(chain)
+    expect(() =>
+      appendAgentSessionProviderHandleLink([original], {
+        ...replacement,
+        replaces: { ...replacement.replaces!, key: agentSessionProviderHandleKey(CLAUDE) }
+      })
     ).toThrow('agent_session_provider_handle_invalid')
   })
 })

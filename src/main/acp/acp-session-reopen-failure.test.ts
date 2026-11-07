@@ -15,13 +15,12 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-it('propagates a temporary load envelope before takeover or a dead-child assertion can replace it', async () => {
+it('propagates a temporary load envelope before a dead-child assertion can replace it', async () => {
   const rig = await openAcpAdapterRig({
     launch: {
       resume: {
         key: 'saved-key',
         sessionId: 'saved-id',
-        mayBeUnsaved: () => false,
         unannouncedLosses: () => []
       }
     },
@@ -52,7 +51,6 @@ it.each([
       resume: {
         key: 'saved-key',
         sessionId: 'saved-id',
-        mayBeUnsaved: () => false,
         unannouncedLosses: () => []
       }
     },

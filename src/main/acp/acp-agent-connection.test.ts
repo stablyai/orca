@@ -10,7 +10,13 @@ import {
   type AcpAgentConnection,
   type AcpAgentConnectionOptions
 } from './acp-agent-connection'
-import { AcpAgentExitedError, AcpAuthRequiredError } from './acp-errors'
+import {
+  AcpAgentExitedError,
+  AcpAuthRequiredError,
+  AcpInvalidResponseError,
+  AcpRpcError
+} from './acp-errors'
+import { isAcpSavedSessionMissing } from './acp-session-reopen-failure'
 import { acpStartFailure } from './acp-startup-outcome'
 import captures from '../native-chat/agent-session-wire/__fixtures__/startup-protocol-rejections.json'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
@@ -77,6 +83,88 @@ afterEach(async () => {
 
 describe('ACP process-owning connection', () => {
   // The supervisor (POSIX only) reports the failed spawn on stderr and exits 127.
+
+  it('marks only the addressed load reporting its saved session missing as missing', async () => {
+    const { connection, agent } = fixture()
+    agent.on('initialize', (frame) =>
+      agent.reply(frame, {
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true },
+        authMethods: [{ id: 'cached', name: 'Cached sign-in' }]
+      })
+    )
+    await connection.initialize()
+    agent.on('session/load', (frame) => agent.fail(frame, -32002, 'Resource not found'))
+    const missing = await connection.start({ ...start, sessionId: 'saved-1' }).catch((e) => e)
+    expect(isAcpSavedSessionMissing(missing, 'saved-1')).toBe(true)
+    expect(isAcpSavedSessionMissing(missing, 'saved-2')).toBe(false)
+
+    agent.on('session/load', (frame) => agent.fail(frame, -32000, 'Authentication required'))
+    agent.on('authenticate', (frame) => agent.fail(frame, -32002, 'Resource not found'))
+    const signIn = await connection
+      .start({ ...start, sessionId: 'saved-1', authMethodId: 'cached' })
+      .catch((e) => e)
+    expect(signIn).toMatchObject({ code: -32002, request: { method: 'authenticate' } })
+    expect(isAcpSavedSessionMissing(signIn, 'saved-1')).toBe(false)
+  })
+
+  it("treats only the addressed load or resume's exact not-found detail as missing", async () => {
+    const { connection, agent } = fixture()
+    agent.on('initialize', (frame) =>
+      agent.reply(frame, {
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true, sessionCapabilities: { resume: {}, fork: {} } }
+      })
+    )
+    await connection.initialize()
+    const exact = { details: 'ACP session not found: saved-1' }
+    const answer = async (
+      method: 'session/load' | 'session/resume' | 'session/fork',
+      code: number,
+      data?: unknown,
+      message = 'Internal error'
+    ) => {
+      agent.on(method, (frame) => agent.fail(frame, code, message, data))
+      return method === 'session/fork'
+        ? connection.forkSession('saved-1', start.cwd).catch((e) => e)
+        : connection
+            .start({
+              ...start,
+              sessionId: 'saved-1',
+              resumePreference: method === 'session/resume' ? 'resume' : 'load'
+            })
+            .catch((e) => e)
+    }
+    for (const [method, code, data, missing] of [
+      ['session/load', -32603, exact, true],
+      ['session/resume', -32603, exact, true],
+      ['session/fork', -32603, exact, false],
+      ['session/load', -32603, { details: 'ACP session not found: saved-2' }, false],
+      ['session/load', -32603, { details: `${exact.details} (retry)` }, false],
+      ['session/load', -32603, { details: 'acp session not found: saved-1' }, false],
+      ['session/load', -32603, { reason: exact.details }, false],
+      ['session/load', -32603, { details: 42 }, false],
+      ['session/load', -32603, undefined, false],
+      ['session/load', -32001, exact, false]
+    ] as const) {
+      const error = await answer(method, code, data)
+      expect(error).toMatchObject({ code, request: { method } })
+      expect(
+        isAcpSavedSessionMissing(error, 'saved-1'),
+        `${method} ${code} ${JSON.stringify(data)}`
+      ).toBe(missing)
+    }
+    const messageOnly = await answer('session/load', -32603, undefined, exact.details)
+    expect(isAcpSavedSessionMissing(messageOnly, 'saved-1')).toBe(false)
+    const addressed = await answer('session/load', -32603, exact)
+    expect(isAcpSavedSessionMissing(addressed, 'saved-2')).toBe(false)
+    expect(isAcpSavedSessionMissing(new AcpInvalidResponseError('bad', exact), 'saved-1')).toBe(
+      false
+    )
+    expect(
+      isAcpSavedSessionMissing(new AcpRpcError(-32603, 'Internal error', exact), 'saved-1')
+    ).toBe(false)
+  })
 
   it('settles prompts and permission signals on proven exit with stdout still open', async () => {
     const statusDuringExit: unknown[] = []

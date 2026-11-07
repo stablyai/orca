@@ -33,8 +33,9 @@ export function isAgentSessionProviderHandleReplacement(
   }
   const { key, reason, replacedAt } = value
   return (
-    // Older builds reject later Claude/Codex creations, setting the whole chat aside on downgrade. Other agents were unreadable there; typed-lane fallback needs a stored-shape decision first.
-    !isAgentSessionProviderHandleReadByOlderBuilds(handle) &&
+    // Unreleased builds saved Codex replacements; reading them keeps those chats decodable. Claude stays refused.
+    (handle.transport === 'codex-app-server' ||
+      !isAgentSessionProviderHandleReadByOlderBuilds(handle)) &&
     isAgentSessionProviderHandleKeyFor(handle, key) &&
     typeof reason === 'string' &&
     reason.length > 0 &&

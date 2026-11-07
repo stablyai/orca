@@ -10,7 +10,6 @@ import {
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
-import { ACP_REOPEN_FAILED } from './acp-session-reopen-failure'
 import {
   GROK_CONFIG_OPTIONS,
   openAcpAdapterRig,
@@ -36,7 +35,6 @@ const resume = {
     resume: {
       sessionId: PROVIDER_SESSION,
       key: 'acp:grok:saved',
-      mayBeUnsaved: () => false,
       unannouncedLosses: () => []
     }
   }
@@ -236,18 +234,23 @@ describe('reattaching a Grok chat the journal holds', () => {
   })
 
   it.each([
-    ['a saved session', false, -32603, 'session file is corrupt'],
-    ['a created session that fails for another reason', true, -32603, 'session file is corrupt'],
-    ['a saved session the agent reports missing', false, -32002, 'Resource not found']
+    ['a saved session it cannot read', -32603, 'session file is corrupt', false],
+    ['a saved session that cannot resume', -32601, 'Method not found', false],
+    ['a saved session the agent reports missing', -32002, 'Resource not found', true],
+    [
+      'a session no turn was exchanged on that the agent reports missing',
+      -32002,
+      'Resource not found',
+      true
+    ]
   ])(
-    'continues %s it cannot reopen in a new one, says so once, and keeps working',
-    async (_label, mayBeUnsaved, code, message) => {
+    'fails %s in place, keeping its identity and opening no other session',
+    async (_label, code, message, missing) => {
       const rig = await openAcpAdapterRig({
         launch: {
           resume: {
             sessionId: 'saved-1',
             key: 'acp-key-saved-1',
-            mayBeUnsaved: () => mayBeUnsaved,
             unannouncedLosses: () => []
           }
         },
@@ -255,19 +258,15 @@ describe('reattaching a Grok chat the journal holds', () => {
         script: (agent) => agent.on('session/load', (frame) => agent.fail(frame, code, message))
       })
       await rig.acquire()
-      expect(rig.started().link).toMatchObject({
-        origin: 'created',
-        handle: { nativeId: PROVIDER_SESSION },
-        replaces: { key: 'acp-key-saved-1', reason: 'restore-failed', replacedAt: 5_000 }
-      })
-      expect(rig.started().link?.supersedesKey).toBeUndefined()
-      expect(rig.sent('session/new')).toHaveLength(1)
-      const rows = await notRestoredRows(rig)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.body).toMatchObject({ kind: 'status', tone: 'warning' })
-      await exchange(rig, 'hi', true)
-      expect(await texts(rig)).toEqual(['hello', 'hi'])
-      expect(await notRestoredRows(rig)).toHaveLength(1)
+      expect(rig.openFailure()).toBeInstanceOf(Error)
+      if (missing) {
+        expect(rig.openFailure()).toMatchObject({ reason: 'savedConversationMissing' })
+      } else {
+        expect(rig.openFailure()).not.toMatchObject({ reason: 'savedConversationMissing' })
+      }
+      expect(rig.sent('session/load')).toHaveLength(1)
+      expect(rig.sent('session/new')).toEqual([])
+      expect(await notRestoredRows(rig)).toEqual([])
     }
   )
 
@@ -279,7 +278,6 @@ describe('reattaching a Grok chat the journal holds', () => {
         resume: {
           sessionId: 'saved-1',
           key: 'acp-key-saved-1',
-          mayBeUnsaved: () => false,
           unannouncedLosses: () => []
         }
       },
@@ -295,6 +293,5 @@ describe('reattaching a Grok chat the journal holds', () => {
     expect(rig.ended).toMatchObject([{ cause: 'requested-close' }])
     expect(rig.sent('session/new')).toEqual([])
     expect(await notRestoredRows(rig)).toEqual([])
-    expect(logger.warn).not.toHaveBeenCalledWith(ACP_REOPEN_FAILED, expect.anything())
   })
 })

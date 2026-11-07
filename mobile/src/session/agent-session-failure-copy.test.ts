@@ -7,20 +7,6 @@ afterEach(async () => {
   await activateMobileUiLocale('en')
 })
 
-it('gives new-chat guidance while keeping a missing conversation diagnostic private', () => {
-  expect(
-    agentSessionFailureSentence(
-      {
-        kind: 'savedConversationMissing',
-        detail: { text: 'No conversation found with session ID: private-id', audience: 'log' }
-      },
-      'row',
-      { agentName: 'Claude' },
-      sayMobileAgentSessionFailure
-    )
-  ).toBe("Claude couldn't find this chat's saved conversation. Start a new chat to continue.")
-})
-
 it.each([
   [
     'en',
