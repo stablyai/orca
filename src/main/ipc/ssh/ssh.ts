@@ -55,7 +55,7 @@ import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { recordForwardFailure } from './ssh-port-forward-unrestored'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
-import { setSshHostServedListener } from '../../ssh/ssh-host-server-status'
+import { getSshHostServerStatus, setSshHostServedListener } from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
@@ -66,6 +66,11 @@ import { reconcileManagedOrcadSshTargets } from '../../ssh/orcad-retained-source
 import { installOrcadMigrationScrollbackRetention } from '../../ssh/orcad-migration-scrollback-retention-wiring'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/legacy-relay-bridge-ipc'
+import {
+  onLastBridgedTerminalExit,
+  retryMoveAfterLastBridgedExit
+} from '../../ssh/legacy-relay/legacy-relay-move-retry'
+import { connectTarget } from './ssh-connect-flow'
 import {
   disposeDesktopBrowserBridge,
   installDesktopBrowserBridge
@@ -163,6 +168,22 @@ export function registerSshHandlers(
     connection: (targetId) => connectionManager?.getConnection(targetId) ?? null,
     runtime: () => runtime ?? null
   })
+  // COMPAT(legacy-relay-bridge): the move waited only on those terminals; finish it (#29626).
+  onLastBridgedTerminalExit(
+    (targetId) =>
+      void retryMoveAfterLastBridgedExit(targetId, {
+        waitingOnBridgedTerminals: (id) => {
+          const status = getSshHostServerStatus(id)
+          return (
+            connectionManager?.getState(id)?.status === 'connected' &&
+            status?.kind === 'relay' &&
+            status.bridged === true
+          )
+        },
+        connectInFlight: (id) => connectInFlight.get(id)?.promise,
+        connect: (id) => connectTarget(id, { automatic: true })
+      })
+  )
 
   if (runtime) {
     installDesktopBrowserBridge({
