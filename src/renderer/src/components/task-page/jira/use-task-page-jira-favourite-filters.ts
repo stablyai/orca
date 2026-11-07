@@ -7,6 +7,7 @@ import {
 import type { JiraFavouriteFilter } from '../../../../../shared/jira/jira-favourite-filters'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_FAVOURITES: readonly JiraFavouriteFilter[] = []
 type FavouriteModel = Pick<
@@ -35,6 +36,7 @@ type Snapshot = {
 }
 
 export function useTaskPageJiraFavouriteFilters(model: FavouriteModel) {
+  const t = useTranslate()
   const ownerKey = model.jiraTaskSourceContext?.hostId ?? model.accountBackedTaskSourceHostId
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(ownerKey), [ownerKey])
   const siteId = model.selectedJiraSiteId
@@ -133,7 +135,7 @@ export function useTaskPageJiraFavouriteFilters(model: FavouriteModel) {
         if (lifetimeRef.current === lifetime && lifetime.intent === intent) {
           setApplyError({
             lifetime,
-            message: translate(
+            message: t(
               'jira.favourites.clearFailed',
               'Could not clear the saved filter. Retry after it finishes loading or saving.'
             )
@@ -154,7 +156,7 @@ export function useTaskPageJiraFavouriteFilters(model: FavouriteModel) {
           message:
             reason instanceof Error
               ? reason.message
-              : translate('jira.favourites.applyFailed', 'Could not apply the Jira favourite.')
+              : t('jira.favourites.applyFailed', 'Could not apply the Jira favourite.')
         })
       }
       return false
