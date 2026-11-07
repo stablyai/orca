@@ -15,7 +15,10 @@ import {
   claudeProfileConfigHomes,
   getClaudeProfileRouter
 } from '../claude-accounts/claude-profile-installed-router'
-import { resolveClaudeDefaultHome } from '../claude-accounts/claude-profile-paths'
+import {
+  readUserClaudeConfigDir,
+  resolveClaudeDefaultHome
+} from '../claude-accounts/claude-profile-paths'
 
 const STATS_CACHE_FILE = 'stats-cache.json'
 const MIN_SUPPORTED_VERSION = 5
@@ -171,9 +174,12 @@ async function wslClaudeStatsCacheHomes(): Promise<string[]> {
 }
 
 export async function readHostClaudeStatsCaches(): Promise<ClaudeStatsCacheHome[]> {
+  // Headless hosts have no profile router, so read their inherited CLAUDE_CONFIG_DIR directly.
+  const inheritedHome = getClaudeProfileRouter() ? undefined : readUserClaudeConfigDir(process.env)
   const homes = new Set([
     resolveClaudeDefaultHome(homedir()),
     ...claudeProfileConfigHomes(),
+    ...(inheritedHome ? [inheritedHome] : []),
     ...(await wslClaudeStatsCacheHomes())
   ])
   const entries = await Promise.all(

@@ -8,7 +8,7 @@ import {
 } from '../../../../shared/claude-usage-types'
 import { useAppStore } from '../../store'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '../../runtime/runtime-host-connection-state'
 import { formatDayKey, formatTokens } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
