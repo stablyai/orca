@@ -133,9 +133,9 @@ describe('evidence', () => {
 describe('a query the engine had to cut says so', () => {
   it('loads a candidate set larger than one batch of bound ids', async () => {
     const { db, engine } = await open('ss-engine-id-batching', {
-      sessionCandidateLimit: 1200
+      sessionCandidateLimit: 600
     })
-    for (let id = 1; id <= 1100; id++) {
+    for (let id = 1; id <= 513; id++) {
       addSyntheticSession(db, { id, text: 'needle' })
     }
     const result = engine.search({ query: 'needle', limit: 5 })

@@ -99,6 +99,7 @@ export type SessionParseResult = {
 }
 
 export type ResumableParseFinalizeOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }

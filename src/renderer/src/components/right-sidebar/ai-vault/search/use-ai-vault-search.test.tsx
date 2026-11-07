@@ -230,3 +230,28 @@ it('revalidates active search without losing hits, accepting old pages, or touch
   await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
   expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
 })
+
+it('keeps loaded rows while a continuation is pending and appends its captured page', async () => {
+  searchSessions.mockResolvedValueOnce({
+    ...searchResults(),
+    hits: [{ ...searchHit(), sessionId: 'first' }],
+    page: { cursor: 'next', hasMore: true }
+  })
+  const request = { query: 'needle' }
+  const { result, unmount } = renderHook(() => useAiVaultSearch(request, 'local', ''))
+  await debounce()
+  let resolve!: (response: AiVaultSearchResponse) => void
+  searchSessions.mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done
+      })
+  )
+  act(() => result.current.loadMore())
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first'])
+  await act(async () =>
+    resolve({ ...searchResults(), hits: [{ ...searchHit(), sessionId: 'second' }] })
+  )
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first', 'second'])
+  unmount()
+})

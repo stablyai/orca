@@ -3,7 +3,7 @@ import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
 import { isUnderScanRoot } from './session-search-scan-roots'
 import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
-import type { SessionSearchStore } from './session-search-store'
+import type { SessionSearchIndexStore } from './session-search-store'
 
 // Walk missing directories upward to seek a listing that proves which component disappeared.
 const MISSING_DIRECTORY = new Set(['ENOENT', 'ENOTDIR'])
@@ -19,7 +19,7 @@ export type SessionSearchRetirement = {
 }
 
 export type SessionSearchRetirementArgs = {
-  store: SessionSearchStore
+  store: SessionSearchIndexStore
   /** Indexed paths absent from this pass’s discovery. */
   paths: readonly string[]
   /** Longest containing root bounds each path’s proof walk. */
