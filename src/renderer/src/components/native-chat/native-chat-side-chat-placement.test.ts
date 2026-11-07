@@ -119,6 +119,36 @@ it('selects and moves the side chat beside its source once a later frame draws i
   })
 })
 
+it('focuses the side chat after this window moves and selects it there', () => {
+  // As dropUnifiedTab does: the tab moves into the right pane, which becomes the active one.
+  mocks.moveTabToGroup.mockImplementationOnce(() => {
+    const state = store.getState()
+    store.setState({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        'wt-1': [
+          source,
+          { id: 'tab-side', worktreeId: 'wt-1', groupId: 'g-right', entityId: 'side' }
+        ]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        'wt-1': [
+          group('g-left', 'tab-source', ['tab-source']),
+          group('g-right', 'tab-side', ['tab-side'])
+        ]
+      },
+      activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, 'wt-1': 'g-right' }
+    })
+    return 'moved'
+  })
+  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
+
+  publishSideChat()
+
+  expect(mocks.focusComposer).toHaveBeenCalledWith('tab-side')
+})
+
 it('leaves it in the background once the user selected elsewhere, even after going back', () => {
   const placement = beginNativeChatSideChatPlacement('wt-1', 'tab-source')
   selectGroup('g-right')

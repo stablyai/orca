@@ -92,12 +92,12 @@ export function beginNativeChatSideChatPlacement(
       finish()
       return
     }
-    if (moveBeside(tabId, sourceGroupId) === 'owner') {
-      // Finished once main's frame draws it elsewhere, or when main refuses.
-      movingFrom = sourceGroupId
-      return
+    // From here the move's own changes are the request's, whether this window draws them now or
+    // main's frame does later; an 'owner' move finishes once drawn, or when main refuses.
+    movingFrom = sourceGroupId
+    if (moveBeside(tabId, sourceGroupId) !== 'owner') {
+      finish()
     }
-    finish()
   }
   const moveBeside = (tabId: string, sourceGroupId: string): 'owner' | 'moved' | false => {
     const layout = useAppStore.getState().layoutByWorktree[worktreeId]
