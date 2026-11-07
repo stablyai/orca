@@ -127,9 +127,10 @@ it('keeps disk blockers authoritative and offers the existing branch after a col
   )
   const recovery = vi.mocked(toast.error).mock.lastCall?.[1]?.action
   expect(recovery).toMatchObject({ label: 'Switch to hidden' })
-  await act(async () =>
-    (recovery as { onClick: (event: unknown) => void }).onClick(new MouseEvent('click'))
-  )
+  if (!recovery || typeof recovery !== 'object' || !('onClick' in recovery)) {
+    throw new Error('Collision toast has no recovery action')
+  }
+  await act(async () => Reflect.apply(recovery.onClick, undefined, []))
   expect(switchRuntimeGitBranch).toHaveBeenLastCalledWith(
     props.context,
     { kind: 'local', name: 'hidden' },

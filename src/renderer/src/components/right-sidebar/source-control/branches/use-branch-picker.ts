@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -154,34 +155,46 @@ export function useBranchPicker(options: BranchPickerOptions) {
           setOpen(false)
         }
       } catch (failure) {
-        if (generation.current === ownGeneration) {
+        // Report a failure even after the user left; only the recovery needs this picker.
+        const here = generation.current === ownGeneration
+        if (here) {
           setOpen(false)
-          const existingBranch = branchSwitchExistingBranch(failure)
-          toast.error(
-            translate('sourceControl.branchPicker.switchFailedTitle', "Couldn't switch branches"),
-            {
-              description:
-                failure instanceof Error
-                  ? failure.message
-                  : translate(
-                      'sourceControl.branchPicker.switchFailed',
-                      "Orca couldn't switch branches. Try again."
-                    ),
-              action: existingBranch
-                ? {
-                    label: translate('sourceControl.branchPicker.recover', 'Switch to {{branch}}', {
-                      branch: existingBranch
-                    }),
-                    onClick: () =>
+        }
+        const existingBranch = here ? branchSwitchExistingBranch(failure) : null
+        toast.error(
+          here
+            ? translate('sourceControl.branchPicker.switchFailedTitle', "Couldn't switch branches")
+            : translate(
+                'sourceControl.branchPicker.switchFailedIn',
+                "Couldn't switch branches in {{workspace}}",
+                { workspace: basename(route.worktreePath) }
+              ),
+          {
+            description:
+              failure instanceof Error
+                ? failure.message
+                : translate(
+                    'sourceControl.branchPicker.switchFailed',
+                    "Orca couldn't switch branches. Try again."
+                  ),
+            action: existingBranch
+              ? {
+                  label: translate('sourceControl.branchPicker.recover', 'Switch to {{branch}}', {
+                    branch: existingBranch
+                  }),
+                  onClick: () => {
+                    // A toast outlives the picker; never switch a workspace the user has left.
+                    if (generation.current === ownGeneration) {
                       void selectRef.current({
                         target: { kind: 'local', name: existingBranch },
                         label: existingBranch
                       })
+                    }
                   }
-                : undefined
-            }
-          )
-        }
+                }
+              : undefined
+          }
+        )
       } finally {
         inFlight.current = false
         if (generation.current === ownGeneration) {
@@ -191,7 +204,9 @@ export function useBranchPicker(options: BranchPickerOptions) {
     },
     [route, hostLabel, onOpenWorkspace, onSwitched, setOpen]
   )
-  selectRef.current = select
+  useEffect(() => {
+    selectRef.current = select
+  }, [select])
   return {
     open,
     openedAt,

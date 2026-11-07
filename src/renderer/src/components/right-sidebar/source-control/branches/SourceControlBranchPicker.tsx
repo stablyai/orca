@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
+import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getExecutionHostLabel } from '../../../../../../shared/execution-host'
@@ -47,16 +48,32 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       useAppStore.getState().setActiveWorktree(workspace.id, workspace.hostId),
     []
   )
+  const activeWorktreePath = activeWorktree?.path
   const onSwitched = useCallback(
     (message?: string) => {
       if (message) {
-        toast.warning(message, { duration: 15000 })
+        // The switch can land after the user moved on; name the workspace it happened in.
+        if (useAppStore.getState().activeWorktreeId === activeWorktreeId) {
+          toast.warning(message, { duration: 15000 })
+        } else {
+          toast.warning(
+            translate('sourceControl.branchPicker.switchedIn', 'In {{workspace}}', {
+              workspace: basename(activeWorktreePath ?? '')
+            }),
+            { description: message, duration: 15000 }
+          )
+        }
       }
       if (activeWorktreeId) {
         recordBranchSwitchOutcome(activeWorktreeId, refreshActiveGitStatusAfterMutation)
       }
     },
-    [activeWorktreeId, recordBranchSwitchOutcome, refreshActiveGitStatusAfterMutation]
+    [
+      activeWorktreeId,
+      activeWorktreePath,
+      recordBranchSwitchOutcome,
+      refreshActiveGitStatusAfterMutation
+    ]
   )
   if (!activeWorktree || !activeWorktreeId || !activeRepo || !activeRepoTarget) {
     return null
@@ -65,7 +82,7 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
   const blocker = agentWorking
     ? translate(
         'sourceControl.branchPicker.agentWorking',
-        'An agent is working in this workspace. Switch branches after it finishes.'
+        'An agent is working in this workspace. Switch branches after it finishes, or close its tab if it has stopped.'
       )
     : statusReadError
       ? translate(

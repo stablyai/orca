@@ -37,10 +37,7 @@ export function useSourceControlWorktreeOperationState({
     Record<string, SourceControlActionError | null>
   >({})
   const remoteActionErrorSequenceByWorktreeRef = useRef<Record<string, number>>({})
-  const recordBranchSwitchOutcome = useBranchSwitchOutcome(
-    setRemoteActionErrors,
-    remoteActionErrorSequenceByWorktreeRef
-  )
+  const recordBranchSwitchOutcome = useBranchSwitchOutcome(setRemoteActionErrors)
   const previousConflictOperationsRef = useRef<Record<string, GitConflictOperation>>({})
   // Track commits per worktree so navigation cannot allow a duplicate in-flight commit.
   const [commitInFlightByWorktree, setCommitInFlightByWorktree] = useState<Record<string, boolean>>(

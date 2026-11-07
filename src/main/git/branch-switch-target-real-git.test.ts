@@ -161,6 +161,31 @@ it('probes the resolved local name when a remote checkout lands with a hook fail
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('topic')
   expect(recorded).toHaveBeenCalledOnce()
 })
+it("quotes git's own error without blaming a hook when a switch lands", async () => {
+  await git('branch', 'topic')
+  await expect(
+    switchBranchGuarded(
+      directory,
+      { kind: 'local', name: 'topic' },
+      {},
+      {
+        getStatus: () => getStatus(directory, { includeLineStats: false }),
+        checkout: async (branch) => {
+          await git('checkout', '-q', branch)
+          throw Object.assign(new Error('checkout failed'), {
+            stderr: 'error: unable to create file app.css: Permission denied\n'
+          })
+        },
+        getAgentBlocker: async () => null
+      }
+    )
+  ).rejects.toThrow(
+    new BranchSwitchLandedWithWarningError(
+      'Switched to topic, but git reported: error: unable to create file app.css: Permission denied',
+      'topic'
+    )
+  )
+})
 it('maps a remote not covered by its fetch settings to tracking recovery', async () => {
   await remote('origin')
   await git('config', 'remote.origin.fetch', '+refs/heads/other:refs/remotes/origin/other')

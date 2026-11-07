@@ -276,9 +276,11 @@ export async function switchBranchGuarded(
           ? filesLeftBehindMessage(branch, failed)
           : tracking
             ? `Switched to ${branch}, but ${tracking}`
-            : detail
-              ? `Switched to ${branch}. A git hook in this repository failed afterwards and said: ${detail}. The switch itself worked.`
-              : `Switched to ${branch}. A git hook or git step in this repository failed afterwards. The switch itself worked.`,
+            : detail && /^(error|fatal):/.test(detail)
+              ? `Switched to ${branch}, but git reported: ${detail}`
+              : detail
+                ? `Switched to ${branch}. A git hook in this repository failed afterwards and said: ${detail}. The switch itself worked.`
+                : `Switched to ${branch}. A git hook or git step in this repository failed afterwards. The switch itself worked.`,
         branch
       )
     }
