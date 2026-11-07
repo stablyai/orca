@@ -9,6 +9,8 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   runtimeNotFound: 'Unknown ephemeral VM runtime: {{runtimeId}}',
   runtimeRepoMissing: 'Ephemeral VM runtime has no repo id: {{runtimeId}}',
   provisionCancelled: 'Provisioning cancelled.',
+  provisionInterrupted:
+    'Orca stopped while this VM was being created. Destroy it to release any provider resources.',
   startRefUnresolved: 'Could not resolve provisioned-root start ref: {{ref}}',
   defaultStartRefUnresolved: 'Could not resolve a default provisioned-root start ref.',
   recipeExited: 'Recipe exited with code {{exitCode}}.',

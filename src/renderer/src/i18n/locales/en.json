@@ -12000,7 +12000,11 @@
           "stopCleanup": "Stop cleanup",
           "cleanupStopped": "Cleanup stopped",
           "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup.",
-          "cloudVmRefreshLabel": "Refresh Cloud VMs"
+          "cloudVmRefreshLabel": "Refresh Cloud VMs",
+          "provisioning": "Provisioning",
+          "untrackedRuntimeHint": "Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.",
+          "removeFromList": "Remove from list",
+          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list."
         },
         "ephemeralVms": {
           "search": {
@@ -24246,7 +24250,8 @@
       "suspendExitedWithoutCode": "Suspend exited with code unknown.",
       "resumeExited": "Resume exited with code {{exitCode}}.",
       "resumeExitedWithoutCode": "Resume exited with code unknown.",
-      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer."
+      "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
+      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources."
     }
   },
   "installDirAcl": {
