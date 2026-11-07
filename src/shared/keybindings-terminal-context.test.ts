@@ -45,7 +45,6 @@ describe('keybindings', () => {
     (platform) => {
       const chords = [
         { action: 'terminal.search', key: 'f', code: 'KeyF', shift: false },
-        { action: 'terminal.clear', key: 'k', code: 'KeyK', shift: false },
         { action: 'terminal.closePane', key: 'w', code: 'KeyW', shift: false },
         { action: 'tab.newTerminal', key: 't', code: 'KeyT', shift: false },
         { action: 'terminal.selectAll', key: 'a', code: 'KeyA', shift: platform !== 'darwin' },
@@ -154,7 +153,7 @@ describe('keybindings', () => {
     expect(
       keybindingMatchesAction(
         'worktree.palette',
-        { key: 'j', code: 'KeyJ', control: false, meta: true, alt: false, shift: false },
+        { key: 'k', code: 'KeyK', control: false, meta: true, alt: false, shift: false },
         'darwin',
         undefined,
         { context: 'app', terminalShortcutPolicy: 'terminal-first' }

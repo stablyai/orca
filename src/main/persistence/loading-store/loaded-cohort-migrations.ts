@@ -14,21 +14,30 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateTabSwitchKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
-    const existing = state.settings?.tabSwitchKeybindingSeed
-    if (existing === 'pending' || existing === 'done') {
-      return state
-    }
-    // Persist the frozen cohort before the first file makes a fresh install appear existing.
-    this.runtime.loadNeedsSave = true
-    return {
-      ...state,
-      settings: {
-        ...state.settings,
-        // Existing installs seed old chords; fresh ones use current defaults.
-        tabSwitchKeybindingSeed: fileExistedOnLoad ? 'pending' : 'done'
+  migrateKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    // Secondary profiles start with only the install's telemetry consent, before their first load.
+    const telemetryOnly =
+      Object.keys(state).length === 1 &&
+      isRecord(state.settings) &&
+      Object.keys(state.settings).length === 1 &&
+      isRecord(state.settings.telemetry)
+    const existingProfile = fileExistedOnLoad && !telemetryOnly
+    for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
+      const existing = state.settings?.[key]
+      if (existing === 'legacy' || existing === 'done') {
+        continue
+      }
+      // Freeze each rollout's cohort before saving makes a fresh install appear existing.
+      this.runtime.loadNeedsSave = true
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
+        }
       }
     }
+    return state
   }
 
   /** Reads the retired Chat UI switch from the raw profile, before load strips it. */

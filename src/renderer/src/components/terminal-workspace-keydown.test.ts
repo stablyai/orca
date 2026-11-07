@@ -398,6 +398,13 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
   })
+
+  it('routes a tab chord to the floating panel when its event target is inside it', () => {
+    mocks.targetInsideFloatingPanel = true
+    nextTab()
+    expect(switchFloatingWorkspaceTab).toHaveBeenCalledWith(mocks.state, 1, 'all-types')
+    expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
 })
 
 describe('tab.closeAll confirmation', () => {
