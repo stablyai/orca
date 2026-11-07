@@ -141,6 +141,33 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
+  /** Sessions whose title contains every query token, case-insensitively. */
+  titleMatches(tokens: readonly string[], scope: RetrievalScope): SessionRow[] {
+    const needles = tokens.map((token) => token.toLowerCase())
+    if (needles.length === 0) {
+      return []
+    }
+    const { conditions, values } = scope.filter
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    // Why: SQLite lower()/LIKE fold only ASCII, so match in JS to keep titles like "Gestión" findable.
+    // ponytail: scans every session title per query; move titles into FTS if session counts grow large.
+    const rows = this.db
+      .prepare(`SELECT id, title FROM sessions ${where} ORDER BY updated_at DESC, id DESC`)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessions.id and sessions.title are NOT NULL columns of the private schema.
+      .all(...values) as { id: number; title: string }[]
+    const ids: number[] = []
+    for (const row of rows) {
+      if (ids.length >= scope.candidateLimit) {
+        break
+      }
+      const title = row.title.toLowerCase()
+      if (needles.every((needle) => title.includes(needle))) {
+        ids.push(row.id)
+      }
+    }
+    return this.loadSessions(ids, scope)
+  }
+
   /** Bound SQL parameters independently of the configurable candidate limit. */
   private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []

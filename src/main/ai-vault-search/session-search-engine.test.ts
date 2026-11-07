@@ -185,3 +185,14 @@ describe('a sentence pasted out of a transcript is found behind a full candidate
     expect(ids(result)).toEqual(['1'])
   })
 })
+
+describe('a session title is searched alongside its messages', () => {
+  it('finds a title-only match after content matches', async () => {
+    const { db, engine } = await open('ss-engine-title-match')
+    addSyntheticSession(db, { id: 1, text: 'refactor the parser' })
+    addSyntheticSession(db, { id: 2, text: 'quarterly gestión notes' })
+    db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run('PPP Gestión', 1)
+    expect(ids(engine.search({ query: 'gestión' }))).toEqual(['2', '1'])
+    expect(ids(engine.search({ query: 'PPP' }))).toEqual(['1'])
+  })
+})
