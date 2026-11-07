@@ -33,7 +33,7 @@ import {
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
 import { isWslHostsServing } from '../../wsl-host-internal-gate'
-import { createFileContentCache } from './runtime-environment-store-read-cache'
+import { createSecureFileContentCache } from './runtime-environment-store-read-cache'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -78,7 +78,7 @@ type MergedEnvironmentStore = {
   environments: KnownRuntimeEnvironment[]
 }
 
-const mergedStoreCache = createFileContentCache<MergedEnvironmentStore>()
+const mergedStoreCache = createSecureFileContentCache<MergedEnvironmentStore>()
 
 export function readEnvironmentStore(
   userDataPath: string,
