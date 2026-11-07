@@ -7,6 +7,8 @@ export type SttRecognizerInit = {
   hotwordsFilePath?: string
   /** Absent = auto-detect. */
   language?: string
+  /** Silero VAD GGUF; when present, offline models commit text at each pause. */
+  vadModelPath?: string
 }
 
 export type SttRecognizerEvent =

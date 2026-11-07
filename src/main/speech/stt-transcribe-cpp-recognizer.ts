@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url'
 import type * as TranscribeCpp from 'transcribe-cpp'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
+import { VadPauseSegmenter } from './stt-vad-pause-segmenter'
 import type { SttRecognizer, SttRecognizerInit, SttRecognizerPost } from './stt-recognizer'
 
 // Past ~8 threads decode slowed 2-4x under load in the 2026-11 benchmark; E-cores and SMT siblings
@@ -24,12 +25,59 @@ async function readVocabulary(path: string | undefined): Promise<string[]> {
     .filter(Boolean)
 }
 
+// Without the detector, audio is still cut at the decode bound, just not at pauses.
+type AudioSegmenter = {
+  readonly heldSamples: number
+  push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
+  flush(): Float32Array[] | Promise<Float32Array[]>
+}
+
+function boundedChunks(sampleRate: number): AudioSegmenter {
+  const chunker = new OfflineAudioChunker(sampleRate)
+  return {
+    get heldSamples() {
+      return chunker.heldSamples
+    },
+    push: (samples) => chunker.push(samples),
+    flush: () => {
+      const rest = chunker.flush()
+      return rest ? [rest] : []
+    }
+  }
+}
+
 // Totals, not the nominal rate ratio: per-feed resampling rounds, and the drift would replay decoded audio.
 type StreamCoverage = {
-  chunker: OfflineAudioChunker
+  segmenter: AudioSegmenter
+  vad: TranscribeCpp.VadSession | null
   inputSamples: number
   resampledSamples: number
-  decodedSamples: number
+  reportedSamples: number
+}
+
+// Dropped silence still counts as covered; report it so the host's replay buffer and stall watch don't grow through long pauses.
+const SILENCE_COVERAGE_REPORT_SECONDS = 5
+
+// Optional: without it dictation still works, with text only at the decode bound and at stop.
+async function loadSileroVad(
+  transcribe: typeof TranscribeCpp,
+  path: string | undefined,
+  sampleRate: number
+): Promise<TranscribeCpp.TranscribeModel | null> {
+  if (!path) {
+    return null
+  }
+  try {
+    // Tiny and per-frame; the CPU keeps it off a GPU that may fail over.
+    const model = await transcribe.TranscribeModel.load(path, { backend: 'cpu' })
+    if (model.vadInfo.sampleRate === sampleRate) {
+      return model
+    }
+    model.dispose()
+  } catch (error) {
+    console.warn('[speech] Silero VAD unavailable; text arrives at stop:', error)
+  }
+  return null
 }
 
 export async function createTranscribeCppRecognizer(
@@ -58,7 +106,23 @@ export async function createTranscribeCppRecognizer(
     ...(vocabulary.length > 0 && model.supports('vocabulary') ? { vocabulary } : {})
   }
   const modelRate = model.capabilities.nativeSampleRate || init.sampleRate
+  const vadModel = await loadSileroVad(transcribe, init.vadModelPath, modelRate)
   const streams = new Map<string, StreamCoverage>()
+
+  const openStream = (): StreamCoverage => {
+    // A VAD stream is per-dictation state, so each dictation gets its own session.
+    const vad = vadModel?.createVadSession({ nThreads: 1 }) ?? null
+    return {
+      segmenter:
+        vad && vadModel
+          ? new VadPauseSegmenter(vad, modelRate, vadModel.vadInfo.frameSamples)
+          : boundedChunks(modelRate),
+      vad,
+      inputSamples: 0,
+      resampledSamples: 0,
+      reportedSamples: 0
+    }
+  }
 
   const transcribeChunk = async (chunk: Float32Array): Promise<string> => {
     try {
@@ -76,27 +140,41 @@ export async function createTranscribeCppRecognizer(
   await transcribeChunk(new Float32Array(Math.round(modelRate / 2)))
 
   // Coverage is in input-rate samples so the host can trim the audio it keeps for a CPU replay.
-  const decode = async (streamId: string, stream: StreamCoverage, chunk: Float32Array) => {
-    const text = await transcribeChunk(chunk)
-    stream.decodedSamples += chunk.length
+  const report = (streamId: string, stream: StreamCoverage, text: string, undecoded: number) => {
+    const covered = stream.resampledSamples - stream.segmenter.heldSamples - undecoded
+    stream.reportedSamples = covered
     post({
       type: 'chunk',
       streamId,
-      text: text.trim(),
-      samples: Math.round((stream.decodedSamples * stream.inputSamples) / stream.resampledSamples)
+      text,
+      samples: Math.round((covered * stream.inputSamples) / stream.resampledSamples)
     })
+  }
+
+  const decode = async (streamId: string, stream: StreamCoverage, chunks: Float32Array[]) => {
+    let undecoded = chunks.reduce((total, chunk) => total + chunk.length, 0)
+    for (const chunk of chunks) {
+      const text = await transcribeChunk(chunk)
+      undecoded -= chunk.length
+      report(streamId, stream, text.trim(), undecoded)
+    }
+    const dropped = stream.resampledSamples - stream.segmenter.heldSamples - stream.reportedSamples
+    if (dropped >= SILENCE_COVERAGE_REPORT_SECONDS * modelRate) {
+      report(streamId, stream, '', 0)
+    }
+  }
+
+  const closeStream = (streamId: string): StreamCoverage | undefined => {
+    const stream = streams.get(streamId)
+    streams.delete(streamId)
+    return stream
   }
 
   return {
     async feed(streamId, samples, sampleRate) {
       let stream = streams.get(streamId)
       if (!stream) {
-        stream = {
-          chunker: new OfflineAudioChunker(modelRate),
-          inputSamples: 0,
-          resampledSamples: 0,
-          decodedSamples: 0
-        }
+        stream = openStream()
         streams.set(streamId, stream)
       }
       // The binding borrows PCM until the run settles; resampleToRate may return the caller's buffer.
@@ -105,20 +183,21 @@ export async function createTranscribeCppRecognizer(
       )
       stream.inputSamples += samples.length
       stream.resampledSamples += resampled.length
-      for (const chunk of stream.chunker.push(resampled)) {
-        await decode(streamId, stream, chunk)
-      }
+      await decode(streamId, stream, await stream.segmenter.push(resampled))
     },
     async finish(streamId) {
-      const stream = streams.get(streamId)
-      streams.delete(streamId)
-      const remaining = stream?.chunker.flush()
-      if (stream && remaining) {
-        await decode(streamId, stream, remaining)
+      const stream = closeStream(streamId)
+      if (!stream) {
+        return
+      }
+      try {
+        await decode(streamId, stream, await stream.segmenter.flush())
+      } finally {
+        stream.vad?.dispose()
       }
     },
     discard(streamId) {
-      streams.delete(streamId)
+      closeStream(streamId)?.vad?.dispose()
     }
   }
 }

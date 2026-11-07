@@ -498,6 +498,7 @@
 1 src/main/speech/speech-model-download-transport.ts
 1 src/main/speech/speech-model-files.ts
 2 src/main/speech/speech-model-http-download.ts
+1 src/main/speech/speech-vad-model.ts
 2 src/main/speech/stt-gpu-failure-marker.ts
 2 src/main/sqlite/harden-database-files.ts
 1 src/main/sqlite/row-cache/keyed-json-row-cache.ts
