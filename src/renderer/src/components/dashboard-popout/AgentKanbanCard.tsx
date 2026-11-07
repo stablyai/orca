@@ -14,6 +14,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { isMacUserAgent } from '@/lib/user-agent-platform'
 import {
   dashboardCardDisplayState,
   type DashboardCard
@@ -21,6 +22,11 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
+
+/** Cmd+Click on macOS, Ctrl+Click elsewhere keeps the terminal preview one gesture away. */
+function hasPreviewModifier(event: React.MouseEvent): boolean {
+  return isMacUserAgent() ? event.metaKey : event.ctrlKey
+}
 
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
@@ -189,6 +195,8 @@ type AgentKanbanCardProps = {
   now: number
   /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
   onOpenTerminal: (card: DashboardCard) => void
+  /** A plain click focuses the agent's worktree directly; Cmd/Ctrl+Click opens the preview instead. */
+  onOpenWorktree: (card: DashboardCard) => void
 }
 
 export const AgentKanbanCard = memo(
@@ -196,10 +204,22 @@ export const AgentKanbanCard = memo(
     card,
     repoIcon = null,
     now,
-    onOpenTerminal
+    onOpenTerminal,
+    onOpenWorktree
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
+    const handleOpenClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
+      if (hasPreviewModifier(event)) {
+        onOpenTerminal(card)
+        return
+      }
+      // Why: the first click already revealed the worktree; repeat clicks would re-run the reveal.
+      if (event.detail > 1) {
+        return
+      }
+      onOpenWorktree(card)
+    }
     // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
     const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
@@ -223,7 +243,7 @@ export const AgentKanbanCard = memo(
       >
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={handleOpenClick}
           className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <div className="flex w-full items-center gap-1.5">
@@ -306,7 +326,7 @@ export const AgentKanbanCard = memo(
 
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={handleOpenClick}
           className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <Tooltip>
@@ -341,6 +361,7 @@ export const AgentKanbanCard = memo(
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.onOpenWorktree === next.onOpenWorktree &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||

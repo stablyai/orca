@@ -252,7 +252,12 @@ function PopoutFixture() {
         createElement(
           'section',
           { key: card.paneKey, 'data-testid': card.tabId },
-          createElement(AgentKanbanCard, { card, now: NOW, onOpenTerminal: noop }),
+          createElement(AgentKanbanCard, {
+            card,
+            now: NOW,
+            onOpenTerminal: noop,
+            onOpenWorktree: noop
+          }),
           card.tabId === 'tab1'
             ? createElement(AgentTerminalPanel, { card, onOpenChange: noop, onReveal: noop })
             : null
