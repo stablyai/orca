@@ -140,6 +140,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       ['ui.onOpenSettings', 'ui.consumePendingOpenSettings'],
       ['ui.onQuitAndStopAllSessions', 'ui.consumePendingQuitAndStopAllSessions'],
       ['ui.onOpenSkillShare', 'ui.consumePendingSkillShare'],
+      ['ui.onOpenOrchestrationDeepLink', 'ui.consumePendingOrchestrationDeepLink'],
       ['rateLimits.onUpdate', 'rateLimits.get'],
       ['agentStatus.onSet', 'agentStatus.getSnapshot'],
       ['agentStatus.onClear', 'agentStatus.getSnapshot'],

@@ -180,11 +180,20 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   const trayCreateFallback = setTimeout(createTray, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
   const rendererWebContentsId = window.webContents.id
+  const resetDocumentListenersOnNavigation = (): void => {
+    // Clear readiness before reload/navigation tears down the old renderer listener.
+    state.osDocumentOpenListenerReady = false
+    state.orchestrationDeepLinkListenerReady = false
+  }
+  window.webContents.on('did-start-loading', resetDocumentListenersOnNavigation)
+  window.webContents.on('render-process-gone', resetDocumentListenersOnNavigation)
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
     logStartupMilestone('did-finish-load')
     // Reload removes the listener; hold pushes until the fresh renderer pulls to prove readiness.
+    // Note: orchestrationDeepLinkListenerReady is cleared on did-start-loading / render-process-gone
+    // rather than did-finish-load so a renderer that pulls before did-finish-load stays ready.
     state.osDocumentOpenListenerReady = false
     const currentStore = state.store
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
@@ -230,6 +239,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('closed', () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
+      state.orchestrationDeepLinkListenerReady = false
       if (state.isServeMode) {
         applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
       }

@@ -27,6 +27,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
+import { usePendingOrchestrationDeepLink } from './use-pending-orchestration-deep-link'
 
 export * from './activity-prototype-page-exports'
 
@@ -44,6 +45,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const setCompactMode = useAppStore((s) => s.setAgentsCompactMode)
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
   const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
+  usePendingOrchestrationDeepLink()
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
   const [activePortalSlotId, setActivePortalSlotId] =
