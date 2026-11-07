@@ -270,12 +270,11 @@ async function typeFilter(renderer: ReactTestRenderer, text: string): Promise<vo
 function pagingHost(folders: Record<string, MobileDirEntry[]>) {
   return createHost((_method, relativePath, params) => {
     const entries = folders[relativePath] ?? []
-    const page: Record<string, unknown> =
-      typeof params === 'object' && params !== null ? params : {}
-    const after: Record<string, unknown> =
-      typeof page.after === 'object' && page.after !== null ? page.after : {}
-    const start = entries.findIndex((candidate) => candidate.name === after.name) + 1
-    const limit = typeof page.limit === 'number' ? page.limit : entries.length
+    const page = typeof params === 'object' && params !== null ? params : {}
+    const after = 'after' in page && typeof page.after === 'object' ? page.after : null
+    const afterName = after !== null && 'name' in after ? after.name : undefined
+    const start = entries.findIndex((candidate) => candidate.name === afterName) + 1
+    const limit = 'limit' in page && typeof page.limit === 'number' ? page.limit : entries.length
     return ok({
       entries: entries.slice(start, start + limit),
       total: entries.length,
