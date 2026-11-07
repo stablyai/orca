@@ -10,7 +10,7 @@ import {
   invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
   resetLocalImageCacheState as resetLocalImageSrcStateForTests
 } from './local-image-src-cache'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
 import {
   holdBrowserAttachmentFiles,

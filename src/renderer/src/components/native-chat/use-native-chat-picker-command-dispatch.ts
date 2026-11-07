@@ -16,7 +16,7 @@ import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/nati
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
-} from './use-native-chat-local-command-answer'
+} from './session/options/terminal/use-native-chat-local-command-answer'
 
 export function useNativeChatPickerCommandDispatch(args: {
   agent: AgentType

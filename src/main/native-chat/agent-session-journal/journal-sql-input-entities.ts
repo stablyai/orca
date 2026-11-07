@@ -24,11 +24,6 @@ const INPUT_ENTITIES = {
     id: 'message_id',
     counter: 'overlay_cards'
   },
-  'cards.indexed': {
-    table: 'journal_proj_indexed_cards',
-    id: 'message_id',
-    counter: 'indexed_cards'
-  },
   ...journalSqlSubmissionMemberTables,
   'inputs.rejections': {
     table: 'journal_proj_input_rejections',
@@ -53,8 +48,6 @@ const INPUT_ENTITIES = {
   },
   receipts: { table: 'journal_proj_receipts', id: 'client_message_id', counter: 'receipts' },
   'queue.cards': { table: 'journal_proj_queue_cards', id: 'message_id', counter: 'cards' },
-  inputEntries: { table: 'journal_proj_input_entries', id: 'input_id', counter: 'entries' },
-  inputCards: { table: 'journal_proj_lineage_cards', id: 'message_id', counter: 'lineage' },
   'inputs.sources': { table: 'journal_proj_input_sources', id: 'input_id', counter: 'sources' }
 } as const
 type InputEntity = keyof typeof INPUT_ENTITIES

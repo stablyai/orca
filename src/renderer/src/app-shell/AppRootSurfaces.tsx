@@ -63,7 +63,7 @@ const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
 const NativeChatAccountUsageDialog = lazy(
-  () => import('../components/native-chat/NativeChatAccountUsageDialog')
+  () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
 )
 const DeleteWorktreeDialog = lazy(
   () => import('../components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog')

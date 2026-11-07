@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import '../../../../../shared/workspace-scope'
 import { pointerDownInTab, ringBell } from './workspace-unread-characterization-driver'
 import {

@@ -67,18 +67,6 @@ const FACTS = {
     value: 'input_id',
     counter: 'recovery_owed'
   },
-  'cards.unintroduced': {
-    table: 'journal_proj_unintroduced_cards',
-    id: 'message_id',
-    value: 'message_id',
-    counter: 'unintroduced_cards'
-  },
-  'cards.cleared': {
-    table: 'journal_proj_cleared_cards',
-    id: 'message_id',
-    value: 'message_id',
-    counter: 'cleared_cards'
-  },
   'observations.providerByInput': {
     table: 'journal_proj_input_providers',
     id: 'input_id',

@@ -16,7 +16,7 @@ import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { useFileExplorerSelection } from '../selection/useFileExplorerSelection'
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
-import type { WslHostUnavailableReason } from '../../../terminal-pane/use-wsl-host-unavailable-reason'
+import type { WslHostUnavailableReason } from '../../../../lib/wsl-host-availability'
 import type { StoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 
 type FileExplorerFilesTreePaneProps = {

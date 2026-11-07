@@ -1,6 +1,5 @@
 import type { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import type { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
-import type { JournalInputCandidates } from './input-order/journal-input-candidates'
+import type { JournalQueuedRowIndex } from './input-order/journal-queued-row-index'
 import type { JournalSubmissionIndex } from './input-order/journal-submission-index'
 import type { TurnSource } from './input-order/journal-newest-turn-tree'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
@@ -9,37 +8,18 @@ import type {
   JournalInputCardFacts,
   JournalInputObservationFacts,
   JournalInputEvidenceFacts,
-  JournalSubmissionLinkFacts,
-  JournalInputLineageFacts
+  JournalSubmissionLinkFacts
 } from './journal-input-facts-storage'
-import type { JournalInputCard } from './input-order/journal-input-lineage'
 import type { JournalStateQueries } from './journal-state-queries'
 
 // Expose named queries, so a SQL implementation cannot accidentally become a collection scan.
 export type JournalInputPlaceStorage = Pick<
   JournalInputPlaceIndex,
-  | 'set'
-  | 'setPosition'
-  | 'delete'
-  | 'clear'
-  | 'isEmpty'
-  | 'query'
-  | 'lastId'
-  | 'successorId'
-  | 'idsAfter'
-  | 'firstPosition'
-  | 'allPlaces'
+  'setPosition' | 'delete' | 'isEmpty' | 'lastId' | 'successorId' | 'idsAfter' | 'allPlaces'
 >
 
-export type JournalInputReleasedStorage = Pick<
-  JournalInputReleasedPositions,
-  'pause' | 'delete' | 'add' | 'query'
->
-
-export type JournalInputCandidateStorage = Pick<
-  JournalInputCandidates,
-  'set' | 'clear' | 'hasMail' | 'after' | 'pastHead'
->
+/** Live queue rows in (position, message id) order; `set` reports whether membership changed. */
+export type JournalQueuedRowStorage = Pick<JournalQueuedRowIndex, 'set' | 'head' | 'values'>
 
 export type JournalSubmissionStorage = Pick<JournalSubmissionIndex, 'keep' | 'list'>
 
@@ -70,10 +50,8 @@ export type JournalIndexStorageFactory = {
   observationFacts: () => JournalInputObservationFacts
   evidenceFacts: () => JournalInputEvidenceFacts
   linkFacts: () => JournalSubmissionLinkFacts
-  lineageFacts: (cards: JournalKeyedMap<string, JournalInputCard>) => JournalInputLineageFacts
   place: (name: string, key?: string | number) => JournalInputPlaceStorage
-  released: (name: string) => JournalInputReleasedStorage
-  candidates: (name: string) => JournalInputCandidateStorage
+  queuedRows: (name: string) => JournalQueuedRowStorage
   submissions: (name: string) => JournalSubmissionStorage
   newestTurn: () => JournalNewestTurnStorage
 }

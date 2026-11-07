@@ -1,4 +1,4 @@
-import { isDocumentVisibilityProvenStale } from '../../stale-document-visibility'
+import { isDocumentVisibilityProvenStale } from '../../viewport/visibility/stale-document-visibility'
 
 export function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   if (!isPaneVisible) {

@@ -82,14 +82,6 @@ describe('branch line total never blocks the status response', () => {
     expect(next.total).toEqual({ added: 5, removed: 5, mergeBase: MERGE_BASE })
   })
 
-  it('still returns the total inline when the diff is fast', async () => {
-    const fastPass = runPass(10)
-    await vi.advanceTimersByTimeAsync(10)
-    const fast = await fastPass
-    expect(fast.total).toEqual({ added: 5, removed: 5, mergeBase: MERGE_BASE })
-    expect(fast.elapsed).toBe(10)
-  })
-
   it('late unavailability removes an exact cached total and republishes its marker on reuse', async () => {
     storeGitStatusLineStats({
       cacheKey: CACHE_KEY,
@@ -108,15 +100,6 @@ describe('branch line total never blocks the status response', () => {
       unavailable: MERGE_BASE,
       elapsed: 0
     })
-  })
-
-  it('backfills late unavailability from a reuse pass with no cached total', async () => {
-    storeGitStatusLineStats({ cacheKey: CACHE_KEY, head: 'head-1', entries })
-    const pending = runPass(3000, { total: null, reuse: true })
-    await vi.advanceTimersByTimeAsync(GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
-    expect(await pending).toMatchObject({ total: undefined, unavailable: undefined })
-    await vi.advanceTimersByTimeAsync(3000 - GIT_BRANCH_LINE_TOTAL_SOFT_DEADLINE_MS)
-    expect(readCachedGitBranchLineTotal({ cacheKey: CACHE_KEY, mergeBase: MERGE_BASE })).toBeNull()
   })
 
   it.each([

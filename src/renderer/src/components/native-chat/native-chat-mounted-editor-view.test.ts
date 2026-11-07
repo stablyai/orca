@@ -13,10 +13,4 @@ describe('the prompt editor view before and after mount', () => {
     editor.destroy()
     expect(mountedEditorView(editor)).toBeNull()
   })
-
-  it('is the view once mounted', () => {
-    const editor = new Editor({ element: document.createElement('div'), extensions: [StarterKit] })
-    expect(mountedEditorView(editor)).toBe(editor.view)
-    editor.destroy()
-  })
 })

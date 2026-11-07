@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
   AntigravityAccountState,
@@ -15,7 +15,7 @@ import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-acc
 import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
   AntigravityChatSignInRow,
   antigravityChatSignInBlocked,
@@ -183,17 +183,10 @@ export function AntigravityAccountsSection({
 
   return (
     <section id="accounts-antigravity" className="space-y-4 scroll-mt-6">
-      <div className="space-y-1">
-        <h3 className="flex items-center gap-2 text-sm font-semibold">
-          <AgentIcon agent="antigravity" size={16} />
-          {translate('accounts.antigravity.title', 'Antigravity')}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {translate('accounts.antigravity.scope', 'Manage the native agy account on {{host}}.', {
-            host: label
-          })}
-        </p>
-      </div>
+      <h3 className="flex items-center gap-2 text-sm font-semibold">
+        <AgentIcon agent="antigravity" size={16} />
+        {translate('accounts.antigravity.title', 'Antigravity')}
+      </h3>
       <p className="text-xs text-muted-foreground">
         {translate(
           'accounts.antigravity.signIn',
@@ -340,37 +333,35 @@ export function AntigravityAccountsSection({
             )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
-        <div className="space-y-4">
-          <ManagedRuntimeInstallRow
-            observation={chatRuntime}
-            agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
-            signInRunning={antigravityChatSignInRunning(signIn.flow)}
-          >
-            {(line, actions) => (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {translate(
-                      'settings.chat.providers.antigravityDescription',
-                      'Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.'
-                    )}
-                  </p>
-                  {line}
+        <AntigravityChatSignInRow
+          owner={owner}
+          label={label}
+          description={translate(
+            'accounts.antigravity.chatSeparate',
+            'Separate from your agy terminal account.'
+          )}
+          disabled={antigravityChatSignInBlocked(chatRuntime)}
+          runtime={
+            <ManagedRuntimeInstallRow
+              observation={chatRuntime}
+              agentLabel={translate('accounts.antigravity.title', 'Antigravity')}
+              signInRunning={antigravityChatSignInRunning(signIn.flow)}
+              buttonSize="default"
+            >
+              {(line, actions) => (
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {translate('settings.agents.chatRuntime', 'Chat runtime')}
+                    </p>
+                    <div className="mt-0.5">{line}</div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">{actions}</div>
                 </div>
-                {actions}
-              </div>
-            )}
-          </ManagedRuntimeInstallRow>
-          <AntigravityChatSignInRow
-            owner={owner}
-            label={label}
-            description={translate(
-              'accounts.antigravity.chatDescription',
-              'Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.'
-            )}
-            disabled={antigravityChatSignInBlocked(chatRuntime)}
-          />
-        </div>
+              )}
+            </ManagedRuntimeInstallRow>
+          }
+        />
       ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
         <ChatUnavailableOnWindowsNote
           label={translate('accounts.antigravity.title', 'Antigravity')}

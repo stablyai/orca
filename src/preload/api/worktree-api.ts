@@ -145,7 +145,7 @@ export type WorktreeApi = {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
-  }) => Promise<WorktreeLineage | null>
+  }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>

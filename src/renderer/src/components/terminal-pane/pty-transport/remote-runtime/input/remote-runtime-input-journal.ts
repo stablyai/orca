@@ -1,6 +1,6 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../../shared/non-secure-context-uuid'
 import type { TerminalInputAckKind } from '../../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import type { RemoteRuntimeMultiplexedTerminal } from '../../../../../runtime/remote-runtime-terminal-multiplexer-types'
+import type { RemoteRuntimeMultiplexedTerminal } from '../../../../../runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import {
   isSameRemoteRuntimeInputEndpoint,
   type RemoteRuntimeInputEndpoint

@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { translate } from '../i18n/mobile-i18n'
+import { useCallback, useMemo, useReducer, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileSourceControlSettings } from '../source-control/mobile-source-control-settings'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -14,11 +12,9 @@ import {
 } from './mobile-diff-review-queue'
 import { useMobileDiffReviewSelection } from './use-mobile-diff-review-selection'
 import type { MobileDiffReviewInitialTarget } from './mobile-diff-review-positioning'
-import { loadMobileDiffReviewSnapshot } from './mobile-diff-review-loaders'
-import { loadMobileDiffReviewCommitSnapshot } from './mobile-diff-review-commit-loader'
+import { useMobileDiffReviewSnapshot } from './use-mobile-diff-review-snapshot'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 import { canOpenMobileBranchCompareDiff } from '../source-control/mobile-branch-compare'
-import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
   NO_REVIEW_SHEETS,
   reduceReviewSheets,
@@ -72,10 +68,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     onOpenSession,
     onReconnect
   } = input
-  const loadGenerationRef = useRef(0)
-  const [screenState, setScreenState] = useState<ReviewScreenState>({ kind: 'loading' })
-  // Bumped by every snapshot load (open, retry, after a git action), so the open file's diff reloads with it.
-  const [snapshotVersion, setSnapshotVersion] = useState(0)
   const filter = initialFilter
   const [pendingLine, setPendingLine] = useState<number | null>(initialLine)
   const clearScrollToLine = useCallback(() => setPendingLine(null), [])
@@ -86,79 +78,16 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
-  const { compareAgainstUpstream } = useMobileSourceControlSettings(
-    hostId,
-    client,
-    connState
-  ).settings
-
-  const loadReviewData = useCallback(async () => {
-    const generation = loadGenerationRef.current + 1
-    loadGenerationRef.current = generation
-    const isCurrent = () => generation === loadGenerationRef.current
-    if (!worktreeId) {
-      setScreenState({
-        kind: 'error',
-        message: translate('session.useDiffReviewController.missingWorktree', 'Missing worktree')
-      })
-      return
-    }
-    // Shells from before commit diffs drop the commit param when they mount this route themselves.
-    if (initialFilter === 'commit' && !commitOid) {
-      setScreenState({
-        kind: 'unavailable',
-        message: translate(
-          'session.useDiffReviewController.commitMissing',
-          'Update the Orca app to open commit files here.'
-        )
-      })
-      return
-    }
-    // Keep an existing review through disconnects; only empty screens need the waiting state.
-    const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
-      prev.kind === 'ready' ? prev : fallback
-    if (!client || connState !== 'connected') {
-      setScreenState(
-        keepReady({
-          kind: 'error',
-          message: translate(
-            'session.useDiffReviewController.waitingForDesktop',
-            'Waiting for desktop...'
-          )
-        })
-      )
-      return
-    }
-    setScreenState(keepReady({ kind: 'loading' }))
-    try {
-      const nextState = commitOid
-        ? await loadMobileDiffReviewCommitSnapshot(client, worktreeId, commitOid)
-        : await loadMobileDiffReviewSnapshot(client, worktreeId, compareAgainstUpstream)
-      if (!isCurrent()) {
-        return
-      }
-      setScreenState(nextState)
-      setSnapshotVersion((version) => version + 1)
-      setActionError(nextState.kind === 'ready' ? (nextState.branchError ?? null) : null)
-    } catch (err) {
-      if (isCurrent()) {
-        // Failed reconnect reads must not destroy an already loaded review.
-        setScreenState(
-          keepReady({
-            kind: 'error',
-            message:
-              err instanceof Error
-                ? err.message
-                : translate('session.useDiffReviewController.loadFailed', 'Unable to load review')
-          })
-        )
-      }
-    }
-  }, [client, commitOid, compareAgainstUpstream, connState, initialFilter, worktreeId])
-
-  useEffect(() => {
-    void loadReviewData()
-  }, [loadReviewData])
+  const { screenState, setScreenState, statusRevision, target, loadReviewData } =
+    useMobileDiffReviewSnapshot({
+      client,
+      connState,
+      hostId,
+      worktreeId,
+      commitOid,
+      filter,
+      setActionError
+    })
 
   // Use git.status for PR head identity; branchCompare’s base ref is not the head.
   const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
@@ -219,10 +148,10 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     hostId,
     client,
     connState,
-    worktreeId,
+    target,
     currentItem,
     screenState,
-    snapshotVersion
+    statusRevision
   })
 
   const comments = screenState.kind === 'ready' ? screenState.comments : NO_COMMENTS

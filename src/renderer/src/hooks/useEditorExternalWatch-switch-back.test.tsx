@@ -40,12 +40,12 @@ vi.mock('./editor-external-watch-targets', async (importOriginal) => ({
   }),
   getEditorExternalWatchTargetKey: harness.keyOf
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: harness.readRuntimeFileContent
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
 import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'

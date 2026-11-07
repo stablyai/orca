@@ -12,7 +12,7 @@ import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
 } from '../../../shared/workspace-layout/workspace-layout-published'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'
 import { serverLayoutForDesktop } from './server-layout-frame-ids'
@@ -41,7 +41,7 @@ import {
   resetFrameDrawnServerWorkspacesForTests
 } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 const hoisted = vi.hoisted(

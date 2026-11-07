@@ -6,10 +6,10 @@ import {
   markUnreadFollowUpMail,
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
-  FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail,
   receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { resolveOrcaSessionParty } from '../../../../orchestration/addressing/orchestration-party'
 import { readStructuredAgentSessionRecord } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'

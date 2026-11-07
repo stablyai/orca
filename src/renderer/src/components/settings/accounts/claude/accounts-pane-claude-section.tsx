@@ -1,6 +1,6 @@
 import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -22,7 +22,7 @@ import {
   ClaudeSignInLinkMenu,
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
-import { addClaudeAccountOnHost } from '@/runtime/runtime-host-account-sign-in-client'
+import { addClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { HostAccountSignInPrompt } from '../sign-in/HostAccountSignInPrompt'
 import {
   accountAdditionShownInPrompt,

@@ -45,6 +45,7 @@ const store = {
   sshStateByEnvironment: new Map(),
   runtimeStatusByEnvironmentId: new Map<string, { status: { hostPlatform: NodeJS.Platform } }>(),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+  unifiedTabsByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,

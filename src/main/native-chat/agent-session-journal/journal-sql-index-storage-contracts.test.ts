@@ -3,7 +3,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
 import type { JournalIndexStorageFactory } from './journal-index-storage'
-import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
+import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { memoryJournalIndexStorage } from './journal-memory-index-storage'
 import { memoryJournalStateQueries } from './journal-memory-state-queries'
 import { sqlJournalIndexStorage } from './journal-sql-index-storage'
@@ -49,6 +49,21 @@ function send(id: string, fence = 1): AgentJournalSubmission {
   }
 }
 
+function row(id: string, position: number): QueuedMessageRow {
+  return {
+    messageId: id,
+    position,
+    queuedAt: { epoch: 'generation', sequence: 1 },
+    body: { kind: 'message', role: 'user', blocks: [] },
+    fingerprint: id,
+    state: 'waiting',
+    holdReason: null,
+    returnedReason: null,
+    returnedRejection: null,
+    consumedAs: null
+  }
+}
+
 const ids = (values: Iterable<AgentJournalSubmission>) => [...values].map((v) => v.clientMessageId)
 
 it('keeps Map insertion order, delete-then-set reinsertion and scalars across commands', () => {
@@ -84,7 +99,6 @@ it('keeps Map insertion order, delete-then-set reinsertion and scalars across co
   expect(ids(sql.enteredSubmissions())).toEqual(ids(memory.enteredSubmissions()))
   expect([...sql.recoveryOwedIds()]).toEqual([...memory.recoveryOwedIds()])
   expect([sql.revision, sql.queued.size]).toEqual([memory.revision, memory.queued.size])
-  expect(sql.explicitSend()).toBeUndefined()
 })
 
 it('rebuilds nested per-key indexes from membership, and drops them when emptied', () => {
@@ -153,47 +167,49 @@ it('lists family members and phase members in insertion order with the same subm
   expect(links.revision).toBe(4)
 })
 
-it('compares pause keys by stored value and keeps per-open lineage facts', () => {
+it('reads live queue rows in position then message id order across commands', () => {
   const command = sqlCommands()
+  const memory = memoryJournalIndexStorage.queuedRows('cards')
   let c = command()
+  let rows = c.storage.queuedRows('cards')
   let cards = c.storage.cardFacts()
-  const stop = { sequence: 4, event: { reason: 'user' } }
-  expect(cards.pauseKeyMatches([stop, 0, null])).toBe(false)
-  cards.pauseKey = [stop, 0, null]
-  cards.initialized = true
-  cards.replaceClearMembers(['m1', 'm2'])
-  const lineageCards = c.storage.map<string, JournalInputCard>('inputCards')
-  const entries = c.storage.map<string, JournalInputEntry>('inputEntries')
-  lineageCards.set('card-1', { introduced: 9, baseline: { coordinate: null } })
-  lineageCards.set('card-2', { introduced: 3 })
-  entries.set('send-1', {
-    context: { cut: 11, basis: 'observed', source: { epoch: 'epoch', sequence: 1 } }
-  })
-  let lineage = c.storage.lineageFacts(lineageCards)
-  expect(lineage.frontier(entries)).toBe(11)
-  lineage.base = 5
-  c.finish()
-
-  c = command()
-  cards = c.storage.cardFacts()
-  expect(cards.initialized).toBe(true)
-  expect(cards.pauseKeyMatches([{ sequence: 4, event: { reason: 'user' } }, 0, null])).toBe(true)
-  expect(cards.cleared.has('m2')).toBe(true)
-  const restoredCards = c.storage.map<string, JournalInputCard>('inputCards')
-  lineage = c.storage.lineageFacts(restoredCards)
-  expect(lineage.base).toBe(5)
-  for (const [id, card] of lineage.cardsForRelease()) {
-    if (id === 'card-2') {
-      restoredCards.delete(id)
-    } else {
-      delete card.baseline
+  // More equal-position rows than one SQL page, written out of order, then one removed.
+  const written = [
+    ...Array.from({ length: 70 }, (_, n) => row(`tie-${String(69 - n).padStart(2, '0')}`, 2)),
+    row('tail', 3),
+    row('head', 1),
+    row('gone', 2)
+  ]
+  for (const index of [memory, rows]) {
+    for (const card of written) {
+      index.set(card, true)
     }
+    index.set(row('gone', 2), false)
   }
+  cards.firstPosition = 1
+  cards.lastPosition = 3
+  cards.floor = { epoch: 'generation', sequence: 7 }
   c.finish()
 
   c = command()
-  expect(c.storage.map<string, JournalInputCard>('inputCards').get('card-1')).toEqual({
-    introduced: 9
-  })
-  expect(c.storage.map('inputCards').has('card-2')).toBe(false)
+  rows = c.storage.queuedRows('cards')
+  cards = c.storage.cardFacts()
+  const order = (values: Iterable<{ messageId: string }>) => [...values].map((v) => v.messageId)
+  expect(order(rows.values())).toEqual(order(memory.values()))
+  expect(order(rows.values()).slice(0, 3)).toEqual(['head', 'tie-00', 'tie-01'])
+  expect(order(rows.values()).at(-1)).toBe('tail')
+  expect(order(rows.values(row('tie-64', 2)))).toEqual([
+    'tie-65',
+    'tie-66',
+    'tie-67',
+    'tie-68',
+    'tie-69',
+    'tail'
+  ])
+  expect(rows.head()?.messageId).toBe('head')
+  expect([cards.firstPosition, cards.lastPosition, cards.floor]).toEqual([
+    1,
+    3,
+    { epoch: 'generation', sequence: 7 }
+  ])
 })

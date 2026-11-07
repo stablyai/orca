@@ -103,6 +103,7 @@ function useLegacyHostListSections({
 }
 
 const NO_SECTIONS: Section[] = []
+const PHONE_FEED_LINEAGE = { acceptLegacyLineage: true }
 
 function useFeedHostListSections({
   client,
@@ -134,7 +135,8 @@ function useFeedHostListSections({
     [state.view, projectOrderBy, domains, hostPlatform]
   )
   const built = useMemo(
-    () => (domains ? buildSidebarFeedRows(domains, catalog, view) : null),
+    // The phone keeps nesting by an older server's edges without instance ids, as it always has.
+    () => (domains ? buildSidebarFeedRows(domains, catalog, view, PHONE_FEED_LINEAGE) : null),
     [domains, catalog, view]
   )
   const lastVisited = useLastVisitedWorktreeOnHost(hostId)

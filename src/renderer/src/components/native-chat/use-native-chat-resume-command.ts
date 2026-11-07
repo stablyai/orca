@@ -8,7 +8,7 @@ import { selectAiVaultPanelWorkspace } from '../right-sidebar/ai-vault/scope/ai-
 import { openAgentSessionHistoryModal } from '../right-sidebar/ai-vault/panel/agent-session-history-modal'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
-import { findNativeChatTabOwnerWorktreeId } from './native-chat-file-link'
+import { findNativeChatTabOwnerWorktreeId } from './pane/ownership/native-chat-tab-owner'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput

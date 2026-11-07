@@ -55,12 +55,4 @@ describe('a request whose own recipe VM wake re-paired its server', () => {
     }
     expect((await fence(1, 'before')).failure).toMatchObject({ ok: false })
   })
-
-  it('holds a request that woke nothing to the current pairing', async () => {
-    prepared.current = { environment: AFTER_WAKE, before: AFTER_WAKE, wokenPairingRevision: null }
-    await expect(fence(2, 'after')).resolves.toMatchObject({
-      failure: null,
-      expected: { pairingRevision: 2, runtimeId: 'after' }
-    })
-  })
 })

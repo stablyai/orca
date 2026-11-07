@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -240,6 +241,31 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   stderrTail(): string {
     return this.managed.stderrTail().trim()
+  }
+
+  /** Requires advertised session listing support. */
+  listSessions(cwd: string): Promise<unknown> {
+    return this.call('session/list', { cwd }, z.unknown())
+  }
+
+  /** The stderr tail once an exited process's stderr ends, bounded for a descendant holding it. */
+  async stderrTailAfterExit(): Promise<string> {
+    const stderr = this.managed.child.stderr
+    if (this.exited && !stderr.readableEnded && !stderr.destroyed) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          clearTimeout(timer)
+          stderr.removeListener('end', finish)
+          stderr.removeListener('close', finish)
+          resolve()
+        }
+        const timer = setTimeout(finish, PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+        timer.unref?.()
+        stderr.once('end', finish)
+        stderr.once('close', finish)
+      })
+    }
+    return this.stderrTail()
   }
 
   /** First managed exit observation, including processless spawn failure. */

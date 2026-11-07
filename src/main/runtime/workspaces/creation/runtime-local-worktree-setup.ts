@@ -55,10 +55,14 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     repo,
     yamlHooks,
     effectiveDecision,
-    request.approvedSetupHash
+    request
   )
   // Only the approved content may run; the client re-prompts with the branch's.
   const runDecision = setupTrustMismatch ? 'skip' : effectiveDecision
+  if (setupTrustMismatch) {
+    // Automations have no prompt to re-ask; the host log is their record of the skip.
+    console.warn(`[hooks] setup skipped for ${worktreePath}: it differs from the approved content`)
+  }
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   try {
     const launch = getDefaultTabsLaunch(yamlHooks, repo, runDecision)

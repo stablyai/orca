@@ -1,5 +1,5 @@
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +25,6 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
@@ -33,7 +32,6 @@ const {
   requestTerminalPaneRecovery
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -53,12 +51,8 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   resetAndRefreshAllTerminalWebglAtlases
 }))
 
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
-}))
-
 // Only the request is spied: connect still needs the real generation/instance registry.
-vi.mock('../../terminal-pane-recovery', async (importOriginal) => ({
+vi.mock('../../render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery
 }))
@@ -81,7 +75,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
 }))
 

@@ -119,7 +119,9 @@ describe('useMobileSessionImageAttachments', () => {
         'look',
         ['file:///a.jpg'],
         expect.any(Number),
-        [image]
+        [image],
+        undefined,
+        { onHandBack: expect.any(Function) }
       )
       expect(args.client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
         'clipboard.startImageUpload',

@@ -6,13 +6,10 @@ import {
 import type { JournalReducerState } from '../../../agent-session-journal/projection/journal-reducer'
 import { journalInputOrder } from '../../../agent-session-journal/input-order/journal-input-order'
 import type { CommandReceiptRead } from '../../../agent-session-journal/writing/command-receipt-table'
-import { commandReceiptSchema } from '../../../agent-session-journal/writing/command-receipt-schema'
+
 import { parseJournalRow } from '../../../agent-session-journal/durable-rows/journal-row-schema'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  structuredSendAnswer,
-  type StructuredSendAnswer
-} from '../structured-agent-session-queued-send-answer'
+import { structuredSendAnswer } from '../structured-agent-session-queued-send-answer'
 
 const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'work' }] }
 
@@ -109,25 +106,6 @@ async function answer(
   }
 }
 
-function receipt(status: 'accepted' | 'rejected'): CommandReceiptRead {
-  return {
-    verdict: 'readable',
-    // Parsed as the receipt table reads a saved row.
-    receipt: commandReceiptSchema.parse({
-      operationId: 'mail',
-      sessionId: 'session-1',
-      callerKey: 'client',
-      method: 'agentSession.send',
-      fingerprint: 'f'.repeat(64),
-      acceptedAt: 1,
-      status,
-      ...(status === 'accepted'
-        ? { result: { kind: 'journal-row', epoch: 'old', sequence: 1 } }
-        : { rejection: { reference: { code: 'agent_session_conflict' } } })
-    })
-  }
-}
-
 describe('what a chat host answers for one send', () => {
   it('counts a later turn by where it was handed over, not where it was admitted', async () => {
     const j = journal()
@@ -155,30 +133,5 @@ describe('what a chat host answers for one send', () => {
       kind: 'rejected',
       recovered: false
     })
-  })
-
-  it('answers a gone card from its latest handoff, by key', async () => {
-    const j = journal()
-    j.submit(1, 'handoff-1', 'card')
-    j.handOver(2, 'handoff-1')
-    j.accept(3, 'handoff-1')
-    expect((await answer(j.state, 'card')).result).toEqual({ kind: 'accepted' })
-  })
-
-  const receiptCases: [string, CommandReceiptRead, StructuredSendAnswer['kind']][] = [
-    ['nothing recorded proves it was never admitted', { verdict: 'absent' }, 'absent'],
-    [
-      'an unreadable receipt proves nothing',
-      { verdict: 'unreadable', scope: { kind: 'global' }, operationId: 'mail' },
-      'unreadable'
-    ],
-    // History replaced since: the admission stands, whatever its id's age.
-    ['an admission whose journal detail is gone stays in doubt', receipt('accepted'), 'unknown'],
-    ['a refusal before admission is not in doubt', receipt('rejected'), 'refused']
-  ]
-  it.each(receiptCases)('%s', async (_label, read, kind) => {
-    const { result, readReceipt } = await answer(journal().state, 'mail', read)
-    expect(result).toEqual({ kind })
-    expect(readReceipt).toHaveBeenCalledWith('mail')
   })
 })

@@ -6,7 +6,7 @@ import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-p
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { Card, CardContent } from '../../ui/card'
 import { AgentOpensAsControl } from '../../agent/launch-settings/AgentChatChoiceControls'
 import { buildAgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'

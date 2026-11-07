@@ -24,8 +24,6 @@ export class JournalSqlReducer {
 
   constructor(scope: JournalSqlScope, epoch: string) {
     this.context = new JournalSqlValueContext(scope, new JournalSqlItemValues(scope))
-    this.context.access('inputEntries')
-    this.context.access('inputCards')
     this.facts = new JournalSqlQueryFacts(this.context)
     const items = new JournalSqlKeyedMap<string, AgentJournalRenderItem>(this.context, 'items')
     const storage = sqlJournalIndexStorage({

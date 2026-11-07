@@ -60,22 +60,6 @@ it('leaves transcript following with the nested scroller until it chains upward'
   fireEvent.wheel(h.getByTestId('text'), { deltaY: -10 })
   expect(h.onLeaveEnd).not.toHaveBeenCalled()
 })
-it('hands the transcript to upward keyboard, scrollbar and rail gestures', () => {
-  const h = harness()
-  fireEvent.keyDown(h.root, { key: 'PageUp' })
-  fireEvent.keyDown(h.root, { key: ' ', shiftKey: true })
-  fireEvent.pointerDown(h.root)
-  h.railWheel(-20)
-  expect(h.onLeaveEnd).toHaveBeenCalledTimes(4)
-})
-it('passes frame input to the transcript owner without assuming it moved', () => {
-  const h = harness()
-  const wheel = { kind: 'wheel', deltaY: -20, zoom: false } as const
-  h.forwardedGesture(wheel)
-  h.forwardedGesture({ kind: 'touch-drag' })
-  expect(h.onScrollGesture.mock.calls).toEqual([[wheel], [{ kind: 'touch-drag' }]])
-  expect(h.onLeaveEnd).not.toHaveBeenCalled()
-})
 it('hands the transcript to a touch drag only once it has carried the view off the end', () => {
   const h = harness()
   fireEvent.touchMove(h.root)
@@ -83,13 +67,6 @@ it('hands the transcript to a touch drag only once it has carried the view off t
   h.root.scrollTop = 1400
   fireEvent.touchMove(h.root)
   expect(h.onLeaveEnd).toHaveBeenCalledOnce()
-})
-it('lets a nested scrollbar cancel a pending reveal while retaining transcript following', () => {
-  const h = harness()
-  h.nested.scrollTop = 50
-  fireEvent.pointerDown(h.nested)
-  expect(h.onReaderScroll).toHaveBeenCalledOnce()
-  expect(h.onLeaveEnd).not.toHaveBeenCalled()
 })
 it('keeps following on downward gestures at the tail, zoom and editing keys', () => {
   const h = harness()

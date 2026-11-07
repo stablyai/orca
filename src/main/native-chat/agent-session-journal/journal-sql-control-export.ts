@@ -1,20 +1,19 @@
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
-import { JournalInputCandidates } from './input-order/journal-input-candidates'
+import { JournalQueuedRowIndex } from './input-order/journal-queued-row-index'
 import { JournalSubmissionIndex } from './input-order/journal-submission-index'
 import { MemoryJournalTurnSources } from './journal-memory-turn-sources'
 import { memoryJournalMap } from './journal-memory-collections'
 
-/** Restored fields the export leaves alone: item content keeps its own projection, and query
- *  procedures and back-references are the reducer's wiring, not saved facts. */
-const WIRING = ['queries', 'state', 'keyReads']
+/** Restored fields the export leaves alone: item content keeps its own projection, query
+ *  procedures and back-references are the reducer's wiring, derived caches rebuild, and an old
+ *  saved queue's open-time decoder is never saved (the writer's open converts that queue). */
+const WIRING = ['queries', 'state', 'keyReads', 'derived', 'legacy']
 
 /** The SQL storage at the same place as a memory container: whichever of these its kind has. */
 type Importer = {
   importEntry: (...args: unknown[]) => void
-  importState: (state: unknown) => void
   set: (...args: unknown[]) => unknown
   add: (value: unknown) => unknown
   get: (key: unknown) => unknown
@@ -49,12 +48,6 @@ export function exportJournalControlState(
   }
   for (const [key, card] of memoryJournalMap(memory.queue.cards)) {
     sql.queue.cards.set(key, card)
-  }
-  for (const [key, entry] of memoryJournalMap(memory.inputEntries)) {
-    sql.inputEntries.set(key, entry)
-  }
-  for (const [key, card] of memoryJournalMap(memory.inputCards)) {
-    sql.inputCards.set(key, card)
   }
   for (const [key, source] of memoryJournalMap(memory.inputs.sources)) {
     sql.inputs.sources.set(key, source)
@@ -151,10 +144,8 @@ function copyContainer(memory: unknown, sql: unknown, path: string): void {
     for (const entry of memory.exportEntries()) {
       sql.importEntry(entry)
     }
-  } else if (memory instanceof JournalInputReleasedPositions) {
-    sql.importState(memory.exportState())
-  } else if (memory instanceof JournalInputCandidates) {
-    for (const card of memory.exportCards()) {
+  } else if (memory instanceof JournalQueuedRowIndex) {
+    for (const card of memory.values()) {
       sql.set(card, true)
     }
   } else if (memory instanceof JournalSubmissionIndex) {
@@ -173,8 +164,7 @@ function isContainer(value: unknown): value is object {
     value instanceof Map ||
     value instanceof Set ||
     value instanceof JournalInputPlaceIndex ||
-    value instanceof JournalInputReleasedPositions ||
-    value instanceof JournalInputCandidates ||
+    value instanceof JournalQueuedRowIndex ||
     value instanceof JournalSubmissionIndex ||
     value instanceof MemoryJournalTurnSources
   )

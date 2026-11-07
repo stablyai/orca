@@ -31,7 +31,6 @@ const card: readonly Capture[] = [
 const HOLDERS: readonly Holder[] = [
   { name: 'order.queued', table: 'journal_proj_queued_inputs' },
   { name: 'order.entered', table: 'journal_proj_entered_inputs' },
-  { name: 'order.overrides', table: 'journal_proj_send_overrides' },
   { name: 'evidence.recoverable', table: 'journal_proj_recoverable_inputs' },
   { name: 'evidence.statusPending', table: 'journal_proj_pending_status_inputs' },
   { name: 'inputs.candidates', table: 'journal_proj_input_candidates' },
@@ -44,22 +43,6 @@ const HOLDERS: readonly Holder[] = [
     { name: 'cards.current', table: 'journal_proj_current_cards', captures: card },
     { name: 'cards.overlays', table: 'journal_proj_overlay_cards', captures: card },
     { name: 'inputs.presentations', table: 'journal_proj_input_presentations', captures: card },
-    { name: '@index:places:', table: 'journal_proj_index_cards', captures: card },
-    { name: '@index:domains:', table: 'journal_proj_index_cards', captures: card },
-    { name: '@index:candidates:', table: 'journal_proj_index_cards', captures: card },
-    {
-      name: 'cards.indexed',
-      table: 'journal_proj_indexed_cards',
-      captures: [
-        { path: 'card', source: 'queue.cards', id: 'card_id', incarnation: 'card_incarnation' },
-        {
-          path: 'source',
-          source: 'inputCards',
-          id: 'lineage_message_id',
-          incarnation: 'lineage_incarnation'
-        }
-      ]
-    },
     {
       name: 'inputs.handovers',
       table: 'journal_proj_input_handovers',

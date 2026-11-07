@@ -3,8 +3,8 @@ import { createUntitledMarkdownFile } from './create-untitled-markdown'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
 

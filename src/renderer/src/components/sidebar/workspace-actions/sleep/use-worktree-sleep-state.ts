@@ -7,7 +7,7 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import {
   hasUnknownStructuredChat,
   type StructuredChatSleptAtByPaneKey
-} from '@/store/slices/structured-chat-slept-at'
+} from '@/store/slices/agent-status/structured-chat-slept-at'
 
 type TabLike = { id: string }
 

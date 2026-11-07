@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useNativeChatVisualOwner } from './native-chat-visual-owner'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import {
   agentMessageSendersShown,
   type AgentMessageSender,

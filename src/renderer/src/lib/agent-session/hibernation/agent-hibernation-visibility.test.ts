@@ -4,7 +4,7 @@ import {
   startAgentHibernationCoordinator,
   stopAgentHibernationCoordinator
 } from './agent-hibernation-coordinator'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 
 function setVisibility(state: 'visible' | 'hidden'): void {
   Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })

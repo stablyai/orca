@@ -1,3 +1,4 @@
+import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
@@ -9,7 +10,7 @@ import { isStructuredAgentSessionCommandTurnId } from '../operations/structured-
 export type SendSettlementJournal = Pick<AgentSessionJournal['reads'], 'submission' | 'cursor'> & {
   attemptEnded?: (clientMessageId: string) => boolean
   activeTurnId: () => string | null
-  behindCommand?: (clientMessageId: string) => boolean
+  queuedSend?: (clientMessageId: string) => AgentSessionSendResult | null
 }
 
 type SettledSend = {
@@ -49,20 +50,27 @@ async function settledSend(
   clientMessageId: string,
   until: SendSettlementPoint
 ): Promise<SendSettlement> {
-  const submission = await journal.submission(clientMessageId)
+  const row = journal.queuedSend?.(clientMessageId)
+  if (row && 'queued' in row) {
+    return row.queued.state === 'withdrawn' ||
+      row.queued.state === 'returned' ||
+      (until === 'handed-over-or-behind-command' && runningCommand(journal))
+      ? { cursor: await journal.cursor(), value: row }
+      : 'pending'
+  }
+  const submission =
+    row && 'submission' in row ? row.submission : await journal.submission(clientMessageId)
   if (!submission) {
     return 'missing'
   }
-  const ended = submission.dispatchState === 'pending' && journal.attemptEnded?.(clientMessageId)
+  const ended =
+    submission.dispatchState === 'pending' && journal.attemptEnded?.(submission.clientMessageId)
   const observed = ended ? { ...submission, dispatchState: 'unknown' as const } : submission
   const waiting =
     until === 'answered'
       ? submission.dispatchState === 'pending' && !ended
       : isQueuedAgentJournalSubmission(submission) &&
-        !(
-          until === 'handed-over-or-behind-command' &&
-          (runningCommand(journal) || journal.behindCommand?.(clientMessageId))
-        )
+        !(until === 'handed-over-or-behind-command' && runningCommand(journal))
   return waiting
     ? 'pending'
     : { cursor: await journal.cursor(), value: { clientMessageId, submission: observed } }
@@ -217,6 +225,6 @@ export function sendSettlementReading(
     attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
     cursor: () => journal.reads.cursor(),
     activeTurnId: () => work().activeTurnId(),
-    behindCommand: (id) => journal.inputOrder.forced(id)
+    queuedSend: (id) => queuedSendAnswer(journal, id)
   }
 }

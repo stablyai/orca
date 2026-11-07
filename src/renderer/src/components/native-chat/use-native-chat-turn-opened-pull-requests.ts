@@ -13,8 +13,8 @@ import {
 } from '../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { nativeChatToolFullPayload } from '../../../../shared/native-chat/tools/native-chat-tool-output'
 import { nativeChatRowsInTranscriptOrder } from './native-chat-subagent-sections'
-import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
-import { useNativeChatVisualOwner } from './native-chat-visual-owner'
+import { NativeChatMarkdownImageOwnerContext } from './media/images/native-chat-markdown-image-owner'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import type { NativeChatTurnRows } from './use-native-chat-turn-membership'
 
 const NONE: NativeChatTurnOpenedPullRequests = {

@@ -1,10 +1,10 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetForOwnerEnvironment
-} from '../../../../runtime/runtime-client-target'
+} from '../../../../runtime/rpc/targets/runtime-client-target'
 import { lineageStoreKeyOfTarget } from './cross-store-lineage-state'
 import { refreshCrossStoreLineageForTarget } from './cross-store-lineage-hydration'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -14,7 +14,7 @@ import {
   setWorktreeLineageForRuntime
 } from './worktree-lineage-refresh'
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
 import { buildCrossStoreParentRef } from './cross-store-parent-ref'
 

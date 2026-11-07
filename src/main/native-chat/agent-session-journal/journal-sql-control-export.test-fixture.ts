@@ -14,13 +14,12 @@ export function journalSqlControlSnapshot(state: JournalReducerState) {
       ])
     ),
     firstQueued: order.firstQueued()?.clientMessageId,
-    explicit: order.explicitSend()?.clientMessageId,
+    queue: order.cards.list().map((card) => card.messageId),
     entered: [...order.enteredSubmissions()].map((send) => send.clientMessageId),
     unsettled: order.unsettledSubmissions().map((send) => send.clientMessageId),
     sending: order.sendingSubmissions().map((send) => send.clientMessageId),
     inputs: ['send', 'second', 'first', 'retry'].map((id) => ({
       id,
-      predecessors: order.predecessors(state, id),
       original: order.familyOriginal(id)?.clientMessageId,
       linked: [...order.linkedTo(id)].map((send) => send.clientMessageId),
       ended: state.inputs.ended.has(id),

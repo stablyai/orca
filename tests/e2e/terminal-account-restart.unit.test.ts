@@ -233,7 +233,7 @@ import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
 } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
-import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport-test-harness'
+import { installIpcPtyWindow } from '../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport-test-harness'
 import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import type * as React from 'react'
 import type { PtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
@@ -269,7 +269,7 @@ const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => true)
 }))
 vi.mock(
-  '../../src/renderer/src/components/terminal-pane/terminal-pane-recovery',
+  '../../src/renderer/src/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     requestTerminalPaneRecovery
@@ -327,7 +327,7 @@ describe('account restart through renderer connection and host spawn', () => {
     const { createIpcPtyTransport } =
       await import('../../src/renderer/src/components/terminal-pane/pty-transport/ipc/pty-transport')
     const { useTerminalPaneProcessExitActions } =
-      await import('../../src/renderer/src/components/terminal-pane/use-terminal-pane-process-exit-actions')
+      await import('../../src/renderer/src/components/terminal-pane/controller/use-terminal-pane-process-exit-actions')
     const oldTransport = createIpcPtyTransport({ worktreeId, tabId, leafId })
     oldTransport.attach({ existingPtyId: 'pty-old', callbacks: {} })
     const pane = createPane(1)
@@ -470,7 +470,7 @@ describe('account restart through renderer connection and host spawn', () => {
       const { createRemoteRuntimePtyTransport } =
         await import('../../src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport')
       const { releasePaneTransportForRestart } =
-        await import('../../src/renderer/src/components/terminal-pane/pane-restart-transport-handoff')
+        await import('../../src/renderer/src/components/terminal-pane/process-exit/pane-restart-transport-handoff')
       const { buildCodexAccountRestartStartup } =
         await import('../../src/renderer/src/lib/agent-account-restart-startup')
       const options = {

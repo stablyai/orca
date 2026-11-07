@@ -46,8 +46,9 @@ type ScalarKey = {
 
 type Collection = { path: string; entries: Iterable<[unknown, unknown]> }
 
-export function journalStateScalars(state: JournalReducerState): string {
-  const stop = state.queuePauseMarks.latestStop
+export function journalStateScalars(state: JournalReducerState, format: 2 | 3 = 3): string {
+  const { manualStop, ...marks } = state.queuePauseMarks
+  const stop = marks.latestStop
   return JSON.stringify({
     sessionId: state.sessionId,
     epoch: state.epoch,
@@ -58,7 +59,8 @@ export function journalStateScalars(state: JournalReducerState): string {
     derivedTurnScope: state.derivedTurnScope.snapshot(),
     latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
     queuePauseMarks: {
-      ...state.queuePauseMarks,
+      ...marks,
+      ...(format === 3 && manualStop !== undefined ? { manualStop } : {}),
       latestStop: stop && { sequence: stop.sequence, event: stop.event }
     },
     queue: { revision: state.queue.revision },

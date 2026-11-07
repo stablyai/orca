@@ -61,8 +61,10 @@ export function useMobileTaskCommentSendOutcome(model: {
     if (!unconfirmed || openItem !== outcome.item || !detailPayload) {
       return
     }
+    // Matching text alone could be someone else's identical comment; without proof of authorship the draft stays.
     const landed = detailPayload.comments.some(
       (comment) =>
+        comment.viewerDidAuthor === true &&
         !unconfirmed.priorIds.has(String(comment.id)) &&
         sameCommentText(comment.body, unconfirmed.postedBody)
     )

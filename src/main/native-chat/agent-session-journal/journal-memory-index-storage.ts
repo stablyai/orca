@@ -1,7 +1,6 @@
 import type { JournalIndexStorageFactory } from './journal-index-storage'
 import { JournalInputPlaceIndex } from './input-order/journal-input-place-index'
-import { JournalInputReleasedPositions } from './input-order/journal-input-released-positions'
-import { JournalInputCandidates } from './input-order/journal-input-candidates'
+import { JournalQueuedRowIndex } from './input-order/journal-queued-row-index'
 import { JournalSubmissionIndex } from './input-order/journal-submission-index'
 import { MemoryJournalTurnSources } from './journal-memory-turn-sources'
 import { memoryJournalStateQueries } from './journal-memory-state-queries'
@@ -10,8 +9,7 @@ import {
   memoryJournalInputCardFacts,
   memoryJournalInputObservationFacts,
   memoryJournalInputEvidenceFacts,
-  memoryJournalSubmissionLinkFacts,
-  memoryJournalInputLineageFacts
+  memoryJournalSubmissionLinkFacts
 } from './journal-memory-input-facts'
 
 export const memoryJournalIndexStorage: JournalIndexStorageFactory = {
@@ -23,10 +21,8 @@ export const memoryJournalIndexStorage: JournalIndexStorageFactory = {
   observationFacts: memoryJournalInputObservationFacts,
   evidenceFacts: memoryJournalInputEvidenceFacts,
   linkFacts: memoryJournalSubmissionLinkFacts,
-  lineageFacts: memoryJournalInputLineageFacts,
   place: () => new JournalInputPlaceIndex(''),
-  released: () => new JournalInputReleasedPositions(),
-  candidates: () => new JournalInputCandidates(),
+  queuedRows: () => new JournalQueuedRowIndex(),
   submissions: () => new JournalSubmissionIndex(),
   newestTurn: () => ({
     initializeFromItems: true,

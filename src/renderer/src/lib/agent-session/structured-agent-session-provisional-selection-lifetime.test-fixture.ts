@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { StructuredAgentLaunchHandle } from './launch/continuation/structured-agent-launch-settlement'
 import type { OpenedAgentSessionTab } from './launch/pane/structured-agent-session-tab-open-through-layout-owner'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
 import {
   nativeChatComposerDraftWritesSettled,
@@ -21,7 +21,7 @@ import type { SelectionOperation } from '../../../../shared/agent-session/option
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type * as launchModule from './launch/structured-agent-session-launch-create-call'
 import * as sessionClient from '@/runtime/structured-agent-session-client'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export async function assertProvisionalSelectionLifetime({
   launch,

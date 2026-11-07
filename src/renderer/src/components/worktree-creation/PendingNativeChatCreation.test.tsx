@@ -56,7 +56,7 @@ vi.mock('@/components/native-chat/NativeChatComposer', async (importOriginal) =>
     })
   }
 })
-vi.mock('@/components/native-chat/NativeChatEmptyState', () => ({
+vi.mock('@/components/native-chat/host-access/NativeChatEmptyState', () => ({
   NativeChatEmptyState: () => null
 }))
 vi.mock('@/components/native-chat/NativeChatUserMessageRow', () => ({

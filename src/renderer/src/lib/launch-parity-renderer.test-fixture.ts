@@ -1,8 +1,8 @@
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
 import { useStore } from 'zustand'
-import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
-import type * as CapabilitiesNamespace from '@/runtime/local-runtime-capabilities'
+import type * as StoreHelpersNamespace from '@/store/testing/app-store-test-fixture'
+import type * as CapabilitiesNamespace from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   LAUNCH_FOLDER_ID,
   LAUNCH_REPO_ID,
@@ -55,9 +55,9 @@ export function perClientLoader<T>(
       return cached
     }
     vi.resetModules()
-    const helpers: StoreHelpers = await import('@/store/slices/store-test-helpers')
+    const helpers: StoreHelpers = await import('@/store/testing/app-store-test-fixture')
     const capabilities: typeof CapabilitiesNamespace =
-      await import('@/runtime/local-runtime-capabilities')
+      await import('@/runtime/hosts/capabilities/local-runtime-capabilities')
     capabilities.setLocalRuntimeCapabilitiesForTests([])
     const loaded = { ...(await load()), createStore: helpers.createTestStore }
     cache.set(client, loaded)
@@ -79,7 +79,9 @@ export function launchWorkspaceState(
         addedAt: 0,
         kind: 'git',
         connectionId: null,
-        executionHostId: 'local'
+        executionHostId: 'local',
+        // Parity rows model a repo whose first-launch trust answer is already stored.
+        agentWorkspaceTrust: 'pre-trust'
       }
     : null
   const worktree = {

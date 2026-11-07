@@ -56,24 +56,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_entered_inputs_current
   ON journal_proj_entered_inputs(session_id, epoch, input_id) WHERE current=1;
 CREATE INDEX IF NOT EXISTS journal_proj_entered_inputs_order
   ON journal_proj_entered_inputs(session_id, epoch, ordinal) WHERE current=1;
-CREATE TABLE IF NOT EXISTS journal_proj_send_overrides (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  input_id TEXT NOT NULL,
-  incarnation INTEGER NOT NULL,
-  current INTEGER NOT NULL,
-  ordinal INTEGER NOT NULL,
-  payload_json TEXT NOT NULL,
-  submission_id TEXT,
-  submission_incarnation INTEGER,
-  fence REAL,
-  submitted_seq INTEGER,
-  PRIMARY KEY (session_id, epoch, input_id, incarnation)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_send_overrides_current
-  ON journal_proj_send_overrides(session_id, epoch, input_id) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_send_overrides_order
-  ON journal_proj_send_overrides(session_id, epoch, ordinal) WHERE current=1;
 CREATE TABLE IF NOT EXISTS journal_proj_recoverable_inputs (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

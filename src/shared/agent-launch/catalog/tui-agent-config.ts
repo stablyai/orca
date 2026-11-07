@@ -282,7 +282,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.
     promptInjectionMode: 'flag-interactive',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
-    preflightTrust: 'copilot'
+    preflightTrust: 'copilot',
+    draftPasteReadySignal: 'copilot-composer-prompt'
   },
   grok: {
     detectCmd: 'grok',

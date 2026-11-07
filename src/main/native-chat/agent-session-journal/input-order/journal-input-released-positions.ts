@@ -1,7 +1,7 @@
 import type { JournalInputCard } from './journal-input-lineage'
 import type { JournalInputPlace } from './journal-input-order-state'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
-import type { JournalIndexedInputCard } from './journal-input-card-index'
+import type { JournalIndexedInputCard } from './legacy-queue-card-index'
 import {
   JournalInputPlaceIndex,
   type InputPlaceQuery,

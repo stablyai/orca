@@ -8,7 +8,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { encodeFederatedControlMessage } from '../../../../orchestration/federation/relay/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../../../shared/protocol-version'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
-import type { SendParams } from '../schemas'
+import type { SendParams } from './send-params'
 import type { SendRecipientWarning } from './recipient-routing'
 import type { z } from 'zod'
 

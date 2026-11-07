@@ -141,7 +141,7 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
     it('grounds xterm and the mirror together on Reset Terminal and asks the host to ground', async () => {
       const { pane, mirror } = await reattachWithSnapshotFlags(true)
       expect(mirror?.flags).toBe(31)
-      const { resetTerminalInputModes } = await import('../../../terminal-input-mode-reset')
+      const { resetTerminalInputModes } = await import('../../../input/terminal-input-mode-reset')
 
       resetTerminalInputModes('tab-pty')
 

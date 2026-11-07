@@ -1,7 +1,6 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalKeyedMap } from '../journal-keyed-storage'
-import type { JournalInputLineageFacts } from '../journal-input-facts-storage'
-import { memoryJournalInputLineageFacts } from '../journal-memory-input-facts'
+import { memoryJournalMap } from '../journal-memory-collections'
 
 export type JournalInputContext = {
   source: AgentJournalCursor
@@ -64,19 +63,12 @@ export function isInputLineage(value: unknown): value is JournalInputLineage {
 
 /** Initial source coordinates and introduction cuts never follow physical restatement rows. */
 export class JournalInputLineageOwner {
-  constructor(
-    readonly cards: JournalKeyedMap<string, JournalInputCard>,
-    private readonly facts: JournalInputLineageFacts = memoryJournalInputLineageFacts(cards)
-  ) {}
-  get clock(): number {
-    return this.facts.clock
-  }
-  set clock(value: number) {
-    this.facts.clock = value
-  }
+  private base = 0
+  clock = 0
+  constructor(readonly cards: JournalKeyedMap<string, JournalInputCard>) {}
 
   load(lineage: JournalInputLineage): void {
-    this.facts.base = lineage.clock
+    this.base = lineage.clock
     this.clock = lineage.clock
     for (const card of lineage.cards) {
       this.cards.set(card.messageId, {
@@ -87,15 +79,21 @@ export class JournalInputLineageOwner {
   }
   /** A restore stamps cards before its frontier exists, so a reopen starts from no offset too. */
   reopen(): void {
-    this.facts.base = 0
+    this.base = 0
   }
   restoreFrontier(sequence: number, entries: JournalKeyedMap<string, JournalInputEntry>): void {
-    const frontier = this.facts.frontier(entries)
+    let frontier = 0
+    for (const entry of memoryJournalMap(entries).values()) {
+      frontier = Math.max(frontier, entry.context.cut)
+    }
+    for (const card of memoryJournalMap(this.cards).values()) {
+      frontier = Math.max(frontier, card.introduced)
+    }
     this.clock = frontier
-    this.facts.base = frontier - sequence
+    this.base = frontier - sequence
   }
   at(sequence: number): number {
-    return this.facts.base + sequence
+    return this.base + sequence
   }
   observe(sequence: number): void {
     this.clock = Math.max(this.clock, this.at(sequence))
@@ -110,7 +108,7 @@ export class JournalInputLineageOwner {
     }
   }
   releaseHistory(keep: (id: string) => boolean): void {
-    for (const [id, card] of this.facts.cardsForRelease()) {
+    for (const [id, card] of memoryJournalMap(this.cards).entries()) {
       if (!keep(id)) {
         this.cards.delete(id)
       } else {

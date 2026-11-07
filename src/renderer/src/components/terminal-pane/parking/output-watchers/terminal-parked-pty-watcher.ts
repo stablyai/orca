@@ -12,7 +12,7 @@ import {
   hasPreHandlerPtyExit
 } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { consumeCommittedPtyShutdownExit } from '../../pty-transport/shutdown/pty-shutdown-exit-deferral'
-import { detachTerminalLayoutLeaf } from '../../terminal-layout-leaf-detach'
+import { detachTerminalLayoutLeaf } from '../../layout/detach/terminal-layout-leaf-detach'
 import {
   isParkRestorableTerminalPty,
   type TerminalParkRestorePolicy
@@ -21,7 +21,7 @@ import type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconci
 import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
-} from '../../terminal-pane-close-identity'
+} from '../../layout/close/terminal-pane-close-identity'
 import {
   capturedPanesByTabId,
   parkedWatchersByTabId,

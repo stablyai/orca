@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/mirrored-browser-tabs'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
 import {
   getBrowserAgentActivityRevision,
   useLastBrowserAgentActivity
 } from '../browser-pane/agent-cursor/browser-agent-activity-state'
-import { useNativeChatVisualOwner } from './native-chat-visual-owner'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { nativeChatToolRunCategory } from '../../../../shared/native-chat/tools/native-chat-tool-icon'
 import { nativeChatFullCommand } from '../../../../shared/native-chat/tools/native-chat-tool-input-text'
 import { parseOrcaBrowserCommand } from '../../../../shared/orca-browser-cli-commands'

@@ -19,7 +19,7 @@ import type { AgentSessionContinuationContext } from '../../../../shared/agent-s
 import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
-import type { NativeChatFileLinkContext } from './native-chat-file-link'
+import type { NativeChatFileLinkContext } from './links/actions/native-chat-file-link-context'
 import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
 
 export type NativeChatHandOff = {

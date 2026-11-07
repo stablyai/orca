@@ -2,7 +2,7 @@ import {
   findStructuredAgentSessionPendingSend,
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import {
   restoreStructuredAgentSessionLaunchIntent,
   type StructuredAgentSessionLaunchIntent

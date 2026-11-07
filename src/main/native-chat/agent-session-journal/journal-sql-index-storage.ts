@@ -16,15 +16,13 @@ import {
   journalSqlOrderedValues
 } from './journal-sql-keyed-values'
 import { JournalSqlPlaceIndex } from './journal-sql-place-index'
-import { JournalSqlReleasedPositions } from './journal-sql-released-positions'
-import { JournalSqlCandidates } from './journal-sql-candidates'
+import { JournalSqlQueuedRows } from './journal-sql-queued-rows'
 import { JournalSqlTurnSources } from './journal-sql-turn-sources'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import {
   sqlJournalInputCardFacts,
   sqlJournalInputEvidenceFacts,
-  sqlJournalInputLineageFacts,
   sqlJournalInputObservationFacts,
   sqlJournalInputOrderFacts,
   sqlJournalSubmissionLinkFacts,
@@ -86,6 +84,10 @@ export function sqlJournalIndexStorage(
   return {
     stateQueries: () => options.stateQueries,
     map: <K, V>(name: string, key?: string | number): JournalKeyedMap<K, V> => {
+      // Format-3 chats hold no saved queue places; only the open-time legacy decoder fills these.
+      if (key === undefined && (name === 'inputEntries' || name === 'inputCards')) {
+        return new Map<K, V>()
+      }
       const special = key === undefined && name === 'items' ? options.collections.items : undefined
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a projection collection is registered under the reducer field name whose types it stores.
       return special ? (special() as JournalKeyedMap<K, V>) : map<K, V>(name, key)
@@ -96,10 +98,8 @@ export function sqlJournalIndexStorage(
     observationFacts: () => sqlJournalInputObservationFacts(deps),
     evidenceFacts: () => sqlJournalInputEvidenceFacts(deps),
     linkFacts: () => sqlJournalSubmissionLinkFacts(deps),
-    lineageFacts: (cards) => sqlJournalInputLineageFacts(deps, cards),
     place,
-    released: (name) => new JournalSqlReleasedPositions(indexScope, name),
-    candidates: (name) => new JournalSqlCandidates(indexScope, name),
+    queuedRows: () => new JournalSqlQueuedRows(context),
     submissions: (name) =>
       new JournalSqlSubmissionIndex(context, map<string, AgentJournalSubmission>('phase', name)),
     newestTurn: () => {
