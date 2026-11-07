@@ -115,9 +115,12 @@ function MobileFilePreviewDocument({ route }: Props) {
     [previewParams]
   )
 
-  useEffect(() => {
+  // Re-seed from the route during render so a route change never paints the previous source.
+  const [seededRouteSource, setSeededRouteSource] = useState(routePreviewSource)
+  if (seededRouteSource !== routePreviewSource) {
+    setSeededRouteSource(routePreviewSource)
     setPreviewSource(routePreviewSource)
-  }, [routePreviewSource])
+  }
 
   useEffect(() => {
     previewSourceKeyRef.current = previewSourceKey
