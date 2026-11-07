@@ -109,7 +109,7 @@ export async function beginSubmissionHandover(
     return carried ? withStoppedHistory(body, carried.messages) : body
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
-  const requestedAt = structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+  const requestedAt = await structuredAgentSessionHandoverOrigin(ctx.journal, submission)
   return {
     run: async (commit) => {
       try {

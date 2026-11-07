@@ -215,11 +215,11 @@ async function openCommandTurn(
 }
 
 /** Start work timing at handover, excluding waits behind commands/startup. */
-export function structuredAgentSessionHandoverOrigin(
+export async function structuredAgentSessionHandoverOrigin(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission
-): number {
-  const handedOver = journal.submission(submission.clientMessageId)
+): Promise<number> {
+  const handedOver = await journal.reads.submission(submission.clientMessageId)
   return handedOver?.handedOverAt ?? submission.submittedAt
 }
 
