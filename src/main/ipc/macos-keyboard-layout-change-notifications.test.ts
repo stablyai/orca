@@ -6,14 +6,16 @@ const {
   getAllWindows,
   subscribeNotification,
   unsubscribeNotification,
-  waitForSnapshotIdle
+  waitForSnapshotIdle,
+  invalidateSnapshot
 } = vi.hoisted(() => ({
   appOnce: vi.fn(),
   appRemoveListener: vi.fn(),
   getAllWindows: vi.fn(),
   subscribeNotification: vi.fn(),
   unsubscribeNotification: vi.fn(),
-  waitForSnapshotIdle: vi.fn()
+  waitForSnapshotIdle: vi.fn(),
+  invalidateSnapshot: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -23,6 +25,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./macos-keyboard-layout-snapshot', () => ({
+  invalidateMacKeyboardLayoutSnapshot: invalidateSnapshot,
   waitForMacKeyboardLayoutSnapshotIdle: waitForSnapshotIdle
 }))
 
@@ -81,6 +84,7 @@ describe('macOS keyboard layout change notifications', () => {
     )
 
     notificationCallback?.()
+    expect(invalidateSnapshot).toHaveBeenCalledTimes(1)
     expect(send).toHaveBeenCalledExactlyOnceWith(KEYBOARD_LAYOUT_CHANGED_CHANNEL, {
       phase: 'invalidated',
       generation: 1

@@ -3,7 +3,10 @@ import {
   KEYBOARD_LAYOUT_CHANGED_CHANNEL,
   type KeyboardLayoutChangeEvent
 } from '../../shared/keyboard-layout-events'
-import { waitForMacKeyboardLayoutSnapshotIdle } from './macos-keyboard-layout-snapshot'
+import {
+  invalidateMacKeyboardLayoutSnapshot,
+  waitForMacKeyboardLayoutSnapshotIdle
+} from './macos-keyboard-layout-snapshot'
 
 const INPUT_SOURCE_CHANGED_NOTIFICATION =
   'com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged'
@@ -41,6 +44,7 @@ export function registerMacKeyboardLayoutChangeNotifications(): () => void {
         if (disposed) {
           return
         }
+        invalidateMacKeyboardLayoutSnapshot()
         const nextGeneration = ++generation
         broadcast({ phase: 'invalidated', generation: nextGeneration })
         void refreshAfterCurrentRead(nextGeneration)
