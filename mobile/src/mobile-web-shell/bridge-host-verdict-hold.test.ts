@@ -4,17 +4,12 @@ import { bridgeId, clientFrame, flushBridge } from './bridge-host-test-fakes'
 import { harness, subscribeFrame } from './bridge-host-test-harness'
 
 const PROVEN: HostStatusReply = { protocolVersion: 10, minCompatibleMobileVersion: 1 }
-const STORE_READ = { values: ['cached-rows'], deferred: [] }
 
 // A cached page renders before this connection's verdict; nothing it sends may reach the desktop until then.
 describe('the connection verdict hold', () => {
   function heldBridge() {
     const verdict: { status: HostStatusReply | null } = { status: null }
-    const bridge = harness({
-      ready: true,
-      readHostStatus: () => verdict.status,
-      serveNativeVerb: async () => STORE_READ
-    })
+    const bridge = harness({ ready: true, readHostStatus: () => verdict.status })
     return { bridge, verdict }
   }
 
@@ -31,30 +26,15 @@ describe('the connection verdict hold', () => {
     bridge.host.receive(
       clientFrame({ type: 'request', id: bridgeId(3), method: 'native.pdf.view', params: {} })
     )
-    // status.get is how the page learns the verdict, so it alone reaches the desktop.
+    // status.get is how the page learns the verdict, so it alone goes through.
     bridge.host.receive(clientFrame({ type: 'request', id: bridgeId(4), method: 'status.get' }))
-    // The device store never leaves the phone, so a cached page can read it before (or without) a verdict.
-    const storeRead = { action: 'read', table: 'cache', keys: ['host-list'] }
-    bridge.host.receive(
-      clientFrame({
-        type: 'request',
-        id: bridgeId(5),
-        method: 'native.store.rows',
-        params: storeRead
-      })
-    )
     bridge.client.pushState('connected')
     await flushBridge()
 
     expect(bridge.client.requests.map((request) => request.method)).toEqual(['status.get'])
     expect(bridge.client.streams).toEqual([])
-    expect(bridge.nativeCalls).toEqual([{ verb: 'native.store.rows', params: storeRead }])
-    expect(
-      bridge.frames().find((frame) => frame.type === 'reply' && frame.id === bridgeId(5))
-    ).toMatchObject({ payload: { ok: true, result: STORE_READ } })
-    expect(bridge.frames().findLast((frame) => frame.type === 'state')).toMatchObject({
-      connection: { state: 'handshaking' }
-    })
+    expect(bridge.nativeCalls).toEqual([])
+    expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'handshaking' } })
   })
 
   it("serves the phone's own store before the verdict, so drafts typed offline are saved", async () => {
