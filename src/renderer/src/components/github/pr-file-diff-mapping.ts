@@ -1,3 +1,4 @@
+import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
   MAX_RENDERED_DIFF_LINES_PER_SIDE,
@@ -15,6 +16,7 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../shared/github/pull-request-types'
+import { isPRFileViewed } from './pr-file-content-size'
 
 export const PR_DIFF_OVERSCAN = 5
 
@@ -40,6 +42,31 @@ export function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChange
 
 export function getPRFileSectionKey(path: string): string {
   return `combined-commit:${path}`
+}
+
+export function createPRFileDiffSections(
+  entries: readonly GitBranchChangeEntry[],
+  fileByPath: ReadonlyMap<string, GitHubPRFile>
+): DiffSection[] {
+  return entries.map((entry) => {
+    const file = fileByPath.get(entry.path)
+    return {
+      key: getPRFileSectionKey(entry.path),
+      path: entry.path,
+      oldPath: entry.oldPath,
+      status: entry.status,
+      added: entry.added,
+      removed: entry.removed,
+      originalContent: '',
+      modifiedContent: '',
+      collapsed: file ? isPRFileViewed(file) : false,
+      loading: true,
+      error: undefined,
+      dirty: false,
+      diffResult: null,
+      largeDiffRenderLimit: null
+    }
+  })
 }
 
 export function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {
