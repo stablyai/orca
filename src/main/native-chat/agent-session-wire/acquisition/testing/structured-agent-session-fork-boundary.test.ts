@@ -1,3 +1,8 @@
+import { prepareForkSnapshot } from '../structured-agent-session-fork-snapshot'
+import type {
+  AgentJournalSnapshot,
+  AgentJournalItemBody
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
@@ -235,3 +240,191 @@ it.each([false, true])(
     }
   }
 )
+
+it('freezes the selected mixed root, includes its late rows, and drops unfinished work with its dependents', () => {
+  const k = (n: number) =>
+    agentJournalItemKey({
+      provider: 'codex',
+      threadId: 'source',
+      turnId: n < 4 ? 'T1' : 'T2',
+      ordinal: n
+    })
+  const l = (id: string) =>
+    agentJournalItemKey({ provider: 'legacy', agent: 'codex', sessionId: 'source', recordId: id })
+  const row = (itemId: string, body: AgentJournalItemBody, turnItemId?: string) => ({
+    itemId,
+    body,
+    sequence: 1,
+    revision: 1,
+    observedAt: 123,
+    ...(turnItemId ? { turnScope: { kind: 'turn' as const, turnItemId } } : {})
+  })
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: 'source-chat',
+    cursor: { epoch: 'epoch', sequence: 10 },
+    submissions: [],
+    items: [
+      row(k(0), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'first' }] }),
+      row(l('root1'), { kind: 'turn', turnId: 'T1', userItemId: k(0), state: 'completed' }),
+      row(
+        k(1),
+        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'rich original' }] },
+        l('root1')
+      ),
+      row(
+        l('running'),
+        { kind: 'tool-call', name: 'command', callId: 'call-running', input: {}, state: 'running' },
+        l('root1')
+      ),
+      row(l('dependent'), { kind: 'status', text: 'linked work' }, l('running')),
+      row(l('transitive'), { kind: 'status', text: 'linked descendant' }, l('dependent')),
+      row(
+        l('helper'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            { type: 'text', text: 'Kicked off subagent Audit' },
+            {
+              type: 'subagent',
+              id: 'child-1',
+              label: 'Audit',
+              groupId: 'T1',
+              state: 'working',
+              background: true
+            }
+          ]
+        },
+        l('root1')
+      ),
+      row(
+        l('legacy-helpers'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'subagent-group',
+              groupId: 'T1',
+              agents: [{ id: 'legacy-child', label: 'Legacy', state: 'working' }]
+            }
+          ]
+        },
+        l('root1')
+      ),
+      {
+        ...row(l('helper-output'), { kind: 'status', text: 'completed child output' }),
+        agentId: 'child-1',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('nested-output'), { kind: 'status', text: 'nested output' }),
+        agentId: 'nested',
+        parentAgentId: 'child-1',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('legacy-output'), { kind: 'status', text: 'legacy output' }),
+        agentId: 'legacy-child',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('linked-tool-output'), { kind: 'status', text: 'tool output' }),
+        agentId: 'tool-child',
+        providerParentRef: 'call-running',
+        producerKind: 'agent'
+      },
+      {
+        ...row(l('tool-descendant'), { kind: 'status', text: 'tool descendant' }),
+        agentId: 'tool-descendant',
+        parentAgentId: 'tool-child',
+        producerKind: 'agent'
+      },
+      row(k(4), { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'second' }] }),
+      row(
+        l('late'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'late retained detail' }]
+        },
+        l('root1')
+      ),
+      row(l('notice'), { kind: 'status', text: 'later unscoped notice' }),
+      row(
+        l('tool'),
+        {
+          kind: 'tool-call',
+          name: 'command',
+          input: { turnItemId: k(0), userItemId: l('running') },
+          state: 'completed'
+        },
+        l('root1')
+      ),
+      row(
+        l('settled-helper'),
+        {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'subagent', id: 'C', label: 'Audit', groupId: 'T1', state: 'completed' }]
+        },
+        l('root1')
+      ),
+      {
+        ...row(
+          l('settled-goal'),
+          { kind: 'status', text: 'Goal cleared', threadGoal: { state: 'cleared' } },
+          l('root1')
+        ),
+        agentId: 'C',
+        producerKind: 'agent'
+      },
+      {
+        ...row(
+          l('settled-answer'),
+          {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Completed audit' }]
+          },
+          l('root1')
+        ),
+        agentId: 'C',
+        producerKind: 'agent'
+      }
+    ]
+  }
+  const original = structuredClone(snapshot)
+  const copied = prepareForkSnapshot({
+    snapshot,
+    nextItemId: k(4),
+    sourceThreadId: 'source',
+    childThreadId: 'child'
+  })
+  expect(snapshot).toEqual(original)
+  expect(copied.map((item) => agentJournalItemKey(item.identity))).toEqual([
+    'codex:child:T1:0',
+    'legacy:codex:source:root1',
+    'codex:child:T1:1',
+    'legacy:codex:source:late',
+    'legacy:codex:source:tool',
+    'legacy:codex:source:settled-helper',
+    'legacy:codex:source:settled-answer'
+  ])
+  expect(copied[1]?.body).toEqual({
+    kind: 'turn',
+    turnId: 'T1',
+    userItemId: 'codex:child:T1:0',
+    state: 'completed'
+  })
+  expect(copied[4]?.body).toMatchObject({
+    input: { turnItemId: 'codex:source:T1:0', userItemId: 'legacy:codex:source:running' }
+  })
+  snapshot.items[2]!.body = { kind: 'status', text: 'changed source' }
+  expect(copied[2]).toMatchObject({
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'rich original' }] },
+    observedAt: 123,
+    ownerFence: 0,
+    turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:root1' }
+  })
+})

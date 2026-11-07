@@ -663,3 +663,63 @@ describe('ACP history catch-up', () => {
     expect(onOverflow).toHaveBeenCalledOnce()
   })
 })
+
+it('skips the copied root after undo and imports each new root once without timestamps', async () => {
+  const { fixture, catchUp } = await setup(OPENCODE_ACP_DIALECT, 'user-message-id')
+  const journal = fixture.rig.journal
+  await journal.replaceEpochItems(
+    'session_created',
+    1,
+    [
+      {
+        identity: { provider: 'legacy', agent: AGENT, sessionId: 'source', recordId: 'rich' },
+        ownerFence: 0,
+        observedAt: 123,
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'rich copied history' }]
+        }
+      }
+    ],
+    undefined,
+    undefined,
+    {
+      version: 1,
+      kind: 'native_copy',
+      agent: AGENT,
+      unit: 'acp-user-message',
+      providerHandle: { kind: 'opaque', agent: AGENT, value: NAMESPACE },
+      ids: ['U1', 'U2']
+    }
+  )
+  const frames = [
+    replayUpdate('user_message_chunk', {
+      messageId: 'U1',
+      content: { type: 'resource_link', uri: 'file:///image.png', name: 'image' }
+    }),
+    answerReplay('provider copy of inherited reply', 'A1'),
+    userReplay('U3', 'new after undo'),
+    answerReplay('new reply', 'A3')
+  ]
+  await catchUp(frames)
+  await catchUp(frames)
+  const next = [
+    ...frames,
+    userReplay('U4', 'local later'),
+    answerReplay('four', 'A4'),
+    userReplay('U5', 'CLI later'),
+    answerReplay('five', 'A5')
+  ]
+  await catchUp(next)
+  await catchUp(next)
+  expect(
+    journal
+      .snapshot()
+      .items.flatMap((item) =>
+        item.body.kind === 'message' && item.body.role === 'assistant'
+          ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+          : []
+      )
+  ).toEqual(['rich copied history', 'new reply', 'four', 'five'])
+})

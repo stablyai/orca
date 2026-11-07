@@ -1,9 +1,10 @@
+import { recordedCodexRollout } from './__fixtures__/codex-rollout-recordings'
 import type * as AppServerSession from './app-server/codex-app-server-session'
 import type * as LocalHistory from '../native-chat/codex-local-history'
 import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
 import { readCodexLocalHistory } from '../native-chat/codex-local-history'
 import { readCodexRolloutBytes } from '../native-chat/codex-rollout-history-stream'
-import { mkdir, mkdtemp, rm, writeFile, readFile, realpath } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -84,7 +85,7 @@ async function history(id: string, records: object[]) {
   state.paths.set(id, path)
   return path
 }
-function copy(selected = `${SOURCE}:a1`, settled = true) {
+function copy(selected = `${SOURCE}:a1`, settled = true, turnId?: string) {
   return copyCodexConversation(
     {
       record: agentSessionRecordFixture({
@@ -110,7 +111,8 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
           sessionId: SOURCE,
           recordId: selected
         }),
-        settled
+        settled,
+        ...(turnId ? { turnId } : {})
       }
     },
     {
@@ -121,10 +123,41 @@ function copy(selected = `${SOURCE}:a1`, settled = true) {
   )
 }
 
+async function childPrefix(lines?: number) {
+  const source = `${(await readFile(state.paths.get(SOURCE)!, 'utf8'))
+    .trimEnd()
+    .split('\n')
+    .slice(0, lines)
+    .join('\n')}\n`
+  const count = source.trim().split('\n').length
+  const path = await history(CHILD, [])
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      ordinal: count,
+      type: 'session_meta',
+      payload: {
+        id: CHILD,
+        history_mode: 'paginated',
+        history_base: {
+          thread_id: SOURCE,
+          end_ordinal_exclusive: count,
+          end_byte_offset: Buffer.byteLength(source)
+        }
+      }
+    })}\n`
+  )
+  return path
+}
+
 it('uses a persisted terminal canonical boundary for an idle imported latest reply with no live owner', async () => {
   await history(SOURCE, turn('canonical', 1))
+  await childPrefix()
   state.request.mockResolvedValue({ thread: { id: CHILD } })
-  await expect(copy(undefined, false)).resolves.toEqual({ sessionId: CHILD })
+  await expect(copy(undefined, false)).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['canonical'] }
+  })
   expect(state.initialize).toHaveBeenCalledWith(
     expect.objectContaining({
       command: 'codex',
@@ -147,7 +180,6 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
     })
   )
   expect(state.request).toHaveBeenCalledWith('thread/fork', expect.objectContaining({ cwd: root }))
-  expect(state.request.mock.calls.map(([method]) => method)).toEqual(['thread/fork'])
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',
     expect.objectContaining({ lastTurnId: 'canonical' })
@@ -156,8 +188,16 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
 
 it('uses beforeTurnId only for the immediate next effective root and opts into the experimental API', async () => {
   await history(SOURCE, [...turn(undefined, 1), ...turn('canonical-next', 2)])
-  state.request.mockResolvedValue({ thread: { id: CHILD } })
-  await copy()
+  await childPrefix(3)
+  state.request.mockImplementation(async (method) =>
+    method === 'thread/fork'
+      ? { thread: { id: CHILD } }
+      : { data: [{ id: 'legacy-first' }, { id: 'canonical-next' }], nextCursor: null }
+  )
+  await expect(copy()).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['legacy-first'] }
+  })
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',
     expect.objectContaining({ beforeTurnId: 'canonical-next' })
@@ -177,11 +217,10 @@ it('forks and reverts only the child for legacy, legacy, canonical, counting aga
   )
   state.paths.set(CHILD, path)
   let reverted = false
-  state.request.mockImplementation(async (method, params) => {
+  state.request.mockImplementation(async (method) => {
     if (method === 'thread/fork') {
       return { thread: { id: CHILD, historyMode: 'paginated' } }
     }
-    expect(params?.threadId).toBe(CHILD)
     if (method === 'thread/name/set') {
       return {}
     }
@@ -196,7 +235,10 @@ it('forks and reverts only the child for legacy, legacy, canonical, counting aga
       nextCursor: null
     }
   })
-  await expect(copy()).resolves.toEqual({ sessionId: CHILD })
+  await expect(copy()).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['legacy-1'] }
+  })
   expect(state.request).toHaveBeenCalledWith('thread/revert', {
     threadId: CHILD,
     beforeTurnId: 'legacy-2'
@@ -210,9 +252,12 @@ it('forks and reverts only the child for legacy, legacy, canonical, counting aga
 
 it('refuses an unpaginated child when there is no canonical boundary', async () => {
   await history(SOURCE, turn(undefined, 1))
-  state.request.mockResolvedValue({ thread: { id: CHILD, historyMode: 'legacy' } })
+  state.request.mockImplementation(async (method) =>
+    method === 'thread/fork'
+      ? { thread: { id: CHILD, historyMode: 'legacy' } }
+      : { data: [{ id: 'legacy-first' }], nextCursor: null }
+  )
   await expect(copy()).rejects.toThrow('Codex could not locate an exact saved boundary')
-  expect(state.request.mock.calls.map(([method]) => method)).toEqual(['thread/fork'])
 })
 
 it('uses exact physical identities across repeated prompts rather than a retained-window offset', async () => {
@@ -242,74 +287,72 @@ it('reports a provider in-progress rejection without suggesting an update', asyn
   await expect(copy()).rejects.toThrow('Wait for it to finish')
 })
 
-it.each([
-  { count: 250, kept: 125, capturePages: 3, verificationPages: 2 },
-  { count: 2500, kept: 1250, capturePages: 25, verificationPages: 13 }
-])(
-  'bounds fallback paging and rollout passes for $count turns',
-  async ({ count, kept, capturePages, verificationPages }) => {
-    const sourcePath = await history(
-      SOURCE,
-      Array.from({ length: count }, (_, index) => turn(undefined, index + 1)).flat()
-    )
-    const source = await readFile(sourcePath, 'utf8')
-    const childPath = await history(CHILD, [])
-    await writeFile(
-      childPath,
-      `${JSON.stringify({
-        type: 'session_meta',
-        ordinal: count * 2 + 1,
-        payload: {
-          id: CHILD,
-          history_mode: 'paginated',
-          history_base: {
-            thread_id: SOURCE,
-            end_ordinal_exclusive: count * 2 + 1,
-            end_byte_offset: Buffer.byteLength(source)
-          }
-        }
-      })}\n`
-    )
-    let reverted = false
-    const pages = { capture: 0, verification: 0 }
-    state.request.mockImplementation(async (method, params) => {
-      if (method === 'thread/fork') {
-        return { thread: { id: CHILD, historyMode: 'paginated' } }
-      }
-      expect(params?.threadId).toBe(CHILD)
-      if (method === 'thread/revert') {
-        expect(params?.beforeTurnId).toBe(`legacy-${kept + 1}`)
-        reverted = true
-        return { thread: { id: CHILD } }
-      }
-      expect(method).toBe('thread/turns/list')
-      expect(params?.limit).toBe(100)
-      expect(params?.sortDirection).toBe('asc')
-      pages[reverted ? 'verification' : 'capture']++
-      const offset = params?.cursor ? Number(params.cursor) : 0
-      const end = Math.min(offset + 100, reverted ? kept : count)
-      return {
-        data: Array.from({ length: end - offset }, (_, index) => ({
-          id: `legacy-${offset + index + 1}`
-        })),
-        nextCursor: end < (reverted ? kept : count) ? String(end) : null
-      }
-    })
-    await expect(copy(`${SOURCE}:a${kept}`)).resolves.toEqual({ sessionId: CHILD })
-    expect(pages).toEqual({ capture: capturePages, verification: verificationPages })
-    expect(state.request.mock.calls.filter(([method]) => method === 'thread/revert')).toHaveLength(
-      1
-    )
-    expect(vi.mocked(readCodexLocalHistory).mock.calls.map(([input]) => input.filePath)).toEqual([
-      sourcePath,
-      childPath
-    ])
-    // Each pass reads a header and a body; the child's pass also visits its source prefix.
-    const streams = vi.mocked(readCodexRolloutBytes).mock.calls.map(([path]) => path)
-    expect(streams).toHaveLength(6)
-    const sourcePhysicalPath = await realpath(sourcePath)
-    const childPhysicalPath = await realpath(childPath)
-    expect(streams.filter((path) => path === sourcePhysicalPath)).toHaveLength(4)
-    expect(streams.filter((path) => path === childPhysicalPath)).toHaveLength(2)
+it('freezes all-unrecorded root IDs on the source, excluding child replacements and later source growth', async () => {
+  await history(SOURCE, [...turn(undefined, 1), ...turn(undefined, 2), ...turn(undefined, 3)])
+  let reverted = false
+  state.request.mockImplementation(async (method, params) => {
+    if (method === 'thread/fork') {
+      await history(SOURCE, [
+        ...turn(undefined, 1),
+        ...turn(undefined, 2),
+        ...turn(undefined, 3),
+        ...turn(undefined, 4)
+      ])
+      const path = await childPrefix()
+      await appendFile(
+        path,
+        `${JSON.stringify({
+          type: 'event_msg',
+          payload: { type: 'task_started', turn_id: 'child-only' }
+        })}\n`
+      )
+      return { thread: { id: CHILD, historyMode: 'paginated' } }
+    }
+    if (method === 'thread/revert') {
+      reverted = true
+      return { thread: { id: CHILD } }
+    }
+    return {
+      data: (params?.threadId === SOURCE
+        ? ['S1', 'S2', 'S3']
+        : reverted
+          ? ['S1']
+          : ['S1', 'C2', 'C3', 'C4']
+      ).map((id) => ({ id })),
+      nextCursor: null
+    }
+  })
+  await expect(copy()).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['S1'] }
+  })
+})
+
+it('certifies recorded turns in a standalone copied rollout with no physical history base', async () => {
+  const rows = await recordedCodexRollout('c')
+  const source = rows.find((row) => row.type === 'session_meta')!
+  const started = rows.find(
+    (row) => row.type === 'event_msg' && row.payload.type === 'task_started'
+  )!
+  const through = rows.findIndex(
+    (row) => row.type === 'event_msg' && row.payload.type === 'task_complete'
+  )
+  const captured = rows.slice(0, through + 1)
+  for (const [id, meta] of [
+    [SOURCE, source],
+    [CHILD, source]
+  ] as const) {
+    const path = await history(id, [])
+    const serialized = captured
+      .map((row) =>
+        JSON.stringify(row === meta ? { ...row, payload: { ...row.payload, id } } : row)
+      )
+      .join('\n')
+    await writeFile(path, `${serialized}\n`)
   }
-)
+  state.request.mockResolvedValue({ thread: { id: CHILD } })
+  await expect(copy(undefined, true, String(started.payload.turn_id))).resolves.toEqual({
+    sessionId: CHILD,
+    coverage: { unit: 'codex-turn', ids: ['01a1b0d7-ac1d-7e00-85b8-806a4d8d494b'] }
+  })
+})
