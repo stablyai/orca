@@ -6,8 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import {
+  clipboardImageCopyErrorDescription,
+  imageCopyFailedMessage
+} from '@/lib/clipboard-image-copy'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
-import { renderImagePngDataUrl } from './image-png-export'
+import { imageClipboardPngDataUrl } from './image-png-export'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
@@ -38,13 +42,13 @@ async function copyImageAsPng(
 ): Promise<void> {
   try {
     await window.api.ui.writeClipboardImage(
-      await renderImagePngDataUrl(src, size, background ?? null)
+      await imageClipboardPngDataUrl(src, size, background ?? null)
     )
     toast.success(translate('auto.components.editor.PanZoomImageDialog.copiedPng', 'Copied as PNG'))
-  } catch {
-    toast.error(
-      translate('auto.components.editor.PanZoomImageDialog.copyPngFailed', 'Could not copy image')
-    )
+  } catch (error) {
+    toast.error(imageCopyFailedMessage(), {
+      description: clipboardImageCopyErrorDescription(error)
+    })
   }
 }
 

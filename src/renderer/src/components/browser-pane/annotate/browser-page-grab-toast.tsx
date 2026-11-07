@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
 import type { BrowserPageGrabToastState } from '../describe-page/browser-page-types'
 
 export function BrowserPageGrabToast({
@@ -74,17 +75,25 @@ export function BrowserPageGrabToast({
                 onSelect={() => {
                   const dataUrl = grabToast.payload?.screenshot?.dataUrl
                   if (dataUrl?.startsWith('data:image/png;base64,')) {
-                    void window.api.ui.writeClipboardImage(dataUrl)
-                    setGrabToast((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            message: translate(
-                              'auto.components.browser.pane.BrowserPane.f30d2d35a7',
-                              'Screenshotted'
-                            )
-                          }
-                        : null
+                    void window.api.ui.writeClipboardImage(dataUrl).then(
+                      () =>
+                        setGrabToast((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                message: translate(
+                                  'auto.components.browser.pane.BrowserPane.f30d2d35a7',
+                                  'Screenshotted'
+                                )
+                              }
+                            : null
+                        ),
+                      () =>
+                        setGrabToast((prev) =>
+                          prev
+                            ? { ...prev, message: imageCopyFailedMessage(), type: 'error' }
+                            : null
+                        )
                     )
                   }
                 }}
