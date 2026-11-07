@@ -4,7 +4,7 @@ import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import StructuredAgentSessionPaneOverlayLayer from './native-chat/StructuredAgentSessionPaneOverlayLayer'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
-import type { HiddenTerminalPrewarm } from './terminal-pane/terminal-pane-types'
+import type { HiddenTerminalPrewarm } from './terminal-pane/controller/terminal-pane-types'
 
 /** Share retained pane hosts across group-tree hosts so retention, parking and browser paint have one lifecycle owner. */
 export function WorkspacePaneOverlayLayers({

@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { createTerminalStreamFixtures } from '@/components/terminal-pane/remote-runtime-pty-transport-stream-fixtures'
+import { createTerminalStreamFixtures } from '@/components/terminal-pane/pty-transport/remote/remote-runtime-pty-transport-stream-fixtures'
 
 export function createHostSessionLaunchRuntimeFixture() {
   const runtimeCall = vi.fn()

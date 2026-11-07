@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store/index'
+import { useAppStateValue } from '@/store/app-state-view'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getLocalExecutionHostLabel } from '../../../../../../shared/execution-host'
@@ -22,7 +22,7 @@ export function CodexHistorySharingSetting({
   hostScope: SettingsHostScope
 }): React.JSX.Element {
   const environmentId = runtimeTargetEnvironmentId(hostScope.target)
-  const hostName = useAppStore((state) =>
+  const hostName = useAppStateValue((state) =>
     environmentId
       ? state.runtimeEnvironments.find((entry) => entry.id === environmentId)?.name
       : null

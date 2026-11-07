@@ -58,7 +58,7 @@ vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
 }))
 
 // Only the request is spied: connect still needs the real generation/instance registry.
-vi.mock('../../terminal-pane-recovery', async (importOriginal) => ({
+vi.mock('../../render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery
 }))

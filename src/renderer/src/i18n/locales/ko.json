@@ -13297,7 +13297,8 @@
             "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?",
             "markResolved": "해결됨으로 표시",
             "keepFile": "파일 유지",
-            "keepDeletion": "삭제 유지"
+            "keepDeletion": "삭제 유지",
+            "refreshAll": "모두 새로 고침"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -16284,7 +16285,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "음성 오류: {{value0}}",
-          "7afff43472": "받아쓰기가 완료되었지만 텍스트 필드에 초점이 맞춰지지 않았습니다.",
           "55127a3706": "받아쓰기 실패: {{value0}}",
           "bb7f599ee7": "설정 열기",
           "2d5b9fabf9": "마이크 액세스가 거부되었습니다. 시스템 설정에서 액세스 권한을 부여한 다음 Orca를 다시 시작하세요.",
@@ -16295,7 +16295,13 @@
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
-          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
+          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "받아쓰기를 삽입할 수 없어 클립보드에 복사했습니다.",
+          "copiedWithoutTarget": "포커스된 텍스트 필드가 없어 받아쓰기를 클립보드에 복사했습니다.",
+          "lost": "받아쓰기를 삽입하거나 복사할 수 없습니다."
         },
         "DictationIndicator": {
           "335e1bc6cb": "받아쓰기 중지",
@@ -17592,6 +17598,10 @@
           "actionsUnavailable": "이 클라이언트에서는 플러그인 작업을 사용할 수 없습니다.",
           "messageTooLarge": "메시지가 크기 제한을 초과합니다.",
           "tooManyRequests": "요청이 너무 많습니다."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "이 워크트리 열기",
+          "reconnect": "이 워크트리의 변경 사항을 보려면 다시 연결하세요."
         }
       },
       "link": {
@@ -20725,6 +20735,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}}에서 시작했습니다",
     "actionSaveFailed": "이 작업을 저장하지 못했습니다. 설정에서 다시 저장해 보세요.",
     "unlinkedPr": {
       "status": "PR #{{number}} 연결 해제됨"

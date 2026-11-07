@@ -75,6 +75,7 @@ export type TerminalState = {
       resumeSource?: SavedResumeStartupSource
       launchToken?: string
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       /** The agent launch the pane's own spawn starts, instead of `command`. */
       agentLaunch?: AgentPaneLaunchRequest
       freshAgentLaunch?: FreshWorkspaceAgentLaunch

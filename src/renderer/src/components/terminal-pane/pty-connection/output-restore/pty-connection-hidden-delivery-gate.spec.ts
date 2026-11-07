@@ -234,7 +234,8 @@ export function registerPtyConnectionHiddenDeliveryGateTests(): void {
         enableMainAuthority()
         const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
         mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
-        const { _resetTerminalPaneRecoveryForTests } = await import('../../terminal-pane-recovery')
+        const { _resetTerminalPaneRecoveryForTests } =
+          await import('../../render-health/recovery/terminal-pane-recovery')
         _resetTerminalPaneRecoveryForTests()
         const deps = createDeps({ isVisibleRef: { current: false } })
         const { pane, dataCallback } = await connectHiddenPane(deps)

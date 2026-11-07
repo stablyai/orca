@@ -25,6 +25,27 @@ afterEach(() => {
 })
 
 describe('launchAgentInNewTab', () => {
+  it('carries section trust ownership only in the transient pending startup', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      requestId: 'section-trust-test',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      requestedSurface: 'terminal',
+      initialCwd: '/outside/section',
+      trustWorktreeId: 'repo::/outside/section',
+      prompt: 'Resolve conflicts',
+      promptDelivery: 'auto-submit'
+    })
+    expect(queuedStartups()[0]).toMatchObject({
+      trustWorktreeId: 'repo::/outside/section',
+      launchAgent: 'claude'
+    })
+    expect(mockCreateTab.mock.calls[0][0]).toBe('wt-1')
+    expect(mockCreateTab.mock.calls[0][3]).not.toHaveProperty('trustWorktreeId')
+    expect(mockCreateTab.mock.calls[0][3]?.startupCwd).toBe('/outside/section')
+  })
+
   it.each(['created', 'failed'] as const)(
     'settles a %s requested host agent beside existing surfaces using its captured owner',
     async (creation) => {

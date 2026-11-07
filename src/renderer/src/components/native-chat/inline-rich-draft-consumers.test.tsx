@@ -556,24 +556,19 @@ it.each(['mounted', 'success', 'unmounted', 'ime', 'cancel'] as const)(
       const bottom = promptEditor(screen.getByRole('textbox', { name: 'Bottom' }))
       act(() => bottom.commands.setTextSelection(bottom.state.doc.content.size - 1))
     }
-    act(() => insertText('echo', captured))
+    act(() => void insertText('echo', captured))
     if (mode === 'ime') {
       const bottom = promptEditor(screen.getByRole('textbox', { name: 'Bottom' }))
       expect(promptText(bottom.state.doc)).toBe('first\n\necho')
       act(() =>
         bottom.view.dispatch(bottom.state.tr.insertText('가', bottom.state.doc.content.size - 1))
       )
-      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가 echo' }])
+      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가echo' }])
     } else {
       expect(nextSend().blocks).toEqual([
         {
           type: 'text',
-          text:
-            mode === 'cancel'
-              ? 'first\n\necho'
-              : mode === 'mounted' || mode === 'success'
-                ? 'first\n\nechoecho'
-                : 'first\n\necho echo'
+          text: mode === 'cancel' ? 'first\n\necho' : 'first\n\necho echo'
         }
       ])
     }
@@ -734,7 +729,7 @@ it('replays captured ordinary insertion over late storage hydration without chan
   act(() => controller.editor!.save())
   await waitFor(() => expect(controller.editor).toBeUndefined())
   view.unmount()
-  act(() => insertText('echo', target))
+  act(() => void insertText('echo', target))
   await act(async () => {
     load!(new Map([[scope, { text: 'echo', images: [], savedAt: 1 }]]))
     await loading

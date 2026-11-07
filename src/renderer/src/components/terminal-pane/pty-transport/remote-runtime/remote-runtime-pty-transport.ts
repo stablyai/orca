@@ -3,7 +3,8 @@ import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
 import {
   agentSessionCreateCapabilities,
-  agentSessionCreateRequest
+  agentSessionCreateRequest,
+  createAgentSessionTrustWorktreeOptions
 } from '@/runtime/agent-session-create-request'
 import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
 import {
@@ -237,6 +238,7 @@ export function createRemoteRuntimePtyTransport(
   runtimeEnvironmentId: string,
   opts: IpcPtyTransportOptions = {}
 ): PtyTransport {
+  const trustOptions = createAgentSessionTrustWorktreeOptions(opts.trustWorktreeId)
   const {
     command,
     startupCommandDelivery,
@@ -3640,7 +3642,11 @@ export function createRemoteRuntimePtyTransport(
               }
             })())
           : {}
+      const sectionTrustOptions = opts.trustWorktreeId
+        ? await trustOptions(createEnvironmentId)
+        : {}
       const legacyCreateParams = {
+        ...sectionTrustOptions,
         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
         clientMutationId: terminalCreateMutationId,
         ...(commandToSend !== undefined ? { command: commandToSend } : {}),
@@ -3783,6 +3789,8 @@ export function createRemoteRuntimePtyTransport(
                   withAgentSessionCreateOperationId(
                     {
                       ...keyboardOptions,
+                      ...sectionTrustOptions,
+                      ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                       agent: launchAgentToSend!,
                       ...(composed

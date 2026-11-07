@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -44,7 +45,6 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/host-chat-program'
-import { useAppStore } from '@/store/index'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
@@ -101,7 +101,7 @@ export function AgentLaunchSettingsCatalog({
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
   useHostStructuredAgentsVersion()
-  const installedHere = useAppStore(readNativeDetectedAgents)
+  const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
       ? { kind: 'git-worktree' as const, runtimeEnvironmentId: detectionTarget.environmentId }
@@ -109,7 +109,7 @@ export function AgentLaunchSettingsCatalog({
   useChatProgramFacts(workspace, detectionTarget.kind !== 'ssh')
   const chosen = settings.defaultTuiAgent
   // The saved default reads as available where it opens as a chat without its CLI.
-  const defaultOpensAsChat = useAppStore((state) =>
+  const defaultOpensAsChat = useAppStateValue((state) =>
     chosen && chosen !== 'blank' && detectionTarget.kind !== 'ssh'
       ? agentChoiceOpensAsChat(state, chosen, workspace, detected)
       : false
@@ -122,7 +122,7 @@ export function AgentLaunchSettingsCatalog({
       .map((row) => row.agent)
   )
   // Agents whose chat program is here without their CLI, like a downloaded chat runtime, are installed for chat.
-  const chatOnlyKey = useAppStore((state) => {
+  const chatOnlyKey = useAppStateValue((state) => {
     if (detectionTarget.kind === 'ssh') {
       return ''
     }

@@ -78,7 +78,6 @@ function mountStart() {
           disabledTuiAgents: [],
           agentLaunchChoices: {}
         },
-        settings: null,
         repo: null,
         promptDelivery: 'submit-after-ready',
         launchPlatform: 'linux',

@@ -13,7 +13,7 @@ vi.mock('./terminal-bracketed-paste', () => ({
   sanitizeTerminalPasteText: (text: string) => text.split('\u001b').join('\u241b')
 }))
 
-vi.mock('../../terminal-input-activity', () => ({
+vi.mock('../terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
