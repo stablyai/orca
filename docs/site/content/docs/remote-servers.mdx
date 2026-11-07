@@ -205,6 +205,7 @@ Copies of a machine image share the server identity: the pairing key, the paired
 - With `ORCA_INSTANCE_ID` set, Orca records the value with the server identity. If a later start sees a different value, Orca creates a new identity and removes all paired devices on that copy, so clients pair with it again.
 - The first value Orca sees on an existing server is only recorded, so setting the variable later keeps existing pairings. Use a value that stays the same across restarts of one instance; a value that changes on every boot forces a new pairing each time.
 - When `ORCA_INSTANCE_ID` is not set, Orca never changes the identity on its own.
+- If Orca cannot write the new identity (for example on a full or read-only disk), it keeps serving the current one unchanged, logs an error, and tries again on the next start.
 - `orca serve reset-identity` does the same reset on demand. Stop Orca on that machine first; the command asks for confirmation, or pass `--yes`.
 
 ### Mobile from a headless server

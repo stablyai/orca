@@ -21,6 +21,15 @@ export async function resetServeHostIdentity(userDataPath: string): Promise<void
       `Stop Orca (the desktop app or \`orca serve\`) for ${userDataPath} first. ${result.message}`
     )
   }
+  if (result.status === 'failed') {
+    throw new RuntimeClientError('reset_failed', `${result.message} Nothing was reset.`)
+  }
+  if (result.status === 'incomplete') {
+    throw new RuntimeClientError(
+      'reset_incomplete',
+      `The reset did not finish (${result.message}). The next Orca start for ${userDataPath} finishes it before pairing is served; fix the cause first.`
+    )
+  }
 }
 
 export const SERVE_RESET_IDENTITY_HANDLERS: Record<string, CommandHandler> = {

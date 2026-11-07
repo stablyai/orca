@@ -92,7 +92,7 @@ describe('OrcaRuntimeRpcServer', () => {
       const offer = server.createPairingOffer({ name: 'Clone test' })
       return { server, parsed: offer.available ? parsePairingCode(offer.pairingUrl) : null }
     }
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const source = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const clone = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     try {
@@ -114,7 +114,7 @@ describe('OrcaRuntimeRpcServer', () => {
       await restarted.server.stop()
     } finally {
       vi.unstubAllEnvs()
-      warnSpy.mockRestore()
+      errorSpy.mockRestore()
     }
   })
 

@@ -1,10 +1,14 @@
-import { cpSync, mkdtempSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { cpSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadOrCreateE2EEKeypair } from './e2ee-keypair'
+import { loadOrCreateE2EEKeypair, writeNewE2EEKeypair } from './e2ee-keypair'
 import { DeviceRegistry } from './rpc/server/pairing/device-registry'
-import { loadOrCreateHostInstallationId } from './hosts/platform-probe/host-descriptor'
+import {
+  HOST_INSTALLATION_FILENAME,
+  loadOrCreateHostInstallationId
+} from './hosts/platform-probe/host-descriptor'
 import { writeDurableSecureJsonFile } from '../../shared/secure-file'
 import {
   ensureHostInstanceIdentity,
@@ -93,26 +97,49 @@ describe('ensureHostInstanceIdentity', () => {
     expect((await identity(dir)).registry.validateToken(source.token)).not.toBeNull()
   })
 
-  it('keeps the old identity when a rotation fails before it starts', async () => {
+  it.each([
+    ['the staged keypair', 'orca-e2ee-keypair.json.next'],
+    ['the staged registry', `${DEVICE_REGISTRY_FILENAME}.next`],
+    ['the rotating marker', HOST_INSTANCE_FILENAME]
+  ])('keeps serving the old identity when writing %s fails', async (_label, failing) => {
     ensureHostInstanceIdentity(dir, vmA)
     const before = await pairedHost(dir)
 
-    expect(() =>
-      ensureHostInstanceIdentity(dir, vmB, failingWriteOf(HOST_INSTANCE_FILENAME))
-    ).toThrow(/simulated crash/)
+    expect(ensureHostInstanceIdentity(dir, vmB, failingWriteOf(failing))).toMatchObject({
+      kind: 'kept'
+    })
     const after = await identity(dir)
     expect(after.publicKeyB64).toBe(before.publicKeyB64)
+    expect(after.installationId).toBe(before.installationId)
     expect(after.registry.validateToken(before.token)).not.toBeNull()
+    expect(readdirSync(dir).filter((name) => name.endsWith('.next'))).toEqual([])
+    // The change is still pending, so a start that can write applies it.
+    expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({
+      kind: 'rotated',
+      reason: 'instance_changed'
+    })
   })
 
-  it('finishes a rotation interrupted between files on the next start, even without the variable', async () => {
+  it('keeps serving the old identity when the first id cannot be recorded', async () => {
+    const before = await pairedHost(dir)
+    expect(
+      ensureHostInstanceIdentity(dir, vmA, failingWriteOf(HOST_INSTANCE_FILENAME))
+    ).toMatchObject({ kind: 'kept' })
+    expect((await identity(dir)).registry.validateToken(before.token)).not.toBeNull()
+  })
+
+  it('finishes a publish interrupted after the marker on the next start, without the variable', async () => {
     ensureHostInstanceIdentity(dir, vmA)
     const before = await pairedHost(dir)
 
-    // The new keypair landed, the registry did not.
-    expect(() =>
-      ensureHostInstanceIdentity(dir, vmB, failingWriteOf(DEVICE_REGISTRY_FILENAME))
-    ).toThrow(/simulated crash/)
+    // Every staged file was moved into place; clearing `rotating` failed.
+    const failFinalMarker: HostIdentityWrite = (path, value) => {
+      if (path.endsWith(HOST_INSTANCE_FILENAME) && !JSON.stringify(value).includes('rotating')) {
+        throw new Error('simulated crash clearing the marker')
+      }
+      return writeDurableSecureJsonFile(path, value)
+    }
+    expect(() => ensureHostInstanceIdentity(dir, vmB, failFinalMarker)).toThrow(/simulated crash/)
 
     expect(ensureHostInstanceIdentity(dir, null)).toEqual({
       kind: 'rotated',
@@ -121,6 +148,33 @@ describe('ensureHostInstanceIdentity', () => {
     const after = await identity(dir)
     expect(after.publicKeyB64).not.toBe(before.publicKeyB64)
     expect(after.installationId).not.toBe(before.installationId)
+    expect(after.registry.validateToken(before.token)).toBeNull()
+    expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({ kind: 'unchanged' })
+  })
+
+  it('publishes the rest of a staged identity after a crash between renames', async () => {
+    ensureHostInstanceIdentity(dir, vmA)
+    const before = await pairedHost(dir)
+    // The keypair was already moved into place; the registry and installation id were not.
+    const newKey = writeNewE2EEKeypair(dir, writeDurableSecureJsonFile).publicKeyB64
+    writeDurableSecureJsonFile(join(dir, `${DEVICE_REGISTRY_FILENAME}.next`), [])
+    const stagedInstallationId = randomUUID()
+    writeDurableSecureJsonFile(join(dir, `${HOST_INSTALLATION_FILENAME}.next`), {
+      installationId: stagedInstallationId
+    })
+    writeDurableSecureJsonFile(join(dir, HOST_INSTANCE_FILENAME), {
+      v: 1,
+      instanceId: vmB,
+      rotating: true
+    })
+
+    expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({
+      kind: 'rotated',
+      reason: 'interrupted_rotation'
+    })
+    const after = await identity(dir)
+    expect(after.publicKeyB64).toBe(newKey)
+    expect(after.installationId).toBe(stagedInstallationId)
     expect(after.registry.validateToken(before.token)).toBeNull()
     expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({ kind: 'unchanged' })
   })

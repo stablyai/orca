@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../../e2ee-keypair'
-import { ensureHostInstanceIdentity } from '../../host-instance-identity'
+import { ensureHostInstanceIdentity, type HostIdentityOutcome } from '../../host-instance-identity'
 import { RuntimeRpcState } from './runtime-rpc-state'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -88,15 +88,10 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
 
   protected initializePairingIdentity(): PairingIdentityInitialization {
     try {
-      const outcome = ensureHostInstanceIdentity(this.userDataPath)
-      if (outcome.kind === 'rotated') {
-        console.warn(
-          `[runtime] Rotated the pairing identity (${outcome.reason === 'instance_changed' ? 'ORCA_INSTANCE_ID changed' : 'finished an interrupted rotation'}). Paired clients must pair with this host again.`
-        )
-      }
+      logHostIdentityOutcome(ensureHostInstanceIdentity(this.userDataPath))
     } catch (error) {
-      // A half-finished rotation must not be served; the next start finishes it.
-      console.error('[runtime] Failed to check the host instance identity:', error)
+      // A rotation that started but could not finish must not be served; the next start finishes it.
+      console.error('[runtime] Failed to finish rotating the pairing identity:', error)
       return {
         ok: false,
         failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
@@ -126,5 +121,23 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
       }
     }
     return { ok: true, deviceRegistry, e2eeKeypair }
+  }
+}
+
+function logHostIdentityOutcome(outcome: HostIdentityOutcome): void {
+  if (outcome.kind === 'kept') {
+    console.error(
+      '[runtime] Could not apply ORCA_INSTANCE_ID; serving the existing pairing identity unchanged. Orca retries on the next start.',
+      outcome.error
+    )
+  } else if (outcome.kind === 'rotated' && outcome.reason === 'instance_changed') {
+    // Loud on purpose: a value that changes on every start would un-pair clients each time.
+    console.error(
+      '[runtime] ORCA_INSTANCE_ID differs from the value recorded with this pairing identity, so Orca created a new identity and removed all paired devices. Clients must pair with this host again. If this host was not copied, set ORCA_INSTANCE_ID to a value that stays the same across restarts.'
+    )
+  } else if (outcome.kind === 'rotated') {
+    console.error(
+      '[runtime] Finished an interrupted pairing identity rotation. Clients must pair with this host again.'
+    )
   }
 }
