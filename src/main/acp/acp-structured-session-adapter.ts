@@ -274,7 +274,7 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   readOptions = async (input: { sessionId: string; fence: number }) => {
     const session = this.live(input.sessionId)
-    return readAcpLiveOptions(session, session.spec.permissionModeConfig?.values)
+    return readAcpLiveOptions(session, session.permissionModes)
   }
 
   readCommands = (sessionId: string) => {

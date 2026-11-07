@@ -22,6 +22,7 @@ import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import {
+  AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
   antigravityHostAccountHome,
   agyUsesApiKey,
@@ -89,7 +90,7 @@ function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
-  args: () => ['acp'],
+  args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
   env: {},
   scrubEnvironment: scrubAgyHostApiKeys,
   authMethod: undefined,
@@ -110,8 +111,11 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
   managedRuntime: undefined,
-  // agy has no full-access mode: such chats start on Orca's runtime, and a switch fails the start.
-  permissionModeConfig: { values: { ask: 'default', 'accept-edits': 'accept-edits' } },
+  // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
+  permissionModeConfig: {
+    values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
+    fullAccessAtLaunch: true
+  },
   keepsEverySession: true
 }
 
