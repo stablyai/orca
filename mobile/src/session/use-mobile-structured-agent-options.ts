@@ -26,7 +26,6 @@ import {
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
 import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -140,9 +139,19 @@ export function useMobileStructuredAgentOptions(args: {
     (view = readOptionState()) => {
       const shown = structuredAgentSessionShownSnapshot(view)
       const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
-      return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      if (!acceptsPicks) {
+        return lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      }
+      // Before attach only the picker's options queue; the composer's mode toggle waits.
+      return appliesOnAttach
+        ? snapshot.map((row) =>
+            row.id === 'interactionMode'
+              ? lockedStructuredAgentSessionOptionSnapshot([row])[0]!
+              : row
+          )
+        : snapshot
     },
-    [acceptsPicks, legacyHostPermissions, readOptionState]
+    [acceptsPicks, appliesOnAttach, legacyHostPermissions, readOptionState]
   )
   const readOptionSnapshot = useCallback(() => {
     const view = readOptionState()
@@ -190,11 +199,11 @@ export function useMobileStructuredAgentOptions(args: {
     fence,
     acceptsPicks,
     isCurrentContext,
+    flushQueued: () => writer.flushQueued(),
     readOptionSnapshot,
     onOptionError: args.onOptionError
   })
   const readWriteContext = () => {
-    const existingChat = createdHere === undefined || args.hasTurn === true
     const currentState = projectRuntimeReports({
       ...optionStateRef.current,
       permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
@@ -207,17 +216,12 @@ export function useMobileStructuredAgentOptions(args: {
       snapshot: readBaseOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
-      existingChat,
+      existingChat: createdHere === undefined || args.hasTurn === true,
       isCurrentContext,
-      ...(appliesOnAttach
-        ? {
-            hold: (id: string, encoded: string, view: StructuredAgentSessionOptionState) =>
-              held.holdUntilAttach(id, encoded, view, existingChat)
-          }
-        : {}),
-      flush: (isCurrent: () => boolean) => {
+      queues: appliesOnAttach,
+      flush: (isCurrent: () => boolean, queued?: boolean) => {
         if (fence !== null) {
-          held.sendPicks(isCurrent, false)
+          held.sendPicks(isCurrent, queued)
         }
       },
       revalidate: reread,

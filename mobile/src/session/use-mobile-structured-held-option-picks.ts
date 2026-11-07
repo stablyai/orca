@@ -1,10 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
-import {
-  structuredAgentSessionOptionPicks,
-  type StructuredAgentSessionOptionState
-} from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import type { StructuredSessionSelectionController } from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import {
@@ -29,84 +25,69 @@ function pickLabel(descriptor: SessionOptionDescriptor | undefined): string | nu
     : value
 }
 
-/** Picks made before the chat attaches wait on the controller and go out when its fence lands. */
+/** Sends picks; ones taken before the chat attached go when its fence lands and report a refusal themselves. */
 export function useMobileStructuredHeldOptionPicks(args: {
   controller: StructuredSessionSelectionController
   mutate: MobileStructuredAgentMutate
   fence: number | null
   acceptsPicks: boolean
   isCurrentContext: () => boolean
+  flushQueued: () => void
   readOptionSnapshot: () => SessionOptionDescriptor[]
   onOptionError?: (message: string) => void
 }) {
   const { controller, mutate, fence, acceptsPicks, isCurrentContext } = args
-  const sendPicks = (isCurrent: () => boolean, held: boolean) => {
+  const sendPicks = (isCurrent: () => boolean, queued = false) => {
     controller.flush(async (pick) => {
       // A queued pick never retargets a replacement runtime.
       if (!isCurrent()) {
         return { kind: 'superseded' }
       }
+      const shown = (): string | null =>
+        pickLabel(latest.current.args.readOptionSnapshot().find((row) => row.id === pick.key))
+      const picked = queued ? shown() : null
       const result = await mutate<AgentSessionOptionResult>(
         'agentSession.setOption',
         'agentSession.setOption',
         { key: pick.key, value: pick.value },
-        // A held pick's refusal names the kept value instead of the host's message.
-        held ? () => false : undefined
+        // A queued pick's refusal names the kept value instead of the host's message.
+        queued ? () => false : undefined
       )
-      return result.status === 'accepted'
-        ? acceptedStructuredSessionSelectionOutcome(pick, result.value.options)
-        : result.status === 'unknown'
-          ? { kind: 'unknown' }
-          : { kind: 'refused' }
+      if (result.status === 'accepted') {
+        return acceptedStructuredSessionSelectionOutcome(pick, result.value.options)
+      }
+      if (result.status === 'unknown') {
+        return { kind: 'unknown' }
+      }
+      // The kept value shows once the refused pick has left the overlay.
+      void pick.result.then(() => {
+        const kept = shown()
+        if (picked && kept) {
+          latest.current.args.onOptionError?.(
+            translate(
+              'chat.sessionOptionPickers.heldPickRefused',
+              "{{picked}} isn't available in this chat. Kept {{kept}}.",
+              { picked, kept }
+            )
+          )
+        }
+      })
+      return { kind: 'refused' }
     })
   }
-  const latest = useRef({ sendPicks, args })
+  const latest = useRef({ args })
   useLayoutEffect(() => {
-    latest.current = { sendPicks, args }
+    latest.current = { args }
   })
   // Passive, so the option state's context has caught up with the new fence before it sends.
   useEffect(() => {
     if (fence !== null && acceptsPicks) {
-      latest.current.sendPicks(isCurrentContext, true)
+      latest.current.args.flushQueued()
     }
   }, [fence, acceptsPicks, isCurrentContext])
 
-  const holdUntilAttach = (
-    id: string,
-    encoded: string,
-    view: StructuredAgentSessionOptionState,
-    existingChat: boolean
-  ) => {
-    const pick = structuredAgentSessionOptionPicks(view, { [id]: encoded }, existingChat)[0]
-    const operation = controller.issue(
-      id,
-      encoded,
-      pick?.modelId ?? null,
-      undefined,
-      undefined,
-      pick?.adoptModelAsLaunchDefault === false ? false : undefined
-    )
-    const shown = (): SessionOptionDescriptor | undefined =>
-      latest.current.args.readOptionSnapshot().find((row) => row.id === id)
-    const picked = pickLabel(shown())
-    return operation.result.then((outcome) => {
-      const kept = pickLabel(shown())
-      if (outcome.kind === 'refused' && picked && kept) {
-        latest.current.args.onOptionError?.(
-          translate(
-            'chat.sessionOptionPickers.heldPickRefused',
-            "{{picked}} isn't available in this chat. Kept {{kept}}.",
-            { picked, kept }
-          )
-        )
-      }
-      return outcome
-    })
-  }
-
   return {
     sendPicks,
-    holdUntilAttach,
     heldPick:
       acceptsPicks &&
       fence === null &&

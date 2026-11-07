@@ -46,7 +46,8 @@ export function ModelPill({
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const PillIcon = Icon ?? leading ?? (warning ? ShieldAlert : undefined)
+  // A held pick's clock never hides the full-access warning.
+  const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
     <Pressable
       accessibilityLabel={accessibleName}
@@ -60,13 +61,7 @@ export function ModelPill({
       {PillIcon ? (
         <PillIcon
           size={15}
-          color={
-            warning && PillIcon !== leading
-              ? colors.statusAmber
-              : disabled
-                ? colors.textMuted
-                : colors.textSecondary
-          }
+          color={warning ? colors.statusAmber : disabled ? colors.textMuted : colors.textSecondary}
           strokeWidth={2.2}
         />
       ) : null}

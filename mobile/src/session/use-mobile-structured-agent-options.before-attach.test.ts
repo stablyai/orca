@@ -1,7 +1,10 @@
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
 import {
   OPTIONS,
+  deferred,
   BASE,
   accepted,
   currentValueOf,
@@ -12,11 +15,10 @@ import {
 } from './use-mobile-structured-agent-options.test-fixture'
 
 describe('useMobileStructuredAgentOptions before the chat attaches', () => {
-  it('takes a pick at once and sends it when the fence lands', async () => {
+  it('takes a pick at once and sends it when the fence lands, locked until the chat answers', async () => {
     const client = optionsClient(queuedReads(OPTIONS))
-    const { calls, mutate } = recordingMutate(async () =>
-      accepted({ key: 'model', value: 'gpt-fast', options: { model: 'gpt-fast' } }, true)
-    )
+    const reply = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const { calls, mutate } = recordingMutate(() => reply.promise)
     const harness = await mountOptions({ ...BASE, fence: null, client: client.client, mutate })
 
     let taken: boolean | null = null
@@ -33,6 +35,14 @@ describe('useMobileStructuredAgentOptions before the chat attaches', () => {
       { method: 'agentSession.setOption', fields: { key: 'model', value: 'gpt-fast' } }
     ])
     expect(harness.current().heldPick).toBe(false)
+    expect(harness.current().pendingOptionId).toBe('model')
+
+    await act(async () => {
+      reply.resolve(
+        accepted({ key: 'model', value: 'gpt-fast', options: { model: 'gpt-fast' } }, true)
+      )
+    })
+    expect(harness.current().pendingOptionId).toBeNull()
     await harness.unmount()
   })
 
