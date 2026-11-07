@@ -49,7 +49,9 @@ function createModel(): TaskPageLinearCollectionEffectsModel {
     jiraQuickFiltersLoading: false,
     setJiraStatusCatalog: vi.fn(),
     setJiraProjectStatusOrder: vi.fn(),
-    displayedJiraIssues: []
+    displayedJiraIssues: [],
+    availableJiraProjects: [],
+    jiraProjectsLoading: false
   }
   // SAFETY: the hook only reads the Jira fields above; the preceding pipeline model is intentionally not constructed in this isolated wiring test.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the partial fixture intentionally models only fields read by this hook.
@@ -151,6 +153,46 @@ describe('useTaskPageJiraListEffects refresh wiring', () => {
       )
     )
     expect(listJiraIssues).not.toHaveBeenCalled()
+  })
+
+  it('looks up a bare issue number in the selected project', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = '400'
+    model.jiraProjectFilter = { id: '10', key: 'ALP', name: 'Alpha', siteId: 'site-a' }
+    renderHook(() => useTaskPageJiraListEffects(model))
+    await waitFor(() =>
+      expect(searchJiraIssues).toHaveBeenNthCalledWith(
+        1,
+        'project = "10" AND (key = "ALP-400")',
+        50,
+        {
+          sourceContext: null,
+          siteId: 'site-a',
+          force: false
+        }
+      )
+    )
+  })
+
+  it('looks up a bare issue number in every listed project once the projects load', async () => {
+    const model = createModel()
+    model.appliedJiraSearch = '400'
+    model.jiraProjectsLoading = true
+    const { rerender } = renderHook(() => useTaskPageJiraListEffects(model))
+    expect(model.setJiraLoading).toHaveBeenLastCalledWith(true)
+    expect(searchJiraIssues).not.toHaveBeenCalled()
+    model.availableJiraProjects = [
+      { id: '10', key: 'ALP', name: 'Alpha' },
+      { id: '20', key: 'BET', name: 'Beta' }
+    ]
+    model.jiraProjectsLoading = false
+    rerender()
+    await waitFor(() =>
+      expect(searchJiraIssues).toHaveBeenNthCalledWith(1, 'key in ("ALP-400", "BET-400")', 50, {
+        sourceContext: null,
+        force: false
+      })
+    )
   })
 
   it('reports a saved query that exceeds the request limit after sprint composition', async () => {
