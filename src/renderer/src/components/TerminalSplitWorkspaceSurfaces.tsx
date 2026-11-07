@@ -43,6 +43,7 @@ export function TerminalSplitWorkspaceSurfaces({
   const gridViewCellRectFor = (workspaceId: string) =>
     gridViewCellRects[visibleWorkspaceIds.indexOf(workspaceId)] ?? null
   const renderedWorkspaceIds = new Set<string>()
+  const mountedWorkspaceIds = new Set<string>()
   // Why the grid view stays shown without an active layout: opening an empty member can seed
   // its first tab asynchronously, and the other cells must not vanish meanwhile.
   return (
@@ -58,6 +59,7 @@ export function TerminalSplitWorkspaceSurfaces({
       {workspaceSurfaces
         .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
         .map((workspace) => {
+          mountedWorkspaceIds.add(workspace.id)
           const layout = getEffectiveLayoutForWorktree(workspace.id)
           if (!layout) {
             return null
@@ -119,7 +121,7 @@ export function TerminalSplitWorkspaceSurfaces({
                   isFocused={isFocused}
                   // Why unmounted counts as opening: a restored member mounts only once startup
                   // releases its terminal hold, and offering to open it before then is wrong.
-                  isOpening={isFocused || !mountedWorktreeIdsRef.current.has(workspace.id)}
+                  isOpening={isFocused || !mountedWorkspaceIds.has(workspace.id)}
                 />
               ) : null
             })

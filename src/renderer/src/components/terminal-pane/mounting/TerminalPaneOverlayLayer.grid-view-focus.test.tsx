@@ -16,7 +16,7 @@ const { WORKTREE_ID, FOCUSED_SPLIT_TAB_ID, OTHER_SPLIT_TAB_ID, mocks } = vi.hois
   }
 }))
 
-vi.mock('../../store', async () => {
+vi.mock('../../../store', async () => {
   const { create } = await import('zustand')
   const useAppStore = create(() => ({
     tabsByWorktree: {
@@ -53,7 +53,7 @@ vi.mock('../../store', async () => {
   }))
   return { useAppStore }
 })
-vi.mock('./parking/lifecycle/use-terminal-tab-cold-parking', () => ({
+vi.mock('../parking/lifecycle/use-terminal-tab-cold-parking', () => ({
   useTerminalTabColdParking: () => new Set()
 }))
 vi.mock('./TerminalOverlaySlot', () => ({
@@ -66,15 +66,12 @@ vi.mock('./TerminalOverlaySlot', () => ({
     return null
   }
 }))
-vi.mock('./use-terminal-tab-cold-parking', () => ({
-  useTerminalTabColdParking: () => new Set<string>()
-}))
-vi.mock('../native-chat/use-native-chat-toggle-shortcut', () => ({
+vi.mock('../../native-chat/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: (_worktreeId: string, enabled: boolean) => {
     mocks.chatShortcutEnabled.push(enabled)
   }
 }))
-vi.mock('../tab-group/workspace-emptied-reaction', () => ({
+vi.mock('../../tab-group/workspace-emptied-reaction', () => ({
   captureWorkspaceEmptiedReaction: vi.fn()
 }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
