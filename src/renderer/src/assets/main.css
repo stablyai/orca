@@ -2552,14 +2552,19 @@ html.native-shell .app-layout {
    side's lone blank line is not a real removal or addition. */
 .orca-diff-whole-file-added
   .monaco-diff-editor
-  .monaco-editor
+  :is(.monaco-editor, .diff-review)
   :is(.char-insert, .char-delete, .line-delete, .gutter-delete, .inline-deleted-margin-view-zone),
 .orca-diff-whole-file-deleted
   .monaco-diff-editor
-  .monaco-editor
+  :is(.monaco-editor, .diff-review)
   :is(.char-delete, .char-insert, .line-insert, .gutter-insert, .inline-added-margin-view-zone) {
   background-color: transparent;
   border-color: transparent;
+}
+
+.orca-diff-whole-file-added .monaco-diff-editor .delete-sign,
+.orca-diff-whole-file-deleted .monaco-diff-editor .insert-sign {
+  visibility: hidden;
 }
 
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
