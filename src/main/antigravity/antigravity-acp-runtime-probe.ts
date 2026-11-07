@@ -30,11 +30,17 @@ type ProbeLaunch = {
   envToDelete: string[]
 }
 
-/** Initializes from a disposable folder; rejects unless the server's exit is proven afterwards. */
+/** Initializes from a disposable folder, then runs `check` there within the same deadline; rejects
+ *  unless the server's exit is proven afterwards. */
 export async function initializeAntigravityAcp(
   launch: (folder: string) => ProbeLaunch,
   timeoutMs: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  check?: (
+    connection: AcpAgentConnection,
+    initialized: InitializeResponse,
+    folder: string
+  ) => Promise<void>
 ): Promise<InitializeResponse> {
   // Keep the server's working folder, and any home inside it, together for cleanup.
   const folder = await mkdtemp(join(tmpdir(), 'orca-antigravity-probe-'))
@@ -47,7 +53,11 @@ export async function initializeAntigravityAcp(
         probe.connection = createAcpAgentConnection({ ...launch(folder), cwd: folder })
         return probe.connection
       },
-      (started) => started.initialize(),
+      async (started) => {
+        const response = await started.initialize()
+        await check?.(started, response, folder)
+        return response
+      },
       { label: 'Antigravity', timeoutMs, ...(signal ? { signal } : {}) }
     )
   } catch (error) {
