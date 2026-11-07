@@ -31,6 +31,7 @@ import {
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { NetworkSourceClass } from '../../network-source-class'
 
 // Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
@@ -245,26 +246,25 @@ export class DeviceRegistry extends DeviceRegistryStore {
     return findPrincipalDevice(this.devices, principal)
   }
 
-  updateLastSeen(deviceId: string): void {
+  updateLastSeen(deviceId: string, sourceClass?: NetworkSourceClass): void {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
     this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) => ({
-      ...device,
-      lastSeenAt: seenAt
-    }))
+    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
+      seen(device, seenAt, sourceClass)
+    )
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
    * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string): void {
+  updateLastSeenDeferred(deviceId: string, sourceClass?: NetworkSourceClass): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId) : undefined
+      return existing ? this.updateLastSeen(deviceId, sourceClass) : undefined
     }
     const seenAt = Date.now()
     this.devices = this.devices.map((device) =>
-      device === existing ? { ...device, lastSeenAt: seenAt } : device
+      device === existing ? seen(device, seenAt, sourceClass) : device
     )
     if (this.pendingLastSeenFlush) {
       return
@@ -284,4 +284,8 @@ export class DeviceRegistry extends DeviceRegistryStore {
     // Failed bookkeeping must not terminate the runtime.
     this.saveOrLog({}, 'persist device lastSeen')
   }
+}
+
+function seen(device: DeviceEntry, seenAt: number, sourceClass?: NetworkSourceClass): DeviceEntry {
+  return { ...device, lastSeenAt: seenAt, ...(sourceClass ? { lastSourceClass: sourceClass } : {}) }
 }

@@ -198,7 +198,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       fallbackLadder: wsFallbackPortLadder(this.wsPort)
     })
     const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
-    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
+    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport, (ws) => {
+      const sourceClass = wsTransport.sourceClassOf(ws)
+      return sourceClass ? { transport: 'direct', sourceClass } : { transport: 'direct' }
+    })
 
     try {
       await wsTransport.start()
@@ -248,6 +251,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.handleWebSocketBinaryMessage(bytes, socket.ws)
       },
       onReady: (socket) => {
+        if (socket.transport.transport === 'direct') {
+          this.authenticatedSourceRecorder.note(socket.transport.sourceClass)
+        }
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
         if (socket.clientCapabilities.includes(AGENT_LAUNCH_RUNTIME_CAPABILITY)) {
           this.runtime.noteAgentLaunchClientReady?.()
