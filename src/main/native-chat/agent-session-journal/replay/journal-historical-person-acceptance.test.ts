@@ -139,9 +139,15 @@ it.each([1_000, 10_000])(
     const prepare = db.prepare.bind(db)
     let cursorVisits = 0
     let payloadBytes = 0
+    const instrumented = new WeakSet()
     vi.spyOn(db, 'prepare').mockImplementation((sql) => {
       const statement = prepare(sql)
-      if (sql.includes('ORDER BY seq DESC') && !sql.includes('entry_key=?')) {
+      if (
+        sql.includes('ORDER BY seq DESC') &&
+        !sql.includes('entry_key=?') &&
+        !instrumented.has(statement)
+      ) {
+        instrumented.add(statement)
         const iterate = statement.iterate.bind(statement)
         vi.spyOn(statement, 'iterate').mockImplementation(function* (...args) {
           for (const row of iterate(...args)) {
