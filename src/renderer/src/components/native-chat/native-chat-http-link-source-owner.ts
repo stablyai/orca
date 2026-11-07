@@ -1,10 +1,10 @@
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-route-eligibility'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 
 /** Without a PTY, resolve runtime then SSH from the workspace; unresolved ownership remains unknown. */

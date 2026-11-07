@@ -9,7 +9,7 @@ import {
   recordTerminalWebglDiagnostic,
   setTerminalWebglDiagnosticRecorder
 } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { maybeStartTerminalRenderDesyncSentinel } from './terminal-render-desync-trigger'
+import { maybeStartTerminalRenderDesyncSentinel } from './render-health/terminal-render-desync-trigger'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
 const ATLAS_FONT_PROBE_MISMATCH = 'atlas-font-probe-mismatch'

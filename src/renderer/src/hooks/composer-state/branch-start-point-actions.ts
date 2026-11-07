@@ -34,7 +34,7 @@ import { useCallback } from 'react'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 
 export function useBranchStartPointActions(input: BranchStartPointActionsInput) {

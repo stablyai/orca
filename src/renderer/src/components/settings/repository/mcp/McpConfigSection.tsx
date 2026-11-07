@@ -26,9 +26,8 @@ import {
 import { joinPath } from '../../../../lib/path'
 import { extractIpcErrorMessage } from '../../../../lib/ipc-error'
 import { Button } from '../../../ui/button'
-import { isWindowsUserAgent } from '../../../terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '../../../../lib/user-agent-platform'
 import { McpConfigFileRow } from './McpConfigFileRow'
-
 import { McpMissingConfigList } from './McpMissingConfigList'
 import {
   type LoadedMcpConfigInspection,

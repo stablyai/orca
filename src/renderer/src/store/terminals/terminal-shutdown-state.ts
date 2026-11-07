@@ -5,7 +5,7 @@ import {
   clearCommittedPtyShutdownSettlements,
   markCommittedPtyShutdowns,
   settleDeferredPtyShutdownExits
-} from '@/components/terminal-pane/pty-shutdown-exit-deferral'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import '../slices/agent-status/agent-status'
 import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
 import type {

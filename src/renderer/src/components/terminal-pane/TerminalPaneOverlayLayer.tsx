@@ -8,14 +8,14 @@ import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
-import type { HiddenTerminalPrewarm } from './terminal-pane-types'
+import type { HiddenTerminalPrewarm } from './controller/terminal-pane-types'
 import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../tab-group/workspace-emptied-reaction'
 import { TerminalRestoringPlaceholder } from './TerminalRestoringPlaceholder'
-import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { useTerminalTabColdParking } from './parking/lifecycle/use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string

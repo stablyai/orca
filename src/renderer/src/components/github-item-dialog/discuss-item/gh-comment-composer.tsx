@@ -6,6 +6,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -38,9 +39,13 @@ export function GHCommentComposer({
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
+    if (uploading) {
+      return
+    }
     const bodyState = getCommentBodySubmitState(body)
     if (bodyState.status === 'empty') {
       return
@@ -95,6 +100,7 @@ export function GHCommentComposer({
     }
   }, [
     body,
+    uploading,
     mountedRef,
     repoPath,
     repoId,
@@ -109,6 +115,14 @@ export function GHCommentComposer({
   return (
     <div className={cn('relative', className)}>
       <GitHubMarkdownComposer
+        imageUploadAddress={githubCommentImageUploadAddress({
+          repoPath,
+          repoId,
+          sourceContext,
+          type: itemType,
+          prRepo
+        })}
+        onImageUploadPendingChange={setUploading}
         value={body}
         onChange={setBody}
         placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
@@ -123,7 +137,7 @@ export function GHCommentComposer({
             type="button"
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!canSubmitComment || submitting}
+            disabled={!canSubmitComment || submitting || uploading}
             className="absolute bottom-3 right-3 shadow-sm"
             aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
           >

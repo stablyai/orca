@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { paneClaudeTarget } from './terminal-pane-claude-target'
+import { paneClaudeTarget } from './host-state/terminal-pane-claude-target'
 import { PaneTopWarningBanner } from './PaneTopWarningBanner'
 
 const RESIZE_RECHECK_MS = 300

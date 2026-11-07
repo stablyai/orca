@@ -2,7 +2,7 @@ import {
   captureTerminalPaneRecoveryGeneration,
   requestTerminalPaneRecovery,
   settleTerminalPaneRecovery
-} from './terminal-pane-recovery'
+} from './render-health/recovery/terminal-pane-recovery'
 import { setTerminalTabs, terminalTabs } from './terminal-recovery-ledger-test-store'
 
 // Keep request/settle outside the fake store: its mock factory imports that store, and importing recovery back would deadlock.

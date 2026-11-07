@@ -1,9 +1,15 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
+import {
+  buildEditorActiveResult,
+  resolveEditorOpenTargetGroupId
+} from '../tabs/editor-open-target-group'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
+import { resolveEditorFileIdForOwner } from '../file-ids/editor-file-ids'
+import { editorOpenOwner } from '../git/editor-open-owner'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
-import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import { resolveEditorPreviewIntent } from '../tabs/editor-preview-tab-setting'
 import {
   getReplaceablePreviewFileId,
@@ -18,14 +24,23 @@ export function createOpenConflictFile(
   return {
     openConflictFile: (worktreeId, worktreePath, entry, language, options) => {
       const absolutePath = joinPath(worktreePath, entry.path)
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       let editorItemTargetGroupId = options?.targetGroupId
       let openedConflictFile = true
+      let conflictFileId = absolutePath
       set((s) => {
-        const id = absolutePath
+        const contentOwner = editorOpenOwner(s, worktreeId, options)
+        const { runtimeEnvironmentId } = contentOwner
+        const id = resolveEditorFileIdForOwner(s, absolutePath, worktreeId, runtimeEnvironmentId, [
+          'edit'
+        ])
+        conflictFileId = id
+        intent.register(id)
         const conflict = toOpenConflictMetadata(entry)
         const targetGroupId =
-          resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+          resolveEditorOpenTargetGroupId(s, placementId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
         const existing = s.openFiles.find((f) => f.id === id)
         const nextTracked =
@@ -56,14 +71,12 @@ export function createOpenConflictFile(
                     diffSource: undefined,
                     skippedConflicts: undefined,
                     conflictReview: undefined,
+                    ...contentOwner,
                     isPreview: updatedPreview
                   }
                 : f
             ),
-            activeFileId: id,
-            activeTabType: 'editor',
-            activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-            activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+            ...buildEditorActiveResult(s, placementId, id),
             trackedConflictPathsByWorktree:
               nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
                 ? s.trackedConflictPathsByWorktree
@@ -76,6 +89,7 @@ export function createOpenConflictFile(
           filePath: absolutePath,
           relativePath: entry.path,
           worktreeId,
+          ...contentOwner,
           language,
           isDirty: false,
           mode: 'edit',
@@ -84,7 +98,7 @@ export function createOpenConflictFile(
         }
 
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
@@ -94,10 +108,7 @@ export function createOpenConflictFile(
                 index === replaceablePreviewIndex ? newFile : file
               ),
               ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
-              activeFileId: id,
-              activeTabType: 'editor',
-              activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-              activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+              ...buildEditorActiveResult(s, placementId, id),
               trackedConflictPathsByWorktree:
                 nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
                   ? s.trackedConflictPathsByWorktree
@@ -108,10 +119,7 @@ export function createOpenConflictFile(
 
         return {
           openFiles: [...s.openFiles, newFile],
-          activeFileId: id,
-          activeTabType: 'editor',
-          activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
-          activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' },
+          ...buildEditorActiveResult(s, placementId, id),
           trackedConflictPathsByWorktree:
             nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
               ? s.trackedConflictPathsByWorktree
@@ -120,16 +128,19 @@ export function createOpenConflictFile(
       })
       // Why: no conflict metadata means no OpenFile was added, so a workspace tab would point at nothing.
       if (!openedConflictFile) {
+        intent.finish(null)
         return
       }
-      openWorkspaceEditorItem(
-        get(),
-        absolutePath,
-        worktreeId,
-        entry.path,
-        'editor',
-        isPreview,
-        editorItemTargetGroupId
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          conflictFileId,
+          placementId,
+          entry.path,
+          'editor',
+          isPreview,
+          editorItemTargetGroupId
+        )
       )
     }
   }

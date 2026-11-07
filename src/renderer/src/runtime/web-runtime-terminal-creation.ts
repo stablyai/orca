@@ -2,16 +2,21 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
-} from '../lib/agent-launch-prompt-delivery'
+} from '../lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
+import { resolveWebRuntimeSessionEnvironmentId } from './web-runtime-session-workspace-routing'
+import { useAppStore } from '../store'
 import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-create-failure-notice'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { startStoppedWslHostForUserAct, stoppedWslHostMessage } from '../lib/wsl-host-user-start'
 import type {
   CreateWebRuntimeSessionTerminalArgs,
+  CreateWebRuntimeSessionTerminalOnHostArgs,
   CreatedWebRuntimeSessionTerminal,
   WebRuntimeTerminalCreateOutcome
 } from './web-runtime-session-types'
+
+type TerminalCreateOptions = { notifyFailure?: boolean; userAct?: boolean }
 
 /**
  * Toast host failure here because no mirrored pane can show it; callers reporting themselves use
@@ -20,13 +25,38 @@ import type {
  */
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
-  options: { notifyFailure?: boolean; userAct?: boolean } = {}
+  options: TerminalCreateOptions = {}
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  return await createWebRuntimeTerminal(args, options, () =>
+    createWebRuntimeSessionTerminalResult({
+      ...args,
+      environmentId: resolveWebRuntimeSessionEnvironmentId(
+        args.environmentId,
+        useAppStore.getState().settings?.activeRuntimeEnvironmentId
+      )
+    })
+  )
+}
+
+export async function createWebRuntimeSessionTerminalOnHost(
+  args: CreateWebRuntimeSessionTerminalOnHostArgs,
+  options: TerminalCreateOptions = {}
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  return await createWebRuntimeTerminal(args, options, () =>
+    createWebRuntimeSessionTerminalResult(args)
+  )
+}
+
+async function createWebRuntimeTerminal(
+  args: CreateWebRuntimeSessionTerminalArgs,
+  options: TerminalCreateOptions,
+  create: () => Promise<CreatedWebRuntimeSessionTerminal>
 ): Promise<WebRuntimeTerminalCreateOutcome> {
   if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
     // The start already told the user why; the host is still stopped.
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
   }
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await create()
   if (
     created.hostFailed &&
     created.outcome.status === 'failed' &&

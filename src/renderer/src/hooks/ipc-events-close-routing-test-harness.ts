@@ -123,7 +123,7 @@ export async function useIpcEventsForCloseRouting({
   vi.doMock('@/lib/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
@@ -143,10 +143,10 @@ export async function useIpcEventsForCloseRouting({
   vi.doMock('@/lib/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
-  vi.doMock('@/lib/workspace-session-host-persistence', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
     persistWorkspaceSessionByHost: persistWorkspaceSession
   }))
-  vi.doMock('@/lib/workspace-session', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session', () => ({
     buildWorkspaceSessionPayload: vi.fn(() => ({}))
   }))
 

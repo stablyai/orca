@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
@@ -24,6 +24,7 @@ type UseGitStatusFileWatchRefreshParams = {
   activeConnectionId: string | null
   activeRepoSupportsGit: boolean
   activeWorktreeId: string | null
+  runtimeEnvironmentId?: string | null
   enabled: boolean
   fetchStatus: () => void
   gitStatusHugeByWorktree: Record<string, unknown> | undefined
@@ -58,6 +59,7 @@ export function shouldRefreshGitStatusForFileChange(
 }
 
 export function useGitStatusFileWatchRefresh({
+  runtimeEnvironmentId,
   activeConnectionId,
   activeRepoSupportsGit,
   activeWorktreeId,
@@ -72,7 +74,9 @@ export function useGitStatusFileWatchRefresh({
   worktreePath
 }: UseGitStatusFileWatchRefreshParams): void {
   const activeRuntimeEnvironmentId = useAppStore((state) =>
-    runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
+    runtimeEnvironmentId !== undefined
+      ? runtimeEnvironmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(state, activeWorktreeId)
   )
   const fetchStatusRef = useRef(fetchStatus)
   fetchStatusRef.current = fetchStatus

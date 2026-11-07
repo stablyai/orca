@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { TerminalUnsubscribe } from '../../../shared/rpc-contract/terminal-viewport-schemas-params'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 

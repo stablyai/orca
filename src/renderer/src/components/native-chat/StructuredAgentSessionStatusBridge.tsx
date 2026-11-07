@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
@@ -10,25 +9,24 @@ import {
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { worktreeOwnerRowsTokenOf } from '@/lib/worktree-owner-rows-token'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import {
-  structuredAgentSessionOwnerForTab,
-  structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
   getStructuredAgentSessionStatusFeed,
   structuredAgentSessionStatusFeedKey,
   type StructuredAgentSessionStatusFeedOwner
 } from '@/runtime/structured-agent-session-status-feed'
 import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
+import {
+  createTabOwnerCache,
+  ownerInputChanged,
+  ownerInputs
+} from './structured-agent-session-tab-owner-cache'
 
 // Re-exported so the bridge stays the one import site its consumers already know.
 export { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 
 export {
-  useStructuredAgentSessionStatusSummary,
+  useStructuredAgentSessionPermissionStatus,
   useStructuredAgentSessionOptionStamp,
   useStructuredAgentSessionHostExecutionPhase,
   useStructuredAgentSessionHostStopping,
@@ -38,6 +36,10 @@ export {
 
 type HostGroup = {
   members: Member[]
+  /** A host tick names its sessions; this finds their tabs without walking every member. */
+  membersBySession: Map<string, Member[]>
+  /** Captured but not yet projected (a throwing commit); retried on this host's next tick. */
+  owed: Set<Member>
   feed: StructuredAgentSessionStatusFeedOwner
   unsubscribe: () => void
   release?: () => void
@@ -59,58 +61,6 @@ type Member = {
   status?: ProjectionInput
   captured?: ProjectionInput
 }
-const ownerInputs: readonly (keyof WorktreeRuntimeOwnerState)[] = [
-  'repos',
-  'settings',
-  'worktreesByRepo',
-  'detectedWorktreesByRepo',
-  'folderWorkspaces',
-  'projectGroups',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'activeWorktreeId',
-  'activeWorkspaceExecutionHostId',
-  'runtimeEnvironments',
-  'runtimeEnvironmentCatalogHydrated',
-  'removedRuntimeEnvironmentIds'
-]
-
-// Rank/unread/activity row patches keep row ownership, so they must not re-walk every session tab.
-function ownerInputChanged(
-  state: AppState,
-  previous: AppState,
-  key: keyof WorktreeRuntimeOwnerState
-): boolean {
-  return (
-    state[key] !== previous[key] &&
-    (key !== 'worktreesByRepo' ||
-      worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state)) !==
-        worktreeOwnerRowsTokenOf(selectWorktreesByRepo(previous)))
-  )
-}
-
-function ownerInputToken(state: AppState, key: keyof WorktreeRuntimeOwnerState): unknown {
-  return key === 'worktreesByRepo'
-    ? worktreeOwnerRowsTokenOf(selectWorktreesByRepo(state))
-    : state[key]
-}
-
-/** Owners only change with owner inputs, so feed ticks and tab-map edits reuse each tab's resolution. */
-function createTabOwnerCache(): (state: AppState, tab: StructuredTab) => ExecutionHostId | null {
-  let inputs: unknown[] | null = null
-  let owners = new WeakMap<StructuredTab, ExecutionHostId | null>()
-  return (state, tab) => {
-    const next = ownerInputs.map((key) => ownerInputToken(state, key))
-    if (!inputs || next.some((input, index) => input !== inputs?.[index])) {
-      inputs = next
-      owners = new WeakMap()
-    }
-    if (!owners.has(tab)) {
-      owners.set(tab, structuredAgentSessionOwnerForTab(state, tab))
-    }
-    return owners.get(tab) ?? null
-  }
-}
-
 /** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
 function sameCapturedInput(previous: ProjectionInput | undefined, next: ProjectionInput): boolean {
   return (
@@ -264,6 +214,7 @@ function installStatusProjection(): () => void {
     // Mark consumed only after a normal return: a throwing commit leaves the input for the next emission to retry.
     for (const input of inputs) {
       input.member.captured = input
+      input.member.group?.owed.delete(input.member)
     }
   }
   const activateGroups = (): void => {
@@ -296,9 +247,10 @@ function installStatusProjection(): () => void {
         sleptAt: group ? group.feed.getSessionSleepState(tab.entityId) : null,
         directory: member.hostKey === 'local' ? summary?.launchDirectory : undefined
       }
-      // A host feed tick names one session; skip the hundreds of unchanged members it also carries.
+      // Launch ticks and full host ticks carry every member; skip the unchanged ones.
       if (!sameCapturedInput(member.captured, input)) {
         inputs.push(input)
+        member.group?.owed.add(member)
       }
     }
     enqueue(
@@ -319,13 +271,32 @@ function installStatusProjection(): () => void {
       let group = hostKey ? groups.get(hostKey) : undefined
       if (!group && target && hostKey) {
         const feed = getStructuredAgentSessionStatusFeed(target)
-        const created: HostGroup = { members: [], feed, unsubscribe: () => {} }
+        const created: HostGroup = {
+          members: [],
+          membersBySession: new Map(),
+          owed: new Set(),
+          feed,
+          unsubscribe: () => {}
+        }
         groups.set(hostKey, created)
-        created.unsubscribe = feed.subscribe(() =>
+        created.unsubscribe = feed.subscribe((change) =>
           boundary(() => {
-            if (!disposed) {
-              capture(created.members)
+            if (disposed) {
+              return
             }
+            if (change === null) {
+              capture(created.members)
+              return
+            }
+            const selected = new Set<Member>()
+            for (const sessionId of change) {
+              for (const member of created.membersBySession.get(sessionId) ?? []) {
+                selected.add(member)
+              }
+            }
+            // Reconcile prunes superseded members, so the debt holds only current tabs.
+            created.owed.forEach((member) => selected.add(member))
+            capture(selected)
           })
         )
         group = created
@@ -352,11 +323,26 @@ function installStatusProjection(): () => void {
     membersByTabId.clear()
     for (const group of groups.values()) {
       group.members = []
+      group.membersBySession = new Map()
+      // A rebound pane gets a new member without retiring the old one; drop every superseded identity.
+      for (const member of group.owed) {
+        if (next.get(member.paneKey) !== member) {
+          group.owed.delete(member)
+        }
+      }
     }
     for (const [key, member] of next) {
       members.set(key, member)
       membersByTabId.set(member.tab.id, member)
-      member.group?.members.push(member)
+      if (member.group) {
+        member.group.members.push(member)
+        const sessionMembers = member.group.membersBySession.get(member.tab.entityId)
+        if (sessionMembers) {
+          sessionMembers.push(member)
+        } else {
+          member.group.membersBySession.set(member.tab.entityId, [member])
+        }
+      }
     }
     for (const [key, group] of groups) {
       if (groups.get(key) === group && !group.members.length) {

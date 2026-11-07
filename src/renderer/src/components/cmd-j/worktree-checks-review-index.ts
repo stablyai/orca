@@ -1,5 +1,5 @@
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
-import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'

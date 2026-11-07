@@ -31,7 +31,7 @@ export const SQLITE_MODULES = [
   'src/main/ai-vault-search/session-search-schema',
   'src/main/ai-vault-search/session-search-store',
   'src/main/persistence/profile-state/profile-state-sqlite-authority',
-  'src/main/native-chat/agent-session-journal/journal-host-database',
+  'src/main/native-chat/agent-session-journal/database/journal-host-database',
   'src/main/runtime/orchestration/db',
   'src/main/runtime/orchestration/db/orchestration-db',
   'src/main/runtime/agent-session/structured-agent-session-runtime',

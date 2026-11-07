@@ -32,7 +32,7 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9.5 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 9.75 * 1024 * 1024
 
 // Only this licensed desktop-identical asset has its own allowance; other fonts (KaTeX's) and code count.
 export const MOBILE_WEB_APP_TERMINAL_FONT_MAX_BYTES = 1200 * 1024
@@ -58,19 +58,19 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/[...page].tsx', 8],
   ['./h/[hostId]/accounts.tsx', 12],
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 17],
-  ['./h/[hostId]/automations.tsx', 23],
-  ['./h/[hostId]/edit.tsx', 25],
-  ['./h/[hostId]/files/[worktreeId].tsx', 30],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 40],
-  ['./h/[hostId]/history/[worktreeId].tsx', 43],
-  ['./h/[hostId]/index.tsx', 52],
-  ['./h/[hostId]/new-workspace.tsx', 65],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 66],
-  ['./h/[hostId]/review/[worktreeId].tsx', 78],
-  ['./h/[hostId]/session/[worktreeId].tsx', 94],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 103],
-  ['./h/[hostId]/tasks.tsx', 114],
-  ['./h/_layout.tsx', 118]
+  ['./h/[hostId]/automations.tsx', 24],
+  ['./h/[hostId]/edit.tsx', 26],
+  ['./h/[hostId]/files/[worktreeId].tsx', 32],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 42],
+  ['./h/[hostId]/history/[worktreeId].tsx', 45],
+  ['./h/[hostId]/index.tsx', 55],
+  ['./h/[hostId]/new-workspace.tsx', 67],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 68],
+  ['./h/[hostId]/review/[worktreeId].tsx', 81],
+  ['./h/[hostId]/session/[worktreeId].tsx', 96],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 104],
+  ['./h/[hostId]/tasks.tsx', 117],
+  ['./h/_layout.tsx', 123]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)

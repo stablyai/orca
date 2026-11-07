@@ -5,7 +5,7 @@ import {
   requeuePendingPaneTitleRenames,
   takeUnsentPaneTitleRenames
 } from '@/runtime/pending-pane-title-renames'
-import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from './layout/terminal-layout-leaf-traversal'
 
 export type RemotePaneLayoutPusher = {
   push: (input: { worktreeId: string; tabId: string; layout: TerminalLayoutSnapshot }) => void

@@ -82,7 +82,6 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   const totalBySource = useMemo(() => countSshTargetsBySource(targets), [targets])
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
-  const clearRemovedSshTargetState = useAppStore((s) => s.clearRemovedSshTargetState)
 
   const loadTargets = useCallback(
     async (opts?: { signal?: AbortSignal }) => {
@@ -195,8 +194,6 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const removeTargetQuietly = async (id: string): Promise<void> => {
     await window.api.ssh.removeTarget({ id })
-    // Clear deferred reconnect metadata after removal so passphrase-gated tabs stop retrying the target.
-    clearRemovedSshTargetState(id)
   }
 
   const handleRemove = async (id: string): Promise<void> => {

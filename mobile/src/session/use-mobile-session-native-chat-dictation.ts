@@ -207,9 +207,9 @@ export function useMobileSessionNativeChatDictation(
   }, [dictation])
 
   const handleDictationToggle = useCallback(() => {
-    if (dictation.isStarting || dictation.isProcessing) {
-      // Ignore toggles until start or finish settles; a tap must not discard what was said.
-    } else if (dictation.isRecording) {
+    if (dictation.isProcessing) {
+      // Ignore toggles until finish settles; a tap must not discard what was said.
+    } else if (dictation.isStarting || dictation.isRecording) {
       stopDictation()
     } else {
       startDictation()
@@ -223,13 +223,11 @@ export function useMobileSessionNativeChatDictation(
   }, [dictation, startDictation])
 
   const handleDictationPressOut = useCallback(() => {
-    if (dictation.isRecording) {
+    // Speech is held from the press, so a release while starting finishes once the host answers.
+    if (dictation.isStarting || dictation.isRecording) {
       stopDictation()
-    } else if (dictation.isStarting) {
-      // Released before recording began: cancel so we don't leave a live mic.
-      cancelDictation()
     }
-  }, [cancelDictation, dictation, stopDictation])
+  }, [dictation, stopDictation])
 
   const dictationSettingsReadRef = useRef(0)
   const refreshDictationMode = useCallback(async () => {

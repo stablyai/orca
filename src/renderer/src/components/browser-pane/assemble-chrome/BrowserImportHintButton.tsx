@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Import } from 'lucide-react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
@@ -18,12 +18,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isLinuxUserAgent, isMacUserAgent } from '@/lib/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type BrowserImportHintButtonProps = {
   profileId: string | null

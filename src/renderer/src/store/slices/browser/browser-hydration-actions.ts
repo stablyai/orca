@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from './browser-slice-contract'
-import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
+import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../../shared/worktree/degraded-repo-worktree-validity'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { projectHydratedBrowserSession } from './browser-hydration-state'

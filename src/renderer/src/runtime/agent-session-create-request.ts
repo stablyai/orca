@@ -1,12 +1,18 @@
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
 } from '../../../shared/agent-session/agent-session-host-authority'
 import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { runtimeEnvironmentSupportsCapabilities } from './runtime-rpc-client'
+import {
+  runtimeEnvironmentSupportsCapability,
+  runtimeEnvironmentSupportsCapabilities
+} from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 export async function agentSessionCreateCapabilities(environmentId: string) {
@@ -43,5 +49,26 @@ export function agentSessionCreateRequest(args: {
     ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     presentation: 'background' as const
+  }
+}
+
+/** Negotiate once per launch so retries retain the same request after an upgrade. */
+export function createAgentSessionTrustWorktreeOptions(trustWorktreeId: string | undefined) {
+  let negotiated: Promise<{ trustWorktreeId?: string }> | undefined
+  return (environmentId: string) => {
+    negotiated ??= (async () => {
+      if (!trustWorktreeId) {
+        return {}
+      }
+      const supported = await runtimeEnvironmentSupportsCapability(
+        environmentId,
+        AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY
+      )
+      return supported ? { trustWorktreeId } : {}
+    })().catch((error: unknown) => {
+      negotiated = undefined
+      throw error
+    })
+    return negotiated
   }
 }

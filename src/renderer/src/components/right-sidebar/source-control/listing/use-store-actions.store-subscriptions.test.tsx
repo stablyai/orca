@@ -42,7 +42,7 @@ afterEach(() => {
 })
 
 describe('useSourceControlStoreActions store subscriptions', () => {
-  it('keeps only the two generation-record maps subscribed', () => {
+  it('subscribes to no store slices', () => {
     const baseline = listenerCount()
 
     function Probe(): null {
@@ -51,8 +51,8 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     }
     mount(<Probe />)
 
-    // Subscribe only to the two generation maps; fixed-identity actions come from getState().
-    expect(listenerCount() - baseline).toBe(2)
+    // Fixed-identity actions come from getState(); generation records are selected per owner by their consumers.
+    expect(listenerCount() - baseline).toBe(0)
 
     unmount()
     expect(listenerCount()).toBe(baseline)
@@ -81,40 +81,5 @@ describe('useSourceControlStoreActions store subscriptions', () => {
     act(() => rerender?.())
 
     expect(latest).toBe(first)
-  })
-
-  it('still tracks the generation-record maps it subscribes to', () => {
-    let latest: SourceControlStoreActions | null = null
-    function Probe(): null {
-      latest = useSourceControlStoreActions()
-      return null
-    }
-    function read(): SourceControlStoreActions {
-      if (!latest) {
-        throw new Error('probe did not render')
-      }
-      return latest
-    }
-    mount(<Probe />)
-
-    const before = read()
-    const record = { status: 'pending' } as never
-    act(() => {
-      useAppStore.setState({
-        pullRequestGenerationRecords: { 'wt-1': record }
-      })
-    })
-
-    expect(read()).not.toBe(before)
-    expect(read().prGenerationRecords).toEqual({ 'wt-1': record })
-
-    const afterPr = read()
-    act(() => {
-      useAppStore.setState({
-        commitMessageGenerationRecords: { 'wt-1': record }
-      })
-    })
-    expect(read()).not.toBe(afterPr)
-    expect(read().commitMessageGenerationRecords).toEqual({ 'wt-1': record })
   })
 })

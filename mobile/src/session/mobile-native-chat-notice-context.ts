@@ -21,3 +21,8 @@ export type MobileNativeChatNoticeView = {
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({
   hostName: null
 })
+
+/** Opens the chat a "Forked from" divider names; absent where the view cannot open chats. */
+export const MobileNativeChatForkedFromContext = createContext<
+  ((sourceSessionId: string) => void) | undefined
+>(undefined)

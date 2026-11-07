@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { WslHostConnectionState } from '../../../../shared/wsl-host-types'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 /**
  * A pane that met its WSL host stopped gave up; Start revives it, but so must the host coming back

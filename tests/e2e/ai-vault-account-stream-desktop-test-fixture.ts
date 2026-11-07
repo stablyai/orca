@@ -58,8 +58,9 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../src/main/runtime/rpc/methods', async () => ({
-  ALL_RPC_METHODS: (await import('../../src/main/runtime/rpc/methods/accounts')).ACCOUNT_METHODS
+vi.mock('../../src/main/runtime/rpc/methods/rpc-method-registry', async () => ({
+  ALL_RPC_METHODS: (await import('../../src/main/runtime/rpc/methods/accounts/accounts'))
+    .ACCOUNT_METHODS
 }))
 
 type AccountStreamDesktopRuntime = Pick<
@@ -92,8 +93,8 @@ export function accountStreamDesktopFixture(
   let holdDispatch = false
   const pending = new Set<Promise<void>>()
   const slotsById = new Map<string, (typeof slots)[number]>()
-  const dispatch = RpcDispatcher.prototype.dispatchStreaming
-  vi.spyOn(RpcDispatcher.prototype, 'dispatchStreaming').mockImplementation(function (
+  const dispatch = RpcDispatcher.prototype.dispatchStreamingObjects
+  vi.spyOn(RpcDispatcher.prototype, 'dispatchStreamingObjects').mockImplementation(function (
     this: RpcDispatcher,
     request,
     reply,
@@ -112,8 +113,8 @@ export function accountStreamDesktopFixture(
       dispatch.call(
         this,
         request,
-        (wire) => {
-          const response = RuntimeRpcEnvelopeSchema.parse(JSON.parse(wire))
+        (frame) => {
+          const response = RuntimeRpcEnvelopeSchema.parse(frame)
           if ('ok' in response && response.ok) {
             frames.push(response.result)
             const frame = response.result
@@ -126,7 +127,7 @@ export function accountStreamDesktopFixture(
               slot.serverId = frame.subscriptionId
             }
           }
-          reply(wire)
+          reply(frame)
         },
         options
       )
@@ -143,8 +144,9 @@ export function accountStreamDesktopFixture(
     once: vi.fn(),
     isDestroyed: () => false,
     send: (channel: string, response: RuntimeRpcResponse<unknown>) => {
+      const cloned = structuredClone(response)
       for (const listener of desktopIpc.listeners.get(channel) ?? []) {
-        listener({}, response)
+        listener({}, cloned)
       }
     }
   }
