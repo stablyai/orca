@@ -13,6 +13,7 @@ import {
 } from '../../shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type * as AuthValidation from './rpc/mobile-e2ee-auth-validation'
+import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/device-key-capability'
 
 // Hosts released between v2 and capability-carrying v2 token auth refused the extra field.
 const TOKEN_FOR_HOST_WITHOUT_V2_TOKEN_CAPABILITIES = 'device-token-v2-exact'
@@ -31,11 +32,13 @@ vi.mock('./rpc/mobile-e2ee-auth-validation', async (importOriginal) => {
   }
 })
 
-type HostKind = 'current' | 'v2-without-token-capabilities' | 'pre-v2'
+// current-behind-v2-blocker: a current host behind something on the path that refuses v2 hellos.
+type HostKind = 'current' | 'current-behind-v2-blocker' | 'v2-without-token-capabilities' | 'pre-v2'
 type TestHost = {
   connection: PairedRuntimeConnection
   authFramings: ('legacy' | 'v2')[]
   capabilities: unknown[]
+  requests: string[]
   close: () => Promise<void>
 }
 
@@ -50,6 +53,10 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
       : 'device-token'
   const authFramings: TestHost['authFramings'] = []
   const capabilities: unknown[] = []
+  const requests: string[] = []
+  const hostCapabilities = kind.startsWith('current')
+    ? [E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY]
+    : []
   const server = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   server.on('connection', (ws: WebSocket) => {
     let sawHello = false
@@ -73,15 +80,18 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
       onError: (code, reason) => ws.close(code, reason)
     })
     channel.onMessage((plaintext, reply) => {
-      const { id } = JSON.parse(plaintext)
-      reply(JSON.stringify({ id, ok: true, result: 'pong', _meta: { runtimeId: 'r' } }))
+      const { id, method } = JSON.parse(plaintext)
+      requests.push(`${method} over ${channel.transcriptHashB64 ? 'v2' : 'legacy'}`)
+      const result = method === 'status.get' ? { capabilities: hostCapabilities } : 'pong'
+      reply(JSON.stringify({ id, ok: true, result, _meta: { runtimeId: 'r' } }))
     })
     ws.on('message', (data: Buffer) => {
       const text = data.toString()
       if (!sawHello) {
         sawHello = true
         // A host from before v2 rejects a hello without a legacy public key.
-        if (kind === 'pre-v2' && !JSON.parse(text).publicKeyB64) {
+        const refusesV2 = kind === 'pre-v2' || kind === 'current-behind-v2-blocker'
+        if (refusesV2 && !JSON.parse(text).publicKeyB64) {
           ws.close(4001, 'Invalid e2ee_hello')
           return
         }
@@ -100,6 +110,7 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
     },
     authFramings,
     capabilities,
+    requests,
     close: () =>
       new Promise((resolve) => {
         for (const client of server.clients) {
@@ -176,14 +187,33 @@ describe('remote runtime client E2EE framing', () => {
     expect(host.capabilities[0]).toContain('test.capability.v1')
   })
 
-  it('never downgrades a host it has authenticated with v2', async () => {
+  it('keeps a latched host working over legacy once the host itself shows it was downgraded', async () => {
     const keyPair = nacl.box.keyPair()
     const current = await startHost('current', keyPair)
     await expect(ping(current)).resolves.toBe('pong')
     await current.close()
 
-    const impostor = await startHost('pre-v2', keyPair)
-    await expect(ping(impostor)).rejects.toMatchObject({ closeCode: 4001 })
-    expect(impostor.authFramings).toEqual([])
+    const downgraded = await startHost('pre-v2', keyPair)
+    await expect(ping(downgraded)).resolves.toBe('pong')
+
+    expect(downgraded.requests).toEqual(['status.get over legacy', 'status.ping over legacy'])
+    expect(latchedHosts()).toEqual([])
+  })
+
+  it('never sends a request over legacy to a latched host when v2 is refused on the path', async () => {
+    const keyPair = nacl.box.keyPair()
+    const current = await startHost('current', keyPair)
+    await expect(ping(current)).resolves.toBe('pong')
+    await current.close()
+
+    const blocked = await startHost('current-behind-v2-blocker', keyPair)
+    await expect(ping(blocked)).rejects.toMatchObject({
+      closeCode: 4001,
+      message: expect.stringContaining('Update Orca on that host')
+    })
+
+    // Only the read-only status check reached the host over legacy; it proved the host is current.
+    expect(blocked.requests).toEqual(['status.get over legacy'])
+    expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
   })
 })

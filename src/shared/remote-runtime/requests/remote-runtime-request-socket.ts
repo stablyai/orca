@@ -48,7 +48,9 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
   requestSelection?: RuntimeRequestSelection,
-  prepareRequest?: RuntimeRequestPreparation
+  prepareRequest?: RuntimeRequestPreparation,
+  // Internal: the framing fallback's legacy status check on a latched host uses exactly this dial.
+  latchedHostCheck?: RemoteRuntimeClientHandshake
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
@@ -272,9 +274,25 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       ws.on('close', onClose)
       ws.on('message', onMessage)
     })
-  return await withRemoteRuntimeFramingFallback(
-    connection.hostPublicKeyB64,
-    attempt,
-    signal
-  ).finally(() => releaseRemoteRuntimePreparedRequest(pendingRequest))
+  const dialed = latchedHostCheck
+    ? attempt(latchedHostCheck)
+    : withRemoteRuntimeFramingFallback(connection.hostPublicKeyB64, {
+        attempt,
+        signal,
+        readStatus: (handshake) =>
+          sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
+            connection,
+            'status.get',
+            undefined,
+            timeoutMs,
+            undefined,
+            undefined,
+            signal,
+            clientCapabilities,
+            undefined,
+            undefined,
+            handshake
+          )
+      })
+  return await dialed.finally(() => releaseRemoteRuntimePreparedRequest(pendingRequest))
 }

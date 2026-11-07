@@ -4,12 +4,17 @@ import { readNodeFileSyncWithinLimit } from '../../../node-bounded-file-reader'
 import { writeSecureJsonFile } from '../../../secure-file'
 import type { PairedE2EEV2LatchStore } from '../paired-e2ee-framing-policy'
 
+export type NodeE2EEV2HostLatchStore = PairedE2EEV2LatchStore & {
+  /** Only after the host itself, over a channel keyed to its pinned key, shows it predates v2 token auth. */
+  unlatch: (hostPublicKeyB64: string) => void
+}
+
 export const REMOTE_RUNTIME_E2EE_V2_HOSTS_FILENAME = 'remote-runtime-e2ee-v2-hosts.json'
 const MAX_LATCHED_HOSTS = 512
 const MAX_FILE_BYTES = 64 * 1024
 const MAX_HOST_KEY_LENGTH = 128
 
-let configured: { userDataPath: string | null; store: PairedE2EEV2LatchStore } | null = null
+let configured: { userDataPath: string | null; store: NodeE2EEV2HostLatchStore } | null = null
 
 /** Persist v2-capable hosts in this profile; the desktop app and the CLI share it. */
 export function configureRemoteRuntimeE2EEV2HostLatch(userDataPath: string | null): void {
@@ -25,7 +30,7 @@ export function configureRemoteRuntimeE2EEV2HostLatch(userDataPath: string | nul
 }
 
 /** Unconfigured processes (tests, tools) keep the latch in memory. */
-export function remoteRuntimeE2EEV2HostLatchStore(): PairedE2EEV2LatchStore {
+export function remoteRuntimeE2EEV2HostLatchStore(): NodeE2EEV2HostLatchStore {
   configured ??= { userDataPath: null, store: createNodeE2EEV2HostLatchStore(null) }
   return configured.store
 }
@@ -34,7 +39,7 @@ export function remoteRuntimeE2EEV2HostLatchStore(): PairedE2EEV2LatchStore {
  * Hosts (by pinned public key) this profile has authenticated with E2EE v2. Shared by the desktop
  * app and the CLI through the profile directory; a null path keeps the latch in memory only.
  */
-export function createNodeE2EEV2HostLatchStore(filePath: string | null): PairedE2EEV2LatchStore {
+export function createNodeE2EEV2HostLatchStore(filePath: string | null): NodeE2EEV2HostLatchStore {
   let latched: Set<string> | null = null
   const load = (): Set<string> => {
     const current = latched ?? new Set<string>()
@@ -58,6 +63,12 @@ export function createNodeE2EEV2HostLatchStore(filePath: string | null): PairedE
       }
       current.add(hostPublicKeyB64)
       persist(filePath, load())
+    },
+    unlatch: (hostPublicKeyB64) => {
+      const current = load()
+      if (current.delete(hostPublicKeyB64)) {
+        persist(filePath, current)
+      }
     }
   }
 }
