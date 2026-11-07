@@ -2,11 +2,8 @@ import * as z from 'zod'
 import type { RpcClient, SendRequestOptions } from './rpc-client'
 import type { RpcOperationSender } from './rpc-operation-sender'
 import { captureGitHubInvocation, supportsExactGitHubOperations } from './github-target-invocation'
-import {
-  readRuntimeStatusProbe,
-  recordRuntimeStatusProbe,
-  runtimeStatusProbeEpoch
-} from './runtime-status-probe'
+import { readRuntimeStatusProbe, recordRuntimeStatusProbe } from './runtime-status-probe'
+import { hostConnectionEpoch } from '../query/host-status-query'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
 
 type Status = Awaited<ReturnType<ReturnType<typeof captureGitHubInvocation>['status']>>
@@ -31,7 +28,7 @@ const supporting = (status: Status | null | undefined) =>
 
 function knownStatus(client: RpcClient): Status | null | undefined {
   const prior = discoveries.get(client)
-  const proof = prior?.epoch === runtimeStatusProbeEpoch(client) ? prior.status : undefined
+  const proof = prior?.epoch === hostConnectionEpoch(client) ? prior.status : undefined
   const cached = readRuntimeStatusProbe(client)
   const value = cached === undefined ? client.getShellHostStatus?.() : cached
   const parsed = statusSchema.safeParse(value)
@@ -56,7 +53,7 @@ function knownStatus(client: RpcClient): Status | null | undefined {
 
 function statusFor(client: RpcClient, refresh: boolean): Promise<Status | null | undefined> {
   const known = knownStatus(client)
-  const epoch = runtimeStatusProbeEpoch(client)
+  const epoch = hostConnectionEpoch(client)
   let entry = discoveries.get(client)
   if (!entry || entry.epoch !== epoch) {
     entry = { epoch, attempted: known !== undefined, status: known ?? undefined }
@@ -127,14 +124,14 @@ export async function captureMobilePRCheckContract(
       (relay &&
         supportsExactGitHubOperations(relay) &&
         (client.carriesRpcEnvelope?.() ?? true))) === true
-  const started = runtimeStatusProbeEpoch(client)
+  const started = hostConnectionEpoch(client)
   const routeCurrent = () => {
     try {
       invocation.assertCurrent()
       relayInvocation?.assertCurrent()
       const now = knownStatus(client)
       return (
-        runtimeStatusProbeEpoch(client) === started &&
+        hostConnectionEpoch(client) === started &&
         (!source.success || now?.runtimeId === source.data.runtimeId)
       )
     } catch {
