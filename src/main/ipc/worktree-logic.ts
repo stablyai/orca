@@ -237,15 +237,19 @@ function getRuntimePathOps(
     : posix
 }
 
+/** Trim surrounding whitespace so a pasted absolute path is never resolved relative to `repoPath` (#39545). */
 function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
-  const pathOps = getRuntimePathOps(repoPath, workspaceDir)
-  return pathOps.isAbsolute(workspaceDir)
-    ? pathOps.normalize(workspaceDir)
-    : resolveRuntimePath(repoPath, workspaceDir)
+  const trimmedWorkspaceDir = workspaceDir.trim()
+  const pathOps = getRuntimePathOps(repoPath, trimmedWorkspaceDir)
+  return pathOps.isAbsolute(trimmedWorkspaceDir)
+    ? pathOps.normalize(trimmedWorkspaceDir)
+    : resolveRuntimePath(repoPath, trimmedWorkspaceDir)
 }
 
+/** Trim surrounding whitespace before checking whether `workspaceDir` is repository-relative (#39545). */
 function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): boolean {
-  return !getRuntimePathOps(repoPath, workspaceDir).isAbsolute(workspaceDir)
+  const trimmedWorkspaceDir = workspaceDir.trim()
+  return !getRuntimePathOps(repoPath, trimmedWorkspaceDir).isAbsolute(trimmedWorkspaceDir)
 }
 
 function getEffectiveWorktreeBasePath(
@@ -254,7 +258,7 @@ function getEffectiveWorktreeBasePath(
 ): string {
   const basePath = getRepoWorktreeBasePath(repo)
   if (basePath === undefined) {
-    return settings.workspaceDir
+    return settings.workspaceDir.trim()
   }
   return resolveWslRepoWorktreeBasePath(repo.path, basePath)
 }
@@ -277,10 +281,11 @@ function resolveMirrorDistro(
 }
 
 function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: string): boolean {
-  if (isWorkspaceDirRelativeToRepo(repoPath, workspaceDir)) {
+  const trimmedWorkspaceDir = workspaceDir.trim()
+  if (isWorkspaceDirRelativeToRepo(repoPath, trimmedWorkspaceDir)) {
     return false
   }
-  return !isWslUncPath(workspaceDir)
+  return !isWslUncPath(trimmedWorkspaceDir)
 }
 
 export function parseWorktreeId(worktreeId: string): { repoId: string; worktreePath: string } {
