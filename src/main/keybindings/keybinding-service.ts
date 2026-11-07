@@ -10,69 +10,39 @@ import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
   readKeybindingFile,
-  seedLegacyKeybindings,
   writeKeybindingOverride
 } from './keybinding-file'
-
-type LegacyKeybindingSeed = {
-  isPending: () => boolean
-  markSeeded: () => void
-}
 
 export type KeybindingServiceOptions = {
   homePath: string
   platform?: NodeJS.Platform
   getLegacyOverrides?: () => KeybindingOverrides | undefined
-  /** Seed once for pre-existing installs; markSeeded completes the persisted cohort. */
-  legacyTabSwitchSeed?: LegacyKeybindingSeed
-  searchKeybindingSeed?: LegacyKeybindingSeed
+  legacyTabSwitchDefaults?: boolean
+  legacySearchDefaults?: boolean
 }
 
 export class KeybindingService {
   private readonly configPath: string
   private readonly platform: NodeJS.Platform
+  private readonly defaultOverrides: KeybindingOverrides
+  private fallbackOverrides: KeybindingOverrides = {}
   private snapshot: KeybindingFileSnapshot | null = null
 
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
-    // A keybindings file supersedes shortcuts stored in legacy global settings.
-    try {
-      migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
-    } catch (error) {
-      console.error('Failed to import legacy keybindings:', error)
-      return
+    this.defaultOverrides = {
+      ...(options.legacyTabSwitchDefaults ? LEGACY_TAB_SWITCH_BINDINGS : {}),
+      ...(options.legacySearchDefaults && this.platform === 'darwin'
+        ? LEGACY_MAC_SEARCH_BINDINGS
+        : {})
     }
-    // Complete the cohort only after successful pinning so transient I/O failures retry next launch.
-    for (const [seed, bindings, name] of [
-      [options.legacyTabSwitchSeed, LEGACY_TAB_SWITCH_BINDINGS, 'tab-switch'],
-      [
-        options.searchKeybindingSeed,
-        this.platform === 'darwin' ? LEGACY_MAC_SEARCH_BINDINGS : {},
-        'search'
-      ]
-    ] as const) {
-      if (!seed) {
-        continue
-      }
-      const pending = seed.isPending()
-      if (!pending) {
-        continue
-      }
-      try {
-        // Seed already read the file; reuse its snapshot for the lazy cache.
-        this.snapshot = seedLegacyKeybindings(
-          this.configPath,
-          this.platform,
-          bindings,
-          name
-        ).snapshot
-        if (pending) {
-          seed.markSeeded()
-        }
-      } catch (error) {
-        console.error(`Failed to seed legacy ${name} keybindings:`, error)
-      }
+    const legacyOverrides = options.getLegacyOverrides?.()
+    try {
+      migrateLegacyKeybindings(this.configPath, this.platform, legacyOverrides)
+    } catch (error) {
+      this.fallbackOverrides = { ...legacyOverrides }
+      console.error('Failed to import legacy keybindings:', error)
     }
   }
 
@@ -82,13 +52,18 @@ export class KeybindingService {
 
   getSnapshot(): KeybindingFileSnapshot {
     if (!this.snapshot) {
-      this.snapshot = readKeybindingFile(this.configPath, this.platform)
+      return this.reload()
     }
     return this.snapshot
   }
 
   reload(): KeybindingFileSnapshot {
-    this.snapshot = readKeybindingFile(this.configPath, this.platform)
+    this.snapshot = readKeybindingFile(
+      this.configPath,
+      this.platform,
+      this.defaultOverrides,
+      this.fallbackOverrides
+    )
     return this.snapshot
   }
 
@@ -105,7 +80,15 @@ export class KeybindingService {
     actionId: KeybindingActionId,
     bindings: string[] | null
   ): KeybindingFileSnapshot {
-    this.snapshot = writeKeybindingOverride(this.configPath, this.platform, actionId, bindings)
+    this.snapshot = writeKeybindingOverride(
+      this.configPath,
+      this.platform,
+      actionId,
+      bindings,
+      this.defaultOverrides,
+      this.fallbackOverrides
+    )
+    this.fallbackOverrides = {}
     return this.snapshot
   }
 }

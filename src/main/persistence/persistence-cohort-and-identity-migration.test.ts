@@ -79,6 +79,23 @@ describe('Store', () => {
     })
   })
 
+  it('retains inherited shortcut defaults across profile saves and pending cohort upgrades', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      ui: {},
+      settings: { searchKeybindingSeed: 'pending' }
+    })
+    const store = await createStore()
+    expect(store.getSettings().searchKeybindingSeed).toBe('legacy')
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('legacy')
+    store.flush()
+    await closeTestStores()
+    const reopened = await createStore()
+    expect(reopened.getSettings().searchKeybindingSeed).toBe('legacy')
+  })
+
   it('excludes an unopened secondary profile with inherited telemetry from legacy shortcut rollouts', async () => {
     writeDataFile({
       settings: {

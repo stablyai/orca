@@ -30,7 +30,7 @@ export function initializeNewOrcaProfileState(
     }
     const defaults = getDefaultPersistedState(homedir())
     const cohorts = new LoadedCohortMigrationOperations({ loadNeedsSave: false })
-    const initial = cohorts.migrateTabSwitchKeybindings(
+    const initial = cohorts.migrateKeybindings(
       telemetry
         ? { ...defaults, settings: { ...defaults.settings, telemetry } }
         : cohorts.migrateTelemetry(defaults, false),

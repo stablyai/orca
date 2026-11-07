@@ -1,35 +1,18 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getEffectiveKeybindingsForAction, keybindingMatchesAction } from '../../shared/keybindings'
-import { getUserKeybindingsPath, writeKeybindingOverride } from './keybinding-file'
+import {
+  findKeybindingConflicts,
+  getEffectiveKeybindingsForAction,
+  keybindingMatchesAction
+} from '../../shared/keybindings'
+import { getUserKeybindingsPath } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 
-// Verify effective bindings and keystroke matching for fresh/existing cohorts across all platforms.
-
-function makeCohort(pending: boolean): {
-  controller: { isPending: () => boolean; markSeeded: () => void }
-  seeded: () => boolean
-} {
-  let stillPending = pending
-  let didSeed = false
-  return {
-    controller: {
-      isPending: () => stillPending,
-      markSeeded: () => {
-        didSeed = true
-        stillPending = false
-      }
-    },
-    seeded: () => didSeed
-  }
-}
-
-// Physical bracket codes are layout-independent; Mod maps to the platform modifier.
-
-describe('KeybindingService cohort seeding', () => {
+describe('KeybindingService profile defaults', () => {
   let home: string
+  const cmdK = { key: 'k', code: 'KeyK', meta: true, control: false, alt: false, shift: false }
 
   beforeEach(() => {
     home = mkdtempSync(join(tmpdir(), 'orca-kb-service-'))
@@ -39,249 +22,226 @@ describe('KeybindingService cohort seeding', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  it('preserves older defaults when a fresh profile starts first', () => {
-    new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      searchKeybindingSeed: makeCohort(false).controller
+  function open(legacySearchDefaults = false): KeybindingService {
+    return new KeybindingService({ homePath: home, platform: 'darwin', legacySearchDefaults })
+  }
+
+  function write(document: unknown): void {
+    mkdirSync(join(home, '.orca'), { recursive: true })
+    writeFileSync(getUserKeybindingsPath(home), JSON.stringify(document))
+  }
+
+  it('keeps fresh and older profiles independent across opening order and reloads', () => {
+    const fresh = open()
+    expect(keybindingMatchesAction('worktree.palette', cmdK, 'darwin', fresh.getOverrides())).toBe(
+      true
+    )
+    const older = open(true)
+    expect(keybindingMatchesAction('terminal.clear', cmdK, 'darwin', older.getOverrides())).toBe(
+      true
+    )
+    expect(older.getOverrides()['worktree.palette']).toEqual(['Mod+J'])
+    expect(fresh.reload().overrides).toEqual({})
+    expect(open().getOverrides()).toEqual({})
+    expect(open(true).getOverrides()['terminal.clear']).toEqual(['Mod+K'])
+    expect(existsSync(getUserKeybindingsPath(home))).toBe(false)
+  })
+
+  it('reconciles inherited clear on reset and keeps that explicit choice across profiles', () => {
+    const older = open(true)
+    const reset = older.setActionBindings('worktree.palette', null)
+    expect(reset.overrides).toEqual({ 'worktree.palette': ['Mod+K'], 'terminal.clear': [] })
+    expect(
+      findKeybindingConflicts('darwin', reset.overrides, {
+        includeMainProcessInterception: true
+      })
+    ).toEqual([])
+    expect(keybindingMatchesAction('terminal.clear', cmdK, 'darwin', reset.overrides)).toBe(false)
+    expect(open(true).getOverrides()).toEqual(reset.overrides)
+    expect(open().getOverrides()).toEqual({ 'worktree.palette': ['Mod+K'] })
+    expect(JSON.parse(readFileSync(getUserKeybindingsPath(home), 'utf8')).platforms.darwin).toEqual(
+      {
+        'worktree.palette': ['Mod+K']
+      }
+    )
+  })
+
+  it('keeps a reset performed in a fresh profile authoritative for older profiles', () => {
+    open().setActionBindings('worktree.palette', null)
+    expect(open(true).getOverrides()).toEqual({
+      'worktree.palette': ['Mod+K'],
+      'terminal.clear': []
     })
-    const older = new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      searchKeybindingSeed: makeCohort(true).controller
+  })
+
+  it('preserves explicit clear assignments when search is reset', () => {
+    const older = open(true)
+    older.setActionBindings('terminal.clear', ['Mod+Alt+K'])
+    expect(older.setActionBindings('worktree.palette', null).overrides).toEqual({
+      'worktree.palette': ['Mod+K'],
+      'terminal.clear': ['Mod+Alt+K']
     })
+  })
+
+  it('rejects a reset that conflicts with an explicit clear shortcut without changing it', () => {
+    const older = open(true)
+    older.setActionBindings('terminal.clear', ['Mod+K'])
+    const path = getUserKeybindingsPath(home)
+    const before = readFileSync(path, 'utf8')
+    expect(() => older.setActionBindings('worktree.palette', null)).toThrow('conflicts')
+    expect(readFileSync(path, 'utf8')).toBe(before)
+    expect(older.reload().overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
+  })
+
+  it('keeps inherited shortcuts active with malformed JSON and after repair', () => {
+    write({})
+    const path = getUserKeybindingsPath(home)
+    writeFileSync(path, '{invalid')
+    const older = open(true)
     expect(older.getOverrides()).toEqual({
       'worktree.palette': ['Mod+J'],
       'terminal.clear': ['Mod+K']
     })
-  })
-
-  it('preserves malformed sections and retries migration after repair', () => {
-    mkdirSync(join(home, '.orca'))
-    const path = getUserKeybindingsPath(home)
-    const invalid = JSON.stringify({ keybindings: {}, platforms: { win32: 'recover me' } })
-    writeFileSync(path, invalid)
-    const cohort = makeCohort(true)
-    const options = {
-      homePath: home,
-      platform: 'darwin' as const,
-      searchKeybindingSeed: cohort.controller
-    }
-    const service = new KeybindingService(options)
-    expect(readFileSync(path, 'utf8')).toBe(invalid)
-    expect(service.getSnapshot().diagnostics.length).toBeGreaterThan(0)
-    expect(cohort.controller.isPending()).toBe(true)
-    writeFileSync(path, JSON.stringify({ keybindings: {}, platforms: { win32: {} } }))
-    expect(new KeybindingService(options).getOverrides()).toEqual({
+    expect(older.getSnapshot().diagnostics[0].code).toBe('readFailed')
+    expect(older.reload().overrides).toEqual(older.getOverrides())
+    expect(readFileSync(path, 'utf8')).toBe('{invalid')
+    write({ platforms: { darwin: { 'terminal.clear': [] } } })
+    expect(older.reload().overrides).toEqual({
       'worktree.palette': ['Mod+J'],
-      'terminal.clear': ['Mod+K']
+      'terminal.clear': []
     })
-    expect(cohort.seeded()).toBe(true)
   })
 
-  it('retries a failed legacy import without completing the cohort', () => {
-    const path = getUserKeybindingsPath(home)
-    mkdirSync(join(home, '.orca'))
-    writeFileSync(path, JSON.stringify({ migrations: { legacySettings: 'pending' } }))
-    mkdirSync(`${path}.tmp`)
-    const cohort = makeCohort(true)
+  it('uses custom legacy settings in memory when importing fails and retries next launch', () => {
+    mkdirSync(join(home, '.orca', 'keybindings.json.tmp'), { recursive: true })
     const options = {
       homePath: home,
       platform: 'darwin' as const,
-      getLegacyOverrides: () => ({ 'worktree.palette': ['Mod+Alt+J'] }),
-      searchKeybindingSeed: cohort.controller
+      legacySearchDefaults: true,
+      getLegacyOverrides: () => ({ 'worktree.palette': ['Mod+Alt+J'] })
     }
-    expect(() => new KeybindingService(options)).not.toThrow()
-    expect(cohort.controller.isPending()).toBe(true)
-    rmSync(`${path}.tmp`, { recursive: true })
-    expect(new KeybindingService(options).getOverrides()['worktree.palette']).toEqual(['Mod+Alt+J'])
-  })
-
-  it('keeps a search reset when another unmigrated profile opens the shared file', () => {
-    const cohort = makeCohort(true)
-    const options = {
-      homePath: home,
-      platform: 'darwin' as const,
-      searchKeybindingSeed: cohort.controller
-    }
-    const service = new KeybindingService(options)
-    expect(service.getOverrides()).toEqual({
-      'worktree.palette': ['Mod+J'],
-      'terminal.clear': ['Mod+K']
-    })
-    expect(cohort.seeded()).toBe(true)
-
-    service.setActionBindings('worktree.palette', null)
-    const otherProfile = makeCohort(true)
-    const reopened = new KeybindingService({
-      ...options,
-      searchKeybindingSeed: otherProfile.controller
-    })
-    const cmdK = { key: 'k', code: 'KeyK', meta: true, control: false, alt: false, shift: false }
-    expect(
-      keybindingMatchesAction('worktree.palette', cmdK, 'darwin', reopened.getOverrides())
-    ).toBe(true)
-    expect(reopened.getOverrides()).toEqual({ 'terminal.clear': ['Mod+K'] })
-    expect(otherProfile.seeded()).toBe(true)
-  })
-
-  it('imports older custom shortcuts after a fresh profile records migration metadata', () => {
-    new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      legacyTabSwitchSeed: makeCohort(false).controller,
-      searchKeybindingSeed: makeCohort(false).controller
-    })
-    const existing = new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      getLegacyOverrides: () => ({
-        'worktree.palette': ['Mod+Alt+J'],
-        'terminal.clear': []
-      }),
-      legacyTabSwitchSeed: makeCohort(true).controller,
-      searchKeybindingSeed: makeCohort(true).controller
-    })
-    expect(existing.getOverrides()).toMatchObject({
+    const failed = new KeybindingService(options)
+    expect(failed.getOverrides()).toEqual({
       'worktree.palette': ['Mod+Alt+J'],
-      'terminal.clear': [],
-      'tab.previousSameType': ['Mod+Shift+BracketLeft']
-    })
-  })
-
-  it('keeps an explicit reset after a fresh profile records migration metadata', () => {
-    const fresh = new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      searchKeybindingSeed: makeCohort(false).controller
-    })
-    fresh.setActionBindings('worktree.palette', ['Mod+Alt+J'])
-    fresh.setActionBindings('worktree.palette', null)
-
-    const existing = new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      getLegacyOverrides: () => ({
-        'worktree.palette': ['Mod+Alt+J'],
-        'terminal.clear': []
-      }),
-      searchKeybindingSeed: makeCohort(true).controller
-    })
-    expect(existing.getOverrides()).toEqual({})
-  })
-
-  it('keeps tab-switch resets across profiles and scopes migration completion to the platform', () => {
-    const options = { homePath: home, platform: 'linux' as const }
-    const linux = new KeybindingService({
-      ...options,
-      legacyTabSwitchSeed: makeCohort(true).controller,
-      searchKeybindingSeed: makeCohort(true).controller
-    })
-    linux.setActionBindings('tab.nextAllTypes', [])
-    linux.setActionBindings('tab.nextSameType', null)
-    const reopened = new KeybindingService({
-      ...options,
-      legacyTabSwitchSeed: makeCohort(true).controller
-    })
-    expect(
-      getEffectiveKeybindingsForAction('tab.nextSameType', 'linux', reopened.getOverrides())
-    ).toEqual(['Mod+Alt+BracketRight'])
-    const mac = new KeybindingService({
-      homePath: home,
-      platform: 'darwin',
-      searchKeybindingSeed: makeCohort(true).controller
-    })
-    expect(mac.getOverrides()).toEqual({
-      'worktree.palette': ['Mod+J'],
       'terminal.clear': ['Mod+K']
     })
+    rmSync(join(home, '.orca', 'keybindings.json.tmp'), { recursive: true })
+    expect(new KeybindingService(options).getOverrides()).toEqual({
+      'worktree.palette': ['Mod+Alt+J'],
+      'terminal.clear': ['Mod+K']
+    })
+    expect(JSON.parse(readFileSync(getUserKeybindingsPath(home), 'utf8')).platforms.darwin).toEqual(
+      {
+        'worktree.palette': ['Mod+Alt+J']
+      }
+    )
   })
 
-  it('preserves common, disabled and other-platform choices when upgrading search', () => {
-    mkdirSync(join(home, '.orca'))
-    writeFileSync(
-      getUserKeybindingsPath(home),
-      JSON.stringify({
-        keybindings: { 'worktree.palette': ['Mod+Alt+J'] },
-        platforms: {
-          darwin: { 'terminal.clear': [] },
-          win32: { 'worktree.palette': ['Mod+Shift+J'] }
-        }
-      })
-    )
-    const service = new KeybindingService({
+  it('persists pending legacy choices together with a new settings edit after recovery', () => {
+    mkdirSync(join(home, '.orca', 'keybindings.json.tmp'), { recursive: true })
+    const older = new KeybindingService({
       homePath: home,
       platform: 'darwin',
-      searchKeybindingSeed: makeCohort(true).controller
+      legacySearchDefaults: true,
+      getLegacyOverrides: () => ({ 'worktree.palette': ['Mod+Alt+J'] })
     })
-    expect(service.getOverrides()).toEqual({
+    rmSync(join(home, '.orca', 'keybindings.json.tmp'), { recursive: true })
+    expect(older.setActionBindings('view.tasks', ['Ctrl+Alt+T']).overrides).toEqual({
+      'worktree.palette': ['Mod+Alt+J'],
+      'terminal.clear': ['Mod+K'],
+      'view.tasks': ['Ctrl+Alt+T']
+    })
+    expect(open(true).getOverrides()).toEqual({
+      'worktree.palette': ['Mod+Alt+J'],
+      'terminal.clear': ['Mod+K'],
+      'view.tasks': ['Ctrl+Alt+T']
+    })
+  })
+
+  it('imports the first explicit legacy choices without leaking generated defaults', () => {
+    open(true)
+    const older = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      legacySearchDefaults: true,
+      getLegacyOverrides: () => ({ 'worktree.palette': ['Cmd+K'], 'view.tasks': ['Ctrl+Alt+T'] })
+    })
+    expect(older.getOverrides()).toEqual({
+      'worktree.palette': ['Cmd+K'],
+      'terminal.clear': [],
+      'view.tasks': ['Ctrl+Alt+T']
+    })
+    const another = new KeybindingService({
+      homePath: home,
+      platform: 'darwin',
+      getLegacyOverrides: () => ({ 'view.tasks': ['Ctrl+Alt+X'] })
+    })
+    expect(another.getOverrides()).toEqual({
+      'worktree.palette': ['Cmd+K'],
+      'view.tasks': ['Ctrl+Alt+T']
+    })
+  })
+
+  it('preserves common, disabled and other-platform choices', () => {
+    write({
+      keybindings: { 'worktree.palette': ['Mod+Alt+J'] },
+      platforms: {
+        darwin: { 'terminal.clear': [] },
+        win32: { 'worktree.palette': ['Mod+Shift+J'] }
+      }
+    })
+    const older = open(true)
+    expect(older.getOverrides()).toEqual({
       'worktree.palette': ['Mod+Alt+J'],
       'terminal.clear': []
     })
-    expect(service.getSnapshot().platformOverrides.win32).toEqual({
-      'worktree.palette': ['Mod+Shift+J']
-    })
+    older.setActionBindings('worktree.palette', ['Mod+Alt+K'])
+    const reset = older.setActionBindings('worktree.palette', null)
+    expect(reset.overrides).toEqual({ 'worktree.palette': ['Mod+Alt+J'], 'terminal.clear': [] })
+    expect(reset.platformOverrides.win32).toEqual({ 'worktree.palette': ['Mod+Shift+J'] })
   })
 
-  it('leaves new profiles and non-Mac profiles without legacy search pins', () => {
-    const fresh = new KeybindingService({
+  it.each(['linux', 'win32'] as const)(
+    'keeps tab defaults local and search unchanged on %s',
+    (platform) => {
+      const older = new KeybindingService({
+        homePath: home,
+        platform,
+        legacyTabSwitchDefaults: true,
+        legacySearchDefaults: true
+      })
+      expect(older.getOverrides()).toEqual({
+        'tab.nextSameType': ['Mod+Shift+BracketRight'],
+        'tab.previousSameType': ['Mod+Shift+BracketLeft'],
+        'tab.nextAllTypes': ['Mod+Alt+BracketRight'],
+        'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
+      })
+      older.setActionBindings('tab.nextAllTypes', [])
+      const reset = older.setActionBindings('tab.nextSameType', null)
+      expect(
+        getEffectiveKeybindingsForAction('tab.nextSameType', platform, reset.overrides)
+      ).toEqual(['Mod+Alt+BracketRight'])
+      expect(new KeybindingService({ homePath: home, platform }).getOverrides()).toEqual({
+        'tab.nextSameType': ['Mod+Alt+BracketRight'],
+        'tab.nextAllTypes': []
+      })
+    }
+  )
+
+  it('yields inherited tab shortcuts to explicit assignments during loads and settings writes', () => {
+    write({ platforms: { darwin: { 'tab.previousAllTypes': ['Mod+Shift+BracketLeft'] } } })
+    const older = new KeybindingService({
       homePath: home,
       platform: 'darwin',
-      searchKeybindingSeed: makeCohort(false).controller
+      legacyTabSwitchDefaults: true
     })
-    expect(fresh.getOverrides()).toEqual({})
-    const windows = new KeybindingService({
-      homePath: home,
-      platform: 'win32',
-      searchKeybindingSeed: makeCohort(true).controller
-    })
-    expect(windows.getOverrides()).toEqual({})
-  })
-
-  it('existing install keeps a rebound action AND pins the pre-swap default on the rest', () => {
-    const platform: NodeJS.Platform = 'darwin'
-    writeKeybindingOverride(getUserKeybindingsPath(home), platform, 'tab.nextSameType', ['Mod+K'])
-
-    const cohort = makeCohort(true)
-    const service = new KeybindingService({
-      homePath: home,
-      platform,
-      legacyTabSwitchSeed: cohort.controller
-    })
-    const overrides = service.getOverrides()
-
-    expect(getEffectiveKeybindingsForAction('tab.nextSameType', platform, overrides)).toEqual([
-      'Mod+K'
-    ])
-    expect(getEffectiveKeybindingsForAction('tab.previousSameType', platform, overrides)).toEqual([
-      'Mod+Shift+BracketLeft'
-    ])
-    expect(getEffectiveKeybindingsForAction('tab.nextAllTypes', platform, overrides)).toEqual([
-      'Mod+Alt+BracketRight'
-    ])
-    expect(getEffectiveKeybindingsForAction('tab.previousAllTypes', platform, overrides)).toEqual([
-      'Mod+Alt+BracketLeft'
-    ])
-  })
-
-  it('leaves the cohort pending when the seed write fails (retries next launch)', () => {
-    // A file at homePath forces mkdir failure; the cohort must remain pending.
-    const fileHome = join(home, 'not-a-dir')
-    writeFileSync(fileHome, 'x', 'utf8')
-    const cohort = makeCohort(true)
-    const searchCohort = makeCohort(true)
-
-    expect(
-      () =>
-        new KeybindingService({
-          homePath: fileHome,
-          platform: 'darwin',
-          legacyTabSwitchSeed: cohort.controller,
-          searchKeybindingSeed: searchCohort.controller
-        })
-    ).not.toThrow()
-    expect(cohort.seeded()).toBe(false)
-    expect(cohort.controller.isPending()).toBe(true)
-    expect(searchCohort.controller.isPending()).toBe(true)
+    expect(older.getOverrides()['tab.previousSameType']).toEqual([])
+    const changed = older.setActionBindings('tab.nextSameType', ['Mod+Alt+BracketRight'])
+    expect(changed.overrides['tab.nextAllTypes']).toEqual([])
+    expect(changed.overrides['tab.nextSameType']).toEqual(['Mod+Alt+BracketRight'])
+    expect(changed.diagnostics).toEqual([])
   })
 })

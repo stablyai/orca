@@ -5,8 +5,8 @@ export type KeybindingGlobalSettings = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Legacy shortcut overrides; new writes go to ~/.orca/keybindings.json. */
   keybindings?: KeybindingOverrides
-  /** Existing profiles pin the old tab-switch shortcuts once; fresh profiles start done. */
-  tabSwitchKeybindingSeed?: 'pending' | 'done'
-  /** Existing profiles pin the old Mac search/clear shortcuts once before adopting new defaults. */
-  searchKeybindingSeed?: 'pending' | 'done'
+  /** Profile-owned defaults; legacy profiles keep their shortcuts without writing the shared file. */
+  tabSwitchKeybindingSeed?: 'pending' | 'done' | 'legacy'
+  /** The Mac search/clear rollout cohort, independent of the shared shortcut choices. */
+  searchKeybindingSeed?: 'pending' | 'done' | 'legacy'
 }

@@ -24,7 +24,7 @@ export class LoadedCohortMigrationOperations {
     const existingProfile = fileExistedOnLoad && !telemetryOnly
     for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
       const existing = state.settings?.[key]
-      if (existing === 'pending' || existing === 'done') {
+      if (existing === 'legacy' || existing === 'done') {
         continue
       }
       // Freeze each rollout's cohort before saving makes a fresh install appear existing.
@@ -33,7 +33,7 @@ export class LoadedCohortMigrationOperations {
         ...state,
         settings: {
           ...state.settings,
-          [key]: existingProfile ? 'pending' : 'done'
+          [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
         }
       }
     }

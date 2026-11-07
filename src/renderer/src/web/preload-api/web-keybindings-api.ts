@@ -3,9 +3,11 @@ import {
   findKeybindingConflicts,
   formatKeybindingList,
   getKeybindingPlatform,
+  getKeybindingResetBindings,
   isKeybindingActionId,
   LEGACY_MAC_SEARCH_BINDINGS,
-  normalizeKeybindingArrayForAction
+  normalizeKeybindingArrayForAction,
+  resolveKeybindingOverrides
 } from '../../../../shared/keybindings'
 import type {
   KeybindingActionId,
@@ -37,12 +39,16 @@ export type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
 
 export const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
 
+const SEARCH_DEFAULTS_STORAGE_KEY = 'orca.web.searchKeybindingSeed.v1'
+let legacySearchDefaults = false
+
 function migrateWebSearchKeybindings(): void {
-  const seedKey = 'orca.web.searchKeybindingSeed.v1'
-  if (window.localStorage.getItem(seedKey) === 'done') {
+  const cohort = window.localStorage.getItem(SEARCH_DEFAULTS_STORAGE_KEY)
+  if (cohort === 'done' || cohort === 'legacy') {
+    legacySearchDefaults = cohort === 'legacy'
     return
   }
-  const existing = [
+  legacySearchDefaults = [
     SETTINGS_STORAGE_KEY,
     KEYBINDINGS_STORAGE_KEY,
     UI_STORAGE_KEY,
@@ -50,40 +56,13 @@ function migrateWebSearchKeybindings(): void {
     ONBOARDING_STORAGE_KEY,
     GITHUB_CACHE_STORAGE_KEY
   ].some((key) => window.localStorage.getItem(key) !== null)
-  if (existing && getWebKeybindingPlatform() === 'darwin') {
-    const raw = window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY)
-    let document: unknown = createEmptyWebKeybindingDocument()
-    if (raw !== null) {
-      try {
-        document = JSON.parse(raw)
-      } catch {
-        return
-      }
-    }
-    if (!isJsonObject(document)) {
-      return
-    }
-    const keybindings = document.keybindings === undefined ? {} : document.keybindings
-    const platforms = document.platforms === undefined ? {} : document.platforms
-    if (
-      !isJsonObject(keybindings) ||
-      !isJsonObject(platforms) ||
-      (platforms.darwin !== undefined && !isJsonObject(platforms.darwin))
-    ) {
-      return
-    }
-    const darwin = { ...platforms.darwin }
-    for (const [actionId, bindings] of Object.entries(LEGACY_MAC_SEARCH_BINDINGS)) {
-      if (!Object.hasOwn(keybindings, actionId) && !Object.hasOwn(darwin, actionId)) {
-        darwin[actionId] = bindings
-      }
-    }
-    writeJson(KEYBINDINGS_STORAGE_KEY, {
-      ...document,
-      platforms: { ...platforms, darwin }
-    })
-  }
-  window.localStorage.setItem(seedKey, 'done')
+  window.localStorage.setItem(SEARCH_DEFAULTS_STORAGE_KEY, legacySearchDefaults ? 'legacy' : 'done')
+}
+
+function getWebDefaultOverrides(): KeybindingOverrides {
+  return legacySearchDefaults && getWebKeybindingPlatform() === 'darwin'
+    ? LEGACY_MAC_SEARCH_BINDINGS
+    : {}
 }
 
 export function createEmptyWebKeybindingDocument(): WebKeybindingDocument {
@@ -127,10 +106,11 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
   const platformOverrides = normalizeWebPlatformOverrides(document.platforms, diagnostics)
   const overrides = removeConflictingWebOverrides(
     platform,
-    {
-      ...commonOverrides,
-      ...platformOverrides[platform]
-    },
+    resolveKeybindingOverrides(
+      platform,
+      { ...commonOverrides, ...platformOverrides[platform] },
+      getWebDefaultOverrides()
+    ),
     diagnostics
   )
 
@@ -139,6 +119,7 @@ export function getWebKeybindingSnapshot(): KeybindingFileSnapshot {
     platform,
     exists: window.localStorage.getItem(KEYBINDINGS_STORAGE_KEY) !== null,
     overrides,
+    defaultOverrides: getWebDefaultOverrides(),
     commonOverrides,
     platformOverrides,
     diagnostics
@@ -152,15 +133,20 @@ export function writeWebKeybindingAction(
   if (!isKeybindingActionId(actionId)) {
     throw new Error(`Unknown keybinding action "${String(actionId)}".`)
   }
+  const platform = getWebKeybindingPlatform()
+  const currentSnapshot = getWebKeybindingSnapshot()
   const normalizedBindings =
-    bindings === null ? null : normalizeKeybindingArrayForAction(actionId, bindings)
+    bindings === null
+      ? getKeybindingResetBindings(actionId, platform, currentSnapshot.commonOverrides)
+      : normalizeKeybindingArrayForAction(actionId, bindings)
   if (normalizedBindings !== null && !Array.isArray(normalizedBindings)) {
     throw new Error(normalizedBindings.ok ? 'Unable to parse shortcut.' : normalizedBindings.error)
   }
 
-  const platform = getWebKeybindingPlatform()
-  const currentSnapshot = getWebKeybindingSnapshot()
-  const candidateOverrides = { ...currentSnapshot.overrides }
+  const candidateOverrides = {
+    ...currentSnapshot.commonOverrides,
+    ...currentSnapshot.platformOverrides[platform]
+  }
   if (normalizedBindings === null) {
     const common = currentSnapshot.commonOverrides[actionId]
     if (common) {
@@ -171,9 +157,11 @@ export function writeWebKeybindingAction(
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }
-  const blockingConflict = findKeybindingConflicts(platform, candidateOverrides).find((conflict) =>
-    conflict.actionIds.includes(actionId)
-  )
+  const blockingConflict = findKeybindingConflicts(
+    platform,
+    resolveKeybindingOverrides(platform, candidateOverrides, getWebDefaultOverrides()),
+    { includeMainProcessInterception: true }
+  ).find((conflict) => conflict.actionIds.includes(actionId))
   if (blockingConflict) {
     throw new Error(
       `${formatKeybindingList([blockingConflict.binding], platform)} conflicts with another shortcut.`

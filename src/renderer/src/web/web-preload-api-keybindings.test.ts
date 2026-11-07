@@ -38,7 +38,10 @@ describe('web keybindings preload API', () => {
     expect(snapshot.platformOverrides.win32).toEqual({ 'worktree.palette': ['Mod+Shift+J'] })
     await window.api.keybindings.setAction({ actionId: 'worktree.palette', bindings: null })
     installWebPreloadApi()
-    expect((await window.api.keybindings.get()).overrides).toEqual({ 'terminal.clear': [] })
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+K'],
+      'terminal.clear': []
+    })
   })
 
   it('retains legacy Mac shortcuts for a profile without saved settings', async () => {
@@ -52,36 +55,27 @@ describe('web keybindings preload API', () => {
     })
   })
 
-  it('preserves newer document fields while adding legacy Mac shortcuts', async () => {
-    const { storage } = installBrowserGlobals('MacIntel')
-    storage.setItem(
-      'orca.web.keybindings.v1',
-      JSON.stringify({
-        version: 2,
-        metadata: { source: 'import' },
-        keybindings: { 'future.action': ['Mod+U'] },
-        platforms: {
-          darwin: { 'terminal.clear': [], 'future.macAction': ['Mod+I'] },
-          future: { 'future.action': ['Mod+O'] }
-        }
+  it.each(['common', 'platform'])(
+    'keeps an explicit %s palette chord ahead of the generated clear shortcut',
+    async (section) => {
+      const { storage } = installBrowserGlobals('MacIntel')
+      const bindings = { 'worktree.palette': ['Cmd+K'] }
+      storage.setItem(
+        'orca.web.keybindings.v1',
+        JSON.stringify(
+          section === 'common' ? { keybindings: bindings } : { platforms: { darwin: bindings } }
+        )
+      )
+      const { installWebPreloadApi } = await import('./web-preload-api')
+      installWebPreloadApi()
+      const snapshot = await window.api.keybindings.get()
+      expect(snapshot.overrides).toEqual({
+        'worktree.palette': ['Cmd+K'],
+        'terminal.clear': []
       })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    expect(JSON.parse(storage.getItem('orca.web.keybindings.v1')!)).toEqual({
-      version: 2,
-      metadata: { source: 'import' },
-      keybindings: { 'future.action': ['Mod+U'] },
-      platforms: {
-        darwin: {
-          'terminal.clear': [],
-          'future.macAction': ['Mod+I'],
-          'worktree.palette': ['Mod+J']
-        },
-        future: { 'future.action': ['Mod+O'] }
-      }
-    })
-  })
+      expect(snapshot.diagnostics).toEqual([])
+    }
+  )
 
   it('leaves an invalid Mac section intact and retries after repair', async () => {
     const { storage } = installBrowserGlobals('MacIntel')
@@ -106,7 +100,10 @@ describe('web keybindings preload API', () => {
     })
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
-    expect((await window.api.keybindings.get()).overrides).toEqual({})
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
     write.mockRestore()
     installWebPreloadApi()
     expect((await window.api.keybindings.get()).overrides).toEqual({
@@ -130,6 +127,10 @@ describe('web keybindings preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     expect(storage.getItem('orca.web.keybindings.v1')).toBe('{invalid')
+    expect((await window.api.keybindings.get()).overrides).toEqual({
+      'worktree.palette': ['Mod+J'],
+      'terminal.clear': ['Mod+K']
+    })
     storage.setItem('orca.web.keybindings.v1', '{}')
     installWebPreloadApi()
     expect((await window.api.keybindings.get()).overrides).toEqual({

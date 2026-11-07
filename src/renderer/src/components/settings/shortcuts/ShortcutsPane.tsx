@@ -7,6 +7,7 @@ import {
 } from '../../../../../shared/keybindings/formatting'
 import { getEffectiveKeybindingsForDefinition } from '../../../../../shared/keybindings/effective'
 import { getKeybindingDefinition } from '../../../../../shared/keybindings/definitions'
+import { resolveKeybindingOverrides } from '../../../../../shared/keybindings/profile-defaults'
 import { keybindingFromInputForAction } from '../../../../../shared/keybindings/input'
 import { normalizeKeybindingListForAction } from '../../../../../shared/keybindings/normalization'
 import type {
@@ -185,15 +186,24 @@ export function ShortcutsPane(): React.JSX.Element {
       return false
     }
     const defaults = getEffectiveKeybindingsForDefinition(definition, platform, {})
+    const explicitOverrides = keybindingSnapshot?.defaultOverrides
+      ? { ...keybindingSnapshot.commonOverrides, ...keybindingSnapshot.platformOverrides[platform] }
+      : keybindings
     const next =
       (sameBindings(normalizedResult, defaults) ||
         (normalizedResult.length === 0 && defaults.length === 0)) &&
       !hasCommonBindingOverride(keybindingSnapshot, actionId)
-        ? removeBindingOverride(keybindings, actionId)
-        : { ...keybindings, [actionId]: normalizedResult }
-    const blockingConflict = findKeybindingConflictsForDefinitions(definitions, platform, next, {
-      ignoredActionIds: ignoredConflictActionIds
-    }).find((conflict) => conflict.actionIds.includes(actionId))
+        ? removeBindingOverride(explicitOverrides, actionId)
+        : { ...explicitOverrides, [actionId]: normalizedResult }
+    const blockingConflict = findKeybindingConflictsForDefinitions(
+      definitions,
+      platform,
+      resolveKeybindingOverrides(platform, next, keybindingSnapshot?.defaultOverrides ?? {}),
+      {
+        ignoredActionIds: ignoredConflictActionIds,
+        includeMainProcessInterception: true
+      }
+    ).find((conflict) => conflict.actionIds.includes(actionId))
     if (blockingConflict) {
       const labels = blockingConflict.actionIds
         .filter((id) => id !== actionId)

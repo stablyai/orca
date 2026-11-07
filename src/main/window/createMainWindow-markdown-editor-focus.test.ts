@@ -235,7 +235,7 @@ describe('createMainWindow', () => {
       control: !isDarwin,
       alt: false,
       shift: false
-    } as never)
+    })
     expect(event.defaultPrevented).toBe(false)
   })
 

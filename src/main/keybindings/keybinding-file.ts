@@ -4,12 +4,10 @@ import {
   findKeybindingConflicts,
   formatKeybindingList,
   getKeybindingPlatform,
+  getKeybindingResetBindings,
   isKeybindingActionId,
   keybindingFileDiagnostic,
-  LEGACY_MAC_SEARCH_BINDINGS,
-  LEGACY_TAB_SWITCH_BINDINGS,
-  normalizeKeybindingArrayForAction,
-  type KeybindingActionId,
+  resolveKeybindingOverrides,
   type KeybindingFileDiagnostic,
   type KeybindingFileSnapshot,
   type KeybindingOverrides
@@ -33,7 +31,9 @@ export function getUserKeybindingsPath(homePath: string): string {
 
 export function readKeybindingFile(
   path: string,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  defaultOverrides: KeybindingOverrides = {},
+  fallbackOverrides: KeybindingOverrides = {}
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const diagnostics: KeybindingFileDiagnostic[] = []
@@ -43,7 +43,8 @@ export function readKeybindingFile(
       path,
       platform: keybindingPlatform,
       exists: readResult.exists,
-      overrides: {},
+      defaultOverrides,
+      overrides: resolveKeybindingOverrides(platform, fallbackOverrides, defaultOverrides),
       commonOverrides: {},
       platformOverrides: {},
       diagnostics: [
@@ -64,16 +65,22 @@ export function readKeybindingFile(
       : parseBindingSection(document.keybindings, 'keybindings', diagnostics)
   const platformOverrides = parsePlatformOverrides(document, diagnostics)
   const mergedOverrides = {
+    ...fallbackOverrides,
     ...commonOverrides,
     ...platformOverrides[keybindingPlatform]
   }
-  const overrides = removeConflictingOverrides(keybindingPlatform, mergedOverrides, diagnostics)
+  const overrides = removeConflictingOverrides(
+    keybindingPlatform,
+    resolveKeybindingOverrides(platform, mergedOverrides, defaultOverrides),
+    diagnostics
+  )
 
   return {
     path,
     platform: keybindingPlatform,
     exists: readResult.exists,
     overrides,
+    defaultOverrides,
     commonOverrides,
     platformOverrides,
     diagnostics
@@ -96,10 +103,13 @@ export function migrateLegacyKeybindings(
     return
   }
   const { document, exists } = readJsonDocument(path)
+  if (!document) {
+    throw new Error('Could not read keybindings file.')
+  }
   const current = readKeybindingFile(path, platform)
   if (
     exists &&
-    (!isJsonObject(document?.migrations) ||
+    (!isJsonObject(document.migrations) ||
       document.migrations.legacySettings !== 'pending' ||
       current.diagnostics.length > 0 ||
       Object.keys(current.commonOverrides).length > 0 ||
@@ -112,99 +122,13 @@ export function migrateLegacyKeybindings(
   })
 }
 
-/** Pin each uncustomized action to its pre-swap chord in the active-platform section, preserving resettable user choices. */
-export function seedLegacyKeybindings(
-  path: string,
-  platform: NodeJS.Platform,
-  legacyBindings: Readonly<Partial<Record<KeybindingActionId, string[]>>>,
-  migration: 'tab-switch' | 'search'
-): { seeded: boolean; snapshot: KeybindingFileSnapshot } {
-  const keybindingPlatform = getKeybindingPlatform(platform)
-  const readResult = readJsonDocument(path)
-  if (!readResult.document) {
-    throw new Error(readResult.error ?? 'Could not read keybindings file.')
-  }
-  const doc = readResult.document
-  if (
-    (doc.keybindings !== undefined && !isJsonObject(doc.keybindings)) ||
-    (doc.platforms !== undefined &&
-      (!isJsonObject(doc.platforms) ||
-        ['darwin', 'linux', 'win32'].some(
-          (key) =>
-            doc.platforms &&
-            isJsonObject(doc.platforms) &&
-            doc.platforms[key] !== undefined &&
-            !isJsonObject(doc.platforms[key])
-        )))
-  ) {
-    throw new Error('Cannot migrate malformed keybinding sections.')
-  }
-  const migrations = isJsonObject(readResult.document.migrations)
-    ? readResult.document.migrations
-    : {}
-  const platformMigrations = isJsonObject(migrations[keybindingPlatform])
-    ? migrations[keybindingPlatform]
-    : {}
-  const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
-  const current = readKeybindingFile(path, platform)
-  // Profiles share this file; a later profile must not undo another profile's reset.
-  if (platformMigrations[migration] === true) {
-    return { seeded: false, snapshot: current }
-  }
-  const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
-  // New defaults can hide valid pre-swap overrides as conflicts; inspect raw common/platform sections.
-  const toSeed = actionIds.filter(
-    (actionId) =>
-      !Object.hasOwn(current.commonOverrides, actionId) &&
-      !Object.hasOwn(activePlatformOverrides, actionId)
-  )
-  // Write valid pins, then throw on dropped pins so a fixed build can retry the pending cohort.
-  const pins: (readonly [KeybindingActionId, string[]])[] = []
-  const failedActionIds: KeybindingActionId[] = []
-  for (const actionId of toSeed) {
-    const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
-    if (!Array.isArray(normalized)) {
-      failedActionIds.push(actionId)
-      continue
-    }
-    pins.push([actionId, normalized])
-  }
-  const snapshot =
-    pins.length > 0 || failedActionIds.length === 0
-      ? writeActivePlatformSection(
-          path,
-          platform,
-          current.commonOverrides,
-          (activePlatform, document) => {
-            for (const [actionId, normalized] of pins) {
-              activePlatform[actionId] = normalized
-            }
-            if (failedActionIds.length === 0) {
-              document.migrations = {
-                ...migrations,
-                ...(!readResult.exists ? { legacySettings: 'pending' } : {}),
-                ...(pins.length > 0 ? { legacySettings: 'done' } : {}),
-                [keybindingPlatform]: { ...platformMigrations, [migration]: true }
-              }
-            }
-          },
-          'migration'
-        )
-      : current
-  if (failedActionIds.length > 0) {
-    throw new Error(`Could not normalize legacy binding for "${failedActionIds.join('", "')}".`)
-  }
-  return { seeded: pins.length > 0, snapshot }
-}
-
 // Migration and Settings writes must use the same document assembly.
 function writeActivePlatformSection(
   path: string,
   platform: NodeJS.Platform,
   fallbackCommonOverrides: KeybindingOverrides,
-  mutateActivePlatform: (activePlatform: JsonObject, document: JsonObject) => void,
-  source: 'migration' | 'settings' = 'settings',
-  resetMigration?: 'tab-switch' | 'search'
+  mutateActivePlatform: (activePlatform: JsonObject) => void,
+  defaultOverrides: KeybindingOverrides = {}
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
@@ -225,20 +149,10 @@ function writeActivePlatformSection(
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
-  mutateActivePlatform(activePlatform, document)
-  // A deliberate reset is authoritative even when it leaves every binding section empty.
-  if (source === 'settings') {
-    const migrations = isJsonObject(document.migrations) ? document.migrations : {}
-    const platformMigrations = isJsonObject(migrations[keybindingPlatform])
-      ? migrations[keybindingPlatform]
-      : {}
-    document.migrations = {
-      ...migrations,
-      legacySettings: 'done',
-      ...(resetMigration
-        ? { [keybindingPlatform]: { ...platformMigrations, [resetMigration]: true } }
-        : {})
-    }
+  mutateActivePlatform(activePlatform)
+  document.migrations = {
+    ...(isJsonObject(document.migrations) ? document.migrations : {}),
+    legacySettings: 'done'
   }
 
   document.version = FILE_VERSION
@@ -251,23 +165,31 @@ function writeActivePlatformSection(
     [keybindingPlatform]: activePlatform
   }
   writeJsonDocument(path, document)
-  return readKeybindingFile(path, platform)
+  return readKeybindingFile(path, platform, defaultOverrides)
 }
 
 export function writeKeybindingOverride(
   path: string,
   platform: NodeJS.Platform,
   actionId: string,
-  bindings: unknown
+  bindings: unknown,
+  defaultOverrides: KeybindingOverrides = {},
+  fallbackOverrides: KeybindingOverrides = {}
 ): KeybindingFileSnapshot {
   if (!isKeybindingActionId(actionId)) {
     throw new Error(`Unknown keybinding action "${actionId}".`)
   }
-  const normalizedBindings = normalizeWriteBindingValue(actionId, bindings)
-
   const keybindingPlatform = getKeybindingPlatform(platform)
   const currentSnapshot = readKeybindingFile(path, platform)
-  const candidateOverrides = { ...currentSnapshot.overrides }
+  const normalizedBindings =
+    bindings === null
+      ? getKeybindingResetBindings(actionId, platform, currentSnapshot.commonOverrides)
+      : normalizeWriteBindingValue(actionId, bindings)
+  const candidateOverrides = {
+    ...fallbackOverrides,
+    ...currentSnapshot.commonOverrides,
+    ...currentSnapshot.platformOverrides[keybindingPlatform]
+  }
   if (normalizedBindings === null) {
     const common = currentSnapshot.commonOverrides[actionId]
     if (common) {
@@ -278,9 +200,11 @@ export function writeKeybindingOverride(
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }
-  const blockingConflict = findKeybindingConflicts(keybindingPlatform, candidateOverrides).find(
-    (conflict) => conflict.actionIds.includes(actionId)
-  )
+  const blockingConflict = findKeybindingConflicts(
+    keybindingPlatform,
+    resolveKeybindingOverrides(platform, candidateOverrides, defaultOverrides),
+    { includeMainProcessInterception: true }
+  ).find((conflict) => conflict.actionIds.includes(actionId))
   if (blockingConflict) {
     throw new Error(
       `${formatKeybindingList([blockingConflict.binding], keybindingPlatform)} conflicts with another shortcut.`
@@ -292,6 +216,14 @@ export function writeKeybindingOverride(
     platform,
     currentSnapshot.commonOverrides,
     (activePlatform) => {
+      for (const [fallbackAction, fallbackBindings] of Object.entries(fallbackOverrides)) {
+        if (
+          !Object.hasOwn(currentSnapshot.commonOverrides, fallbackAction) &&
+          !Object.hasOwn(activePlatform, fallbackAction)
+        ) {
+          activePlatform[fallbackAction] = fallbackBindings
+        }
+      }
       if (normalizedBindings === null) {
         // Reset only the platform mask; common bindings may be intentional on other OSes.
         delete activePlatform[actionId]
@@ -299,13 +231,6 @@ export function writeKeybindingOverride(
         activePlatform[actionId] = normalizedBindings
       }
     },
-    'settings',
-    normalizedBindings === null
-      ? Object.hasOwn(LEGACY_TAB_SWITCH_BINDINGS, actionId)
-        ? 'tab-switch'
-        : Object.hasOwn(LEGACY_MAC_SEARCH_BINDINGS, actionId)
-          ? 'search'
-          : undefined
-      : undefined
+    defaultOverrides
   )
 }
