@@ -27,6 +27,7 @@ type HeroFlowProps = {
   pairQrDataUrl: string | null
   pairQrSize?: number | null
   pairingUrl: string | null
+  pairingEndpoint?: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
   onUseLan: () => void
@@ -65,6 +66,7 @@ export function HeroFlow({
   pairQrDataUrl,
   pairQrSize = null,
   pairingUrl,
+  pairingEndpoint = null,
   pairingQrError,
   relayMintFailure,
   onUseLan,
@@ -198,6 +200,7 @@ export function HeroFlow({
             pairQrDataUrl={pairQrDataUrl}
             pairQrSize={pairQrSize}
             pairingUrl={pairingUrl}
+            pairingEndpoint={pairingEndpoint}
             pairingQrError={pairingQrError}
             relayMintFailure={relayMintFailure}
             onUseLan={onUseLan}

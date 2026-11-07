@@ -62,6 +62,7 @@ export async function requestMobilePairingOffer(
   args: {
     address?: string
     connectionMode?: MobilePairingConnectionMode
+    localPath?: boolean
     rotate?: boolean
     // Unset leaves the offer without an expiry, as headless serve/orcad mint today.
     offerTtlMs?: number
@@ -71,7 +72,8 @@ export async function requestMobilePairingOffer(
   | PairingOfferUnavailable
   | (Omit<MobilePairingOfferAvailable, 'endpoint'> & { endpoint: string | null })
 > {
-  const ip = await pairingAddress(server, args.address, lookup)
+  const relayOnly = args.connectionMode !== 'local-only' && args.localPath === false
+  const ip = relayOnly ? null : await pairingAddress(server, args.address, lookup)
   // Relay works without a direct candidate; LAN-only must refuse when none is usable.
   if (!ip && args.connectionMode === 'local-only') {
     return pairingUnavailable('invalid_advertised_endpoint', NO_PAIRING_ADDRESS_GUIDANCE)
