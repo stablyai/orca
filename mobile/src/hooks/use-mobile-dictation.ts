@@ -225,7 +225,9 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     },
     [applyStatus, capture, failActiveDictation, run]
   )
-  finishRef.current = finishDictation
+  useLayoutEffect(() => {
+    finishRef.current = finishDictation
+  }, [finishDictation])
 
   const stop = useCallback(async () => {
     // Speech is held from the tap, so a stop before the host answers finishes once it does.
