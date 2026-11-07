@@ -1,6 +1,6 @@
 import type { OrcadOptions } from './orcad-start-contract'
 import { DEFAULT_WS_PORT } from '../runtime/rpc/server/runtime-rpc-pairing-types'
-import { ORCAD_LOOPBACK_BIND_HOST } from './orcad-bind-address'
+import { ORCAD_LOOPBACK_BIND_HOST } from '../../shared/orcad-bind-address'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -95,6 +95,7 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
     }
   }
   const validationError = getServeOptionValidationError({
+    bind: options.bind,
     noPairing: options.noPairing === true,
     mobilePairing: options.mobilePairing === true,
     grantDesktopControl: options.grantDesktopControl,

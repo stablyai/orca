@@ -836,7 +836,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}"
+      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -931,7 +932,7 @@
         "parakeetV2": "Yalnızca İngilizce. Benzer doğrulukla v3'ten daha hızlı. Noktalama ve büyük/küçük harf kullanımı.",
         "zipformerBilingual": "Dil geçişleriyle Çince + İngilizce. Düşük gecikmeli gerçek zamanlı akış.",
         "paraformerBilingual": "Çince (Mandarin + lehçeler) + İngilizce. Aksanlı ve bölgesel Çince konuşmalarda güçlü.",
-        "zipformerStreamingEn": "Yalnızca İngilizce. Hız ve boyut arasında iyi denge sunan, 20 milyon parametreli hafif model.",
+        "zipformerStreamingEnRetired": "Artık sunulmuyor: cümlelerin başını atlıyor. Yer açmak için silin.",
         "zipformerStreamingZh": "Yalnızca Çince. Kaynakları kısıtlı cihazlar için ideal, 14 milyon parametreli çok hafif model.",
         "zipformerStreamingKo": "Yalnızca Korece. Düşük gecikmeli gerçek zamanlı akış.",
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
@@ -4244,7 +4245,8 @@
             "chatUnavailableAfterSelection": "{{value0}} sohbeti başlatılamadı.",
             "startChat": "{{value0}} ile sohbet başlat",
             "cliTag": "(CLI)",
-            "agentsLoading": "Ajanlar yükleniyor"
+            "agentsLoading": "Ajanlar yükleniyor",
+            "chatNotOnWindows": "Windows'ta henüz sohbet yok"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Sekme Değiştir",
@@ -6146,7 +6148,6 @@
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Yerel kurulumu kaydet",
           "3933401d28": "Yapılandır",
           "31b8b01a45": "Ayarlar",
           "4a98f907ae": "Yeniden dene",
@@ -6161,7 +6162,15 @@
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin."
+          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
+          "reviewSetupScript": "Kurulum betiğini incele"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Kurulum betiğini incele",
+          "description": "Kaydedildiğinde, Orca {{repo}} için her worktree oluşturduğunda bu çalışır.",
+          "setupScript": "Kurulum betiği",
+          "archiveScript": "Arşiv betiği",
+          "save": "Yerel kurulumu kaydet"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "İptal",
@@ -9118,8 +9127,8 @@
           "proxyConnectionReuseHelp": "Yavaş ProxyCommand veya ProxyJump sunucuları üzerinden daha hızlı bağlantı sağlar. Yalnızca ssh_config yapılandırmanız sunucuya özgü Match veya %h kurallarına dayanmıyorsa etkinleştirin.",
           "reconnectOnLaunch": "Açılışta yeniden bağlan",
           "reconnectOnLaunchHelp": "Kapalıyken Orca, siz bağlanana kadar bu sunucuya ve onun üzerinden erişilen Orca sunucularına açılışta bağlanmaz.",
-          "allowRemoteCliControl": "Bu sunucudaki orca CLI aracının Orca'yı kontrol etmesine izin ver",
-          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucuda çalıştırılan orca komutlarının, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açmasına ve yönetmesine izin verir. Ayrıca bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin kendi gözetimli işleri için orkestrasyon komutlarını (check, inbox, send, ask, reply) çalıştırmasına izin verir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamazlar. Kapalı olduğunda yalnızca bu sunucunun kendi Orca sunucusuna erişirler.",
+          "allowRemoteCliControl": "Bu sunucunun kendi çalışma alanlarındaki Orca tarayıcı sekmelerini kontrol etmesine izin ver",
+          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucudaki ajanlar ve orca komutları, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açabilir, okuyabilir ve kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin orca orkestrasyon komutlarını çalıştırması için de bu ayarın açık olması gerekir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamaz.",
           "editTitle": "SSH sunucusunu düzenle",
           "addTitle": "SSH sunucusu ekle",
           "editDescription": "Bu makine için bağlantı bilgilerini güncelleyin. Değişiklikler bir sonraki bağlantıda uygulanır.",
@@ -13255,7 +13264,8 @@
           "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
           "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
           "review": "İncele",
-          "dismiss": "Kapat"
+          "dismiss": "Kapat",
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
@@ -18899,6 +18909,9 @@
           "cancel": "İptal",
           "add": "Katalog ekle",
           "body": "Bir bağlantı bu katalogdan {{value0}} öğesini göstermek istedi. Yalnızca güvendiğiniz kişilerin kataloglarını ekleyin."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20077,7 +20090,8 @@
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
         "worktree": "Worktree"
-      }
+      },
+      "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın."
     },
     "tab": {
       "bar": {
@@ -22229,7 +22243,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "Bir ajan bu sayfayı kullanıyor"
+    "agentDriving": "Bir ajan bu sayfayı kullanıyor",
+    "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
     "math": {
@@ -23210,6 +23225,15 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} bir tarayıcı sekmesini kontrol ediyor",
+    "description": "Bu SSH sunucusundaki ajanlar, sunucunun çalışma alanlarındaki Orca tarayıcı sekmelerini açıp kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bunu Ayarlar > SSH bölümünden değiştirebilirsiniz.",
+    "stop": "Durdur",
+    "disallow": "İzin verme",
+    "stopped": "{{host}}, Orca yeniden başlatılana kadar tarayıcı sekmelerini kontrol etmeyecek.",
+    "disallowed": "{{host}} artık tarayıcı sekmelerini kontrol edemez. Ayarlar > SSH bölümünden yeniden açabilirsiniz.",
+    "failed": "{{host}} durdurulamadı. Tarayıcı kontrolünü Ayarlar > SSH bölümünden kapatın."
   },
   "gitGraph": {
     "copyHash": "Commit karmasını kopyala",

@@ -164,8 +164,8 @@ export function registerBrowserStateIpcBridge(
   // Why: the bootstrap lease is fixed at creation; an agent's page in a hidden worktree must keep drawing while it drives it.
   const agentActivityPaintHolds = createMainOwnedPaintHolds()
   const unsubscribeAgentActivity = window.api.browser.onAgentActivity?.(
-    ({ browserPageId, worktreeId, active }) => {
-      setBrowserAgentPageActive(browserPageId, active, worktreeId)
+    ({ browserPageId, worktreeId, active, controllerHostLabel }) => {
+      setBrowserAgentPageActive(browserPageId, active, worktreeId, controllerHostLabel)
       agentActivityPaintHolds.set(browserPageId, active)
     }
   )

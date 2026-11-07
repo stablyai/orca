@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
+  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from '../../../../../shared/rpc-contract/antigravity-accounts-params'
@@ -18,6 +19,11 @@ import {
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { structuredAgentHostLaunchSources } from '../../../agent-session/launch/structured-agent-launch-support'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
+
+import {
+  readAntigravityChatAuthConfig,
+  applyAntigravityChatAuthConfig
+} from '../../../../antigravity/antigravity-chat-auth-settings'
 
 const chatSignInHost = (runtime: OrcaRuntimeService) => ({
   launchSources: (signal: AbortSignal) =>
@@ -97,5 +103,22 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     params: AntigravityChatSignInCompleteParams,
     handler: async ({ flowId, callbackUrl }, ctx) =>
       completeAntigravityChatSignIn(signInOwner(ctx), flowId, callbackUrl)
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatAuthGet',
+    permission: 'accounts-admin',
+    params: null,
+    handler: (_, ctx) => readAntigravityChatAuthConfig(ctx.runtime.requireStore())
+  }),
+  defineMethod({
+    name: 'accounts.antigravityChatAuthApply',
+    permission: 'accounts-admin',
+    params: AntigravityChatAuthConfigSchema,
+    handler: (config, ctx) =>
+      applyAntigravityChatAuthConfig(
+        ctx.runtime.requireStore(),
+        config,
+        chatSignInHost(ctx.runtime).stopLiveChats
+      )
   })
 ] as const

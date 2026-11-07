@@ -809,7 +809,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 依您的設定繼續以聊天方式開啟。",
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
-      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}"
+      "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -904,7 +905,7 @@
         "parakeetV2": "僅限英文。準確度與 v3 相近，速度更快。支援標點符號及大小寫。",
         "zipformerBilingual": "中文 + 英文，支援語言混用。低延遲即時串流。",
         "paraformerBilingual": "中文（國語 + 方言）+ 英文。擅長辨識各地口音與方言。",
-        "zipformerStreamingEn": "僅限英文。2,000 萬個參數的輕量模型，兼顧速度與大小。",
+        "zipformerStreamingEnRetired": "已不再提供：它會遺漏句子開頭。刪除它以釋放空間。",
         "zipformerStreamingZh": "僅限中文。1,400 萬個參數的超輕量模型，適合資源有限的裝置。",
         "zipformerStreamingKo": "僅限韓文。低延遲即時串流。",
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
@@ -4188,7 +4189,8 @@
             "chatUnavailableAfterSelection": "無法開始與 {{value0}} 的聊天。",
             "startChat": "開始與 {{value0}} 聊天",
             "cliTag": "(CLI)",
-            "agentsLoading": "正在載入代理程式"
+            "agentsLoading": "正在載入代理程式",
+            "chatNotOnWindows": "Windows 尚不支援聊天"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切換分頁",
@@ -6003,7 +6005,6 @@
           "savedInProjectSettings": "已儲存於此<settings>專案的設定</settings>中"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "儲存本機設定",
           "3933401d28": "設定",
           "31b8b01a45": "設定",
           "4a98f907ae": "重試",
@@ -6018,7 +6019,15 @@
           "5bfd5c8779": "關閉設定指令碼",
           "detectedFromSource": "從 <source>{{source}}</source> 偵測到",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。"
+          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。",
+          "reviewSetupScript": "檢查設定指令碼"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "檢查設定指令碼",
+          "description": "儲存後，Orca 每次為 {{repo}} 建立工作樹時都會執行此指令碼。",
+          "setupScript": "設定指令碼",
+          "archiveScript": "封存指令碼",
+          "save": "儲存本機設定"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "取消",
@@ -8955,8 +8964,8 @@
           "proxyConnectionReuseHelp": "透過速度較慢的 ProxyCommand 或 ProxyJump 主機連線時，可加快連線速度。僅在 ssh_config 不依賴各主機專用的 Match 或 %h 規則時啟用。",
           "reconnectOnLaunch": "啟動時重新連線",
           "reconnectOnLaunchHelp": "關閉時，Orca 啟動後不會連線至此主機或透過此主機存取的任何 Orca 伺服器，直到手動連線為止。",
-          "allowRemoteCliControl": "允許此主機的 orca CLI 控制 Orca",
-          "allowRemoteCliControlHelp": "新主機預設開啟。允許在此主機上執行的 orca 命令開啟並操作這臺電腦上的 Orca 瀏覽器分頁，僅限此主機的工作區，且僅在主機連線期間有效；也允許此主機上由舊版 Orca 啟動的終端機，為其受監督的工作執行編排命令（check、inbox、send、ask、reply）。這些命令無法讀取檔案、剪貼簿或 Cookie。關閉時，這些命令只能存取此主機本身的 Orca 伺服器。",
+          "allowRemoteCliControl": "允許此主機控制其工作區中的 Orca 瀏覽器分頁",
+          "allowRemoteCliControlHelp": "新主機預設開啟。此主機上的代理程式和 orca 命令可以開啟、讀取和使用這臺電腦上的 Orca 瀏覽器分頁，僅限此主機的工作區，且僅在主機連線期間有效。它控制的分頁會顯示其名稱。此主機上由舊版 Orca 啟動的終端機也需要開啟此項，才能執行 orca 編排命令。它無法讀取你的檔案、剪貼簿或 Cookie。",
           "editTitle": "編輯 SSH 主機",
           "addTitle": "新增 SSH 主機",
           "editDescription": "更新此機器的連線詳情。變更將在下次連線時生效。",
@@ -13092,7 +13101,8 @@
           "oneDescription": "發佈者：{{value0}}。在你審查之前不會更新。",
           "manyDescription": "在你審查之前不會更新。",
           "review": "審查",
-          "dismiss": "關閉"
+          "dismiss": "關閉",
+          "movedInstalled": "在你審查之前會保持關閉。"
         },
         "PluginThemeUseNow": {
           "assignedLight": "已將 {{value0}} 設為淺色主題",
@@ -18654,6 +18664,9 @@
           "cancel": "取消",
           "add": "新增目錄",
           "body": "有連結要求顯示此目錄中的 {{value0}}。請只新增你信任之人的目錄。"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}}（{{value1}}）"
         }
       }
     },
@@ -19788,7 +19801,8 @@
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
         "worktree": "工作樹"
-      }
+      },
+      "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。"
     },
     "tab": {
       "bar": {
@@ -21916,7 +21930,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "代理程式正在使用此網頁"
+    "agentDriving": "代理程式正在使用此網頁",
+    "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
     "math": {
@@ -22897,6 +22912,15 @@
     "sameAsTextDefault": "與預設值相同 · {{value0}}",
     "chatChoicesNote": "沒有 CLI 旗標的 {{agent}} 模型或推理力度選項適用於聊天。",
     "composedChoicesNote": "{{agent}} 的推理力度和速度選項包含在模型引數中。"
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} 正在控制一個瀏覽器分頁",
+    "description": "此 SSH 主機上的代理程式可以開啟並使用其工作區中的 Orca 瀏覽器分頁。它控制的分頁會顯示其名稱。你可以在「設定 > SSH」中變更此項。",
+    "stop": "停止",
+    "disallow": "不允許",
+    "stopped": "在 Orca 重新啟動之前，{{host}} 將不再控制瀏覽器分頁。",
+    "disallowed": "{{host}} 已無法控制瀏覽器分頁。可在「設定 > SSH」中重新開啟。",
+    "failed": "無法停止 {{host}}。請在「設定 > SSH」中關閉其瀏覽器控制。"
   },
   "gitGraph": {
     "copyHash": "複製提交雜湊",

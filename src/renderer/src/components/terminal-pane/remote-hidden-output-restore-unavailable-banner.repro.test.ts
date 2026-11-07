@@ -1,13 +1,13 @@
 import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 
 // Remote-only recovery must tolerate transient null/slow host snapshots, recover hidden bytes and remain bounded when the host never answers; inject faults at serializeBuffer.
 
@@ -371,7 +371,7 @@ type RemotePaneDrive = {
 async function connectHiddenRemoteAgentPane(
   serializeBuffer: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
   const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
