@@ -27,6 +27,15 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: dependencies.hostId })
 }))
 
+// The host route's open-target hook reads the on-disk page cache; these tests cover the route's shell handoff.
+vi.mock('./use-host-document-open-target', () => ({
+  useHostDocumentOpenTarget: () => ({
+    routeParams: undefined,
+    onRouteParamClear: () => {},
+    onPageLocation: () => {}
+  })
+}))
+
 vi.mock('./PageRouteUnavailableScreen', () => ({
   PageRouteUnavailableScreen: () => {
     dependencies.refusals += 1
