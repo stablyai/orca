@@ -486,10 +486,10 @@
       "invariant": "A prompt occurrence leaves the input region only when an accepted reply answers it (a current host's provider acknowledgment, or an older host's whole-write acceptance as before) or the user collapses it to a strip above the composer, which writes nothing and keeps the card mounted with its partial answer; status-backed occurrences are told apart by the host wait's start, so view toggles and remounts preserve them while real clear/replacement supersedes them, and a transcript-only one is dropped when the view stops observing it; obsolete results cannot change replacements; selector groups wait for complete writes before pacing; refusal or unknown handoff never causes replay; a card retires an unsubmitted composer send without writing under it or losing its text, and the hidden composer cannot send or interrupt; Collapse or Escape folds a card without writing, never during an in-flight answer, and a new occurrence shows expanded again; the phone blocks only Send while a card is expanded and shows one card per occurrence; cancellation stops unsent groups and active dictation can stop.",
       "oracle": "Retained exact unchanged-source receipts remain the only current execution evidence. Reduced selectors have no fresh execution result. Historical pre-audit oracle account for changed sources: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Existing exact unchanged-selector receipts remain the only current execution evidence. Changed source selectors have no fresh execution result. Historical prior-source oracle account: Retained unchanged-selector receipts are the only current execution evidence. Reduced-source assertions await validation. Historical prior oracle: The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): After acknowledged phone replies with stale host status, the exact card disappears and Send is enabled; unknown, refused or unverifiable-settlement replies retain enabled choices, while an older host's accepted reply dismisses like an acknowledged one; a same-occurrence view toggle retains pending acknowledgment and real replacements discard it. A slow 32 KiB SSH answer completes all chunks before Enter; cancellation preserves issued bytes but omits remaining groups. Paired settlement invokes the actual provider and lost callbacks remain unknown; older hosts deliver ordinary messages, launch and selector groups once and their accepted answers dismiss as before. An answered card stays hidden across a view remount; a collapsed card is a strip that frees the composer and expands back; an identical question in a new wait shows again; a composer send caught by a new card keeps its bubble without submitting or clearing the line under it.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts src/main/runtime/terminal/input/runtime-terminal-writer.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts tests/e2e/native-chat-ssh-delivery.unit.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-composer.test.tsx src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts src/main/runtime/terminal/input/runtime-terminal-writer.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts tests/e2e/native-chat-ssh-delivery.unit.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts mobile/src/session/mobile-prompt-controller.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-cancel-ask.test.ts mobile/src/session/native-chat/input/use-mobile-native-chat-answer-send.test.ts mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts --maxWorkers=1",
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts --maxWorkers=2",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/components/native-chat/NativeChatInteractiveCard.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.prompt-card-input.test.tsx src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts src/renderer/src/lib/agent-paste-draft.test.ts src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts src/main/ipc/pty/ipc/write-input-user-input.test.ts src/main/ipc/pty/pty-write-ipc-validation.test.ts --maxWorkers=2",
         "ORCA_BACKGROUND_LAUNCH=1 mobile/node_modules/.bin/vitest run --config mobile/vitest.config.ts mobile/src/session/native-chat/MobileNativeChatView.prompt-presentation.test.ts mobile/src/session/native-chat/use-mobile-native-chat-controller.test.ts mobile/src/session/native-chat/MobileNativeChatView.failure-banner.test.ts --maxWorkers=2"
       ],
       "testFiles": [
@@ -499,7 +499,7 @@
         "src/renderer/src/components/native-chat/use-native-chat-prompt-card-presentation.test.ts",
         "src/renderer/src/components/native-chat/NativeChatResolvedView.turn-status.test.tsx",
         "src/renderer/src/components/native-chat/native-chat-interactive-prompt.test.ts",
-        "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts",
         "src/renderer/src/lib/agent-paste-draft.test.ts",
         "src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts",
         "src/main/ipc/pty/ipc/write-input-user-input.test.ts",
@@ -8101,9 +8101,9 @@
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host/testing/terminal-host.test.ts src/main/daemon/providers/routing/testing/daemon-pty-router.test.ts src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter.test.ts src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-completion-and-notification.test.ts src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts"
       ],
       "testFiles": [
         "src/main/providers/pty-process-inspection.test.ts",
@@ -8112,7 +8112,7 @@
         "src/main/daemon/providers/routing/testing/degraded-daemon-pty-provider.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "tests/e2e/remote-agent-completion-authority.unit.test.ts",
-        "src/renderer/src/runtime/runtime-terminal-inspection.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-inspection.test.ts",
         "src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-process-cadence.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-completion-and-notification.test.ts",
         "src/renderer/src/lib/agent-session/accounts/codex/codex-session-restart.test.ts",
@@ -8132,8 +8132,8 @@
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal/adoption/terminal-orphan-topology.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync-focus-intent.test.ts"
       ],
       "assertionRefs": [
@@ -8242,11 +8242,11 @@
           ]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts",
           "assertions": ["mirrors a new CLI tab after old-host recovery when $name"]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts",
           "assertions": [
             "serializes a newer convergence snapshot after an in-flight adoption conflict"
           ]
@@ -9352,7 +9352,7 @@
         "ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test tests/e2e/paired-client-first-terminal-unopened-host-worktree.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat.test.ts src/main/runtime/orca-runtime-hook-agent-status-projection.test.ts tests/e2e/session-tabs-decorative-title-fanout.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-hidden-replay.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-visibility-and-exit.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/parking/retention/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/runtime/hosted-terminals/streams/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments/runtime-environments-pairing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs/session-tabs.test.ts src/main/daemon/terminal-host/testing/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
@@ -9398,8 +9398,8 @@
         "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts",
         "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-reconciliation.test.ts",
         "src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-partial-reconciliation.test.ts",
-        "src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts",
-        "src/renderer/src/runtime/runtime-client-events.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/streams/remote-runtime-terminal-stall-recovery.test.ts",
+        "src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-activation-inventory-fallback.test.ts",
         "src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts",
         "tests/e2e/paired-remote-terminal-lossy-initial-snapshot.spec.ts",
@@ -9602,7 +9602,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/streams/remote-runtime-terminal-stall-recovery.test.ts",
           "assertions": [
             "restarts only the stream whose renderer delivery credit never settles",
             "keeps the oldest pending delivery deadline anchored while later frames settle",
@@ -10426,7 +10426,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/TerminalRemoteRuntimeReconnectBanner.test.tsx src/shared/remote-runtime/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime/control/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal/terminal-create-idempotency.test.ts src/main/runtime/terminal/launch/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/layout/detach/terminal-tab-strip-drop-target-geometry.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/runtime/hosts/platform-probe/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/runtime/hosts/platform-probe/public-ssh-state.test.ts src/main/ssh/connection/ssh-connection-manager.test.ts src/main/ssh/connection/ssh-connection.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/renderer/src/runtime/hosts/ssh/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -10476,8 +10476,8 @@
         "src/main/ssh/connection/ssh-connection-manager.test.ts",
         "src/main/ssh/connection/ssh-connection.test.ts",
         "src/preload/ssh-authority-forwarding.test.ts",
-        "src/renderer/src/runtime/runtime-client-events.test.ts",
-        "src/renderer/src/runtime/runtime-environment-ssh-state.test.ts",
+        "src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts",
+        "src/renderer/src/runtime/hosts/ssh/runtime-environment-ssh-state.test.ts",
         "src/shared/ssh-retained-payload-admission.test.ts"
       ],
       "assertionRefs": [
@@ -10612,13 +10612,13 @@
           ]
         },
         {
-          "file": "src/renderer/src/runtime/runtime-client-events.test.ts",
+          "file": "src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts",
           "assertions": [
             "partial runtime authority is rejected through the captured subscription callback before environment state receives it"
           ]
         },
         {
-          "file": "src/renderer/src/runtime/runtime-environment-ssh-state.test.ts",
+          "file": "src/renderer/src/runtime/hosts/ssh/runtime-environment-ssh-state.test.ts",
           "assertions": [
             "membership refresh prunes removed targets and reads only newly joined targets",
             "held replies from an old generation cannot replace a newer generation; failed full refresh preserves live state behind queued metadata",
@@ -14143,14 +14143,14 @@
       "invariant": "Only the current subscription attempt can cause renderer event work or reconnect recovery. Current early frames and other hosts survive; canceled late setup handles dispose.",
       "oracle": "Hold setup, clean up the bridge, deliver100 events and a replay, and require zero provider read dispatches/cache publications/recovery/re-subscriptions. Require initial/live delivery, same-ID replacement, rekey, stop during synchronous setup, sibling host survival and late disposal.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
       ],
       "testFiles": [
         "src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts",
         "src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts",
         "src/renderer/src/hooks/runtime-client-events-sync.test.ts",
         "src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts",
-        "src/renderer/src/runtime/runtime-client-events.test.ts",
+        "src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts",
         "src/preload/runtime-environment-subscriptions.test.ts"
       ],
       "assertionRefs": [
@@ -14171,7 +14171,17 @@
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts",
           "result": "passed",
           "durationSeconds": 2.12,
-          "summary": "41 tests /6 suites pass;13 new regressions have12 failures /1 pass against original production source."
+          "summary": "41 tests /6 suites pass;13 new regressions have12 failures /1 pass against original production source.",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts"
+        },
+        {
+          "date": "2026-11-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/runtime-client-events-sync-ownership.test.ts src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-ownership.test.ts src/renderer/src/hooks/runtime-client-events-sync.test.ts src/renderer/src/hooks/ipc-events/runtime-reconnect-host-status.test.ts src/renderer/src/runtime/rpc/subscriptions/runtime-client-events.test.ts src/preload/runtime-environment-subscriptions.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.36,
+          "summary": "64 tests / 6 suites pass after defining-owner relocation and partial-authority test-policy cleanup. Earlier red/green evidence remains historical; no new mutation or native lifecycle claim."
         }
       ],
       "runtimeBudget": {
@@ -15489,7 +15499,7 @@
       "invariant": "Cold parking or restarting a host renderer/runtime never retires a live PTY's runtime-graph leaf, erases a paired viewer's last verified leaf binding merely because the host temporarily publishes pending-handle, or drops the surviving PTY's history writer. A split request for a cold-parked tab replays against its stable source leaf after exact-tab remount without switching workspaces or focusing the tab. The paired stream, input, resize, pane identity, multi-pane routing, checkpoint, and output log converge to the authoritative ready handle; the binding clears only after positive replacement, mismatch, or two consecutive authoritative absence observations without an intervening ready surface.",
       "oracle": "The retained unchanged-source receipts are the only current execution evidence; reduced-source assertions await validation. Historical oracle account (not a current claim for changed sources): Cold-park a host-owned pane while a paired client actively views it, require the host manager to unmount, then type through the client and require the same PTY to receive and echo the token without any disconnected sample. Restart a real pinned-port headless runtime while its daemon PTY survives, observe a pending-handle snapshot, require the viewer binding never to become empty, then require rendered output, focused keyboard input, a post-recovery window resize, the pre-restart checkpoint, and post-restart output-log append to reach the same PTY and process before authoritative close clears the binding. Invoke the real `orca-dev terminal split` against a cold-parked renderer-owned tab, require only that tab to acquire and release the existing background-mount lease, complete before the historical timeout, preserve the active worktree/tab/focus, then reveal two rendered panes and type through each while retaining the stable source leaf and PTY. Deterministically require synchronous stable-leaf replay after lifecycle registration and fail closed for a missing or stale leaf. Separately publish multi-pane parked leaves with exact pane runtime IDs and require per-PTY disposal to remove only the retired leaf.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/parking/output-watchers/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/layout/split/terminal-pane-split-request-routing.test.ts src/renderer/src/components/terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking.test.ts src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery-regressions.test.ts src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-orphan-recovery-adoption-regressions.test.ts src/renderer/src/runtime/hosted-terminals/recovery/panes/web-session-terminal-pending-handle-recovery.test.ts tests/e2e/host-cold-park-remote-subscriber.unit.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-protocol-compatibility.test.ts src/main/daemon/providers/adapter/testing/daemon-pty-adapter-history-recovery.test.ts --reporter=dot",
         "pnpm exec playwright test tests/e2e/host-parked-pane-remote-viewer.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-parked-cli-split.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -15502,11 +15512,11 @@
         "src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge-split.test.ts",
         "src/main/runtime/terminal/layout/orca-runtime-terminal-split-authority.test.ts",
         "src/renderer/src/runtime/sync-runtime-graph-parked-leaf.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-recovery-regressions.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts",
-        "src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery-regressions.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-orphan-recovery-adoption-regressions.test.ts",
+        "src/renderer/src/runtime/hosted-terminals/recovery/panes/web-session-terminal-pending-handle-recovery.test.ts",
         "src/main/daemon/providers/adapter/testing/daemon-pty-adapter-cold-restore-reanchor.test.ts",
         "src/main/daemon/providers/adapter/testing/daemon-pty-adapter-session-adoption.test.ts",
         "src/main/daemon/providers/adapter/testing/daemon-pty-adapter-protocol-compatibility.test.ts",
@@ -15560,28 +15570,28 @@
           ]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-mixed-version.test.ts",
           "assertions": ["mirrors a new CLI tab after old-host recovery when $name"]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption-regressions.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-orphan-recovery-adoption-regressions.test.ts",
           "assertions": [
             "retries a transient thrown adoption on an unchanged semantic frame",
-            "retains the client epoch and retries when the post-adoption list has %s",
-            "preserves the prior inventory and mirror bindings after a post-adoption %s and retries",
-            "merges host-projected %s sibling state after adoption without treating pending as exited",
+            "retains the client epoch and retries when the post-adoption list has $failure",
+            "preserves prior terminal bindings after a post-adoption $failure and retries",
+            "merges host-projected $verdict sibling state after adoption without treating pending as exited",
             "does not apply an adoption result after the local tab closes while adoption is blocked",
             "does not apply an adoption result after the local tab moves groups while adoption is blocked"
           ]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/web-session-terminal-orphan-recovery.test.ts",
           "assertions": [
             "serializes a newer convergence snapshot after an in-flight adoption conflict"
           ]
         },
         {
-          "file": "src/renderer/src/runtime/web-session-terminal-pending-handle-recovery.test.ts",
+          "file": "src/renderer/src/runtime/hosted-terminals/recovery/panes/web-session-terminal-pending-handle-recovery.test.ts",
           "assertions": [
             "retries a transient pane-resolution failure for an unchanged replayed snapshot",
             "retries a disconnected pane resolution for an unchanged replayed snapshot"

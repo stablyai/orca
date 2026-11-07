@@ -11,10 +11,10 @@ import { AntigravityProviderSignInArea } from './AntigravityProviderSignInArea'
 import {
   callAntigravityChatAuthConfig,
   callAntigravityChatSignIn
-} from '@/runtime/runtime-antigravity-accounts-client'
-import { observeAntigravityChatSignIn } from '@/runtime/antigravity-chat-sign-in-status'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
+} from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { observeAntigravityChatSignIn } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import type { AntigravityChatAuthConfig } from '../../../../shared/antigravity-chat-auth-config'
 import type { AntigravityChatSignInStatus } from '../../../../shared/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -36,7 +36,7 @@ function follow(owner: RuntimeClientTarget): void {
 vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => streams.capability
 }))
-vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityChatAuthConfig: vi.fn(),
   callAntigravityChatSignIn: vi.fn(async () => ({ flowId: 'new-flow' })),
   subscribeAntigravityChatSignIn: vi.fn(

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   readJiraStatus: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   assertRuntimeEnvironmentCapability: mocks.assertRuntimeEnvironmentCapability
 }))
 

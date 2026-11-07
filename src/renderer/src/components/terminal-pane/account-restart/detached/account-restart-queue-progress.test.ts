@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
-import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 import {
   installCodexDetachedPaneRestartExecutor,

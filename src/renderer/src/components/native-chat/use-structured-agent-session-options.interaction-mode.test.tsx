@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import {
   mocks,
@@ -7,18 +8,18 @@ import {
   REOPENED,
   currentValue
 } from './use-structured-agent-session-options.test-fixture'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
-import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
+
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useStructuredAgentSessionOptionStamp } from './structured-agent-session-status-hooks'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpc>()),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 

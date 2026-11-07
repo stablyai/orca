@@ -10,7 +10,7 @@ import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
 import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

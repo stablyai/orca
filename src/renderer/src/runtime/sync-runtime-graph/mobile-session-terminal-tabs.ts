@@ -17,7 +17,7 @@ import {
   isUnifiedTabActiveInActiveGroup
 } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,

@@ -4,7 +4,7 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 
 import { nativeChatAttachmentOwnerUnchanged } from './native-chat-resolved-path-ownership'
 
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { resolveNativeChatRuntimeSessionAttachmentOwner } from './native-chat-attachment-upload'
 it.each([false, true])(
   'accepts an upload after re-pair only with proven host continuity=%s',

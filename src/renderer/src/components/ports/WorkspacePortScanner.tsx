@@ -9,7 +9,7 @@ import {
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
 } from '@/lib/workspace-ports/workspace-port-actions'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,

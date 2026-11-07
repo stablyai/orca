@@ -10,9 +10,9 @@ import {
 } from '../../../../shared/jira/jira-detail-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
-} from '../runtime-rpc-client'
+} from '../rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
 import { rowLessSourceTarget } from '../../lib/default-creation-host'
 import type { RowLessSource as RuntimeJiraSettings } from '../../lib/default-creation-host'

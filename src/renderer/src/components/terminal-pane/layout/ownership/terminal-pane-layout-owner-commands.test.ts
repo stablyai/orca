@@ -26,7 +26,9 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({}) } }))
 vi.mock('@/lib/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId

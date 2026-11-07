@@ -25,7 +25,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Main answers the window's layout commands; its frames draw the browser tabs.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

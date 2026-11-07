@@ -36,7 +36,7 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 import { createPaneManagerOptionsTestContext } from '../../mounting/terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

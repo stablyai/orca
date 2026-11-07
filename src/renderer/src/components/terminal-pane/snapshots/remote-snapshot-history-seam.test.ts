@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { writeHeadlessTerminal } from '../pty-connection/test-fixtures/pty-connection-test-async'
 import { buildFoldedImageReplayWrites } from './terminal-snapshot-replay-paint'
-import { stubRuntimeEnvironmentBridge } from '../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 // Host push recovery can follow a byte gap; never splice stale client history under a historyless image. Drive real wire transport and the production drain’s paint function.
 
@@ -55,7 +55,9 @@ describe('pushed remote snapshots never splice stale history above the image', (
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doUnmock(
+      '../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
     vi.clearAllMocks()
     subscriptionCallbacks = null
     runtimeSubscribe.mockImplementation(

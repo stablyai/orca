@@ -9,7 +9,7 @@ import { terminalLogicalLinkHasOscLink } from '../../../../../../shared/terminal
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import type { TerminalFileContext } from '../../host-files/terminal-file-path-mapping'
-import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
 import {
   fileLinkTargetExists,
   mayCheckFileLinkTargetUnprompted,
@@ -18,8 +18,8 @@ import {
   type FileLinkTarget
 } from './terminal-file-link-target'
 import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 type FileLinkHitTestDeps = {
   startupCwd: string

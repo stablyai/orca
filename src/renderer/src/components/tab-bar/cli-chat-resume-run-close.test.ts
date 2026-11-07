@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
@@ -63,10 +64,13 @@ vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
 // Switch-on, main opens the chat's tab and its frame draws it.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(
     await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await importOriginal()),
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>

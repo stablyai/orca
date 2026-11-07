@@ -1,12 +1,12 @@
 import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
+import { splitWebRuntimeTerminal } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-split'
 import {
   isHostTabPane,
   notifyHostTabSplitRefused,
   readHostPublishedSplitSourcePtyId
-} from '@/runtime/web-runtime-split-source-pty'
+} from '@/runtime/hosted-terminals/actions/web-runtime-split-source-pty'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { resolveSplitCwd, type PaneCwdMap } from './resolve-split-cwd'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'

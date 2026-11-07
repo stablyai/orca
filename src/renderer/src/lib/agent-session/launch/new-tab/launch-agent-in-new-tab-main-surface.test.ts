@@ -14,7 +14,7 @@ import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -49,7 +49,7 @@ vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () =>
 createStoreCascadesMockApi()
 
 import { makeFolderWorkspace as makeLaunchFolderWorkspace } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 afterEach(() => {
   vi.unstubAllGlobals()

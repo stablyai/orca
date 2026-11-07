@@ -1,4 +1,4 @@
-import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
+import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 
 export function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
   if (result.source === 'local') {

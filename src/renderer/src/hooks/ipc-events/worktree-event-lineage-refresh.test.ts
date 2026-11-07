@@ -11,7 +11,7 @@ import {
   makeWorktree,
   TEST_REPO
 } from '../../store/slices/worktrees-slice-test-fixtures'
-import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
 import { WORKTREE_SORT_ORDER_BATCH_WINDOW_MS } from './worktree-sort-order-publication-batch'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'

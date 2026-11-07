@@ -1,6 +1,6 @@
 import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
 import type { LinearComment, LinearIssue } from '../../../../shared/linear/issue-types'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
   getLinearRuntimeTarget,
   type LinearCommentResult,

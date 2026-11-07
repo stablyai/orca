@@ -16,7 +16,7 @@ import { runWorktreeDelete } from '../../../../sidebar/workspace-actions/deletio
 import {
   connectRuntimeEnvironmentSshTarget,
   resyncRuntimeEnvironmentSshTargets
-} from '@/runtime/runtime-environment-ssh-state'
+} from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { canConnectSshStatus, isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { sshConnectingLabel, sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { SSH_RECONNECT_UI_TIMEOUT_MS, withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'

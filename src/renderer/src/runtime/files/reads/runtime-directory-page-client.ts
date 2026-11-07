@@ -13,7 +13,7 @@ import {
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { getRemoteFileArgs } from '../runtime-file-routing'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { readRuntimeDirectory } from './runtime-directory-read'
 
 function hostServesDirPages(environmentId: string): boolean {

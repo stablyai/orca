@@ -5,7 +5,7 @@ import { createBrowserMockApi } from '../browser-slice-test-harness'
 import { createTestStoreDrawnFromMain } from '../browser-slice-drawn-from-main.test-fixture'
 import { makeAnnotation } from './browser-annotation-test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

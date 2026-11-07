@@ -49,7 +49,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
     mocks.readChat(...args)
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (
     target: Parameters<NonNullable<typeof mocks.renderer>['call']>[0],
     method: string,
@@ -59,7 +59,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
       throw new Error('renderer not bound')
     }
     return mocks.renderer.call(target, method, params)
-  },
+  }
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({

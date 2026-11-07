@@ -47,7 +47,7 @@ import { launchStructuredWorktreeSession } from './worktree-creation-structured-
 
 // Main's answer to the window's layout commands, as a switch-on build sends them, and the first
 // terminals it starts for the window's new tabs.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

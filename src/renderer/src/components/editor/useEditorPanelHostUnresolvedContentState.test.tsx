@@ -56,7 +56,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR
