@@ -3,6 +3,8 @@ import type { RecognizerConfigInput } from './stt-worker-model-config'
 export type SttRecognizerInit = RecognizerConfigInput & {
   /** The node_modules directory holding this model's engine package. */
   speechModulesDir: string
+  /** Silero VAD GGUF; when present, offline models commit text at each pause. */
+  vadModelPath?: string
 }
 
 export type SttRecognizerEvent =

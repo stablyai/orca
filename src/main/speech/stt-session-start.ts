@@ -28,6 +28,7 @@ import {
 } from './stt-worker-startup'
 import { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
 import { STT_WORKER_EXITED_ERROR } from './stt-worker-process'
+import { sileroVadModelPath } from './speech-vad-model'
 
 export async function startSttDictation(
   state: SttSessionState,
@@ -168,10 +169,14 @@ export function spawnSttEngine(
   manifest: SpeechModelManifest
 ): SttEngine {
   const files = manifest.files ?? []
-  const speechModulesDir = getSpeechEngineModulesDir(speechEngineForModelFiles(files))
+  const speechEngine = speechEngineForModelFiles(files)
+  const speechModulesDir = getSpeechEngineModulesDir(speechEngine)
   if (!speechModulesDir) {
     throw new Error(LOCAL_SPEECH_UNAVAILABLE_ERROR)
   }
+  // A VAD fetched now serves the next engine start.
+  const vadModelPath =
+    speechEngine === 'transcribe-cpp' ? sileroVadModelPath(state.modelManager) : undefined
   clearSttIdleTeardownTimer(state)
   const worker = state.spawnWorker()
   const readyPromise = waitForSttWorkerReady(worker, START_DICTATION_TIMEOUT_MS)
@@ -210,7 +215,8 @@ export function spawnSttEngine(
     files,
     hotwordsFilePath: config.hotwordsFilePath,
     modelingUnit: manifest.modelingUnit,
-    language: config.language
+    language: config.language,
+    vadModelPath
   })
   return engine
 }
