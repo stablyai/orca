@@ -40,11 +40,6 @@
         }
       }
     },
-    "2fa554297f6c": {
-      "name": "agentSession.subscribeStatus#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
-    },
     "30f2a42bed00": {
       "activeWorktreePath": "/repo/feature",
       "refreshing": false,
@@ -284,40 +279,6 @@
       "screenState": {
         "kind": "error",
         "message": "The host sent a reply this app could not read (aiVault.listSessions)"
-      }
-    },
-    "b281b8e61f00": {
-      "name": "status.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
       }
     },
     "b6a16cc83e18": {
@@ -568,6 +529,45 @@
         }
       }
     },
+    "daf52dc85a58": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -620,8 +620,8 @@
       {
         "id": "aivault-history-scan-fulfilled.normal:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "cb5715e0f275"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "cb5715e0f275"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -632,8 +632,8 @@
       {
         "id": "aivault-history-scan-fulfilled.normal:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "cb5715e0f275"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "cb5715e0f275"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -644,8 +644,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-absent:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "d4b9d334dde7"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "d4b9d334dde7"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -656,8 +656,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-absent:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "d4b9d334dde7"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "d4b9d334dde7"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -668,8 +668,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-null:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "c7ccb71459eb"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c7ccb71459eb"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -680,8 +680,8 @@
       {
         "id": "aivault-history-scan-fulfilled.result-null:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "c7ccb71459eb"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c7ccb71459eb"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -692,8 +692,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-ok-missing:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "2d708a37d5ea"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "2d708a37d5ea"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -704,8 +704,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-ok-missing:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "2d708a37d5ea"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "2d708a37d5ea"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -716,8 +716,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-string-error:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "c5a0bb1d4a76"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c5a0bb1d4a76"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -728,8 +728,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-string-error:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "c5a0bb1d4a76"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c5a0bb1d4a76"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -740,8 +740,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-object-error:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "c967ce34a622"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c967ce34a622"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -752,8 +752,8 @@
       {
         "id": "aivault-history-scan-fulfilled.inner-false-object-error:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "c967ce34a622"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "c967ce34a622"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -764,8 +764,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "3f0d3328af85"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "3f0d3328af85"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -776,8 +776,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "3f0d3328af85"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "3f0d3328af85"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -788,8 +788,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused-no-message:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "f37a7212d893"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "f37a7212d893"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -800,8 +800,8 @@
       {
         "id": "aivault-history-scan-fulfilled.outer-refused-no-message:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "f37a7212d893"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "f37a7212d893"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -812,8 +812,8 @@
       {
         "id": "aivault-history-scan-fulfilled.method-not-found:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "d16bd9a670c3"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "d16bd9a670c3"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -824,8 +824,8 @@
       {
         "id": "aivault-history-scan-fulfilled.method-not-found:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "d16bd9a670c3"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "d16bd9a670c3"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -836,8 +836,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "8fc90c2a1d6c", "7d9b0e9536df"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "8fc90c2a1d6c", "7d9b0e9536df"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -848,8 +848,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "8fc90c2a1d6c", "54a7c3bc47d2"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "8fc90c2a1d6c", "54a7c3bc47d2"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -860,8 +860,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection-no-message:ready",
         "observation": {
-          "sender": ["b281b8e61f00", "6919c6d453c4", "7d9b0e9536df"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "6919c6d453c4", "7d9b0e9536df"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -872,8 +872,8 @@
       {
         "id": "aivault-history-scan-fulfilled.transport-rejection-no-message:cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "6919c6d453c4", "54a7c3bc47d2"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
+          "sender": ["daf52dc85a58", "6919c6d453c4", "54a7c3bc47d2"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18", "7f300f2af8fd"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

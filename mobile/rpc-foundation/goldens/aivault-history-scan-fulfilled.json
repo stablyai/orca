@@ -4,11 +4,6 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
-    "2fa554297f6c": {
-      "name": "agentSession.subscribeStatus#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
-    },
     "44a27dbf05e2": {
       "name": "status.get#1",
       "ordinal": 3,
@@ -39,40 +34,6 @@
             "id": "s1"
           }
         ]
-      }
-    },
-    "b281b8e61f00": {
-      "name": "status.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
       }
     },
     "b6a16cc83e18": {
@@ -123,6 +84,45 @@
         }
       }
     },
+    "daf52dc85a58": {
+      "name": "status.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -138,8 +138,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["b281b8e61f00", "cb5715e0f275"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "cb5715e0f275"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -150,8 +150,8 @@
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["b281b8e61f00", "cb5715e0f275"],
-          "payloads": ["2fa554297f6c", "44a27dbf05e2", "b6a16cc83e18"],
+          "sender": ["daf52dc85a58", "cb5715e0f275"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "b6a16cc83e18"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

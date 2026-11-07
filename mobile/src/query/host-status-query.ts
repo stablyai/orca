@@ -3,6 +3,7 @@ import type { HostStatusReply } from '../transport/host-status-reply-schema'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
+import { readViewBase } from './host-read-client'
 
 export type HostStatusClient = UnvalidatedRpcRequestPort &
   Partial<Pick<RpcClient, 'getState' | 'getGeneration' | 'getLastConnectedAt' | 'requestRoute'>>
@@ -46,8 +47,10 @@ function sendStatusGet(client: HostStatusClient, options: SendRequestOptions | u
 // The live direct connection that answers this client's status.get, or null when none may hold an answer.
 // status.get carries no params, so a view that routes by params sends it where its base client would.
 function statusConnection(
-  client: HostStatusClient
+  view: HostStatusClient
 ): { connection: HostStatusClient; epoch: string } | null {
+  // A query's read view shares its connection's status; it still sends through the view.
+  const client = readViewBase(view)
   const route = client.requestRoute?.(undefined)
   if (route) {
     return route.intermediary || route.client === client ? null : statusConnection(route.client)

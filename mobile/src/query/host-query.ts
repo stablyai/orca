@@ -108,7 +108,8 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
-  useHostConnectionInvalidation(hostId, enabled ? client : null)
+  // Watch even while disabled: a query gated on the connection must still see the connected edge that re-enables it.
+  useHostConnectionInvalidation(hostId, client)
   // Same options object while nothing changed (target and input count by value), so TanStack's per-render setOptions is a no-op.
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
