@@ -27,15 +27,23 @@ import { FileReader } from './MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { PaneEdgeNavigationOverlay } from '../navigation/edge-arrows/edge-navigation-context'
+import { useSessionEdgeNavigation } from './use-session-edge-navigation'
 
 export function MobileSessionActiveContent({
-  controller
+  controller,
+  obscured = false
 }: {
   controller: MobileSessionController
+  obscured?: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
+  const { terminalTarget, contentTarget, navigateSessionTabs } = useSessionEdgeNavigation({
+    controller,
+    obscured
+  })
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
   const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
   const {
@@ -181,6 +189,7 @@ export function MobileSessionActiveContent({
           }
           keyboardLift={keyboardLift}
         />
+        <PaneEdgeNavigationOverlay target={contentTarget} bottomInset={keyboardLift} />
         {toastMessage && (
           <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>
@@ -210,6 +219,7 @@ export function MobileSessionActiveContent({
               : undefined
           }
         />
+        <PaneEdgeNavigationOverlay target={contentTarget} bottomInset={keyboardLift} />
         {toastMessage && (
           <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>
@@ -229,6 +239,7 @@ export function MobileSessionActiveContent({
           bottomInset={controller.insets.bottom}
           onToast={showToast}
         />
+        <PaneEdgeNavigationOverlay target={contentTarget} bottomInset={keyboardLift} />
         {toastMessage && (
           <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>
@@ -364,6 +375,9 @@ export function MobileSessionActiveContent({
                   sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
                   getSendCompletionGeneration={controller.getSendCompletionGeneration}
                   keyboardInset={keyboardLift}
+                  obscured={obscured}
+                  canNavigateRight={controller.visibleTabs.length > 1}
+                  onNavigateHorizontal={navigateSessionTabs}
                   // A workspace routed to another server stops with that server, whose name the phone lacks.
                   hostName={executionHost === undefined && hostProfile ? hostTitle : null}
                   onOpenUrlInOrca={openUrlInOrca}
@@ -382,6 +396,9 @@ export function MobileSessionActiveContent({
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
+        {!controller.showNativeChat && activeHandle ? (
+          <PaneEdgeNavigationOverlay target={terminalTarget} bottomInset={keyboardLift} />
+        ) : null}
         {toastMessage && (
           <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
             <Text style={styles.toastText}>{toastMessage}</Text>

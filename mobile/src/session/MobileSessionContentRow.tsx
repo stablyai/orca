@@ -11,7 +11,13 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
 
-export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
+export function MobileSessionContentRow({
+  controller,
+  obscured = false
+}: {
+  controller: MobileSessionController
+  obscured?: boolean
+}) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
@@ -47,7 +53,7 @@ export function MobileSessionContentRow({ controller }: { controller: MobileSess
             </Pressable>
           </View>
         ) : null}
-        <MobileSessionActiveContent controller={controller} />
+        <MobileSessionActiveContent controller={controller} obscured={obscured} />
         {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
         <MobileSessionCommandDock controller={controller} />
         <MobileDictationStatusAnnouncement dictation={dictation} />

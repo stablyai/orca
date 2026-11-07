@@ -1,3 +1,4 @@
+import { useMemo, useRef, type ReactNode } from 'react'
 import { MobileFileMediaPreview } from './MobileFileMediaPreview'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { Text, View } from 'react-native'
@@ -19,6 +20,20 @@ import {
   MobileStateView
 } from '../components/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import {
+  createRepeatingDirectionHandle,
+  PaneEdgeNavigationOverlay,
+  scrollPaneViewport,
+  type EdgeDirection,
+  type EdgeNavigationTarget
+} from '../navigation/edge-arrows/edge-navigation-context'
+
+const previewPaneStyle = {
+  flex: 1,
+  minHeight: 0,
+  position: 'relative',
+  overflow: 'hidden'
+} as const
 
 type Props = {
   preview: MobileFilePreviewResult
@@ -37,11 +52,38 @@ type Props = {
   onOpenFile?: (pathText: string) => void
   /** Null where the only retry is a re-dial this document cannot make. */
   onRetry: (() => void) | null
+  onBack?: () => void
+  obscured?: boolean
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const onBackRef = useRef(options.onBack)
+  onBackRef.current = options.onBack
+
+  const previewTarget = useMemo<EdgeNavigationTarget>(
+    () => ({
+      id: `file-preview:${options.relativePath}`,
+      kind: 'content-window',
+      obscured: options.obscured,
+      preparePress: (direction: EdgeDirection, paneNode?: unknown) => {
+        if (direction === 'up' || direction === 'down') {
+          return createRepeatingDirectionHandle(() => {
+            scrollPaneViewport(paneNode, direction)
+          }, true)
+        }
+        return createRepeatingDirectionHandle(() => {
+          const res = scrollPaneViewport(paneNode, direction)
+          if (!res.scrolled && direction === 'left') {
+            onBackRef.current?.()
+          }
+        }, direction === 'right')
+      }
+    }),
+    [options.obscured, options.relativePath]
+  )
+
   if (preview.status === 'loading') {
     return <MobileStateView loading title={preview.message} />
   }
@@ -53,7 +95,10 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
   }
   if (preview.status === 'empty') {
     return options.editable ? (
-      <EditablePreviewSource {...options} />
+      <View style={previewPaneStyle}>
+        <EditablePreviewSource {...options} />
+        <PaneEdgeNavigationOverlay target={previewTarget} />
+      </View>
     ) : (
       <MobileStateView icon={FileText} title={t('files.filePreviewBody.emptyFile', 'Empty file')} />
     )
@@ -80,21 +125,30 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       </View>
     )
   }
+  const wrapWithEdgeArrows = (node: ReactNode) => (
+    <View style={previewPaneStyle}>
+      {node}
+      <PaneEdgeNavigationOverlay target={previewTarget} />
+    </View>
+  )
+
   if (preview.kind === 'markdown') {
-    return options.editable ? (
-      <EditablePreviewSource {...options} />
-    ) : (
-      <MobileFileMarkdownPreview
-        mode={options.markdownMode}
-        relativePath={options.relativePath}
-        client={options.client}
-        worktreeId={options.worktreeId}
-        content={preview.content}
-        truncated={preview.truncated}
-        byteLength={preview.byteLength}
-        initialLine={options.lineColumn?.line}
-        onOpenFile={options.onOpenFile}
-      />
+    return wrapWithEdgeArrows(
+      options.editable ? (
+        <EditablePreviewSource {...options} />
+      ) : (
+        <MobileFileMarkdownPreview
+          mode={options.markdownMode}
+          relativePath={options.relativePath}
+          client={options.client}
+          worktreeId={options.worktreeId}
+          content={preview.content}
+          truncated={preview.truncated}
+          byteLength={preview.byteLength}
+          initialLine={options.lineColumn?.line}
+          onOpenFile={options.onOpenFile}
+        />
+      )
     )
   }
   if ((preview.kind === 'svg' || preview.kind === 'html') && !preview.truncated) {
@@ -116,26 +170,28 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         />
       )
 
-    return preview.kind === 'svg' ? (
-      <MobileSvgPreview
-        markup={content}
-        title={options.title}
-        notice={notice}
-        renderSource={renderSource}
-      />
-    ) : (
-      <MobileHtmlPreview
-        html={content}
-        initialMode={options.lineColumn?.line ? 'source' : 'preview'}
-        notice={notice}
-        renderSource={renderSource}
-      />
+    return wrapWithEdgeArrows(
+      preview.kind === 'svg' ? (
+        <MobileSvgPreview
+          markup={content}
+          title={options.title}
+          notice={notice}
+          renderSource={renderSource}
+        />
+      ) : (
+        <MobileHtmlPreview
+          html={content}
+          initialMode={options.lineColumn?.line ? 'source' : 'preview'}
+          notice={notice}
+          renderSource={renderSource}
+        />
+      )
     )
   }
   if (options.editable) {
-    return <EditablePreviewSource {...options} />
+    return wrapWithEdgeArrows(<EditablePreviewSource {...options} />)
   }
-  return (
+  return wrapWithEdgeArrows(
     <MobileFilePreviewSourceText
       relativePath={options.relativePath}
       content={preview.content}
