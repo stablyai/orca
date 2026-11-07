@@ -1,3 +1,4 @@
+import type { JournalWorkAuthority } from './journal-observer-read'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import {
@@ -67,6 +68,53 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
     // Spans more than one reader page.
     expect(expected[13].length).toBeGreaterThan(256)
     expect(await answers(sql)).toEqual(expected)
+    const authority: JournalWorkAuthority = {
+      handle: 'this-open',
+      record: {
+        currentFence: 1,
+        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+      },
+      child: { fence: 1, heldSends: [] },
+      handingOver: [],
+      continuingUnadmitted: [],
+      finalizing: [],
+      openedThrough: await sql.physicalCursor(),
+      reopenFloor: null,
+      operationalRevision: 0,
+      stopRevision: 0,
+      stop: null
+    }
+    const observed = await sql.observer({
+      authority,
+      start: 0,
+      floor: 0,
+      firstInputSubmissionKey: null
+    })
+    expect(observed.work).toMatchObject({
+      liveFence: 1,
+      working: true,
+      activeTurn: { turnId: 'turn-1' }
+    })
+    expect(observed.state).toEqual(expected[19])
+    const ended = await sql.observer({
+      authority: {
+        ...authority,
+        ended: { fence: 1, rootGone: true, cause: 'exit' },
+        operationalRevision: 1
+      },
+      start: 0,
+      floor: 0,
+      firstInputSubmissionKey: null
+    })
+    expect(ended.physicalCursor).toEqual(observed.physicalCursor)
+    expect(ended.work).toMatchObject({
+      liveFence: null,
+      working: false,
+      activeTurn: null,
+      latestTurn: { itemId: 'orca:turn-1', turn: { state: 'interrupted' } }
+    })
+    expect(ended.state.summary).toMatchObject({ status: 'idle', turnOutcome: 'interruption' })
+    expect(structuredClone(ended)).toEqual(ended)
   } finally {
     await pool.close()
   }

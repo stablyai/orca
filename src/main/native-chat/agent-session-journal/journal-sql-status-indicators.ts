@@ -14,7 +14,8 @@ import type {
 export function readJournalSqlStatusIndicators(
   state: JournalSqlStatusContext,
   input: JournalStatusIndicatorRead,
-  scope?: StructuredAgentSessionWorkScope
+  scope?: StructuredAgentSessionWorkScope,
+  firstInputSubmissionKey?: string | null
 ): JournalStatusIndicators {
   const order = state
   const { epoch } = state
@@ -22,10 +23,13 @@ export function readJournalSqlStatusIndicators(
   const failed = stop?.settle?.failedOn
   const openedAfter = failed && 'openedAfter' in failed ? failed.openedAfter : undefined
   const submissions = order.statusInputs(openedAfter)
-  const first = readJournalSqlFirstInputId(state, input.start, input.floor, submissions)
+  const first = firstInputSubmissionKey
+    ? null
+    : readJournalSqlFirstInputId(state, input.start, input.floor, submissions)
   return {
     acceptedSendKey: `${epoch}:${submissions.findLast((send) => send.dispatchState === 'accepted')?.clientMessageId ?? ''}`,
-    firstInputSubmissionKey: first === null ? null : JSON.stringify([epoch, first]),
+    firstInputSubmissionKey:
+      firstInputSubmissionKey ?? (first === null ? null : JSON.stringify([epoch, first])),
     submissionCount: order.submissionCount,
     stopping: readJournalStopping(state, stop, submissions, scope)
   }

@@ -77,6 +77,7 @@ it.each(['memory', 'sql'] as const)(
         journalDispatchRowBuilder(() => state, {
           clientMessageId: id,
           state: 'accepted',
+          providerIdentity: null,
           fence: 0
         })(1, submittedAt)
       )
@@ -117,6 +118,7 @@ it.each(['memory', 'sql'] as const)(
   (backend) => {
     const state = fixture(backend)
     const stop: JournalLatestStop = {
+      sequence: 10,
       event: { reason: 'user-stop', at: 1 },
       settle: { settling: false, failedOn: { openedAfter: 10 } }
     }
@@ -149,6 +151,7 @@ it.each(['memory', 'sql'] as const)(
       journalDispatchRowBuilder(() => state, {
         clientMessageId: 'later',
         state: 'accepted',
+        providerIdentity: null,
         fence: 0
       })(12, 1)
     )

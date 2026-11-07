@@ -1,3 +1,4 @@
+import type { JournalStatusState } from '../../agent-session-journal/journal-status-state'
 import type {
   StructuredAgentSessionWorkEvidence,
   StructuredAgentSessionSeenEnd,
@@ -258,4 +259,19 @@ export class StructuredAgentSessionWorkPolicy {
       ? { ...latest, turn: { ...latest.turn, state: 'unverifiable' } }
       : null
   }
+}
+
+/** Project proven child death immediately, before durable settlement can land. */
+export function withStructuredAgentSessionDiedTurnVerdict(
+  state: JournalStatusState,
+  died: { turnId: string } | null
+): JournalStatusState {
+  const request = state.latestRequest
+  return died &&
+    state.summary.status === 'idle' &&
+    request?.kind === 'turn' &&
+    request.id === died.turnId &&
+    request.turnState === 'running'
+    ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
+    : state
 }

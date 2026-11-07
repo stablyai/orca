@@ -9,6 +9,7 @@ import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-s
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import { withStructuredAgentSessionDiedTurnVerdict as withDiedTurnVerdict } from './structured-agent-session-work-policy'
 import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
 
 import type { StructuredAgentSessionWorkEvidence } from './structured-agent-session-work-evidence'
@@ -155,19 +156,4 @@ export class StructuredAgentSessionJournalProjections {
     }
     return projection
   }
-}
-
-/** Project proven child death immediately, before durable settlement can land. */
-function withDiedTurnVerdict(
-  state: StructuredAgentSessionStatusState,
-  died: { turnId: string } | null
-): StructuredAgentSessionStatusState {
-  const request = state.latestRequest
-  return died &&
-    state.summary.status === 'idle' &&
-    request?.kind === 'turn' &&
-    request.id === died.turnId &&
-    request.turnState === 'running'
-    ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
-    : state
 }

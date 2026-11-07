@@ -1,3 +1,5 @@
+import { journalWroteBeforeOpen } from './replay/journal-cursor'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalSqlOwner } from './journal-sql-owner'
@@ -81,6 +83,8 @@ type AnswerFacts = (
 /** A live ownership token and worker ports; no reduced chat or writable connection lives here. */
 export class SqlAgentSessionJournal {
   readonly reads: JournalSqlReads
+  private readonly openedThrough: AgentJournalCursor
+  private acknowledged: AgentJournalCursor
   private closed = false
   private admitted: Promise<unknown> = Promise.resolve()
   private listener: ((commit: JournalWriterCommit) => void) | undefined
@@ -89,9 +93,13 @@ export class SqlAgentSessionJournal {
     private readonly database: JournalSqlDatabase,
     readonly identity: AgentSessionJournalIdentity,
     private target: JournalWriterTarget,
-    private readonly now: () => number
+    private readonly now: () => number,
+    opened: JournalWriterCommit
   ) {
     this.reads = journalSqlReads(database.readers, identity.sessionId)
+    // The open operation returns its physical position before ordinary recovery.
+    this.openedThrough = { ...(opened.value as AgentJournalCursor) }
+    this.acknowledged = { ...opened.cursor }
   }
 
   static async open(options: {
@@ -99,13 +107,28 @@ export class SqlAgentSessionJournal {
     identity: AgentSessionJournalIdentity
     now?: () => number
   }): Promise<SqlAgentSessionJournal> {
-    const { target } = await options.database.openSession(options.identity)
+    const { target, commit } = await options.database.openSession(options.identity)
     return new SqlAgentSessionJournal(
       options.database,
       options.identity,
       target,
-      options.now ?? Date.now
+      options.now ?? Date.now,
+      commit
     )
+  }
+
+  openingCursor = (): AgentJournalCursor => ({ ...this.openedThrough })
+  cursor = (): AgentJournalCursor => ({ ...this.acknowledged })
+  physicalCursor = (): AgentJournalCursor => ({
+    epoch: this.target.epoch,
+    sequence: this.acknowledged.sequence
+  })
+  observationHandle = (): string => this.target.ownerToken
+  get isClosed(): boolean {
+    return this.closed
+  }
+  wroteBeforeOpen(sequence: number | undefined): boolean {
+    return journalWroteBeforeOpen(this.physicalCursor(), this.openedThrough, sequence)
   }
 
   /** Nonthrowing publication runs on the command lane, after receipts have adopted COMMIT. */
@@ -160,7 +183,6 @@ export class SqlAgentSessionJournal {
         }
         preparation.settle?.(commit)
         staged?.settle(commit.receiptWritten ? commit.effects : undefined)
-        this.listener?.(commit)
         if (operation.kind === 'epoch-replace') {
           // Public context identities need not equal the physical epoch a command targets.
           const epoch = await this.database.sessionEpoch(this.identity.sessionId)
@@ -169,6 +191,8 @@ export class SqlAgentSessionJournal {
           }
           this.target = { ...this.target, epoch }
         }
+        this.acknowledged = { ...commit.cursor }
+        this.listener?.(commit)
         return commit
       }
     })

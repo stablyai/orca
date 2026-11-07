@@ -1,3 +1,4 @@
+import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -7,7 +8,9 @@ import type {
   JournalInputReader
 } from './journal-input-reads'
 
-export type JournalSqlReads = AgentSessionJournalReads
+export type JournalSqlReads = AgentSessionJournalReads & {
+  observer(input: JournalObserverRead): Promise<JournalObserverResult>
+}
 
 const VISIT_PAGE = 256
 
@@ -49,6 +52,7 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    observer: async (input) => (await read({ kind: 'observer', input })).observation,
     statusIndicators: async (input) =>
       (await read({ kind: 'status-indicators', input })).indicators,
     statusState: async (currentFence) =>

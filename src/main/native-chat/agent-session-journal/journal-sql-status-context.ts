@@ -2,6 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
@@ -22,6 +23,8 @@ export class JournalSqlStatusContext {
   private readonly ordinals = new Map<string, number>()
   private readonly seeds = new Map<number | undefined, AgentJournalSubmission[]>()
   readonly epoch: string
+  readonly sequence: number
+  private recoverable: AgentJournalSubmission[] | undefined
   readonly submissionCount: number
   readonly stop: JournalLatestStop | null
 
@@ -29,6 +32,7 @@ export class JournalSqlStatusContext {
     this.values = new JournalSqlReadValues(scope, () => {})
     const reducer = new JournalSqlScalars(scope, 'reducer')
     this.epoch = journalContextEpoch(scope.epoch, reducer.get('contextBoundary', 1))
+    this.sequence = reducer.get('lastSequence', 0)
     this.submissionCount = new JournalSqlScalars(scope, 'evidence').get('nextOrdinal', 0)
     this.stop = new JournalSqlScalars(scope, 'pause-marks').get<{
       latestStop: JournalLatestStop | null
@@ -91,6 +95,47 @@ export class JournalSqlStatusContext {
     return id === undefined ? undefined : this.submission(id)
   }
 
+  itemFence = (id: string) =>
+    this.values.get<number>('itemExecutionOwners', id) ?? this.values.get<number>('itemFences', id)
+
+  runningTurn = () => {
+    const boundary = this.select({ kind: 'boundary', raw: true })[Symbol.iterator]().next().value
+    return boundary ? runningStructuredAgentSessionTurnItemBySequence([boundary.item]) : null
+  }
+
+  recoverableSubmissions = (): AgentJournalSubmission[] => {
+    if (!this.recoverable) {
+      const candidates = [...this.memberIds('journal_proj_recoverable_inputs')].flatMap((id) => {
+        const input = this.values.get<AgentJournalSubmission>('evidence.recoverable', id)
+        return input ? [{ input, ordinal: this.inputOrdinal(id) }] : []
+      })
+      candidates.sort((a, b) => a.ordinal - b.ordinal)
+      this.recoverable = candidates.map(({ input }) => input)
+    }
+    return this.recoverable
+  };
+
+  private *memberIds(
+    table: 'journal_proj_pending_status_inputs' | 'journal_proj_recoverable_inputs'
+  ) {
+    let after = -1
+    for (;;) {
+      const rows = this.scope.db
+        .prepare(`SELECT input_id,ordinal FROM ${table}
+        WHERE session_id=? AND epoch=? AND current=1 AND ordinal>? ORDER BY ordinal LIMIT 128`)
+        .all(...this.scope.prefix, after)
+      for (const row of rows) {
+        this.scope.examined(row)
+        yield String(row.input_id)
+      }
+      const last = rows.at(-1)
+      if (rows.length < 128 || !last) {
+        return
+      }
+      after = Number(last.ordinal)
+    }
+  }
+
   statusInputs(afterStop?: number): AgentJournalSubmission[] {
     const existing = this.seeds.get(afterStop)
     if (existing) {
@@ -113,23 +158,7 @@ export class JournalSqlStatusContext {
       this.seeds.set(afterStop, inputs)
       return inputs
     }
-    const ids = new Set<string>()
-    let after = -1
-    for (;;) {
-      const rows = this.scope.db
-        .prepare(`SELECT input_id,ordinal FROM journal_proj_pending_status_inputs
-        WHERE session_id=? AND epoch=? AND current=1 AND ordinal>? ORDER BY ordinal LIMIT 128`)
-        .all(...this.scope.prefix, after)
-      for (const row of rows) {
-        this.scope.examined(row)
-        ids.add(String(row.input_id))
-      }
-      const last = rows.at(-1)
-      if (rows.length < 128 || !last) {
-        break
-      }
-      after = Number(last.ordinal)
-    }
+    const ids = new Set(this.memberIds('journal_proj_pending_status_inputs'))
     const add = (id: string | undefined) => {
       if (id !== undefined) {
         ids.add(id)

@@ -107,6 +107,10 @@ function receipt(adopt: (committed: boolean) => void, draft = 'retained'): Journ
 
 it('adopts a row-bound receipt before publishing and reads the persisted revision after restart', async () => {
   const { root, database, journal } = await fixture()
+  const opening = journal.openingCursor()
+  expect(opening.sequence).toBe(1)
+  expect(journal.wroteBeforeOpen(undefined)).toBe(false)
+  expect(journal.wroteBeforeOpen(1)).toBe(true)
   let adopted = false
   const publications: boolean[] = []
   journal.observeCommits(() => publications.push(adopted))
@@ -116,6 +120,9 @@ it('adopts a row-bound receipt before publishing and reads the persisted revisio
     })
   }))
   expect(publications).toEqual([true])
+  expect(journal.openingCursor()).toEqual(opening)
+  expect(journal.cursor().sequence).toBe(2)
+  expect(journal.wroteBeforeOpen(2)).toBe(false)
   expect(await database.readCommandReceipt({ kind: 'global' }, 'operation')).toMatchObject({
     verdict: 'readable',
     receipt: { result: { kind: 'journal-row', sequence: 2 } }
@@ -130,6 +137,9 @@ it('adopts a row-bound receipt before publishing and reads the persisted revisio
   await database.close()
   const reopened = await open(root)
   const next = await SqlAgentSessionJournal.open({ database: reopened.journalDatabase, identity })
+  expect(next.wroteBeforeOpen(2)).toBe(true)
+  expect(next.openingCursor().sequence).toBe(3)
+  expect(next.observationHandle()).not.toBe(journal.observationHandle())
   expect(await next.reads.item('orca:item')).toMatchObject({
     revision: 2,
     body: { text: 'revised' }
