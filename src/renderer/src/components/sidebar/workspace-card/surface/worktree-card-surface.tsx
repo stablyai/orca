@@ -10,8 +10,23 @@ import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktre
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { useWorktreeCardOpen } from './worktree-card-open-state'
+import {
+  getLineageChildrenInlineStyle,
+  SLOT_LINEAGE_TITLE_COLUMN_SHIFT
+} from '../../worktree-list/rows/indentation'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
+
+/** 2.0's leading icon moves the title column right; children start on it. */
+function slotLineageChildrenStyle(
+  style: React.CSSProperties | undefined
+): React.CSSProperties | undefined {
+  if (style?.marginLeft === undefined) {
+    return style
+  }
+  const offset = typeof style.marginLeft === 'number' ? `${style.marginLeft}px` : style.marginLeft
+  return getLineageChildrenInlineStyle(`calc(${offset} + ${SLOT_LINEAGE_TITLE_COLUMN_SHIFT}px)`)
+}
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -144,7 +159,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             slotLayout && 'worktree-card-slot-lineage'
           )}
           data-worktree-lineage-children=""
-          style={lineageChildrenStyle}
+          style={slotLayout ? slotLineageChildrenStyle(lineageChildrenStyle) : lineageChildrenStyle}
         >
           {lineageChildren}
         </div>

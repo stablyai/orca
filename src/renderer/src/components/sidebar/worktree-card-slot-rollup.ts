@@ -31,7 +31,7 @@ import {
 } from './worktree-card-slot-targets'
 
 /** Ids repeat across hosts, so a child resolves only to its own host's copy. */
-function worktreeForIdentity(
+export function worktreeForIdentity(
   state: AppState,
   identity: HostScopedWorktreeKey
 ): Worktree | undefined {
@@ -121,7 +121,7 @@ export function collectLineageChildTargetsOfKind(
   return slotTargetsOfKind(targets, kind)
 }
 
-function splitIdentities(key: string): HostScopedWorktreeKey[] {
+export function splitIdentities(key: string): HostScopedWorktreeKey[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `key` only ever joins HostScopedWorktreeKey values.
   return key ? (key.split('\n') as HostScopedWorktreeKey[]) : []
 }

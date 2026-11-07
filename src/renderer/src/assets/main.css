@@ -1809,6 +1809,187 @@ html.native-shell .app-layout {
   position: relative;
 }
 
+/* 2.0 leading icon: the latest tab in front, older tabs peeking above it as narrower, dimmer cards.
+   The box is the front tile only, so it centers on the title; layers overflow upward. */
+.worktree-card-leading-icon {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 22px;
+  height: 18px;
+}
+
+.worktree-card-leading-tile {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 22px;
+  height: 18px;
+  border-radius: 5px;
+  transform-origin: 50% 0;
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, var(--worktree-sidebar));
+  /* Top highlight and a hairline rim, then the shadow this card casts on the one behind it. */
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
+    0 -1px 2px rgb(0 0 0 / 0.5);
+}
+
+.worktree-card-leading-tint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  /* Single-color glyphs paint with currentColor; black makes them a dark tile, like a terminal. */
+  color: black;
+  transform: scale(5);
+  filter: blur(2.5px) saturate(1.7) brightness(1.1);
+  pointer-events: none;
+}
+
+.worktree-card-leading-fill {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Centered absolutely: grid alignment pins an item larger than its box to the top. */
+.worktree-card-leading-fill > svg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Soft gloss across the top half, like an app icon. */
+.worktree-card-leading-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom, rgb(255 255 255 / 0.16), transparent 60%);
+  pointer-events: none;
+}
+
+.worktree-card-leading-glyph {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.3));
+}
+
+/* Agent logos read as white marks on their own color; favicons, letters, files and shells keep theirs. */
+.worktree-card-leading-tile[data-kind='agent']
+  .worktree-card-leading-glyph:has(svg):not(:has(text)) {
+  filter: brightness(0) invert(1) drop-shadow(0 1px 1px rgb(0 0 0 / 0.3));
+}
+
+.worktree-card-leading-tile[data-layer='front'] {
+  z-index: 4;
+  color: var(--worktree-sidebar-foreground);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 12%, transparent),
+    0 -1.5px 2.5px rgb(0 0 0 / 0.55),
+    0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.worktree-card-leading-tile[data-layer='l1'] {
+  z-index: 3;
+  transform: translateY(-3.5px) scale(0.88);
+  filter: brightness(0.92);
+}
+
+.worktree-card-leading-tile[data-layer='l2'] {
+  z-index: 2;
+  transform: translateY(-6.5px) scale(0.76);
+  filter: brightness(0.82);
+}
+
+.worktree-card-leading-tile[data-layer='l3'] {
+  z-index: 1;
+  transform: translateY(-9px) scale(0.64);
+  filter: brightness(0.72);
+}
+
+.worktree-card-leading-icon-offline .worktree-card-leading-tile {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.worktree-card-leading-badge {
+  position: absolute;
+  z-index: 5;
+  left: 15px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--worktree-sidebar);
+}
+
+/* PR rollup: the count rides the icon's bottom-right corner, like a notification badge. */
+.worktree-card-pr-state {
+  position: relative;
+  display: inline-flex;
+}
+
+.worktree-card-pr-state:has(.worktree-card-pr-count) {
+  margin-right: 3px;
+}
+
+.worktree-card-pr-count {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  min-width: 9px;
+  height: 9px;
+  padding: 0 2px;
+  border-radius: 5px;
+  font-size: 7.5px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  /* Fill takes the state's tone from the wrapper; the digit is cut out in the sidebar color. */
+  background: currentColor;
+  -webkit-text-fill-color: var(--worktree-sidebar);
+  box-shadow: 0 0 0 1.5px var(--worktree-sidebar);
+}
+
+/* A hidden subtree trails a short hooked line under the icon. */
+.worktree-card-thread-stub {
+  position: relative;
+}
+
+.worktree-card-thread-stub::after {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 19px;
+  width: 8px;
+  height: 7px;
+  border-left: 1px solid
+    var(
+      --worktree-card-slot-guide,
+      color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent)
+    );
+  border-bottom: 1px solid
+    var(
+      --worktree-card-slot-guide,
+      color-mix(in srgb, var(--worktree-sidebar-foreground) 22%, transparent)
+    );
+  border-bottom-left-radius: 4px;
+  pointer-events: none;
+}
+
 /* An open 2.0 card hangs a line from its title through the rows it owns. */
 .worktree-card-slot-thread {
   position: relative;
@@ -1817,7 +1998,8 @@ html.native-shell .app-layout {
 .worktree-card-slot-thread::before {
   content: '';
   position: absolute;
-  left: 5px;
+  /* Under the leading icon's center. */
+  left: 11px;
   top: 22px;
   bottom: 3px;
   width: 1px;

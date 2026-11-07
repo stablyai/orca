@@ -1,5 +1,4 @@
 import React, { useCallback } from 'react'
-import { ChevronDown } from 'lucide-react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { translate } from '@/i18n/i18n'
 import { viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
@@ -10,42 +9,6 @@ import { SlotAgentLineRow } from './worktree-card-slot-agent-line-row'
 
 function stopPropagation(event: React.SyntheticEvent): void {
   event.stopPropagation()
-}
-
-/** Expanded agents' header: the label sits in the icon column and the chevron in the slot column. */
-export function SlotAgentLinesHeader({
-  label,
-  onCollapse
-}: {
-  label: string
-  onCollapse: () => void
-}): React.JSX.Element {
-  const handleClick = useCallback(
-    (event: React.MouseEvent) => {
-      event.stopPropagation()
-      onCollapse()
-    },
-    [onCollapse]
-  )
-  return (
-    <button
-      type="button"
-      draggable={false}
-      className="worktree-agent-row-hover mt-[3px] flex h-[22px] w-full min-w-0 items-center gap-1.5 rounded-sm pr-1.5 pl-1 text-left text-2xs leading-none font-medium text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-expanded={true}
-      aria-label={translate(
-        'auto.components.sidebar.worktree.card.compact.agents.0c1debfe84',
-        'Collapse {{value0}}',
-        { value0: label }
-      )}
-      onClick={handleClick}
-      onMouseDown={stopPropagation}
-      onPointerDown={stopPropagation}
-    >
-      <span className="min-w-0 flex-1 truncate pl-0.5">{label}</span>
-      <ChevronDown className="size-3 shrink-0" aria-hidden />
-    </button>
-  )
 }
 
 /** Experimental 2.0 agent lines: lead agents, their subagents on demand, and the shared picking/unread/focus model. */
@@ -172,7 +135,7 @@ export function WorktreeCardSlotAgentLines({
   }
   return (
     <div
-      className="mt-px flex flex-col gap-0.5 pl-2.5"
+      className="mt-1 flex flex-col gap-1 pl-[24px]"
       role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       onDoubleClick={stopPropagation}
