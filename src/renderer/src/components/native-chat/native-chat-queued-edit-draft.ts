@@ -1,9 +1,4 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { withoutImageReference } from '../../../../shared/native-chat/native-chat-image-reference'
-import {
-  imageReferencesToPromptMarkers,
-  promptMarkersToImageReferences
-} from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,
@@ -61,10 +56,7 @@ export function createNativeChatQueuedEditDraft(
 ): NativeChatQueuedEditDraft {
   const scopeKey = `queued-edit:${createUuidV4()}`
   const kept = queuedEditKeptImages(body)
-  const text = promptMarkersToImageReferences(
-    queuedMessageEditableText(body) ?? '',
-    kept.map(({ id }) => id)
-  )
+  const text = queuedMessageEditableText(body) ?? ''
   const initial: NativeChatComposerDraft = {
     text,
     document: seedPromptSkillReferences(promptTextContent(text), body.skills),
@@ -87,10 +79,7 @@ export function nativeChatQueuedEditInput(
   skillsCapable: boolean
 ): QueuedMessageEdit {
   const draft = readNativeChatComposerDraft(edit.scopeKey)
-  const text = imageReferencesToPromptMarkers(
-    resolveNativeChatPastedText(edit.scopeKey, draft.text),
-    draft.images.map(({ id }) => id)
-  )
+  const text = resolveNativeChatPastedText(edit.scopeKey, draft.text)
   const images = draft.images.map(
     (image) =>
       edit.kept.find((entry) => sameQueuedEditImage(entry.image, image))?.block ?? {
@@ -136,7 +125,6 @@ export function handBackNativeChatQueuedEdit(
     draft.images.some((image) => sameQueuedEditImage(entry.image, image))
   )
   for (const { id } of kept) {
-    text = withoutImageReference(text, id)
     if (document) {
       document = withoutImageReferenceNodes(document, id)
     }
