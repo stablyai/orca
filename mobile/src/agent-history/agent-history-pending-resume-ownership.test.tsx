@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   activateMobileUiLocale,
   mobileI18n,
@@ -43,6 +43,7 @@ vi.mock('react-native-reanimated', () => ({
 const notifications = vi.hoisted(() => ({
   error: vi.fn(),
   success: vi.fn(),
+  push: vi.fn(),
   replace: vi.fn(),
   back: vi.fn(),
   announce: vi.fn()
@@ -80,6 +81,7 @@ vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'Icon',
   CircleAlert: 'Icon',
   History: 'Icon',
+  Play: 'Icon',
   RefreshCw: 'Icon',
   Search: 'Icon',
   SearchX: 'Icon',
@@ -101,6 +103,7 @@ vi.mock('../platform/haptics', () => ({
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', () => ({
   useRouteHandoff: () => ({
+    push: notifications.push,
     replace: notifications.replace,
     back: notifications.back,
     canGoBack: () => false
@@ -131,6 +134,11 @@ vi.mock('./use-mobile-agent-history-state', () => ({
     retry: vi.fn()
   })
 }))
+const openTabActions = vi.hoisted(() => ({
+  closedSessionIds: new Set<string>(),
+  onJumpToOpenSession: vi.fn(async () => {}),
+  onCloseOpenSession: vi.fn(async () => {})
+}))
 vi.mock('./MobileAgentSessionHistoryList', () => ({
   MobileAgentSessionHistoryList: (props: {
     onResume: (session: AiVaultSession) => Promise<void>
@@ -139,7 +147,14 @@ vi.mock('./MobileAgentSessionHistoryList', () => ({
     state.resumeAction = props.resumeActionStateBySessionId.get(state.session?.id ?? '')
     state.onResume = props.onResume
     return null
-  }
+  },
+  useMobileAgentHistoryOpenTabActions: (input: { sessions: readonly AiVaultSession[] }) => ({
+    sessionsWithOpenTabs: input.sessions,
+    closingSessionId: null,
+    closedSessionIds: openTabActions.closedSessionIds,
+    onJumpToOpenSession: openTabActions.onJumpToOpenSession,
+    onCloseOpenSession: openTabActions.onCloseOpenSession
+  })
 }))
 import { MobileAgentSessionHistoryPanel } from './MobileAgentSessionHistoryPanel'
 import { AgentHistoryResumeNotice } from './AgentHistoryNotices'
@@ -151,6 +166,14 @@ afterEach(async () => {
   setMobilePseudoLocalization(false)
   mobileI18n.removeResourceBundle('fr', 'translation')
   await activateMobileUiLocale('en')
+})
+
+beforeEach(() => {
+  notifications.error.mockClear()
+  notifications.success.mockClear()
+  notifications.push.mockClear()
+  notifications.replace.mockClear()
+  notifications.back.mockClear()
 })
 
 function ownedSession(): AiVaultSession {
@@ -177,6 +200,7 @@ function ownedSession(): AiVaultSession {
     subagent: null
   }
 }
+
 it.each([
   ['stable', 'metadata'],
   ['generation', 'metadata'],
@@ -201,7 +225,9 @@ it.each([
   let hostId = 'owned-host'
   notifications.error.mockClear()
   notifications.success.mockClear()
+  notifications.push.mockClear()
   notifications.replace.mockClear()
+  notifications.back.mockClear()
   state.legacy = boundary === 'accepted send'
   state.completedBoundary = state.legacy || boundary === 'owned create accepted'
   state.generation = 1
@@ -418,6 +444,119 @@ it.each([
   }
 })
 
+function resumeWorktree(worktreeId: string, path: string, displayName: string) {
+  return {
+    worktreeId,
+    repoId: 'repo_1',
+    repo: 'Repo',
+    path,
+    branch: 'main',
+    displayName,
+    liveTerminalCount: 0,
+    hasAttachedPty: false,
+    preview: '',
+    unread: false,
+    isPinned: false,
+    linkedPR: null
+  }
+}
+
+async function resumeFromHistory(args: {
+  worktreeId: string
+  origin?: string
+  sessionCwd: string
+  worktrees: ReturnType<typeof resumeWorktree>[]
+}): Promise<void> {
+  state.generation = 1
+  state.legacy = false
+  state.completedBoundary = false
+  state.connection = 'connected'
+  state.session = {
+    id: 'qoder:owned-session',
+    executionHostId: 'local',
+    agent: 'qoder',
+    sessionId: 'owned-session',
+    title: 'Owned session',
+    cwd: args.sessionCwd,
+    branch: null,
+    model: null,
+    filePath: '/owned/qoder-session.json',
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '2026-10-04T00:00:00.000Z',
+    messageCount: 2,
+    totalTokens: 10,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null
+  }
+  const sendRequest: RpcClient['sendRequest'] = vi.fn<RpcClient['sendRequest']>(async (method) => {
+    if (method === 'repo.list') {
+      return {
+        id: 'owned-reply',
+        ok: true,
+        result: { repos: [{ id: 'repo_1', path: '/workspaces', connectionId: null }] }
+      }
+    }
+    if (method === 'folderWorkspace.list') {
+      return { id: 'owned-reply', ok: true, result: { workspaces: [] } }
+    }
+    if (method === 'projectGroup.list') {
+      return { id: 'owned-reply', ok: true, result: { groups: [] } }
+    }
+    if (method === 'worktree.ps') {
+      return { id: 'owned-reply', ok: true, result: { worktrees: args.worktrees } }
+    }
+    if (method === 'settings.get') {
+      return { id: 'owned-reply', ok: true, result: {} }
+    }
+    if (method === 'session.tabs.createTerminal') {
+      return {
+        id: 'owned-reply',
+        ok: true,
+        result: {
+          tab: { type: 'terminal', id: 'owned-tab', terminal: 'owned-pty', title: 'Terminal' }
+        }
+      }
+    }
+    if (method === 'terminal.send') {
+      return { id: 'owned-reply', ok: true, result: { send: { accepted: true } } }
+    }
+    throw new Error(`Unexpected method ${method}`)
+  })
+  state.client = {
+    ...createFakeRpcClient({ getGeneration: () => state.generation }),
+    sendRequest
+  }
+  const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+  const panel = () =>
+    React.createElement(
+      React.StrictMode,
+      null,
+      React.createElement(MobileAgentSessionHistoryPanel, {
+        hostId: 'host_1',
+        worktreeId: args.worktreeId,
+        ...(args.origin === undefined ? {} : { origin: args.origin })
+      })
+    )
+  try {
+    await act(async () => {
+      rendered.tree = create(panel())
+    })
+    await act(async () => {
+      if (!state.session || !state.onResume) {
+        throw new Error('missing resume callback')
+      }
+      await state.onResume(state.session)
+    })
+  } finally {
+    await act(async () => rendered.tree?.unmount())
+  }
+}
+
 it('resuming into the session it was opened from shows the resumed terminal there', async () => {
   notifications.replace.mockClear()
   notifications.back.mockClear()
@@ -480,6 +619,35 @@ it('resuming into the session it was opened from shows the resumed terminal ther
   } finally {
     await act(async () => tree?.unmount())
   }
+})
+
+it('pops history when a resumed session is already this session', async () => {
+  await resumeFromHistory({
+    worktreeId: 'wt_1',
+    origin: 'session',
+    sessionCwd: '/owned/workspace',
+    worktrees: [resumeWorktree('wt_1', '/owned/workspace', 'One')]
+  })
+  expect(notifications.back).toHaveBeenCalledOnce()
+  expect(notifications.replace).not.toHaveBeenCalled()
+  expect(notifications.push).not.toHaveBeenCalled()
+})
+
+it('replaces history when a resumed session is a different worktree', async () => {
+  await resumeFromHistory({
+    worktreeId: 'wt_1',
+    origin: 'session',
+    sessionCwd: '/owned/workspace',
+    worktrees: [
+      resumeWorktree('wt_1', '/workspaces/one', 'One'),
+      resumeWorktree('wt_2', '/owned/workspace', 'Other')
+    ]
+  })
+  expect(notifications.replace).toHaveBeenCalledWith(
+    '/h/host_1/session/wt_2?name=Other&executionHost='
+  )
+  expect(notifications.back).not.toHaveBeenCalled()
+  expect(notifications.push).not.toHaveBeenCalled()
 })
 
 it.each([

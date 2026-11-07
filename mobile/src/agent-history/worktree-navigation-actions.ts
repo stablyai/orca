@@ -2,6 +2,7 @@ import { GitBranch } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { RouteHandoff } from '../navigation/route-handoff'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { MobileAgentSessionHistoryIcon } from './MobileAgentSessionHistoryIcon'
@@ -18,7 +19,39 @@ type Args = {
   onDone: () => void
 }
 
-// Gate history action on aiVault.v1 so navigation cannot call a missing RPC; actions also include Source Control.
+export function openHistorySession(
+  router: RouteHandoff,
+  origin: string | undefined,
+  hostId: string,
+  fromWorktreeId: string,
+  toWorktreeId: string,
+  name?: string,
+  executionHost?: ExecutionHostId | null,
+  currentExecutionHost?: ExecutionHostId | null
+): void {
+  // Why both hosts: the same worktree can resume on another machine.
+  if (
+    origin === 'session' &&
+    toWorktreeId === fromWorktreeId &&
+    (executionHost ?? null) === (currentExecutionHost ?? null)
+  ) {
+    router.back()
+    return
+  }
+  const query = name === undefined ? '' : `?name=${encodeURIComponent(name)}`
+  const href = workspaceRouteHref(
+    `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(toWorktreeId)}${query}`,
+    executionHost
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Expo Router's typed Href union does not model the optional name and executionHost query on this session route.
+  router.replace(href as Parameters<RouteHandoff['replace']>[0])
+}
+
+// Why: builds the per-worktree "navigate to a screen" action-sheet actions
+// (Source Control + Agent Session History). The Agent Session History action is
+// included only on hosts advertising the aiVault.v1 capability, so we never
+// navigate to a screen that would call a missing RPC method. Extracted from the
+// host index action sheet to keep that file under its max-lines budget.
 export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] {
   if (args.executionHost === null) {
     return []
