@@ -107,7 +107,16 @@ function resolveCloseTarget(
 // A split landing has no tab to close, so Close collapses the pane.
 function closeFocusedSplitLanding(state: TabState): boolean {
   const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
-  return group !== null && state.closeEmptyGroup(group.worktreeId, group.id)
+  if (group === null) {
+    return false
+  }
+  // Closing a sole chooser empties the workspace, which then lands like a last-tab close.
+  const whenEmptied = captureWorkspaceEmptiedReaction(group.worktreeId)
+  if (!state.closeEmptyGroup(group.worktreeId, group.id)) {
+    return false
+  }
+  whenEmptied()
+  return true
 }
 
 /** Input adapters describe intent; targeting and tab operations live here. */

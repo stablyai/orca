@@ -118,6 +118,25 @@ it('Close on the empty pane collapses the split back to the chat', () => {
   expect(state.splitLandingGroupIds).toEqual({})
 })
 
+it('Closing the chat keeps the workspace open on its landing; Close there leaves it', () => {
+  const worktreeId = folderWorkspaceKey('chat-folder')
+  const { source, target } = sourceChat(worktreeId)
+  store.setState({ activeWorktreeId: worktreeId })
+  runNativeChatSplitTarget(target, 'right')
+  const landing = store.getState().activeGroupIdByWorktree[worktreeId]
+  store.getState().closeUnifiedTab(source.id)
+  let state = store.getState()
+  expect(state.activeWorktreeId).toBe(worktreeId)
+  expect(state.groupsByWorktree[worktreeId]).toEqual([
+    expect.objectContaining({ id: landing, tabOrder: [] })
+  ])
+  expect(state.activeGroupIdByWorktree[worktreeId]).toBe(landing)
+  expect(dispatchWorkspaceTabCommand({ type: 'close' })).toBe(true)
+  state = store.getState()
+  expect(state.activeWorktreeId).toBeNull()
+  expect(state.splitLandingGroupIds).toEqual({})
+})
+
 it('Close leaves an empty split that is waiting on chosen content', () => {
   const worktreeId = folderWorkspaceKey('pending-folder')
   const { source } = sourceChat(worktreeId)

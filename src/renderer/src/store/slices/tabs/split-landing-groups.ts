@@ -3,14 +3,12 @@ import type { AppState } from '../../types'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
-type SplitLandingState = Pick<
-  AppState,
-  'groupsByWorktree' | 'activeGroupIdByWorktree' | 'splitLandingGroupIds'
->
+type SplitLandingMarks = Pick<AppState, 'groupsByWorktree' | 'splitLandingGroupIds'>
+type SplitLandingState = SplitLandingMarks & Pick<AppState, 'activeGroupIdByWorktree'>
 
 /** A chat split's chooser pane while it is still empty; other empty groups await content already chosen. */
 export function isSplitLandingGroup(
-  state: SplitLandingState,
+  state: SplitLandingMarks,
   worktreeId: string,
   group: TabGroup | undefined
 ): group is TabGroup {
@@ -18,8 +16,14 @@ export function isSplitLandingGroup(
     group !== undefined &&
     state.splitLandingGroupIds?.[group.id] === worktreeId &&
     worktreeId !== FLOATING_TERMINAL_WORKTREE_ID &&
-    group.tabOrder.length === 0 &&
-    (state.groupsByWorktree?.[worktreeId]?.length ?? 0) > 1
+    group.tabOrder.length === 0
+  )
+}
+
+/** A waiting chooser keeps its workspace open when the last tab beside it closes. */
+export function hasSplitLandingGroup(state: SplitLandingMarks, worktreeId: string): boolean {
+  return (state.groupsByWorktree?.[worktreeId] ?? []).some((group) =>
+    isSplitLandingGroup(state, worktreeId, group)
   )
 }
 

@@ -13,7 +13,7 @@ import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-clos
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { landOnEmptiedWorktree } from '../tabs/tabs-close-actions'
+import { landOnEmptiedWorktree } from '../tabs/emptied-worktree-landing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 import {
