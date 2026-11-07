@@ -35,7 +35,7 @@ import {
 } from '../continuation/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '../structured-agent-session-launch-callers'
 import type { AgentLaunchRequestId } from './agent-launch-request-id'
-import { relearnHostStructuredAgents } from '../../../../runtime/host-structured-agents'
+import { relearnHostStructuredAgents } from '../../../../runtime/native-chat/agent-catalogs/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '../../../../runtime/hosts/capabilities/local-runtime-capabilities'
 
 export type AgentLaunchSurface = 'chat' | 'terminal'

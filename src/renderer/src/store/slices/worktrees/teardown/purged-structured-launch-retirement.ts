@@ -19,7 +19,7 @@ import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 /** Settles launch waits and retires chat ownership for purged tabs of one workspace. */
 export function retirePurgedTabLaunches(

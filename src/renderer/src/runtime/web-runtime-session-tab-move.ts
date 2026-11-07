@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import {
   clearWebSessionReorderIntent,
   recordWebSessionReorderIntent

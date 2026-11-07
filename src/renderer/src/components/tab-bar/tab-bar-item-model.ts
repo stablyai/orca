@@ -1,7 +1,7 @@
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'

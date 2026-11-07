@@ -53,7 +53,7 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true,
   runtimeEnvironmentSupportsCapabilities: async () => [false, false]
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: inventory.session
 }))
 

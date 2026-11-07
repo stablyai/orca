@@ -2,7 +2,7 @@ import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import {

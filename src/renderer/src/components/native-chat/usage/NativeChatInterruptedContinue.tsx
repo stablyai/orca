@@ -15,8 +15,8 @@ import {
   publishStructuredAgentSessionSends,
   type StructuredAgentSessionPendingSend
 } from '../session/structured/delivery/structured-agent-session-pending-sends'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type {
   AgentJournalRenderItem,

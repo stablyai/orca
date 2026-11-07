@@ -40,7 +40,7 @@ import {
 import { createWebRuntimeSessionTerminal } from '../hosted-terminals/creation/web-runtime-terminal-creation'
 import { releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame } from './initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { createInitialTerminalSeeder } from './initial-terminal-seeder'
-import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 import { isSessionTabsStreamEnd, type SessionTabsStreamEvent } from './state'
 import type { SessionTabsSnapshotHandler } from './visibility-resume-types'

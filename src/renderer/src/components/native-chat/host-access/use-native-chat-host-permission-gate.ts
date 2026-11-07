@@ -1,7 +1,7 @@
 import { newChatPermissionModeForSettings } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { translate } from '@/i18n/i18n'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
-import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
+import { useStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'

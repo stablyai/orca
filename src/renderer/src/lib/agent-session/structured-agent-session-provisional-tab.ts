@@ -23,7 +23,7 @@ import {
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   openTerminalForDeclinedChat,

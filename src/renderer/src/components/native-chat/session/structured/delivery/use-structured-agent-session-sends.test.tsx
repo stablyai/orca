@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 

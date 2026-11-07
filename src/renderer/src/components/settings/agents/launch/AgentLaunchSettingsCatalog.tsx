@@ -58,7 +58,7 @@ import {
   chatUnavailableOnThisDesktop
 } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 

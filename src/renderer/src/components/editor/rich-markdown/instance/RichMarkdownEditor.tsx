@@ -1,6 +1,6 @@
 import { useDiffCommentView } from '../../../diff-comments/use-diff-comment-owner'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useFileOwnerRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useFileOwnerRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useEditorState, type Editor } from '@tiptap/react'
 import { useAppStore } from '@/store/index'
 import { useLocalImagePick } from '../images/useLocalImagePick'

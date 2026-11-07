@@ -15,7 +15,7 @@ import {
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
 import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).

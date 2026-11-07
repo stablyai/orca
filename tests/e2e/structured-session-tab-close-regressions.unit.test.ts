@@ -22,10 +22,10 @@ import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-
 import {
   suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
-} from '../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
+} from '../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/local-session-tab-close-owner'
 import { clearHostSessionMirrorHydration } from '../../src/renderer/src/runtime/host-session-mirror-hydration'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../src/renderer/src/runtime/local-structured-session-owner'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../src/renderer/src/runtime/native-chat/local-sessions/local-structured-session-owner'
 import {
   isWebSessionCloseIntentPending,
   resetWebSessionCloseIntentForTests
@@ -136,14 +136,17 @@ function closeMain(): void {
   main = undefined
 }
 
-vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => ({
-  closeStructuredAgentSession: async (_target: unknown, sessionId: string) => {
-    if (bridge.scenario === 'reopened') {
-      bridge.rendererSessionCloses.push(sessionId)
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-close',
+  () => ({
+    closeStructuredAgentSession: async (_target: unknown, sessionId: string) => {
+      if (bridge.scenario === 'reopened') {
+        bridge.rendererSessionCloses.push(sessionId)
+      }
+      return 'closed'
     }
-    return 'closed'
-  }
-}))
+  })
+)
 
 // After /clear, history reopens the first conversation under a suffixed tab id; real main close/focus must target that tab.
 // Connect real window store/mirror/IPC with only the process boundary stubbed.

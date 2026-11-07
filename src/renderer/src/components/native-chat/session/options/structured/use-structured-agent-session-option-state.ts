@@ -23,8 +23,8 @@ import {
   useStructuredAgentSessionHostCapability,
   useStructuredAgentSessionOwnPermissionState,
   structuredAgentSessionHostKey
-} from '@/runtime/structured-agent-session-host-capability'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
 
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'

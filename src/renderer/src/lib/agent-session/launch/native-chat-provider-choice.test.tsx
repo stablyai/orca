@@ -75,7 +75,7 @@ vi.mock('@/lib/host-chat-program', async (importOriginal) => ({
       ? 'available'
       : 'missing'
 }))
-vi.mock('@/runtime/host-structured-agents', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', () => ({
   readHostStructuredAgents: () => [{ agent: 'antigravity', managedRuntime: true }]
 }))
 vi.mock('@/runtime/hosts/installation/managed-runtime-install-status', async (importOriginal) => ({

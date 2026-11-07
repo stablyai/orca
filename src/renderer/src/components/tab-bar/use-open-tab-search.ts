@@ -14,7 +14,7 @@ import {
 } from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { useWorktreeStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
+import { useWorktreeStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
 

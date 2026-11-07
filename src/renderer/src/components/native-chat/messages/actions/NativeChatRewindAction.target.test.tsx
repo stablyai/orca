@@ -24,8 +24,11 @@ import { MessageRow } from '../rows/NativeChatMessageRow'
 const mocks = vi.hoisted(() => ({ call: vi.fn(), confirm: vi.fn() }))
 let state: StructuredAgentSessionState
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('../../session/structured/use-structured-agent-session-hold', () => ({

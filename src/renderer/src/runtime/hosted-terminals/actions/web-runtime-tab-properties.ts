@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envel
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId

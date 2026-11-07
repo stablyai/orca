@@ -2,10 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  readStructuredAgentSessionItem,
-  supportsStructuredAgentSessionItemDetail
-} from '@/runtime/structured-agent-session-client'
+import { readStructuredAgentSessionItem } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
+import { supportsStructuredAgentSessionItemDetail } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { AgentJournalBoundedPayload } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatToolResultBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { truncateToolDetail } from '../../../../../../shared/native-chat/tools/native-chat-tool-summary'

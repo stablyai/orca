@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({ beginClose: vi.fn() }))
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: mocks.beginClose
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

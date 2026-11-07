@@ -21,7 +21,7 @@ import {
   structuredLaunchOwner
 } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'

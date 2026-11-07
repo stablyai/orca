@@ -1,9 +1,7 @@
 import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/structured-agent-session-live-read'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import {
-  callStructuredAgentSession,
-  subscribeStructuredAgentSession
-} from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { subscribeStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 
 type LiveReadArgs = Parameters<typeof startStructuredAgentSessionLiveRead>[0]
 

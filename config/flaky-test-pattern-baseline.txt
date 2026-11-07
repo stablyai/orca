@@ -763,7 +763,7 @@
 1 test-no-wall-clock:src/renderer/src/lib/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace/activation/worktree-activation-emptied-workspace-reseed.test.ts
 1 test-no-wall-clock:src/renderer/src/runtime/close-mirrored-editor-tab.test.ts
-2 test-no-wall-clock:src/renderer/src/runtime/structured-agent-session-tab-retirement.test.ts
+2 test-no-wall-clock:src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement.test.ts
 2 test-no-wall-clock:src/renderer/src/store/github/pull-requests/github-pr-branch-linked-pr-divergence.test.ts
 7 test-no-wall-clock:src/renderer/src/store/slices/jira/jira.test.ts
 1 test-no-wall-clock:src/renderer/src/store/terminals/store-sleep-exact-runtime-stop.test.ts

@@ -11,8 +11,8 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { getWorkspaceAttachmentOriginKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
-import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
-import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 
 const EMPTY_TABS: Tab[] = []
 

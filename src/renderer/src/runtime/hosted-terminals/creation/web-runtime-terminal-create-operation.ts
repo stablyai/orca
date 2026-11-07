@@ -13,7 +13,7 @@ import {
 } from './agent-launch/agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './agent-launch/remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { resolveWebRuntimeSessionEnvironmentId } from '../../web-runtime-session-workspace-routing'
 import { recordWebSessionFocusIntent } from '../../web-session-focus-intent'
 import {

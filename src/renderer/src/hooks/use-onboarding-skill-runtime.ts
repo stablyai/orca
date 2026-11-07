@@ -8,7 +8,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 

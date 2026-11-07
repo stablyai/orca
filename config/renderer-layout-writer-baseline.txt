@@ -29,7 +29,7 @@
 1 src/renderer/src/lib/workspace/persistence/workspace-session-unified-tabs.ts
 17 src/renderer/src/lib/workspace/persistence/workspace-session.ts
 3 src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-projection.ts
-3 src/renderer/src/runtime/structured-agent-session-tab-retirement.ts
+3 src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement.ts
 10 src/renderer/src/runtime/sync-runtime-graph/mobile-session-group-projection.ts
 2 src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots.ts
 2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts

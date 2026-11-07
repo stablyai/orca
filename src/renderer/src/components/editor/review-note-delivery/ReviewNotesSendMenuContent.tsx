@@ -19,7 +19,7 @@ import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-work
 import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
-} from '@/runtime/structured-chat-name-observation'
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'

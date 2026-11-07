@@ -105,7 +105,7 @@ import type { RemoteRuntimeSnapshotOutcome } from '../../../../runtime/hosted-te
 import {
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
-} from '../../../../runtime/runtime-worktree-selector'
+} from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher

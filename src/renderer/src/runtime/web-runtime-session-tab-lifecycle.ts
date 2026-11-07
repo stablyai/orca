@@ -6,7 +6,7 @@ import type {
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import {
   clearWebSessionCloseIntent,
   makeWebSessionCloseIntentDurable,

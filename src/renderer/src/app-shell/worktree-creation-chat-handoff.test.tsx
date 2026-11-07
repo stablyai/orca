@@ -24,7 +24,7 @@ import { useAppChromeLayout } from './use-app-chrome-layout'
 import { useFloatingWorkspacePanel } from './use-floating-workspace-panel'
 
 const host = vi.hoisted(() => ({ createSupport: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn((_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? host.createSupport() : new Promise(() => undefined)
   )

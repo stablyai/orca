@@ -7,7 +7,7 @@ import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-p
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { relearnHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { AgentSurface } from './use-onboarding-flow-types'

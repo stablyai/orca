@@ -6,7 +6,7 @@ import type { AgentSessionConversationOutline } from '../../../../../../shared/a
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const mocks = vi.hoisted(() => ({ read: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/journal/structured-agent-session-journal-reads', () => ({
   readStructuredAgentSessionConversationOutline: mocks.read
 }))
 

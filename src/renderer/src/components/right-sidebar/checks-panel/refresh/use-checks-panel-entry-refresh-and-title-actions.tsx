@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'

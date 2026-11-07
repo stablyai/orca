@@ -5,7 +5,7 @@ import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
 import { waitForWebRuntimeBrowserPageMaterialization } from './web-runtime-browser-materialization-wait'
 import {

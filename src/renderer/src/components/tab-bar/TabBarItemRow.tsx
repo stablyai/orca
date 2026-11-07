@@ -14,7 +14,7 @@ import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import {
   useStructuredChatTabConversationName,
   useStructuredChatTabNamingFailure
-} from '@/runtime/structured-conversation-name'
+} from '@/runtime/native-chat/naming/structured-conversation-name'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
 

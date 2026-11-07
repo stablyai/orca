@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { translate } from '@/i18n/i18n'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { copyAgentSessionContext } from '@/lib/copy-agent-session-context'

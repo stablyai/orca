@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isBrowserPageDefinitivelyGone } from '@/runtime/client-hosted-browser-close-intent-replay'
 import { isDurableClientHostedBrowserHandle } from '@/runtime/client-hosted-browser-close-intents'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { PendingClientHostedBrowserClose } from '@/runtime/client-hosted-browser-close-intents'
 import type { RemoteBrowserPageHandle } from '../browser-slice-contract'
 

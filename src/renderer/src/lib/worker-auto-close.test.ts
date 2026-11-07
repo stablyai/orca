@@ -21,7 +21,7 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: vi.fn(async () => {}),
   readLocalRuntimeCapabilitiesOrUnknown: () => ['orchestration.worker-keep-open.v1']
 }))
-vi.mock('@/runtime/visible-agent-orchestration', () => ({
+vi.mock('@/runtime/agent-orchestration/visible-agent-orchestration', () => ({
   selectVisibleAgentOrchestration: () =>
     mocks.worker
       ? { 'tab:leaf': { taskId: 't', dispatchId: 'd', dispatchStatus: 'completed' } }

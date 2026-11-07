@@ -7,7 +7,7 @@ import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive

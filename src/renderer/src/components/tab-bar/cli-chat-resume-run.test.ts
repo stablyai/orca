@@ -27,18 +27,24 @@ vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  structuredAgentSessionHostSupports: mocks.closeCapability,
-  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
-    (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
-  supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
-  supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
+vi.mock(
+  '../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: mocks.closeCapability,
+    structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+      (await mocks.closeCapability(...args)) ? 'supported' : 'unsupported',
+    supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
+    supportsStructuredAgentSessionCreateMessage: mocks.createCapability
+  })
+)
+
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (...args: unknown[]) =>
     args[1] === 'agentSession.createSupport'
       ? Promise.resolve({ supported: true })
       : mocks.call(...args)
 }))
-vi.mock('@/runtime/structured-session-tab-inventory', () => ({
+vi.mock('@/runtime/native-chat/tab-inventory/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: async () => {
     throw new Error('Reply unavailable')
   }
@@ -112,7 +118,7 @@ import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent
 } from '@/runtime/web-session-focus-intent'
-import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionFocusOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-bridge'
 import {
   drawTabsFromMain,

@@ -19,7 +19,7 @@ import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 
 const SUGGESTED_TILE_LIMIT = 8

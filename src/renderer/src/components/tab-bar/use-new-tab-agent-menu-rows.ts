@@ -20,13 +20,13 @@ import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
-} from '@/runtime/host-structured-agents'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
+import { useHostStructuredAgentAvailability } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer

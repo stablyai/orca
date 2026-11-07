@@ -13,7 +13,7 @@ import {
   HOST_TEST_SESSION,
   HOST_TEST_LOCATION
 } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import type { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import type { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createQueuedMessageTestRig } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,10 +45,13 @@ vi.mock(
       mocks.actualHost ?? (mocks.hostAvailable ? mocks.host : null)
   })
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
-    mocks.readChat(...args)
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: (...args: Parameters<typeof callStructuredAgentSession>) =>
+      mocks.readChat(...args)
+  })
+)
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (
     target: Parameters<NonNullable<typeof mocks.renderer>['call']>[0],

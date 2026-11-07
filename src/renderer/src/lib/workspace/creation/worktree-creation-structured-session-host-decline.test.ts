@@ -16,7 +16,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mocks.webLaunch
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
   )

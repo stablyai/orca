@@ -5,7 +5,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchestration'
+import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'

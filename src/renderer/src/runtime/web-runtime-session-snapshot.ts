@@ -8,7 +8,7 @@ import {
 } from './remote-runtime-session-tabs-inflight'
 import { getRuntimeEnvironmentRevision } from './rpc/environment-revisions/runtime-environment-revision'
 import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from './web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from './web-runtime-browser-creation-e2e-fault'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'

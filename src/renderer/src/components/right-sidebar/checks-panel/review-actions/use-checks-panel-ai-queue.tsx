@@ -8,7 +8,7 @@ import {
 } from '../comments/pr-comments-ai-launch-ack'
 import type { ChecksAgentComposerState } from '../panel-state-types'
 import type { ChecksPanelAiAcknowledgementState } from './use-checks-panel-ai-acknowledgement'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../../../shared/source-control/recovery/source-control-conflict-prompts'
 import { buildPRCommentsResolutionPrompt } from '../../../../../../shared/source-control/review-comments/pr-comments-resolution-prompt'

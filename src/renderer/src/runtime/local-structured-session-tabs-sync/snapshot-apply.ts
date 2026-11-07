@@ -14,7 +14,7 @@ import {
   noteRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
-import { knownStructuredSessionWorktreeIds } from '../local-structured-session-tab-retirement'
+import { knownStructuredSessionWorktreeIds } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
 import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
@@ -31,9 +31,9 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { suppressCancelledStructuredSessionTabs } from '../structured-agent-session-tab-retirement'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
-import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { suppressCancelledStructuredSessionTabs } from '../native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
+import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
 import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'

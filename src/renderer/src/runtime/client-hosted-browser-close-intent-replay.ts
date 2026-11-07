@@ -4,7 +4,7 @@ import {
   listClientHostedBrowserCloseIntents,
   type ClientHostedBrowserCloseIntentsByEnvironment
 } from './client-hosted-browser-close-intents'
-import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from './rpc/targets/runtime-worktree-selector'
 
 const REPLAY_TIMEOUT_MS = 15_000
 

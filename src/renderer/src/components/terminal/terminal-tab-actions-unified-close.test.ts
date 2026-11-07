@@ -27,7 +27,7 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(() => null)
 }))
 
-vi.mock('@/runtime/structured-agent-session-close', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: vi.fn(() => Promise.resolve())
 }))
 

@@ -151,7 +151,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs
 }))
-vi.mock('@/runtime/local-structured-session-owner', () => ({
+vi.mock('@/runtime/native-chat/local-sessions/local-structured-session-owner', () => ({
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
@@ -168,7 +168,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
         : 'local',
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (target: unknown, method: string, params: unknown) =>
     method === 'agentSession.createSupport'
       ? mockCreateSupport()

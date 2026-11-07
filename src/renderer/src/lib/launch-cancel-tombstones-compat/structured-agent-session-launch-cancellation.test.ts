@@ -4,7 +4,7 @@ import { markStructuredAgentSessionLaunchCancelled } from '../agent-session/laun
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import type { StructuredLaunchState } from '../agent-session/launch/structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,

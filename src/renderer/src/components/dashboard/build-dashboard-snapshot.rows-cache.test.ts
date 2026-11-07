@@ -22,7 +22,7 @@ vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
-vi.mock('@/runtime/structured-chat-name-observation', () => ({
+vi.mock('@/runtime/native-chat/naming/structured-chat-name-observation', () => ({
   subscribeStructuredChatTabNames: () => () => {},
   getStructuredChatTabNames: () => new Map()
 }))

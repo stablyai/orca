@@ -10,7 +10,7 @@ import { prepareLoadedProfileSettings } from '../../src/main/persistence/loading
 import { useNativeChatHostPermissionGate } from '@/components/native-chat/host-access/use-native-chat-host-permission-gate'
 import * as runtimeRpcCapability from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import * as runtimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
-import type * as HostPermission from '@/runtime/structured-chat-host-permission'
+import type * as HostPermission from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import type { Worktree } from '../../src/shared/worktree/types'
 
 const mocks = vi.hoisted(() => ({
@@ -29,21 +29,33 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
 vi.mock('@/lib/agent-session/resume/history/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: async () => ({ sessionId: 'provider-1' })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) => {
-    if (method === 'agentSession.createSupport') {
-      return mocks.createSupport(params)
-    }
-    return new Promise(() => undefined)
-  }),
-  structuredAgentSessionHostSupports: async () => true,
-  structuredAgentSessionHostCapabilityState: mocks.writerCapability
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: vi.fn(async (_target: unknown, method: string, params: unknown) => {
+      if (method === 'agentSession.createSupport') {
+        return mocks.createSupport(params)
+      }
+      return new Promise(() => undefined)
+    })
+  })
+)
 
-vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostPermission>()),
-  readStructuredChatHostPermissionVerdict: mocks.hostPermission
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: async () => true,
+    structuredAgentSessionHostCapabilityState: mocks.writerCapability
+  })
+)
+
+vi.mock(
+  '@/runtime/native-chat/host-capabilities/structured-chat-host-permission',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HostPermission>()),
+    readStructuredChatHostPermissionVerdict: mocks.hostPermission
+  })
+)
 // Switch-on, main opens this machine's chats and its frames draw them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -65,7 +77,7 @@ import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
-import { structuredAgentSessionFocusOwner } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionFocusOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
@@ -429,7 +441,7 @@ describe('a structured chat launch on a paired server', () => {
         parsed = { ...parsed, settings: JSON.parse(JSON.stringify(settings)) }
       }
       const actual = await vi.importActual<typeof HostPermission>(
-        '@/runtime/structured-chat-host-permission'
+        '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
       )
       mocks.hostPermission.mockImplementation(actual.readStructuredChatHostPermissionVerdict)
       let answerCapability: (supported: boolean) => void = () => {}
