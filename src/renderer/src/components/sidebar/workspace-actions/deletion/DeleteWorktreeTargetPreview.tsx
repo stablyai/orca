@@ -17,6 +17,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -33,12 +34,13 @@ function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
 
 function getTargetHostLabel(
   worktree: Worktree,
-  hostLabelById: ReadonlyMap<ExecutionHostId, string>
+  hostLabelById: ReadonlyMap<ExecutionHostId, string>,
+  t: Translate = translate
 ): string {
   const hostId = parseExecutionHostId(worktree.hostId)?.id
   return hostId
     ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
-    : translate('components.workspace.cleanup.host.unknown', 'Unknown host')
+    : t('components.workspace.cleanup.host.unknown', 'Unknown host')
 }
 
 export function DeleteWorktreeTargetPreview({
@@ -62,6 +64,7 @@ export function DeleteWorktreeTargetPreview({
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
 }): JSX.Element | null {
+  const t = useTranslate()
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
   if (isBatchDelete) {
@@ -70,7 +73,7 @@ export function DeleteWorktreeTargetPreview({
         <div className="space-y-1 px-3 py-2" role="list">
           {worktrees.map((item, index) => {
             const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
-            const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState)
+            const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState, t)
             const labelIds = {
               name: `${targetIdPrefix}-${index}-name`,
               path: `${targetIdPrefix}-${index}-path`,
@@ -94,7 +97,7 @@ export function DeleteWorktreeTargetPreview({
                     </div>
                     {showHost ? (
                       <div id={labelIds.host} className="mt-0.5 text-muted-foreground">
-                        {getTargetHostLabel(item, hostLabelById)}
+                        {getTargetHostLabel(item, hostLabelById, t)}
                       </div>
                     ) : null}
                     <DeleteWorktreeDirtyChangeHint
@@ -150,7 +153,7 @@ export function DeleteWorktreeTargetPreview({
       </div>
       {showHost ? (
         <div id={labelIds.host} className="mt-0.5 text-muted-foreground">
-          {getTargetHostLabel(worktree, hostLabelById)}
+          {getTargetHostLabel(worktree, hostLabelById, t)}
         </div>
       ) : null}
       <DeleteWorktreeDirtyChangeHint
