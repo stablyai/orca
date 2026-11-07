@@ -17,6 +17,11 @@ import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-stat
 import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { readJournalStatusState, type JournalStatusState } from './journal-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import {
+  readJournalStatusIndicators,
+  type JournalStatusIndicatorRead,
+  type JournalStatusIndicators
+} from './journal-status-indicators'
 
 /** Which items a visit decodes; a database serves only the named kinds, in sequence order. */
 export type JournalItemFilter = {
@@ -25,6 +30,7 @@ export type JournalItemFilter = {
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
+  statusIndicators(input: JournalStatusIndicatorRead): Promise<JournalStatusIndicators>
   statusState(currentFence?: number | null): Promise<JournalStatusState>
   input: JournalInputReader
   usageLimitCut(): Promise<NativeChatUsageLimitCut | null>
@@ -61,7 +67,13 @@ type FoldedJournalReads = {
   [
     K in Exclude<
       keyof AgentSessionJournalReads,
-      'visitItems' | 'contextFloor' | 'input' | 'usageLimitCut' | 'orcaStopCut' | 'statusState'
+      | 'visitItems'
+      | 'contextFloor'
+      | 'input'
+      | 'usageLimitCut'
+      | 'orcaStopCut'
+      | 'statusState'
+      | 'statusIndicators'
     >
   ]: (
     ...args: Parameters<AgentSessionJournalReads[K]>
@@ -87,6 +99,9 @@ export function foldedJournalReads(
       }
     }
   return {
+    statusIndicators: now((input: JournalStatusIndicatorRead) =>
+      readJournalStatusIndicators(state(), input)
+    ),
     statusState: now((fence?: number | null) => readJournalStatusState(state(), fence)),
     input: async (operation) => readJournalInput(state(), operation),
     usageLimitCut: now(() => readJournalUsageLimitCut(state())),

@@ -11,6 +11,7 @@ import { journalSqlOrderedValues } from './journal-sql-keyed-values'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { sqlHasStatusRequestItem, sqlFailedStatusItems } from './journal-sql-status-request-items'
 import { sqlJournalStatusItems } from './journal-sql-status-items'
+import { sqlStatusRelatedInputIds } from './journal-sql-status-inputs'
 
 export function sqlJournalStateQueries(
   context: JournalSqlValueContext,
@@ -46,6 +47,10 @@ export function sqlJournalStateQueries(
     return Number(row?.sequence ?? 0)
   }
   return {
+    statusRelatedInputIds(_state, start, floor) {
+      facts.flush()
+      return sqlStatusRelatedInputIds(scope, start, floor)
+    },
     hasStatusRequestItem() {
       facts.flush()
       return sqlHasStatusRequestItem(scope)

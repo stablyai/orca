@@ -10,6 +10,11 @@ import type { JournalStatusItem, JournalStatusItemSelection } from './journal-st
 
 /** Each live range query names its population; whole-state restore/export remains memory-only. */
 export type JournalStateQueries = {
+  statusRelatedInputIds: (
+    state: JournalReducerState,
+    start: number,
+    floor: number
+  ) => Iterable<string>
   hasStatusRequestItem: (state: JournalReducerState) => boolean
   failedStatusItems: (state: JournalReducerState, floor: number) => Iterable<JournalStatusItem>
   statusItems: (

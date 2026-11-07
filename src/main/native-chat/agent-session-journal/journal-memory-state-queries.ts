@@ -9,8 +9,10 @@ import { compareAgentJournalItems } from '../../../shared/agent-session/journal/
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import { memoryHasStatusRequestItem, memoryFailedStatusItems } from './journal-status-request-items'
 import { memoryJournalStatusItems } from './journal-status-items'
+import { memoryStatusRelatedInputIds } from './journal-status-inputs'
 
 export const memoryJournalStateQueries: JournalStateQueries = {
+  statusRelatedInputIds: memoryStatusRelatedInputIds,
   hasStatusRequestItem: memoryHasStatusRequestItem,
   failedStatusItems: memoryFailedStatusItems,
   statusItems: memoryJournalStatusItems,

@@ -60,7 +60,8 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
         reads.newestTurn(),
         reads.usageLimitCut(),
         reads.orcaStopCut(),
-        reads.statusState(1)
+        reads.statusState(1),
+        reads.statusIndicators({ start: 0, floor: 0 })
       ])
     const expected = await answers(memory)
     // Spans more than one reader page.

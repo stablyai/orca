@@ -24,6 +24,11 @@ import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native
 import { readJournalStatusState, type JournalStatusState } from './journal-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
 import {
+  readJournalStatusIndicators,
+  type JournalStatusIndicatorRead,
+  type JournalStatusIndicators
+} from './journal-status-indicators'
+import {
   readJournalSqlItems,
   type JournalSqlItemRead,
   type JournalSqlItemReadResult
@@ -32,6 +37,7 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'status-indicators'; input: JournalStatusIndicatorRead }
     | { kind: 'status-state'; currentFence?: number | null }
     | { kind: 'usage-limit-cut' }
     | { kind: 'orca-stop-cut' }
@@ -50,6 +56,7 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'status-indicators'; indicators: JournalStatusIndicators }
   | { kind: 'status-state'; status: JournalStatusState }
   | { kind: 'usage-limit-cut'; cut: NativeChatUsageLimitCut | null }
   | { kind: 'orca-stop-cut'; cut: NativeChatOrcaStopCut | null }
@@ -102,6 +109,13 @@ function read(
     )
   }
   switch (operation.kind) {
+    case 'status-indicators': {
+      const { state } = new JournalSqlReducer(scope, scope.epoch)
+      return {
+        kind: 'status-indicators',
+        indicators: readJournalStatusIndicators(state, operation.input)
+      }
+    }
     case 'status-state': {
       const { state } = new JournalSqlReducer(scope, scope.epoch)
       return {

@@ -31,6 +31,11 @@ export function* sqlJournalStatusItems(
         predicates.push('root=1')
       }
       ascending = selection.direction === 'asc'
+      single = selection.first === true
+      if (selection.before !== undefined) {
+        predicates.push('sequence<?')
+        params.push(selection.before)
+      }
       break
     case 'prompt':
     case 'users':

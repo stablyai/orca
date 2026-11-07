@@ -105,6 +105,8 @@ export class JournalInputEvidence extends JournalInputObservations {
     return this.evidenceFacts.ordinals.get(id) ?? Infinity
   }
 
+  latestSteerForItem = (itemId: string) => this.evidenceFacts.steers.get(itemId)?.lastId()
+
   /** Private evidence for the unchanged status helpers; transport snapshots retain all inputs. */
   statusInputs(
     state: JournalReducerState,

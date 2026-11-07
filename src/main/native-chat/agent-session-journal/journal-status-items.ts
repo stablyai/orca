@@ -12,7 +12,14 @@ export type JournalStatusItem = { item: AgentJournalRenderItem; position: Journa
 export type JournalStatusItemSelection =
   | { kind: 'boundary'; raw?: true }
   | { kind: 'clear' }
-  | { kind: 'turns'; root?: true; floor?: number; direction?: 'asc' | 'desc' }
+  | {
+      kind: 'turns'
+      root?: true
+      floor?: number
+      before?: number
+      first?: true
+      direction?: 'asc' | 'desc'
+    }
   | { kind: 'users'; floor?: number; unknown?: true }
   | { kind: 'assistant-prose'; floor?: number }
   | { kind: 'assistant-exists' }
@@ -60,7 +67,10 @@ export function* memoryJournalStatusItems(
         matches = readAgentJournalTurn(body) !== null || isAgentSessionContextClear(body)
         break
       case 'turns':
-        matches = readAgentJournalTurn(body) !== null && (!selection.root || root)
+        matches =
+          readAgentJournalTurn(body) !== null &&
+          (!selection.root || root) &&
+          (selection.before === undefined || item.sequence < selection.before)
         break
       case 'users':
         matches = user && (!selection.unknown || item.turnScope?.kind === 'unknown')
@@ -121,6 +131,7 @@ export function* memoryJournalStatusItems(
     selection.kind === 'clear' ||
     selection.kind === 'prompt' ||
     selection.kind === 'tools' ||
-    selection.kind === 'assistant-exists'
+    selection.kind === 'assistant-exists' ||
+    (selection.kind === 'turns' && selection.first)
   yield* single ? selected.slice(0, 1) : selected
 }

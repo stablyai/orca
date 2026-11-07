@@ -49,6 +49,8 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    statusIndicators: async (input) =>
+      (await read({ kind: 'status-indicators', input })).indicators,
     statusState: async (currentFence) =>
       (await read({ kind: 'status-state', currentFence })).status,
     input,
