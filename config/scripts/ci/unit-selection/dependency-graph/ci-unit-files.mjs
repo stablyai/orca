@@ -15,6 +15,7 @@ export const UNIT_INCLUDE = [
 
 export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts',
   'config/scripts/test-runtime/environment/vitest-bun-node-builtins.ts',
   'config/scripts/test-runtime/dom/vitest-dom-setup.ts',
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',

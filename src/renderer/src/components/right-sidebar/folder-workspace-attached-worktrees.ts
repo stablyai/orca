@@ -41,6 +41,8 @@ type AttachedWorktreeResolverArgs = {
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
   worktreeLineageById: Record<string, WorktreeLineage>
   worktreesByRepo: Record<string, readonly Worktree[]>
+  /** Children on other machines (selectCrossStoreFolderChildrenById). */
+  crossStoreChildrenByFolderId: ReadonlyMap<string, readonly Worktree[]>
 }
 
 export function getWorktreeActivityTime(worktree: Worktree): number {
@@ -55,7 +57,8 @@ export function getAttachedWorktreesForFolderWorkspace({
   folderWorkspaces,
   workspaceLineageByChildKey,
   worktreeLineageById,
-  worktreesByRepo
+  worktreesByRepo,
+  crossStoreChildrenByFolderId
 }: AttachedWorktreeResolverArgs): AttachedWorktreeResolution {
   const activeScope = parseWorkspaceKey(activeWorkspaceKey ?? activeWorktreeId ?? '')
   const folderWorkspace =
@@ -152,6 +155,12 @@ export function getAttachedWorktreesForFolderWorkspace({
     if (lineage) {
       add(row, lineage.createdAt)
     }
+  }
+  for (const child of crossStoreChildrenByFolderId.get(folderWorkspace.id) ?? []) {
+    add(
+      child,
+      getProjectedWorktreeLineage(child, worktreeLineageById)?.createdAt ?? child.createdAt ?? 0
+    )
   }
   for (let i = 0; i < queue.length; i++) {
     for (const child of childrenByParent.get(getWorktreeHostIdentity(queue[i])) ?? []) {

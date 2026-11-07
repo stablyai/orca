@@ -20,9 +20,7 @@ export function PluginPageHero({
 }): React.JSX.Element {
   const cover = images?.cover
   return (
-    // Why capped: the decision below the header must stay in view at 1280×800 and 900×700; a
-    // taller column crops the 16:10 picture from its centre instead of growing.
-    <div className="relative aspect-[16/10] max-h-64 w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
+    <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-border/70 bg-muted/40">
       {cover ? (
         <img
           src={cover.url}

@@ -4174,6 +4174,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Исходная панель агента недоступна. Сохранённый вывод остаётся здесь.",
       "openAgent": "Открыть агента",
       "retryHistory": "Повторить загрузку истории",
+      "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
+      "retryFullOutput": "Повторить",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "В загруженной истории нет подходящих запусков. Загрузите ещё, чтобы продолжить.",
       "noMatchingRunsYet": "Подходящих запусков пока нет.",
       "runSummary": "{{title}}, {{status}}, {{date}}",

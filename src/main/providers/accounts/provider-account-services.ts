@@ -146,9 +146,9 @@ export function createProviderAccountServices(
   )
   // agy has one shared login: attribute readings to saved accounts instead of switching to read others.
   rateLimits.setAntigravityAccountUsageRecorder({
-    begin: (target) => getAntigravityAccountService(target).beginUsageRead(),
-    finish: (target, login, limits) =>
-      getAntigravityAccountService(target).finishUsageRead(login, limits)
+    begin: async (target) => (await getAntigravityAccountService(target)).beginUsageRead(),
+    finish: async (target, login, limits) =>
+      (await getAntigravityAccountService(target)).finishUsageRead(login, limits)
   })
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {

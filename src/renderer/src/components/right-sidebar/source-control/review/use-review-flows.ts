@@ -161,6 +161,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     operationStore,
     prAiGenerationEnabled: createReviewComposer.prAiGenerationEnabled,
     prBase,
+    prImageUploadPendingRef: createReviewComposer.prImageUploadPendingRef,
     prBody,
     prDraft,
     prFieldRevisions: createReviewComposer.prFieldRevisions,

@@ -177,13 +177,13 @@ export function SshHostAdvancedFields({
               <Label className="text-xs font-medium">
                 {translate(
                   'auto.components.settings.SshTargetForm.allowRemoteCliControl',
-                  "Allow this host's orca CLI to control Orca"
+                  'Allow this host to control Orca browser tabs in its workspaces'
                 )}
               </Label>
               <p className="text-muted-foreground">
                 {translate(
                   'auto.components.settings.SshTargetForm.allowRemoteCliControlHelp',
-                  "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server."
+                  "On by default for new hosts. Agents and orca commands on this host can open, read and use Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected. Tabs it controls show its name. Terminals started on this host by an older Orca also need this on to run orca orchestration commands. It cannot read your files, clipboard or cookies."
                 )}
               </p>
             </div>
@@ -198,7 +198,7 @@ export function SshHostAdvancedFields({
               }
               ariaLabel={translate(
                 'auto.components.settings.SshTargetForm.allowRemoteCliControl',
-                "Allow this host's orca CLI to control Orca"
+                'Allow this host to control Orca browser tabs in its workspaces'
               )}
             />
           </div>

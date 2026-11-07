@@ -3974,6 +3974,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理程式窗格無法使用。已儲存的輸出仍保留在此處。",
       "openAgent": "開啟代理程式",
       "retryHistory": "重試歷程記錄",
+      "fullOutputUnavailable": "無法載入完整輸出。",
+      "retryFullOutput": "重試",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已載入的歷程記錄中沒有符合的執行。請載入更多以繼續。",
       "noMatchingRunsYet": "尚無符合的執行。",
       "runSummary": "{{title}}，{{status}}，{{date}}",

@@ -25,6 +25,24 @@ describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
 describe('OpenAiTranscriptionSession', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  it('sends the dictation language only when one is chosen', async () => {
+    const languages: (FormDataEntryValue | null)[] = []
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      languages.push(init.body instanceof FormData ? init.body.get('language') : 'not multipart')
+      return new Response(JSON.stringify({ text: 'ok' }))
+    })
+    for (const language of ['ko', undefined]) {
+      const session = new OpenAiTranscriptionSession(
+        'openai-gpt-4o-mini-transcribe',
+        () => 'test-key',
+        language
+      )
+      session.feedAudio(new Float32Array([0.1]), 16000)
+      await session.finish()
+    }
+    expect(languages).toEqual(['ko', null])
+  })
+
   it('preserves multipart WAV bytes across owned, resampled and empty audio chunks', async () => {
     const uploads: Buffer[] = []
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {

@@ -60,6 +60,7 @@ it.each(['github', 'gitlab'] as const)(
     }
     const operationStore = getWorktreeOperationStore(`wt-1-${provider}`, null, undefined)
     operationStore.setState({ createPrIntentRun: token, createPrIntentTarget: token })
+    const imagePending = { current: true }
     const create = vi
       .fn()
       .mockResolvedValue({ ok: true, number: 100, url: 'https://example.com/reviews/100' })
@@ -89,10 +90,19 @@ it.each(['github', 'gitlab'] as const)(
           hostedReviewCreateCopy: localizedHostedReviewCopy(provider),
           operationStore,
           prBase: 'main',
+          prImageUploadPendingRef: imagePending,
           prBody: ''
         }),
       { initialProps: { settings: null } }
     )
+    await expect(
+      result.current.createHostedReviewForCreatePrIntent(token, eligibility)
+    ).resolves.toBe(false)
+    expect(create).not.toHaveBeenCalled()
+    expect(operationStore.getState().createPrIntentNotice).toEqual(
+      expect.objectContaining({ tone: 'muted', message: expect.any(String) })
+    )
+    imagePending.current = false
     await expect(
       result.current.createHostedReviewForCreatePrIntent(token, eligibility)
     ).resolves.toBe(true)

@@ -1016,7 +1016,9 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}"
+      "sameAsChoice": "Same as {{agent}} · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
+      "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "symlink",
@@ -1126,7 +1128,7 @@
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
         "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
         "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
-        "zipformerStreamingEn": "English only. Lightweight 20M-param model, good balance of speed and size.",
+        "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
         "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
         "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
@@ -4505,7 +4507,8 @@
             "chatUnavailableAfterSelection": "Couldn't start a {{value0}} chat.",
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
-            "agentsLoading": "Loading agents"
+            "agentsLoading": "Loading agents",
+            "chatNotOnWindows": "No chat on Windows yet"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -6429,7 +6432,6 @@
           "savedInProjectSettings": "Saved in this <settings>project's settings</settings>"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Save local setup",
           "3933401d28": "Configure",
           "31b8b01a45": "Settings",
           "4a98f907ae": "Retry",
@@ -6444,7 +6446,15 @@
           "5bfd5c8779": "Dismiss setup scripts",
           "detectedFromSource": "Detected from <source>{{source}}</source>",
           "ignoresSharedSetup": "This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.",
-          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees."
+          "foundSetupCommandIn": "Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.",
+          "reviewSetupScript": "Review setup script"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Review setup script",
+          "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
+          "setupScript": "Setup script",
+          "archiveScript": "Archive script",
+          "save": "Save local setup"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -9427,8 +9437,8 @@
           "proxyConnectionReuseHelp": "Faster connects through slow ProxyCommand or ProxyJump hosts. Only enable if your ssh_config doesn't rely on host-specific Match or %h rules.",
           "reconnectOnLaunch": "Reconnect on launch",
           "reconnectOnLaunchHelp": "When off, Orca leaves this host, and any Orca server reached through it, disconnected at launch until you connect it.",
-          "allowRemoteCliControl": "Allow this host's orca CLI to control Orca",
-          "allowRemoteCliControlHelp": "On by default for new hosts. Lets orca commands run on this host open and drive Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected, and lets terminals started by an older Orca on this host run orchestration commands (check, inbox, send, ask, reply) for their own supervised work. They cannot read your files, clipboard or cookies. When off, they reach only this host's own Orca server.",
+          "allowRemoteCliControl": "Allow this host to control Orca browser tabs in its workspaces",
+          "allowRemoteCliControlHelp": "On by default for new hosts. Agents and orca commands on this host can open, read and use Orca browser tabs on this desktop, only in this host's workspaces and only while it is connected. Tabs it controls show its name. Terminals started on this host by an older Orca also need this on to run orca orchestration commands. It cannot read your files, clipboard or cookies.",
           "editTitle": "Edit SSH host",
           "addTitle": "Add SSH host",
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
@@ -11574,7 +11584,10 @@
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
-              "micDefault": "system default"
+              "micDefault": "system default",
+              "dictationLanguageTitle": "Dictation Language",
+              "dictationLanguageDescription": "Tell the speech model which language you speak.",
+              "dictationLanguageKeyword": "language"
             }
           }
         },
@@ -13398,6 +13411,7 @@
           "needsOrcaTitle": "Needs Orca {{value0}} or later",
           "needsOrcaBody": "You have Orca {{value0}}.",
           "back": "Plugins",
+          "backToPlugin": "Back",
           "info": "Info",
           "version": "Version",
           "latest": "Latest",
@@ -13506,6 +13520,20 @@
           "update": "Update",
           "review": "Review",
           "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+        },
+        "PluginAuthor": {
+          "publisher": "Publisher",
+          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
+          "publisherByline": "Publisher: {{publisher}}",
+          "declaredByline": "Declared publisher: {{publisher}}",
+          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
+          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
+          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
+          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
+          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
+          "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
+          "samePublisher": "More listed as {{value0}}"
         },
         "PluginDetailInfo": {
           "previous": "Previous",
@@ -13692,7 +13720,8 @@
           "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
           "manyDescription": "They won’t update until you review them.",
           "review": "Review",
-          "dismiss": "Dismiss"
+          "dismiss": "Dismiss",
+          "movedInstalled": "It stays off until you review it."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
@@ -18043,6 +18072,8 @@
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
           "latestSavedOutput": "Latest saved output",
+          "fullOutputUnavailable": "Couldn't load the full output.",
+          "retryFullOutput": "Retry",
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
@@ -19366,6 +19397,9 @@
           "conflict": "Not used: {{value0}}, installed first, replaces it",
           "detail": "From its shortcut, the palette and menus. If the plugin fails, Orca’s own runs.",
           "switch": "Use {{value0}} instead of Orca’s {{value1}}"
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19589,6 +19623,18 @@
         "terminalTipCaption": "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI.",
         "chatTip": "Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.",
         "turnOnChat": "Turn on now"
+      },
+      "agyInstall": {
+        "open": "Install",
+        "title": "Install Antigravity",
+        "description": "Press Enter in the terminal to run the official installer. Closing this terminal stops any command still running.",
+        "target": "Install location: {{location}}",
+        "thisDevice": "This device",
+        "wslLocation": "WSL {{distro}}",
+        "terminal": "Antigravity installer",
+        "detected": "Antigravity is detected on PATH. Close the terminal when the installer has finished.",
+        "close": "Close terminal",
+        "recheck": "Re-check agents"
       },
       "agentSurface": {
         "chat": {
@@ -19906,6 +19952,9 @@
       },
       "composer": {
         "send": "Send",
+        "planMode": "Plan",
+        "moreControls": "More chat controls",
+        "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",
         "previewQueue": "Queue",
         "previewSteer": "Steer",
@@ -20699,7 +20748,8 @@
         "hidden": "Orca won't show opened pull requests anymore",
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
-      }
+      },
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
     },
     "tab": {
       "bar": {
@@ -21148,6 +21198,15 @@
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
         "turnDiffsSearchChangedFiles": "changed files",
         "turnDiffsSearchEdits": "edits"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} only transcribes the languages it was built for, so it ignores this setting.",
+          "unsupported": "{{model}} doesn't support {{language}}, so it detects the language itself.",
+          "description": "The language you speak. Auto-detect lets the model work it out each time.",
+          "title": "Dictation Language",
+          "auto": "Auto-detect"
+        }
       }
     },
     "agentChildRow": {
@@ -22262,6 +22321,18 @@
       },
       "windowsChanged": "The host default account changed. Select a saved account to apply it again.",
       "windowsSessions": "Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.",
+      "authMethod": "Sign in with",
+      "personal": "Google account",
+      "enterprise": "Gemini Enterprise",
+      "gcpProject": "Google Cloud project",
+      "gcpLocation": "Google Cloud location",
+      "projectPlaceholder": "my-project-id",
+      "locationPlaceholder": "us-central1",
+      "signInAgainWith": "Sign in again to use {{method}}.",
+      "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
+      "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
+      "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
+      "signInWith": "Signs in with {{method}} on {{host}}.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet"
     },
@@ -22382,6 +22453,16 @@
     "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
   },
   "worktree": {
+    "setupTrust": {
+      "createdBranchSkipped": "Setup didn't run: this workspace's branch has different orca.yaml setup commands than the ones you approved.",
+      "runFailed": "Could not start setup.",
+      "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
+      "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
+      "reviewAction": "Review setup",
+      "branchDiffersTitle": "This workspace's branch has different setup commands",
+      "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
+      "branchSetupScript": "Branch's setup script"
+    },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",
       "review": "Delete with nested worktrees…",
@@ -23128,7 +23209,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "An agent is using this page"
+    "agentDriving": "An agent is using this page",
+    "controlledByHost": "Controlled by {{host}}"
   },
   "nativeChat": {
     "math": {
@@ -23619,7 +23701,11 @@
     "viewed": {
       "markFile": "Mark {{path}} as viewed",
       "unmarkFile": "Unmark {{path}} as viewed"
-    }
+    },
+    "pasteImageFile": "Paste the image as a file to attach it to GitHub.",
+    "imageUploadFailed": "Could not attach image: {{message}}",
+    "imageUploadError": "GitHub could not upload this image.",
+    "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
@@ -24052,7 +24138,7 @@
     "unsupportedDescription": "Apple doesn’t support macOS {{macos}} on this Mac.",
     "unknownDescription": "We couldn’t confirm an upgrade for this Mac. Apple’s compatibility guide can help.",
     "whyTitle": "Why is this changing?",
-    "whyIntro": "We updated Electron, the foundation Orca runs on, to bring:",
+    "whyIntro": "We updated parts of Orca’s foundation, like Electron and the on-device speech engine, to bring:",
     "whySecurity": "Ongoing security fixes from Electron and Chromium.",
     "whyPerformance": "Faster startup and more efficient native API calls.",
     "whySystemApis": "Support for current macOS notification APIs and secure Keychain storage.",
@@ -24063,5 +24149,14 @@
     "discussionAction": "Join the discussion",
     "checkAction": "Check compatibility",
     "settingsStatus": "Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} is controlling a browser tab",
+    "description": "Agents on this SSH host can open and use Orca browser tabs in its workspaces. Tabs it controls show its name. You can change this in Settings > SSH.",
+    "stop": "Stop",
+    "disallow": "Don’t allow",
+    "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
+    "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
+    "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
   }
 }

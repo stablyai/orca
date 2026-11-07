@@ -85,7 +85,8 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
         }
       },
       worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [visible, archived, stale] }
+      worktreesByRepo: { 'repo-1': [visible, archived, stale] },
+      crossStoreChildrenByFolderId: new Map()
     })
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])
@@ -149,7 +150,8 @@ it('keeps attachment order, descendants and Attached-tab parents on their resolv
     worktreesByRepo: {
       remote: [twin, remoteChild, remoteGrandchild, remoteOnly],
       local: [root, child, stale]
-    }
+    },
+    crossStoreChildrenByFolderId: new Map()
   })
   expect(
     result.owners.map((owner) => [
@@ -168,4 +170,25 @@ it('keeps attachment order, descendants and Attached-tab parents on their resolv
     'local-root',
     'remote-only-instance'
   ])
+})
+
+it('includes resolved cross-store roots and their descendants without attaching another host copy', () => {
+  const root = makeWorktree({ id: 'remote-root', hostId: 'ssh:box', instanceId: 'root' })
+  const twin = makeWorktree({ id: 'remote-root', hostId: 'ssh:other', instanceId: 'twin' })
+  const child = makeWorktree({ id: 'remote-child', hostId: 'ssh:box', instanceId: 'child' })
+  const lineage = edge(child, root, 5)
+  Object.assign(child, { lineage })
+  const result = getAttachedWorktreesForFolderWorkspace({
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    executionHostId: 'local',
+    folderWorkspaces: [makeFolder()],
+    workspaceLineageByChildKey: {},
+    worktreeLineageById: {},
+    worktreesByRepo: { remote: [root, child], other: [twin] },
+    crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
+  })
+  expect(result.owners.map((owner) => owner.worktree.instanceId)).toEqual(['root', 'child'])
+  expect(result.rootChildWorktrees).toEqual([root])
+  expect(result.lineageChildrenByParentId.get('ssh:box|remote-root')).toEqual([child])
 })

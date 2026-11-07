@@ -30,6 +30,10 @@ export type SpeechModelManifest = {
   streaming: boolean
   modelingUnit?: ModelingUnit
   recommended?: boolean
+  /** Retired: never offered for selection, and a saved selection moves to this model on load. */
+  replacedBy?: string
+  /** Codes the engine accepts (others crash or fail to load it); absent when it ignores the setting. */
+  dictationLanguages?: readonly string[]
 }
 
 export type SpeechModelStatus = 'not-downloaded' | 'downloading' | 'extracting' | 'ready' | 'error'
@@ -70,7 +74,8 @@ export type VoiceSettings = {
   enabled: boolean
   sttModel: string
   modelsDir: string
-  language: string
+  /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
+  dictationLanguage: string
   dictationMode: DictationMode
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]

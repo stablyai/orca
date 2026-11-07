@@ -511,6 +511,7 @@ describe('runtime composition parity (Electron vs orcad)', () => {
       'ctor:getPairedDeviceName',
       'rpc-option:webClientRoot',
       'rpc-option:wsPort',
+      'rpc-option:pinnedBindHost',
       'runtime.setAccountServices',
       // #31112: without it `stats.summary` answers {} and mobile home shows zeros.
       'ctor-arg:stats',

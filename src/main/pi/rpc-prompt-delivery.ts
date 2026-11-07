@@ -29,11 +29,47 @@ type DeliveryDeps = {
   refused?: () => void
 }
 
+const MISSING_KEY_PREFIX = 'No API key found for '
+const DEAD_OAUTH_GRANT = /invalid_grant|invalid_token|unauthorized_client|\brevoked\b/i
+const TEMPORARY_OAUTH_FAILURE =
+  /timeout|network|fetch failed|ECONN(?:REFUSED|RESET)|ETIMEDOUT|ETIMEOUT|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|FailedToOpenSocket|EAI_AGAIN|socket hang up|\b(?:408|425|429|5\d{2})\b|rate.?limit|too many requests|temporar|unavailable|forbidden|permission_denied|cloudflare|captcha/i
+
+function hasExpiredRefreshToken(error: string): boolean {
+  let refreshToken = false
+  // Consume bounded tokens once rather than searching the remaining suffix at every token.
+  for (const [part] of error.matchAll(/refresh[\s_]?token|expired|[\r\n\u2028\u2029]/gi)) {
+    if (part.toLowerCase() === 'expired') {
+      if (refreshToken) {
+        return true
+      }
+    } else {
+      refreshToken = part.length > 1
+    }
+  }
+  return false
+}
+
+function piHttpErrorStatus(error: string): number | undefined {
+  // Provider SDKs put status in the outer envelope; numbers in the body are not auth evidence.
+  const status =
+    /^([1-5]\d{2})(?:[ \t:]|$)/.exec(error)?.[1] ??
+    /^[^\r\n:()]+ error \(([1-5]\d{2})\):/i.exec(error)?.[1] ??
+    /^[^\r\n:()]+: ([1-5]\d{2}):/.exec(error)?.[1]
+  return status === undefined ? undefined : Number(status)
+}
+
 export function piRpcFailureFact(error: string) {
-  return agentSessionFailureFact(
-    error.startsWith('No API key found for ') ? 'notSignedIn' : 'providerRejected',
-    { detail: providerDiagnostic(error, 'person') }
-  )
+  const signInRequired =
+    error.startsWith(MISSING_KEY_PREFIX) ||
+    (error.startsWith('Authentication failed for ') && error.includes("Run '/login ")) ||
+    (error.startsWith('OAuth refresh failed for ')
+      ? DEAD_OAUTH_GRANT.test(error) ||
+        hasExpiredRefreshToken(error) ||
+        (/\b401\b/.test(error) && !TEMPORARY_OAUTH_FAILURE.test(error))
+      : piHttpErrorStatus(error) === 401)
+  return agentSessionFailureFact(signInRequired ? 'notSignedIn' : 'providerRejected', {
+    detail: providerDiagnostic(error, signInRequired ? 'log' : 'person')
+  })
 }
 
 function piRejection(fact: SubmissionRejectionFact): AgentSessionDispatchOutcome {
@@ -112,7 +148,11 @@ export class PiRpcPromptDelivery {
     if (!reply.success) {
       const error = reply.error ?? 'Pi rejected the prompt'
       const fact = piRpcFailureFact(error)
-      if (!submission.accepted && fact.kind === 'notSignedIn' && submission.retries++ < 8) {
+      if (
+        !submission.accepted &&
+        error.startsWith(MISSING_KEY_PREFIX) &&
+        submission.retries++ < 8
+      ) {
         submission.signInRefusal = error
         this.removeWaiting(submission)
         const timer = setTimeout(() => {

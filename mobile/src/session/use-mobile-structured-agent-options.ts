@@ -19,6 +19,7 @@ import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalo
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
   acceptedStructuredSessionSelectionOutcome,
+  structuredAgentSessionOptionAvailability,
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
@@ -124,11 +125,32 @@ export function useMobileStructuredAgentOptions(args: {
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
   const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  const readBaseOptionSnapshot = useCallback(
+    (view = readOptionState()) => {
+      const shown = structuredAgentSessionShownSnapshot(view)
+      const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
+      return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+    },
+    [acceptsPicks, legacyHostPermissions, readOptionState]
+  )
   const readOptionSnapshot = useCallback(() => {
-    const shown = structuredAgentSessionShownSnapshot(readOptionState())
-    const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, legacyHostPermissions, readOptionState])
+    const view = readOptionState()
+    return structuredAgentSessionOptionAvailability({
+      controller,
+      view,
+      snapshot: readBaseOptionSnapshot(view),
+      ready: acceptsPicks,
+      providerStarting,
+      isCurrentContext
+    })
+  }, [
+    controller,
+    readOptionState,
+    readBaseOptionSnapshot,
+    acceptsPicks,
+    providerStarting,
+    isCurrentContext
+  ])
   const optionSnapshot = readOptionSnapshot()
 
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
@@ -160,7 +182,7 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: readOptionSnapshot(),
+      snapshot: readBaseOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
       existingChat: createdHere === undefined || args.hasTurn === true,
@@ -215,6 +237,7 @@ export function useMobileStructuredAgentOptions(args: {
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
       optionSnapshot,
+      admits: writer.admits,
       demandModelCatalog,
       setStructuredOption,
       readOptionSnapshot

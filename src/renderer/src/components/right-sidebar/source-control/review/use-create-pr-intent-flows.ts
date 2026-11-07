@@ -55,6 +55,7 @@ export function useSourceControlCreatePrIntentFlows(
     hostedReviewCreateCopy,
     operationStore,
     prBase,
+    prImageUploadPendingRef: reviewFlows.prImageUploadPendingRef,
     prBody
   })
   const createPrIntentProbes = useSourceControlCreatePrIntentProbes({

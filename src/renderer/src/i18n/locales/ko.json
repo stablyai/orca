@@ -404,7 +404,8 @@
       "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
-      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다."
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -499,7 +500,7 @@
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
         "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
         "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
-        "zipformerStreamingEn": "영어 전용. 파라미터 2천만 개의 경량 모델로, 속도와 크기의 균형이 좋습니다.",
+        "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
         "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
         "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
         "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
@@ -3734,7 +3735,8 @@
             "chatUnavailableAfterSelection": "{{value0}} 채팅을 시작할 수 없습니다.",
             "chatCheckFailed": "채팅 가능 여부를 확인할 수 없습니다.",
             "terminalListNeedsServerUpdate": "터미널 에이전트를 나열하려면 이 서버의 Orca를 업데이트하세요",
-            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다"
+            "terminalListFailed": "이 워크스페이스의 터미널 에이전트를 나열할 수 없습니다",
+            "chatNotOnWindows": "Windows에서는 아직 채팅 불가"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "탭 전환",
@@ -5518,7 +5520,6 @@
           "savedInProjectSettings": "이 <settings>프로젝트의 설정</settings>에 저장됨"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "로컬 설정 저장",
           "3933401d28": "구성",
           "31b8b01a45": "설정",
           "4a98f907ae": "다시 시도",
@@ -5533,7 +5534,15 @@
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
-          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
+          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요.",
+          "reviewSetupScript": "설정 스크립트 검토"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "설정 스크립트 검토",
+          "description": "저장하면 Orca가 {{repo}}의 워크트리를 만들 때마다 실행됩니다.",
+          "setupScript": "설정 스크립트",
+          "archiveScript": "아카이브 스크립트",
+          "save": "로컬 설정 저장"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "취소",
@@ -8446,8 +8455,8 @@
           "editingPrefix": "편집 중",
           "reconnectOnLaunch": "시작 시 다시 연결",
           "reconnectOnLaunchHelp": "끄면 Orca가 시작될 때 이 호스트와 이 호스트를 통해 연결되는 Orca 서버를 직접 연결할 때까지 연결하지 않습니다.",
-          "allowRemoteCliControl": "이 호스트의 orca CLI가 Orca를 제어하도록 허용",
-          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다.",
+          "allowRemoteCliControl": "이 호스트가 작업 공간의 Orca 브라우저 탭을 제어하도록 허용",
+          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트의 에이전트와 orca 명령은 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 읽고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 이 호스트에서 이전 버전의 Orca가 시작한 터미널에서 orca 오케스트레이션 명령을 실행하려면 이 설정도 켜져 있어야 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다.",
           "addHost": "호스트 추가",
           "proxyConnectionReuse": "프록시 연결 하나를 재사용",
           "proxyConnectionReuseHelp": "느린 ProxyCommand 또는 ProxyJump 호스트를 통한 연결이 빨라집니다. ssh_config가 호스트별 Match 또는 %h 규칙에 의존하지 않는 경우에만 사용하세요."
@@ -10576,7 +10585,10 @@
               "micInput": "입력",
               "micDevice": "장치",
               "micAirpods": "에어팟",
-              "micDefault": "시스템 기본값"
+              "micDefault": "시스템 기본값",
+              "dictationLanguageTitle": "받아쓰기 언어",
+              "dictationLanguageDescription": "음성 모델에 말하는 언어를 알려 줍니다.",
+              "dictationLanguageKeyword": "언어"
             }
           }
         },
@@ -12723,7 +12735,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
@@ -16976,6 +16989,8 @@
           "noRunUsageYet": "아직 실행 사용량 없음",
           "noWorkspace": "워크스페이스 없음",
           "latestSavedOutput": "최근 저장된 출력",
+          "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
+          "retryFullOutput": "다시 시도",
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
@@ -18260,6 +18275,9 @@
           "cancel": "취소",
           "add": "카탈로그 추가",
           "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -18649,6 +18667,7 @@
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
+        "planMode": "계획",
         "send": "보내기",
         "alternateSteerHint": "{{shortcut}}(으)로 지금 보내기",
         "previewQueue": "대기열에 추가",
@@ -19394,7 +19413,8 @@
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "worktree": "작업 트리"
-      }
+      },
+      "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요."
     },
     "tab": {
       "bar": {
@@ -19811,6 +19831,15 @@
         "idleStopSearchTimeout": "시간 제한",
         "idleStopSearchKeepAlive": "연결 유지",
         "idleStopNever": "사용 안 함"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}}은(는) 지원하는 언어만 받아쓰므로 이 설정을 사용하지 않습니다.",
+          "unsupported": "{{model}}은(는) {{language}}을(를) 지원하지 않아 언어를 자동으로 감지합니다.",
+          "description": "말하는 언어입니다. 자동 감지를 선택하면 모델이 매번 언어를 판단합니다.",
+          "title": "받아쓰기 언어",
+          "auto": "자동 감지"
+        }
       }
     },
     "agentChildRow": {
@@ -21921,7 +21950,8 @@
     "rowActions": "{{name}}에 대한 작업"
   },
   "browserTab": {
-    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다",
+    "controlledByHost": "{{host}}에서 제어 중"
   },
   "quitAndStopAllSessions": {
     "title": "완전히 종료",
@@ -22950,5 +22980,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}}에서 브라우저 탭을 제어하고 있습니다",
+    "description": "이 SSH 호스트의 에이전트는 해당 작업 공간의 Orca 브라우저 탭을 열고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 설정 > SSH에서 변경할 수 있습니다.",
+    "stop": "중지",
+    "disallow": "허용 안 함",
+    "stopped": "Orca를 다시 시작할 때까지 {{host}}에서 브라우저 탭을 제어하지 않습니다.",
+    "disallowed": "{{host}}에서 더 이상 브라우저 탭을 제어할 수 없습니다. 설정 > SSH에서 다시 켤 수 있습니다.",
+    "failed": "{{host}}을(를) 중지하지 못했습니다. 설정 > SSH에서 브라우저 제어를 끄세요."
   }
 }

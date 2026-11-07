@@ -1,3 +1,5 @@
+import { CURSOR_SHOW_SEQUENCE as SHOW_CURSOR } from '../escape/terminal-cursor-restore'
+import { FOCUS_REPORTING_DISABLE_SEQUENCE as RESET_FOCUS_REPORTING } from './terminal-focus-reports'
 // Share renderer replay and daemon cold-restore mode contracts; duplicated literals drifted (#12101).
 
 // Cold restores target a fresh shell; stale serialized TUI modes would leak input/focus reports into it.
@@ -55,10 +57,9 @@ export const RELEASE_SYNCHRONIZED_OUTPUT = '\x1b[?2026l'
 const LEAVE_ALTERNATE_SCREEN_KEEPING_NORMAL_CURSOR = `${SAVE_GROUNDED_CURSOR}\x1b[?1049l`
 // UTF-8 and urxvt encodings RESET_MOUSE_REPORTING leaves out; xterm ignores them, other hosts may not.
 const RESET_LEGACY_MOUSE_ENCODINGS = '\x1b[?1005l\x1b[?1015l'
-const RESET_FOCUS_REPORTING = '\x1b[?1004l'
+
 const RESET_BRACKETED_PASTE = '\x1b[?2004l'
 const RESET_APPLICATION_CURSOR_AND_KEYPAD = '\x1b[?1l\x1b[?66l'
-const SHOW_CURSOR = '\x1b[?25h'
 
 /** Ground cold restores and proven process ends without ownership signals (OSC 133 or mode enables). Reset per-screen Kitty stacks around ?1049l.
  * keepFocusReporting preserves ConPTY’s pane-lifetime focus mode. */

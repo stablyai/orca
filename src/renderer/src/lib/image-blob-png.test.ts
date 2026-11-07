@@ -80,6 +80,19 @@ describe('convertImageBlobToPng', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:decode-owned')
   })
 
+  it.each([WEBP_BYTES, PNG_BYTES])(
+    'downscales a pasted image above the pixel cap',
+    async (bytes) => {
+      stubDecodedSize(8000, 6000)
+      const { dimensions, png } = stubCanvas()
+
+      await expect(
+        convertImageBlobToPng(new Blob([bytes]), { downscaleToFit: true })
+      ).resolves.toBe(png)
+      expect(dimensions).toEqual({ width: 6688, height: 5016 })
+    }
+  )
+
   it('releases its temporary URL on a decode error', async () => {
     stubDecodedSize(800, 600, vi.fn().mockRejectedValue(new Error('invalid image')))
 

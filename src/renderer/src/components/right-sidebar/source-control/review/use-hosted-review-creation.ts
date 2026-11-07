@@ -8,7 +8,10 @@ import {
   normalizeHostedReviewBaseRef as stripBaseRef
 } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveBlockedCreateReviewNoticeMessage } from './source-control-create-review-blocked-action'
-import { localizedCreateFailure } from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
+import {
+  localizedCreateFailure,
+  localizedCreateException
+} from '../../hosted-review/provider-actions/hosted-review-create-failure-copy'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
@@ -39,6 +42,7 @@ export function useSourceControlHostedReviewCreation({
   operationStore,
   prAiGenerationEnabled,
   prBase,
+  prImageUploadPendingRef,
   prBody,
   prDraft,
   prFieldRevisions,
@@ -47,33 +51,37 @@ export function useSourceControlHostedReviewCreation({
   prTitle,
   pullRequestFieldsInitialized,
   worktreePath
-}: {
+}: Pick<
+  SourceControlCreateReviewComposer,
+  | 'prAiGenerationEnabled'
+  | 'prBase'
+  | 'prBody'
+  | 'prDraft'
+  | 'prFieldRevisions'
+  | 'prFieldsAreSeedPlaceholders'
+  | 'prTitle'
+  | 'pullRequestFieldsInitialized'
+  | 'handleGeneratePullRequestFields'
+> & {
   activePullRequestGenerationKey: SourceControlPullRequestGeneration['activePullRequestGenerationKey']
   activeRepo: SourceControlWorktreeContext['activeRepo']
   activeWorktreeId: string | null
   branchName: string
   createHostedReview: SourceControlStoreActions['createHostedReview']
   createStackedHostedReview: SourceControlStoreActions['createStackedHostedReview']
-  handleGeneratePullRequestFields: SourceControlCreateReviewComposer['handleGeneratePullRequestFields']
   handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
   hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
   hostedReviewCreateProvider: SourceControlHostedReviewState['hostedReviewCreateProvider']
   hostedReviewCreation: SourceControlHostedReviewState['hostedReviewCreation']
   operationStore: SourceControlWorktreeOperationState['operationStore']
-  prAiGenerationEnabled: SourceControlCreateReviewComposer['prAiGenerationEnabled']
-  prBase: SourceControlCreateReviewComposer['prBase']
-  prBody: SourceControlCreateReviewComposer['prBody']
-  prDraft: SourceControlCreateReviewComposer['prDraft']
-  prFieldRevisions: SourceControlCreateReviewComposer['prFieldRevisions']
-  prFieldsAreSeedPlaceholders: SourceControlCreateReviewComposer['prFieldsAreSeedPlaceholders']
+  prImageUploadPendingRef?: React.RefObject<boolean>
   prGenerating: boolean
-  prTitle: SourceControlCreateReviewComposer['prTitle']
-  pullRequestFieldsInitialized: SourceControlCreateReviewComposer['pullRequestFieldsInitialized']
   worktreePath: string | null
 }) {
   const createPullRequest = useCallback(
     async (stacked = false, generated?: PullRequestGenerationFields): Promise<void> => {
       if (
+        prImageUploadPendingRef?.current ||
         !activeRepo ||
         !activeWorktreeId ||
         !worktreePath ||
@@ -230,14 +238,7 @@ export function useSourceControlHostedReviewCreation({
       } catch (error) {
         setCreatePrIntentNotice(operationStore, {
           tone: 'destructive',
-          message:
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-                  'Failed to create {{value0}}',
-                  { value0: hostedReviewCreateCopy.reviewLabel }
-                )
+          message: localizedCreateException(error, hostedReviewCreateCopy.reviewLabel)
         })
       }
     },
@@ -254,6 +255,7 @@ export function useSourceControlHostedReviewCreation({
       hostedReviewCreateCopy.titleLabel,
       hostedReviewCreateProvider,
       prBase,
+      prImageUploadPendingRef,
       prBody,
       prDraft,
       prGenerating,
