@@ -9,6 +9,7 @@ import {
 
 const credentialStoreSchema = z.record(z.string(), z.string())
 
+/** ZCode v2 session credential used to authenticate Start Plan usage queries. */
 export type ZcodeV2StartPlanCredential =
   | { status: 'absent' | 'unavailable' | 'error' }
   | { status: 'ok'; jwt: string; deviceMid: string }

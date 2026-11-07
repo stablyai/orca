@@ -79,6 +79,7 @@ function asStartPlanBucketName(balance: StartPlanBalance): string | null {
   return null
 }
 
+/** Maps a balance bucket into the shared rate-limit shape, or null when it is unusable. */
 function asStartPlanBucket(balance: StartPlanBalance): RateLimitBucket | null {
   if (balance.meter !== 'model_usage' || balance.unit_type !== 'token') {
     return null
@@ -113,6 +114,7 @@ function asStartPlanBucket(balance: StartPlanBalance): RateLimitBucket | null {
   }
 }
 
+/** Picks the display name of the highest-priority active plan, or null when none reports one. */
 function asStartPlanPlanType(plans: StartPlanPlan[]): string | null {
   let best: { priority: number; name: string } | null = null
   for (const plan of plans) {
@@ -176,7 +178,7 @@ export async function fetchZcodeStartPlanUsage(
     const msg = payload?.msg
     const message =
       typeof msg === 'string' && msg
-        ? msg.replaceAll(credential.jwt, '[redacted]')
+        ? msg.replaceAll(credential.jwt, '[redacted]').slice(0, 200)
         : 'Invalid ZCode Start Plan quota response'
     return failed(message, 'parse', credential)
   }

@@ -215,6 +215,22 @@ describe('fetchZcodeRateLimits', () => {
       'https://api.z.ai/api/monitor/usage/quota/limit'
     )
   })
+
+  it('keeps a transient Coding Plan failure instead of switching to the Start Plan session', async () => {
+    writeConfig()
+    const host = writeStartPlanStore()
+    vi.mocked(fetch).mockResolvedValue(new Response('denied', { status: 401 }))
+
+    const result = await fetchZcodeRateLimits({ configPath, credentialHost: host })
+
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('ZCode quota request failed (401)')
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(String(vi.mocked(fetch).mock.calls[0][0])).toBe(
+      'https://open.bigmodel.cn/api/monitor/usage/quota/limit'
+    )
+    expect(JSON.stringify(result)).not.toContain(START_PLAN_JWT)
+  })
 })
 
 describe('quota credential privacy', () => {

@@ -53,7 +53,7 @@ export function zcodeV2DataDir(host: ZcodeCredentialHost): string {
   return userPath(host.env.ZCODE_DATA_BASE_DIR ?? host.home, host.home)
 }
 
-// Read-only enc:v1 compatibility with ZCode 29628c9 credential-cipher.ts.
+/** Read-only enc:v1 compatibility with ZCode 29628c9 credential-cipher.ts. */
 export function decryptZcodeV2Secret(value: string, host: ZcodeCredentialHost): string {
   if (!value.startsWith('enc:v1:')) {
     return value
