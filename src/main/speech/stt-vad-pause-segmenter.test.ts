@@ -46,8 +46,8 @@ function framesOf(chunks: Float32Array[]): number[][] {
 describe('VadPauseSegmenter', () => {
   it('commits a phrase at a 0.6 s pause, keeps 0.4 s ahead of the next, and drops the silence between', async () => {
     const segmenter = new VadPauseSegmenter(fakeVad(), RATE, FRAME)
-    const first = await segmenter.push(audio([0.1, 0.9, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
-    expect(framesOf(first)).toEqual([[0.1, 0.9, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]])
+    const first = await segmenter.push(audio([0.1, 0.9, 0.8, 0.7, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
+    expect(framesOf(first)).toEqual([[0.1, 0.9, 0.8, 0.7, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]])
     expect(segmenter.heldSamples).toBe(0)
 
     const second = await segmenter.push(audio([0.1, 0.1, 0.1, 0.1, 0.1, 0.11, 0.12, 0.13, 0.14]))
@@ -55,18 +55,26 @@ describe('VadPauseSegmenter', () => {
     // Only the last 0.4 s of that silence is held as the next phrase's lead-in.
     expect(segmenter.heldSamples).toBe(4 * FRAME)
 
-    const rest = await segmenter.push(audio([0.7, 0.6]))
-    expect(rest).toEqual([])
+    expect(await segmenter.push(audio([0.7, 0.6]))).toEqual([])
     expect(framesOf(await segmenter.flush())).toEqual([[0.11, 0.12, 0.13, 0.14, 0.7, 0.6]])
   })
 
   it('keeps a phrase whole across a pause shorter than 0.6 s', async () => {
     const segmenter = new VadPauseSegmenter(fakeVad(), RATE, FRAME)
     const ready = await segmenter.push(
-      audio([0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])
+      audio([0.9, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2])
     )
     expect(framesOf(ready)).toEqual([
-      [0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+      [0.9, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+    ])
+  })
+
+  it('holds a click shorter than 0.25 s of speech until real speech joins it', async () => {
+    const segmenter = new VadPauseSegmenter(fakeVad(), RATE, FRAME)
+    expect(await segmenter.push(audio([0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))).toEqual([])
+    const ready = await segmenter.push(audio([0.8, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
+    expect(framesOf(ready)).toEqual([
+      [0.9, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.8, 0.8, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
     ])
   })
 
@@ -75,5 +83,26 @@ describe('VadPauseSegmenter', () => {
     expect(await segmenter.push(audio([0.1, 0.2, 0.3, 0.1]))).toEqual([])
     expect(await segmenter.flush()).toEqual([])
     expect(segmenter.heldSamples).toBe(0)
+  })
+
+  it('keeps every held sample when the detector fails mid-dictation', async () => {
+    const vad = fakeVad()
+    const segmenter = new VadPauseSegmenter(
+      {
+        streamFeed: async (pcm) => {
+          if (pcm instanceof Float32Array && pcm[0] === 0.5) {
+            throw new Error('vad failed')
+          }
+          return vad.streamFeed(pcm)
+        },
+        streamFlush: vad.streamFlush
+      },
+      RATE,
+      FRAME
+    )
+    expect(await segmenter.push(audio([0.1, 0.2, 0.1, 0.1, 0.1, 0.9]))).toEqual([])
+    expect(await segmenter.push(audio([0.5, 0.1]))).toEqual([])
+    expect(await segmenter.push(audio([0.2]))).toEqual([])
+    expect(framesOf(await segmenter.flush())).toEqual([[0.2, 0.1, 0.1, 0.1, 0.9, 0.5, 0.1, 0.2]])
   })
 })

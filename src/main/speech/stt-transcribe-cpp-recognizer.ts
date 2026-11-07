@@ -73,6 +73,9 @@ async function loadSileroVad(
     if (model.vadInfo.sampleRate === sampleRate) {
       return model
     }
+    console.warn(
+      `[speech] Silero VAD needs ${model.vadInfo.sampleRate} Hz; this model takes ${sampleRate} Hz`
+    )
     model.dispose()
   } catch (error) {
     console.warn('[speech] Silero VAD unavailable; text arrives at stop:', error)
@@ -108,6 +111,10 @@ export async function createTranscribeCppRecognizer(
   const modelRate = model.capabilities.nativeSampleRate || init.sampleRate
   const vadModel = await loadSileroVad(transcribe, init.vadModelPath, modelRate)
   const streams = new Map<string, StreamCoverage>()
+  // Whisper pads every decode to a 30 s window, so a phrase costs a full decode; on a CPU that's slower than speaking,
+  // and per-pause decodes would queue up behind the speaker. Two in a row (not a first-run shader compile) stop the cuts.
+  let slowPhraseDecodes = 0
+  const cutsAtPauses = () => slowPhraseDecodes < 2
 
   const openStream = (): StreamCoverage => {
     // A VAD stream is per-dictation state, so each dictation gets its own session.
@@ -115,7 +122,7 @@ export async function createTranscribeCppRecognizer(
     return {
       segmenter:
         vad && vadModel
-          ? new VadPauseSegmenter(vad, modelRate, vadModel.vadInfo.frameSamples)
+          ? new VadPauseSegmenter(vad, modelRate, vadModel.vadInfo.frameSamples, cutsAtPauses)
           : boundedChunks(modelRate),
       vad,
       inputSamples: 0,
@@ -154,7 +161,12 @@ export async function createTranscribeCppRecognizer(
   const decode = async (streamId: string, stream: StreamCoverage, chunks: Float32Array[]) => {
     let undecoded = chunks.reduce((total, chunk) => total + chunk.length, 0)
     for (const chunk of chunks) {
+      const startedAt = performance.now()
       const text = await transcribeChunk(chunk)
+      if (stream.vad && cutsAtPauses()) {
+        const slow = performance.now() - startedAt > (chunk.length / modelRate) * 1000
+        slowPhraseDecodes = slow ? slowPhraseDecodes + 1 : 0
+      }
       undecoded -= chunk.length
       report(streamId, stream, text.trim(), undecoded)
     }
