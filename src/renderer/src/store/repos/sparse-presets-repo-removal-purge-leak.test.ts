@@ -1,8 +1,8 @@
 /** Repo UUIDs never recur; removal must evict all four lazily populated sparse-preset maps or session memory grows forever. */
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 

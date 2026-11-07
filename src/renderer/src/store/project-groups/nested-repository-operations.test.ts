@@ -1,6 +1,6 @@
 import { it, vi, expect, beforeEach, describe } from 'vitest'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const LOCAL_OWNER = { runtimeEnvironmentId: null }
 const projectGroupsScanNested = vi.fn()

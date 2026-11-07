@@ -3,7 +3,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
 const PTY_ID_SSH = 'ssh:target-1@@pty-9'

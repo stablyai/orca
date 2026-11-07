@@ -4,15 +4,13 @@ import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultSettings
 } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import {
-  makeWorktree,
-  makeFolderWorkspace
-} from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
 import { resolveQueuedInitialCwd } from '@/components/terminal-pane/mounting/queued-initial-cwd'
 import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

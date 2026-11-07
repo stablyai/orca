@@ -7,7 +7,7 @@ import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
-import { getIndexedReposById } from '@/store/worktree-repo-index'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,

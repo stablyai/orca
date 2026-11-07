@@ -25,7 +25,7 @@ import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-pref
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../workspace-record-selectors'
+} from '../../workspaces/catalog/workspace-record-fields'
 
 export function assertWorkspaceCleanupAgentStopApproved(
   state: AppState,

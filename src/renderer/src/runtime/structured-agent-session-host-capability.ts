@@ -2,7 +2,7 @@ import {
   useAppStateViewActive,
   useAppViewExternalStore,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../shared/agent-session/structured-agent-session-host-capability'
 import { useEffect, useState } from 'react'

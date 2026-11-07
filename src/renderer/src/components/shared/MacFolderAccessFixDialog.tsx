@@ -5,7 +5,7 @@ import { isMacTccFolderClass } from '../../../../shared/daemon-adoption-telemetr
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
-import { useMacFolderAccessFixStore } from '@/store/mac-folder-access-fix'
+import { useMacFolderAccessFixStore } from '@/store/terminals/folder-access/mac-folder-access-fix'
 import { Button } from '../ui/button'
 import {
   Dialog,

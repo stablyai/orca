@@ -1,4 +1,4 @@
-import { selectDiffCommentView, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
@@ -13,8 +13,11 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '../runtime-status'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '../runtime-status-connection-generation'
+import {
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
+  setRuntimeEnvironmentConnectionGenerationForTests
+} from '../runtime-status/runtime-status-connection-generation'
+
 import { createDiffCommentsSlice } from './create-diff-comments-slice'
 import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 

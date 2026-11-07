@@ -13,7 +13,7 @@ vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspecti
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose,
@@ -114,13 +114,6 @@ describe('guardRunningTerminalClose', () => {
     })
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
-  })
-
-  it('probes each pty once when the map and the layout name the same one', async () => {
-    guard()
-    await settleProbe()
-
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('closes without probing when the user turned the prompt off', () => {

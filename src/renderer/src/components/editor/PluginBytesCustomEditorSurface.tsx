@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState, useSyncExternalStore } from 'r
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import { readRuntimeFileBytes } from '@/runtime/files/reads/runtime-paged-file-read'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { CUSTOM_EDITOR_DOCUMENT_MAX_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { matchPluginFile } from '../../../../shared/plugins/contributions/plugin-file-match'
 import { fileTypeOfPath } from '../../../../shared/plugins/contributions/plugin-file-type'

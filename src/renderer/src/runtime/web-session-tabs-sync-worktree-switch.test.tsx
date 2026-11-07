@@ -33,7 +33,7 @@ import { clearHostLiveTerminalProbesForTests } from './hosted-terminals/inventor
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import './web-session-tabs-sync/tracking'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { TERMINAL_WORKTREE_HOT_RETAIN_LIMIT } from '@/components/terminal-pane/parking/retention/terminal-hidden-view-parking'
 import { publicRuntimeEnvironment } from './rpc/testing/paired-runtime-environment-test-fixture'

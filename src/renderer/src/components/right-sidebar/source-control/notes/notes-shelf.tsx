@@ -1,6 +1,6 @@
 import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-owner'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
 import { DiffNotesSendMenu } from '@/components/editor/diff/review/DiffNotesSendMenu'

@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { toast } from 'sonner'
-import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
+import { makeDetectedResult } from '@/store/slices/worktrees/listing/worktrees-detected-listing-fixtures'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { RepoScanUnavailableIndicator } from './worktree-list/rows/RepoScanUnavailableIndicator'
 

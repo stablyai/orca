@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import type { AutomationListScopeSelector } from '../../../../shared/automation-list-scope'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 

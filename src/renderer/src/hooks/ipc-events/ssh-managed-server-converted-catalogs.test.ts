@@ -7,7 +7,8 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore, makeWorktree } from '../../store/slices/store-test-helpers'
+import { createTestStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { buildBrowserPage } from '../../store/slices/browser/pages/browser-page-records'
 
 const store = createTestStore()

@@ -28,7 +28,7 @@ import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layou
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { dropTabThroughLayoutOwner } from '../components/tab-group/tab-group-layout-owner-commands'
 import { applyRuntimePaneTitle } from '../hooks/ipc-events/terminal-pane-title-ipc-bridge'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { endLayoutFramePositions } from './layout-frame-position'
 import type { AppliedLayoutCommand } from './layout-apply-test-double'
 import { mainLayoutFrameSender } from './main-loaded-layout-frames.test-fixture'

@@ -5,7 +5,7 @@ import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appea
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 

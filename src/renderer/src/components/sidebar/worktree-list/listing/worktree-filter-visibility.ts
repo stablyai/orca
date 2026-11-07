@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getRepoMapFromState } from '@/store/selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
@@ -9,7 +9,7 @@ import {
 import './visible-worktrees'
 import { computeVisibleWorktrees } from './compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from './visible-worktree-options-from-state'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Check filters without collapse/order elision; a known host must match so a visible twin cannot qualify another host. */
 export function worktreePassesSidebarFilters(
@@ -17,7 +17,7 @@ export function worktreePassesSidebarFilters(
   executionHostId?: ExecutionHostId
 ): boolean {
   const state = useAppStore.getState()
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
   const requestedHostId = executionHostId ? normalizeExecutionHostId(executionHostId) : null
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   return computeVisibleWorktrees(

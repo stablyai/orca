@@ -1,4 +1,4 @@
-import { useAppStateValue, useAppStateViewActive } from '@/store/app-state-view'
+import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import React, { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'

@@ -5,7 +5,7 @@ import type {
   ClosedBrowserWorkspaceSnapshot
 } from '../browser-slice-contract'
 import { findWorkspace } from '../pages/browser-page-records'
-import { restoreRecentlyClosedTabPosition } from '../../recently-closed-tab-position'
+import { restoreRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
 import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
 import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'

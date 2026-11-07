@@ -9,11 +9,11 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const sshState = vi.hoisted(() => ({ generation: 0 }))
 
-vi.mock('../slices/runtime-environment-ssh', async (importOriginal) => ({
+vi.mock('../slices/ssh/runtime-environment-ssh', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getEnvironmentSshStateGeneration: () => sshState.generation
 }))

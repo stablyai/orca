@@ -18,7 +18,7 @@ import {
   MCP_STARTER_CONFIG
 } from '../../../../../../shared/mcp-config'
 import { useAppStore } from '../../../../store/index'
-import { selectRuntimeAwareSshStatus } from '../../../../store/slices/runtime-environment-ssh-selectors'
+import { selectRuntimeAwareSshStatus } from '../../../../store/slices/ssh/runtime-environment-ssh-selectors'
 import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
@@ -43,7 +43,7 @@ import {
 } from '../../../../../../shared/file-write-disk-precondition'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type McpConfigSectionProps = {
   repo: Repo

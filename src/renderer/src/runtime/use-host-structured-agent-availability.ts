@@ -1,4 +1,7 @@
-import { useAppStateViewActive, useAppViewExternalStore } from '@/store/app-state-view'
+import {
+  useAppStateViewActive,
+  useAppViewExternalStore
+} from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect } from 'react'
 import {
   acquireHostStructuredAgentAvailability,
