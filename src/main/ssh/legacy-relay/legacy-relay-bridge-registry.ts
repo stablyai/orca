@@ -25,7 +25,8 @@ import {
   bridgeableLeasesByRelayId,
   isBridgeableLease,
   listedAppPtyIds,
-  listedLeasesByRelayId
+  listedLeasesByRelayId,
+  withUnlistedLeasedPanes
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 import { legacyRelayChannels } from './legacy-relay-bridge-connections'
@@ -43,6 +44,8 @@ type ReportPhase = EventProps<'ssh_host_server_legacy_relay_bridge'>['phase']
 
 export type LegacyRelayBridgeHost = {
   leases: (targetId: string) => SshRemotePtyLease[]
+  /** Every target with a stored lease, so panes are listed before their host connects. */
+  leasedTargetIds: () => string[]
   /** Ends the lease and any stop recorded on it: on the relay's proof, or on a stop it can't be sent. */
   retireLease: (targetId: string, relayPtyId: string, evidence: PtyRetirementEvidence) => void
   /** Persists a closed tab's stop on its lease, so a restart still sends it. */
@@ -239,10 +242,11 @@ function releaseHeldPanes(targetId: string): void {
 }
 
 export function legacyRelayBridgedPanes(): LegacyRelayBridgedPane[] {
-  return [
+  // Not listed yet is never "none": a leased pane stays the bridge's until its relay answers.
+  return withUnlistedLeasedPanes(host, paneStops, [
     ...[...bridges.values()].flatMap((bridge) => bridge.snapshot()),
     ...[...heldPanes].flatMap(([targetId, panes]) => stillLeased(targetId, panes))
-  ]
+  ])
 }
 
 function stillLeased(targetId: string, panes: LegacyRelayBridgedPane[]): LegacyRelayBridgedPane[] {

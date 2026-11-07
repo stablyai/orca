@@ -51,8 +51,10 @@ export async function activateWebRuntimeSessionTab(args: {
   // activating that pane on the managed server would start a second shell there that no tab shows.
   // A click names no leaf, so the pane on screen does; the server would otherwise pick the first.
   // Loaded lazily: the module subscribes to main's pane list on import, and terminal panes load it.
-  const { hasLegacyRelayBridgedPane, isLegacyRelayBridgedTab } =
+  const { hasLegacyRelayBridgedPane, isLegacyRelayBridgedTab, legacyRelayBridgedPanesListed } =
     await import('../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes')
+  // The first import starts with an empty list; that is not "no bridged panes".
+  await legacyRelayBridgedPanesListed()
   const leafId =
     args.leafId ??
     (hasLegacyRelayBridgedPane(args.tabId)

@@ -15,6 +15,7 @@ const listeners = new Set<() => void>()
 const claims = new Map<string, string>()
 let subscribed = false
 let firstListing: Promise<void> = Promise.resolve()
+let firstListingSettled = false
 
 function ensureSubscribed(): void {
   const api = typeof window === 'undefined' ? undefined : window.api?.legacyRelayBridge
@@ -32,13 +33,24 @@ function ensureSubscribed(): void {
     listeners.forEach((listener) => listener())
   }
   api.onPanes(apply)
-  firstListing = api.listPanes().then(apply, () => {})
+  firstListing = api
+    .listPanes()
+    .then(apply, () => {})
+    .finally(() => {
+      firstListingSettled = true
+    })
 }
 
 /** Settles once main's first pane list arrived, so a close never reads the empty initial cache. */
 export function legacyRelayBridgedPanesListed(): Promise<void> {
   ensureSubscribed()
   return firstListing
+}
+
+/** False until main's first pane list arrived; an empty cache before then is not "no bridged panes". */
+export function hasLegacyRelayBridgedPanesListing(): boolean {
+  ensureSubscribed()
+  return firstListingSettled || !subscribed
 }
 
 ensureSubscribed()

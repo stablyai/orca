@@ -183,6 +183,31 @@ export function servedBridgedPanes(
     .map(([ptyId, pane]) => toBridgedPane(targetId, ptyId, pane))
 }
 
+/**
+ * Adds leased panes no bridge has listed yet, as unverifiable. Before a host's first connect, an
+ * empty list would read as "no relay terminals" and let a mounting pane resume its agent on orcad.
+ */
+export function withUnlistedLeasedPanes(
+  host: {
+    leasedTargetIds: () => string[]
+    leases: (targetId: string) => SshRemotePtyLease[]
+  } | null,
+  stops: ReadonlyMap<string, { owes: (ptyId: string) => boolean }>,
+  answered: LegacyRelayBridgedPane[]
+): LegacyRelayBridgedPane[] {
+  const listed = new Set(answered.map((pane) => pane.ptyId))
+  const unlisted = (host?.leasedTargetIds() ?? []).flatMap((targetId) =>
+    [...bridgeableLeasesByRelayId(host?.leases(targetId) ?? [])].flatMap(([relayPtyId, lease]) => {
+      const ptyId = toAppSshPtyId(targetId, relayPtyId)
+      // A closed tab's pane whose stop is owed is never served again.
+      return listed.has(ptyId) || stops.get(targetId)?.owes(ptyId)
+        ? []
+        : [toBridgedPane(targetId, ptyId, toPane(lease, relayPtyId, null, 'unverifiable'))]
+    })
+  )
+  return [...answered, ...unlisted]
+}
+
 export type LegacyRelayLivePane = { ptyId: string; incarnationId?: string; terminalHandle?: string }
 
 /** The live leased pane a pane key's stable leaf names; the lease is the desktop's own record. */

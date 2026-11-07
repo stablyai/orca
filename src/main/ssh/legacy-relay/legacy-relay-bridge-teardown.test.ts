@@ -81,6 +81,7 @@ beforeEach(async () => {
   report = vi.fn()
   registry.installLegacyRelayBridge({
     leases: () => leases,
+    leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
     retireLease: vi.fn(),
     recordStop: vi.fn(),
     connection: () => null,
@@ -140,12 +141,58 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
   })
 })
 
+describe('an app relaunch before the host connects (#37840)', () => {
+  function relaunch(): void {
+    // A relaunch keeps only the persisted leases: no bridge, nothing held.
+    registry.installLegacyRelayBridge({
+      leases: () => leases,
+      leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
+      retireLease: vi.fn(),
+      recordStop: vi.fn(),
+      connection: () => null,
+      onPanesChanged: vi.fn(),
+      onData: vi.fn(),
+      onReplay: vi.fn(),
+      onExit: vi.fn(),
+      report: vi.fn()
+    })
+  }
+
+  it('lists a leased relay terminal as unverifiable, so its pane never starts on orcad', () => {
+    relaunch()
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([
+      { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'unverifiable' }
+    ])
+  })
+
+  it('lists no pane for a closed tab or an ended terminal', () => {
+    relaunch()
+    leases = [
+      { ...lease(), pendingKill: { requestedAt: 1, attempts: 0 } },
+      { ...lease(), ptyId: 'pty-2', state: 'terminated' }
+    ]
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([])
+  })
+
+  it('lists each pane once after the bridge starts', async () => {
+    relaunch()
+    await registry.startLegacyRelayBridge(TARGET)
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([
+      { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'live' }
+    ])
+  })
+})
+
 describe('attaching a bridged pane', () => {
   it('sends a reattach screen in output order and only once', async () => {
     const replays: string[] = []
     const connection = unusedSshConnection()
     registry.installLegacyRelayBridge({
       leases: () => leases,
+      leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
       retireLease: vi.fn(),
       recordStop: vi.fn(),
       connection: () => connection,
