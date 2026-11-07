@@ -19847,17 +19847,6 @@
           "reviewStatus": "查看每个工作树上的问题状态、审核状态和 CI 检查",
           "managePullRequests": "无需离开 Orca 即可阅读、评论和合并拉取请求"
         }
-      },
-      "agyInstall": {
-        "open": "安装",
-        "title": "安装 Antigravity",
-        "description": "在终端中按 Enter 运行官方安装程序。关闭终端会停止仍在运行的命令。",
-        "target": "安装位置：{{location}}",
-        "thisDevice": "此设备",
-        "terminal": "Antigravity 安装程序",
-        "detected": "已在 PATH 中检测到 Antigravity。安装程序完成后请关闭终端。",
-        "close": "关闭终端",
-        "recheck": "重新检测智能体"
       }
     },
     "jiraUserPicker": {

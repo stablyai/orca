@@ -20659,17 +20659,6 @@
           "reviewStatus": "Consultez l'état du problème, l'état de la révision et les vérifications CI sur chaque arbre de travail",
           "managePullRequests": "Lisez, commentez et fusionnez les demandes d'extraction sans quitter Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Installer",
-        "title": "Installer Antigravity",
-        "description": "Appuyez sur Entrée dans le terminal pour lancer l’installateur officiel. La fermeture de ce terminal arrête toute commande encore en cours.",
-        "target": "Emplacement d’installation : {{location}}",
-        "thisDevice": "Cet appareil",
-        "terminal": "Installateur Antigravity",
-        "detected": "Antigravity est détecté dans PATH. Fermez le terminal lorsque l’installation est terminée.",
-        "close": "Fermer le terminal",
-        "recheck": "Revérifier les agents"
       }
     },
     "jiraUserPicker": {

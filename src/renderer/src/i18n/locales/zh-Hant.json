@@ -18929,17 +18929,6 @@
           "reviewStatus": "查看每個工作樹的議題狀態、審查狀態與 CI 檢查",
           "managePullRequests": "不離開 Orca，即可閱讀、留言與合併 PR"
         }
-      },
-      "agyInstall": {
-        "open": "安裝",
-        "title": "安裝 Antigravity",
-        "description": "在終端機中按 Enter 執行官方安裝程式。關閉終端機會停止仍在執行的命令。",
-        "target": "安裝位置：{{location}}",
-        "thisDevice": "此裝置",
-        "terminal": "Antigravity 安裝程式",
-        "detected": "已在 PATH 中偵測到 Antigravity。安裝程式完成後請關閉終端機。",
-        "close": "關閉終端機",
-        "recheck": "重新偵測代理程式"
       }
     },
     "jiraIssueAssigneeField": {

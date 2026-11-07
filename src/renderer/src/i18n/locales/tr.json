@@ -19174,17 +19174,6 @@
           "reviewStatus": "Her worktree'de sorun durumunu, inceleme durumunu ve CI kontrollerini görün",
           "managePullRequests": "Orca'dan çıkmadan pull request'leri okuyun, yorum yapın ve merge edin"
         }
-      },
-      "agyInstall": {
-        "open": "Yükle",
-        "thisDevice": "Bu cihaz",
-        "title": "Antigravity’yi yükle",
-        "description": "Resmî yükleyiciyi çalıştırmak için terminalde Enter’a basın. Bu terminali kapatmak hâlâ çalışan komutları durdurur.",
-        "target": "Yükleme konumu: {{location}}",
-        "terminal": "Antigravity yükleyicisi",
-        "detected": "Antigravity PATH üzerinde algılandı. Yükleyici tamamlandığında terminali kapatın.",
-        "close": "Terminali kapat",
-        "recheck": "Ajanları yeniden kontrol et"
       }
     },
     "jiraIssueAssigneeField": {
