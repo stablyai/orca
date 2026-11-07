@@ -259,7 +259,7 @@ function useContributionRowActions(
       case 'customEditors':
       case 'vmRecipes':
       case 'statusBarItems':
-        // Themes have "Use now" above the list; fonts are picked in Settings; editors open from their new files; recipes have nothing to try here.
+        // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }
   }

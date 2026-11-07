@@ -211,11 +211,13 @@ export async function buildPluginList(
         fonts: plugin.manifest.contributes.fonts.map((font, familyIndex) => ({
           family: font.family,
           faces: font.faces.map((face, faceIndex) => ({
-            url: pluginInstalledImageUrl(
+            // Why the change count for dev folders: their URL is otherwise fixed, so an edited
+            // font would keep its loaded face.
+            url: `${pluginInstalledImageUrl(
               plugin.pluginKey,
               plugin.contentHash ?? 'dev',
               pluginFontSlot(familyIndex, faceIndex)
-            ),
+            )}${plugin.isDev ? `?v=${plugin.devChangeCount ?? 0}` : ''}`,
             weight: face.weight ?? '400',
             style: face.style ?? 'normal'
           }))

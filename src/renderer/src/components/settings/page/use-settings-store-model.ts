@@ -141,7 +141,7 @@ export function useSettingsStoreModel() {
   // Keep import state above sections so remounts cannot close the modal.
   const terminalConfigImport = useTerminalConfigImport(updateSettings, settings)
   const warpThemes = useWarpThemeImport(updateSettings, settings)
-  const [installedFontSuggestions, setFontSuggestions] = useState<string[]>(
+  const [installedFontSuggestions, setInstalledFontSuggestions] = useState<string[]>(
     mergeFontSuggestions([], getFallbackTerminalFonts())
   )
   const pluginFontFamilies = usePluginFontFamilies()
@@ -251,7 +251,7 @@ export function useSettingsStoreModel() {
     terminalConfigImport,
     warpThemes,
     fontSuggestions,
-    setFontSuggestions,
+    setFontSuggestions: setInstalledFontSuggestions,
     terminalFontSuggestions,
     activeSectionId,
     setActiveSectionId,

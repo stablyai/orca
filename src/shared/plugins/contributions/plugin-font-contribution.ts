@@ -26,6 +26,12 @@ const FONT_SIGNATURES: Record<PluginFontFormat, readonly number[]> = {
   woff: [0x77, 0x4f, 0x46, 0x46], // wOFF
   woff2: [0x77, 0x4f, 0x46, 0x32] // wOF2
 }
+// The wrapped font's flavor (bytes 4-7): TrueType or CFF. A collection (`ttcf`) is refused.
+const FONT_FLAVORS: readonly (readonly number[])[] = [
+  [0x00, 0x01, 0x00, 0x00],
+  [0x4f, 0x54, 0x54, 0x4f], // OTTO
+  [0x74, 0x72, 0x75, 0x65] // true
+]
 
 /** The format a file's extension claims, or null when it is not a web font. */
 function claimedFontFormat(path: string): PluginFontFormat | null {
@@ -33,10 +39,15 @@ function claimedFontFormat(path: string): PluginFontFormat | null {
   return lower.endsWith('.woff2') ? 'woff2' : lower.endsWith('.woff') ? 'woff' : null
 }
 
-/** Its format when the extension and the leading bytes agree; nothing past the signature is read. */
+/** Its format when the extension, signature and flavor agree; nothing past byte 8 is read. */
 export function pluginFontFormat(path: string, bytes: Uint8Array): PluginFontFormat | null {
   const format = claimedFontFormat(path)
-  return format && FONT_SIGNATURES[format].every((value, index) => bytes[index] === value)
+  const flavorOk = FONT_FLAVORS.some((flavor) =>
+    flavor.every((value, index) => bytes[4 + index] === value)
+  )
+  return format &&
+    flavorOk &&
+    FONT_SIGNATURES[format].every((value, index) => bytes[index] === value)
     ? format
     : null
 }
@@ -115,6 +126,15 @@ export const pluginFontContributionSchema = z
 
 export type PluginFontContribution = z.infer<typeof pluginFontContributionSchema>
 
+/** For clients re-checking a host's list: the same rules the manifest enforces. */
+export function isPluginFontFamilyLabel(family: string): boolean {
+  return FONT_FAMILY_RE.test(family)
+}
+
+export function isPluginFontWeight(weight: string): boolean {
+  return FONT_WEIGHT_RE.test(weight)
+}
+
 /** The CSS family Orca registers: the plugin key keeps it from matching any other font. */
 export function pluginFontFamilyName(pluginKey: string, family: string): string {
   return `${family} (${pluginKey})`
@@ -122,7 +142,12 @@ export function pluginFontFamilyName(pluginKey: string, family: string): string 
 
 /** True when `fontFamily` is a family the plugin registers, so its removal can reset the choice. */
 export function isPluginFontFamilyOf(fontFamily: string | undefined, pluginKey: string): boolean {
-  return fontFamily?.trim().endsWith(` (${pluginKey})`) === true
+  return fontFamily?.trim().toLowerCase().endsWith(` (${pluginKey})`) === true
+}
+
+/** True when `fontFamily` has the shape `pluginFontFamilyName` gives, whichever plugin it names. */
+export function isPluginFontFamilyName(fontFamily: string): boolean {
+  return / \([a-z0-9-]+\.[a-z0-9-]+\)$/i.test(fontFamily.trim())
 }
 
 /** The image-protocol slot of one font file: `font-<family index>-<face index>`. */

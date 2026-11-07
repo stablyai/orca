@@ -18,6 +18,7 @@ import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
+import { usePluginFontRegistration } from './store/plugin-fonts'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
@@ -63,6 +64,7 @@ if (!rootElement) {
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
+  usePluginFontRegistration()
   useReduceVisualEffects(settings?.reduceVisualEffects)
 
   useEffect(() => {

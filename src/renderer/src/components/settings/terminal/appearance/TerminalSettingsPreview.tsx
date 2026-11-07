@@ -6,7 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded, usePluginFontLoadStore } from '@/store/plugin-fonts'
+import { pluginFontFamilyWhenLoaded, usePluginFontReady } from '@/store/plugin-fonts'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'
@@ -66,7 +66,7 @@ export function TerminalSettingsPreview({
   const skipInitialThemeRewriteRef = useRef(false)
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
-  const pluginFontRevision = usePluginFontLoadStore((state) => state.revision)
+  const fontReady = usePluginFontReady(effectiveFontFamily)
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
   // Seed from app theme once; preview toggles remain independent afterward.
@@ -187,7 +187,7 @@ export function TerminalSettingsPreview({
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
     effectiveFontFamily,
-    pluginFontRevision,
+    fontReady,
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,

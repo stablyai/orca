@@ -23,8 +23,9 @@ export function buildFontFamily(fontFamily: string): string {
   const parts = trimmed ? [`"${trimmed}"`] : []
   const lowerParts = parts.map((p) => p.toLowerCase())
   for (const fallback of FALLBACK_FONTS) {
-    const lower = fallback.toLowerCase()
-    if (!lowerParts.some((p) => p.includes(lower))) {
+    // Why exact: a family that only contains a fallback's name, such as a plugin's
+    // "Menlo (acme.fonts)", must not drop the real fallback.
+    if (!lowerParts.includes(`"${fallback.toLowerCase()}"`)) {
       // Generic keywords like "monospace" are unquoted; named fonts are quoted.
       parts.push(fallback === 'monospace' ? fallback : `"${fallback}"`)
     }

@@ -8,13 +8,13 @@ import { readCheckedPluginImage, type CheckedPluginImage } from './plugin-image-
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
-import { readPluginFontSlot } from './plugin-font-files'
+import { readPluginFontSlot, type CheckedPluginFont } from './plugin-font-files'
 import { parsePluginFontSlot } from '../../shared/plugins/contributions/plugin-font-contribution'
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
-  /** Enabled and consented; fonts are served only for these, so disabling stops them at once. */
+  /** Enabled and consented; fonts are served only for these. */
   findApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
 }
 
@@ -52,29 +52,29 @@ export function createPluginImageRequestHandler(
     }
     const reference = parsePluginImageUrl(request.url)
     try {
-      let image: CheckedPluginImage | null = null
+      let asset: CheckedPluginImage | CheckedPluginFont | null = null
       const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
       if (reference?.kind === 'sha') {
-        image = await dependencies.cache.get(reference.sha256)
+        asset = await dependencies.cache.get(reference.sha256)
       } else if (reference?.kind === 'installed' && isFont) {
         const plugin = dependencies.findApprovedPlugin(reference.pluginKey)
-        image =
+        asset =
           plugin && isCurrentContent(plugin, reference.contentHash)
             ? await readPluginFontSlot(plugin.rootDir, plugin.manifest, reference.slot)
             : null
       } else if (reference?.kind === 'installed') {
         const plugin = dependencies.findValidPlugin(reference.pluginKey)
-        image = plugin
+        asset = plugin
           ? await readInstalledImage(plugin, reference.contentHash, reference.slot)
           : null
       }
-      if (!image) {
+      if (!asset) {
         return new Response(null, { status: 404 })
       }
-      return new Response(request.method === 'HEAD' ? null : new Uint8Array(image.bytes), {
+      return new Response(request.method === 'HEAD' ? null : new Uint8Array(asset.bytes), {
         headers: {
-          'Content-Type': image.mimeType,
-          'Content-Length': String(image.bytes.byteLength),
+          'Content-Type': asset.mimeType,
+          'Content-Length': String(asset.bytes.byteLength),
           // Why immutable is safe: a hash or install hash names exact bytes; dev trees change in place.
           'Cache-Control':
             reference?.kind === 'installed' && reference.contentHash === 'dev'
