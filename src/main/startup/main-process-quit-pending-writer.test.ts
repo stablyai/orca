@@ -17,7 +17,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../daemon/providers/lifecycle/daemon-provider-state': {
+    disconnectDaemon: settled(),
+    shutdownDaemon: settled()
+  },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -32,8 +35,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
-  '../browser/paired-runtime-browser-client-host-runtime': {
+  '../runtime/rpc/server/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
+  '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
   '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
@@ -41,8 +44,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../browser/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
-  '../browser/browser-session-registry': { browserSessionRegistry: {} },
-  '../browser/local-ssh-browser-route': { closeAllLocalSshBrowserRoutes: settled() },
+  '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
+  '../browser/routing/local-host-partitions/local-ssh-browser-route': {
+    closeAllLocalSshBrowserRoutes: settled()
+  },
   '../codex/codex-state-db-backfill-recovery': { stopCodexStateDbBackfillRecoveries: settled() },
   '../codex/codex-account-session-bridge': { stopCodexAccountSessionBridges: idle() },
   '../git/refs/maintenance/local-repo-ref-maintenance': { awaitPackedRefsLockRelease: settled() },

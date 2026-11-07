@@ -83,13 +83,14 @@ export function installBrowserLinkMaterializationProbe() {
         enabled: false,
         sttModel: '',
         modelsDir: '',
-        language: 'en',
+        dictationLanguage: 'auto',
         dictationMode: 'hold',
         terminalConfirmBeforeInsert: true,
         userModels: [],
         openAiApiKeyConfigured: false,
         microphoneDeviceId: null,
-        microphoneDeviceLabel: null
+        microphoneDeviceLabel: null,
+        unloadModelAfterMinutes: 15
       }
     })
   useAppStore.setState({

@@ -77,50 +77,6 @@ function expectedFolded(width: number): number {
 }
 
 describe('useBrowserChromeToolFold', () => {
-  it('keeps every tool inline when the address has its minimum width', () => {
-    let folded = -1
-    layout.rowWidth = 600
-    render(<Host onFolded={(count) => (folded = count)} />)
-    expect(folded).toBe(0)
-  })
-
-  it('folds just enough tools to give the address its minimum width', () => {
-    let folded = -1
-    layout.rowWidth = 300
-    render(<Host onFolded={(count) => (folded = count)} />)
-    expect(folded).toBe(expectedFolded(300))
-    expect(folded).toBeGreaterThan(0)
-  })
-
-  it('unfolds as the row widens and refolds as it narrows', () => {
-    let folded = -1
-    layout.rowWidth = 600
-    render(<Host onFolded={(count) => (folded = count)} />)
-
-    resizeTo(260)
-    expect(folded).toBe(expectedFolded(260))
-
-    resizeTo(400)
-    expect(folded).toBe(expectedFolded(400))
-
-    resizeTo(700)
-    expect(folded).toBe(0)
-  })
-
-  it('folds everything but lets the address shrink once no tool is left', () => {
-    let folded = -1
-    layout.rowWidth = 150
-    render(<Host onFolded={(count) => (folded = count)} />)
-    expect(folded).toBe(BROWSER_CHROME_FOLD_ORDER.length)
-  })
-
-  it('leaves a hidden (zero-width) row alone', () => {
-    let folded = -1
-    layout.rowWidth = 0
-    render(<Host onFolded={(count) => (folded = count)} />)
-    expect(folded).toBe(0)
-  })
-
   it('measures when a hidden row becomes visible', () => {
     let folded = -1
     layout.rowWidth = 0

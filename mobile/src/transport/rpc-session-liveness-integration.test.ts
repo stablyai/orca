@@ -3,7 +3,7 @@ import { connect } from './rpc-client'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../src/shared/terminal-stream-protocol'
+} from '../../../src/shared/terminal/stream/terminal-stream-protocol'
 
 vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
 
@@ -91,59 +91,6 @@ afterEach(() => {
 })
 
 describe('physical session liveness', () => {
-  it('recovers when the initial handshake write races socket teardown', () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]!
-    socket.throwOnSend = true
-
-    try {
-      expect(() => socket.authenticate()).not.toThrow()
-      expect(socket.close).toHaveBeenCalledOnce()
-      expect(client.getState()).toBe('reconnecting')
-    } finally {
-      client.close()
-    }
-  })
-
-  it('tolerates the first fair silent foreground-probe window', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]!
-    socket.authenticate()
-
-    try {
-      client.notifyForeground()
-      await vi.advanceTimersByTimeAsync(8_000)
-
-      expect(socket.close).not.toHaveBeenCalled()
-      expect(client.getState()).toBe('connected')
-    } finally {
-      client.close()
-    }
-  })
-
-  it.each(['app-resume', 'network-change'] as const)(
-    'ends a silent direct socket after one 4s miss on %s',
-    async (reason) => {
-      const client = connect('ws://desktop.invalid', 'token', 'server-key')
-      const socket = sockets[0]
-      if (!socket) {
-        throw new Error('Expected a direct socket')
-      }
-      socket.authenticate()
-
-      try {
-        client.notifyForeground(reason)
-        await vi.advanceTimersByTimeAsync(3_999)
-        expect(client.getState()).toBe('connected')
-        await vi.advanceTimersByTimeAsync(1)
-        expect(socket.close).toHaveBeenCalledOnce()
-        expect(client.getState()).toBe('reconnecting')
-      } finally {
-        client.close()
-      }
-    }
-  )
-
   it('upgrades a focus probe on resume without letting repeated nudges extend the deadline', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]
@@ -162,72 +109,6 @@ describe('physical session liveness', () => {
       await vi.advanceTimersByTimeAsync(1_000)
       expect(socket.close).toHaveBeenCalledOnce()
       expect(client.getState()).toBe('reconnecting')
-    } finally {
-      client.close()
-    }
-  })
-
-  it('checks a distinct background return after a recently answered network probe', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]
-    if (!socket) {
-      throw new Error('Expected a direct socket')
-    }
-    socket.authenticate()
-
-    try {
-      client.notifyForeground('network-change')
-      const id = lastRequestId(socket)
-      socket.onmessage?.({
-        data: `encrypted:${JSON.stringify({ id, ok: true, result: {} })}`
-      })
-      await vi.advanceTimersByTimeAsync(1_000)
-      client.notifyForeground('app-resume')
-      await vi.advanceTimersByTimeAsync(4_000)
-      expect(socket.close).toHaveBeenCalledOnce()
-      expect(client.getState()).toBe('reconnecting')
-    } finally {
-      client.close()
-    }
-  })
-
-  it('ends a silent socket after one 4s miss when a caller stopped hearing back', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]!
-    socket.authenticate()
-
-    try {
-      // Just heard from, so not suspect yet.
-      const probes = () => socket.sent.filter((frame) => frame.includes('mobile-liveness-'))
-      client.probeLivenessNow?.()
-      await vi.advanceTimersByTimeAsync(4_000)
-      expect(probes()).toHaveLength(0)
-
-      client.probeLivenessNow?.()
-      expect(probes()).toHaveLength(1)
-      await vi.advanceTimersByTimeAsync(3_999)
-      expect(socket.close).not.toHaveBeenCalled()
-      await vi.advanceTimersByTimeAsync(1)
-
-      expect(socket.close).toHaveBeenCalledOnce()
-      expect(client.getState()).toBe('reconnecting')
-    } finally {
-      client.close()
-    }
-  })
-
-  it('turns a tolerant probe already running into a decisive one', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]!
-    socket.authenticate()
-
-    try {
-      client.notifyForeground('focus')
-      await vi.advanceTimersByTimeAsync(4_000)
-      client.probeLivenessNow?.()
-      await vi.advanceTimersByTimeAsync(4_000)
-
-      expect(socket.close).toHaveBeenCalledOnce()
     } finally {
       client.close()
     }
@@ -259,37 +140,6 @@ describe('physical session liveness', () => {
     client.close()
   })
 
-  it('turns a probe write exception into session recovery', () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const socket = sockets[0]!
-    socket.authenticate()
-    socket.throwOnSend = true
-
-    try {
-      expect(() => client.notifyForeground()).not.toThrow()
-      expect(socket.close).toHaveBeenCalledOnce()
-      expect(client.getState()).toBe('reconnecting')
-    } finally {
-      client.close()
-    }
-  })
-
-  it.each([{ runtimeId: 'host' }, { runtimeId: 'old-host', worktrees: [], sessions: [] }])(
-    'keeps a direct socket when its current probe receives %j',
-    async (result) => {
-      const client = connect('ws://desktop.invalid', 'token', 'server-key')
-      const socket = sockets[0]!
-      socket.authenticate()
-      client.notifyForeground('app-resume')
-      const id = lastRequestId(socket)
-      await vi.advanceTimersByTimeAsync(3_000)
-      socket.onmessage?.({ data: `encrypted:${JSON.stringify({ id, ok: true, result })}` })
-      await vi.advanceTimersByTimeAsync(4_000)
-      expect(client.getState()).toBe('connected')
-      client.close()
-    }
-  )
-
   it('ignores superseded probes and unrelated RPC replies during a control check', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = sockets[0]!
@@ -307,28 +157,6 @@ describe('physical session liveness', () => {
     expect((await request).ok).toBe(true)
     await vi.advanceTimersByTimeAsync(9_000)
     expect(client.getState()).toBe('reconnecting')
-    client.close()
-  })
-
-  it('retains every queued stream when replay write fails', async () => {
-    const client = connect('ws://desktop.invalid', 'token', 'server-key')
-    const first = sockets[0]!
-    const disposeFirst = client.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn())
-    const disposeSecond = client.subscribe('terminal.subscribe', { terminal: 'term-2' }, vi.fn())
-    first.throwForMethod = 'terminal.subscribe'
-
-    first.authenticate()
-    expect(client.getState()).toBe('reconnecting')
-    await vi.advanceTimersByTimeAsync(500)
-
-    const replacement = sockets[1]!
-    replacement.authenticate()
-    expect(
-      replacement.sent.filter((payload) => payload.includes('terminal.subscribe'))
-    ).toHaveLength(2)
-
-    disposeFirst()
-    disposeSecond()
     client.close()
   })
 

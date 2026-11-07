@@ -9,7 +9,7 @@ import * as structuredTabs from '../../../shared/agent-session/view/structured-a
 import '../../../shared/ephemeral-setup-terminal-worktree-id'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type * as LayoutRouting from '@/store/terminals/tab-change-through-layout-owner'
-import type * as LocalRuntimeCapabilities from './local-runtime-capabilities'
+import type * as LocalRuntimeCapabilities from './hosts/capabilities/local-runtime-capabilities'
 import {
   addWorkspace,
   emptySession
@@ -20,7 +20,7 @@ import { renameTab } from '../../../shared/workspace-layout/workspace-layout-tab
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
 import { makeWorktree, makeUnifiedTab, TEST_REPO } from '@/store/slices/store-test-helpers'
 import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import { WorkspaceAttachmentOrigins } from '@/components/sidebar/WorkspaceAttachmentOrigins'
+import { WorkspaceAttachmentOrigins } from '@/components/sidebar/workspace-card/review/WorkspaceAttachmentOrigins'
 import { useAppStore } from '@/store'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'
@@ -32,13 +32,13 @@ import {
 } from './structured-chat-name-observation'
 import { useLiveDashboardSnapshot } from '@/components/dashboard/useLiveDashboardSnapshot'
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace-session-host-hydration'
-import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace-session-unified-tabs'
-import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace/persistence/workspace-session-host-hydration'
+import { buildPersistedUnifiedTabSessionData } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import { sendMessageToAgent } from '@/lib/agent-message-send'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import './web-session-tabs-sync/snapshot-api'
 import './web-session-tabs-sync/store-patch'
@@ -62,7 +62,9 @@ vi.mock('@/components/native-chat/structured-agent-session-message-sender', () =
 vi.mock('@/store', async () => ({
   useAppStore: (await import('@/store/slices/store-test-helpers')).createTestStore()
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: mock.rpc }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mock.rpc
+}))
 vi.mock('./structured-agent-session-client', () => ({
   supportsStructuredAgentSessionRename: async () => true
 }))
@@ -70,11 +72,11 @@ vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAI
 vi.mock('@/store/terminals/tab-change-through-layout-owner', () => ({
   sendTabChangeToLayoutOwner: mock.layout
 }))
-vi.mock('./local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalRuntimeCapabilities>()),
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {}
 }))
-vi.mock('./runtime-host-contact-regained', () => ({
+vi.mock('./hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_id: string, listener: () => void) => {
     mock.contacts.add(listener)
     return () => mock.contacts.delete(listener)

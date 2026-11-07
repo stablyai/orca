@@ -1,10 +1,11 @@
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
 import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
+import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -20,15 +21,12 @@ import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationListViewItem } from './automation-list-view'
 import { AutomationDestinationField } from './AutomationDestinationField'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { AutomationTemplate } from './automation-templates'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
   selfScopedList
 } from './automations-page-runtime-fixtures'
-
-export type { DetailPaneProps } from './automations-page-fixtures'
-
-export { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 
 export type ListPanelProps = {
   sortedListItems: readonly AutomationListViewItem[]
@@ -63,6 +61,7 @@ export type ListPanelProps = {
 }
 
 export type EditorDialogProps = {
+  launchAuthority?: AutomationAuthorityRef
   open: boolean
   isEditing: boolean
   isSaving: boolean
@@ -77,6 +76,7 @@ export type EditorDialogProps = {
   onSave: () => void
   onProjectChange: (projectId: string) => void
   onDraftChange: (updater: (current: unknown) => unknown) => void
+  onApplyTemplate: (template: AutomationTemplate) => void
 }
 
 export type DeleteDialogProps = {
@@ -131,8 +131,10 @@ vi.mock('@/store/selectors', () => ({
   useWorktreeMap: () => mocks.worktreeMap
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => mocks.getRuntimeEnvironmentStatus(...args)
 }))
 
@@ -159,15 +161,16 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: () => null
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   checkRuntimeHooks: vi.fn(async () => ({ hooks: null, ok: true }))
 }))
 
 vi.mock('@/lib/ensure-hooks-confirmed', () => ({
-  ensureHooksConfirmed: vi.fn(async () => 'inherit')
+  ensureHooksConfirmed: vi.fn(async () => 'inherit'),
+  ensureHooksApproved: vi.fn(async () => ({ decision: 'run' }))
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 

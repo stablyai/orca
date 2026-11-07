@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import {
   ArrowRight,
   CircleCheck,
@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   MessageCircle,
   MoreHorizontal,
+  RotateCw,
   type LucideIcon
 } from 'lucide-react-native'
 import { MobileLoadErrorState, MobileStateView } from './MobileStateView'
@@ -41,6 +42,7 @@ import { NavBarButton } from './nav-bar/NavBarButton'
 import { PullDownMenu } from './nav-bar/PullDownMenu'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { prTabStyles as styles } from './pr-sidebar/pr-tab-styles'
+import { mobilePrSidebarStyles as sidebarStyles } from './pr-sidebar/mobile-pr-sidebar-styles'
 
 type BranchCompare = { commitsAhead?: number; baseRef: string } | null
 
@@ -98,10 +100,29 @@ export function MobilePrTabBody({
       </View>
     )
   }
+  // A failed refresh keeps the accepted result; its line sits above the content so nothing below remounts.
+  const refreshFailed =
+    (state.kind === 'ready' || state.kind === 'none') && state.refreshFailed === true ? (
+      <View style={sidebarStyles.refreshFailedRow}>
+        <Text style={sidebarStyles.refreshFailedText}>
+          {t('session.prActionsEngine.refreshFailed', 'Failed to refresh pull request.')}
+        </Text>
+        <Pressable
+          style={sidebarStyles.retryButton}
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
+        >
+          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <Text style={sidebarStyles.retryText}>{t('common.retry', 'Retry')}</Text>
+        </Pressable>
+      </View>
+    ) : null
   if (branch === 'none') {
     return (
       <View style={styles.container}>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+          {refreshFailed}
           <PrTabEmptyState tab={tab} branchCompare={branchCompare} />
         </ScrollView>
         {footer}
@@ -118,6 +139,7 @@ export function MobilePrTabBody({
         contentContainerStyle={[styles.content, !footer && { paddingBottom: bottomInset }]}
         showsVerticalScrollIndicator={false}
       >
+        {refreshFailed}
         <PrTabSections tab={tab} data={state.data} onOpenChanges={onOpenChanges} />
       </ScrollView>
       {footer}
@@ -295,7 +317,8 @@ export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarP
     onCreateSettled,
     live: screen === 'comments' ? 'details' : 'checks'
   })
-  const refresh = () => refetch({ includeDetails: true })
+  // The user's explicit Refresh asks the server for the canonical details.
+  const refresh = () => refetch({ includeDetails: true, refresh: true })
   const prMenuGroups = usePrTabMenuGroups(tab, refresh)
   // Without a PR the dock still needs Refresh, e.g. after a PR is opened on the web.
   const menuGroups = prMenuGroups ?? [

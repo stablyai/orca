@@ -22,10 +22,10 @@ import {
   bulkDiscardRuntimeGitPaths,
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths
-} from '@/runtime/runtime-git-working-tree-client'
+} from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { ActionButton } from '../listing/action-button'
 import { UncommittedEntryRow } from '../listing/uncommitted-entry-row'
 import { LinkedRepoCommitBox } from './linked-repo-commit-box'

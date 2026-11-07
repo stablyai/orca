@@ -6,11 +6,15 @@ import {
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello,
   type MobileE2EEV2Ready
-} from '../../../shared/mobile-e2ee-v2-contract'
-import { sealMobileE2EEV2Frame } from '../../../shared/mobile-e2ee-v2-framing'
-import type { DeviceRegistry } from '../device-registry'
-import { deriveSharedKey, encrypt, generateKeyPair } from '../../../shared/e2ee-crypto'
-import { deriveMobileE2EEV2KeySchedule } from '../../../shared/mobile-e2ee-v2-node-key-schedule'
+} from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
+import { sealMobileE2EEV2Frame } from '../../../shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import type { DeviceRegistry } from './server/pairing/device-registry'
+import {
+  deriveSharedKey,
+  encrypt,
+  generateKeyPair
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { deriveMobileE2EEV2KeySchedule } from '../../../shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   MobileSocketWiring,
   type MobileSocketTransport,
@@ -169,6 +173,48 @@ describe('MobileSocketWiring', () => {
     expect(onClose).toHaveBeenCalledWith(expect.objectContaining({ ws }), false)
     expect(wiring.channelCount).toBe(0)
     expect(wiring.connectionCount).toBe(0)
+  })
+
+  it('records the direct source class only for a socket that authenticated', () => {
+    const desktop = generateKeyPair()
+    const transport = new FakeTransport()
+    const registry = registryFor('device-1', 'valid-token')
+    const onReady = vi.fn()
+    const wiring = new MobileSocketWiring({
+      deviceRegistry: registry,
+      e2eeKeypair: {
+        publicKey: desktop.publicKey,
+        secretKey: desktop.secretKey,
+        publicKeyB64: Buffer.from(desktop.publicKey).toString('base64')
+      },
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onClose: vi.fn(),
+      onReady
+    })
+    wiring.attachTransport(transport, () => ({ transport: 'direct', sourceClass: 'public' }))
+    const authenticate = (ws: FakeSocket, deviceToken: string): void => {
+      const phone = generateKeyPair()
+      transport.receive(
+        ws,
+        JSON.stringify({
+          type: 'e2ee_hello',
+          publicKeyB64: Buffer.from(phone.publicKey).toString('base64')
+        })
+      )
+      const sharedKey = deriveSharedKey(phone.secretKey, desktop.publicKey)
+      transport.receive(ws, encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken }), sharedKey))
+    }
+
+    authenticate(new FakeSocket(), 'wrong-token')
+    expect(registry.updateLastSeenDeferred).not.toHaveBeenCalled()
+    expect(onReady).not.toHaveBeenCalled()
+
+    authenticate(new FakeSocket(), 'valid-token')
+    expect(registry.updateLastSeenDeferred).toHaveBeenCalledWith('device-1', 'public', 'legacy')
+    expect(onReady.mock.calls[0]?.[0]).toMatchObject({
+      transport: { transport: 'direct', sourceClass: 'public' }
+    })
   })
 
   it('reports other live sockets of the same device on close', () => {

@@ -113,6 +113,7 @@ function NativePromptEditor({
       editable: !disabled,
       editorProps: {
         attributes: {
+          'data-native-chat-prompt-editor': 'true',
           role: 'textbox',
           'aria-multiline': 'true',
           'aria-label': placeholder,

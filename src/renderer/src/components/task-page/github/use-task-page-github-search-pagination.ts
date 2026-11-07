@@ -59,13 +59,17 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
       setPaginationLoading(true)
       setLoadingTargetPage(target)
       try {
-        const { items, failedCount, errorTypes } = await fetchWorkItemsNextPage(
+        const result = await fetchWorkItemsNextPage(
           repoArgs,
           githubPerRepoPageLimit,
           githubPageSize,
           q,
           taskPageToGitHubApiPage(target)
         )
+        if (!result) {
+          return
+        }
+        const { items, failedCount, errorTypes } = result
         if (paginationGenerationRef.current !== requestGeneration) {
           return
         }
@@ -126,8 +130,10 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
               failedCount,
               errorTypes
             })
-            countedTotalPagesRef.current = next
-            setCountedTotalPages(next)
+            if (next !== committedCount) {
+              countedTotalPagesRef.current = next
+              setCountedTotalPages(next)
+            }
           }
           return
         }

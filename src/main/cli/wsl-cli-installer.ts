@@ -14,7 +14,7 @@ import {
   getWslLauncherMarker,
   parseManagedLauncherTarget
 } from './wsl-cli-scripts'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import {
   buildWslCliStatus,

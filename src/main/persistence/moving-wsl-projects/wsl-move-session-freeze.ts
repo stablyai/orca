@@ -4,17 +4,17 @@
  * change nor drop it. Every other workspace's rows, and the global fields, are taken as written.
  * Once the host owns the project, its native chat tabs are taken as written too.
  */
-import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
+import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
   mergeWorkspaceSessionArrayField,
   mergeWorkspaceSessionRecordField
-} from '../../../shared/workspace-session-host-records'
+} from '../../../shared/workspace-session/workspace-session-host-records'
 import {
   filterWorkspaceRows,
   withoutWorkspaces,
   workspaceIdsNamedByPartition
-} from '../../../shared/workspace-session-stranded-partition-adoption'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   hasWslMoveFrozenSessions,
   isWslMoveWorkspaceHostOwned,

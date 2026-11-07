@@ -29,7 +29,7 @@ import {
 } from '../../persistence/moving-wsl-projects/wsl-move-host-copy-stop'
 import { beginWslMoveUndoRun } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { runWslMoveHostAutomationsExclusive } from '../../persistence/moving-wsl-projects/wsl-move-undo-host-automations'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { wasWslHostKeptForPeers } from '../../wsl/host-lifecycle/wsl-host-kept-for-peers'
 
 const COMMITTED_FROM = WSL_MOVE_CUTOVER_PHASES.indexOf('destination-committed')

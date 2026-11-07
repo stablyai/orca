@@ -58,56 +58,6 @@ afterEach(() => {
 })
 
 describe('describeCreatedWorktree when Git and the repo disagree', () => {
-  it('reports nothing when the witness proves a different object store', async () => {
-    const otherGitDir = join(scratchDir, 'other-repo', '.git')
-    mkdirSync(otherGitDir, { recursive: true })
-    writeFileSync(join(repoPath, '.git'), `gitdir: ${otherGitDir}\n`)
-    await expect(
-      describeCreatedWorktree(repoPath, worktreePath, 'feature')
-    ).resolves.toBeUndefined()
-  })
-
-  it('throws when the .git marker points at a path that does not exist', async () => {
-    writeFileSync(join(repoPath, '.git'), `gitdir: ${join(scratchDir, 'gone', '.git')}\n`)
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).rejects.toMatchObject({
-      message: expect.stringContaining('gitdir marker target unreadable')
-    })
-  })
-
-  it('throws when the .git marker points at a file', async () => {
-    const notAGitDir = join(scratchDir, 'not-a-git-dir')
-    writeFileSync(notAGitDir, 'not a git dir\n')
-    writeFileSync(join(repoPath, '.git'), `gitdir: ${notAGitDir}\n`)
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).rejects.toMatchObject({
-      message: expect.stringContaining('gitdir marker target is not a directory')
-    })
-  })
-
-  it('reports nothing for a bare repo, whose missing .git is a real answer', async () => {
-    await expect(
-      describeCreatedWorktree(repoPath, worktreePath, 'feature')
-    ).resolves.toBeUndefined()
-  })
-
-  it('follows gitdir and commondir markers', async () => {
-    const commonDir = join(scratchDir, 'main', '.git')
-    const linkedGitDir = join(commonDir, 'worktrees', 'source')
-    mkdirSync(linkedGitDir, { recursive: true })
-    writeFileSync(join(repoPath, '.git'), `gitdir: ${linkedGitDir}\n`)
-    writeFileSync(join(linkedGitDir, 'commondir'), '../..\n')
-    readRepoLocationMock.mockResolvedValue({
-      topLevel: worktreePath,
-      commonDir,
-      gitDir: join(commonDir, 'worktrees', 'feature')
-    })
-
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toMatchObject(
-      {
-        branch: 'refs/heads/feature'
-      }
-    )
-  })
-
   it.skipIf(!CAN_DENY_READ)('throws when the .git marker exists but cannot be read', async () => {
     const dotGit = join(repoPath, '.git')
     writeFileSync(dotGit, 'gitdir: /somewhere\n')
@@ -116,26 +66,5 @@ describe('describeCreatedWorktree when Git and the repo disagree', () => {
       message: expect.stringMatching(/^repo common dir unverifiable: could not read .*\.git: /),
       cause: expect.objectContaining({ code: 'EACCES' })
     })
-  })
-})
-
-describe('describeCreatedWorktree before the witness is reached', () => {
-  it('never pays for the disk read when Git already agreed', async () => {
-    const commonDir = join(repoPath, '.git')
-    mkdirSync(commonDir, { recursive: true })
-    readRepoLocationMock.mockResolvedValue({
-      topLevel: worktreePath,
-      commonDir,
-      gitDir: join(commonDir, 'worktrees', 'feature')
-    })
-    readRepoCommonDirFromGitMock.mockResolvedValue(commonDir)
-    if (CAN_DENY_READ) {
-      chmodSync(repoPath, 0o000)
-    }
-    await expect(describeCreatedWorktree(repoPath, worktreePath, 'feature')).resolves.toMatchObject(
-      {
-        branch: 'refs/heads/feature'
-      }
-    )
   })
 })

@@ -1,4 +1,4 @@
-import type { SourceControlActionLaunchPreferences } from '../../../../../shared/source-control-ai-actions'
+import type { SourceControlActionLaunchPreferences } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 
 import {
   AgentChoiceControls,

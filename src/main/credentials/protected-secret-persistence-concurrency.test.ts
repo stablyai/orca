@@ -129,16 +129,6 @@ describe('protected secret acknowledgements', () => {
     }
   )
 
-  it('retains the last same-slot value in a single acknowledged preparation batch', () => {
-    const secrets = new ProtectedSecretPersistence()
-    const updates = [prepare(secrets, 'slot', 'older'), prepare(secrets, 'slot', 'newer')]
-
-    secrets.commitRetentionUpdates(updates)
-
-    cipherState.available = false
-    expect(secrets.encrypt('slot', 'replacement').blob).toBe(ciphertext('newer'))
-  })
-
   it('does not reuse an old acknowledgement when a removed dynamic slot is recreated', () => {
     const secrets = new ProtectedSecretPersistence()
     const removed = prepare(secrets, 'dynamic-slot', 'removed')

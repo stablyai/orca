@@ -6,23 +6,25 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionEndedEvent
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   UNVERIFIABLE_TURN_VERDICT,
   type StructuredAgentSessionTurnVerdict
-} from '../native-chat/agent-session-wire/structured-agent-session-stale-turn-verdict'
+} from '../native-chat/agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import type { AcpLaunchSpec } from './acp-launch-specs'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpSessionEvent } from './acp-session-runtime'
+import { absorbsAcpModelCommandOutput } from './acp-model-command'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import type { AcpStructuredLane } from './acp-structured-lane'
 import type { AcpStructuredOptions } from './acp-structured-options'
 import type { AcpStructuredPrompts } from './acp-structured-prompts'
 import type { AcpStructuredTurns } from './acp-structured-turns'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 
 export type AcpStructuredSession = {
   events?: StructuredAgentSessionEventSink
@@ -30,6 +32,8 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  /** Session modes this launch reports as Orca's permission modes. */
+  permissionModes: Readonly<Partial<Record<AgentChatPermissionMode, string>>> | undefined
   childStops?: AcpChildStops
   connection: AcpStructuredConnection
   lane: AcpStructuredLane
@@ -54,13 +58,19 @@ export function routeAcpSessionEvent(
   at: number,
   reattaching = false
 ): void {
-  if (event.kind === 'known') {
+  if (
+    event.kind === 'known' &&
+    event.notification.sessionId === session.lane.translator.providerSessionId
+  ) {
     const { update } = event.notification
     if (update.sessionUpdate === 'available_commands_update') {
       session.options.adoptCommands(update.availableCommands)
     } else if (update.sessionUpdate === 'config_option_update') {
       session.options.adoptConfigOptions(update.configOptions)
     }
+  }
+  if (absorbsAcpModelCommandOutput(session.options, event)) {
+    return
   }
   const { translator } = session.lane
   session.lane.apply(

@@ -2,8 +2,8 @@ import {
   nativeChatPreferenceFor,
   type NativeChatDefaultSettings
 } from '../../../../../shared/structured-native-chat-launch-route'
-import type { TuiAgent } from '../../../../../shared/tui-agent'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
 /** Settings knows the default surface; workspace-specific terminal fallback stays a launch decision. */
 export function shouldShowSourceControlActionArguments({

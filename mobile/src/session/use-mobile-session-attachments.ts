@@ -46,7 +46,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     refreshCanPaste,
     activeSessionTab,
     agentSessionHostSupport,
-    hostId
+    hostId,
+    terminalsLoaded
   } = scope
   const clipboardContents = useClipboardReader().contents
   const agent = resolveMobileImageAttachmentAgent(
@@ -117,7 +118,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
     compactInstructions:
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
-    files: nativeChatFiles
+    files: nativeChatFiles,
+    threadGoal: nativeChatController.nativeChatThreadGoal
   })
 
   useEffect(() => {
@@ -150,6 +152,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     hostCapabilities,
     worktreeId,
     open: showCreateTabDrawer || pendingDiffNotesDelivery !== null,
+    // After the session's own first reads, so the list is ready by the first "+" tap.
+    prefetch: terminalsLoaded,
     setLoadState: setCreateTabAgentLoadState,
     setOptions: setCreateTabAgentOptions
   })

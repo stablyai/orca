@@ -1,7 +1,10 @@
 import type { WorkerThreadFactory } from '../../../../worker-threads/worker-thread-transport'
-import { aiVaultScanIssueText } from '../../../../../shared/ai-vault-scan-issue-copy'
+import { aiVaultScanIssueText } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { WorkerThreadRequestQueue } from '../../../../worker-threads/worker-thread-request-queue'
-import type { AiVaultScanIssue, AiVaultSession } from '../../../../../shared/ai-vault-types'
+import type {
+  AiVaultScanIssue,
+  AiVaultSession
+} from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   OpenCodeNativeChatReadRequest,
   OpenCodeNativeChatReadValue,

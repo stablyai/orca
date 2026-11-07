@@ -2,11 +2,16 @@ import {
   remoteInstallListingRegexSource,
   type RemoteInstallModel
 } from '../managed-server/install/remote-install-model'
-import type { RemoteHostPlatform } from './ssh-remote-platform'
-import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
+
+import {
+  type RemoteHostPlatform,
+  isWindowsRemoteHost,
+  joinRemotePath,
+  remoteDirname
+} from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
 import { quotePowerShellLiteral as powerShellLiteral } from '../../shared/powershell-native-argument'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   if (!isWindowsRemoteHost(host)) {

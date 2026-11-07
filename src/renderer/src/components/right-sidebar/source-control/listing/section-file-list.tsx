@@ -1,8 +1,8 @@
 import React from 'react'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { ConflictResolution } from '../../../../../../shared/source-control-entry-actions'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { DiscardAllArea } from '../../../../../../shared/source-control-discard-all-sequence'
+import type { DiscardAllArea } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,

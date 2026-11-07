@@ -1,5 +1,5 @@
 import type { LoadBookkeeping } from './native-chat-composer-draft-load'
-import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch-picker-authority'
+import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import {
   currentDraftScope,
   captureLaunchDraftDestination,
@@ -7,7 +7,7 @@ import {
   nativeChatLaunchPromptDraftOwner,
   retainLaunchDraftSource
 } from './native-chat-launch-draft-source'
-import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerDraft } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 export {
   nativeChatLaunchPromptDraftOwner,
   nativeChatLaunchPromptDraftScopeKey,
@@ -15,6 +15,7 @@ export {
 } from './native-chat-launch-draft-source'
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
+import { reconcileNativeChatStagedDraft } from './native-chat-draft-attachment-staging'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
@@ -78,6 +79,7 @@ export function installNativeChatDraftRecord(
   } else {
     records.delete(scope)
   }
+  reconcileNativeChatStagedDraft(scope, draft)
 }
 
 // Changed in memory with no write issued yet; a refused write comes back here for the next flush.
@@ -303,14 +305,12 @@ export const submissions = new Map<string, Set<DraftSubmission>>()
 /** Each send retains its own full source until a recipient owns it; removal revokes its write authority. */
 export function captureNativeChatComposerSubmission(scopeKey: string) {
   scopeKey = currentDraftScope(scopeKey)
-  const current: NativeChatComposerDraft & { owner?: NativeChatComposerDraftOwner } = records.get(
-    scopeKey
-  ) ?? { text: '', images: [] }
+  const current = records.get(scopeKey)
   const submission: DraftSubmission = {
     scopeKey,
     draft: {
-      ...current,
-      owner: current.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
+      ...(current ?? { text: '', images: [] }),
+      owner: current?.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
     },
     stopObserving: () => {}
   }

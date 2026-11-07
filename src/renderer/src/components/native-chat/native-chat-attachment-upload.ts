@@ -1,7 +1,7 @@
 import {
   lastVerifiedRuntimeStatus,
   isRuntimeHostContactRevoked
-} from '../../../../shared/runtime-host-status'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store'
 // Upload structured-chat client paths to their paired host; other remote chats cannot read client-local files.
 
@@ -14,11 +14,11 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../shared/agent-session/failures/agent-session-write-notice-copy'
@@ -40,7 +40,7 @@ export type NativeChatRuntimeSessionAttachmentOwner = {
 
 export type NativeChatAttachmentOwner =
   /** `structuredSessionId`: a structured chat on this machine, whose sends claim its pastes. */
-  | { kind: 'local'; structuredSessionId?: string }
+  | { kind: 'local'; structuredSessionId?: string; stagingScope?: string }
   | NativeChatRuntimeSessionAttachmentOwner
   /** Refuse client paths for terminal-backed remote or nested SSH/WSL chats; the paired store may not reach their agent. */
   | {
@@ -121,6 +121,8 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
 
 export type NativeChatStructuredAttachmentSession = {
   sessionId: string
+  /** Files belong to the draft until its future session can receive them. */
+  attachmentStagingScope?: string
   /** Null: the chat runs on this machine. */
   runtimeEnvironmentId: string | null
   /** The host has not confirmed this chat, so nothing can be uploaded into it. */

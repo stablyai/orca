@@ -1,21 +1,23 @@
+import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
 import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
 import type { FileContent } from './editor-panel-content-types'
 import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
-import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { MarkdownRenderState } from './markdown-render-mode'
+import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 
 // Retry is a user act: it may start a stopped WSL distro.
 const USER_RETRY = { wakeWslDistro: true }
@@ -131,6 +133,10 @@ export function EditorContent({
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
 
+  if (activeFile.mode === 'git-graph') {
+    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+  }
+
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails
     if (!checkRunDetails) {
@@ -233,6 +239,7 @@ export function EditorContent({
             filePath={activeFile.filePath}
             sourceFileId={previewSourceFileId}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={markdownPreviewViewStateKey}
             initialAnchor={activeFile.markdownPreviewAnchor ?? null}

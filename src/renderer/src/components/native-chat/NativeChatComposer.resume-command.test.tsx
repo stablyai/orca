@@ -1,13 +1,20 @@
 // @vitest-environment happy-dom
 
 // @vitest-environment happy-dom
-import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
-import { act, cleanup, render } from '@testing-library/react'
-import type { RefObject } from 'react'
+
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useLayoutEffect, type RefObject } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import { createStructuredSessionSelectionController } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 
 type CommandItem = Extract<NativeChatPickerItem, { kind: 'command' }>
 
@@ -16,10 +23,12 @@ type FieldProps = {
   autocomplete?: { mode: string; items?: NativeChatPickerItem[] }
   onChooseMentionFile?: (path: string) => void
   onSend?: () => void
+  sendButtonDisabled?: boolean
   onChoosePickerItem?: (item: NativeChatPickerItem) => void
   goalMode?: { active: boolean }
 }
 type KeyDownArgs = {
+  send: () => void
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: CommandItem) => void
 }
@@ -35,7 +44,9 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
-vi.mock('../../store', () => {
+vi.mock('./NativeChatComposerWorkspace', () => ({ NativeChatComposerWorkspace: () => null }))
+
+vi.mock('../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
@@ -53,10 +64,10 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('../right-sidebar/ai-vault-panel-workspace', () => ({
+vi.mock('../right-sidebar/ai-vault/scope/ai-vault-panel-workspace', () => ({
   selectAiVaultPanelWorkspace: () => ({ worktree: { id: 'wt-1' }, repo: null })
 }))
-vi.mock('../right-sidebar/agent-session-history-modal', () => ({
+vi.mock('../right-sidebar/ai-vault/panel/agent-session-history-modal', () => ({
   openAgentSessionHistoryModal: mocks.openHistory
 }))
 vi.mock('./native-chat-runtime-send', () => ({
@@ -69,8 +80,21 @@ vi.mock('./use-native-chat-draft', () => ({
 vi.mock('./NativeChatComposerField', () => ({
   NativeChatComposerField: (props: FieldProps) => {
     mocks.fieldProps = props
+    const draft = mocks.draft
+    useLayoutEffect(() => {
+      if (props.textareaRef.current) {
+        props.textareaRef.current.value = draft
+      }
+    }, [draft, props.textareaRef])
     // Holds the draft as the real editor does; a picker completes the text the editor holds.
-    return <textarea ref={props.textareaRef} value={mocks.draft} readOnly />
+    return (
+      <>
+        <textarea ref={props.textareaRef} defaultValue={mocks.draft} />
+        <button disabled={props.sendButtonDisabled} onClick={props.onSend}>
+          Send command
+        </button>
+      </>
+    )
   }
 }))
 vi.mock('./use-native-chat-skills', () => ({
@@ -90,30 +114,21 @@ vi.mock('./use-native-chat-composer-keydown', () => ({
   }
 }))
 
-import {
-  createNativeChatQueuedEditDraft,
-  discardNativeChatQueuedEdit
-} from './native-chat-queued-edit-draft'
 import { NativeChatComposer } from './NativeChatComposer'
 
-const RESUME: CommandItem = {
-  kind: 'command',
-  id: 'command:resume',
-  name: 'resume',
-  token: '/resume',
-  skillCollision: false,
-  orcaOwned: true
-}
-
-function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
+function renderStructuredChat(
+  editSession?: QueuedMessageInlineEditor,
+  agent: AgentType = 'claude'
+) {
   const transport: NativeChatStructuredComposerTransport = {
     capturePresentation: () => () => true,
     ...(editSession ? { threadGoal: { setObjective: vi.fn(async () => true) } } : {}),
     send: vi.fn(() => true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
     optionsSurface: {
+      admits: vi.fn(() => true),
       getSnapshot: () => [],
-      setOption: vi.fn(),
+      setOption: vi.fn(async () => ({ snapshot: [] })),
       invokeAction: vi.fn(),
       subscribe: () => () => {}
     },
@@ -131,7 +146,7 @@ function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
       draftScopeKey={editSession?.draftScopeKey}
       paneKey="tab-1:structured"
       targetPtyId={null}
-      agent="claude"
+      agent={agent}
       structuredTransport={transport}
     />
   )
@@ -139,7 +154,33 @@ function renderStructuredChat(editSession?: QueuedMessageInlineEditor) {
   return { transport, rerender: () => view.rerender(chat()) }
 }
 
-describe('/resume in the native chat composer', () => {
+const USAGE: CommandItem = {
+  kind: 'command',
+  id: 'command:usage',
+  name: 'usage',
+  token: '/usage',
+  skillCollision: false,
+  orcaOwned: true
+}
+
+const MODE: SessionOptionDescriptor = {
+  id: 'interactionMode',
+  label: 'Mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    currentValue: 'default',
+    choices: [
+      { value: 'default', label: 'Build' },
+      { value: 'plan', label: 'Plan' }
+    ]
+  },
+  valueSource: 'default',
+  transport: 'agent-session',
+  settable: true
+}
+
+describe('structured composer control picks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.draft = '/resume'
@@ -153,167 +194,226 @@ describe('/resume in the native chat composer', () => {
   })
   afterEach(() => cleanup())
 
-  it("opens a structured chat's history, typed in any case, and sends nothing", () => {
-    mocks.draft = '/Resume  auth  retry'
-    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
-    const { transport } = renderStructuredChat()
-    let focusedAtOpen: Element | null = null
-    mocks.openHistory.mockImplementation(() => (focusedAtOpen = document.activeElement))
-
-    // Clicking Send leaves focus on the button; the dialog must be able to hand it back to the chat.
-    act(() => mocks.fieldProps?.onSend?.())
-    expect(focusedAtOpen).toBeInstanceOf(HTMLTextAreaElement)
-
-    expect(mocks.openHistory).toHaveBeenCalledWith({
-      workspace: { worktreeId: 'wt-structured' },
-      chatTabId: 'tab-1',
-      initialQuery: 'auth retry',
-      agent: 'claude'
-    })
-    expect(transport.send).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).not.toHaveBeenCalled()
-    expect(mocks.setDraft).toHaveBeenCalledWith('')
-    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
-
-    cleanup()
-    mocks.draft = '/res'
-    renderStructuredChat()
-    act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
-    expect(mocks.openHistory).toHaveBeenCalledTimes(2)
-  })
-
-  it('sends a picked skill named resume to the agent, as the skill it is', () => {
-    mocks.draft = '/res'
-    const { transport, rerender } = renderStructuredChat()
-    act(() =>
-      mocks.fieldProps?.onChoosePickerItem?.({
-        kind: 'skill',
-        id: 'skill:resume',
-        name: 'resume',
-        token: '/resume',
-        description: null,
-        sources: []
-      })
-    )
-    mocks.draft = '/resume make it one page'
-    rerender()
-
-    act(() => mocks.fieldProps?.onSend?.())
-
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).toHaveBeenCalledWith('/resume make it one page')
-    mocks.draft = '/resume'
-    rerender()
-    act(() => mocks.keyDownArgs?.dispatchPickerCommand(RESUME))
-    expect(mocks.openHistory).toHaveBeenCalledOnce()
-  })
-
-  it('reopened native slash identity permits only edit Save and cannot authorize a stale command row', () => {
-    const draft = createNativeChatQueuedEditDraft(
-      {
-        kind: 'message',
-        role: 'user',
-        blocks: [{ type: 'text', text: '/model\nintent' }],
-        skills: [{ name: 'model', path: '/selected/SKILL.md' }]
-      },
-      'bottom'
-    )
-    mocks.draft = '/model\nintent'
-    const editor: QueuedMessageInlineEditor = {
-      messageId: 'seeded',
-      draftScopeKey: draft.scopeKey,
-      text: mocks.draft,
-      change: vi.fn(),
-      acquiring: false,
-      saving: false,
-      canSave: true,
-      imagesCapable: true,
-      save: vi.fn(),
-      cancel: vi.fn()
-    }
-    const { transport } = renderStructuredChat(editor)
-    act(() => mocks.fieldProps?.onSend?.())
-    expect(editor.save).toHaveBeenCalledOnce()
-    act(() =>
-      mocks.fieldProps?.onChoosePickerItem?.({
-        ...RESUME,
-        id: 'command:model',
-        name: 'model',
-        token: '/model'
-      })
-    )
-    expect(editor.save).toHaveBeenCalledOnce()
-    expect(transport.dispatchCommand).not.toHaveBeenCalled()
-    expect(transport.send).not.toHaveBeenCalled()
-    discardNativeChatQueuedEdit(draft)
-  })
-
-  it.each(['/compact', '/goal ship it', '/resume old chat'])(
-    'saves literal %s but refuses its picked control without dispatch',
-    (text) => {
-      mocks.draft = text
-      const editor: QueuedMessageInlineEditor = {
-        messageId: 'queued',
-        draftScopeKey: 'queued-edit:test',
-        text,
-        change: vi.fn(),
-        acquiring: false,
-        saving: false,
-        canSave: true,
-        imagesCapable: true,
-        save: vi.fn(),
-        cancel: vi.fn()
-      }
-      const { transport } = renderStructuredChat(editor)
-      act(() => mocks.fieldProps?.onSend?.())
-      const name = text.slice(1).split(' ')[0]!
-      const item: CommandItem = { ...RESUME, id: `command:${name}`, name, token: `/${name}` }
-      act(() => mocks.keyDownArgs?.dispatchPickerCommand(item))
-      act(() => mocks.fieldProps?.onChoosePickerItem?.(item))
-      expect(editor.save).toHaveBeenCalledOnce()
+  it.each([
+    ['claude', '/plan', 'plan'],
+    ['codex', '/default', 'default']
+  ] as const)(
+    'lets %s %s configure a held host through Send and Enter',
+    async (agent, draft, mode) => {
+      mocks.draft = draft
+      const { transport, rerender } = renderStructuredChat(undefined, agent)
+      transport.sendBlockedReason = 'The host is waiting'
+      vi.mocked(transport.dispatchCommand).mockImplementation((text) =>
+        dispatchStructuredAgentSessionComposerCommand(text, {
+          agent,
+          snapshot: transport.optionSnapshot,
+          setOption: async (id, value) => {
+            await transport.optionsSurface.setOption(id, value)
+            return true
+          },
+          invokeAction: async () => false
+        })
+      )
+      rerender()
+      expect(screen.getByRole('button', { name: 'Send command' }).hasAttribute('disabled')).toBe(
+        true
+      )
+      transport.optionSnapshot = [MODE]
+      rerender()
+      const button = screen.getByRole('button', { name: 'Send command' })
+      expect(button.hasAttribute('disabled')).toBe(false)
+      await act(async () => fireEvent.click(button))
+      expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith('interactionMode', mode)
+      await act(async () => mocks.keyDownArgs?.send())
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(2)
+      expect(transport.dispatchCommand).toHaveBeenNthCalledWith(1, draft)
+      expect(transport.dispatchCommand).toHaveBeenNthCalledWith(2, draft)
+      transport.sendOut = true
+      rerender()
+      expect(button.hasAttribute('disabled')).toBe(true)
+      await act(async () => fireEvent.click(button))
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(2)
       expect(transport.send).not.toHaveBeenCalled()
-      expect(transport.threadGoal?.setObjective).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['claude', 'codex'] as const)(
+    'applies %s mode picks through every picker route without sending or losing draft text',
+    async (agent) => {
+      mocks.draft = '/pl'
+      mocks.imageAttachments = [{ id: 'kept-image', path: '/tmp/kept.png' }]
+      const { transport, rerender } = renderStructuredChat(undefined, agent)
+      transport.optionSnapshot = [MODE]
+      transport.sessionCommands = [
+        { name: 'plan', kind: 'command', description: 'Toggle plan mode' },
+        { name: 'plan', kind: 'command', description: 'Switch to Plan mode' }
+      ]
+      rerender()
+      const plans = mocks.fieldProps?.autocomplete?.items?.filter(
+        (item): item is CommandItem => item.kind === 'command' && item.name === 'plan'
+      )
+      expect(plans).toHaveLength(1)
+      const plan = plans![0]!
+      const input = document.querySelector('textarea')!
+      const reply = Promise.withResolvers<{ snapshot: SessionOptionDescriptor[] }>()
+      vi.mocked(transport.optionsSurface.setOption).mockReturnValue(reply.promise)
+      const choose = [
+        () => mocks.fieldProps?.onChoosePickerItem?.(plan),
+        () => mocks.keyDownArgs?.completePickerItem(plan),
+        () => mocks.keyDownArgs?.dispatchPickerCommand(plan)
+      ]
+      for (const pick of choose) {
+        // The live editor can move ahead of the React draft before a pick lands.
+        input.value = 'keep /pl tail'
+        input.setSelectionRange(8, 8)
+        await act(async () => pick())
+        expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith(
+          'interactionMode',
+          'plan'
+        )
+        expect(mocks.setDraft).toHaveBeenLastCalledWith('keep  tail')
+        expect(input.value).toBe('keep  tail')
+        expect(input.selectionStart).toBe(5)
+        expect(document.activeElement).toBe(input)
+      }
+      input.value = 'later typing'
+      mocks.setDraft.mockClear()
+      await act(async () => choose[0]!())
+      expect(mocks.setDraft).not.toHaveBeenCalled()
+      expect(transport.optionsSurface.setOption).toHaveBeenCalledTimes(3)
+      input.blur()
+      await act(async () => reply.resolve({ snapshot: [] }))
+      expect(input.value).toBe('later typing')
+      expect(document.activeElement).not.toBe(input)
+
+      if (agent === 'codex') {
+        mocks.draft = '/def'
+        rerender()
+        const leave = mocks.fieldProps?.autocomplete?.items?.find(
+          (item) => item.kind === 'command' && item.name === 'default'
+        )
+        expect(leave).toBeDefined()
+        input.value = '/def'
+        input.setSelectionRange(4, 4)
+        await act(async () => mocks.fieldProps?.onChoosePickerItem?.(leave!))
+        expect(transport.optionsSurface.setOption).toHaveBeenLastCalledWith(
+          'interactionMode',
+          'default'
+        )
+        expect(input.value).toBe('')
+      }
+      expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+      expect(transport.send).not.toHaveBeenCalled()
       expect(transport.dispatchCommand).not.toHaveBeenCalled()
       expect(mocks.sendNativeChatTypedCommand).not.toHaveBeenCalled()
-      expect(mocks.openHistory).not.toHaveBeenCalled()
-      expect(mocks.setDraft).not.toHaveBeenCalledWith('')
     }
   )
 
-  it.each([undefined, [], [{ name: 'fast', kind: 'command' as const }]])(
-    'saves typed provider commands with inventory %j through the inline composer',
-    (inventory) => {
-      for (const text of ['/fast', '/permissions']) {
-        mocks.draft = text
-        const editor: QueuedMessageInlineEditor = {
-          messageId: 'queued-provider',
-          draftScopeKey: 'queued-edit:provider',
-          text,
-          change: vi.fn(),
-          acquiring: false,
-          saving: false,
-          canSave: true,
-          imagesCapable: true,
-          save: vi.fn(),
-          cancel: vi.fn()
-        }
-        const { transport } = renderStructuredChat(editor)
-        transport.sessionCommands = inventory
-        act(() => mocks.fieldProps?.onSend?.())
-        expect(editor.save).toHaveBeenCalledOnce()
-        expect(transport.send).not.toHaveBeenCalled()
-        expect(transport.dispatchCommand).not.toHaveBeenCalled()
-        cleanup()
-      }
+  it('keeps a locked or transmitted mode pick intact even through a retained event callback', async () => {
+    mocks.draft = '/pl'
+    mocks.imageAttachments = [{ id: 'kept-image', path: '/tmp/kept.png' }]
+    const { transport, rerender } = renderStructuredChat(undefined, 'codex')
+    const controller = createStructuredSessionSelectionController(() => {})
+    const view = createStructuredAgentSessionOptionState(
+      'codex',
+      structuredAgentSessionSeedCatalog('codex')
+    )
+    let ready = false
+    const reply = Promise.withResolvers<{ kind: 'accepted'; options: Record<string, string> }>()
+    const transmit = vi.fn(() => reply.promise)
+    const writer = createStructuredAgentSessionOptionsWriteOwner(() => ({
+      controller,
+      record: view.record,
+      view,
+      snapshot: [MODE],
+      ready,
+      providerStarting: false,
+      existingChat: true,
+      isCurrentContext: () => true,
+      flush: () => controller.flush(transmit),
+      revalidate: () => {},
+      revalidateOn: 'settled'
+    }))
+    transport.optionsSurface.admits = writer.admits
+    vi.mocked(transport.optionsSurface.setOption).mockImplementation(async (id, value) => {
+      await writer.setOption(id, value)
+      return { snapshot: [MODE] }
+    })
+    transport.optionSnapshot = [MODE]
+    rerender()
+    const plan = mocks.fieldProps!.autocomplete!.items!.find((item) => item.name === 'plan')!
+    const choose = mocks.fieldProps!.onChoosePickerItem!
+    const input = document.querySelector('textarea')!
+    input.value = 'keep /pl tail'
+    input.setSelectionRange(8, 8)
+    mocks.setDraft.mockClear()
+    act(() => choose(plan))
+    expect(input.value).toBe('keep /pl tail')
+    expect(input.selectionStart).toBe(8)
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(transmit).not.toHaveBeenCalled()
+    ready = true
+    act(() => choose(plan))
+    expect(input.value).toBe('keep  tail')
+    expect(transmit).toHaveBeenCalledTimes(1)
+    input.value = 'keep /def tail'
+    input.setSelectionRange(9, 9)
+    const leave: CommandItem = {
+      kind: 'command',
+      id: 'command:default',
+      name: 'default',
+      token: '/default',
+      skillCollision: false,
+      orcaOwned: true
     }
-  )
+    // No rerender: this callback still holds the enabled descriptor from before Plan was issued.
+    act(() => choose(leave))
+    expect(input.value).toBe('keep /def tail')
+    expect(input.selectionStart).toBe(9)
+    expect(transmit).toHaveBeenCalledTimes(1)
+    await act(async () => reply.resolve({ kind: 'accepted', options: { interactionMode: 'plan' } }))
+    await act(async () => choose(leave))
+    expect(input.value).toBe('keep  tail')
+    expect(transmit).toHaveBeenCalledTimes(2)
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+  })
 
-  it('saves ordinary text and a picked provider skill without any send or command RPC', () => {
-    mocks.draft = '/res'
-    const editor: QueuedMessageInlineEditor = {
+  it('keeps namesake skills and a retained mode pick on an unsupported host as text', async () => {
+    mocks.draft = '/pl'
+    const { transport, rerender } = renderStructuredChat()
+    transport.optionSnapshot = [MODE]
+    rerender()
+    const plan = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'plan')
+    expect(plan).toBeDefined()
+    await act(async () =>
+      mocks.fieldProps?.onChoosePickerItem?.({
+        kind: 'skill',
+        id: 'skill:plan',
+        name: 'plan',
+        token: '/plan',
+        description: null,
+        sources: []
+      })
+    )
+    expect(mocks.setDraft).toHaveBeenLastCalledWith('/plan ')
+    transport.optionSnapshot = []
+    rerender()
+    const input = document.querySelector('textarea')!
+    input.value = '/pl'
+    input.setSelectionRange(3, 3)
+    await act(async () => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(input.value).toBe('/plan ')
+    expect(transport.optionsSurface.setOption).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+  })
+
+  it('rechecks a retained Plan command pick when the host starts owning mode changes', () => {
+    mocks.draft = '/pl'
+    const edit: QueuedMessageInlineEditor = {
       messageId: 'queued',
-      draftScopeKey: 'queued-edit:test',
-      text: '/res',
+      draftScopeKey: 'queued-edit:plan-pick',
+      text: '/pl',
       change: vi.fn(),
       acquiring: false,
       saving: false,
@@ -322,86 +422,79 @@ describe('/resume in the native chat composer', () => {
       save: vi.fn(),
       cancel: vi.fn()
     }
-    const { transport, rerender } = renderStructuredChat(editor)
+    const { transport, rerender } = renderStructuredChat(edit)
+    transport.sessionCommands = [{ name: 'plan', kind: 'command' }]
+    rerender()
+    const plan = mocks.fieldProps?.autocomplete?.items?.find((item) => item.name === 'plan')
+    expect(plan).toBeDefined()
+    act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(mocks.setDraft).toHaveBeenCalledWith('/plan ')
+    mocks.setDraft.mockClear()
+    transport.optionSnapshot = [MODE]
+    rerender()
+    act(() => mocks.fieldProps?.onChoosePickerItem?.(plan!))
+    expect(mocks.setDraft).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).not.toHaveBeenCalled()
+  })
+
+  it('offers usage only with host support and consumes a pick without dropping the remaining draft or attachments', () => {
+    mocks.draft = '/usa'
+    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
+    const { transport, rerender } = renderStructuredChat()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      ) ?? false
+    ).toBe(false)
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
+    expect(
+      mocks.fieldProps?.autocomplete?.items?.some(
+        (item) => item.name === 'usage' && item.kind === 'command'
+      )
+    ).toBe(true)
+    mocks.draft = '/usa keep this draft'
+    rerender()
+    const select = vi.spyOn(HTMLTextAreaElement.prototype, 'setSelectionRange')
+    act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
+    expect(open).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenCalledWith('keep this draft')
+    // The next keystroke lands after the kept text, not in front of it.
+    expect(select).toHaveBeenLastCalledWith('keep this draft'.length, 'keep this draft'.length)
+    select.mockRestore()
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+    expect(transport.send).not.toHaveBeenCalled()
+    mocks.draft = '/usage'
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(open).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a picked skill named usage as a skill', () => {
+    mocks.draft = '/usa'
+    const { transport, rerender } = renderStructuredChat()
+    const open = vi.fn()
+    transport.accountUsage = { open }
+    rerender()
     act(() =>
       mocks.fieldProps?.onChoosePickerItem?.({
         kind: 'skill',
-        id: 'skill:resume',
-        name: 'resume',
-        token: '/resume',
+        id: 'skill:usage',
+        name: 'usage',
+        token: '/usage',
         description: null,
         sources: []
       })
     )
-    mocks.draft = '/resume write a page'
+    mocks.draft = '/usage'
     rerender()
     act(() => mocks.fieldProps?.onSend?.())
-    expect(editor.save).toHaveBeenCalledOnce()
-    expect(transport.send).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).not.toHaveBeenCalled()
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-  })
-
-  // A terminal-backed chat (every SSH chat, for one) keeps the agent's own /resume.
-  it('leaves /resume to the agent in a terminal-backed chat', () => {
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:leaf-1"
-        targetPtyId="pty-1"
-        agent="codex"
-      />
-    )
-
-    act(() => mocks.fieldProps?.onSend?.())
-
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-    expect(mocks.sendNativeChatTypedCommand).toHaveBeenCalledWith('pty-1', '/resume', {
-      clearInput: AGENT_TUI_CLEAR_INPUT_MAX
-    })
-  })
-
-  it('derives inline catalog from the same action boundary before resolving namesake skills', () => {
-    mocks.draft = '/'
-    const edit: QueuedMessageInlineEditor = {
-      messageId: 'queue',
-      draftScopeKey: 'queued-edit:menu',
-      text: '/',
-      acquiring: false,
-      saving: false,
-      canSave: true,
-      imagesCapable: true,
-      save: vi.fn(),
-      cancel: vi.fn(),
-      change: vi.fn()
-    }
-    const { transport, rerender } = renderStructuredChat(edit)
-    transport.sessionCommands = [
-      { name: 'review', kind: 'command' },
-      { name: 'model', kind: 'skill', path: '/model/SKILL.md' },
-      { name: 'goal', kind: 'command' }
-    ]
-    transport.conversationCommands = ['clear', 'compact']
-    rerender()
-    expect(
-      mocks.fieldProps?.autocomplete?.items?.map(({ kind, name }) => `${kind}:${name}`)
-    ).toEqual(['command:review', 'skill:model'])
-    expect(mocks.openHistory).not.toHaveBeenCalled()
-    // Without a host goal action /goal is valid provider prompt input.
-    delete transport.threadGoal
-    rerender()
-    expect(mocks.fieldProps?.autocomplete?.items?.map(({ name }) => name)).toContain('goal')
-    mocks.draft = '/goal objective'
-    rerender()
-    act(() => mocks.fieldProps?.onSend?.())
-    expect(edit.save).toHaveBeenCalledOnce()
-    expect(transport.send).not.toHaveBeenCalled()
-    expect(transport.dispatchCommand).not.toHaveBeenCalled()
-    mocks.draft = '@src'
-    rerender()
-    expect(mocks.fieldProps?.autocomplete?.mode).toBe('mention')
-    act(() => mocks.fieldProps?.onChooseMentionFile?.('src/file.ts'))
-    expect(mocks.setDraft).toHaveBeenCalledWith(expect.stringContaining('src/file.ts'))
+    expect(open).not.toHaveBeenCalled()
+    expect(transport.dispatchCommand).toHaveBeenCalledWith('/usage')
+    act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
+    expect(open).toHaveBeenCalledOnce()
   })
 })
 

@@ -3,14 +3,14 @@ import {
   getOpenCodeCliCapabilities,
   type OpenCodeCliCapabilities
 } from '../../shared/opencode-cli-version'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCommandOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { probeOpenCodeCliVersion } from './opencode-cli-version'
 import {
   getAgentLaunchCommandToken,
   getAgentLaunchExecutableName
-} from '../../shared/agent-command-line-intent'
+} from '../../shared/agent-launch/startup/agent-command-line-intent'
 
 export function getOpenCodeLaunchExecutable(
   command: string | undefined,

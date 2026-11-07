@@ -6,7 +6,7 @@ import {
   type ExecutionHostId,
   type ExecutionHostScope
 } from '../execution-host'
-import type { FolderWorkspace } from '../folder-workspace-types'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
 

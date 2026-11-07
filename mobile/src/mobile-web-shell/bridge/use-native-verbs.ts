@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
   mediaNameResultSchema,
@@ -24,6 +24,19 @@ import {
   type BridgeNativeVerb,
   type BridgePdfOpenParams
 } from './bridge-native-verbs'
+import { imageResultSchema, type BridgeImageRunParams } from './bridge-image-verbs'
+import {
+  BRIDGE_SPEECH_VERB,
+  speechCancelResultSchema,
+  speechFinishResultSchema,
+  speechReadResultSchema,
+  speechStartResultSchema,
+  speechStatusResultSchema,
+  type BridgeSpeechFinish,
+  type BridgeSpeechRead,
+  type BridgeSpeechStartResult,
+  type BridgeSpeechStatusResult
+} from './bridge-speech-verbs'
 
 // Use ordinary request frames/caps, served only on-device. Refuse ungranted verbs before posting and parse results because the installed shell can differ from this page build.
 export type NativeVerbs = {
@@ -47,6 +60,16 @@ export type NativeVerbs = {
   canOpenPdf: boolean
   openPdf: (params: BridgePdfOpenParams) => Promise<void>
   cancelPdf: () => Promise<void>
+  canActOnImages: boolean
+  stageImage: (offset: number, base64: string) => Promise<void>
+  runImageAction: (params: BridgeImageRunParams) => Promise<void>
+  // Without it dictation goes to the computer exactly as before.
+  canRecognizeSpeech: boolean
+  speechStatus: (locale: string) => Promise<BridgeSpeechStatusResult>
+  speechStart: (locale: string) => Promise<BridgeSpeechStartResult>
+  speechRead: () => Promise<BridgeSpeechRead>
+  speechFinish: () => Promise<BridgeSpeechFinish>
+  speechCancel: () => Promise<void>
 }
 
 // Expose stable reason codes, including local ungranted and frame refusals. Unknown newer-shell codes floor to unreported so caller switches remain exhaustive.
@@ -81,6 +104,7 @@ export const NATIVE_VERB_REASONS = [
   'native_audio_not_capturing',
   'native_pdf_no_viewer',
   'native_pdf_host_outdated',
+  'native_image_permission_denied',
   'native_verb_not_a_verb',
   'bridge_cap_exceeded',
   'bridge_host_disposed',
@@ -163,6 +187,23 @@ export function useNativeVerbs(): NativeVerbs {
       },
       cancelPdf: async () => {
         await call('native.pdf.view', { action: 'cancel' }, pdfViewResultSchema)
+      },
+      canActOnImages: has('native.image.act'),
+      stageImage: async (offset, base64) => {
+        await call('native.image.act', { action: 'stage', offset, base64 }, imageResultSchema)
+      },
+      runImageAction: async (params) => {
+        await call('native.image.act', { action: 'run', ...params }, imageResultSchema)
+      },
+      canRecognizeSpeech: has(BRIDGE_SPEECH_VERB),
+      speechStatus: (locale) =>
+        call(BRIDGE_SPEECH_VERB, { action: 'status', locale }, speechStatusResultSchema),
+      speechStart: (locale) =>
+        call(BRIDGE_SPEECH_VERB, { action: 'start', locale }, speechStartResultSchema),
+      speechRead: () => call(BRIDGE_SPEECH_VERB, { action: 'read' }, speechReadResultSchema),
+      speechFinish: () => call(BRIDGE_SPEECH_VERB, { action: 'finish' }, speechFinishResultSchema),
+      speechCancel: async () => {
+        await call(BRIDGE_SPEECH_VERB, { action: 'cancel' }, speechCancelResultSchema)
       }
     }
   }, [client])

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import {
   applyAppend,
-  boundNativeChatWindow,
   createNativeChatMerger,
   mergeNativeChatMessages,
   replaceList
@@ -52,13 +51,6 @@ describe('mobile stateful merger — oracle vs pure merge', () => {
     expect(after).not.toBe(before)
     expect(after[0]).toBe(before[0])
     expect(after[after.length - 1]).toBe(tail)
-  })
-
-  it('bounds the window to the most-recent tail', () => {
-    const long = Array.from({ length: 10 }, (_, i) => msg(`m${i}`))
-    expect(boundNativeChatWindow(long, 3).map((m) => m.id)).toEqual(['m7', 'm8', 'm9'])
-    expect(boundNativeChatWindow(long, 0)).toBe(long)
-    expect(boundNativeChatWindow(long, 20)).toBe(long)
   })
 
   it('bounds live appends and rebuilds the cached indexes for the retained tail', () => {

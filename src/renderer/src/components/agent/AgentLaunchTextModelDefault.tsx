@@ -1,8 +1,8 @@
 import { CommandItem } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/source-control-text-action-picker'
-import type { AgentPickerEdit } from '../../../../shared/agent-launch-picker-edits'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { TEXT_ACTION_DEFAULT_MODEL } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
+import type { AgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 
 export function AgentLaunchTextModelDefault({
   entry,
@@ -20,13 +20,15 @@ export function AgentLaunchTextModelDefault({
   }
   return (
     <>
-      <CommandItem
-        value={TEXT_ACTION_DEFAULT_MODEL}
-        disabled={disabled}
-        onSelect={() => onSelect({ kind: 'choice', patch: { model: TEXT_ACTION_DEFAULT_MODEL } })}
-      >
-        {entry.textGeneration.defaultLabel}
-      </CommandItem>
+      {entry.textGeneration.defaultLabel !== undefined ? (
+        <CommandItem
+          value={TEXT_ACTION_DEFAULT_MODEL}
+          disabled={disabled}
+          onSelect={() => onSelect({ kind: 'choice', patch: { model: TEXT_ACTION_DEFAULT_MODEL } })}
+        >
+          {entry.textGeneration.defaultLabel}
+        </CommandItem>
+      ) : null}
       {modelInArguments ? (
         <div className="px-2 py-1.5 text-xs text-muted-foreground">
           {translate('agentPicker.setByArguments', 'Set by your Arguments')}

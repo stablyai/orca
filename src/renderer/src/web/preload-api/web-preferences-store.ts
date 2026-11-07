@@ -12,7 +12,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
-} from '../../../../shared/pr-bot-author-overrides'
+} from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import {
   mergeSettings,
@@ -23,6 +23,7 @@ import {
   retainOriginalWebChatSetting
 } from './web-preference-normalization'
 import { callRuntimeResult } from './web-runtime-calls'
+import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
@@ -122,7 +123,7 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
   try {
     // A reply after the host changed still merges; publish keeps consent to the pairing that answered.
     const result = await callRuntimeResult<SettingsResult>('settings.get', undefined, 15_000)
-    const runtimeSettings: Partial<GlobalSettings> = {}
+    const runtimeSettings = followHostVoiceSettings(local, result.settings)
     const currentEnvironment = requireActiveEnvironmentOrNull()
     if (currentEnvironment?.id === requestedEnvironment.id) {
       const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
@@ -253,6 +254,8 @@ export async function syncRuntimeBackedSettings(
           webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
         }
         delete runtimeSettings.worktreeVisibilityDefaults
+        // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
+        delete runtimeSettings.voice
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (

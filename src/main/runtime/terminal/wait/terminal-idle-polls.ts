@@ -1,24 +1,20 @@
-import { isShellProcess } from '../../../../shared/agent-detection'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
 } from '../../../../shared/runtime-terminal-contracts'
-import { detectTerminalWaitBlockedReason } from '../../terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult
-} from '../../terminal-wait-results'
-import { buildTerminalWaitText } from '../../terminal-wait-tail-state'
-import {
-  evaluateTuiIdle,
-  type QuietForegroundLane,
-  type TuiIdleVerdict
-} from '../../tui-idle-evidence'
+} from './terminal-wait-results'
+import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { evaluateTuiIdle, type QuietForegroundLane, type TuiIdleVerdict } from './tui-idle-evidence'
 import {
   outputClockOf,
   ptyTuiIdleEvidence,
   type TuiIdleEvidenceSource
-} from '../../tui-idle-evidence-source'
+} from './tui-idle-evidence-source'
 
 /** Open lanes accept missing clocks as uncorroborated quiet for unseen daemon output; caller timeouts remain and delivery cannot use this lane.
  * Known agents on after-paint lanes must first paint their own command output, excluding shell prompts/echo. */
@@ -36,8 +32,8 @@ function isQuietForQuiescence(
   }
   return Date.now() - lastOutputAt >= quiescenceMs
 }
-import type { TerminalWaiter } from '../../runtime-terminal-contracts'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { TerminalWaiter } from './terminal-waiter'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 type RuntimeTerminalIdlePollDependencies = TuiIdleEvidenceSource & {
   intervalMs: number

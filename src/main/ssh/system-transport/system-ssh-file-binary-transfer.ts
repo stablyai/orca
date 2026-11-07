@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   getSystemSshBuildArgsFromOperationOptions,
   type SystemSshBuildArgsOptions

@@ -1,9 +1,12 @@
-import type { RuntimeEnvironmentStatus } from './runtime-status'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type {
+  RuntimeEnvironmentStatus,
+  RuntimeHostStatusSnapshot
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'
 
 export async function refreshRuntimeEnvironmentStatus(
   environmentId: string,

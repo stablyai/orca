@@ -1,14 +1,19 @@
 import type { ActivePluginCommand } from '@/store/plugin-panels'
 import {
   getEffectiveKeybindingsForDefinition,
+  keybindingIsActiveInContext,
   keybindingMatchesInput,
   type KeybindingDefinition,
   type KeybindingMatchOptions,
   type KeybindingInput,
   type KeybindingOverrides,
+  type KeybindingActionId,
   type PluginKeybindingActionId
 } from '../../../shared/keybindings'
-import { fileSearchClaimsTextKey } from './file-search-shortcut-policy'
+import {
+  type fileSearchClaimsTextKey,
+  textFieldClaimsActionKey
+} from './file-search-shortcut-policy'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget,
@@ -49,30 +54,24 @@ export function buildPluginCommandKeybindingDefinitions(
   return commands.map(pluginCommandKeybindingDefinition)
 }
 
-export function getEffectivePluginCommandKeybindings(
-  command: ActivePluginCommand,
-  platform: NodeJS.Platform,
-  overrides?: KeybindingOverrides
-): string[] {
-  return getEffectiveKeybindingsForDefinition(
-    pluginCommandKeybindingDefinition(command),
-    platform,
-    overrides
-  )
-}
-
 export function findPluginCommandForKeybinding(
   commands: readonly ActivePluginCommand[],
   input: KeybindingInput,
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
-  hasActiveWorktree: boolean
+  hasActiveWorktree: boolean,
+  options: KeybindingMatchOptions = {}
 ): ActivePluginCommand | null {
   for (const command of commands) {
     if (isWorkspaceScopedPluginContext(command.context) && !hasActiveWorktree) {
       continue
     }
-    const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(
+    const definition = pluginCommandKeybindingDefinition(command)
+    // Why: plugin chords obey the terminal shortcut policy exactly as Orca's own app shortcuts do (#15642).
+    if (!keybindingIsActiveInContext(definition, options)) {
+      continue
+    }
+    const matches = getEffectiveKeybindingsForDefinition(definition, platform, overrides).some(
       (binding) => keybindingMatchesInput(binding, input, platform)
     )
     if (matches) {
@@ -86,10 +85,11 @@ export function globalShortcutTargetYields(
   input: KeybindingInput & Parameters<typeof fileSearchClaimsTextKey>[0],
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
-  options: KeybindingMatchOptions
+  options: KeybindingMatchOptions,
+  actionId?: KeybindingActionId
 ): boolean {
   return (
-    fileSearchClaimsTextKey(input) ||
+    textFieldClaimsActionKey(input, actionId) ||
     isFloatingWorkspaceTerminalInputTarget(input.target) ||
     (isFloatingWorkspacePanelFocused() &&
       matchFloatingWorkspacePanelChord(input, platform, null, overrides, options) !== null)

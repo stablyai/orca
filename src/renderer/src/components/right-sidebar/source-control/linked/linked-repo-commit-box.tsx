@@ -3,8 +3,8 @@ import { Check, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { commitRuntimeGit } from '@/runtime/runtime-git-sync-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import { commitRuntimeGit } from '@/runtime/source-control/git/runtime-git-sync-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { CommitMessageComposer } from '../commit/commit-message-composer'
 
 type Props = {

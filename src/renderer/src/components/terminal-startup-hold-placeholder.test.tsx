@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalController } from './use-terminal-controller'
 
 vi.mock('../store', async () => {
@@ -27,10 +27,10 @@ vi.mock('../store', async () => {
 vi.mock('./native-chat/use-native-chat-toggle-shortcut', () => ({
   useNativeChatToggleShortcut: () => {}
 }))
-vi.mock('./terminal-pane/use-terminal-tab-cold-parking', () => ({
+vi.mock('./terminal-pane/parking/lifecycle/use-terminal-tab-cold-parking', () => ({
   useTerminalTabColdParking: () => new Set()
 }))
-vi.mock('./terminal-pane/TerminalOverlaySlot', () => ({
+vi.mock('./terminal-pane/mounting/TerminalOverlaySlot', () => ({
   TerminalOverlaySlot: (props: { terminalTabId: string }) => (
     <div data-terminal-pane-tab-id={props.terminalTabId} />
   )
@@ -45,7 +45,7 @@ vi.mock('./tab-group/RetainedPaneHost', () => ({
 }))
 
 import { useAppStore } from '../store'
-import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
+import TerminalPaneOverlayLayer from './terminal-pane/mounting/TerminalPaneOverlayLayer'
 import { TerminalLegacyTerminalPanes } from './TerminalLegacyTerminalPanes'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })

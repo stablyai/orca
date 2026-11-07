@@ -8,7 +8,7 @@ import { untranslatedGitOutputEnv } from './git-process-env'
 import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
 import type { GitAdmissionTier } from './git-exec-options'
 import { acquireGitAdmission } from './git-subprocess-admission'
-import { classifyGitCommand } from '../../../shared/git-command-classification'
+import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { buildNetworkSshPolicyEnv } from './git-ssh-policy-env'
 import {
   admitWslGit,

@@ -3,19 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import 'sonner'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { _resetHostWorktreeRemovalsForTests } from './worktrees/teardown/host-worktree-removal-state'
 import {
   _resetBackgroundWorktreeRemovalBridgeForTests,
   reconcileHostWorktreeRemovals
 } from '../../hooks/ipc-events/background-worktree-removal-bridge'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import '../../components/sidebar/worktree-delete-error-display'
+import '../../components/sidebar/workspace-actions/deletion/worktree-delete-error-display'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))

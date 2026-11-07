@@ -1,4 +1,4 @@
-import type { AgentType } from '../../agent-status-types'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from '../../agent-session/agent-session-wire'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../skills'
 import { getNativeChatAgentProfile, readsSkillSource } from '../native-chat-agent-profiles'
@@ -52,6 +52,6 @@ export function nativeChatPickerCommands(
   return classifyPickerCommands(commands, scannedSkills, {
     // A chat that keeps scanned skills (OpenCode) may report each as a command too.
     reportMayListSkills: getNativeChatAgentProfile(agent)?.keepsScannedSkills === true,
-    isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent)
+    isSendCommand: (name) => isStructuredAgentSessionComposerCommand(`/${name}`, agent, [])
   })
 }

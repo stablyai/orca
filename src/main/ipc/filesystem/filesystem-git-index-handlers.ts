@@ -16,13 +16,13 @@ import {
 import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
+import { parseGitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import {
   CONFLICT_RESOLUTIONS,
   type ConflictResolution
-} from '../../../shared/source-control-entry-actions'
+} from '../../../shared/source-control/listing/source-control-entry-actions'
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

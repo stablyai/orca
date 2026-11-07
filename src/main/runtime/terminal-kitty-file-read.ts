@@ -13,7 +13,7 @@ import {
   TERMINAL_KITTY_FILE_MAX_BYTES,
   type TerminalKittyFileRequest,
   type TerminalKittyFileResult
-} from '../../shared/terminal-kitty-file'
+} from '../../shared/terminal/images/terminal-kitty-file'
 import { kittyTemporaryRoots } from './terminal-kitty-temporary-roots'
 
 export async function readTerminalKittyFile(

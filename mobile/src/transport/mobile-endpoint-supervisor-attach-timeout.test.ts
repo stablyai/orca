@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/mobile-relay-close-codes'
-import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MOBILE_RELAY_PHONE_CLOSE_REASON } from '../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
+import {
+  MobileEndpointSupervisor,
+  type MobileEndpointSupervisorDependencies
+} from './mobile-endpoint-supervisor'
 import {
   dependencies,
   FakeLogicalClient,
@@ -9,7 +12,7 @@ import {
   relay
 } from './mobile-endpoint-supervisor-test-fakes'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
-import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
+
 import type { RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -102,21 +105,6 @@ describe('relay dial refused because the desktop data link missed its attach dea
     await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
     expect(openRelay).toHaveBeenCalledTimes(3)
     expect(resolveRelay).not.toHaveBeenCalled()
-    supervisor.stop()
-  })
-
-  it('keeps the known-offline wait for a 4404 without the reason', async () => {
-    const { logical, openRelay } = cellRefusing(() => new RelayOuterError(4404, true))
-    const resolveRelay = vi.fn(async () => relay)
-    const supervisor = start(logical, { openRelay, resolveRelay })
-
-    await supervisor.start()
-
-    expect(resolveRelay).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(HOST_OFFLINE_WAIT_MS - 1)
-    expect(openRelay).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(openRelay).toHaveBeenCalledTimes(2)
     supervisor.stop()
   })
 

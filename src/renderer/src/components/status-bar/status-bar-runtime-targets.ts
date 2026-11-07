@@ -12,7 +12,11 @@ export type CodexStatusRuntimeTarget = {
 
 export type CodexStatusSwitchTarget = {
   id: string | null
+  /** Full one-line label, e.g. for the details header. */
   label: string
+  /** Row title and its secondary line; `detail` holds the workspace or disambiguating ID. */
+  name: string
+  detail: string | null
   active: boolean
   runtimeTarget: CodexStatusRuntimeTarget
 }

@@ -12,7 +12,7 @@ import {
   VISIBILITY_INVENTORY_REMOVAL_EPOCH
 } from './web-session-tabs-sync/state'
 import '../../../shared/runtime-types'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 // getState: snapshot receipt reads the held paired-tab closes; none here.
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn(), getState: () => ({}) } }))

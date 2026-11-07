@@ -1,6 +1,7 @@
 /** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
+  notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
 } from '../../../../shared/notification-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -26,7 +27,7 @@ import {
 import { useAppStore } from '@/store'
 import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../shared/dispatched-worker-attention'
-import { getNotificationWorkspaceLabels } from '../terminal-pane/terminal-notification-state'
+import { getNotificationWorkspaceLabels } from '../../attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
@@ -118,6 +119,7 @@ function dispatchStructuredAttention(
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
+          workspaceExecutionHostId: notificationWorkspaceExecutionHostForOwner(owner),
           ...(executionHost ? { executionHost } : {}),
           paneKey: request.subjectKey ?? undefined,
           ...getNotificationWorkspaceLabels(state, request.workspaceId, tab.label),

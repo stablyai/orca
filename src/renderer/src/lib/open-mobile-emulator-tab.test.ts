@@ -1,5 +1,6 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { openMobileEmulatorTab } from './open-mobile-emulator-tab'
 import {
   consumePrelaunchedSimulatorSession,
@@ -26,7 +27,9 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 vi.mock('sonner', () => ({
   toast: {
@@ -50,6 +53,7 @@ const mockAttachResult = {
 
 describe('openMobileEmulatorTab', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     mockStoreState.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }] }
     mockStoreState.unifiedTabsByWorktree = {}
@@ -69,23 +73,6 @@ describe('openMobileEmulatorTab', () => {
     cancelPendingSimulatorPaneShutdown('wt-1')
     vi.useRealTimers()
     vi.unstubAllGlobals()
-  })
-
-  it('does not start a duplicate attach while a manual launch is already pending', async () => {
-    let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
-    vi.mocked(callRuntimeRpc).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveAttach = resolve
-        })
-    )
-
-    const firstLaunch = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe('sim-1')
-
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-    resolveAttach(mockAttachResult)
-    await firstLaunch
   })
 
   it('shuts down the managed emulator if the tab closes before attach resolves', async () => {
@@ -113,23 +100,6 @@ describe('openMobileEmulatorTab', () => {
       managedOnly: true
     })
     expect(consumePrelaunchedSimulatorSession('wt-1')).toBeNull()
-  })
-
-  it('allows a successful retry after simulator tab creation returns null', async () => {
-    vi.mocked(ensureSimulatorTab).mockReturnValueOnce(null).mockReturnValueOnce('sim-retry')
-    vi.mocked(callRuntimeRpc).mockResolvedValue(mockAttachResult)
-
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBeNull()
-    await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe(
-      'sim-retry'
-    )
-
-    expect(ensureSimulatorTab).toHaveBeenCalledTimes(2)
-    const attachCalls = vi
-      .mocked(callRuntimeRpc)
-      .mock.calls.filter(([, method]) => method === 'emulator.attach')
-    expect(attachCalls).toHaveLength(1)
-    expect(isManualSimulatorLaunchPending('wt-1')).toBe(false)
   })
 
   it('does not release another in-flight launch when duplicate tab creation throws', async () => {

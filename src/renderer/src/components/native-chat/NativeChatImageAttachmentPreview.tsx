@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
-import { useLocalImageSrc } from '@/components/editor/useLocalImageSrc'
+import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { copyableNativeChatImageSrc, keepPreviewOpenForChatMenu } from './native-chat-image-copy'
 import { isNativeChatImageAttachmentPath } from './native-chat-image-paste'
@@ -11,7 +11,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { isAgentSessionAttachmentStorePath } from '../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/local-file-access'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { nativeChatImageNumberLabel } from './NativeChatImageReferencePill'
 
 type Props = {

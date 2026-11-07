@@ -16,7 +16,7 @@ import {
 } from '../../ssh/orcad-active-readiness'
 import { computeLocalOrcadBuildHash } from '../../ssh/orcad-local-build-hash'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { joinRemotePath } from '../../ssh/ssh-remote-platform'
 

@@ -34,9 +34,9 @@ import { retireRemovedRuntimeEnvironment } from '../runtime-environments/runtime
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
 import { callRuntimeEnvironment } from '../runtime-environments/runtime-environment-transport-routing'
 import { isRemoteRuntimeConnectionReady } from '../runtime-environments/runtime-environment-request-connections'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { reconcileWslHostBridgePorts } from '../../../shared/runtime-environment-wsl-host-store'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { reconcileWslHostBridgePorts } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
 import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
 import {

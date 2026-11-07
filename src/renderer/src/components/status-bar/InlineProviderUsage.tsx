@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -10,7 +10,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, clampUsedPercent } from './tooltip'
-import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
+import { formatRateLimitWindowChipLabel } from '../../../../shared/rate-limit-window-label'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
 import { translate } from '@/i18n/i18n'
@@ -78,7 +78,7 @@ export function InlineUsageBars({
               style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
             />
           </div>
-          <span className="shrink-0 text-3xs tabular-nums text-muted-foreground">
+          <span className="min-w-[5.5rem] shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
             {formatUsagePercentageLabel(window.used, display)} {window.label}
           </span>
         </div>
@@ -105,54 +105,38 @@ export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | u
 }
 
 export function InlineUsageSignInAction({
-  isFetching,
   isSigningIn,
   disabled,
   accountLabel,
-  onSignIn,
-  reason
+  onSignIn
 }: {
-  isFetching: boolean
   isSigningIn: boolean
   disabled: boolean
   accountLabel: string
   onSignIn: () => void
-  /** Why it needs a sign-in; defaults to the usage it would show. */
-  reason?: string
 }): React.JSX.Element {
   return (
-    <div
-      className={`flex w-full items-center gap-2 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+    <DropdownMenuItem
+      asChild
+      disabled={disabled}
+      onSelect={(event) => {
+        event.preventDefault()
+        onSignIn()
+      }}
     >
-      <span className="min-w-0 flex-1 text-3xs text-muted-foreground">
-        {reason ??
-          translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
-      </span>
-      <DropdownMenuItem
-        asChild
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
         disabled={disabled}
-        onSelect={(event) => {
-          event.preventDefault()
-          onSignIn()
-        }}
+        aria-label={`${translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
       >
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={disabled}
-          aria-label={`${translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
-          className="h-6 shrink-0 px-2 text-muted-foreground hover:text-foreground"
-        >
-          {isSigningIn ? (
-            <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
-          ) : (
-            <RefreshCw className="size-3" />
-          )}
-          {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
-        </Button>
-      </DropdownMenuItem>
-    </div>
+        {isSigningIn ? (
+          <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+        ) : null}
+        {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+      </Button>
+    </DropdownMenuItem>
   )
 }
 

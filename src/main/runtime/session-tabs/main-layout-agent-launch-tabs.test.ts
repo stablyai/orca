@@ -2,7 +2,7 @@
 // main, a retry finds it, and a withdrawn launch pane is taken back by main.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WORKTREE_ID, setupMainOwnedWorkspace } from '../main-owned-workspace-runtime-fixture'
-import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch-tab-publication'
+import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch/agent-launch-tab-publication'
 import { resetAgentLaunchPanesForTests } from '../../agent-launch/agent-launch-pane-attachment'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

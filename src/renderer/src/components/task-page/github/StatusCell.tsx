@@ -20,7 +20,8 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -134,36 +135,14 @@ export function GHStatusCell({
             const target = ownerTarget
             // URL-sourced rows need slug-aware writes to preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
-              return target.kind === 'environment'
-                ? callRuntimeRpc<{
-                    ok?: boolean
-                    error?:
-                      | {
-                          message?: string
-                        }
-                      | string
-                  }>(
-                    target,
-                    'github.project.updateIssueBySlug',
-                    {
-                      owner: parsedOwnerRepo.owner,
-                      repo: parsedOwnerRepo.repo,
-                      host: githubProjectHost(parsedOwnerRepo.host),
-                      number: item.number,
-                      updates
-                    },
-                    {
-                      timeoutMs: 30_000
-                    }
-                  )
-                : window.api.gh.updateIssueBySlug({
-                    owner: parsedOwnerRepo.owner,
-                    repo: parsedOwnerRepo.repo,
-                    host: githubProjectHost(parsedOwnerRepo.host),
-                    number: item.number,
-                    updates,
-                    wakeWslDistro: true
-                  })
+              return gitHubSlugApiForTarget(target).updateIssueBySlug({
+                owner: parsedOwnerRepo.owner,
+                repo: parsedOwnerRepo.repo,
+                host: githubProjectHost(parsedOwnerRepo.host),
+                number: item.number,
+                updates,
+                wakeWslDistro: true
+              })
             }
             if (!repo) {
               throw new Error(

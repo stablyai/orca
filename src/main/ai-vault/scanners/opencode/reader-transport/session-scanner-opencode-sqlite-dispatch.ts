@@ -2,7 +2,7 @@ import {
   readOpenCodeTranscriptPage,
   readOpenCodeTranscriptSignal
 } from '../../../../native-chat/transcript-opencode-sqlite-query'
-import type { AiVaultScanIssue } from '../../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { captureOpenCodeSqliteSession } from '../sqlite/session-scanner-opencode-sqlite-capture'
 import { listOpenCodeSqliteSessions } from '../sqlite/session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from '../sqlite/session-scanner-opencode-sqlite'

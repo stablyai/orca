@@ -1,3 +1,4 @@
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
 import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
 import React, { useRef } from 'react'
 import { cn } from '@/lib/utils'
@@ -7,13 +8,12 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
+
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { RuntimeEnvironmentStatus } from '../../../../shared/runtime-host-status'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AutomationRowAction } from './automation-captured-owner'
 import type { AutomationHostTarget } from './automation-host-client'
 import {
@@ -31,7 +31,10 @@ import {
   type AutomationListSortField,
   type AutomationListViewItem
 } from './automation-list-view'
-import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
+import {
+  type AutomationHostFilter,
+  automationHostFilterStableKey
+} from '../../../../shared/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
@@ -87,9 +90,9 @@ export type AutomationsListPanelProps = {
   sshStateByEnvironment?: ReadonlyMap<string, RuntimeEnvironmentSshBucket>
   runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
-  automationSourceHostAvailabilityByRowKey: ReadonlyMap<string, TaskSourceHostAvailability[]>
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   externalActionKey: string | null
   selectAutomationRow: (rowKey: string | null) => void
   selectExternalKey: (externalKey: string | null) => void
@@ -97,6 +100,7 @@ export type AutomationsListPanelProps = {
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
+  reviewSkippedSetup?: (row: AutomationListRow, content: SetupTrustMismatch) => void
   requestDeleteAutomation: (row: AutomationListRow) => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
@@ -141,9 +145,9 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
     hostTargetFor,
-    automationSourceHostAvailabilityByRowKey,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     externalActionKey,
     selectAutomationRow,
     selectExternalKey,
@@ -151,6 +155,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     runNow,
     openEditDialog,
     toggleAutomation,
+    reviewSkippedSetup,
     requestDeleteAutomation,
     requestExternalAction,
     openCreateDialog,
@@ -271,9 +276,9 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     sshStateByEnvironment,
     runtimeStatusByEnvironmentId,
     hostTargetFor,
-    automationSourceHostAvailabilityByRowKey,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     onSelect: (rowKey: string) => {
       selectExternalKey(null)
       selectAutomationRow(rowKey)
@@ -282,7 +287,8 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onRunNow: runNow,
     onEdit: openEditDialog,
     onToggle: toggleAutomation,
-    onDelete: requestDeleteAutomation
+    onDelete: requestDeleteAutomation,
+    onReviewSetup: reviewSkippedSetup
   }
 
   return (

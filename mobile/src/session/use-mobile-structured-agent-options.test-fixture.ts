@@ -1,5 +1,6 @@
 import { createElement, useLayoutEffect } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
@@ -145,6 +146,7 @@ type ProbeProps = {
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
+  modelEffortDiscovery?: boolean
   permissionOwn?: boolean
   onRender: (controller: Controller) => void
 }
@@ -156,6 +158,7 @@ function Probe(props: ProbeProps): null {
     sessionId: props.sessionId,
     enabled: true,
     fence: props.fence,
+    unloadedTurnRevisions: undefined,
     mutate: props.mutate,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
@@ -165,7 +168,8 @@ function Probe(props: ProbeProps): null {
       sendOptions: false,
       statusFeed: false,
       sendSelection: props.sendSelection,
-      coherentModelCatalog: props.coherentCatalog
+      coherentModelCatalog: props.coherentCatalog,
+      modelEffortDiscovery: props.modelEffortDiscovery
     }
   })
   useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])
@@ -188,7 +192,7 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   }
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(createElement(Probe, { ...props, onRender }))
+    renderer = createWithQueryClient(createElement(Probe, { ...props, onRender }))
   })
   await settle()
   const current = (): Controller => {

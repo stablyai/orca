@@ -2,7 +2,7 @@ import { separateImagePasteFromFollowingText } from '../../../src/shared/image-p
 import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
-} from '../../../src/shared/terminal-bracketed-paste-text'
+} from '../../../src/shared/terminal/input/terminal-bracketed-paste-text'
 import { useCallback, type RefObject } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'

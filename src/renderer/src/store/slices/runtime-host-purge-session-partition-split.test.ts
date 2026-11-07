@@ -1,14 +1,16 @@
 /** After removed-runtime purge, host lookup falls back to local and session writes must stop targeting the retired partition (#8881). */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session-state-types'
-import { patchWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
+import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { patchWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))

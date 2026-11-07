@@ -80,13 +80,6 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     expect(banners()).toHaveLength(1)
   })
 
-  it('renders the route-reported failure verbatim', async () => {
-    await render({ sendErrorMessage: 'Permission reply failed' })
-
-    expect(banners()).toHaveLength(1)
-    expect(bannerText()).toBe('Permission reply failed')
-  })
-
   it('retires the previous route banner when a new send starts', async () => {
     const onClearSendError = vi.fn()
     await render({

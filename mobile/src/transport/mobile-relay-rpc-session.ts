@@ -7,7 +7,7 @@ import {
   PairingGetEndpointsResultSchema,
   type DeviceResumeConfirmed,
   type MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
+} from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
@@ -32,9 +32,6 @@ import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_PROBE_TIMEOUT_MS = 4_000
-const RELAY_MISSED_PROBE_LIMIT = 2
-const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -114,13 +111,16 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
+      if (options?.failWhenDisconnected && state !== 'connected') {
+        throw new Error(`Not connected: ${method}`)
+      }
       throwIfSignalAborted(options?.signal)
       const budget = openRpcRequestBudget(options)
       const connectTimeoutMs = budget.timeoutMs ?? requestTimeoutMs
       await waitForPromiseWithSignal(connectWaiters.wait(connectTimeoutMs), options?.signal)
       throwIfSignalAborted(options?.signal)
-      options?.beforeSend?.()
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
+      options?.beforeSend?.()
       return sendRpc(method, params, timeoutMs, false, options?.envelope, options?.signal)
     },
 
@@ -177,10 +177,13 @@ export function connectMobileRelayRpcSession(args: {
   const connectWaiters = new MobileRelayConnectWaiters(client)
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
-    idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
-    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
-    voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+    // A link silent past the request timeout carries no reply the phone still awaits.
+    isLinkBusy: (framesArrived, silentMs) =>
+      framesArrived || (silentMs < requestTimeoutMs && pending.hasWritten()),
+    idleProbeMs: 15_000,
+    probeTimeoutMs: 4_000,
+    missedProbeLimit: 2,
+    voluntaryProbeMinIntervalMs: 10_000,
     sendProbe: (_identity, id) => state === 'connected' && sendFrame(livenessProbeFrame(id)),
     onTimeout: (evidence) => {
       args.onLog?.({
@@ -278,14 +281,12 @@ export function connectMobileRelayRpcSession(args: {
     } catch {
       return
     }
-    if (!isRpcResponse(value)) {
-      return
+    if (isRpcResponse(value)) {
+      livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
+      if (!pending.settle(value)) {
+        streams.handleResponse(value)
+      }
     }
-    livenessWatchdog.noteProbeReply(livenessIdentity, value.id)
-    if (pending.settle(value)) {
-      return
-    }
-    streams.handleResponse(value)
   }
 
   function publishState(next: ConnectionState): void {

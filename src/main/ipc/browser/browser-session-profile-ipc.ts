@@ -1,10 +1,10 @@
-import { retainLocalGoogleCookieClearTarget } from '../../browser/browser-google-cookie-clear-target'
+import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browser-google-cookie-clear-target'
 import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
-import { browserSessionRegistry } from '../../browser/browser-session-registry'
-import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/paired-runtime-browser-client-host-runtime'
+import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   pickCookieFile,
@@ -19,15 +19,15 @@ import type {
   BrowserSessionProfileScope
 } from '../../../shared/browser-workspace-types'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
-import { ensureManagedBrowserProfile } from '../../browser/browser-managed-session-profiles'
+import { ensureManagedBrowserProfile } from '../../browser/sessions/browser-managed-session-profiles'
 import {
   getBrowserIdentityModeStatus,
   setBrowserIdentityMode
-} from '../../browser/browser-identity-mode-store'
+} from '../../browser/identity/browser-identity-mode-store'
 import {
   listBrowserSitePermissions,
   setBrowserSitePermissionDecisions
-} from '../../browser/browser-site-permission-store'
+} from '../../browser/site-settings/browser-site-permission-store'
 import {
   isBrowserSitePermission,
   isBrowserSitePermissionDecision,

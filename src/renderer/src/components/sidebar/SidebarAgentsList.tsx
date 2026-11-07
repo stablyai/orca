@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
@@ -9,7 +9,10 @@ import { useActivityThreadActionBindings } from '@/components/activity/use-activ
 import { ActivityThreadListPane } from '@/components/activity/activity-thread-list-pane'
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread-controls'
-import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../shared/agents-view-thread-filters'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -71,11 +74,10 @@ export default function SidebarAgentsList({
     visibleThreadGroups
   } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
 
-  useEffect(() => {
-    if (!selectedPaneKeyIsLive) {
-      setSelectedPaneKey(null)
-    }
-  }, [selectedPaneKeyIsLive])
+  if (!selectedPaneKeyIsLive) {
+    // Clear a vanished pane during render so it cannot reselect if the pane key returns.
+    setSelectedPaneKey(null)
+  }
 
   const {
     markThreadRead,

@@ -1,7 +1,11 @@
 /** Write custody at terminal creation so boot-time user input can revoke ownership; waiting for TUI idle lost takeover and later release closed claimed panes. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const READY_WAIT = {

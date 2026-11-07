@@ -1,10 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   emitNativeChatMessageSent,
   emitNativeChatPickerItemAccepted,
   emitNativeChatSendClassified
-} from '@/lib/native-chat-telemetry'
+} from '@/components/native-chat/telemetry/native-chat-telemetry'
 import { sendNativeChatMessage, sendNativeChatTypedCommand } from './native-chat-runtime-send'
 import {
   nativeChatComposerTargetIsRemote,

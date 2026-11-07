@@ -1,3 +1,4 @@
+import { getProviderChecksOutcome } from '../../../shared/source-control/checks/provider-check-summary'
 import {
   resolveGitHubPRMergeState,
   type GitHubPRAutoMergeActionIntent,
@@ -63,7 +64,8 @@ function presentAutoMergeAction(
 }
 
 function presentMergeStateKind(
-  kind: GitHubPRMergeStateKind
+  kind: GitHubPRMergeStateKind,
+  item: GitHubPRMergeStateInput
 ): Pick<GitHubPRMergeStatePresentation, 'label' | 'tone' | 'tooltip'> {
   switch (kind) {
     case 'merged':
@@ -161,6 +163,13 @@ function presentMergeStateKind(
         )
       }
     case 'mergeable_checks_failed':
+      if (getProviderChecksOutcome(item.checksSummary, item.checksStatus) === 'cancelled') {
+        return {
+          label: translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled'),
+          tone: MUTED_TONE,
+          tooltip: translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+        }
+      }
       return {
         label: translate('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed'),
         tone: DANGER_TONE,
@@ -222,7 +231,7 @@ export function presentGitHubPRMergeState(
 ): GitHubPRMergeStatePresentation {
   const decision = resolveGitHubPRMergeState(item)
   return {
-    ...presentMergeStateKind(decision.kind),
+    ...presentMergeStateKind(decision.kind, item),
     directMergeAvailable: decision.directMergeAvailable,
     autoMergeAction: presentAutoMergeAction(decision.autoMergeAction)
   }

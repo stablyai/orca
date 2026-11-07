@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status-types'
+import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { AgentHookServer } from '../../../../../agent-hooks/server'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../terminal/output/terminal-orchestration-authority'
 import {
   AgentStatusObservedPaneIdentityCapture,

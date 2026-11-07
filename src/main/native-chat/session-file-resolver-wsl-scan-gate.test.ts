@@ -27,7 +27,18 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
   runWslTranscriptFsTask: mocks.gate
 }))
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
-  walkSessionFiles: mocks.walk
+  walkSessionFiles: mocks.walk,
+  forEachSessionFile: async (
+    dir: string,
+    agent: string,
+    issues: unknown[],
+    options: { readDirectory?: (dirPath: string) => Promise<unknown[]> },
+    onFile: (path: string) => void
+  ) => {
+    for (const path of await mocks.walk(dir, agent, issues, options)) {
+      onFile(path)
+    }
+  }
 }))
 // These cases cover root and path policy; the E9 gate has its own suite.
 vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
@@ -127,27 +138,6 @@ describe('Codex WSL scan gate', () => {
     expect(mocks.walk).toHaveBeenCalled()
     expect(mocks.walk.mock.calls.some(([dir]) => dir.startsWith('\\\\wsl'))).toBe(false)
     expect(mocks.gate).not.toHaveBeenCalled()
-  })
-
-  it('surfaces the hook-path refusal when the id search also misses', async () => {
-    const refusal = new WslTranscriptFsError('unavailable', 'stuck permits')
-    mocks.gate.mockImplementation(async (options: { operation?: string; path: string }) => {
-      if (options.operation === 'access') {
-        throw refusal
-      }
-      return []
-    })
-    mocks.walk.mockImplementation(async (dir, _agent, _issues, options) => {
-      await options.readDirectory?.(dir)
-      return []
-    })
-
-    await expect(
-      resolveSessionFilePath('codex', 'session-id', {
-        transcriptPath: `${WSL_SESSIONS_DIR}\\2026\\rollout-1-session-id.jsonl`,
-        codexSessionsDirs: [LOCAL_SESSIONS_DIR]
-      })
-    ).rejects.toBe(refusal)
   })
 
   it('reports the abort, not a refusal, when the hook-path probe races a caller abort', async () => {

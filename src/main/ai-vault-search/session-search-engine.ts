@@ -5,10 +5,9 @@ import {
   hasAiVaultSearchQueryOperators,
   splitAiVaultSearchQuery,
   type AiVaultSearchQuerySplit
-} from '../../shared/ai-vault-search-query-operators'
-import { matchesAiVaultQueryOperators } from '../../shared/ai-vault-session-filters'
+} from '../../shared/ai-vault/search/ai-vault-search-query-operators'
+import { matchesAiVaultQueryOperators } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
-  resolveSessionSearchLimit,
   SESSION_SEARCH_QUERY_MAX_LENGTH,
   type SessionSearchHit,
   type SessionSearchRequest,
@@ -16,6 +15,7 @@ import {
   type SessionSearchScope,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
+import { resolveSessionSearchLimit } from '../../shared/ai-vault/search/ai-vault-search-limit'
 import { readIndexGeneration, readIndexIncarnation } from './session-search-index-generation'
 import {
   rankSessionHits,

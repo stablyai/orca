@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   googleCookieClearLocalTarget,
   clearGoogleCookiesForLocalTarget
-} from '../../browser/browser-google-cookie-clear-target'
+} from '../../browser/cookies/browser-google-cookie-clear-target'
 import { ipcMain } from 'electron'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 

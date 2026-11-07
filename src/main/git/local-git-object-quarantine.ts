@@ -5,7 +5,7 @@ import {
   inheritedObjectStore,
   pathApiForGitPath,
   type GitObjectsDirectory
-} from '../../shared/git-object-quarantine'
+} from '../../shared/git/objects/git-object-quarantine'
 import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
 import { usesHostGitForWslLinkedWorktree } from './command-runner/wsl-linked-worktree-git-routing'

@@ -5,8 +5,8 @@ import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-iden
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../runtime/runtime-rpc-client'
+} from '../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import {
   changedHostTwinState,
@@ -43,8 +43,10 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-const { sleepWorktreesReportingFailures } = await import('@/components/sidebar/sleep-worktree-flow')
-const { fakeMainSleep } = await import('@/components/sidebar/sleep-worktree-test-main')
+const { sleepWorktreesReportingFailures } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow')
+const { fakeMainSleep } =
+  await import('@/components/sidebar/workspace-actions/sleep/sleep-worktree-test-main')
 
 const ptyKill = vi.fn()
 

@@ -1,4 +1,3 @@
-import { registerHistoricalSessionTabActivationTests } from './web-runtime-session-tab-historical-activation.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from './web-session-tabs-sync/tracking-decisions'
 import {
@@ -11,7 +10,7 @@ import {
   takeDueWebSessionCloseReplays
 } from './web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import {
@@ -19,9 +18,13 @@ import {
   resetWebSessionCloseIntentForTests
 } from './web-session-close-intent'
 import './web-session-tab-rpc-timeout'
-import '../../../shared/terminal-surface-id'
-import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import '../../../shared/workspace-layout/terminal-surface-id'
+import {
+  ENVIRONMENT_ID,
+  WORKTREE_ID,
+  makeSnapshot
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -45,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.revealWorktree,
   activateAndRevealFolderWorkspace: mocks.revealWorktree
 }))
@@ -83,7 +86,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -132,8 +135,6 @@ describe('web runtime session tab actions', () => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
-
-  registerHistoricalSessionTabActivationTests(mocks, { ENVIRONMENT_ID, WORKTREE_ID })
 
   // STA-6224: clearing on a dropped connection let the host's next snapshot re-add the tab.
   it('holds a user close the host never received and sends it again once reachable', async () => {

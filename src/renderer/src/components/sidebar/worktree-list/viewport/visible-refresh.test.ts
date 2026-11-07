@@ -1,6 +1,6 @@
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { makePRRefreshWorktree } from '@/store/slices/github-slice-test-harness'
+import { makePRRefreshWorktree } from '@/store/github/github-slice-test-harness'
 import { describe, expect, it } from 'vitest'
 
 import { visibleReviewCardIds } from './use-visible-review-refresh'

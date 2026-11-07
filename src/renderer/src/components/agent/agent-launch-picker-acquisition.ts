@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
 import { shallow } from 'zustand/shallow'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 /** Pending local IPC outlives observers; matching menus must retain its physical owner. */
 const pending = new Map<string, AgentPickerAcquisition>()
@@ -292,5 +292,5 @@ export function createAgentPickerInventorySource(
 export function useAgentPickerInventoryEntries(
   source: AgentPickerInventorySource
 ): AgentPickerEntry[] {
-  return useSyncExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
+  return useAppViewExternalStore(source.subscribe, source.getSnapshot, source.getSnapshot)
 }

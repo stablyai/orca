@@ -1,12 +1,12 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import type { BrowserExtensionContextMenuPayload } from '../../../shared/browser-extension-context-menu-types'
-import { isChromeExtensionId } from '../../../shared/browser-extension-url'
+import type { BrowserExtensionContextMenuPayload } from '../../../shared/browser/extensions/browser-extension-context-menu-types'
+import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
 import { browserManager } from '../../browser/browser-manager'
 import {
   buildBrowserExtensionActionContextMenu,
   runBrowserExtensionContextMenuClick
-} from '../../browser/extensions/browser-extension-context-menu-host'
+} from '../../browser/extensions/context-menus/browser-extension-context-menu-host'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const CLICK_CHANNEL = 'browserExtensions:contextMenuClick'

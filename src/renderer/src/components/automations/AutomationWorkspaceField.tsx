@@ -15,8 +15,6 @@ type AutomationWorkspaceFieldProps = {
   worktrees: Worktree[]
   repoMap: Map<string, Repo>
   pickerTriggerClassName: string
-  segmentedGroupClassName: string
-  segmentedItemClassName: string
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }
 
@@ -25,8 +23,6 @@ export function AutomationWorkspaceField({
   worktrees,
   repoMap,
   pickerTriggerClassName,
-  segmentedGroupClassName,
-  segmentedItemClassName,
   onDraftChange
 }: AutomationWorkspaceFieldProps): React.JSX.Element {
   return (
@@ -72,12 +68,12 @@ export function AutomationWorkspaceField({
             }))
           }
           size="sm"
-          className={segmentedGroupClassName}
+          variant="segmented-card"
         >
-          <ToggleGroupItem value="existing" className={segmentedItemClassName}>
+          <ToggleGroupItem value="existing">
             {translate('auto.components.automations.AutomationEditorDialog.a2e688226d', 'Worktree')}
           </ToggleGroupItem>
-          <ToggleGroupItem value="new_per_run" className={segmentedItemClassName}>
+          <ToggleGroupItem value="new_per_run">
             {translate('auto.components.automations.AutomationEditorDialog.6ff66f9012', 'New run')}
           </ToggleGroupItem>
         </ToggleGroup>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PtyFencedTerminationRequest } from '../../../../shared/pty-fenced-termination'
+import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourcePtyRow } from './resource-pty-view-model'
 import type { useResourceSessionInventory } from './use-resource-session-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -129,7 +129,9 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     function drain(): void {
       const pending = queue.current
       while (pending.active < MAX_CONCURRENT_TERMINATIONS && pending.head < pending.items.length) {
-        const target = pending.items[pending.head++]!
+        // Why: oxc React Compiler 0.152 emits a member postfix update used as a value as a prefix one.
+        const target = pending.items[pending.head]!
+        pending.head += 1
         pending.active += 1
         void terminate(target).finally(() => {
           pending.active -= 1

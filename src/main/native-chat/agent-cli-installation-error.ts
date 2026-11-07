@@ -1,10 +1,11 @@
-import type { AgentCliInstallationProblem } from '../../shared/agent-cli-installation-problem'
+import type { AgentCliInstallationProblem } from '../../shared/agent-launch/catalog/agent-cli-installation-problem'
 import {
   agentCliTooOldWords,
   sayAgentSessionFailureEnglish
 } from '../../shared/agent-session/failures/agent-session-failure-copy'
-import type { TuiAgent } from '../../shared/tui-agent'
-import { AgentSessionPreSpawnError } from './agent-session-wire/structured-agent-session-adapter'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+import './agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionPreSpawnError } from './agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { findInErrorChain } from '../provider-process/provider-error-chain'
 
 export class AgentCliInstallationError extends AgentSessionPreSpawnError {

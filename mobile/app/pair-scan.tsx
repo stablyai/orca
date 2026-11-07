@@ -1,3 +1,4 @@
+import * as reticle from '../src/pairing/pairing-scan-reticle-dimensions'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   AppState,
@@ -18,7 +19,8 @@ import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
+import type { ConnectionLogEntry } from '../src/transport/types'
+import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
@@ -39,11 +41,10 @@ import {
   waitForBeat
 } from '../src/pairing/pairing-visuals'
 import { triggerSuccess } from '../src/platform/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
-const SCAN_RETICLE_SCALE = 0.62
-const SCAN_RETICLE_MAX_SIZE = 360
 
 export default function PairScanScreen() {
   useMobileColorScheme()
@@ -203,15 +204,13 @@ export default function PairScanScreen() {
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairScan.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', {
-              error: err instanceof Error ? err.message : String(err)
-            })
+        getPairingFailureMessage({
+          screen: 'scan',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t
+        })
       )
       processingRef.current = false
     }
@@ -233,8 +232,8 @@ export default function PairScanScreen() {
   }
   // Keep QR guide square even on rectangular iPad previews.
   const reticleSize = Math.min(
-    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
-    SCAN_RETICLE_MAX_SIZE
+    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * reticle.SCALE),
+    reticle.MAX_SIZE
   )
 
   if (!permission) {

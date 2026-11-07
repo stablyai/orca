@@ -1,10 +1,10 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
 import type { BrowserActionEffects } from '../../../shared/runtime-browser-contracts'
-import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import type { BrowserPageEvent } from '../browser-page-events'
-import { readRemoteCliAdmittedPage } from '../remote-cli-page-admission'
+import type { BrowserPageEvent } from '../guest-lifecycle/browser-page-events'
+import { readRemoteCliAdmittedPage } from '../routing/input-ownership/remote-cli-page-admission'
 import { readPageChange } from './agent-browser-snapshot-delta'
 import { isLoadingMainFrame } from './agent-browser-bridge-process'
 

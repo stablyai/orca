@@ -1,5 +1,5 @@
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { findNativeChatPasteField } from '@/lib/native-chat-paste-request'
+import { findNativeChatPasteField } from '@/components/native-chat/paste/native-chat-paste-request'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import {
   shouldFocusNativeChatComposerFromEditingKey,
@@ -16,7 +16,7 @@ type NativeChatRootKeyEvent = KeyboardRedirectEvent & {
 export function routeNativeChatRootKeyToInput(
   event: NativeChatRootKeyEvent,
   composer: NativeChatComposerHandle | null,
-  questionAnswerInput: HTMLInputElement | null
+  questionAnswerInput: HTMLInputElement | HTMLTextAreaElement | null
 ): void {
   // A focused transcript or code box owns Space paging; typing elsewhere still reaches the composer.
   if (

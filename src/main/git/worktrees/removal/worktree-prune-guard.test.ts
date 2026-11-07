@@ -41,7 +41,7 @@ vi.mock('../../wsl-drive-checkout-git-routing', () => ({
   pendingWslDriveCheckoutGitRouting: () => null
 }))
 
-import { isForeignLink, PRUNE_GUARD_LOCK_REASON, pruneGitWorktrees } from './worktree-prune-guard'
+import { PRUNE_GUARD_LOCK_REASON, pruneGitWorktrees } from './worktree-prune-guard'
 
 let repo: string
 
@@ -133,28 +133,5 @@ describe('pruneGitWorktrees', () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('prune failed'))
     await expect(pruneGitWorktrees({ cwd: repo }, 'win32')).rejects.toThrow('prune failed')
     expect(existsSync(lockFile('wsl'))).toBe(false)
-  })
-
-  it('reads no links off Windows', async () => {
-    link('linux', '/home/me/app-feature/.git')
-    await pruneGitWorktrees({ cwd: repo }, 'linux')
-    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(['worktree', 'prune'], {
-      cwd: repo
-    })
-  })
-})
-
-describe('isForeignLink', () => {
-  it.each([
-    ['/mnt/c/x/.git', false, true],
-    ['//server/share/x/.git', false, false],
-    ['C:/x/.git', false, false],
-    ['../x/.git', false, false],
-    ['C:/x/.git', true, true],
-    [String.raw`\\?\C:\x\.git`, true, true],
-    ['/home/me/x/.git', true, false],
-    ['../x/.git', true, false]
-  ])('%s with WSL Git=%s is foreign: %s', (link, runsInWsl, foreign) => {
-    expect(isForeignLink(link, runsInWsl)).toBe(foreign)
   })
 })

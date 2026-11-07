@@ -1,6 +1,6 @@
 import { webContents } from 'electron'
 import { browserManager } from '../../browser/browser-manager'
-import { onWorkspaceDocGuestRegistered } from '../../browser/doc-preview-guest-policy'
+import { onWorkspaceDocGuestRegistered } from '../../browser/document-preview/doc-preview-guest-policy'
 
 // CLI commands wait for mounted guest registration; multiple startup callers may wait on one page.
 const pendingTabRegistrations = new Map<string, Set<() => void>>()

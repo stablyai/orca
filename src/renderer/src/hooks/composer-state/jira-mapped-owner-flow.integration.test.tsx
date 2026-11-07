@@ -16,7 +16,7 @@ import { useWorkItemSourceSearch } from '@/components/new-workspace/use-work-ite
 import { useJiraProjectInventory } from '@/components/use-jira-project-inventory'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { JiraIssue, JiraProject } from '../../../../shared/jira/jira-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

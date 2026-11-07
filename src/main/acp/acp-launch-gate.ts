@@ -1,6 +1,7 @@
 // Fence chat starts during host account/runtime changes to prevent stale writes or deleted-file use.
 
-import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { ProviderAcquisitionConnection } from '../provider-process/provider-acquisition-starts'
 
 export class AcpLaunchGate {

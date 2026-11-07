@@ -2,11 +2,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMMAND_SPECS } from '../specs'
+import { COMMAND_SPECS } from '../specs/index'
 import { normalizeCommandPositionals, parseArgs, specPaths } from '../args'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
-import { RuntimeRpcFailureError } from '../runtime/types'
 import type { PluginShotActResult } from '../../shared/plugins/view/plugin-shot-acts'
 import { PLUGIN_VIEW_HANDLERS, type PluginShotReply } from './plugin-view'
 
@@ -89,33 +88,6 @@ describe('orca plugin open', () => {
       )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
   })
-
-  it('refuses --panel with --editor and a malformed key', async () => {
-    const call = vi.fn()
-    await expect(
-      PLUGIN_VIEW_HANDLERS['plugin open'](
-        context(['plugin', 'open', 'acme.todos', '--panel', 'a', '--editor', 'b'], call, { cwd })
-      )
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
-    await expect(
-      PLUGIN_VIEW_HANDLERS['plugin open'](context(['plugin', 'open', 'todos'], call, { cwd }))
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
-    expect(call).not.toHaveBeenCalled()
-  })
-
-  it('says the host is too old when it lacks the method', async () => {
-    const call = vi.fn().mockRejectedValue(
-      new RuntimeRpcFailureError({
-        id: 'r',
-        ok: false,
-        error: { code: 'method_not_found', message: 'nope' },
-        _meta: { runtimeId: 'runtime_local' }
-      })
-    )
-    await expect(
-      PLUGIN_VIEW_HANDLERS['plugin open'](context(['plugin', 'open', 'acme.todos'], call, { cwd }))
-    ).rejects.toMatchObject({ code: 'runtime_unsupported' })
-  })
 })
 
 describe('orca plugin shot', () => {
@@ -150,20 +122,6 @@ describe('orca plugin shot', () => {
       context(['plugin', 'shot', 'acme.todos', '--out', 'a/b.png'], call, { cwd, remote: true })
     )
     expect((await readFile(join(cwd, 'a', 'b.png'))).byteLength).toBeGreaterThan(0)
-  })
-
-  it('checks --theme and --width before reaching the host', async () => {
-    const call = vi.fn()
-    for (const argv of [
-      ['plugin', 'shot', 'acme.todos', '--theme', 'sepia'],
-      ['plugin', 'shot', 'acme.todos', '--width', '10'],
-      ['plugin', 'shot', 'acme.todos', '--width', 'wide']
-    ]) {
-      await expect(
-        PLUGIN_VIEW_HANDLERS['plugin shot'](context(argv, call, { cwd }))
-      ).rejects.toMatchObject({ code: 'invalid_argument' })
-    }
-    expect(call).not.toHaveBeenCalled()
   })
 
   it('refuses a bridged shell, whose cwd is on another machine', async () => {

@@ -22,7 +22,7 @@ import {
   buildJiraBoardSections,
   type TaskPageJiraBoardSection
 } from './task-page-jira-board-sections'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function jiraBoardIssueRefKey(issue: Pick<JiraIssue, 'key' | 'siteId'>): string {
   return `${issue.siteId ?? 'site'}:${issue.key}`

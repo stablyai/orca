@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   terminalLimitInputMaximum,
   type TerminalLimitStatus
-} from '../../../../../../shared/terminal-limit-policy'
+} from '../../../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import { Input } from '../../../ui/input'
 import { Button } from '../../../ui/button'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
@@ -16,9 +16,9 @@ import {
   isHostIdentityFenceCurrent,
   type HostIdentityFence
 } from '@/store/host-catalog-fencing'
-import type { HostRoute } from '@/runtime/runtime-client-target'
+import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { getIntlLocale, translate } from '@/i18n/i18n'
-import { runtimeHostContactForEntry } from '../../../../../../shared/runtime-host-contact'
+import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getTerminalLimitSearchKeywords } from '../platform/terminal-advanced-platform-search'
 
 export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): React.JSX.Element {

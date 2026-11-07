@@ -3,10 +3,10 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import {
   AGENT_CHAT_PERMISSION_MODES,
   newChatPermissionModeForSettings
-} from '../../../../../shared/agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../../../../shared/agent-chat-permission-support'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/tui-agent-display-names'
-import { PERMISSION_CHOICE_AGENTS } from '../../../../../shared/tui-agent-permission-choice'
+} from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { PERMISSION_CHOICE_AGENTS } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { useAppStore } from '@/store/index'
 import { Button } from '../../ui/button'
 import { NativeChatPermissionModePicker } from '../../native-chat/NativeChatPermissionModePicker'

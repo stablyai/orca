@@ -24,9 +24,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
-    reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
-    clearTerminalLiveInputDefault,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -43,31 +41,30 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     subscribeToTerminal,
     fetchTerminals
   } = scope
-  async function handleRenameTerminal(value: string) {
-    if (!client || !renameTarget) {
+  // Throws on refusal so the sheet keeps the typed name and offers Retry.
+  async function handleRenameTerminal(value: string): Promise<void> {
+    const target = renameTarget
+    if (!target) {
       return
     }
-    const target = renameTarget
-    setRenameTarget(null)
-
-    try {
-      const title = value.trim()
-      const response = sessionTerminalRename.interpret(
-        await sessionTerminalRename.request(client, { terminal: target.handle, title })
+    if (!client) {
+      throw new Error('Not connected')
+    }
+    const title = value.trim()
+    const reply = await sessionTerminalRename.request(client, { terminal: target.handle, title })
+    if (!reply.ok) {
+      throw new Error(reply.error.message)
+    }
+    setTerminals((prev) => {
+      const next = prev.map((terminal) =>
+        terminal.handle === target.handle ? { ...terminal, title: title || 'Terminal' } : terminal
       )
-      if (response.accepted) {
-        setTerminals((prev) => {
-          const next = prev.map((terminal) =>
-            terminal.handle === target.handle
-              ? { ...terminal, title: title || 'Terminal' }
-              : terminal
-          )
-          terminalsRef.current = next
-          return next
-        })
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
-      }
-    } catch {}
+      terminalsRef.current = next
+      return next
+    })
+    scheduleDelayedAction(() => void fetchTerminals(), 300)
+    // A sheet reopened for another terminal while this one was in flight stays open.
+    setRenameTarget((current) => (current === target ? null : current))
   }
 
   async function handleCloseTerminal(target: Terminal) {
@@ -82,7 +79,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        clearTerminalLiveInputDefault(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
         terminalsRef.current = next
         setTerminals(next)
@@ -146,7 +142,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           })
         }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -154,7 +149,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)

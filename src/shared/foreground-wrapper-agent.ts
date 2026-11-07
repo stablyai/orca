@@ -2,8 +2,8 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
-} from './agent-process-recognition'
-import { getSyntheticAgentTitleProfile } from './synthetic-agent-title'
+} from './agent-status/process/agent-process-recognition'
+import { getSyntheticAgentTitleProfile } from './agent-status/title/synthetic-agent-title'
 
 export type ForegroundAgentCandidate = {
   pid: number

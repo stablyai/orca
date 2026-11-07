@@ -1,9 +1,9 @@
 import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
-import { resolveStartupShell } from '../../../shared/tui-agent-startup-shell'
+import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../shared/codex-terminal-server-isolation'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../opencode/opencode-pty-launch'
@@ -78,10 +78,12 @@ export type PtySpawnLaunchOptionsInput = {
     commandDelivery?: PtySpawnOptions['commandDelivery']
     startupCommandDelivery?: PtySpawnOptions['startupCommandDelivery']
     worktreeId?: string
+    trustWorktreeId?: string
     tabId?: unknown
     connectionId?: string | null
     shellOverride?: string
     telemetry?: { agent_kind?: unknown }
+    skipAgentWorkspaceTrust?: unknown
   }
   env: Record<string, string> | undefined
   /** Mutated: OpenCode prep may add the keys its launch must drop. */
@@ -197,6 +199,8 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const trustWrite = applyAgentWorkspaceTrustToSpawn({
     launchAgent: args.launchAgent,
     worktreeId: args.worktreeId,
+    trustWorktreeId: args.trustWorktreeId,
+    skipForThisLaunch: args.skipAgentWorkspaceTrust === true,
     cwd: input.cwd,
     store: input.store,
     isFreshLaunch: !input.preAdoptedStablePane && launchCommand !== undefined,

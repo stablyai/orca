@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CHROME_WEB_STORE_HOME_URL } from '../../../../../../shared/browser-extension-webstore'
+import { CHROME_WEB_STORE_HOME_URL } from '../../../../../../shared/browser/extensions/browser-extension-webstore'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../../LoadingSpinner'

@@ -3,15 +3,15 @@ import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs,
   type GitBranchCleanupExecOptions
-} from '../../../../shared/git-branch-cleanup'
+} from '../../../../shared/git/branches/git-branch-cleanup'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
 import { withRepoRefMaintenancePaused } from '../../refs/maintenance/local-repo-ref-maintenance'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { createLocalGitObjectQuarantine } from '../../local-git-object-quarantine'
-import { isBranchReservedByWorktreeOperation } from '../../../../shared/git-worktree-admin'
-import { parseWorktreeList } from '../../../../shared/git-worktree-porcelain-parser'
-import { isBranchCheckedOutInWorktreeError } from '../../../../shared/git-branch-delete-refusal'
+import { isBranchReservedByWorktreeOperation } from '../../../../shared/git/worktrees/git-worktree-admin'
+import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
+import { isBranchCheckedOutInWorktreeError } from '../../../../shared/git/branches/git-branch-delete-refusal'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from '../worktree-operation-options'
 import { gitExecOptions, normalizeLocalBranchRef } from '../worktree-operation-options'
 

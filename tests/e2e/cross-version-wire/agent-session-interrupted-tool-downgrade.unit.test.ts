@@ -8,17 +8,29 @@ import {
   interruptedAgentJournalToolCall
 } from '../../../src/shared/agent-journal-tool-call-lifecycle'
 import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
+import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/replay/journal-read-row'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   releaseModuleExport
 } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 // Pin a release predating endedAs to prove cut-short tool calls still read as failed.
 const BASELINE_REF = 'v1.4.218'
+const releaseToolModules = prepareReleaseFixtures([BASELINE_REF], async (ref) => {
+  const checkout = await materializeReleaseCheckout(ref)
+  return Promise.all(
+    [
+      'src/main/native-chat/agent-session-journal/journal-reducer.ts',
+      'src/shared/agent-session-journal-schemas.ts',
+      'src/shared/structured-agent-session-projection.ts',
+      'src/shared/native-chat-tool-run-outcome.ts'
+    ].map((path) => importReleaseCheckoutModule(checkout, path))
+  )
+})
 
 const SESSION = 'session-interrupted-tool'
 
@@ -84,15 +96,7 @@ test('an older host and client read a call a stop cut short as the failure they 
       { state: 'failed', endedAs: 'unverifiable' }
     ])
 
-    const checkout = await materializeReleaseCheckout(BASELINE_REF)
-    const [reducer, schemas, projection, outcome] = await Promise.all(
-      [
-        'src/main/native-chat/agent-session-journal/journal-reducer.ts',
-        'src/shared/agent-session-journal-schemas.ts',
-        'src/shared/structured-agent-session-projection.ts',
-        'src/shared/native-chat-tool-run-outcome.ts'
-      ].map((path) => importReleaseCheckoutModule(checkout, path))
-    )
+    const [reducer, schemas, projection, outcome] = releaseToolModules(BASELINE_REF)
     const createState = releaseModuleExport<(sessionId: string, epoch: string) => unknown>(
       reducer,
       'createJournalReducerState'

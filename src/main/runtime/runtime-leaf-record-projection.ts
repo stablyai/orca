@@ -1,7 +1,7 @@
 // Join holder layout with PTY registry into mirror-shaped tab/leaf records (census U15).
 // Write mutations to fact owners—PTY connection/output/tail or title/status tracker—then reproject.
 
-import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
+import type { PtyLivenessVerdict } from '../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { RuntimeSyncedTab } from '../../shared/runtime-types'
 import { resolveTerminalTabTitle } from '../../shared/tab-title-resolution'
 import { collectLayoutLeafIdsInOrder } from '../../shared/workspace-layout/terminal-pane-tree'
@@ -14,8 +14,11 @@ import {
 import type { PaneTerminalFact } from '../../shared/workspace-layout/workspace-layout-pane-status'
 import { resolveWorkspaceSelection } from '../../shared/workspace-layout/workspace-layout-views'
 import { pickStoredFields } from '../../shared/workspace-layout/stored-record-fields'
-import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { getPtyTerminalState } from './terminal-wait-results'
+import type {
+  RuntimeLeafRecord,
+  RuntimePtyWorktreeRecord
+} from './terminal/records/runtime-terminal-state-records'
+import { getPtyTerminalState } from './terminal/wait/terminal-wait-results'
 
 export type RuntimeLeafProjection = {
   tabs: ReadonlyMap<string, Readonly<RuntimeSyncedTab>>

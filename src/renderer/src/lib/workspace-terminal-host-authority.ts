@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
+import type { HostLiveTerminalProbeVerdict } from '@/runtime/hosted-terminals/inventory/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'
@@ -14,8 +14,8 @@ import {
 import {
   findIndexedProjectGroupOwner,
   hasIndexedDetectedWorktree
-} from '@/lib/worktree-runtime-owner-index'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 /** Reuse HostLiveTerminalProbeVerdict: live means remote owns creation, unverifiable means owner cannot answer, none means local or connected SSH without host-replaced scope. Unknown must never authorize client seeding or sleeping resume, which duplicate tabs/writers (STA-4658/3500/3498/3374; ssh-execution-boundary.md). */
 export type WorkspaceTerminalHostAuthority = HostLiveTerminalProbeVerdict

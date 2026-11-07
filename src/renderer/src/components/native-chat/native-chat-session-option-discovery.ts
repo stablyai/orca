@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createClaudeCatalogOptions } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
 import { catalogModelsFromModelDiscovery } from '../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
@@ -6,23 +6,26 @@ import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
-} from '../../../../shared/commit-message-host-key'
+} from '../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hasExplicitTuiLaunchCommand } from '../../../../shared/tui-agent-launch-command-override'
+import { hasExplicitTuiLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
 } from '@/lib/local-preflight-context'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
-import { getRuntimeGitScope, type RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import {
+  getRuntimeGitScope,
+  type RuntimeGitContext
+} from '@/runtime/source-control/git/runtime-git-client-context'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
-import { useAppStore } from '@/store'
-import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { useAppStore } from '@/store/index'
+import { selectFileListWorktree } from '@/store/selectors'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string
@@ -86,7 +89,7 @@ export function resolveWorktreeModelDiscoveryRuntime(
     target,
     prefs: state.settings,
     worktreeId,
-    worktreePath: worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : '',
+    worktreePath: selectFileListWorktree(state, worktreeId)?.path ?? '',
     ...(connectionId ? { connectionId } : {})
   }
 }

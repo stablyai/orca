@@ -1,15 +1,16 @@
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { partialRuntimeStore } from '../../src/main/runtime/runtime-store-partial-fixture'
+import type * as RuntimeRpcCallModule from '../../src/renderer/src/runtime/rpc/calls/runtime-rpc-call'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { partialRuntimeStore } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { agentSessionRecordFixture } from '../../src/main/native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 // @vitest-environment happy-dom
 
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import type * as RuntimeRpcClient from '../../src/renderer/src/runtime/runtime-rpc-client'
+
 import type * as RuntimeLayoutClient from '../../src/renderer/src/runtime/runtime-layout-client'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { useAppStore } from '../../src/renderer/src/store'
 import { applyStructuredSessionTabSnapshots } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
@@ -76,8 +77,8 @@ const bridge = vi.hoisted((): ProcessBoundary => ({
 }))
 
 // Switch-on, the window's layout commands reach main's model, which the runtime's own commands share.
-vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClient>()
+vi.mock('../../src/renderer/src/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
     await import('../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture')
   // An untyped mock: the runtime client's generic result type is the caller's to name.

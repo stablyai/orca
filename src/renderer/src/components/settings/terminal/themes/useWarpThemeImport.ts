@@ -7,7 +7,7 @@ import {
   type TerminalCustomTheme,
   type WarpThemeImportPreview,
   type WarpThemeImportSource
-} from '../../../../../../shared/terminal-custom-themes'
+} from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import { useMountedRef } from '../../../../hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 

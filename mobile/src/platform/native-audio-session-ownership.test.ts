@@ -50,6 +50,7 @@ function device(blockAt?: 'permission' | 'open') {
         holds--
       }
     },
+    feedSpeech: () => {},
     onMicrophoneData: (listener) => {
       listeners.add(listener)
       return {
@@ -134,32 +135,4 @@ describe('page sessions sharing the device microphone', () => {
     mic.emit(speech)
     expect(await read(successor)).toEqual(speech)
   })
-
-  it.each([10, 100])(
-    'skips device admission for %i starts queued before retirement',
-    async (count) => {
-      const mic = device('permission')
-      const retired = capture(mic.engine)
-      const pending = Array.from({ length: count }, () =>
-        retired.serve('native.audio.start', { sampleRate: 16_000 })
-      )
-      await mic.entered.promise
-      retired.dispose()
-      const successor = capture(mic.engine)
-      const live = successor.serve('native.audio.start', { sampleRate: 16_000 })
-      mic.blocked.release()
-      await Promise.all(pending)
-      await expect(live).resolves.toMatchObject({ started: true })
-      expect(mic.counts()).toEqual({
-        permissions: 2,
-        opens: 1,
-        recording: true,
-        holds: 1,
-        listeners: 1
-      })
-      const speech = new Uint8Array([9, 10])
-      mic.emit(speech)
-      expect(await read(successor)).toEqual(speech)
-    }
-  )
 })

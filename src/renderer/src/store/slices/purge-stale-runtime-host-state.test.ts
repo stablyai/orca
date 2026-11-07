@@ -9,7 +9,9 @@ vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
 
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
@@ -18,7 +20,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 globalThis.window = { api: {} }
 
 import { createTestStore, seedStore, makeWorktree, makeTab, TEST_REPO } from './store-test-helpers'
-import '@/components/editor/editor-pending-flush'
+import '@/components/editor/save/flush/editor-pending-flush'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 const RUNTIME_NEVER_SAVED = toRuntimeExecutionHostId('env-serving-client')

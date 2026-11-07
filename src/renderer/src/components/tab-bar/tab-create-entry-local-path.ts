@@ -2,10 +2,11 @@ import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { useAppStore } from '@/store'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { selectFileListWorktree } from '@/store/selectors'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -43,7 +44,7 @@ export function getTabEntryAllowAbsolutePaths(
   state: ReturnType<typeof useAppStore.getState>,
   worktreeId: string
 ): boolean {
-  const worktree = state.getKnownWorktreeById(worktreeId)
+  const worktree = selectFileListWorktree(state, worktreeId)
   if (!worktree) {
     return false
   }

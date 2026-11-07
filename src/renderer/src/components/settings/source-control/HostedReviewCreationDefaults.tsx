@@ -1,4 +1,4 @@
-import type { SourceControlAiSettings } from '../../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { Label } from '../../ui/label'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { translate } from '@/i18n/i18n'

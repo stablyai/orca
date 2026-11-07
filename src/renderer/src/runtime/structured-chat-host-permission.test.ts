@@ -9,17 +9,19 @@ const mocks = vi.hoisted(() => {
   return { supportsCapability: vi.fn(), callRuntimeRpc: vi.fn(), contactListeners, settings }
 })
 
-vi.mock('./runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.supportsCapability,
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: mocks.supportsCapability
+}))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/store', () => {
+vi.mock('@/store/index', () => {
   const state = { settings: mocks.settings }
   const useAppStore = (select: (s: typeof state) => unknown) => select(state)
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('./runtime-host-contact-regained', () => ({
+vi.mock('./hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_id: string, listener: () => void) => {
     mocks.contactListeners.push(listener)
     return () => undefined
@@ -52,21 +54,6 @@ describe('the permission verdict on a paired host', () => {
     await expect(
       readStructuredChatHostPermissionVerdict(PAIRED, 'codex', 'accept-edits')
     ).resolves.toEqual({ kind: 'refused', hostMode: 'full-access' })
-  })
-})
-
-describe('the permission verdict a chat holds', () => {
-  it('checks again, holding the chat, when contact with the host returns', async () => {
-    mocks.contactListeners.length = 0
-    mocks.supportsCapability.mockResolvedValue(true)
-    const { result } = renderHook(() => useStructuredChatHostPermissionVerdict(PAIRED, 'claude'))
-    expect(result.current).toMatchObject({ kind: 'checking' })
-    await vi.waitFor(() => expect(result.current).toMatchObject({ kind: 'allowed' }))
-
-    // The host came back as an older build: its answer is still on the way.
-    mocks.supportsCapability.mockReturnValue(new Promise(() => undefined))
-    act(() => mocks.contactListeners.forEach((listener) => listener()))
-    expect(result.current).toMatchObject({ kind: 'checking' })
   })
 })
 

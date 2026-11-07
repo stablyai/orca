@@ -6,7 +6,11 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 
 const cliPath = join(process.cwd(), 'src/cli/index.ts')
 const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
@@ -64,9 +68,9 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   ]) {
     vi.stubEnv(name, '')
   }
-  const { OrcaRuntimeRpcServer } = await import('./runtime-rpc')
+  const { OrcaRuntimeRpcServer } = await import('./rpc/server/runtime-rpc')
   const fixture = await import('./orchestration-mailbox-notification-test-harness')
-  const { registerBoundPty } = await import('./bind-first-pane.test-fixture')
+  const { registerBoundPty } = await import('./orca-runtime-tests/bind-first-pane.test-fixture')
   const coord = fixture.TERMINAL_HANDLE
   const worker = fixture.SECOND_TERMINAL_HANDLE
   const predecessor = 'term_predecessor'

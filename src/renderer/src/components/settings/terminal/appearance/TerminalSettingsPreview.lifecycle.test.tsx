@@ -1,6 +1,6 @@
 import type * as ReactModule from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
 type Cleanup = () => void
@@ -96,8 +96,8 @@ vi.mock('@xterm/xterm', () => ({
   }
 }))
 
-vi.mock('@xterm/addon-ligatures', () => ({
-  LigaturesAddon: class LigaturesAddon {
+vi.mock('@/lib/pane-manager/terminal-ligatures-addon', () => ({
+  TerminalLigaturesAddon: class TerminalLigaturesAddon {
     dispose: Mock
 
     constructor() {
@@ -115,6 +115,11 @@ vi.mock('@/components/ui/card', () => ({
   CardTitle: 'CardTitle'
 }))
 
+vi.mock('@/store/plugin-fonts', () => ({
+  pluginFontFamilyWhenLoaded: (fontFamily: string) => fontFamily,
+  usePluginFontReady: () => true
+}))
+
 vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({
   buildDefaultTerminalOptions: () => ({ scrollback: 0 })
 }))
@@ -123,7 +128,7 @@ vi.mock('@/lib/monospace-font-family', () => ({
   buildFontFamily: (font: string) => `built:${font}`
 }))
 
-vi.mock('@/components/terminal-pane/terminal-appearance', () => ({
+vi.mock('@/components/terminal-pane/appearance/terminal-appearance', () => ({
   composeActiveTerminalTheme: () => ({ background: '#111111', foreground: '#eeeeee' })
 }))
 
@@ -135,11 +140,11 @@ vi.mock('@/lib/terminal-theme', () => ({
   })
 }))
 
-vi.mock('../../../../../../shared/terminal-fonts', () => ({
+vi.mock('../../../../../../shared/terminal/appearance/terminal-fonts', () => ({
   resolveTerminalFontWeights: () => ({ fontWeight: 500, fontWeightBold: 700 })
 }))
 
-vi.mock('../../../../../../shared/terminal-ligatures', () => ({
+vi.mock('../../../../../../shared/terminal/appearance/terminal-ligatures', () => ({
   resolveTerminalLigaturesEnabled: () => mockLigaturesAddon.enabled
 }))
 

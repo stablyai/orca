@@ -20,7 +20,7 @@ export function BrowserUseComputerUseNotice({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.BrowserUseComputerUseNotice.79209b37b9',
-              'If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Computer Use skill; macOS also requires privacy permissions.'
+              'If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.'
             )}
           </p>
         </div>

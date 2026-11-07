@@ -1,10 +1,10 @@
-import type { BrowserClientHostPlacementPreference } from '../../../shared/browser-client-host-placement'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import type { BrowserClientHostPlacementPreference } from '../../../shared/browser/client-hosting/browser-client-host-placement'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   closePairedRuntimeBrowserClientHostEnvironment,
   startPairedRuntimeBrowserClientHost
-} from '../../browser/paired-runtime-browser-client-host-runtime'
-import { prepareBrowserClientHostPlacement } from '../../browser/browser-client-host-placement-preparation'
+} from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { prepareBrowserClientHostPlacement } from '../../browser/client-hosts/lifecycle/browser-client-host-placement-preparation'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 

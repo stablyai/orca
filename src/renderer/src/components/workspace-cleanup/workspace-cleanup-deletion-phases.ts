@@ -1,10 +1,10 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type { WorktreeDeleteState } from '@/store/slices/worktree-helpers'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupIdentityWorktreeId,
   resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 

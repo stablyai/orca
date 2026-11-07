@@ -11,8 +11,8 @@ import {
 } from './wsl-orcad-connection-errors'
 import type { WslHostConnectIntent } from '../../../shared/wsl-host-types'
 import { errorMessage } from '../../../shared/error-message'
-import { parsePairingCode } from '../../../shared/pairing'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {

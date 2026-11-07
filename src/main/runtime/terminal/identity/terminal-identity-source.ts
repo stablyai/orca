@@ -1,10 +1,10 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-types'
+import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { TerminalHandleRecord } from '../../runtime-terminal-contracts'
-import type { PtyIncarnationHandleRecord } from '../../orca-runtime-core'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './terminal-handle-records'
+
 import { TerminalIncarnationCandidates } from './terminal-incarnation-candidates'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
@@ -66,61 +66,45 @@ export class TerminalIdentitySource {
     return record
   }
 
-  setPtyWorktreeId(record: RuntimePtyWorktreeRecord, value: string): void {
+  /** `inferredFromCwd` marks a guess that must never drive a worktree-scoped stop (#36716). */
+  setPtyWorktree(record: RuntimePtyWorktreeRecord, worktreeId: string, inferredFromCwd: boolean) {
+    this.setPtyField(record, 'worktreeId', worktreeId)
+    this.setPtyField(record, 'worktreeInferredFromCwd', inferredFromCwd || undefined)
+  }
+
+  /** A binding (pane, layout) confirms the recorded worktree, so a cwd guess no longer guards it. */
+  confirmPtyWorktree(record: Pick<RuntimePtyWorktreeRecord, 'ptyId'>): void {
     const owned = this.ownedPtys.get(record)
-    if (owned && owned.worktreeId !== value) {
-      owned.worktreeId = value
+    if (owned?.worktreeInferredFromCwd) {
+      delete owned.worktreeInferredFromCwd
       this.changed()
     }
   }
 
   setPtyIncarnationId(record: RuntimePtyWorktreeRecord, value: string | null): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.incarnationId !== value) {
-      owned.incarnationId = value
-      this.changed()
-    }
+    this.setPtyField(record, 'incarnationId', value)
   }
 
   setPtyConnectionId(record: RuntimePtyWorktreeRecord, value: string | null): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.connectionId !== value) {
-      owned.connectionId = value
-      this.changed()
-    }
+    this.setPtyField(record, 'connectionId', value)
   }
 
   setPtyConnected(record: RuntimePtyWorktreeRecord, value: boolean): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.connected !== value) {
-      owned.connected = value
-      this.changed()
-    }
+    this.setPtyField(record, 'connected', value)
   }
 
   setPtyTabId(record: RuntimePtyWorktreeRecord, value: string | null | undefined): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.tabId !== value) {
-      owned.tabId = value
-      this.changed()
-    }
+    this.setPtyField(record, 'tabId', value)
   }
 
   setPtyIsWsl(record: RuntimePtyWorktreeRecord, value: boolean | null): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.isWsl !== value) {
-      owned.isWsl = value
-      this.changed()
-    }
+    this.setPtyField(record, 'isWsl', value)
   }
 
   setPtyWslDistro(record: RuntimePtyWorktreeRecord, value: string | null): void {
-    const owned = this.ownedPtys.get(record)
-    if (owned && owned.wslDistro !== value) {
-      owned.wslDistro = value
-      this.changed()
-    }
+    this.setPtyField(record, 'wslDistro', value)
   }
+
   setRecordedSurface(
     record: Pick<
       RuntimePtyWorktreeRecord,
@@ -300,6 +284,18 @@ export class TerminalIdentitySource {
   advanceRendererEpoch(): void {
     this.epoch += 1
     this.changed()
+  }
+
+  private setPtyField<K extends keyof RuntimePtyWorktreeRecord>(
+    record: RuntimePtyWorktreeRecord,
+    key: K,
+    value: RuntimePtyWorktreeRecord[K]
+  ): void {
+    const owned = this.ownedPtys.get(record)
+    if (owned && owned[key] !== value) {
+      owned[key] = value
+      this.changed()
+    }
   }
 
   private bind(map: Map<string, string>, key: string, value: string): void {

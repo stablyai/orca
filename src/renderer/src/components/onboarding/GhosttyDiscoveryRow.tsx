@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import type { TerminalConfigImportPreview } from '../../../../shared/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 import type { DiscoveryState } from './ThemeStep'
