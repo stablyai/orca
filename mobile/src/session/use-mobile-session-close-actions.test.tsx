@@ -1,6 +1,7 @@
 import { createElement, useRef, useState, type SetStateAction } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
@@ -133,7 +134,7 @@ describe('legacy terminal close acknowledgments', () => {
       return null
     }
     await act(async () => {
-      renderer = create(createElement(Harness))
+      renderer = create(documentQueryClient().wrap(createElement(Harness)))
     })
     return {
       read() {
@@ -235,7 +236,7 @@ describe('legacy terminal close acknowledgments', () => {
     const harness = await mount(target)
     const refused = harness.read().actions.handleRenameTerminal('  build  ')
     expect(harness.requests.mock.calls).toEqual([
-      ['terminal.rename', { terminal: 'b', title: 'build' }]
+      ['terminal.rename', { terminal: 'b', title: 'build' }, { failWhenDisconnected: true }]
     ])
     await expect(harness.acknowledge('b', refused, false)).rejects.toThrow('Retry')
     expect(harness.setRenameTarget).not.toHaveBeenCalled()
