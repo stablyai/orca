@@ -20,7 +20,11 @@ export function SettingsGroup({
   bodyClassName
 }: SettingsGroupProps): React.JSX.Element {
   return (
-    <section data-settings-group="" className={cn('space-y-3', className)}>
+    <section
+      data-settings-group=""
+      // Search can filter out every row; hide the group rather than leave an empty card.
+      className={cn('space-y-3 has-[[data-settings-group-body]:empty]:hidden', className)}
+    >
       {title ? (
         <SettingsGroupHeader title={title} description={description} action={action} />
       ) : null}
@@ -30,10 +34,10 @@ export function SettingsGroup({
           bodyClassName
         )}
       >
-        {/* Rows nest at varying depths, so each outermost row draws its own top rule and the card clips the first. */}
+        {/* Rows nest at varying depths, so each innermost row draws its own top rule and the card clips the first. */}
         <div
           data-settings-group-body=""
-          className="-mt-px [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-t [&_[data-settings-row]:not([data-settings-group-body]_[data-settings-row]_*)]:border-border"
+          className="-mt-px [&_[data-settings-row]:not(:has([data-settings-row]))]:border-t [&_[data-settings-row]:not(:has([data-settings-row]))]:border-border"
         >
           {children}
         </div>
