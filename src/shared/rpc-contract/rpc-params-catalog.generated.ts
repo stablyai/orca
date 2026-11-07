@@ -30,6 +30,10 @@ import {
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
 import { HostAccountLaunchEnvParams } from '../host-account-launch-env'
+import {
+  MobileBrowserTunnelParams,
+  MobileBrowserTunnelUnsubscribeParams
+} from '../mobile-browser-tunnel-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
@@ -1298,6 +1302,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.mobileBrowserTunnel': MobileBrowserTunnelParams,
+  'network.mobileBrowserTunnel.unsubscribe': MobileBrowserTunnelUnsubscribeParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,

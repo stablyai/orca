@@ -10,6 +10,7 @@ import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'
+import { ActiveSessionBrowserTunnel } from './browser-tunnel-frame-channel'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -178,6 +179,7 @@ export function createStableLogicalRpcClient(
         activeSession.probeLivenessNow?.()
       }
     },
+    browserTunnel: new ActiveSessionBrowserTunnel(() => activeSession),
     close() {
       if (closed) {
         return

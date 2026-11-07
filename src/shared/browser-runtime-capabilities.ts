@@ -18,6 +18,8 @@ export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
 export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
+// A phone draws pages in its own web view and sends their traffic through this host.
+export const MOBILE_BROWSER_TUNNEL_RUNTIME_CAPABILITY = 'network.mobileBrowserTunnel.v1' as const
 // Larger stream windows bounded by connection-level credit; the host echoes it on ready to opt in.
 export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY =
   'network.browserTunnel.window.v2' as const
@@ -36,5 +38,6 @@ export const BROWSER_RUNTIME_CAPABILITIES = [
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
-  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+  MOBILE_BROWSER_TUNNEL_RUNTIME_CAPABILITY
 ] as const

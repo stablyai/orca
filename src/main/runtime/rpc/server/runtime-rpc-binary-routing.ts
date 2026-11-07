@@ -26,6 +26,13 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
+  protected registerBrowserTunnelFrameHandler(
+    connectionId: string | undefined,
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ): () => void {
+    return this.binaryMessageRouter.registerBrowserTunnel(connectionId, handler)
+  }
+
   protected handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
     this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }

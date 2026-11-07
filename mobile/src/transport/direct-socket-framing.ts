@@ -27,6 +27,8 @@ export type DirectSocketFraming = {
   handleInbound: (raw: unknown) => void
   // false = not ready yet; throws when the socket write fails.
   sendText: (plaintext: string) => boolean
+  // Same contract as sendText, for browser tunnel frames.
+  sendBinary: (plaintext: Uint8Array) => boolean
   dispose: () => void
 }
 
@@ -76,6 +78,7 @@ function createV2Framing(args: Parameters<typeof createDirectSocketFraming>[0]) 
     },
     handleInbound: (raw: unknown) => void channel.handleMessage(raw),
     sendText: (plaintext: string) => channel.sendText(plaintext),
+    sendBinary: (plaintext: Uint8Array) => channel.sendBinary(plaintext),
     dispose: () => channel.dispose()
   }
 }
@@ -97,6 +100,14 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
       return false
     }
     socket.send(handshake.channel.sealText(plaintext))
+    return true
+  }
+
+  const sendBinary = (plaintext: Uint8Array): boolean => {
+    if (!keyed || disposed || !authenticated) {
+      return false
+    }
+    socket.send(handshake.channel.sealBinary(plaintext))
     return true
   }
 
@@ -180,6 +191,7 @@ function createLegacyFraming(args: Parameters<typeof createDirectSocketFraming>[
     },
     handleInbound: (raw: unknown) => void handleInbound(raw),
     sendText,
+    sendBinary,
     dispose: () => {
       disposed = true
     }

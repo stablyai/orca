@@ -33,6 +33,10 @@ export const PAIRED_DESKTOP_METHODS = [
   // The Mac republishes host changes it already observes.
   'runtime.clientEvents.subscribe',
   'runtime.clientEvents.unsubscribe',
+  // Tunnel frames arrive on this Mac's socket, so a relayed server could never receive them. The Mac reaches local
+  // and SSH workspaces itself; a server's workspace is unknown here, so the phone falls back to streaming.
+  'network.mobileBrowserTunnel',
+  'network.mobileBrowserTunnel.unsubscribe',
   'diagnostics.memory',
   'stats.summary',
   'ui.get',
