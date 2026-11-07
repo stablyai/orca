@@ -58,6 +58,10 @@ export type StructuredAgentAccountHomeServices = {
   prepareCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   readCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
+  /** The launching repo's pre-trust decision; undefined outside a repo or before one is made. */
+  workspaceTrustRepoDecision: (
+    location: AgentSessionExecutionLocation | null
+  ) => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['repoDecision']
   /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
   stateDirectory: string
 }

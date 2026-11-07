@@ -107,6 +107,7 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
         'settings.general.openInMenu.keyword.devinDesktop',
         'devin desktop'
       ),
+      ...translateSearchKeyword('settings.general.openInMenu.keyword.antigravity', 'antigravity'),
       ...translateSearchKeyword('auto.components.settings.general.search.dbeb1f348e', 'command'),
       ...translateSearchKeyword('auto.components.settings.general.search.68d03d9980', 'vscode'),
       ...translateSearchKeyword('auto.components.settings.general.search.c9d9636f24', 'finder'),
