@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomically } from '../../codex-accounts/fs-utils'
-import { upsertOrcaCreatedProjectTrustLevel } from '../../codex/trust/toml/config-toml-trust'
+import {
+  upsertOrcaCreatedProjectTrustLevel,
+  upsertProjectTrustLevel
+} from '../../codex/trust/toml/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
 import { recordOrcaCreatedAntigravityTrust } from './antigravity-workspace-trust-ownership'
 import type { TuiAgentConfig } from '../../../shared/agent-launch/catalog/tui-agent-config-types'
@@ -150,6 +153,24 @@ export function markCodexProjectTrusted(
     }
   )
   return write()
+}
+
+export function markCodewhaleProjectTrusted(
+  workspacePath: string,
+  home: string,
+  env: Record<string, string | undefined> = {}
+): Promise<void> {
+  const expandPath = (value: string) =>
+    value === '~' ? home : /^~[\\/]/.test(value) ? join(home, value.slice(2)) : value
+  const runtimeHome = expandPath(env.CODEWHALE_HOME?.trim() || join(home, '.codewhale'))
+  const configFile = expandPath(
+    env.CODEWHALE_CONFIG_PATH?.trim() || join(runtimeHome, 'config.toml')
+  )
+  if (!isAbsolute(runtimeHome) || !isAbsolute(configFile)) {
+    return Promise.reject(new Error('Codewhale config and home overrides must be absolute'))
+  }
+  upsertProjectTrustLevel(configFile, canonicalize(workspacePath), 'trusted')
+  return Promise.resolve()
 }
 
 function canonicalize(p: string): string {

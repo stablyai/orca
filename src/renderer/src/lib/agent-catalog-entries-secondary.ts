@@ -153,6 +153,13 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.jcode_label', 'Jcode'),
       cmd: 'jcode',
       homepageUrl: 'https://github.com/1jehuang/jcode'
+    },
+    {
+      id: 'codewhale',
+      label: translate('auto.lib.agent.catalog.codewhale_label', 'Codewhale'),
+      cmd: 'codewhale',
+      faviconDomain: 'codewhale.net',
+      homepageUrl: 'https://codewhale.net/'
     }
   ]
 }

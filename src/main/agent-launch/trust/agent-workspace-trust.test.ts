@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
   antigravity: vi.fn<(path: string, home: string, guestPath?: string) => void>(),
   qoder: vi.fn<(path: string, home: string) => void>(),
   kimi: vi.fn<(path: string, kimiHome: string) => void>(),
+  codewhale: vi.fn<
+    (path: string, home: string, env: Record<string, string | undefined>) => Promise<void>
+  >(async () => {}),
   codexConfigFiles: vi.fn<(agentHome: string) => string[]>(() => CODEX_CONFIG_FILES),
   claudeGrant: vi.fn<typeof ClaudeFolderTrustFile.grantClaudeWorkspaceTrust>()
 }))
@@ -41,7 +44,8 @@ vi.mock('./agent-trust-presets', () => ({
   markCursorWorkspaceTrusted: mocks.cursor,
   markCopilotFolderTrusted: mocks.copilot,
   markAntigravityWorkspaceTrusted: mocks.antigravity,
-  markKimiWorkspaceTrusted: mocks.kimi
+  markKimiWorkspaceTrusted: mocks.kimi,
+  markCodewhaleProjectTrusted: mocks.codewhale
 }))
 vi.mock('../../codex/configuration/homes/codex-home-paths', () => ({
   getLocalCodexTrustConfigFiles: mocks.codexConfigFiles
@@ -86,6 +90,24 @@ afterEach(() => {
 })
 
 describe('applyAgentWorkspaceTrust on this machine', () => {
+  it('writes Codewhale trust under the launch env home and its Codewhale overrides', async () => {
+    const env = {
+      HOME: '/home/agent',
+      USERPROFILE: '/home/agent',
+      CODEWHALE_HOME: '/custom/codewhale',
+      CODEWHALE_CONFIG_PATH: '/custom/codewhale.toml'
+    }
+    await applyAgentWorkspaceTrust('codewhale', WORKSPACE, { ...local, env })
+    expect(mocks.codewhale).toHaveBeenCalledWith(
+      WORKSPACE,
+      '/home/agent',
+      expect.objectContaining({
+        CODEWHALE_HOME: '/custom/codewhale',
+        CODEWHALE_CONFIG_PATH: '/custom/codewhale.toml'
+      })
+    )
+  })
+
   it('gives only Codex the long deadline its shared config lane needs', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

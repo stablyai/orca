@@ -10,6 +10,7 @@ import { containsAgentSpinnerGlyph } from './agent-title-glyphs'
 import { isCursorAgentTitle } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
+import { isCodewhaleTerminalTitle } from './providers/codewhale-terminal-title'
 
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
@@ -142,6 +143,9 @@ function computeAgentLabel(title: string): string | null {
     return piBrand
   }
   // Why before Gemini: see isDshTerminalTitle — the two share the `✦` glyph.
+  if (isCodewhaleTerminalTitle(title)) {
+    return 'Codewhale'
+  }
   if (isDshTerminalTitle(title)) {
     return 'DeepSeek Harness'
   }
@@ -234,6 +238,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Grok: 'grok',
   Devin: 'devin',
   Jcode: 'jcode',
+  Codewhale: 'codewhale',
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'OpenCode 2': 'opencode2',
