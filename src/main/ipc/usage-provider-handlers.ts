@@ -3,6 +3,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { MuseUsageStore } from '../muse-usage/store'
+import { setUsageSnapshotStores } from '../runtime/rpc/methods/host-management/usage'
 
 type UsageProviderStores = {
   claudeUsage: ClaudeUsageStore
@@ -75,4 +76,11 @@ export function registerUsageProviderHandlers(stores: UsageProviderStores): void
   registerProviderHandlers('codexUsage', stores.codexUsage)
   registerProviderHandlers('openCodeUsage', stores.openCodeUsage)
   registerProviderHandlers('museUsage', stores.museUsage)
+  // The paired phone reads these same aggregates through the usage.snapshot RPC.
+  setUsageSnapshotStores({
+    claude: stores.claudeUsage,
+    codex: stores.codexUsage,
+    opencode: stores.openCodeUsage,
+    muse: stores.museUsage
+  })
 }
