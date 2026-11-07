@@ -51,6 +51,14 @@ const terminalCreateParams = z.strictObject({
 })
 const terminalCreateResult = z.object({ terminalId })
 
+const terminalSplitParams = z.strictObject({
+  terminalId,
+  /** `horizontal` places the new pane beside `terminalId`; `vertical` places it below. */
+  direction: z.enum(['horizontal', 'vertical']).optional(),
+  /** Run in the new pane's shell once it starts. */
+  command: z.string().min(1).max(TEXT_MAX).optional()
+})
+const terminalSplitResult = z.object({ terminalId })
 const terminalReadParams = z.strictObject({
   terminalId,
   /** The newest lines to return; default 200. */
@@ -134,6 +142,17 @@ export const PLUGIN_WORKSPACE_ACTIONS_API = {
     surfaces: WORKER_ONLY,
     params: terminalCreateParams,
     result: terminalCreateResult
+  }),
+  'terminal.split': spec({
+    summary:
+      'Splits a terminal pane and opens a terminal in the new half, optionally running a command.',
+    since: 5,
+    scope: 'explicit-terminal',
+    capability: 'terminal:send',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: terminalSplitParams,
+    result: terminalSplitResult
   }),
   'terminal.read': spec({
     summary: `Reads a terminal's newest output as plain text, at most ${PLUGIN_TERMINAL_READ_MAX_LINES} lines.`,

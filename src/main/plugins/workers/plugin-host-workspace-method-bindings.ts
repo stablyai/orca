@@ -56,6 +56,7 @@ const folderListAnswer = z.object({
   )
 })
 const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
+const terminalSplitAnswer = z.object({ split: z.object({ handle: z.string() }) })
 const terminalReadAnswer = z.object({
   terminal: z.object({
     tail: z.array(z.string()),
@@ -169,6 +170,14 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
       presentation: 'background'
     })
     return { terminalId: terminalCreateAnswer.parse(answer).terminal.handle }
+  }),
+  'terminal.split': bind(api['terminal.split'], async (params, ctx) => {
+    const answer = await effect(ctx, 'terminal.split', {
+      terminal: params.terminalId,
+      ...(params.direction ? { direction: params.direction } : {}),
+      ...(params.command ? { command: params.command } : {})
+    })
+    return { terminalId: terminalSplitAnswer.parse(answer).split.handle }
   }),
   'terminal.read': bind(api['terminal.read'], async (params, { services, scope }) => {
     const limit = Math.min(params.maxLines ?? DEFAULT_READ_LINES, PLUGIN_TERMINAL_READ_MAX_LINES)
