@@ -17,11 +17,12 @@ class ExpoTwoWayAudioModule : Module() {
         var audioEngine: AudioEngine? = null
     }
 
-    private val speech by lazy {
+    private val speechHandle = lazy {
         OnDeviceSpeech(requireNotNull(appContext.reactContext).applicationContext) { name, body ->
             sendEvent(name, body)
         }
     }
+    private val speech by speechHandle
 
     override fun definition() = ModuleDefinition {
         Name("ExpoTwoWayAudio")
@@ -132,7 +133,7 @@ class ExpoTwoWayAudioModule : Module() {
         }
 
         OnDestroy {
-            speech.destroy()
+            if (speechHandle.isInitialized()) speech.destroy()
         }
 
         Events(

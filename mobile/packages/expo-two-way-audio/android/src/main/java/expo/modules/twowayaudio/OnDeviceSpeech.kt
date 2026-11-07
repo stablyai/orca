@@ -29,6 +29,8 @@ internal class OnDeviceSpeech(
   private var session: SpeechSession? = null
   // Bumped by every start and cancel, so a start that resolves after a newer call stays unstarted.
   private var generation = 0
+  // Never reset, so a reader keeping the highest revision drops a late event from an earlier session.
+  private var revision = 0
 
   suspend fun availability(locale: String): Map<String, Any?> {
     val target = resolve(locale)?.second
@@ -61,16 +63,17 @@ internal class OnDeviceSpeech(
     if (target.status != SpeechStatus.READY) return notStarted(SpeechStatus.NEEDS_DOWNLOAD.wire)
     synchronized(lock) {
       if (generation != startGeneration) return notStarted("failed")
-      val next = SpeechSession(scope, speech, target) { revision, committed, tentative ->
-        sendEvent(
-          SPEECH_TEXT_EVENT,
-          mapOf("revision" to revision, "committed" to committed, "tentative" to tentative)
-        )
+      lateinit var next: SpeechSession
+      next = SpeechSession(scope, speech, target) { committed, tentative ->
+        emitIfCurrent(next) {
+          revision += 1
+          SPEECH_TEXT_EVENT to mapOf("revision" to revision, "committed" to committed, "tentative" to tentative)
+        }
       }
       next.result.invokeOnCompletion { error ->
         if (error == null || error is CancellationException) return@invokeOnCompletion
         Log.w(TAG, "On-device speech failed", error)
-        sendEvent(SPEECH_ERROR_EVENT, mapOf("code" to speech.failureCode(error)))
+        emitIfCurrent(next) { SPEECH_ERROR_EVENT to mapOf("code" to speech.failureCode(error)) }
       }
       session = next
     }
@@ -81,8 +84,9 @@ internal class OnDeviceSpeech(
     synchronized(lock) { session }?.feed(pcm)
   }
 
+  // The session stays current until its final text is in, so a start or cancel meanwhile still ends it.
   suspend fun finish(): String {
-    val current = synchronized(lock) { session.also { session = null } }
+    val current = synchronized(lock) { session }
       ?: throw SpeechFailure("failed", "No on-device dictation is running.")
     return try {
       current.finish()
@@ -90,6 +94,8 @@ internal class OnDeviceSpeech(
       current.cancel()
       if (error is SpeechFailure) throw error
       throw SpeechFailure(current.engine.failureCode(error), error.message ?: "On-device speech failed.", error)
+    } finally {
+      synchronized(lock) { if (session === current) session = null }
     }
   }
 
@@ -101,6 +107,11 @@ internal class OnDeviceSpeech(
     cancel()
     scope.cancel()
     engines.forEach { it.close() }
+  }
+
+  private fun emitIfCurrent(owner: SpeechSession, event: () -> Pair<String, Map<String, Any?>>) {
+    val (name, body) = synchronized(lock) { if (session === owner) event() else null } ?: return
+    sendEvent(name, body)
   }
 
   private fun endSession(): Int {

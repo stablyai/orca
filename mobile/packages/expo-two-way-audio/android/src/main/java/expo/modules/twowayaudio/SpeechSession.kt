@@ -65,20 +65,18 @@ internal class SpeechSession(
   scope: CoroutineScope,
   val engine: OnDeviceSpeechEngine,
   target: SpeechTarget,
-  onText: (Int, String, String) -> Unit
+  onText: (String, String) -> Unit
 ) {
   private val audio = PcmQueue()
-  private var revision = 0
   private var lastText: Pair<String, String>? = null
 
   val result: Deferred<String> = scope.async {
     engine.recognize(target, audio) { committed, tentative ->
-      // Recognizers repeat unchanged hypotheses; a revision is only spent on a visible change.
+      // Recognizers repeat unchanged hypotheses; only a visible change is reported.
       val text = committed to tentative
       if (text != lastText) {
         lastText = text
-        revision += 1
-        onText(revision, committed, tentative)
+        onText(committed, tentative)
       }
     }
   }

@@ -74,7 +74,8 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
     onText: (String, String) -> Unit
   ): String = PacedPcmPipe().use { pipe ->
     val events = Channel<RecognitionEvent>(Channel.UNLIMITED)
-    val recognizer = withContext(Dispatchers.Main) {
+    // Not cancellable: a session cancelled mid-setup must still reach the finally that cancels it.
+    val recognizer = withContext(NonCancellable + Dispatchers.Main) {
       recognizer().apply {
         setRecognitionListener(EventListener(events))
         startListening(recognizeIntent(target.locale).withAudioSource(pipe))
