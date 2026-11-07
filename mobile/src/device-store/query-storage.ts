@@ -123,10 +123,13 @@ export function createOrcaQueryStorage(backend: OrcaQueryStoreBackend): OrcaQuer
     if (ops.length === 0) {
       return
     }
-    const stored = await backend.write(ops).then(
-      (result) => result.written,
-      () => false
-    )
+    // A failed write must not reject: the flush chain would stop every later flush.
+    let stored = false
+    try {
+      stored = (await backend.write(ops)).written
+    } catch {
+      stored = false
+    }
     for (const [key, record] of sent) {
       // After a refusal the next persist of these keys writes again.
       if (stored && record !== null) {
