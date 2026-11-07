@@ -233,6 +233,8 @@ export function useMobileNativeChatController(args: {
         compactInstructions: structuredNativeChat.compactInstructions,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
+        appliesOnAttach: structuredNativeChat.appliesOnAttach,
+        heldPick: structuredNativeChat.heldPick,
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
