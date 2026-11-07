@@ -177,7 +177,7 @@ describe('a tab move drawn from main’s frame', () => {
   it('moves a tab to a split from its menu where main placed it', async () => {
     expect(
       moveTabToNewPaneColumn({ unifiedTabId: 'tab-shell', groupId: 'group-a', direction: 'down' })
-    ).toBe(true)
+    ).toBe('owner')
     await settle()
 
     expect(layoutApplyTestTransport.sentOfType('splitGroup')).toEqual([

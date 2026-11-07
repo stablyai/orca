@@ -49,33 +49,36 @@ export function beginNativeChatSideChatPlacement(
     // Our own selection and move below are not the user's.
     retire()
     const state = useAppStore.getState()
-    state.activateTab(tabId, { worktreeId })
-    // Typing goes to the side chat once its composer shows, wherever it lands below.
-    requestNativeChatComposerFocus(tabId)
     const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
     const fork = tabs.find((tab) => tab.id === tabId)
     const sourceGroupId = tabs.find((tab) => tab.id === sourceTabId)?.groupId
     // Already in another pane, or the source is gone: where it is now is beside enough.
-    if (
-      !fork ||
-      !sourceGroupId ||
-      fork.groupId !== sourceGroupId ||
-      Date.now() - settledAt > SIDE_CHAT_MOVE_MS
-    ) {
-      return
+    const moved =
+      fork &&
+      sourceGroupId &&
+      fork.groupId === sourceGroupId &&
+      Date.now() - settledAt <= SIDE_CHAT_MOVE_MS
+        ? moveBeside(tabId, sourceGroupId)
+        : false
+    // Main selects a tab it moved once its frame shows it there; selecting it first would draw
+    // it, and claim its composer's focus, in the source pane.
+    if (moved !== 'owner') {
+      state.activateTab(tabId, { worktreeId })
     }
-    const layout = state.layoutByWorktree[worktreeId]
+    // Typing goes to the side chat once its composer shows.
+    requestNativeChatComposerFocus(tabId)
+  }
+  const moveBeside = (tabId: string, sourceGroupId: string): 'owner' | 'moved' | false => {
+    const layout = useAppStore.getState().layoutByWorktree[worktreeId]
     const sibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
-    if (sibling) {
-      moveTabToGroup({ worktreeId, unifiedTabId: tabId, groupId: sibling })
-    } else {
-      moveTabToNewPaneColumn({
-        worktreeId,
-        unifiedTabId: tabId,
-        groupId: sourceGroupId,
-        direction: 'right'
-      })
-    }
+    return sibling
+      ? moveTabToGroup({ worktreeId, unifiedTabId: tabId, groupId: sibling })
+      : moveTabToNewPaneColumn({
+          worktreeId,
+          unifiedTabId: tabId,
+          groupId: sourceGroupId,
+          direction: 'right'
+        })
   }
   const lookUp = (): void => {
     const tab = chat && findStructuredLaunchTab({ worktreeId, ...chat })

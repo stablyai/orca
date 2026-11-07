@@ -52,7 +52,7 @@ export function moveTabToNewPaneColumn(args: {
   unifiedTabId: string
   groupId: string
   direction: TabSplitDirection
-}): boolean {
+}): 'owner' | 'moved' | false {
   const state = useAppStore.getState()
   const worktreeId =
     args.worktreeId ??
@@ -76,7 +76,7 @@ export function moveTabToNewPaneColumn(args: {
       direction: args.direction
     })
   ) {
-    return true
+    return 'owner'
   }
   const moved = state.dropUnifiedTab(args.unifiedTabId, {
     groupId: args.groupId,
@@ -91,7 +91,7 @@ export function moveTabToNewPaneColumn(args: {
       splitDirection: args.direction
     })
   }
-  return moved
+  return moved ? 'moved' : false
 }
 
 /** Moves a tab into another pane as dropping it there does: main draws it ('owner'), or this window

@@ -166,3 +166,14 @@ it('does no work once placed', () => {
   expect({ lookups: mocks.lookups, selectionReads: mocks.selectionReads }).toEqual(before)
   expect(mocks.activateTab).toHaveBeenCalledTimes(1)
 })
+
+it('leaves selecting a tab main moves to the frame that shows it moved', () => {
+  mocks.moveTabToGroup.mockReturnValueOnce('owner')
+  beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
+
+  publishSideChat()
+
+  expect(mocks.moveTabToGroup).toHaveBeenCalled()
+  expect(mocks.activateTab).not.toHaveBeenCalled()
+  expect(mocks.focusComposer).toHaveBeenCalledWith('tab-side')
+})
