@@ -61,10 +61,17 @@ export function subscribeMobileTerminalSafely(
 export function noteTerminalStreamTakeover(
   data: Readonly<Record<string, unknown>>,
   handle: string,
-  replacedHandles: Set<string>
+  replacedHandles: { current: Set<string> },
+  activeHandle: { current: string | null },
+  activeAtSubscribe: string | null
 ): void {
-  if (data.type === 'end' && data.reason === 'replaced') {
-    replacedHandles.add(handle)
+  // A tab switch since subscribe already cleared markers; a late event must not re-add one.
+  if (
+    activeHandle.current === activeAtSubscribe &&
+    data.type === 'end' &&
+    data.reason === 'replaced'
+  ) {
+    replacedHandles.current.add(handle)
   }
 }
 

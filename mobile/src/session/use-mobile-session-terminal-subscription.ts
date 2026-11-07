@@ -71,12 +71,12 @@ export function useMobileSessionTerminalSubscription(
       }
       // Another surface of this phone holds the stream; taking it back would start an eviction loop.
       if (replacedHandlesRef.current.has(handle)) {
-        logSkippedGate('replaced-by-sibling')
         return false
       }
+      const wasActive = activeHandleRef.current
       const covered = nativeChatTerminalStream.isTerminalCoveredByNativeChat(
         showNativeChatRef.current,
-        activeHandleRef.current,
+        wasActive,
         handle
       )
       // Covered chat can hold a lease without a mounted WebView; gate readiness only for rendered terminals.
@@ -152,7 +152,7 @@ export function useMobileSessionTerminalSubscription(
           const data = result as Record<string, unknown>
           diagnostics.firstStreamEvent(handle, seq, data.type)
           if (data.type === 'end' || data.type === 'error') {
-            noteTerminalStreamTakeover(data, handle, replacedHandlesRef.current)
+            noteTerminalStreamTakeover(data, handle, replacedHandlesRef, activeHandleRef, wasActive)
             lifetime.end()
             return
           }

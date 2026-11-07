@@ -40,14 +40,10 @@ export function useMobileNativeChatTerminalStream(args: {
   } | null>(null)
   const [webReadyRevision, setWebReadyRevision] = useState(0)
   const [rearmBudgetRevision, setRearmBudgetRevision] = useState(0)
-  const forgetRearmState = useCallback(
-    (handle: string) => {
-      rearmAttemptsRef.current.delete(handle)
-      absentSinceExhaustionRef.current.delete(handle)
-      args.replacedRef.current.delete(handle)
-    },
-    [args.replacedRef]
-  )
+  const forgetRearmState = useCallback((handle: string) => {
+    rearmAttemptsRef.current.delete(handle)
+    absentSinceExhaustionRef.current.delete(handle)
+  }, [])
   const cancelHealthyStreamProof = useCallback(() => {
     if (healthyStreamProofRef.current) {
       clearTimeout(healthyStreamProofRef.current.timer)
@@ -103,8 +99,8 @@ export function useMobileNativeChatTerminalStream(args: {
     const handle = args.activeHandle
     const previousHandle = reconciledHandleRef.current
     if (previousHandle != null && previousHandle !== handle) {
-      // Leaving a tab is the user's cue; coming back may take the stream again.
-      args.replacedRef.current.delete(previousHandle)
+      // Leaving a tab is the user's cue; coming back may take the stream again, split companions included.
+      args.replacedRef.current.clear()
     }
     reconciledHandleRef.current = handle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
