@@ -887,7 +887,7 @@
 1 src/renderer/src/components/settings/chat/NativeChatInlineVisualsSetting.tsx
 7 src/renderer/src/components/settings/chat/NativeChatShellEnvironmentSetting.tsx
 10 src/renderer/src/components/settings/cli/install/CliRegistrationDialog.tsx
-16 src/renderer/src/components/settings/cli/install/CliSection.tsx
+15 src/renderer/src/components/settings/cli/install/CliSection.tsx
 22 src/renderer/src/components/settings/cli/install/WslCliRegistration.tsx
 22 src/renderer/src/components/settings/computer-use/ComputerUsePane.tsx
 2 src/renderer/src/components/settings/computer-use/ComputerUseSkillSetupPanel.tsx
@@ -1062,7 +1062,7 @@
 10 src/renderer/src/components/settings/tasks/TasksPane.tsx
 26 src/renderer/src/components/settings/terminal/TerminalAdvancedSection.tsx
 37 src/renderer/src/components/settings/terminal/TerminalInteractionSection.tsx
-21 src/renderer/src/components/settings/terminal/TerminalPane.tsx
+22 src/renderer/src/components/settings/terminal/TerminalPane.tsx
 25 src/renderer/src/components/settings/terminal/TerminalWindowSection.tsx
 20 src/renderer/src/components/settings/terminal/appearance/TerminalAdvancedTypographyControls.tsx
 5 src/renderer/src/components/settings/terminal/appearance/TerminalAppearanceSection.tsx
