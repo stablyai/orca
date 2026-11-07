@@ -1,6 +1,7 @@
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type {
   HostedReviewInfo,
@@ -63,7 +64,8 @@ export {
 export function getWorkspaceCleanupReviewInfo(
   candidate: WorkspaceCleanupCandidate,
   state: WorkspaceCleanupRendererStateInputs,
-  lookup: WorkspaceCleanupReviewLookup = buildWorkspaceCleanupReviewLookup(state)
+  lookup: WorkspaceCleanupReviewLookup = buildWorkspaceCleanupReviewLookup(state),
+  t?: Translate
 ): WorkspaceCleanupReviewInfo {
   const repo = findWorkspaceCleanupCandidateRepo(candidate, lookup.reposById)
   const worktree = findCandidateWorktree(candidate, repo, lookup)
@@ -84,7 +86,7 @@ export function getWorkspaceCleanupReviewInfo(
     }
   }
 
-  const linkedReview = getLinkedReviewFallback(worktree)
+  const linkedReview = getLinkedReviewFallback(worktree, t)
   if (linkedReview) {
     return {
       hasReview: true,
@@ -184,7 +186,10 @@ function findCandidateWorktree(
   return legacyMatches.length === 1 && repo && repoMatches.length === 1 ? legacyMatches[0] : null
 }
 
-function getLinkedReviewFallback(worktree: Worktree | null): {
+function getLinkedReviewFallback(
+  worktree: Worktree | null,
+  t: Translate = translate
+): {
   label: string
   provider: HostedReviewProvider
 } | null {
@@ -193,7 +198,7 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
   }
   if (worktree.linkedGitLabMR != null) {
     return {
-      label: translate(
+      label: t(
         'components.workspace.cleanup.presentation.gitlabMergeRequestNumber',
         'MR #{{value0}}',
         { value0: worktree.linkedGitLabMR }
@@ -203,7 +208,7 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
   }
   if (worktree.linkedPR != null) {
     return {
-      label: translate(
+      label: t(
         'components.workspace.cleanup.presentation.githubPullRequestNumber',
         'PR #{{value0}}',
         { value0: worktree.linkedPR }
