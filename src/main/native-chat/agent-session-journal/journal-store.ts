@@ -44,10 +44,7 @@ import type {
 } from './durable-rows/journal-row-schema'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { JournalWriteQueue } from './writing/journal-write-queue'
-import {
-  journalItemExecutionFence,
-  journalItemProvenance
-} from './projection/journal-item-provenance'
+import * as provenance from './projection/journal-item-provenance'
 import { createJournalStoreCollaborators } from './store-lifecycle/journal-store-collaborators'
 import { journalThreadGoalSource } from './projection/journal-thread-goal-source'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
@@ -246,10 +243,11 @@ export class AgentSessionJournal {
   lastActivityAt = (): number => this.state.lastActivityAt
 
   /** Prefer later execution ownership for reusable children, otherwise creation provenance. */
-  itemFence = (itemId: string): number | undefined => journalItemExecutionFence(this.state, itemId)
+  itemFence = (itemId: string): number | undefined =>
+    provenance.journalItemExecutionFence(this.state, itemId)
 
   /** Preserve both provenance fields during rebuild. */
-  itemProvenance = (itemId: string) => journalItemProvenance(this.state, itemId)
+  itemProvenance = (itemId: string) => provenance.journalItemProvenance(this.state, itemId)
 
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
@@ -272,7 +270,7 @@ export class AgentSessionJournal {
   presentationRemoved = (itemId: string): boolean =>
     journalInput.journalInputPresentationRemoved(this.state, itemId)
 
-  canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
+  canonicalItemId = (itemId: string) => resolveJournalItemId(this.state, itemId)
   readonly reads: AgentSessionJournalReads = foldedJournalReads(this, () => this.state)
 
   /** Read after all preceding writes and before later ones. */
@@ -297,6 +295,9 @@ export class AgentSessionJournal {
 
   appendShutdownCut = (input: contracts.JournalShutdownCutInput) =>
     this.itemAppender.appendShutdownCut(input)
+
+  openCommand = (input: contracts.JournalCommandOpenInput) =>
+    this.submissionWriter.openCommand(input)
 
   settleCommand = (input: contracts.JournalCommandSettlementInput) =>
     this.submissionWriter.settleCommand(input)

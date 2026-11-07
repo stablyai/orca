@@ -18,9 +18,11 @@ import { AgentSessionJournalError } from './writing/journal-write-guards'
 import type {
   JournalLateDispatchInput,
   JournalShutdownCutInput,
-  JournalCommandSettlementInput
+  JournalCommandSettlementInput,
+  JournalCommandOpenInput
 } from './journal-store-contracts'
 import type { JournalWriterSettled } from './journal-writer-operations'
+import type { JournalCommandOpenResult } from './writing/journal-command-open'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 
 /** Queue commands join this surface after their ordered-list owner has landed. */
@@ -37,6 +39,7 @@ export type JournalSqlStoreOperation =
           | 'late-dispatch'
           | 'shutdown-cut'
           | 'command-settle'
+          | 'command-open'
           | 'stop'
           | 'context-clear'
           | 'context-rewind'
@@ -175,6 +178,15 @@ export class SqlAgentSessionJournal {
 
   async appendShutdownCut(input: JournalShutdownCutInput): Promise<void> {
     await this.write({ kind: 'shutdown-cut', input })
+  }
+
+  async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
+    const { value } = await this.write({ kind: 'command-open', input })
+    const result = value as JournalWriterSettled<JournalCommandOpenResult>
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
+    return result.value
   }
 
   async settleCommand(input: JournalCommandSettlementInput): Promise<void> {

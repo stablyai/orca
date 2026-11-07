@@ -22,8 +22,10 @@ import type {
   JournalSubmissionInput,
   JournalLateDispatchInput,
   JournalCommandSettlementInput,
+  JournalCommandOpenInput,
   ResolveDispatchInput
 } from '../journal-store-contracts'
+import { openJournalCommand } from '../writing/journal-command-open'
 import { settleJournalCommand } from '../writing/journal-command-settlement'
 import type { JournalLifecycleBatchAppender } from '../writing/journal-lifecycle-batch-appender'
 
@@ -40,6 +42,9 @@ export type JournalSubmissionWriterDeps = {
 
 export class JournalSubmissionWriter {
   constructor(private readonly deps: JournalSubmissionWriterDeps) {}
+
+  openCommand = (input: JournalCommandOpenInput) =>
+    openJournalCommand({ ...this.deps, writer: this.deps.rowWriter }, input)
 
   settleCommand = (input: JournalCommandSettlementInput) =>
     settleJournalCommand({ ...this.deps, writer: this.deps.rowWriter }, input)

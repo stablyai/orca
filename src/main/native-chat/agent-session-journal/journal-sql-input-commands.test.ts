@@ -675,3 +675,52 @@ it('settles unsent commands against current turns and keeps dispatch when lifecy
     }
   }
 })
+
+it('opens command turns from the committed handover and retains it when the turn write fails', async () => {
+  const side = await sides()
+  for (const id of ['opened', 'opening-failed']) {
+    const input = { clientMessageId: id, payloadFingerprint: id, body: text(id), fence: 1 }
+    await both(side, (j) => j.submissionWriter.append(input), { kind: 'submission', input })
+    const turn = structuredAgentSessionCommandTurn(id)
+    if (id === 'opening-failed') {
+      for (const db of [side.memoryDb, side.sqlDb]) {
+        db.exec(`CREATE TRIGGER fail_command_open BEFORE INSERT ON journal_outcomes
+          WHEN NEW.field='items' AND NEW.entry_key='"orca:command-turn%3Aopening-failed"'
+          BEGIN SELECT RAISE(ABORT, 'opening failed'); END`)
+      }
+    }
+    const opening = {
+      clientMessageId: id,
+      submittedAt: 10,
+      fence: 1,
+      turnScope: { kind: 'thread' as const }
+    }
+    const result = await both(
+      side,
+      (j) =>
+        j.submissionWriter.openCommand(opening).then(
+          (value) => ({ value }),
+          (error: unknown) => ({ failure: journalSqlFailure(error) })
+        ),
+      { kind: 'command-open', input: opening }
+    )
+    expect(side.memory.state().submissions.get(id)).toMatchObject({
+      handedOverAt: 1_000,
+      dispatchState: 'pending'
+    })
+    if (id === 'opened') {
+      expect(result).toMatchObject({
+        value: {
+          value: { turn, running: { requestedAt: 1_000, startedAt: 1_000, state: 'running' } }
+        }
+      })
+      expect(side.memory.state().items.get(turn.itemId)?.body).toMatchObject({
+        requestedAt: 1_000,
+        startedAt: 1_000
+      })
+    } else {
+      expect(result).toMatchObject({ value: { failure: { message: 'opening failed' } } })
+      expect(side.memory.state().items.has(turn.itemId)).toBe(false)
+    }
+  }
+})

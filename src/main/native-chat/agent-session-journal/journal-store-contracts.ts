@@ -169,6 +169,11 @@ export type JournalShutdownCutInput = {
   fence: number
 }
 
+export type JournalCommandOpenInput = Pick<
+  Extract<ResolveDispatchInput, { state: 'pending' }>,
+  'clientMessageId' | 'fence' | 'turnScope'
+> & { submittedAt: number }
+
 export type JournalCommandSettlementInput = {
   dispatch: Extract<ResolveDispatchInput, { state: 'rejected' | 'unknown' }>
   failureBody?: Extract<AgentJournalItemBody, { kind: 'status' }>

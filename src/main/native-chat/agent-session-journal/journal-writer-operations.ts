@@ -19,6 +19,7 @@ import type {
   JournalLateDispatchInput,
   JournalShutdownCutInput,
   JournalCommandSettlementInput,
+  JournalCommandOpenInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   ResolveDispatchInput
@@ -61,6 +62,7 @@ export type JournalWriterInputOperation =
   | { kind: 'late-dispatch'; input: JournalLateDispatchInput }
   | { kind: 'shutdown-cut'; input: JournalShutdownCutInput }
   | { kind: 'command-settle'; input: JournalCommandSettlementInput }
+  | { kind: 'command-open'; input: JournalCommandOpenInput }
   | {
       kind: 'queue-insert'
       input: {
@@ -109,7 +111,7 @@ export type JournalWriterInputOperation =
 
 /** Recovery tries every send; earlier settlements stay committed when a later one fails, as they
  *  do on the host, so a failure is part of the answer rather than a rollback. */
-export type JournalWriterSettled = { value: unknown } | { failure: JournalSqlFailure }
+export type JournalWriterSettled<T = unknown> = { value: T } | { failure: JournalSqlFailure }
 
 /** Runs one command's operation; `receipt` carries the host-computed effects into its row transaction. */
 export async function runJournalWriterOperation(
@@ -138,6 +140,8 @@ export async function runJournalWriterOperation(
       return submissionWriter.settleLate(operation.input)
     case 'shutdown-cut':
       return collaborators.itemAppender.appendShutdownCut(operation.input)
+    case 'command-open':
+      return settled(submissionWriter.openCommand(operation.input))
     case 'command-settle':
       return settled(submissionWriter.settleCommand(operation.input))
     case 'queue-insert':
@@ -281,7 +285,7 @@ export async function runJournalWriterOperation(
   }
 }
 
-function settled(run: Promise<unknown>): Promise<JournalWriterSettled> {
+function settled<T>(run: Promise<T>): Promise<JournalWriterSettled<T>> {
   return run.then(
     (value) => ({ value }),
     (error: unknown) => ({ failure: journalSqlFailure(error) })

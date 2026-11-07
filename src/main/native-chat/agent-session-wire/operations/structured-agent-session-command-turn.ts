@@ -15,10 +15,9 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalMessageItem,
-  type AgentJournalSubmission
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
@@ -28,7 +27,6 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { agentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type {
   AgentSessionCommandAdmission,
@@ -208,29 +206,12 @@ async function openCommandTurn(
   ctx: StructuredAgentSessionCommandHandoverContext,
   submission: AgentJournalSubmission
 ) {
-  const { clientMessageId } = submission
-  const turn = structuredAgentSessionCommandTurn(clientMessageId)
-  await ctx.journal.resolveDispatch({
-    clientMessageId,
-    state: 'pending',
+  return ctx.journal.openCommand({
+    clientMessageId: submission.clientMessageId,
+    submittedAt: submission.submittedAt,
     fence: ctx.fence,
-    // Join only current execution, never ended-generation turns.
     turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   })
-  const startedAt = ctx.now()
-  const running = agentJournalTurnBody({
-    turnId: turn.turnId,
-    state: 'running',
-    userItemId: agentJournalSubmissionKey(clientMessageId),
-    requestedAt: structuredAgentSessionHandoverOrigin(ctx.journal, submission),
-    startedAt
-  })
-  await ctx.journal.appendItem(turn.identity, running, {
-    fence: ctx.fence,
-    observedAt: startedAt,
-    turnScope: AGENT_JOURNAL_THREAD_SCOPE
-  })
-  return { turn, running }
 }
 
 /** Start work timing at handover, excluding waits behind commands/startup. */
