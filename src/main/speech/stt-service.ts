@@ -1,3 +1,4 @@
+import type { MessagePortMain } from 'electron'
 import type { ModelManager } from './model-manager'
 import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { prewarmSttModel } from './stt-session-prewarm'
@@ -55,6 +56,15 @@ export class SttService {
       sampleRate
     })
     return false
+  }
+
+  /** Hands an active on-device session the renderer's port, so its audio skips this process. */
+  attachAudioPort(owner: string, port: MessagePortMain): boolean {
+    const session = this.state.sessions.get(owner)
+    if (session?.phase !== 'active' || !session.engine) {
+      return false
+    }
+    return session.engine.worker.attachAudioPort?.(session.streamId, port) ?? false
   }
 
   stopDictation(owner = 'desktop', options: { discard?: boolean } = {}): Promise<void> {

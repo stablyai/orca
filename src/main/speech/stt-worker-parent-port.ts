@@ -1,11 +1,17 @@
+import type { MessagePortMain } from 'electron'
+
 type UtilityParentPort = {
-  on(event: 'message', listener: (event: { data: unknown }) => void): unknown
+  on(
+    event: 'message',
+    listener: (event: { data: unknown; ports: MessagePortMain[] }) => void
+  ): unknown
   postMessage(message: unknown): void
 }
 
 export type SttWorkerParentPort = {
   post(message: unknown): void
-  onMessage(listener: (message: unknown) => void): void
+  /** Only a utility process receives ports. */
+  onMessage(listener: (message: unknown, ports: readonly MessagePortMain[]) => void): void
 }
 
 /** Electron's utility process (desktop) or a forked child (orcad). */
@@ -15,7 +21,8 @@ export function connectSttWorkerParentPort(): SttWorkerParentPort {
   if (utilityPort) {
     return {
       post: (message) => utilityPort.postMessage(message),
-      onMessage: (listener) => utilityPort.on('message', (event) => listener(event.data))
+      onMessage: (listener) =>
+        utilityPort.on('message', (event) => listener(event.data, event.ports))
     }
   }
   if (!process.send) {
@@ -25,6 +32,6 @@ export function connectSttWorkerParentPort(): SttWorkerParentPort {
   process.on('disconnect', () => process.exit(0))
   return {
     post: (message) => process.send?.(message),
-    onMessage: (listener) => process.on('message', listener)
+    onMessage: (listener) => process.on('message', (message) => listener(message, []))
   }
 }

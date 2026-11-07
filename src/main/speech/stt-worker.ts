@@ -1,4 +1,6 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
+import type { MessagePortMain } from 'electron'
+import type { SpeechAudioPortMessage } from '../../shared/speech-types'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 import { buildRecognizerConfig } from './stt-worker-model-config'
@@ -17,6 +19,13 @@ type SessionStream = {
   lastPartialText: string
 }
 
+// A desktop renderer's audio for one stream, posted straight here instead of through main.
+type AudioPortInput = {
+  port: MessagePortMain
+  ended: boolean
+  onEnded: (() => void) | null
+}
+
 const parentPort = connectSttWorkerParentPort()
 // Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
 let sherpa: any = null
@@ -24,6 +33,7 @@ let recognizer: any = null
 let isStreaming = false
 let modelSampleRate = 16000
 const streams = new Map<string, SessionStream>()
+const audioPorts = new Map<string, AudioPortInput>()
 
 function loadSherpa(modulePath: string | undefined): any {
   if (!modulePath) {
@@ -155,7 +165,42 @@ function finishStream(stream: SessionStream): string {
   return remaining && remaining.length > 0 ? decodeOfflineChunk(remaining) : ''
 }
 
+function attachAudioPort(streamId: string, port: MessagePortMain | undefined): void {
+  if (!port) {
+    return
+  }
+  const input: AudioPortInput = { port, ended: false, onEnded: null }
+  // The renderer closes its end after 'end'; a close alone means it went away.
+  const end = (): void => {
+    if (input.ended) {
+      return
+    }
+    input.ended = true
+    port.close()
+    input.onEnded?.()
+  }
+  port.on('message', ({ data }) => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the desktop preload holds the other end, and it sends SpeechAudioPortMessage.
+    const msg = data as SpeechAudioPortMessage
+    if (msg.type === 'end') {
+      end()
+    } else {
+      handleFeed({ type: 'feed', streamId, samples: msg.samples, sampleRate: msg.sampleRate })
+    }
+  })
+  port.on('close', end)
+  audioPorts.set(streamId, input)
+  port.start()
+}
+
 function handleStop(streamId: string): void {
+  const input = audioPorts.get(streamId)
+  // Main's stop can overtake the renderer's last frames on the port; finish only after them.
+  if (input && !input.ended) {
+    input.onEnded = () => handleStop(streamId)
+    return
+  }
+  audioPorts.delete(streamId)
   const stream = streams.get(streamId)
   streams.delete(streamId)
   try {
@@ -172,11 +217,13 @@ function handleStop(streamId: string): void {
 
 // A canceled dictation drops its audio undecoded.
 function handleDiscard(streamId: string): void {
+  audioPorts.get(streamId)?.port.close()
+  audioPorts.delete(streamId)
   streams.delete(streamId)
   parentPort.post({ type: 'stopped', streamId })
 }
 
-parentPort.onMessage((message) => {
+parentPort.onMessage((message, ports) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends WorkerMessage.
   const msg = message as WorkerMessage
   switch (msg.type) {
@@ -191,6 +238,9 @@ parentPort.onMessage((message) => {
       break
     case 'discard':
       handleDiscard(msg.streamId)
+      break
+    case 'attach-audio':
+      attachAudioPort(msg.streamId, ports[0])
       break
   }
 })
