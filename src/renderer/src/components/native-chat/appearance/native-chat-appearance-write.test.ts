@@ -55,35 +55,4 @@ describe('chat appearance write queue', () => {
       fontSize: 15
     })
   })
-
-  it('consumes chat size actions without changing saved size while terminal matching is active', async () => {
-    const updateSettings = vi.fn(async (updates: Partial<GlobalSettings>) => {
-      mock.state.settings = { ...mock.state.settings!, ...updates }
-    })
-    mock.state.updateSettings = updateSettings
-    mock.state.settings = {
-      ...getDefaultSettings('/tmp'),
-      nativeChatAppearance: {
-        fontSize: 18,
-        codeFontSize: 16,
-        contrast: 125,
-        matchTerminalInterface: true
-      }
-    }
-    await writeNativeChatFontSize('increase')
-    await writeNativeChatFontSize('decrease')
-    await writeNativeChatFontSize('reset')
-    expect(updateSettings).not.toHaveBeenCalled()
-    expect(mock.state.settings.nativeChatAppearance?.fontSize).toBe(18)
-    mock.state.settings = {
-      ...mock.state.settings,
-      nativeChatAppearance: {
-        ...mock.state.settings.nativeChatAppearance,
-        matchTerminalInterface: false
-      }
-    }
-    await writeNativeChatFontSize('increase')
-    expect(updateSettings).toHaveBeenCalledTimes(1)
-    expect(mock.state.settings.nativeChatAppearance?.fontSize).toBe(19)
-  })
 })

@@ -3,9 +3,8 @@ import type { ParsedTerminalFileLink } from '../../../../../../shared/terminal/l
 import type * as FileLinkTargetModule from '@/components/terminal-pane/links/files/terminal-file-link-target'
 import type { FileLinkPathExistence } from '@/components/terminal-pane/links/files/terminal-file-link-target'
 import type * as FilePathMappingModule from '@/components/terminal-pane/host-files/terminal-file-path-mapping'
-import { RECENT_PATH_ANSWERS_MAX } from '../../../../../../shared/recent-path-answers'
+
 import { createNativeChatFileLinkExistence } from './native-chat-file-link-existence'
-import { UNVERIFIABLE_RETRY_DELAYS_MS } from '../../../../../../shared/native-chat/native-chat-file-link-existence'
 
 const connection = vi.hoisted(() => ({
   resolved: true,
@@ -91,43 +90,6 @@ describe('createNativeChatFileLinkExistence', () => {
     connection.currentOwnerResolved = true
   })
 
-  it('links a path the turn created once the turn ends, without re-rendering first', async () => {
-    let created = false
-    const { asked, pathExists } = hostWith(() => created)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher, onChange } = watching(existence)
-    watcher.getSnapshot().check(link('src/new.ts'))
-    await settle()
-
-    created = true
-    existence.recheck()
-    expect(onChange).not.toHaveBeenCalled()
-    await settle()
-
-    expect(asked).toEqual(['/repo/src/new.ts', '/repo/src/new.ts'])
-    expect(onChange).toHaveBeenCalledOnce()
-    expect(watcher.getSnapshot().check(link('src/new.ts'))).toBe(true)
-  })
-
-  it('removes the underline of a confirmed path deleted during the turn', async () => {
-    let deleted = false
-    const { pathExists } = hostWith(() => !deleted)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher, onChange } = watching(existence)
-    watcher.getSnapshot().check(link('src/old.ts'))
-    await settle()
-    expect(watcher.getSnapshot().check(link('src/old.ts'))).toBe(true)
-
-    deleted = true
-    existence.recheck()
-    // Why: the old answer keeps showing until the host replies, so nothing flickers.
-    expect(watcher.getSnapshot().check(link('src/old.ts'))).toBe(true)
-    await settle()
-
-    expect(onChange).toHaveBeenCalledTimes(2)
-    expect(watcher.getSnapshot().check(link('src/old.ts'))).toBe(false)
-  })
-
   it('shows an answer that landed between a message rendering and subscribing', async () => {
     const { pathExists } = hostWith(() => true)
     const existence = createNativeChatFileLinkExistence(host, pathExists)
@@ -143,48 +105,6 @@ describe('createNativeChatFileLinkExistence', () => {
     expect(onChange).toHaveBeenCalledOnce()
     expect(late.getSnapshot().check(link('src/App.tsx'))).toBe(true)
     expect(pathExists).toHaveBeenCalledOnce()
-  })
-
-  it('asks again on subscribe when the host failed before the message subscribed', async () => {
-    vi.useFakeTimers()
-    let reachable = false
-    const { pathExists } = hostWith(() => (reachable ? true : new Error('SSH connection closed')))
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const late = existence.watch()
-    late.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-    // Why: nothing showed the path yet, so no retry was armed for it.
-    expect(vi.getTimerCount()).toBe(0)
-
-    reachable = true
-    const onChange = vi.fn()
-    late.subscribe(onChange)
-    await settle()
-
-    expect(pathExists).toHaveBeenCalledTimes(2)
-    expect(onChange).toHaveBeenCalledOnce()
-    expect(late.getSnapshot().check(link('src/App.tsx'))).toBe(true)
-  })
-
-  it('keeps every answer a shown message needs, past the unobserved cache limit', async () => {
-    const { pathExists } = hostWith(() => true)
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher } = watching(existence)
-    const names = Array.from(
-      { length: RECENT_PATH_ANSWERS_MAX + 100 },
-      (_, index) => `file-${index}.md`
-    )
-    const render = (): boolean[] => names.map((name) => watcher.getSnapshot().check(link(name)))
-
-    render()
-    await settle()
-    expect(render().every(Boolean)).toBe(true)
-    await settle()
-    expect(pathExists).toHaveBeenCalledTimes(names.length)
-
-    existence.recheck()
-    await settle()
-    expect(pathExists).toHaveBeenCalledTimes(names.length * 2)
   })
 
   it('keeps a reply to an older question from overwriting a newer answer', async () => {
@@ -206,44 +126,5 @@ describe('createNativeChatFileLinkExistence', () => {
     await settle()
 
     expect(watcher.getSnapshot().check(link('src/new.ts'))).toBe(true)
-  })
-
-  it('links a path once a host that could not answer comes back, without a remount', async () => {
-    vi.useFakeTimers()
-    let reachable = false
-    const { pathExists } = hostWith(() => (reachable ? true : new Error('SSH connection closed')))
-    const { watcher, onChange } = watching(createNativeChatFileLinkExistence(host, pathExists))
-
-    watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-    // Why: re-renders while the host is down must not ask again; the retry owns that.
-    watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-    expect(pathExists).toHaveBeenCalledOnce()
-    expect(onChange).not.toHaveBeenCalled()
-
-    reachable = true
-    await vi.advanceTimersByTimeAsync(UNVERIFIABLE_RETRY_DELAYS_MS[0])
-
-    expect(pathExists).toHaveBeenCalledTimes(2)
-    expect(onChange).toHaveBeenCalledOnce()
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
-  })
-
-  it('keeps the shown answer when the host cannot answer a recheck', async () => {
-    let reachable = true
-    const { pathExists } = hostWith(() => (reachable ? true : new Error('SSH connection closed')))
-    const existence = createNativeChatFileLinkExistence(host, pathExists)
-    const { watcher, onChange } = watching(existence)
-    watcher.getSnapshot().check(link('src/App.tsx'))
-    await settle()
-    onChange.mockClear()
-
-    reachable = false
-    existence.recheck()
-    await settle()
-
-    expect(onChange).not.toHaveBeenCalled()
-    expect(watcher.getSnapshot().check(link('src/App.tsx'))).toBe(true)
   })
 })

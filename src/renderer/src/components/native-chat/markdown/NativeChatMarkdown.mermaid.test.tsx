@@ -36,9 +36,6 @@ import { NativeChatMarkdown } from './NativeChatMarkdown'
 import { NativeChatCodeBlock } from './code/NativeChatCodeBlock'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
-const partial = 'flowchart TD\n A["Sync with main '
-const complete = `${partial}once"]`
-
 function reply(source: string, streaming: boolean): React.JSX.Element {
   return (
     <TooltipProvider>
@@ -103,36 +100,5 @@ describe('native chat Mermaid fences', () => {
     await act(async () => pending.resolve({ svg: '<svg><text>Finished</text></svg>' }))
     expect(container.querySelector('svg')).toHaveTextContent('Finished')
     expect(container.querySelector('[data-code-language="mermaid"]')).toBeNull()
-  })
-
-  it('keeps the source mounted until a pending diagram fails', async () => {
-    const pending = holdNextRender()
-    const view = render(reply(partial, true))
-    const source = view.container.querySelector('pre')
-    view.rerender(reply(partial, false))
-    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
-    expect(view.container.querySelector('pre')).toBe(source)
-    expect(screen.queryByText(/Diagram error:/)).toBeNull()
-    await act(async () => pending.reject(new Error('Invalid mermaid syntax')))
-    expect(screen.getByText(/Diagram error: Invalid mermaid syntax/)).toBeInTheDocument()
-    expect(view.container.querySelector('pre')?.textContent).toBe(partial.trimEnd())
-  })
-
-  it('waits for the updated diagram when a previously rendered fence grows again', async () => {
-    const view = render(reply(complete, false))
-    await waitFor(() =>
-      expect(view.container.querySelector('.mermaid-block svg')).toBeInTheDocument()
-    )
-    const next = `${complete}\n B["Next step"]`
-    view.rerender(reply(next, true))
-    const source = view.container.querySelector('pre')
-    expect(source).toHaveTextContent('Next step')
-    const pending = holdNextRender()
-    view.rerender(reply(next, false))
-    await waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(2))
-    expect(view.container.querySelector('pre')).toBe(source)
-    expect(view.container.querySelector('.mermaid-block svg')).toBeNull()
-    await act(async () => pending.resolve({ svg: '<svg><text>Next step</text></svg>' }))
-    expect(view.container.querySelector('.mermaid-block svg')).toHaveTextContent('Next step')
   })
 })

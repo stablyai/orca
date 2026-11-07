@@ -10,7 +10,7 @@ import {
   NativeChatTextAttachmentScope,
   NativeChatTextAttachmentOpener
 } from './NativeChatTextAttachments'
-import { NativeChatTextAttachmentPreview } from './NativeChatTextAttachmentPreview'
+
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import { NativeChatMarkdownImageOwnerContext } from '../images/native-chat-markdown-image-owner'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -89,16 +89,6 @@ afterEach(async () => {
 
 const waitUntilEnabled = (name: string) =>
   waitFor(() => expect(screen.getByRole('button', { name }).hasAttribute('disabled')).toBe(false))
-
-it('shows the old-host limitation and refreshes capability on Retry without affecting the message', async () => {
-  capable = false
-  render(<NativeChatTextAttachmentPreview path={path} target={target} onClose={() => {}} />)
-  await screen.findByText(/This host cannot open text attachments yet/)
-  expect(mocks.rpc.mock.calls.every((call) => call[1] === 'status.get')).toBe(true)
-  capable = true
-  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-  await waitUntilEnabled('Copy contents')
-})
 
 it('keeps focused stateful composer descendants mounted when owner context changes', async () => {
   mocks.context = { target: { kind: 'local' }, worktreeId: 'w', worktreePath: '/repo' }

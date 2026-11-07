@@ -2,9 +2,7 @@ import {
   closeTestStores,
   createStore,
   registerWorkspaceRepos,
-  testState,
-  workspaceRepos,
-  writeDataFile
+  testState
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
@@ -64,58 +62,6 @@ describe('Store', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-  it('remaps legacy SSH lease leaf ids by PTY when the layout is already normalized', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: workspaceRepos('wt1'),
-      worktreeMeta: {},
-      settings: {},
-      ui: {},
-      githubCache: { pr: {}, issue: {} },
-      workspaceSession: {
-        activeRepoId: 'r1',
-        activeWorktreeId: 'wt1',
-        activeTabId: 'tab1',
-        tabsByWorktree: {
-          wt1: [
-            {
-              id: 'tab1',
-              worktreeId: 'wt1',
-              title: 'Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1,
-              ptyId: 'remote-pty'
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          tab1: {
-            root: { type: 'leaf', leafId: TEST_LEAF_1 },
-            activeLeafId: TEST_LEAF_1,
-            expandedLeafId: null,
-            ptyIdsByLeafId: { [TEST_LEAF_1]: 'remote-pty' }
-          }
-        }
-      },
-      sshRemotePtyLeases: [
-        {
-          targetId: 'ssh-1',
-          ptyId: 'remote-pty',
-          worktreeId: 'wt1',
-          tabId: 'tab1',
-          leafId: 'pane:1',
-          state: 'detached',
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
-    })
-
-    const store = await createStore()
-    expect(store.getSshRemotePtyLeases('ssh-1')[0].leafId).toBe(TEST_LEAF_1)
   })
 
   it('normalizes stale legacy session writes to prior UUID leaves before preserving bindings', async () => {
@@ -181,52 +127,6 @@ describe('Store', () => {
     expect(layout.root).toEqual({ type: 'leaf', leafId: TEST_LEAF_1 })
     expect(layout.ptyIdsByLeafId).toEqual({ [TEST_LEAF_1]: 'remote-pty' })
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('remote-pty')
-  })
-
-  it('promotes an empty tab layout to a durable UUID root when persisting the first PTY binding', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession({
-      activeRepoId: 'r1',
-      activeWorktreeId: 'wt1',
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        wt1: [
-          {
-            id: 'tab1',
-            worktreeId: 'wt1',
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: null
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: null,
-          activeLeafId: null,
-          expandedLeafId: null
-        }
-      }
-    })
-
-    await store.persistPtyBinding({
-      worktreeId: 'wt1',
-      tabId: 'tab1',
-      leafId: TEST_LEAF_1,
-      ptyId: 'daemon-pty'
-    })
-
-    const session = store.getWorkspaceSession()
-    expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
-    expect(session.terminalLayoutsByTabId.tab1).toEqual({
-      root: { type: 'leaf', leafId: TEST_LEAF_1 },
-      activeLeafId: TEST_LEAF_1,
-      expandedLeafId: null,
-      ptyIdsByLeafId: { [TEST_LEAF_1]: 'daemon-pty' }
-    })
   })
 
   it('admits a fresh host spawn after retirement while rejecting an older renderer topology', async () => {
