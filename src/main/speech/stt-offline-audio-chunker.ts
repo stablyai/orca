@@ -18,6 +18,11 @@ export class OfflineAudioChunker {
     this.energyWindowSamples = Math.max(1, Math.round(SPLIT_ENERGY_WINDOW_SECONDS * sampleRate))
   }
 
+  /** Samples pushed but not yet returned. */
+  get heldSamples(): number {
+    return this.bufferedSamples
+  }
+
   /** Return complete bounded chunks as samples arrive. */
   push(samples: Float32Array): Float32Array[] {
     if (samples.length === 0) {

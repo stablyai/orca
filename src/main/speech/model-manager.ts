@@ -1,12 +1,11 @@
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
-import type {
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechModelStatus
-} from '../../shared/speech-types'
+import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
+import { speechEngineForModelFiles } from '../../shared/speech-model-engine'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
+import type { SpeechModelDownload } from './model-download-catalog'
+import { downloadSileroVadInBackground, speechModelDownload } from './speech-vad-model'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
 import {
   getSpeechModelCacheDirCandidates,
@@ -98,7 +97,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return cached
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
@@ -122,7 +121,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private getSafeModelDir(modelId: string, root: string = this.modelsDir): string {
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
@@ -135,7 +134,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     return modelDir
   }
 
-  private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
+  private validateModelFiles(manifest: SpeechModelDownload, modelDir: string): boolean {
     if (!manifest.downloadFiles) {
       return false
     }
@@ -154,11 +153,11 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
-    if (!isLocalSpeechModel(manifest)) {
+    if (manifest.provider !== 'local') {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
@@ -211,6 +210,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
       await rm(modelDir, { recursive: true, force: true })
       await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
+      if (speechEngineForModelFiles(getCatalogModel(modelId)?.files ?? []) === 'transcribe-cpp') {
+        downloadSileroVadInBackground(this)
+      }
     } catch (err) {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
@@ -291,7 +293,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private async downloadModelFiles(
-    manifest: SpeechModelManifest,
+    manifest: SpeechModelDownload,
     stagingDir: string,
     modelId: string,
     isAborted: () => boolean,
