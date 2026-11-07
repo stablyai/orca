@@ -71,6 +71,9 @@ export function ShortcutCommandBlock({
   const showAppendSlot = recordingBindingIndex !== null && recordingBindingIndex >= effective.length
   const isDigitIndex = isDigitIndexActionId(item.id)
   const canEnable = isDisabled && previousBindings.length > 0
+  const showEditorNavigationHint =
+    platform === 'darwin' &&
+    (item.id === 'editor.navigateBack' || item.id === 'editor.navigateForward')
 
   const doubleTapHint = platform === 'darwin' ? '⇧⇧' : '⇧ ⇧'
   const recordingMessage = translate(
@@ -292,6 +295,15 @@ export function ShortcutCommandBlock({
           {hasBinding ? recorderFor(effective[0], 0) : null}
         </div>
       </div>
+
+      {showEditorNavigationHint ? (
+        <p className="px-2 text-xs text-muted-foreground">
+          {translate(
+            'settings.shortcuts.editorNavigationIndentationHint',
+            'The default macOS navigation shortcut replaces an editor indentation shortcut. Click the shortcut to remap it, or disable this command to restore indentation.'
+          )}
+        </p>
+      ) : null}
 
       {helperMessage ? (
         <span

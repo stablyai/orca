@@ -120,6 +120,9 @@ const STATIC_TITLE_COPY = {
   'editor.previousChange': () =>
     translate('keybindings.title.editorPreviousChange', 'Go to Previous Change'),
   'editor.nextChange': () => translate('keybindings.title.editorNextChange', 'Go to Next Change'),
+  'editor.navigateBack': () => translate('keybindings.title.editorNavigateBack', 'Go Back'),
+  'editor.navigateForward': () =>
+    translate('keybindings.title.editorNavigateForward', 'Go Forward'),
   'editor.addReviewNote': () =>
     translate('keybindings.title.editorAddReviewNote', 'Add Review Note'),
   'sourceControl.sendReviewNotes': () =>
