@@ -1,3 +1,4 @@
+import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionState } from './types'
 
@@ -54,9 +55,7 @@ export class RpcClientConnectionState {
       this.lastConnectedAt = Date.now()
       this.resolveWaiters()
     } else if (next === 'disconnected' || next === 'auth-failed') {
-      this.rejectWaiters(
-        next === 'auth-failed' ? 'Unauthorized — pairing may be revoked' : 'Connection closed'
-      )
+      this.rejectWaiters(next === 'auth-failed' ? AUTH_REJECTED : 'Connection closed')
     }
     for (const listener of this.listeners) {
       listener(next)

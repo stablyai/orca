@@ -10,11 +10,6 @@ export const journalSqlSubmissionMemberTables = {
     id: 'input_id',
     counter: 'entered_inputs'
   },
-  'order.overrides': {
-    table: 'journal_proj_send_overrides',
-    id: 'input_id',
-    counter: 'send_overrides'
-  },
   'evidence.recoverable': {
     table: 'journal_proj_recoverable_inputs',
     id: 'input_id',

@@ -30,8 +30,8 @@ import type {
   IpcPtyTransportOptions,
   PtyTransport
 } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
-import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
-import { makeTab } from '../../src/renderer/src/store/slices/store-session-test-harness'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeTab } from '../../src/renderer/src/store/terminals/terminal-tab.test-fixture'
 import {
   existsSyncMock,
   wslUncDirectoryExistsAsyncMock
@@ -55,10 +55,13 @@ vi.mock('react', async (importOriginal) => ({
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
-vi.mock('@/components/terminal-pane/terminal-pane-recovery', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requestTerminalPaneRecovery: vi.fn(async () => true)
-}))
+vi.mock(
+  '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    requestTerminalPaneRecovery: vi.fn(async () => true)
+  })
+)
 vi.mock('@/components/terminal-pane/pty-transport/ipc/pty-transport', () => ({
   createIpcPtyTransport: (options: IpcPtyTransportOptions) => {
     mountedOptions = options

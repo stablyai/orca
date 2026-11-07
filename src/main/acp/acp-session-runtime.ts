@@ -270,7 +270,7 @@ export class AcpSessionRuntime {
     return this.started.sessionId
   }
 
-  private call<T>(
+  protected call<T>(
     method: string,
     params: unknown,
     schema: z.ZodType<T>,

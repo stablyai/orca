@@ -1,47 +1,32 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalIndexedInputCard } from './input-order/journal-input-card-index'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
-import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
-import type { DerivedQueuePause } from './queued-messages/queued-message-pause'
 
 export type JournalInputOrderFacts = {
   recoveryOwed: JournalKeyedSet<string>
   queued: JournalKeyedMap<string, AgentJournalSubmission>
   entered: JournalKeyedMap<string, AgentJournalSubmission>
-  overrides: JournalKeyedMap<string, AgentJournalSubmission>
   firstQueued: () => AgentJournalSubmission | undefined
-  explicitSend: () => AgentJournalSubmission | undefined
   enteredSubmissions: () => Iterable<AgentJournalSubmission>
   recoveryOwedIds: () => Iterable<string>
-  reconstructing: boolean
   receiptCount: number
   queueRevision: number
   revision: number
 }
 
 export type JournalInputCardFacts = {
-  current: JournalKeyedMap<string, QueuedMessageRow>
-  indexed: JournalKeyedMap<string, JournalIndexedInputCard>
-  unintroduced: JournalKeyedSet<string>
   overlays: JournalKeyedMap<string, QueuedMessageRow>
-  cleared: JournalKeyedSet<string>
-  currentCards: () => Iterable<QueuedMessageRow>
   overlayCards: () => Iterable<QueuedMessageRow>
-  unintroducedIds: () => Iterable<string>
   replaceOverlays: (cards: Map<string, QueuedMessageRow>) => void
-  replaceClearMembers: (ids: readonly string[]) => void
-  currentRevision: number
-  initialized: boolean
   overlayRows: readonly QueuedMessageRow[]
-  pauseKey: readonly unknown[]
-  /** Whether pause inputs equal the stored key; memory compares the reducer's own objects. */
-  pauseKeyMatches: (inputs: readonly unknown[]) => boolean
+  revision: number
+  initialized: boolean
+  /** Lowest and highest position any row has held, for append and send-now placement. */
+  firstPosition: number
+  lastPosition: number
   floor: AgentJournalCursor | null
-  pauses: readonly DerivedQueuePause[]
-  failed: boolean
 }
 
 export type JournalInputObservationFacts = {
@@ -71,6 +56,7 @@ export type JournalInputEvidenceFacts = {
   recoverableSubmissions: () => Iterable<AgentJournalSubmission>
   statusPendingIds: () => Iterable<string>
   nextOrdinal: number
+  personAcceptedSequence: number
 }
 
 export type JournalSubmissionLinkFacts = {
@@ -82,12 +68,4 @@ export type JournalSubmissionLinkFacts = {
   revision: number
   /** Provider-accepted handover position, which can follow the admission coordinate. */
   acceptedHandoverAt: number
-}
-
-export type JournalInputLineageFacts = {
-  cards: JournalKeyedMap<string, JournalInputCard>
-  base: number
-  clock: number
-  frontier: (entries: JournalKeyedMap<string, JournalInputEntry>) => number
-  cardsForRelease: () => Iterable<[string, JournalInputCard]>
 }

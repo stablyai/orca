@@ -7,7 +7,6 @@ import { isWriteFailureSubmission } from '../../../shared/agent-session/requests
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation, JournalSqlValueReference } from './journal-sql-value-codec'
-import type { JournalInputCard, JournalInputEntry } from './input-order/journal-input-lineage'
 import type { JournalInputSource } from './input-order/journal-input-source-schema'
 import type { JournalDispatchRow } from './durable-rows/journal-row-schema'
 import type { JournalQueueRow } from './queued-messages/journal-queue-events'
@@ -77,33 +76,6 @@ export function writeJournalSqlInputEntityColumns(
         card.consumedAs,
         card.queuedAt?.epoch ?? null,
         card.queuedAt?.sequence ?? null,
-        ...key
-      )
-  } else if (location.collection === 'inputEntries') {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the input entry map owns these payloads.
-    const entry = value as JournalInputEntry
-    scope.db
-      .prepare(`UPDATE journal_proj_input_entries SET basis=?, source_epoch=?, source_seq=?, cut=?
-          WHERE session_id=? AND epoch=? AND input_id=? AND incarnation=?`)
-      .run(
-        entry.context.basis,
-        entry.context.source.epoch,
-        entry.context.source.sequence,
-        entry.context.cut,
-        ...key
-      )
-  } else if (location.collection === 'inputCards') {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lineage card map owns these payloads.
-    const card = value as JournalInputCard
-    const baseline = card.baseline
-    scope.db
-      .prepare(`UPDATE journal_proj_lineage_cards SET introduced=?, baseline_kind=?, baseline_epoch=?, baseline_seq=?
-          WHERE session_id=? AND epoch=? AND message_id=? AND incarnation=?`)
-      .run(
-        card.introduced,
-        baseline === undefined ? 'absent' : baseline.coordinate === null ? 'null' : 'coordinate',
-        baseline?.coordinate?.epoch ?? null,
-        baseline?.coordinate?.sequence ?? null,
         ...key
       )
   } else if (location.collection === 'inputs.rejections') {

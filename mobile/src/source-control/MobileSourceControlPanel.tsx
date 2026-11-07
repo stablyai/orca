@@ -278,6 +278,8 @@ export function MobileSourceControlPanel({
       embedded={embedded}
       worktreeLabel={worktreeLabel}
       ioBusy={ioBusy}
+      // Only Changes reads through the query layer so far; the PR tab keeps its own loading UI.
+      refreshing={activeTab === 'changes' && state.refreshing}
       onBack={onBack}
       onClose={onClose}
       onRefresh={onRefresh}

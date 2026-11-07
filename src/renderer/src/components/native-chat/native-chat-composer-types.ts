@@ -1,6 +1,6 @@
 import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
-import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
-import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
+import type { CaptureStructuredAgentSessionPresentation } from './session/structured/writes/use-structured-agent-session-mutate'
+import type { StructuredAgentSessionSendRequest } from './session/structured/delivery/structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
 import type { StructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
@@ -16,7 +16,7 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatLaunchDraft } from './drafts/native-chat-launch-prompt'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
-import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
+import type { NativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
 import type { NativeChatSendFollowUp } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 
@@ -185,7 +185,8 @@ export type NativeChatComposerHandle = {
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
-  insertTypedText: (text: string) => boolean
+  /** Dictated text is spaced from the text around the caret. */
+  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean

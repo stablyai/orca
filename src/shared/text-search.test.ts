@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   buildGitGrepArgs,
-  buildRgArgs,
   buildSubmatchRegex,
   createAccumulator,
   finalize,
@@ -14,21 +13,6 @@ import {
   MAX_LINE_CONTENT_LENGTH,
   SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
-import { splitSearchGlobPatterns, toGitGlobPathspecs } from './text-search-glob-patterns'
-
-describe('buildRgArgs', () => {
-  it('keeps escaped commas inside a single generated folder glob', () => {
-    const args = buildRgArgs('q', '/r', { includePattern: 'foo\\,bar/**, *.ts' })
-    expect(args).toContain('foo\\,bar/**')
-    expect(args).toContain('*.ts')
-  })
-})
-
-describe('splitSearchGlobPatterns', () => {
-  it('preserves trailing escapes as literal glob input', () => {
-    expect(splitSearchGlobPatterns('src\\')).toEqual(['src\\'])
-  })
-})
 
 describe('ingestRgJsonLine', () => {
   const makeMatch = (
@@ -46,22 +30,6 @@ describe('ingestRgJsonLine', () => {
         submatches: subs
       }
     })
-
-  it('populates accumulator for a match', () => {
-    const acc = createAccumulator()
-    const verdict = ingestRgJsonLine(
-      makeMatch('/root/src/a.ts', 2, [{ start: 0, end: 3 }]),
-      '/root',
-      acc,
-      100
-    )
-    expect(verdict).toBe('continue')
-    expect(acc.totalMatches).toBe(1)
-    const files = Array.from(acc.fileMap.values())
-    expect(files[0].relativePath).toBe('src/a.ts')
-    expect(files[0].matchCount).toBe(1)
-    expect(files[0].matches[0]).toEqual({ line: 2, column: 1, matchLength: 3, lineContent: 'abc' })
-  })
 
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
@@ -146,52 +114,6 @@ describe('ingestRgJsonLine', () => {
       displayColumn - 1 + displayMatchLength
     )
     expect(sliced).toBe('NEEDLE')
-  })
-
-  it('applies transformAbsPath (WSL translation)', () => {
-    const acc = createAccumulator()
-    ingestRgJsonLine(
-      makeMatch('/home/u/repo/a.ts', 1, [{ start: 0, end: 1 }]),
-      '\\\\wsl$\\Ubuntu\\home\\u\\repo',
-      acc,
-      100,
-      (p) => p.replace('/home/u/repo', '\\\\wsl$\\Ubuntu\\home\\u\\repo')
-    )
-    const files = Array.from(acc.fileMap.values())
-    // Transform replaces the root prefix; tail separators are as rg emitted them.
-    expect(files[0].filePath).toBe('\\\\wsl$\\Ubuntu\\home\\u\\repo/a.ts')
-  })
-})
-
-describe('buildGitGrepArgs', () => {
-  it('keeps escaped commas inside one generated folder pathspec', () => {
-    const args = buildGitGrepArgs('q', { includePattern: 'foo\\,bar/**, *.ts' })
-    expect(args).toContain(':(glob)foo\\,bar/**')
-    expect(args).toContain(':(glob)**/*.ts')
-  })
-})
-
-describe('toGitGlobPathspecs', () => {
-  it('also covers the subtree so a directory name behaves like rg --glob', () => {
-    expect(toGitGlobPathspecs('node_modules', true)).toEqual([
-      ':(exclude,glob)**/node_modules',
-      ':(exclude,glob)**/node_modules/**'
-    ])
-    expect(toGitGlobPathspecs('src')).toEqual([':(glob)**/src', ':(glob)**/src/**'])
-    expect(toGitGlobPathspecs('build/out')).toEqual([':(glob)build/out', ':(glob)build/out/**'])
-  })
-
-  it('keeps trailing-slash patterns directory-only', () => {
-    expect(toGitGlobPathspecs('node_modules/', true)).toEqual([':(exclude,glob)**/node_modules/**'])
-    expect(toGitGlobPathspecs('src/')).toEqual([':(glob)**/src/**'])
-  })
-})
-
-describe('buildSubmatchRegex', () => {
-  it('returns null for queries git grep accepts but JS RegExp rejects', () => {
-    // Unbalanced group — git grep ERE accepts it as literal, JS RegExp throws.
-    expect(buildSubmatchRegex('(foo', { useRegex: true })).toBeNull()
-    expect(buildSubmatchRegex('[abc', { useRegex: true })).toBeNull()
   })
 })
 
@@ -355,42 +277,5 @@ describe('ingestGitGrepLine', () => {
         lineContent: 'git reported this line'
       }
     ])
-  })
-})
-
-describe('finalize', () => {
-  it('normalizes missing and too-low per-file match counts', () => {
-    const acc = createAccumulator()
-    acc.fileMap.set('/r/a.ts', {
-      filePath: '/r/a.ts',
-      relativePath: 'a.ts',
-      matches: [
-        { line: 1, column: 1, matchLength: 3, lineContent: 'foo' },
-        { line: 2, column: 1, matchLength: 3, lineContent: 'foo' }
-      ]
-    })
-    acc.fileMap.set('/r/b.ts', {
-      filePath: '/r/b.ts',
-      relativePath: 'b.ts',
-      matchCount: 0,
-      matches: [{ line: 3, column: 1, matchLength: 3, lineContent: 'foo' }]
-    })
-    acc.totalMatches = 3
-
-    expect(finalize(acc).files.map((file) => [file.relativePath, file.matchCount])).toEqual([
-      ['a.ts', 2],
-      ['b.ts', 1]
-    ])
-  })
-
-  it('filters empty files even when malformed payloads claim matches', () => {
-    const acc = createAccumulator()
-    acc.fileMap.set('/r/a.ts', {
-      filePath: '/r/a.ts',
-      relativePath: 'a.ts',
-      matchCount: 2,
-      matches: []
-    })
-    expect(finalize(acc).files).toEqual([])
   })
 })

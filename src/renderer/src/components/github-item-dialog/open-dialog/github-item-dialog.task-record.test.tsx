@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { answered } from '@/store/github/answered-request.test-fixture'
+import { answered } from '@/store/github/requests/answered-request.test-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
@@ -8,7 +8,7 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
@@ -40,7 +40,9 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
 vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: mocks.details,
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.item

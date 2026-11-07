@@ -49,14 +49,13 @@ function answers(state: JournalReducerState) {
   order.cards.ensure(state)
   return {
     firstQueued: order.firstQueued()?.clientMessageId,
-    explicit: order.explicitSend()?.clientMessageId,
+    queue: order.cards.list().map((card) => card.messageId),
     entered: [...order.enteredSubmissions()].map((send) => send.clientMessageId),
     unsettled: order.unsettledSubmissions().map((send) => send.clientMessageId),
     sending: order.sendingSubmissions().map((send) => send.clientMessageId),
     stopped: order.stoppedHistoryInputs('send').map((send) => send.clientMessageId),
     inputs: ['send', 'second', 'first', 'retry'].map((id) => ({
       id,
-      predecessors: order.predecessors(state, id),
       original: order.familyOriginal(id)?.clientMessageId,
       linked: [...order.linkedTo(id)].map((send) => send.clientMessageId),
       ended: state.inputs.ended.has(id)
@@ -83,10 +82,12 @@ function answers(state: JournalReducerState) {
 
 /**
  * Runtime input views a restore re-derives from retained admissions; a persisted chat keeps the
- * values it had before it closed (plan §35.1, listed differences).
+ * values it had before it closed (plan §35.1, listed differences). Placement bounds are the
+ * extreme positions any row held, which a restore re-scans from surviving rows only.
  */
 function reopenAnswers(state: JournalReducerState) {
   const {
+    bounds: _b,
     candidates: _c,
     handovers: _h,
     echo: _e,
@@ -136,14 +137,20 @@ it.each([
     const copy = `${root}-main-${index}`
     roots.push(copy)
     cpSync(root, copy, { recursive: true })
+    // Both opens stamp what they write with the same clock.
     const main = await openAgentSessionJournal({
       identity,
-      database: openTestJournalHostDatabase(copy)
+      database: openTestJournalHostDatabase(copy),
+      now: () => 100
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the oracle reads main's restored state directly.
     const restored = (main as unknown as { state: JournalReducerState }).state
-    const persisted = openTestJournalHostDatabase(root)
-    const engine = new JournalSqlCommand(persisted.db, root)
+    // Each open writes its own recovery rows, so it reads a copy as main's open does.
+    const reopenCopy = `${root}-sql-${index}`
+    roots.push(reopenCopy)
+    cpSync(root, reopenCopy, { recursive: true })
+    const persisted = openTestJournalHostDatabase(reopenCopy)
+    const engine = new JournalSqlCommand(persisted.db, reopenCopy)
     const [opened] = (
       await new JournalSqlBatch(persisted.db).run(
         [
@@ -171,5 +178,6 @@ it.each([
     }
     await main.close()
     await closeTestJournalHostDatabase(copy)
+    await closeTestJournalHostDatabase(reopenCopy)
   }
 })

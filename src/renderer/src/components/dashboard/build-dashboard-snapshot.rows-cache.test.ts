@@ -13,13 +13,13 @@ import { useDashboardPopoutBridge } from './useDashboardPopoutBridge'
 import { useDashboardSnapshot } from '../dashboard-popout/useDashboardSnapshot'
 import { AgentKanbanCard } from '../dashboard-popout/AgentKanbanCard'
 import { AgentTerminalPanel } from '../dashboard-popout/AgentTerminalDialog'
-import { projectStatus } from '../native-chat/structured-agent-session-status-projection'
-import type { StructuredTab } from '../native-chat/structured-agent-session-tabs'
+import { projectStatus } from '../native-chat/session/status/structured-agent-session-status-projection'
+import type { StructuredTab } from '../native-chat/session/status/structured-agent-session-tabs'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/runtime/structured-chat-name-observation', () => ({

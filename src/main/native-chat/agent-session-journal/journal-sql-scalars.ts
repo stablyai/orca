@@ -17,22 +17,20 @@ const SCALAR_COLUMNS = {
   queue: { revision: 'integer' },
   inputs: { revision: 'integer' },
   order: {
-    reconstructing: 'boolean',
     receiptCount: 'integer',
     queueRevision: 'integer',
     revision: 'integer'
   },
   cards: {
-    pauseKey: 'json',
-    currentRevision: 'integer',
+    revision: 'integer',
     initialized: 'boolean',
-    floor: 'json',
-    pauses: 'json',
-    failed: 'boolean'
+    // Row positions are real numbers, as in the queue card table.
+    firstPosition: 'json',
+    lastPosition: 'json',
+    floor: 'json'
   },
-  evidence: { nextOrdinal: 'integer' },
+  evidence: { nextOrdinal: 'integer', personAcceptedSequence: 'integer' },
   links: { revision: 'integer', acceptedHandoverAt: 'integer' },
-  lineage: { base: 'integer', clock: 'integer' },
   'newest-turn': { boundary: 'integer' },
   'pause-marks': {
     stopVersion: 'integer',

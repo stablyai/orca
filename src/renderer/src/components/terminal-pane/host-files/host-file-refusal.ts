@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { getRuntimeEnvironmentDisplayName } from '@/store/repos/owner-routing'
 import { translate } from '@/i18n/i18n'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY } from '../../../../../shared/runtime-file-contracts'
 
 /** The host answered: it has no file there this client may open. Transport failures stay other errors. */

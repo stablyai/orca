@@ -5,20 +5,17 @@ import type {
   JournalInputCardFacts,
   JournalInputObservationFacts,
   JournalInputEvidenceFacts,
-  JournalSubmissionLinkFacts,
-  JournalInputLineageFacts
+  JournalSubmissionLinkFacts
 } from './journal-input-facts-storage'
 import type { JournalInputPlaceStorage } from './journal-index-storage'
-import type { JournalInputCard } from './input-order/journal-input-lineage'
 import type { JournalKeyedMap, JournalKeyedSet } from './journal-keyed-storage'
 import {
-  JournalSqlKeyedMap,
   journalSqlOrderedKeys,
   journalSqlOrderedValues,
+  type JournalSqlKeyedMap,
   type JournalSqlKeyedSet
 } from './journal-sql-keyed-values'
 import { JournalSqlScalars } from './journal-sql-scalars'
-import { journalSqlPauseKey } from './journal-sql-pause-marks'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 
 export type JournalSqlFactsDeps = {
@@ -82,63 +79,42 @@ export function sqlJournalInputOrderFacts(deps: JournalSqlFactsDeps): JournalInp
   const { context } = deps
   const queued = deps.map<string, AgentJournalSubmission>('order.queued')
   const entered = deps.map<string, AgentJournalSubmission>('order.entered')
-  const overrides = deps.map<string, AgentJournalSubmission>('order.overrides')
   const recoveryOwed = deps.set<string>('order.recoveryOwed')
-  const facts: Omit<
-    JournalInputOrderFacts,
-    'reconstructing' | 'receiptCount' | 'queueRevision' | 'revision'
-  > = {
+  const facts: Omit<JournalInputOrderFacts, 'receiptCount' | 'queueRevision' | 'revision'> = {
     recoveryOwed,
     queued,
     entered,
-    overrides,
     firstQueued: () =>
       first(journalSqlOrderedValues<AgentJournalSubmission>(context, queued.collection, 1)),
-    explicitSend: () =>
-      first(journalSqlOrderedValues<AgentJournalSubmission>(context, overrides.collection, 1)),
     // Entered sends are the outstanding handovers of live executions, not history.
     enteredSubmissions: () =>
       journalSqlOrderedValues<AgentJournalSubmission>(context, entered.collection),
     recoveryOwedIds: () => journalSqlOrderedValues<string>(context, recoveryOwed.collection)
   }
-  const scalars: Pick<
-    JournalInputOrderFacts,
-    'reconstructing' | 'receiptCount' | 'queueRevision' | 'revision'
-  > = { reconstructing: false, receiptCount: 0, queueRevision: 0, revision: 0 }
+  const scalars: Pick<JournalInputOrderFacts, 'receiptCount' | 'queueRevision' | 'revision'> = {
+    receiptCount: 0,
+    queueRevision: 0,
+    revision: 0
+  }
   return new JournalSqlScalars(context.scope, 'order').define(facts, scalars)
 }
 
 export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInputCardFacts {
   const { context } = deps
   const cells = new JournalSqlScalars(context.scope, 'cards')
-  const current = deps.map<string, QueuedMessageRow>('cards.current')
   const overlays = deps.map<string, QueuedMessageRow>('cards.overlays')
-  const unintroduced = deps.set<string>('cards.unintroduced')
-  const cleared = deps.set<string>('cards.cleared')
   // Overlay rows are compared by identity on the same handle; a new command never holds them.
   let overlayRows: readonly QueuedMessageRow[] = []
-  const facts: Omit<
+  const facts: Pick<
     JournalInputCardFacts,
-    'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
+    'overlays' | 'overlayCards' | 'replaceOverlays' | 'overlayRows'
   > = {
-    current,
-    indexed: deps.map('cards.indexed'),
-    unintroduced,
     overlays,
-    cleared,
-    currentCards: () => journalSqlOrderedValues<QueuedMessageRow>(context, current.collection),
     overlayCards: () => journalSqlOrderedValues<QueuedMessageRow>(context, overlays.collection),
-    unintroducedIds: () => journalSqlOrderedValues<string>(context, unintroduced.collection),
     replaceOverlays(cards: Map<string, QueuedMessageRow>) {
       overlays.clear()
       for (const [id, card] of cards) {
         overlays.set(id, card)
-      }
-    },
-    replaceClearMembers(ids: readonly string[]) {
-      cleared.clear()
-      for (const id of ids) {
-        cleared.add(id)
       }
     },
     get overlayRows() {
@@ -146,26 +122,14 @@ export function sqlJournalInputCardFacts(deps: JournalSqlFactsDeps): JournalInpu
     },
     set overlayRows(rows: readonly QueuedMessageRow[]) {
       overlayRows = rows
-    },
-    get pauseKey() {
-      return cells.get<readonly unknown[]>('pauseKey', [])
-    },
-    set pauseKey(inputs: readonly unknown[]) {
-      cells.set('pauseKey', inputs.map(journalSqlPauseKey))
-    },
-    pauseKeyMatches(this: Pick<JournalInputCardFacts, 'pauseKey'>, inputs: readonly unknown[]) {
-      return JSON.stringify(inputs.map(journalSqlPauseKey)) === JSON.stringify(this.pauseKey)
     }
   }
-  const scalars: Pick<
-    JournalInputCardFacts,
-    'currentRevision' | 'initialized' | 'floor' | 'pauses' | 'failed'
-  > = {
-    currentRevision: 0,
+  const scalars: Omit<JournalInputCardFacts, keyof typeof facts> = {
+    revision: 0,
     initialized: false,
-    floor: null,
-    pauses: [],
-    failed: false
+    firstPosition: 0,
+    lastPosition: 0,
+    floor: null
   }
   return cells.define(facts, scalars)
 }
@@ -199,7 +163,7 @@ export function sqlJournalInputEvidenceFacts(deps: JournalSqlFactsDeps): Journal
   const { context } = deps
   const recoverable = deps.map<string, AgentJournalSubmission>('evidence.recoverable')
   const statusPending = deps.map<string, AgentJournalSubmission>('evidence.statusPending')
-  const facts: Omit<JournalInputEvidenceFacts, 'nextOrdinal'> = {
+  const facts: Omit<JournalInputEvidenceFacts, 'nextOrdinal' | 'personAcceptedSequence'> = {
     recoverable,
     submissionRows: deps.map('evidence.submissionRows'),
     rowsBySubmission: deps.map('evidence.rowsBySubmission'),
@@ -229,7 +193,10 @@ export function sqlJournalInputEvidenceFacts(deps: JournalSqlFactsDeps): Journal
         }
       })()
   }
-  const scalars: Pick<JournalInputEvidenceFacts, 'nextOrdinal'> = { nextOrdinal: 0 }
+  const scalars: Pick<JournalInputEvidenceFacts, 'nextOrdinal' | 'personAcceptedSequence'> = {
+    nextOrdinal: 0,
+    personAcceptedSequence: 0
+  }
   return new JournalSqlScalars(context.scope, 'evidence').define(facts, scalars)
 }
 
@@ -261,41 +228,4 @@ export function sqlJournalSubmissionLinkFacts(
     acceptedHandoverAt: 0
   }
   return new JournalSqlScalars(context.scope, 'links').define(facts, scalars)
-}
-
-function sqlCollection<K, V>(map: JournalKeyedMap<K, V>): string {
-  if (!(map instanceof JournalSqlKeyedMap)) {
-    throw new Error('SQL lineage facts read only SQL keyed collections')
-  }
-  return map.collection
-}
-
-export function sqlJournalInputLineageFacts(
-  deps: JournalSqlFactsDeps,
-  cards: JournalKeyedMap<string, JournalInputCard>
-): JournalInputLineageFacts {
-  const { context } = deps
-  const facts: Omit<JournalInputLineageFacts, 'base' | 'clock'> = {
-    cards,
-    // Callers: epoch publish over its new epoch's rows; actual opens restore in memory.
-    frontier() {
-      context.flush()
-      const { scope } = context
-      const entry = scope.db
-        .prepare(`SELECT MAX(cut) AS frontier FROM journal_proj_input_entries
-          WHERE session_id=? AND epoch=? AND current=1`)
-        .get(...scope.prefix)!
-      const card = scope.db
-        .prepare(`SELECT MAX(introduced) AS frontier FROM journal_proj_lineage_cards
-          WHERE session_id=? AND epoch=? AND current=1`)
-        .get(...scope.prefix)!
-      scope.examined(entry)
-      scope.examined(card)
-      return Math.max(Number(entry.frontier ?? 0), Number(card.frontier ?? 0))
-    },
-    // Reconstruction releases finished cards and retains current introductions.
-    cardsForRelease: () => orderedEntries<string, JournalInputCard>(context, sqlCollection(cards))
-  }
-  const scalars: Pick<JournalInputLineageFacts, 'base' | 'clock'> = { base: 0, clock: 0 }
-  return new JournalSqlScalars(context.scope, 'lineage').define(facts, scalars)
 }

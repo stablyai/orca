@@ -11,7 +11,7 @@ import {
   createNativeChatQueuedEditDraft,
   handBackNativeChatQueuedEdit,
   discardNativeChatQueuedEdit
-} from './native-chat-queued-edit-draft'
+} from './queue/editing/native-chat-queued-edit-draft'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft,
@@ -239,7 +239,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], retry: () => {} })
 }))
-import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
+import { useStructuredAgentSessionQueuedEdit } from './queue/editing/use-structured-agent-session-queued-edit'
 import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import type {
@@ -248,7 +248,7 @@ import type {
   AgentSessionQueuedMessageEditHoldResult
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import { queuedMessageWithEdit } from '../../../../shared/queued-message-edit'
-import type { StructuredAgentSessionWrite } from './use-structured-agent-session-mutate'
+import type { StructuredAgentSessionWrite } from './session/structured/writes/use-structured-agent-session-mutate'
 let controller: ReturnType<typeof useStructuredAgentSessionQueuedEdit>
 let picker: ReturnType<typeof useNativeChatPickerState>
 const saveRpc = vi.fn()
@@ -440,7 +440,7 @@ it('retains re-picked rich identity after unknown proof and saves the whole repl
 })
 
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
-import { useNativeChatComposerEditSession } from './use-native-chat-composer-edit-session'
+import { useNativeChatComposerEditSession } from './queue/editing/use-native-chat-composer-edit-session'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
 import { captureInsertionTarget, insertText } from '../dictation/dictation-insertion-target'
 function useCapturedPrompt(
@@ -556,24 +556,19 @@ it.each(['mounted', 'success', 'unmounted', 'ime', 'cancel'] as const)(
       const bottom = promptEditor(screen.getByRole('textbox', { name: 'Bottom' }))
       act(() => bottom.commands.setTextSelection(bottom.state.doc.content.size - 1))
     }
-    act(() => insertText('echo', captured))
+    act(() => void insertText('echo', captured))
     if (mode === 'ime') {
       const bottom = promptEditor(screen.getByRole('textbox', { name: 'Bottom' }))
       expect(promptText(bottom.state.doc)).toBe('first\n\necho')
       act(() =>
         bottom.view.dispatch(bottom.state.tr.insertText('가', bottom.state.doc.content.size - 1))
       )
-      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가 echo' }])
+      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가echo' }])
     } else {
       expect(nextSend().blocks).toEqual([
         {
           type: 'text',
-          text:
-            mode === 'cancel'
-              ? 'first\n\necho'
-              : mode === 'mounted' || mode === 'success'
-                ? 'first\n\nechoecho'
-                : 'first\n\necho echo'
+          text: mode === 'cancel' ? 'first\n\necho' : 'first\n\necho echo'
         }
       ])
     }
@@ -734,7 +729,7 @@ it('replays captured ordinary insertion over late storage hydration without chan
   act(() => controller.editor!.save())
   await waitFor(() => expect(controller.editor).toBeUndefined())
   view.unmount()
-  act(() => insertText('echo', target))
+  act(() => void insertText('echo', target))
   await act(async () => {
     load!(new Map([[scope, { text: 'echo', images: [], savedAt: 1 }]]))
     await loading

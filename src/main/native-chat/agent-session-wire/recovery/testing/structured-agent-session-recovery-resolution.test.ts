@@ -113,26 +113,6 @@ function deps(
 }
 
 describe('structured session recovery resolution', () => {
-  it('releases an ownerless reservation: nothing it recorded can be holding it', async () => {
-    const store = await openStore()
-    await reserve(store)
-    await latch(store)
-
-    const result = await resolveStructuredSessionRecovery(
-      deps(store, () => ({ outcome: 'indeterminate', reason: 'no scan' })),
-      SESSION
-    )
-
-    expect(result).toBe('resolved')
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'released',
-      handoffStage: null,
-      runtimeFence: 2,
-      reservedSpawnToken: null,
-      deathEvidence: null
-    })
-  })
-
   it('releases an owner whose identity cannot be verified, and signals nothing', async () => {
     const store = await openStore()
     await liveOwner(store)

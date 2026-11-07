@@ -81,48 +81,6 @@ CREATE INDEX IF NOT EXISTS journal_proj_queue_cards_order
 CREATE INDEX IF NOT EXISTS journal_proj_queue_cards_live
   ON journal_proj_queue_cards(session_id, epoch, position, ordinal)
   WHERE current=1 AND state IN ('waiting', 'returned');
-CREATE TABLE IF NOT EXISTS journal_proj_input_entries (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  input_id TEXT NOT NULL,
-  incarnation INTEGER NOT NULL,
-  current INTEGER NOT NULL,
-  ordinal INTEGER NOT NULL,
-  payload_json TEXT NOT NULL,
-  basis TEXT,
-  source_epoch TEXT,
-  source_seq INTEGER,
-  cut INTEGER,
-  PRIMARY KEY (session_id, epoch, input_id, incarnation)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_input_entries_current
-  ON journal_proj_input_entries(session_id, epoch, input_id) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_input_entries_order
-  ON journal_proj_input_entries(session_id, epoch, ordinal) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_input_entries_cut
-  ON journal_proj_input_entries(session_id, epoch, cut) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_input_entries_basis
-  ON journal_proj_input_entries(session_id, epoch, basis, ordinal) WHERE current=1;
-CREATE TABLE IF NOT EXISTS journal_proj_lineage_cards (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  incarnation INTEGER NOT NULL,
-  current INTEGER NOT NULL,
-  ordinal INTEGER NOT NULL,
-  payload_json TEXT NOT NULL,
-  introduced INTEGER,
-  baseline_kind TEXT,
-  baseline_epoch TEXT,
-  baseline_seq INTEGER,
-  PRIMARY KEY (session_id, epoch, message_id, incarnation)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX IF NOT EXISTS journal_proj_lineage_cards_current
-  ON journal_proj_lineage_cards(session_id, epoch, message_id) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_lineage_cards_order
-  ON journal_proj_lineage_cards(session_id, epoch, ordinal) WHERE current=1;
-CREATE INDEX IF NOT EXISTS journal_proj_lineage_cards_introduced
-  ON journal_proj_lineage_cards(session_id, epoch, introduced) WHERE current=1;
 CREATE TABLE IF NOT EXISTS journal_proj_input_sources (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

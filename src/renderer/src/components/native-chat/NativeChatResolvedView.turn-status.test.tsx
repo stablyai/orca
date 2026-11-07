@@ -9,11 +9,11 @@ import type {
   AgentStatusPayload
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 // Stub transcript/composer to exercise store status through the view into shared turn and prompt rendering.
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
-vi.mock('./use-native-chat-retained-session', () => ({
+vi.mock('./session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
 vi.mock('./NativeChatComposer', () => ({ NativeChatComposer: () => null }))

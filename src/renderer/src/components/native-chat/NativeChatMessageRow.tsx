@@ -13,13 +13,13 @@ import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
 import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
-import { ProviderFrameRow } from './NativeChatTranscriptChrome'
+import { ProviderFrameRow } from './messages/diagnostics/NativeChatProviderDetails'
 import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
   NativeChatSubagentDisclosure,
   NativeChatSubagentRosterState
 } from './native-chat-subagent-sections'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useNativeChatWorkRun } from './use-native-chat-work-run'
 import { useNativeChatRowNavigation } from './use-native-chat-row-navigation'
 
@@ -32,11 +32,13 @@ export type NativeChatDeliveryNotice =
       onEdit?: never
       onSend?: never
       detail?: never
+      failureKind?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
+      failureKind?: string
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void

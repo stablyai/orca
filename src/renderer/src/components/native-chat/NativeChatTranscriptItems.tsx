@@ -10,7 +10,7 @@ import { NativeChatForwardedGestureContext } from './native-chat-reader-scroll-i
 import {
   NativeChatReplyRevealsContext,
   useNativeChatReplyReveals
-} from './native-chat-reply-reveals'
+} from './markdown/native-chat-reply-reveals'
 
 /** Mounted rows own their height; only unloaded gaps use cached measurements. */
 export function NativeChatTranscriptItems({

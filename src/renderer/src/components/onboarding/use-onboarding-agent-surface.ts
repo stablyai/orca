@@ -9,7 +9,7 @@ import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-prog
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { useAppStore } from '@/store'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { AgentSurface } from './use-onboarding-flow-types'
 
 type AgentSurfaceArgs = {

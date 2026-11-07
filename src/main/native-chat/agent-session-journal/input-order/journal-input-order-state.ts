@@ -2,7 +2,7 @@ import { memoryJournalMap } from '../journal-memory-collections'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { JournalInputCardIndex } from './journal-input-card-index'
+import type { LegacyQueueCardIndex } from './legacy-queue-card-index'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -82,7 +82,7 @@ export function isJournalInputOverride(
 export function recordJournalInputAdmission(
   state: JournalReducerState,
   row: JournalRow,
-  cards: JournalInputCardIndex,
+  cards: LegacyQueueCardIndex,
   releasePlace: (id: string) => void
 ): void {
   if (row.kind !== 'submission' || !row.handoverRecorded || row.queuedMessageId !== undefined) {
@@ -107,7 +107,7 @@ export function recordJournalInputAdmission(
 
 export function readJournalInputAdmission(
   row: JournalSubmissionRow,
-  cards: JournalInputCardIndex,
+  cards: LegacyQueueCardIndex,
   cut: number
 ): JournalInputPlace {
   const coordinate = { epoch: row.epoch, sequence: row.seq }
@@ -122,7 +122,7 @@ export function readJournalInputAdmission(
 export function releaseJournalInputHistory(
   state: JournalReducerState,
   lineage: JournalInputLineageOwner,
-  cards: JournalInputCardIndex
+  cards: LegacyQueueCardIndex
 ): void {
   lineage.releaseHistory((id) => {
     const keep = currentJournalInputIdentity(state, id, () => cards.hasOverlay(id))

@@ -1,12 +1,10 @@
-import type { JournalIndexedInputCard } from './input-order/journal-input-card-index'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalSqlValueLocation, JournalSqlValueReference } from './journal-sql-value-codec'
 
 const TABLES = {
   'cards.current': 'journal_proj_current_cards',
-  'cards.overlays': 'journal_proj_overlay_cards',
-  'cards.indexed': 'journal_proj_indexed_cards'
+  'cards.overlays': 'journal_proj_overlay_cards'
 } as const
 
 export function writeJournalSqlCardMemberColumns(
@@ -20,24 +18,13 @@ export function writeJournalSqlCardMemberColumns(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the declared card families select a table.
   const table = TABLES[location.collection as keyof typeof TABLES]
-  const indexed =
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: indexed cards retain their card/source pair and flags; the other families retain a card.
-    location.collection === 'cards.indexed' ? (value as JournalIndexedInputCard) : undefined
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the other declared card families hold a QueuedMessageRow.
-  const card = indexed ? indexed.card : (value as QueuedMessageRow)
-  const captured = (path: string) => refs.some((ref) => ref.path.join('.') === path)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the declared card families hold a QueuedMessageRow.
+  const card = value as QueuedMessageRow
   const key = [...scope.prefix, String(JSON.parse(location.key)), location.incarnation]
-  const cardCaptured = captured(indexed ? 'card' : '')
+  const cardCaptured = refs.some((ref) => ref.path.join('.') === '')
   scope.db
     .prepare(`UPDATE ${table} SET ${cardCaptured ? '' : 'card_id=?, '}position=?, state=?
       WHERE session_id=? AND epoch=? AND message_id=? AND incarnation=?`)
     .run(...(cardCaptured ? [] : [card.messageId]), card.position, card.state, ...key)
-  if (indexed) {
-    scope.db
-      .prepare(`UPDATE journal_proj_indexed_cards SET ${captured('source') ? '' : 'lineage_message_id=NULL, '}
-        actionable=?, handoff=?, released=?
-        WHERE session_id=? AND epoch=? AND message_id=? AND incarnation=?`)
-      .run(Number(indexed.actionable), Number(indexed.handoff), Number(indexed.released), ...key)
-  }
   return true
 }

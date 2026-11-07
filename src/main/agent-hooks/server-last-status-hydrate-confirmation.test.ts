@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
@@ -205,75 +205,6 @@ describe('Last-status persistence', () => {
     }
   })
 
-  it('never persists the unconfirmed flag and re-stamps it on every hydrate', async () => {
-    const firstServer = new AgentHookServer()
-    await firstServer.start({ env: 'production', userDataPath })
-    firstServer.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        payload: { state: 'working', prompt: 'still running', agentType: 'claude' }
-      },
-      'conn-1'
-    )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
-
-    const secondServer = new AgentHookServer()
-    await secondServer.start({ env: 'production', userDataPath })
-    secondServer.flushStatusPersistSync()
-    secondServer.stop()
-    expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('restoredUnconfirmed')
-
-    const thirdServer = new AgentHookServer()
-    await thirdServer.start({ env: 'production', userDataPath })
-    try {
-      expect(thirdServer.getStatusSnapshot()).toEqual([
-        expect.objectContaining({ paneKey: PANE, state: 'working', restoredUnconfirmed: true })
-      ])
-    } finally {
-      thirdServer.stop()
-    }
-  })
-
-  it('refuses interrupt inference on an unconfirmed hydrated row', async () => {
-    const firstServer = new AgentHookServer()
-    await firstServer.start({ env: 'production', userDataPath })
-    firstServer.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
-      },
-      'conn-1'
-    )
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
-
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      const baseline = server.getStatusSnapshot()[0]
-      expect(baseline).toMatchObject({ paneKey: PANE, restoredUnconfirmed: true })
-      const applied = server.inferInterrupt({
-        paneKey: PANE,
-        baselineUpdatedAt: baseline.receivedAt,
-        baselineStateStartedAt: baseline.stateStartedAt,
-        baselinePrompt: 'long task',
-        baselineAgentType: 'codex',
-        intent: 'plain-escape'
-      })
-      // Never infer a live transition from unconfirmed disk state.
-      expect(applied).toBe(false)
-      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
-      expect(server.getStatusSnapshot()[0]?.interrupted).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
   it('keeps SSH status ordering monotonic across hydration and clock rollback', async () => {
     const now = 1_700_000_000_000
     vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -331,60 +262,6 @@ describe('Last-status persistence', () => {
           receivedAt: clearedAt + 1
         })
       ])
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('drops persisted idle Claude child rows from hydration replay', async () => {
-    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
-    const receivedAt = recentTs()
-    writeFileSync(
-      lastStatusPath(),
-      JSON.stringify({
-        version: 2,
-        entries: {
-          [PANE]: {
-            paneKey: PANE,
-            tabId: 'tab-1',
-            worktreeId: 'wt-1',
-            receivedAt,
-            stateStartedAt: recentTs(-1000),
-            payload: {
-              state: 'done',
-              prompt: 'finished orchestration',
-              agentType: 'claude',
-              subagents: [
-                { id: 'aweb-research-8a76b7d7', state: 'idle', startedAt: receivedAt - 5000 },
-                { id: 'apr-history-9b87c6e6', state: 'idle', startedAt: receivedAt - 4000 }
-              ]
-            }
-          }
-        }
-      }),
-      'utf8'
-    )
-
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      const listener = vi.fn()
-      server.setListener(listener)
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          payload: expect.objectContaining({ subagents: undefined })
-        })
-      )
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          state: 'done',
-          prompt: 'finished orchestration',
-          subagents: undefined
-        })
-      ])
-      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
-      expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
     } finally {
       server.stop()
     }

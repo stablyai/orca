@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import { prFlag, prText } from '../session/github-pr-entity-reply-schema'
 import { taskMutationEnvelopeSchema } from './task-provider-entity-reply-schema'

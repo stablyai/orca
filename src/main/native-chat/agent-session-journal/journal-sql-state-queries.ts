@@ -4,10 +4,10 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalStateQueries } from './journal-state-queries'
-import type { JournalInputEntry, JournalInputCard } from './input-order/journal-input-lineage'
+import { memoryJournalMap } from './journal-memory-collections'
 import type { JournalSqlValueContext } from './journal-sql-value-context'
 import type { JournalSqlQueryFacts } from './journal-sql-query-facts'
-import { journalSqlOrderedKeys, journalSqlOrderedValues } from './journal-sql-keyed-values'
+import { journalSqlOrderedValues } from './journal-sql-keyed-values'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 export function sqlJournalStateQueries(
@@ -42,12 +42,6 @@ export function sqlJournalStateQueries(
       scope.examined(row)
     }
     return Number(row?.sequence ?? 0)
-  }
-  function* entries<V>(collection: string): Generator<[string, V]> {
-    facts.flush()
-    for (const key of journalSqlOrderedKeys(context, collection)) {
-      yield [String(JSON.parse(key)), context.read<V>(collection, key)!]
-    }
   }
   return {
     latestContextClearSequence: latestClear,
@@ -141,8 +135,8 @@ export function sqlJournalStateQueries(
     },
     oldestAppliedSettlementId: () =>
       journalSqlOrderedValues<string>(context, 'appliedSettlementIds', 1).next().value,
-    nativeInputEntries: () => entries<JournalInputEntry>('inputEntries'),
-    nativeInputCards: () => entries<JournalInputCard>('inputCards'),
+    nativeInputEntries: (state) => memoryJournalMap(state.inputEntries).entries(),
+    nativeInputCards: (state) => memoryJournalMap(state.inputCards).entries(),
     queueCardsForInitialization: () =>
       journalSqlOrderedValues<QueuedMessageRow>(context, 'queue.cards')
   }

@@ -11,8 +11,8 @@ import { sayNativeChatRewind } from './native-chat-rewind-copy'
 import type {
   CaptureStructuredAgentSessionPresentation,
   StructuredAgentSessionWriteOutcome
-} from './use-structured-agent-session-mutate'
-import { returnMessageToComposer } from './structured-agent-session-message-hand-back'
+} from './session/structured/writes/use-structured-agent-session-mutate'
+import { returnMessageToComposer } from './session/structured/delivery/structured-agent-session-message-hand-back'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
 
 export type RewindInput = Omit<

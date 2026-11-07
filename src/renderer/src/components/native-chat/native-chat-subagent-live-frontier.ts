@@ -5,7 +5,7 @@ import type { AgentJournalPosition } from '../../../../shared/agent-session/jour
 import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import { nativeChatRowRendersContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { compareMessages } from './native-chat-session-assembler'
+import { compareNativeChatDisplayMessages as compareMessages } from '../../../../shared/native-chat/transcript/native-chat-message-order'
 import {
   isNativeChatCodexCollabCallFrameRow,
   nativeChatSubagentDelegation

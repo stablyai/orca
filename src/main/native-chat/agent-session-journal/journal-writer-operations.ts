@@ -118,7 +118,7 @@ export async function runJournalWriterOperation(
       return submissionWriter.append(operation.input, consume, receipt)
     }
     case 'accept-late':
-      queue.rederiveLegacyWitnesses()
+      queue.legacy.rederiveWitnesses()
       return submissionWriter.acceptLate(operation.input)
     case 'queue-insert':
       return queue.insert(operation.input, receipt)

@@ -1,14 +1,13 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import type { OpenFile } from '@/store/slices/editor'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getEditorFileReadContext } from '@/lib/editor-file-operation-owner'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useAppStore } from '@/store'
 import {
   getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff,
   getRuntimeGitDiff
-} from '@/runtime/runtime-git-diff-client'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-diff-client'
+import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { DiffContent, InFlightContentRead } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
@@ -71,11 +70,10 @@ export function useEditorPanelDiffContentLoader({
             ? file.branchCompare
             : null
         const commitCompare = file.commitCompare?.commitOid ? file.commitCompare : null
-        const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
-        const fileTarget = requireRuntimeTargetForFileOwner(
+        const { connectionId, target: fileTarget } = getEditorFileReadContext(
           useAppStore.getState(),
-          file.worktreeId,
-          file.runtimeEnvironmentId
+          file,
+          worktreePath
         )
         const gitScope = getRuntimeGitScope(fileTarget, connectionId)
         const effectiveDiffSource: typeof file.diffSource =

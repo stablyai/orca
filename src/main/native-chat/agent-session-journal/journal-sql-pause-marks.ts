@@ -109,10 +109,13 @@ export class JournalSqlPauseMarks {
       ...marks,
       cleared: clear ? { ...clear, messageIds: null } : undefined
     }
-    // Keep the existing scalar's property order, including a clear appended after the initial marks.
+    // Keep the format-3 scalar's property order: a clear stays where it was appended, and a manual
+    // Stop follows the other marks.
+    const { manualStop, ...rest } = marks
     this.encoded = new JournalEncodedScalar(
       JSON.stringify({
-        ...marks,
+        ...rest,
+        ...(manualStop !== undefined ? { manualStop } : {}),
         latestStop: stop && { sequence: stop.sequence, event: stop.event }
       })
     )

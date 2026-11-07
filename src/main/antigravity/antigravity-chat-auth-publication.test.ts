@@ -7,7 +7,7 @@ import { ProfileStateWriterError } from '../persistence/profile-state/profile-st
 import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 import { resolveAcpLaunchInvocation } from '../acp/acp-structured-launch-resolution'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import {
   applyAntigravityChatAuthConfig,
   readAntigravityChatAuthConfig

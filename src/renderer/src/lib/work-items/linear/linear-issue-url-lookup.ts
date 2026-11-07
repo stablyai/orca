@@ -1,4 +1,4 @@
-import { linearStatus } from '@/runtime/runtime-linear-client'
+import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError

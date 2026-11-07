@@ -15,7 +15,7 @@ import {
   type NewExternalWorktreesInboxActionState
 } from './new-external-worktrees-inbox-actions'
 import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]

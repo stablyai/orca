@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import type React from 'react'
-import type * as WorktreeRepoIndex from '@/store/worktree-repo-index'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -33,12 +32,6 @@ const popoverMock = vi.hoisted(() => ({
   onOpenChange: undefined as ((open: boolean) => void) | undefined
 }))
 
-const indexSpies = vi.hoisted(() => ({
-  getIndexedAllWorktrees: vi.fn(),
-  getIndexedWorktreeMap: vi.fn(),
-  getIndexedWorktreeById: vi.fn()
-}))
-
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
@@ -50,15 +43,6 @@ vi.mock('react-i18next', () => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: FakeStoreState) => unknown) => selector(storeState)
 }))
-
-// Wrap real projections to preserve exclusion coverage while counting enumeration calls.
-vi.mock('@/store/worktree-repo-index', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeRepoIndex>()
-  indexSpies.getIndexedAllWorktrees.mockImplementation(actual.getIndexedAllWorktrees)
-  indexSpies.getIndexedWorktreeMap.mockImplementation(actual.getIndexedWorktreeMap)
-  indexSpies.getIndexedWorktreeById.mockImplementation(actual.getIndexedWorktreeById)
-  return { ...actual, ...indexSpies }
-})
 
 vi.mock('@/components/ui/popover', async () => {
   const { cloneElement } = await import('react')
@@ -173,9 +157,6 @@ beforeEach(() => {
   storeState.repos = []
   storeState.worktreeLineageById = {}
   storeState.workspaceLineageByChildKey = {}
-  indexSpies.getIndexedAllWorktrees.mockClear()
-  indexSpies.getIndexedWorktreeMap.mockClear()
-  indexSpies.getIndexedWorktreeById.mockClear()
 })
 
 afterEach(cleanup)

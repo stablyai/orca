@@ -25,7 +25,7 @@ vi.mock('../../store', () => ({
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
-vi.mock('../../store/pinned-tab-close-guard', () => ({
+vi.mock('../../store/slices/tabs/closing/pinned-tab-close-guard', () => ({
   guardPinnedTabClose: vi.fn(),
   isUnifiedTabPinned: vi.fn(),
   resolvePinnedTabLabel: vi.fn()

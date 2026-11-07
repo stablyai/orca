@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { getRepoMapFromState } from '@/store/selectors'
-import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   isAutomaticDeselection,
   subscribeWorktreeDeselectionIntent,
   type EnclosingWorktreeRemoval
-} from '@/store/active-worktree-deselection-intent'
+} from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -19,7 +19,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type SuccessorState = Pick<
   AppState,
@@ -81,7 +81,7 @@ export function pickActiveWorktreeSuccessor(
   state: SuccessorState,
   removed: RemovedActiveRow
 ): Worktree | null {
-  const repoById = getRepoMapFromState(state)
+  const repoById = getIndexedRepoMap(state.repos)
   const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&

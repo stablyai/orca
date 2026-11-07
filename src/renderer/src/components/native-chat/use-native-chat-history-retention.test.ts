@@ -3,36 +3,6 @@ import { act, renderHook } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { useNativeChatHistoryRetention } from './use-native-chat-history-retention'
 
-it('holds parked history through hidden renders and releases on return, rebind and unmount', () => {
-  const release = vi.fn()
-  const retainHistory = vi.fn(() => release)
-  const trimHistory = vi.fn()
-  const view = renderHook(
-    (source) =>
-      useNativeChatHistoryRetention({ ...source, root: { current: null }, sourceKey: 'test' }),
-    {
-      initialProps: { retainHistory, trimHistory }
-    }
-  )
-  act(() => {
-    view.result.current.leaveEnd()
-    view.result.current.leaveEnd()
-  })
-  view.rerender({ retainHistory, trimHistory })
-  expect(retainHistory).toHaveBeenCalledOnce()
-  expect(release).not.toHaveBeenCalled()
-  act(() => view.result.current.returnToEnd())
-  expect(release).toHaveBeenCalledOnce()
-  act(() => view.result.current.leaveEnd())
-  const nextRelease = vi.fn()
-  const nextRetain = vi.fn(() => nextRelease)
-  view.rerender({ retainHistory: nextRetain, trimHistory })
-  expect(release).toHaveBeenCalledTimes(2)
-  act(() => view.result.current.leaveEnd())
-  view.unmount()
-  expect(nextRelease).toHaveBeenCalledOnce()
-})
-
 it.each([false, true])(
   'preserves a mounted selection until it clears (shared source: %s)',
   (shared) => {

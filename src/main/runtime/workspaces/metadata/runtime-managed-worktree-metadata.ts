@@ -2,7 +2,6 @@ import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identit
 import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
-  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
@@ -35,6 +34,8 @@ type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
+  /** A multi-repo folder workspace named by `folder:<id>`; throws `selector_not_found` when absent. */
+  resolveFolderParent: (selector: string) => Promise<{ folderWorkspaceId: string }>
   validateParent: (worktree: ResolvedWorktree, parent: ResolvedWorktree) => void
   readStoreInstallationId?: () => Promise<string | undefined>
   invalidateResolved: () => void
@@ -51,7 +52,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
-  const folderParentKey = getFolderParentKey(lineage?.parentWorktree)
+  const folderParent = lineage?.parentWorktree ? folderParentKey(lineage.parentWorktree) : undefined
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
     : undefined
@@ -71,7 +72,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (!target) {
     throw new Error('selector_ambiguous')
   }
-  if (lineage?.parentWorktree && !folderParentKey) {
+  if (lineage?.parentWorktree && !folderParent) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
   }
@@ -123,32 +124,19 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'A same-id workspace on another host owns this lineage.'
       )
     }
-  } else if (folderParentKey) {
-    if (!worktree.instanceId) {
+  } else if (folderParent) {
+    const { folderWorkspaceId } = await args.ports.resolveFolderParent(folderParent)
+    if (!worktree.instanceId || !args.store.setFolderParentLineage) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree instance identity was unavailable.'
+        'Worktree instance identity or lineage storage was unavailable.'
       )
-    }
-    if (!args.store.setFolderParentLineage) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree lineage storage was unavailable.'
-      )
-    }
-    // Same rule as create: the folder must exist; folder parents have no host boundary.
-    if (
-      !args.store
-        .getFolderWorkspaces?.()
-        .some((folder) => folderWorkspaceKey(folder.id) === folderParentKey)
-    ) {
-      throw new Error('selector_not_found')
     }
     const recorded = args.store.setFolderParentLineage(target, {
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
       childInstanceId: worktree.instanceId,
-      parentWorkspaceKey: folderParentKey,
-      parentInstanceId: null,
+      parentWorkspaceKey: folderWorkspaceKey(folderWorkspaceId),
+      parentInstanceId: folderWorkspaceId,
       origin: 'manual',
       capture: { source: 'manual-action', confidence: 'explicit' },
       createdAt: Date.now()
@@ -243,14 +231,14 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   return { updated: updates.length }
 }
 
-function getFolderParentKey(selector: string | undefined): WorkspaceKey | undefined {
-  const raw = selector?.startsWith('id:') ? selector.slice('id:'.length) : selector
-  const parsed = raw ? parseWorkspaceKey(raw) : null
-  return parsed?.type === 'folder' ? folderWorkspaceKey(parsed.folderWorkspaceId) : undefined
-}
-
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+/** `folder:<id>` or `id:folder:<id>` names a multi-repo folder workspace parent. */
+function folderParentKey(selector: string): string | undefined {
+  const raw = selector.startsWith('id:') ? selector.slice(3) : selector
+  return parseWorkspaceKey(raw)?.type === 'folder' ? raw : undefined
 }

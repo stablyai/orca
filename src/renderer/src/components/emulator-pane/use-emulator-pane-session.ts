@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/emulator-opening-preferences'
 import { supportsEmulatorOpeningPreferences } from '@/lib/emulator-opening-preferences-capability'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import {
   deviceLabel,

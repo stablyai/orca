@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatTranscriptRowContext } from './NativeChatTranscriptRow'
-import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
+import type { StructuredAgentSessionHostWork } from './session/structured/use-structured-agent-session-transport-state'
 
 type NativeChatTranscriptRowContextInput = Omit<
   NativeChatTranscriptRowContext,

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { bindWritePtyOutputToXterm } from './write-pty-output-to-xterm'
-import { TerminalIdleCursorReset } from '../../terminal-idle-cursor-reset'
-import { TerminalStreamPosition } from '../../terminal-stream-position'
+import { TerminalIdleCursorReset } from '../../emulation/terminal-idle-cursor-reset'
+import { TerminalStreamPosition } from '../../pty-transport/delivery/terminal-stream-position'
 import { createTerminalInputEchoDelay } from './terminal-input-echo-delay'
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({

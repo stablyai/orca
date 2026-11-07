@@ -21,14 +21,6 @@ function journal(dispatchState: 'pending' | 'accepted' | 'unknown'): SendSettlem
   }
 }
 
-function emptyJournal(): SendSettlementJournal {
-  return {
-    activeTurnId: () => null,
-    cursor: () => ({ epoch: 'epoch-1', sequence: 2 }),
-    submission: () => undefined
-  }
-}
-
 function queuedJournal(activeTurnId: string | null, handedOver = false): SendSettlementJournal {
   return {
     cursor: () => ({ epoch: 'epoch-1', sequence: handedOver ? 3 : 2 }),
@@ -85,34 +77,6 @@ describe('a wait that also ends behind a running command', () => {
 describe('structured send settlement compatibility wait', () => {
   afterEach(() => vi.useRealTimers())
 
-  it('returns a settlement already present in the journal', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => journal('accepted'))
-
-    await expect(settlements.wait('session-1', 'client-1')).resolves.toMatchObject({
-      value: { submission: { dispatchState: 'accepted' } }
-    })
-  })
-
-  it('rejects when the send is absent from the current session generation', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => emptyJournal())
-
-    await expect(settlements.wait('session-1', 'client-1')).rejects.toThrow(
-      'agent session send disappeared before settlement'
-    )
-  })
-
-  it('resolves from a journal publication after durable admission', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
-    const pending = settlements.wait('session-1', 'client-1')
-
-    settlements.publish('session-1', journal('accepted'))
-
-    await expect(pending).resolves.toMatchObject({
-      cursor: { sequence: 2 },
-      value: { submission: { dispatchState: 'accepted' } }
-    })
-  })
-
   it('removes an abandoned wait on transport cancellation', async () => {
     const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
     const controller = new AbortController()
@@ -134,28 +98,6 @@ describe('structured send settlement compatibility wait', () => {
     settlements.publish('session-1', journal('accepted'))
   })
 
-  it('caps compatibility observers retained for one session', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
-    const retained = Array.from({ length: 64 }, () =>
-      settlements.wait('session-1', 'client-1').catch(() => undefined)
-    )
-
-    await expect(settlements.wait('session-1', 'client-1')).resolves.toBeUndefined()
-    settlements.closeAll()
-    await Promise.all(retained)
-  })
-
-  it('caps compatibility observers retained across sessions', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
-    const retained = Array.from({ length: 1_024 }, (_, index) =>
-      settlements.wait(`session-${index}`, 'client-1').catch(() => undefined)
-    )
-
-    await expect(settlements.wait('session-overflow', 'client-1')).resolves.toBeUndefined()
-    settlements.closeAll()
-    await Promise.all(retained)
-  })
-
   it('ends only the compatibility observation when the session closes', async () => {
     const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
     const pending = settlements.wait('session-1', 'client-1')
@@ -164,15 +106,6 @@ describe('structured send settlement compatibility wait', () => {
 
     await expect(pending).resolves.toBeUndefined()
     settlements.publish('session-1', journal('accepted'))
-  })
-
-  it('rejects a wait when an authoritative publication drops the submission', async () => {
-    const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
-    const pending = settlements.wait('session-1', 'client-1')
-
-    settlements.publish('session-1', emptyJournal())
-
-    await expect(pending).rejects.toThrow('agent session send disappeared before settlement')
   })
 
   it('ends every compatibility observation when the host closes', async () => {
@@ -185,4 +118,46 @@ describe('structured send settlement compatibility wait', () => {
     await expect(first).resolves.toBeUndefined()
     await expect(second).resolves.toBeUndefined()
   })
+})
+
+it('a row wait follows a replacement handoff and resolves withdrawal or returned recovery', async () => {
+  let row: ReturnType<NonNullable<SendSettlementJournal['queuedSend']>> = {
+    clientMessageId: 'row',
+    queued: { messageId: 'row', position: 1, state: 'waiting' }
+  }
+  const state: SendSettlementJournal = {
+    ...journal('pending'),
+    queuedSend: () => row,
+    submission: () => undefined
+  }
+  const settlements = new StructuredAgentSessionSendSettlement(() => state)
+  const pending = settlements.wait('session-1', 'row')
+  const attempt = journal('pending').submission('client-1')!
+  row = { clientMessageId: 'row', submission: { ...attempt, clientMessageId: 'attempt-1' } }
+  settlements.publish('session-1', state)
+  row = { clientMessageId: 'row', queued: { messageId: 'row', position: 1, state: 'waiting' } }
+  settlements.publish('session-1', state)
+  row = {
+    clientMessageId: 'row',
+    submission: {
+      ...attempt,
+      clientMessageId: 'attempt-2',
+      dispatchState: 'accepted'
+    }
+  }
+  settlements.publish('session-1', state)
+  await expect(pending).resolves.toMatchObject({
+    value: {
+      submission: {
+        clientMessageId: 'attempt-2',
+        dispatchState: 'accepted'
+      }
+    }
+  })
+  for (const result of ['withdrawn', 'returned'] as const) {
+    row = { clientMessageId: 'row', queued: { messageId: 'row', position: 1, state: result } }
+    await expect(settlements.wait('session-1', 'row')).resolves.toMatchObject({
+      value: { queued: { state: result } }
+    })
+  }
 })

@@ -1,6 +1,5 @@
 // Electron is unavailable in main-process worker threads too (verified Electron 43); scan their graphs rather than trusting entry comments.
 export const WORKER_THREAD_ENTRY_NAMES = [
-  'stt-worker',
   'warp-theme-parser-worker',
   'foreign-sqlite-reader-entry',
   'journal-sql-worker-entry',

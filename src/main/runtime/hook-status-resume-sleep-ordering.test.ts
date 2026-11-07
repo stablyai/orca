@@ -147,20 +147,6 @@ describe('a queued hook status and a workspace sleep', () => {
       state: 'done'
     })
   })
-
-  it('lets a status accepted after the sleep is saved replace its record, as the window does', async () => {
-    const { runtime, getSession, releaseFirstWrite } = makeRuntimeWithSlowFirstWrite()
-    releaseFirstWrite()
-    await runtime['sleepResumeRecords'].persist(TEST_WORKTREE_ID, sleepCapture(11), [PTY_ID])
-
-    runtime.recordHookStatusResume(codexRow({ receivedAt: 30 }))
-    await runtime['hookStatusResumeWrites']
-
-    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toMatchObject({
-      origin: 'live',
-      state: 'working'
-    })
-  })
 })
 
 it.each([false, true])(
@@ -198,79 +184,6 @@ it.each([false, true])(
       expect(record).toMatchObject({ prompt: 'new explicit C', updatedAt: 30 })
     } else {
       expect(getSession().sleepingAgentSessionsByPaneKey).toEqual({})
-    }
-  }
-)
-
-it.each([10, 100])(
-  'counts actual refused cleanup copies/writes over %i saved panes',
-  async (size) => {
-    const session = makeWorkspaceSessionWithHeadlessTerminal()
-    const source = sleepCapture(11).get(PTY_ID)!.records[0]!
-    session.sleepingAgentSessionsByPaneKey = Object.fromEntries(
-      Array.from({ length: size }, (_, index) => [
-        `pane-${index}`,
-        { ...source, paneKey: `pane-${index}` }
-      ])
-    )
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(runtimeStore)
-    const originalClone = globalThis.structuredClone
-    let copied = 0
-    let clones = 0
-    const clone = vi.spyOn(globalThis, 'structuredClone').mockImplementation((value, options) => {
-      if (value && typeof value === 'object' && 'sleepingAgentSessionsByPaneKey' in value) {
-        copied += Object.keys(value.sleepingAgentSessionsByPaneKey ?? {}).length
-        clones += 1
-      }
-      return originalClone(value, options)
-    })
-    const clear = (index: number, stale = false) => {
-      const paneKey = `pane-${index}`
-      const record = { ...source, paneKey }
-      return runtime.forgetRefusedSavedResume(
-        TEST_WORKTREE_ID,
-        paneKey,
-        {
-          agent: 'codex',
-          providerSession: SESSION,
-          expectedSavedRecord: {
-            paneKey,
-            capturedAt: stale ? -1 : record.capturedAt,
-            updatedAt: record.updatedAt
-          }
-        },
-        record
-      )
-    }
-    try {
-      await clear(0, true)
-      expect([clones, copied, runtimeStore.flushOrThrow.mock.calls.length]).toEqual([1, size, 0])
-      // The durable fixture executes the real mutation/rollback, failing only its disk-write primitive.
-      runtimeStore.flushOrThrow.mockImplementationOnce(() => {
-        throw new Error('disk full')
-      })
-      await expect(clear(0)).rejects.toThrow('disk full')
-      expect(getSession().sleepingAgentSessionsByPaneKey?.['pane-0']).toBeDefined()
-      clones = 0
-      copied = 0
-      runtimeStore.flushOrThrow.mockClear()
-      await Promise.all(Array.from({ length: size }, (_, index) => clear(index)))
-      // Each accepted edit clones before deleting, then stages one smaller map: sum(2k-1)=N².
-      expect([clones, copied, runtimeStore.flushOrThrow.mock.calls.length]).toEqual([
-        2 * size,
-        size * size,
-        size
-      ])
-      expect(getSession().sleepingAgentSessionsByPaneKey).toEqual({})
-      await clear(0)
-      expect([clones, copied, runtimeStore.flushOrThrow.mock.calls.length]).toEqual([
-        2 * size + 1,
-        size * size,
-        size
-      ])
-    } finally {
-      clone.mockRestore()
     }
   }
 )

@@ -4,7 +4,6 @@ import Database from '../../sqlite/sync-database'
 import { JournalSqlScope } from './journal-sql-scope'
 import { JournalSqlValueContext } from './journal-sql-value-context'
 import { JournalSqlKeyedMap, JournalSqlKeyedSet } from './journal-sql-keyed-values'
-import { JournalSqlPlaceIndex } from './journal-sql-place-index'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 const databases: Database.Database[] = []
@@ -169,7 +168,7 @@ it('preserves undefined entries, membership, reinsert order and change-record or
   ).toEqual([{ item_id: 'b' }, { item_id: 'a' }])
 })
 
-it('materializes indexed cards through their source incarnation across commands', () => {
+it('keeps live rows on their source card incarnation across commands', () => {
   const f = fixture()
   let command = f.context()
   let cards = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'queue.cards')
@@ -194,36 +193,28 @@ it('materializes indexed cards through their source incarnation across commands'
     position: 99,
     returnedReason: 'overlay'
   })
-  new JournalSqlPlaceIndex(command.indexScope(), 'cards').set(cards.get('card')!, true, false)
   command.flush()
 
   command = f.context()
   cards = new JournalSqlKeyedMap(command, 'queue.cards')
-  const index = new JournalSqlPlaceIndex(command.indexScope(), 'cards')
   const original = cards.get('card')!
   original.returnedReason = 'late'
-  expect(index.allPlaces().head).toBe(original)
-  expect(index.allPlaces().head!.returnedReason).toBe('late')
+  expect(
+    new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.current').get('card')
+  ).toBe(original)
   cards.set('card', { ...original, returnedReason: 'replacement' })
   command.flush()
 
   command = f.context()
   cards = new JournalSqlKeyedMap(command, 'queue.cards')
-  const restored = new JournalSqlPlaceIndex(command.indexScope(), 'cards')
-  expect([restored.allPlaces().head!.returnedReason, cards.get('card')!.returnedReason]).toEqual([
+  const current = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.current')
+  const overlays = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.overlays')
+  expect([current.get('card')?.returnedReason, cards.get('card')?.returnedReason]).toEqual([
     'late',
     'replacement'
   ])
-  const current = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.current')
-  const overlays = new JournalSqlKeyedMap<string, QueuedMessageRow>(command, 'cards.overlays')
-  expect(current.get('card')?.returnedReason).toBe('late')
   expect([overlays.get('card')?.returnedReason, overlays.get('card')?.position]).toEqual([
     'overlay',
     99
   ])
-  restored.set(cards.get('card')!, true, false)
-  command.flush()
-  expect(restored.allPlaces().head).toBe(cards.get('card'))
-  restored.delete('card')
-  expect(restored.allPlaces().head).toBeUndefined()
 })

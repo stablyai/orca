@@ -26,7 +26,7 @@ import {
 } from '../../../../shared/agent-session/view/structured-agent-session-goal-mode'
 import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 import { promptHasInteractionModeSkill } from './native-chat-prompt-document'
-import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
+import { runSessionOptionSurfaceCall } from './session/options/controls/native-chat-session-option-surface-call'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput

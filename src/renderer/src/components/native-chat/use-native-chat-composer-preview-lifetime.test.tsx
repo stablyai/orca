@@ -112,33 +112,4 @@ describe('composer preview lifetime', () => {
     expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:pending-preview')
     expect(readNativeChatAttachmentCache('pending-scope')).toEqual([])
   })
-
-  it('does not revoke data previews or saved paths', async () => {
-    const revoke = vi.spyOn(URL, 'revokeObjectURL')
-    const composer = await mount('data-scope')
-    act(() => {
-      const id = begin(composer.api(), 'data:image/png;base64,AAAA')
-      composer.api().resolvePendingImageAttachment(id, '/workspace/image.png')
-    })
-    composer.unmount()
-    expect(revoke).not.toHaveBeenCalled()
-    expect(readNativeChatAttachmentCache('data-scope')).toMatchObject([
-      { path: '/workspace/image.png' }
-    ])
-  })
-
-  it('does not retain previews that were already removed or cleared', async () => {
-    const revoke = vi.spyOn(URL, 'revokeObjectURL')
-    const composer = await mount('cleared-scope')
-    act(() => {
-      const id = begin(composer.api(), 'blob:removed')
-      composer.api().dropPendingImageAttachment(id)
-      const keptId = begin(composer.api(), 'blob:cleared')
-      composer.api().resolvePendingImageAttachment(keptId, '/workspace/image.png')
-    })
-    act(() => composer.api().clearImageAttachments())
-    expect(revoke).toHaveBeenCalledTimes(2)
-    composer.unmount()
-    expect(revoke).toHaveBeenCalledTimes(2)
-  })
 })

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
 
@@ -78,7 +78,8 @@ function publishHostGraph(): void {
 // The host app relaunched with its daemon PTY alive; its renderer has not published yet.
 async function connectThenLoseHostRenderer(options: { staleSend?: boolean } = {}) {
   const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-  const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+  const handleEvents =
+    await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
   const onPtyExit = vi.fn()
   const transport = createRemoteRuntimePtyTransport('env-1', {
     worktreeId: 'wt-1',

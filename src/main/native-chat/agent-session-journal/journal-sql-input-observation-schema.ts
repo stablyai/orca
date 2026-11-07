@@ -36,24 +36,6 @@ CREATE TABLE IF NOT EXISTS journal_proj_recovery_owed (
 ) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS journal_proj_recovery_owed_order
   ON journal_proj_recovery_owed(session_id, epoch, ordinal);
-CREATE TABLE IF NOT EXISTS journal_proj_unintroduced_cards (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  ordinal INTEGER NOT NULL,
-  PRIMARY KEY (session_id, epoch, message_id)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_unintroduced_cards_order
-  ON journal_proj_unintroduced_cards(session_id, epoch, ordinal);
-CREATE TABLE IF NOT EXISTS journal_proj_cleared_cards (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  ordinal INTEGER NOT NULL,
-  PRIMARY KEY (session_id, epoch, message_id)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS journal_proj_cleared_cards_order
-  ON journal_proj_cleared_cards(session_id, epoch, ordinal);
 CREATE TABLE IF NOT EXISTS journal_proj_input_providers (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,

@@ -19,14 +19,14 @@ vi.mock('sonner', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   toast: { info: mocks.toastInfo, error: vi.fn() }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/components/sidebar/workspace-card/activity/use-worktree-agent-activation', () => ({
   activateWorktreeAgentPane: mocks.activatePane
 }))
-vi.mock('@/components/terminal-pane/stale-agent-row', async (original) => ({
+vi.mock('@/components/terminal-pane/agent-status/stale-agent-row', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   showAgentPaneUnavailable: mocks.paneUnavailable
 }))

@@ -15,7 +15,7 @@ import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
 import { withAnswerNext } from '../receipt-next'
-import { ReplyParams } from '../schemas'
+import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 
 export const ORCHESTRATION_REPLY_METHOD = defineMethod({
   name: 'orchestration.reply',

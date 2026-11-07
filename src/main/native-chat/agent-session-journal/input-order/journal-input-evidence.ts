@@ -12,6 +12,7 @@ import type {
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalInputPlaceStorage, JournalIndexStorageFactory } from '../journal-index-storage'
 import { JournalInputObservations } from './journal-input-observations'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
 import { JournalSubmissionLinks } from './journal-submission-links'
 import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
 
@@ -35,6 +36,31 @@ export class JournalInputEvidence extends JournalInputObservations {
     this.acceptedByTime = indexes.place('accepted-by-time')
     this.failedRequests = indexes.place('failed-requests')
     this.stoppedOwed = indexes.place('stopped-owed')
+  }
+
+  latestPersonAcceptedSequence(): number {
+    return this.evidenceFacts.personAcceptedSequence
+  }
+  seedPersonAcceptance(sequence: number): void {
+    this.evidenceFacts.personAcceptedSequence = Math.max(
+      this.evidenceFacts.personAcceptedSequence,
+      sequence
+    )
+  }
+  personalSubmission(
+    submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>
+  ): boolean {
+    return journalSubmissionIsPersonal(this.state, submission)
+  }
+  notePersonAcceptance(
+    submission: Pick<
+      AgentJournalSubmission,
+      'acceptedSequence' | 'queuedMessageId' | 'source' | 'origin'
+    >
+  ): void {
+    if (this.personalSubmission(submission)) {
+      this.seedPersonAcceptance(submission.acceptedSequence ?? 0)
+    }
   }
 
   refreshLink(id: string): void {
@@ -161,6 +187,7 @@ export class JournalInputEvidence extends JournalInputObservations {
       this.evidenceFacts.ordinals.delete(id)
     }
     if (entry?.dispatchState === 'accepted') {
+      this.notePersonAcceptance(entry)
       this.acceptedByTime.setPosition(id, entry.submittedAt, ordinal)
     } else {
       this.acceptedByTime.delete(id)

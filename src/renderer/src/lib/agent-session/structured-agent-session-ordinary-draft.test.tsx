@@ -43,7 +43,7 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import {
   handBackStructuredAgentSessionMessage,
   returnMessageToComposer
-} from '@/components/native-chat/structured-agent-session-message-hand-back'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import { CreateIntentParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 it.each(['close', 'cancel', 'abort', 'edited-close'] as const)(
   'keeps a nonresume Hand Off through actual %s and late create settlement',

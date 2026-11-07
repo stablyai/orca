@@ -1,3 +1,4 @@
+import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { createJournalReducerState, type JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
@@ -16,11 +17,23 @@ export function prepareJournalOutcomeWrite(
   live: JournalReducerState,
   rows: readonly JournalRow[],
   savedAt: number,
-  finishFold?: (draft: JournalReducerState) => void
+  finishFold?: (draft: JournalReducerState) => void,
+  convertingLegacyQueue = false
 ): { state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
+  const format = previous?.format === 3 || !convertingLegacyQueue ? 3 : 2
+  if (
+    format === 3 &&
+    previous?.format !== 3 &&
+    journalInputOrder(live)
+      .recoverableSubmissions()
+      .some((entry) => isQueuedAgentJournalSubmission(entry) && entry.queuedMessageId === undefined)
+  ) {
+    throw new Error('old queue conversion must finish before new input is admitted')
+  }
   const source =
-    previous ?? startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt)
+    previous ??
+    startJournalOutcomeLog(db, live.sessionId, live.epoch, live.lastSequence, savedAt, format)
   if (source.through !== live.lastSequence) {
     throw new Error('journal outcome writer has stale coverage')
   }
@@ -31,9 +44,10 @@ export function prepareJournalOutcomeWrite(
     rows,
     savedAt,
     !previous || previous.format < 2,
-    finishFold
+    finishFold,
+    format
   )
-  advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence)
+  advanceJournalOutcomeSource(db, live.sessionId, live.epoch, transition.state.lastSequence, format)
   return transition
 }
 
@@ -50,7 +64,6 @@ export function publishJournalOutcomeEpoch(
   }
   const source = startJournalOutcomeLog(db, sessionId, epoch, 0, first.ts)
   const initial = createJournalReducerState(sessionId, epoch)
-  journalInputOrder(initial).beginReconstruction()
   const transition = persistJournalOutcomeRows(
     db,
     initial,

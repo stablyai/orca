@@ -30,7 +30,7 @@ import type { NativeChatOptimisticSendOutcome } from './native-chat-composer-typ
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer
-} from './use-native-chat-local-command-answer'
+} from './session/options/terminal/use-native-chat-local-command-answer'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType

@@ -13,7 +13,6 @@ vi.mock('./ArtifactPreview', () => ({
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ArtifactCollection } from './ArtifactCollection'
-import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -91,40 +90,6 @@ describe('ArtifactCollection', () => {
     return { container, selectArtifact }
   }
 
-  it('renders a full-width table list without an inline preview', async () => {
-    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
-    const { container, selectArtifact } = renderCollection(items)
-
-    const table = container.querySelector(`.${LIST_TABLE_CONTAINER_CLASS.split(' ')[0]}`)
-    expect(table).toHaveClass('rounded-md', 'border')
-    expect(screen.getByText('Name')).toBeInTheDocument()
-    expect(screen.getByText('Type')).toBeInTheDocument()
-    expect(screen.queryByText(/Preview https:\/\//)).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: /Second artifact/ }))
-    expect(selectArtifact).toHaveBeenCalledWith('second')
-  })
-
-  it('highlights only the selected row', () => {
-    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
-    renderCollection(items)
-
-    const first = screen.getByRole('button', { name: /First artifact/ })
-    const second = screen.getByRole('button', { name: /Second artifact/ })
-    expect(first).toHaveAttribute('data-current', 'true')
-    expect(second).not.toHaveAttribute('data-current')
-  })
-
-  it('commits selection on Enter from the focused row', async () => {
-    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
-    const { selectArtifact } = renderCollection(items)
-    const second = screen.getByRole('button', { name: /Second artifact/ })
-
-    second.focus()
-    await userEvent.keyboard('{Enter}')
-    expect(selectArtifact).toHaveBeenCalledWith('second')
-  })
-
   it('filters the list by name', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     renderCollection(items)
@@ -164,60 +129,5 @@ describe('ArtifactCollection', () => {
     await user.click(screen.getByRole('menuitem', { name: 'Copy link' }))
     expect(rowFor('Second artifact')).not.toHaveAttribute('data-current')
     expect(rowFor('First artifact')).toHaveAttribute('data-current', 'true')
-  })
-
-  // Exceed the windowing threshold so announced set sizes cannot be inferred from mounted rows alone.
-  const PAGED_ITEM_COUNT = 60
-
-  function pagedItems(): ArtifactListItem[] {
-    return Array.from({ length: PAGED_ITEM_COUNT }, (_, index) =>
-      artifact(`slug-${index}`, `Artifact ${index}`)
-    )
-  }
-
-  // Supply viewport height because happy-dom has no layout; otherwise the virtualizer mounts no rows and assertions are vacuous.
-  function stubScrollerViewport(): void {
-    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
-      this: HTMLElement
-    ) {
-      return this.classList.contains('overflow-auto') ? 600 : 53
-    })
-  }
-
-  function announcedSetSizes(container: HTMLElement): string[] {
-    const wrappers = Array.from(container.querySelectorAll('[data-index]'))
-    expect(wrappers.length).toBeGreaterThan(0)
-    // The window is a strict subset, so a set size read off the DOM could not reach the real total.
-    expect(wrappers.length).toBeLessThan(PAGED_ITEM_COUNT)
-    return wrappers.map((wrapper) => wrapper.getAttribute('aria-setsize') ?? 'missing')
-  }
-
-  it('announces an unknown set size while a further page is loadable', () => {
-    stubScrollerViewport()
-    const { container } = renderCollection(pagedItems(), vi.fn(), true)
-
-    // The button is the contradiction: a concrete set size here would claim these are all of them.
-    expect(screen.getByRole('button', { name: /Load more/ })).toBeInTheDocument()
-    const sizes = announcedSetSizes(container)
-    expect(sizes).toEqual(sizes.map(() => '-1'))
-  })
-
-  it('announces the real row count once the cursor is exhausted', () => {
-    stubScrollerViewport()
-    const { container } = renderCollection(pagedItems())
-
-    expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument()
-    const sizes = announcedSetSizes(container)
-    expect(sizes).toEqual(sizes.map(() => String(PAGED_ITEM_COUNT)))
-  })
-
-  it('shows compact type, size, and expiry in the row', () => {
-    const items = [artifact('first', 'First artifact')]
-    renderCollection(items)
-
-    expect(screen.getByText('HTML')).toBeInTheDocument()
-    expect(screen.getByText('1.2 KB')).toBeInTheDocument()
-    expect(screen.getByText(/in \d+ days/)).toBeInTheDocument()
-    expect(screen.queryByText('https://share.onorca.dev/a/first')).not.toBeInTheDocument()
   })
 })

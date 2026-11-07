@@ -54,7 +54,7 @@ export class JournalQueuedMessages {
     undefined,
     (id) => this.get(id)
   )
-  private readonly legacy: LegacyQueuedCards
+  readonly legacy: LegacyQueuedCards
   inputWork: () => JournalInputWork | null = () => null
   private viewed: { key: string; cards: readonly QueuedMessageRow[] } | null = null
 
@@ -85,8 +85,11 @@ export class JournalQueuedMessages {
     const key = this.revision()
     if (this.viewed?.key !== key) {
       const state = this.inputState()
-      const cards = [...journalInputOrder(state).liveCards(state)]
-      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
+      const cards = journalInputOrder(state).cards.list()
+      this.viewed = {
+        key,
+        cards
+      }
     }
     return this.viewed.cards
   }
@@ -111,10 +114,10 @@ export class JournalQueuedMessages {
       state: this.inputState(),
       floor: this.deps.reopenFloor(),
       get: (messageId) => this.get(messageId),
-      editHeld: (messageId) =>
-        automatic && (this.deps.editHeld ?? ((id) => this.editLeases.isHeld(id)))(messageId),
+      editHeld: (id) => automatic && (this.deps.editHeld?.(id) ?? this.editLeases.isHeld(id)),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
       unavailable: this.mailUnavailable,
+      automatic,
       steer
     })
   }
@@ -124,6 +127,8 @@ export class JournalQueuedMessages {
     input: {
       messageId: string
       body: AgentJournalMessageItem
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
@@ -147,6 +152,8 @@ export class JournalQueuedMessages {
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },
+          ...(input.deliveryMode !== undefined ? { deliveryMode: input.deliveryMode } : {}),
+          ...(input.unattended !== undefined ? { unattended: input.unattended } : {}),
           ...(input.holdReason ? { holdReason: input.holdReason } : {}),
           ...(input.options ? { options: input.options } : {})
         }
@@ -250,16 +257,21 @@ export class JournalQueuedMessages {
     return this.plan(witness ? [{ messageId: witness.messageId }] : [])
   }
 
-  rederiveLegacyWitnesses(): void {
-    this.legacy.rederiveWitnesses()
-  }
-
   importAtOpen(): Promise<void> {
     return this.legacy.importAtOpen()
   }
 
   pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+      failedAt: journalInputOrder(state).newestTurn.failure(),
+      cards: this.list(),
+      reopenFloor: this.deps.reopenFloor()
+    })
   }
 
   awaitReopenMark(): boolean {
@@ -282,19 +294,10 @@ export class JournalQueuedMessages {
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
-    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
-  }
-
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
-    const state = this.deps.state()
-    return deriveQueuePauses({
-      epoch: state.epoch,
-      marks: state.queuePauseMarks,
-      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-      failedAt: journalInputOrder(state).newestTurn.failure(),
-      cards,
-      reopenFloor: this.deps.reopenFloor()
-    })
+    return journalUserStopInForce(
+      state.queuePauseMarks,
+      journalInputOrder(state).latestPersonAcceptedSequence()
+    )
   }
 
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */

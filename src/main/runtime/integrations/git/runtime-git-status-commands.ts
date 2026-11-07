@@ -70,6 +70,11 @@ export class RuntimeGitStatusCommands {
     return requireRuntimeGitProvider(target).checkIgnoredPaths(target.worktree.path, relativePaths)
   }
 
+  async getRuntimeGitRefs(worktreeSelector: string, query?: string) {
+    const target = await resolveGatedGitTarget(this.host, worktreeSelector)
+    return requireRuntimeGitProvider(target).getHistoryRefs(target.worktree.path, query)
+  }
+
   async getRuntimeGitHistory(
     worktreeSelector: string,
     options: GitHistoryOptions = {}

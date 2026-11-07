@@ -49,6 +49,22 @@
       "ordinal": 12,
       "value": {}
     },
+    "854cb236952a": {
+      "actionSheetRequestSeq": 1,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "sessionTabs": [],
+      "terminalsLoaded": false
+    },
     "8c990409ac55": {
       "name": "worktree.activate#1",
       "ordinal": 5,
@@ -105,21 +121,6 @@
       "ordinal": 2,
       "value": {}
     },
-    "acf0370bfacc": {
-      "actionSheetRequestSeq": 1,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "terminalsLoaded": false
-    },
     "ba45b883b259": {
       "name": "fetch-terminals",
       "ordinal": 10,
@@ -162,7 +163,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -181,7 +182,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -202,7 +203,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",

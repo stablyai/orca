@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { HostLiveTerminalProbeVerdict } from '@/runtime/host-live-terminal-probe'
+import type { HostLiveTerminalProbeVerdict } from '@/runtime/hosted-terminals/inventory/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'

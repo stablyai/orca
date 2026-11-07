@@ -1,6 +1,7 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalInputOrder } from './input-order/journal-input-order'
+import { recoverJournalQueue } from './queued-messages/journal-unsent-send-hold'
 import { staleSubagentRosterRevisions } from './item-lifecycle/journal-subagent-liveness'
 import type { JournalWriterSession } from './journal-writer-session'
 import { journalLogNeedsFounding } from './journal-sql-meta'
@@ -19,11 +20,7 @@ export async function openJournalWriterSession(
       readJournalSessionEpoch(db, sessionId)
     )
   }
-  const restored = journalInputOrder(session.state)
-  // Restore stamps cards before its frontier exists; a reopen re-derives both in that order.
-  restored.lineage.reopen()
-  restored.cards.reopen(session.state)
-  restored.lineage.restoreFrontier(session.state.lastSequence, session.state.inputEntries)
+  journalInputOrder(session.state).cards.reopen()
   for (const key of liveWorkItemKeys(session)) {
     const item = session.state.items.get(key)
     for (const revision of item ? staleSubagentRosterRevisions([item]) : []) {
@@ -41,6 +38,7 @@ export async function openJournalWriterSession(
   const order = journalInputOrder(state)
   order.markOpeningRecovery()
   order.newestTurn.reopen(state.lastSequence)
+  await recoverJournalQueue(session.journal, db)
   return openedThrough
 }
 

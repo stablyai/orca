@@ -4,16 +4,16 @@ import '@testing-library/jest-dom/vitest'
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type * as TranscriptChromeModule from './NativeChatTranscriptChrome'
+import type * as TranscriptChromeModule from './media/images/native-chat-image-visibility'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NATIVE_CHAT_VISUAL_READER_SCROLL_TYPE } from '../../../../shared/native-chat/native-chat-visual-shell'
 
 const callRuntimeRpc = vi.fn()
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
 }))
 // The visual's row is in view, so its frame mounts.
-vi.mock('./NativeChatTranscriptChrome', async (importOriginal) => ({
+vi.mock('./media/images/native-chat-image-visibility', async (importOriginal) => ({
   ...(await importOriginal<typeof TranscriptChromeModule>()),
   observeTranscriptVisibility: (_element: Element, onChange: (visible: boolean) => void) => {
     onChange(true)
@@ -21,13 +21,13 @@ vi.mock('./NativeChatTranscriptChrome', async (importOriginal) => ({
   }
 }))
 // Pacing is not this test's subject.
-vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
-  (await import('./native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
+vi.mock('./markdown/use-native-chat-paced-text', async (importOriginal) =>
+  (await import('./markdown/native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
 )
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { NativeChatVisualOwnerContext } from './native-chat-visual-owner'
+import { NativeChatVisualOwnerContext } from './media/visuals/native-chat-visual-owner'
 import {
   deliverResizes,
   marker,

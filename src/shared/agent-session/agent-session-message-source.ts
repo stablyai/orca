@@ -1,6 +1,6 @@
 // Agent-origin messages carry from outside fingerprints; absence identifies the person at the composer.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeAgentSessionConversationName } from './agent-session-conversation-name'
 import { isOrcaSessionId, type OrcaSessionId } from '../orca-session-address'
 import type { OrchestrationPartyIdentity } from '../orchestration-party-identity'

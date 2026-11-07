@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -146,7 +146,9 @@ export const WorktreeResolveCallerParent = z.object({
   envParentWorkspace: OptionalString,
   callerTerminalHandle: OptionalString,
   cwdParentWorktree: OptionalString,
-  cwdParentAmbiguous: z.literal(true).optional()
+  cwdParentAmbiguous: z.literal(true).optional(),
+  /** The workspace note; a task id in it names its parent as on a same-machine create. */
+  comment: OptionalString
 })
 
 export const WorktreeSet = WorktreeSelector.extend({

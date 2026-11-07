@@ -15,11 +15,10 @@ export type Unit = {
   orphans: readonly NativeChatOrphanOrigin[]
 }
 
-export function buildMobileNativeChatUnits(
+export function groupMobileNativeChatUnitMembers(
   grouped: readonly NativeChatMessage[],
-  kinds: ReadonlyMap<NativeChatMessage, NativeChatToolFoldKind>,
-  previous?: { units: readonly Unit[] }
-): Unit[] {
+  kinds: ReadonlyMap<NativeChatMessage, NativeChatToolFoldKind>
+): NativeChatMessage[][] {
   const members: NativeChatMessage[][] = []
   let active = false
   for (const source of grouped) {
@@ -31,26 +30,42 @@ export function buildMobileNativeChatUnits(
       active = source.role === 'assistant' && kind !== 'orphan'
     }
   }
+  return members
+}
+
+export function buildMobileNativeChatUnit(
+  sources: readonly NativeChatMessage[],
+  ids: ReadonlySet<string>,
+  kinds: ReadonlyMap<NativeChatMessage, NativeChatToolFoldKind>,
+  before: Unit | undefined
+): Unit {
+  if (
+    before &&
+    before.sources.length === sources.length &&
+    before.sources.every((source, index) => source === sources[index])
+  ) {
+    return before
+  }
+  const substituted = before && substituteProse(before, sources, kinds)
+  const orphans: NativeChatOrphanOrigin[] = []
+  const rows =
+    substituted ??
+    finishMobileNativeChatMessages(
+      foldToolMessages(sources, ids, kinds, (origin) => orphans.push(origin))
+    )
+  return { sources, rows, orphans: substituted ? before!.orphans : orphans }
+}
+
+export function buildMobileNativeChatUnits(
+  grouped: readonly NativeChatMessage[],
+  kinds: ReadonlyMap<NativeChatMessage, NativeChatToolFoldKind>,
+  previous?: { units: readonly Unit[] }
+): Unit[] {
   const ids = new Set(grouped.map((row) => row.id))
   const oldUnits = new Map(previous?.units.map((unit) => [unit.sources[0]!.id, unit]))
-  const units = members.map((sources): Unit => {
-    const before = oldUnits.get(sources[0]!.id)
-    if (
-      before &&
-      before.sources.length === sources.length &&
-      before.sources.every((source, index) => source === sources[index])
-    ) {
-      return before
-    }
-    const substituted = before && substituteProse(before, sources, kinds)
-    const orphans: NativeChatOrphanOrigin[] = []
-    const rows =
-      substituted ??
-      finishMobileNativeChatMessages(
-        foldToolMessages(sources, ids, kinds, (origin) => orphans.push(origin))
-      )
-    return { sources, rows, orphans: substituted ? before!.orphans : orphans }
-  })
+  const units = groupMobileNativeChatUnitMembers(grouped, kinds).map((sources) =>
+    buildMobileNativeChatUnit(sources, ids, kinds, oldUnits.get(sources[0]!.id))
+  )
   const allocated = new Set(ids)
   const occurrences = new Map<string, number>()
   return units.map((unit) => {

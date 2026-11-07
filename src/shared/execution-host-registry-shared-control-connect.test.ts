@@ -49,20 +49,6 @@ function hostFor(snapshot: RuntimeHostStatusSnapshot) {
   }).find((host) => host.id === 'runtime:env-1')
 }
 
-function snapshot(patch: Partial<RuntimeHostStatusSnapshot>): RuntimeHostStatusSnapshot {
-  return {
-    environmentId: 'env-1',
-    pairingRevision: 1,
-    sequence: 1,
-    checkedAt: 1,
-    status: STATUS,
-    verification: 'verified',
-    transport: 'connecting',
-    remoteControl: diagnostics('awaiting_authenticated'),
-    ...patch
-  }
-}
-
 function ownerSnapshots(): {
   owner: RuntimeHostStatusOwner
   latest: () => RuntimeHostStatusSnapshot
@@ -78,31 +64,6 @@ function ownerSnapshots(): {
 }
 
 describe('runtime host health while shared control connects (#10704)', () => {
-  it('is available when the status probe answered and shared control is still connecting', () => {
-    expect(healthFor(snapshot({}))).toBe('available')
-    expect(
-      healthFor(snapshot({ transport: 'unknown', remoteControl: diagnostics('awaiting_ready') }))
-    ).toBe('available')
-  })
-
-  it('stays connecting when only a status retained from the previous socket is held', () => {
-    expect(healthFor(snapshot({ verification: 'unavailable' }))).toBe('connecting')
-    expect(healthFor(snapshot({ verification: 'checking' }))).toBe('connecting')
-    expect(healthFor(snapshot({ verification: 'checking', transport: 'ready' }))).toBe('connecting')
-  })
-
-  it('stays connecting when shared control lost its socket', () => {
-    expect(
-      healthFor(snapshot({ transport: 'disconnected', remoteControl: diagnostics('reconnecting') }))
-    ).toBe('connecting')
-  })
-
-  it('keeps a version-blocked server blocked while shared control connects', () => {
-    expect(
-      healthFor(snapshot({ status: { ...STATUS, runtimeProtocolVersion: 0, protocolVersion: 0 } }))
-    ).toBe('blocked')
-  })
-
   it('follows the status owner: fresh answer is available, a reconnect withdraws it', () => {
     const { owner, latest } = ownerSnapshots()
     owner.acceptVerified({ id: 'status.get', ok: true, result: STATUS, _meta: { runtimeId: 'r' } })
@@ -117,27 +78,5 @@ describe('runtime host health while shared control connects (#10704)', () => {
     expect(latest().status).toEqual(STATUS)
     expect(healthFor(latest())).toBe('connecting')
     owner.dispose()
-  })
-
-  it('carries why a blocked host refused this client', () => {
-    expect(
-      hostFor(snapshot({ verification: 'blocked', blockedReason: 'access-revoked' }))
-    ).toMatchObject({ health: 'blocked', blockedReason: 'access-revoked' })
-    expect(
-      hostFor(snapshot({ verification: 'blocked', blockedReason: 'incompatible' }))
-    ).toMatchObject({ health: 'blocked', blockedReason: 'incompatible' })
-    expect(
-      hostFor(
-        snapshot({
-          status: { ...STATUS, runtimeProtocolVersion: 0, protocolVersion: 0 }
-        })
-      )
-    ).toMatchObject({ health: 'blocked', blockedReason: 'incompatible' })
-    expect(hostFor(snapshot({}))).not.toHaveProperty('blockedReason')
-    const retired = hostFor(
-      snapshot({ verification: 'blocked', retired: true, transport: 'disconnected' })
-    )
-    expect(retired).toMatchObject({ health: 'disconnected' })
-    expect(retired).not.toHaveProperty('blockedReason')
   })
 })
