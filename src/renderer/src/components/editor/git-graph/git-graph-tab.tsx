@@ -18,11 +18,12 @@ import { GitGraphFilter } from './git-graph-filter'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
 
 export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
+  const t = useTranslate()
   const history = useGitGraphHistory(worktreeId)
   const { result, scope, selectedId, revealId, controller } = history
   const workspaces = useGitGraphWorkspaces(scope)
@@ -115,13 +116,13 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={translate('gitGraph.refresh', 'Refresh commits')}
+              aria-label={t('gitGraph.refresh', 'Refresh commits')}
               onClick={() => void history.refresh()}
             >
               <RefreshCw className="size-4" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{translate('gitGraph.refresh', 'Refresh commits')}</TooltipContent>
+          <TooltipContent>{t('gitGraph.refresh', 'Refresh commits')}</TooltipContent>
         </Tooltip>
       </div>
       {history.error && (
@@ -133,14 +134,14 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
             className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
             style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 604 }}
           >
-            <span>{translate('gitGraph.branchTag', 'Branch / Tag')}</span>
+            <span>{t('gitGraph.branchTag', 'Branch / Tag')}</span>
             <div ref={graphHeader} className="relative flex h-full items-center">
-              <span>{translate('gitGraph.graph', 'Graph')}</span>
+              <span>{t('gitGraph.graph', 'Graph')}</span>
               <div
                 role="separator"
                 tabIndex={0}
                 aria-orientation="vertical"
-                aria-label={translate('gitGraph.resizeColumn', 'Resize graph column')}
+                aria-label={t('gitGraph.resizeColumn', 'Resize graph column')}
                 aria-valuemin={44}
                 aria-valuemax={maxGraphWidth}
                 aria-valuenow={draftGraphWidth}
@@ -166,9 +167,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 }}
               />
             </div>
-            <span>{translate('gitGraph.message', 'Message')}</span>
-            <span>{translate('gitGraph.author', 'Author')}</span>
-            <span>{translate('gitGraph.date', 'Date')}</span>
+            <span>{t('gitGraph.message', 'Message')}</span>
+            <span>{t('gitGraph.author', 'Author')}</span>
+            <span>{t('gitGraph.date', 'Date')}</span>
           </div>
           <div
             ref={scroll}
@@ -250,12 +251,12 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 disabled={history.loading}
                 onClick={() => void history.loadMore()}
               >
-                {translate('gitGraph.loadMore', 'Load more')}
+                {t('gitGraph.loadMore', 'Load more')}
               </Button>
             )}
             {result && !result.items.length && (
               <div className="p-4 text-xs text-muted-foreground">
-                {translate('gitGraph.noCommits', 'No commits yet')}
+                {t('gitGraph.noCommits', 'No commits yet')}
               </div>
             )}
           </div>

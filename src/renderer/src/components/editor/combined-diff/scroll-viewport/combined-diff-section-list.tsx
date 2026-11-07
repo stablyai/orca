@@ -12,7 +12,7 @@ import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { canOpenDiffSectionPreviewToSide } from '../../diff/sections/diff-section-preview'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffScrollThumb } from './use-combined-diff-scrollbar'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function CombinedDiffSectionList({
   activeGroupId,
@@ -73,6 +73,7 @@ export function CombinedDiffSectionList({
   toggleSection: (index: number) => void
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): React.JSX.Element {
+  const t = useTranslate()
   // Index comments once by file instead of rescanning all worktree comments per visible row.
   const commentCountByFilePath = useMemo(() => {
     const counts = new Map<string, number>()
@@ -125,8 +126,8 @@ export function CombinedDiffSectionList({
                   openSection={openSection}
                   openSectionTitle={
                     isAllMode || isBranchMode || isCommitMode
-                      ? translate('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
-                      : translate(
+                      ? t('auto.components.editor.CombinedDiffViewer.openDiff', 'Open diff')
+                      : t(
                           'auto.components.editor.CombinedDiffViewer.openInEditor',
                           'Open in editor'
                         )
