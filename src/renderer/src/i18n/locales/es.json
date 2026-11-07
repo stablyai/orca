@@ -20465,7 +20465,7 @@
         },
         "modelUnload": {
           "title": "Descargar modelo de voz",
-          "description": "Orca carga el modelo local mientras la voz está activada, para que el dictado empiece al instante. Elige cuándo liberar su memoria después de dictar.",
+          "description": "Cuánto tiempo permanece el modelo local en memoria después de dictar. Mientras está cargado, el dictado empieza al instante; «Inmediatamente» libera la memoria, así que cada dictado espera a que el modelo se cargue.",
           "cloud": "Los modelos en la nube se ejecutan en los servidores del proveedor, así que aquí no queda nada cargado.",
           "never": "Nunca",
           "immediately": "Inmediatamente"

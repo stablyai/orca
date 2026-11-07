@@ -20658,7 +20658,7 @@
         },
         "modelUnload": {
           "title": "Sprachmodell entladen",
-          "description": "Orca lädt das lokale Modell, solange die Spracheingabe aktiv ist, damit das Diktieren sofort beginnt. Lege fest, wann sein Speicher nach dem Diktieren freigegeben wird.",
+          "description": "Wie lange das lokale Modell nach dem Diktieren im Speicher bleibt. Solange es geladen ist, beginnt das Diktieren sofort; „Sofort“ gibt den Speicher frei, sodass jedes Diktat auf das Laden des Modells wartet.",
           "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
           "never": "Nie",
           "immediately": "Sofort"

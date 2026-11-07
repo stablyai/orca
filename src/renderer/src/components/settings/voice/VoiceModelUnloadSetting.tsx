@@ -52,14 +52,15 @@ export function VoiceModelUnloadSetting({
             )
           : translate(
               'components.settings.voice.modelUnload.description',
-              'Orca loads the on-device model while voice is on, so dictation starts at once. Choose when to free its memory after you stop dictating.'
+              'How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.'
             )
       }
       labelId={labelId}
       control={
         <Select
           value={choiceValue(current)}
-          disabled={!voiceSettings.enabled || isCloudModel}
+          // Choosing before turning voice on lets Immediately avoid the first load.
+          disabled={isCloudModel}
           onValueChange={(value) =>
             onUpdateVoiceSettings({
               unloadModelAfterMinutes: value === NEVER_VALUE ? null : Number(value)
