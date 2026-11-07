@@ -20231,7 +20231,9 @@
         "hidden": "Orca zeigt keine erstellten Pull Requests mehr an",
         "many_one": "{{count}} Pull Request erstellt",
         "many_other": "{{count}} Pull Requests erstellt"
-      }
+      },
+      "splitRight": "Rechts teilen",
+      "splitDown": "Unten teilen"
     },
     "tab": {
       "bar": {
@@ -20809,6 +20811,20 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}} konnte nicht formatiert werden. Wird ohne Formatierung gespeichert: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Wähle aus, was in diesem Bereich geöffnet werden soll.",
+        "newAgent": "Neuer Agent"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Einen Bereich neben dem Chat öffnen",
+          "action": "Bereich teilen"
+        }
       }
     }
   },

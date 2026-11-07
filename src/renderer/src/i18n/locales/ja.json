@@ -19526,7 +19526,9 @@
         "hidden": "Orca は今後開いたプルリクエストを表示しません",
         "many_one": "{{count}} 件のプルリクエストを開きました",
         "many_other": "{{count}} 件のプルリクエストを開きました"
-      }
+      },
+      "splitRight": "右に分割",
+      "splitDown": "下に分割"
     },
     "tab": {
       "bar": {
@@ -20114,6 +20116,20 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}} をフォーマットできませんでした。フォーマットせずに保存します: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "このペインで開くものを選択してください。",
+        "newAgent": "新規 Agent"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "チャットの横にペインを開く",
+          "action": "ペインを分割"
+        }
       }
     }
   },

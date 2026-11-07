@@ -11,6 +11,7 @@ import {
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
 import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
@@ -103,6 +104,12 @@ function resolveCloseTarget(
   return null
 }
 
+// A split landing has no tab to close, so Close collapses the pane.
+function closeFocusedSplitLanding(state: TabState): boolean {
+  const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
+  return group !== null && state.closeEmptyGroup(group.worktreeId, group.id)
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
@@ -114,6 +121,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       }
       if (isFloatingWorkspacePanelFocused()) {
         return false
+      }
+      if (closeFocusedSplitLanding(state)) {
+        return true
       }
     }
     const target = resolveCloseTarget(state, command.target)

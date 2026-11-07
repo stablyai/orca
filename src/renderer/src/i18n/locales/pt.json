@@ -21187,7 +21187,9 @@
         "many_one": "Criada {{count}} pull request",
         "many_other": "Criadas {{count}} pull requests",
         "many_many": "Criadas {{count}} pull requests"
-      }
+      },
+      "splitRight": "Dividir à direita",
+      "splitDown": "Dividir para baixo"
     },
     "tab": {
       "bar": {
@@ -21780,6 +21782,20 @@
     "editor": {
       "formatOnSave": {
         "failed": "Não foi possível formatar {{file}}. Salvando sem formatação: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Escolha o que abrir neste painel.",
+        "newAgent": "Novo agente"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Abra um painel ao lado do chat",
+          "action": "Dividir painel"
+        }
       }
     }
   },

@@ -20782,7 +20782,9 @@
         "many_one": "Opened {{count}} pull request",
         "many_other": "Opened {{count}} pull requests"
       },
-      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+      "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "splitRight": "Split Right",
+      "splitDown": "Split Down"
     },
     "tab": {
       "bar": {
@@ -21439,6 +21441,10 @@
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        },
+        "splitChatPane": {
+          "title": "Open a pane beside the chat",
+          "action": "Split pane"
         }
       },
       "badgeNew": "New",
@@ -21449,6 +21455,12 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Choose what to open in this pane.",
+        "newAgent": "New Agent"
       }
     }
   },

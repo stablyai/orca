@@ -20024,7 +20024,9 @@
         "many_one": "{{count}} solicitud de extracción creada",
         "many_other": "{{count}} solicitudes de extracción creadas",
         "many_many": "{{count}} solicitudes de extracción creadas"
-      }
+      },
+      "splitRight": "Dividir a la derecha",
+      "splitDown": "Dividir hacia abajo"
     },
     "tab": {
       "bar": {
@@ -20699,6 +20701,20 @@
     "editor": {
       "formatOnSave": {
         "failed": "No se pudo formatear {{file}}. Se guardará sin formatear: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "subtitle": "Elige qué abrir en este panel.",
+        "newAgent": "Nuevo agente"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Abre un panel junto al chat",
+          "action": "Dividir panel"
+        }
       }
     }
   },

@@ -136,6 +136,7 @@ describe('migrateWorktreeIdentity', () => {
       // Tab-id-keyed: must NOT be re-keyed (the tab keeps its id across rename).
       terminalLayoutsByTabId: { tab1: { root: { type: 'leaf', leafId: '0' } } }
     } as unknown as Partial<AppState>)
+    store.setState({ splitLandingGroupIds: { group1: OLD } })
 
     store.getState().migrateWorktreeIdentity(OLD, NEW)
     const s = store.getState()
@@ -163,6 +164,7 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.recentlyClosedBrowserPagesByWorkspace.browser1?.[0]?.worktreeId).toBe(NEW)
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.splitLandingGroupIds).toEqual({ group1: NEW })
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
     expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.gitBranchLineTotalByWorktree[OLD]).toBeUndefined()
