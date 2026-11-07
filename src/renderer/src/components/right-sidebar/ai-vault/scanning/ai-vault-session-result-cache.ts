@@ -29,7 +29,14 @@ function stripPreviewSessions(result: AiVaultListResult): AiVaultListResult {
   const sessions: AiVaultSession[] = result.sessions
     .slice(0, MAX_PERSISTED_SESSIONS)
     .map((session) => ({ ...session, previewMessages: [] }))
-  return { ...result, sessions }
+  const truncated = sessions.length < result.sessions.length
+  return {
+    ...result,
+    sessions,
+    // A truncated list is not the fingerprint's full scan; keep it so a conditional
+    // refresh always asks for the complete result instead of reusing this subset.
+    ...(truncated ? { fingerprint: undefined } : {})
+  }
 }
 
 /** Validate the persisted shape before trusting a decoded entry as a cache hit. */
