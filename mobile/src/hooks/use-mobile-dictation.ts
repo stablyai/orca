@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AppState } from 'react-native'
 import { useDictationCapture } from '../platform/dictation-capture'
 import { useOnDeviceSpeech } from '../platform/on-device-speech'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
@@ -271,14 +272,24 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   useEffect(() => {
     // Finish what was already streamed; only the user's own cancel may discard it.
-    const sub = capture.onInterruption(() => {
+    const interrupted = () => {
       if (statusRef.current === 'recording') {
         void finishDictation(dictationSessionErrorMessage('interrupted'))
       } else if (statusRef.current === 'starting') {
         void abandonDictation(dictationSessionErrorMessage('interrupted'))
       }
+    }
+    const sub = capture.onInterruption(interrupted)
+    // A backgrounded app loses the microphone (Android pauses it, iOS suspends the app), so leaving is an interruption too.
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'background') {
+        interrupted()
+      }
     })
-    return () => sub.remove()
+    return () => {
+      sub.remove()
+      appState.remove()
+    }
   }, [abandonDictation, capture, finishDictation])
 
   useEffect(() => {

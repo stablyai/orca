@@ -41,7 +41,6 @@ class AudioEngine (context: Context) {
     private var micBytes = 0L
 
     var isRecording = false
-    private var isRecordingBeforePause = false
 
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
     var onInputVolumeCallback: ((Float) -> Unit)? = null
@@ -150,18 +149,10 @@ class AudioEngine (context: Context) {
         abandonAudioFocus()
 
         val listener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+            // Calls, alarms and assistants take focus transiently but hold the mic meanwhile; a duck request only lowers output we never play.
             when (focusChange) {
-                AudioManager.AUDIOFOCUS_LOSS -> {
-                    Log.d("AudioEngine", "Audio focus lost")
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        pauseRecording()
-                    } else {
-                        stopRecording()
-                        // Pre-Q stops for good rather than pausing, so the focus goes back too.
-                        abandonAudioFocus()
-                    }
-                    onAudioInterruptionCallback?.let { it("blocked") }
-                }
+                AudioManager.AUDIOFOCUS_LOSS -> endRecordingForInterruption("blocked")
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> endRecordingForInterruption("began")
             }
         }
         audioFocusChangeListener = listener
@@ -270,11 +261,7 @@ class AudioEngine (context: Context) {
         }
     }
 
-    private fun stopRecording(clearPauseResume: Boolean = true) {
-        // Only the activity-pause stop keeps the resume flag; every other stop ends the recording for good.
-        if (clearPauseResume) {
-            isRecordingBeforePause = false
-        }
+    private fun stopRecording() {
         if (!isRecording) return
         isRecording = false
         if (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
@@ -284,13 +271,21 @@ class AudioEngine (context: Context) {
         onInputVolumeCallback?.invoke(0.0F)
     }
 
+    // Stop for good and let JS finish with what was heard; reopening later would splice a silent gap into the dictation.
+    private fun endRecordingForInterruption(kind: String) {
+        if (!isRecording) return
+        Log.d("AudioEngine", "Recording interrupted: $kind")
+        stopRecording()
+        abandonAudioFocus()
+        onAudioInterruptionCallback?.invoke(kind)
+    }
+
     @RequiresApi(Build.VERSION_CODES.Q)
-    fun toggleRecording(value: Boolean, clearPauseResume: Boolean = true): Boolean {
+    fun toggleRecording(value: Boolean): Boolean {
         if (value) {
             if (!isRecording) startRecording()
         } else {
-            // Runs even when already stopped, so a stop issued while paused still clears the resume flag.
-            stopRecording(clearPauseResume)
+            stopRecording()
         }
 
         isRecording = value
@@ -307,22 +302,13 @@ class AudioEngine (context: Context) {
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
+    // Recording in the background is not supported, so leaving the app interrupts it.
     fun pauseRecording() {
-        isRecordingBeforePause = isRecording
-        isRecording = toggleRecording(false, clearPauseResume = false)
+        endRecordingForInterruption("began")
     }
 
-    @RequiresApi(Build.VERSION_CODES.Q)
     fun resumeRecording() {
         requestAudioFocus()
-        // Consume the flag: a second resume without an intervening pause must not reopen the microphone.
-        val shouldResumeRecording = isRecordingBeforePause
-        isRecordingBeforePause = false
-        // Reopen only a mic closed by pause; a JS recording started while paused must stay live.
-        if (shouldResumeRecording) {
-            isRecording = toggleRecording(true)
-        }
     }
 
     @SuppressLint("NewApi")
