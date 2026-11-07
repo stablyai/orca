@@ -147,9 +147,6 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           .then(reportActivationOutcome)
           .catch(() => null)
       }
-      if (disposed) {
-        return
-      }
       // Both join the focus refresh's in-flight reads; its 2 s tick re-lists while the tab stream is unconfirmed or a handle is pending.
       void ensureSessionTabs().catch(() => null)
       await fetchTerminals({ allowEmptyLoaded: false })
