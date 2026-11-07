@@ -17,7 +17,8 @@ export function nativeChatSideChatForkPoint(
   const tipOnly = chat.support.kind === 'known' && chat.support.fork === 'tip'
   for (let index = slots.length - 1; index >= 0; index--) {
     const slot = slots[index]
-    if (slot.kind !== 'message') {
+    // Subagent sections can draw below newer root rows, and never fork.
+    if (slot.kind !== 'message' || slot.depth > 0) {
       continue
     }
     const sequence = slot.message.journalPosition?.sequence

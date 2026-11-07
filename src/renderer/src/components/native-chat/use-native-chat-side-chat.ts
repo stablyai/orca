@@ -47,9 +47,10 @@ export function useNativeChatSideChat(
         }
       }
       const current = point.current
-      return current.kind === 'ready'
+      // A rewind may have dropped the reported response before the list said so.
+      return current.kind === 'ready' && fork.forkableItemIds.has(current.throughItemId)
         ? { throughItemId: current.throughItemId }
-        : { refused: sideChatRefusal(current) }
+        : { refused: sideChatRefusal(current.kind === 'ready' ? { kind: 'no-reply' } : current) }
     }
     const now = start()
     return {
@@ -92,6 +93,8 @@ export function useNativeChatSideChatForkPointReport(
       report?.({ kind })
     }
   }, [kind, report, throughItemId])
+  // An unmounted transcript (an empty conversation) has nothing to fork.
+  useLayoutEffect(() => () => report?.({ kind: 'no-reply' }), [report])
 }
 
 function sideChatRefusal(point: Exclude<NativeChatSideChatForkPoint, { kind: 'ready' }>): string {

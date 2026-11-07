@@ -6,7 +6,8 @@ function slot(
   id: string,
   role: 'user' | 'assistant',
   turnKey: string,
-  activeTurnIsWorking = false
+  activeTurnIsWorking = false,
+  depth = 0
 ): NativeChatMessageSlot {
   return {
     kind: 'message',
@@ -28,7 +29,7 @@ function slot(
     turnFolds: false,
     turnDiff: undefined,
     subagentRoster: undefined,
-    depth: 0,
+    depth,
     estimatedHeight: 40
   }
 }
@@ -73,5 +74,16 @@ describe('nativeChatSideChatForkPoint', () => {
         chat('checkpoint')
       )
     ).toEqual({ kind: 'no-reply' })
+  })
+
+  it('looks past an older subagent section drawn below the newest reply', () => {
+    expect(
+      nativeChatSideChatForkPoint(
+        [...transcript(false), slot('child-1', 'assistant', 'turn-1', false, 1)],
+        'turn-2',
+        false,
+        chat('tip')
+      )
+    ).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
   })
 })
