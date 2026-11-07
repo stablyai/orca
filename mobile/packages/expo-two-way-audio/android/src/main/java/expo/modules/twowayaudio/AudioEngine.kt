@@ -19,8 +19,11 @@ import java.util.concurrent.Executors
 import kotlin.math.pow
 
 
+// The microphone rate; on-device speech requires it too.
+internal const val MIC_SAMPLE_RATE = 16000
+
 class AudioEngine (context: Context) {
-    private val SAMPLE_RATE = 16000
+    private val SAMPLE_RATE = MIC_SAMPLE_RATE
     private val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     private val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
 

@@ -708,7 +708,6 @@
 3 src/renderer/src/hooks/linear-issue-committed-state.ts
 1 src/renderer/src/hooks/use-audio-capture.ts
 1 src/renderer/src/hooks/use-bundled-skill-install.ts
-1 src/renderer/src/hooks/use-monaco-theme.ts
 2 src/renderer/src/hooks/useDetectedAgents.ts
 2 src/renderer/src/hooks/useGitHubTaskItems.ts
 2 src/renderer/src/hooks/useImmediateMutation.ts
