@@ -97,6 +97,8 @@ export function allowNativeBrowserPopup(input: {
       ...input.options,
       title: 'about:blank',
       fullscreenable: false,
+      // Match origin-bar popups: a visible app menu consumes the minimum content height.
+      autoHideMenuBar: true,
       show: mayPresent && !input.background,
       // Content-sized like origin-bar popups, so resizeTo cannot hide the origin title.
       useContentSize: true,

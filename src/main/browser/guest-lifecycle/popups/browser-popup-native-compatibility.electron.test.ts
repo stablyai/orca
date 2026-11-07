@@ -505,7 +505,7 @@ describe('hidden Chromium native popup request compatibility', () => {
       await child.evaluate('window.resizeTo(640, 480)')
       await expect
         .poll(async () => {
-          const width = await child.evaluate('window.outerWidth')
+          const width = await child.evaluate(() => window.outerWidth)
           return Math.abs(width - 640)
         })
         .toBeLessThanOrEqual(1)
