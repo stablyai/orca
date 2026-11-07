@@ -7,6 +7,7 @@ import {
   useQueries,
   useQuery,
   type QueryClient,
+  type StaleTimeFunction,
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
@@ -29,7 +30,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
     input: TInput,
     previous: TData | undefined
   ) => Promise<TData>
-  staleTime?: number
+  staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
   // Only for families the desktop sends no change signal for.
   refetchOnWindowFocus?: boolean

@@ -23,9 +23,10 @@ const fetchReviewDiff = (
 ) => loadMobileDiffReviewDiff(client, target.worktree ?? '', input)
 
 // Branch and commit diffs are named by their oids, so a cached answer never goes stale.
+// `deleted` is the loader's stand-in for a refused read, which may be transient, so it is read again.
 const fixedDiffQuery = defineHostQuery({
   family: 'git.diff',
-  staleTime: Infinity,
+  staleTime: (query) => (query.state.data?.kind === 'deleted' ? 0 : Infinity),
   gcTime: 5 * 60_000,
   fetch: fetchReviewDiff
 })
@@ -110,9 +111,13 @@ export function useMobileDiffReviewDiffLoading(input: DiffLoadingInput): ReviewD
     return { kind: 'idle' }
   }
   const itemKey = currentItem.key
+  // Older lines stand in only while the new read is out or the desktop is away, never for a failed one.
+  const failed = connected && diff.error !== null && !diff.isFetching
   const shown =
     diff.data ??
-    (lastShown && 'itemKey' in lastShown && lastShown.itemKey === itemKey ? lastShown : undefined)
+    (!failed && lastShown && 'itemKey' in lastShown && lastShown.itemKey === itemKey
+      ? lastShown
+      : undefined)
   if (shown) {
     return shown
   }
