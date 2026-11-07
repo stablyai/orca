@@ -9,6 +9,7 @@ import { peekWebSessionTerminalPlacementGroup } from '../hosted-terminals/placem
 import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
+import { isSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 
 export function prepareWebSessionTabsSnapshotGroups(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotUnified>
@@ -138,7 +139,15 @@ export function prepareWebSessionTabsSnapshotGroups(
       return clientOwnedPlacement.groups
     }
     if (!nextUnifiedTabs || nextUnifiedTabs.length === 0) {
-      return null
+      // A waiting split chooser is window content the host never lists; emptying the workspace keeps it.
+      const marks = {
+        groupsByWorktree: state.groupsByWorktree,
+        splitLandingGroupIds: state.splitLandingGroupIds ?? {}
+      }
+      const choosers = currentGroups.filter((group) =>
+        isSplitLandingGroup(marks, worktreeId, group)
+      )
+      return choosers.length > 0 ? choosers : null
     }
     if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
       return buildMirroredHostGroups({
