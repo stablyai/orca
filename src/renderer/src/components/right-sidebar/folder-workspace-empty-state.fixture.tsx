@@ -44,3 +44,17 @@ export const narrow = defineFixture({
   store: repositories.store,
   render: () => <FolderWorkspaceEmptyState {...props} />
 })
+
+// The panels give the empty state a bounded height; a long list scrolls inside it.
+export const manyRepositories = defineFixture({
+  width: 220,
+  store: {
+    projectGroups: [makeProjectGroup()],
+    repos: Array.from({ length: 20 }, (_, index) => repo(`service-${index + 1}`))
+  },
+  render: () => (
+    <div className="flex h-[400px] flex-col">
+      <FolderWorkspaceEmptyState {...props} />
+    </div>
+  )
+})

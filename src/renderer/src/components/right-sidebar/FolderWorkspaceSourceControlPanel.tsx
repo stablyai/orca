@@ -295,6 +295,7 @@ export default function FolderWorkspaceSourceControlPanel() {
       {owners.length === 0 ? (
         <FolderWorkspaceEmptyState
           folderWorkspace={resolution.folderWorkspace ?? null}
+          showRepoActions={resolution.owners.length === 0}
           title={translate(
             'auto.components.rightSidebar.FolderWorkspaceWorktreesPanel.emptyTitle',
             'No attached worktrees yet'

@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
 import { searchRuntimeRepoBaseRefs } from '@/runtime/runtime-repo-client'
 import { useAppStore } from '@/store'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -34,6 +35,40 @@ async function mayHaveBranch(
   }
 }
 
+const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
+
+const pendingCreates = new Set<string>()
+const pendingListeners = new Set<() => void>()
+let pendingVersion = 0
+
+function pendingKey(folderWorkspace: FolderWorkspace, repo: Repo): string {
+  return [folderWorkspace.executionHostId ?? '', folderWorkspace.id, repo.id].join('\0')
+}
+
+function setPending(key: string, pending: boolean): void {
+  if (pending) {
+    pendingCreates.add(key)
+  } else {
+    pendingCreates.delete(key)
+  }
+  pendingVersion += 1
+  pendingListeners.forEach((listener) => listener())
+}
+
+export function subscribeFolderRepoCreates(listener: () => void): () => void {
+  pendingListeners.add(listener)
+  return () => pendingListeners.delete(listener)
+}
+
+export function getFolderRepoCreatesVersion(): number {
+  return pendingVersion
+}
+
+/** Shared by the three panels, so switching panels mid-create can't start a second one. */
+export function isFolderRepoCreatePending(folderWorkspace: FolderWorkspace, repo: Repo): boolean {
+  return pendingCreates.has(pendingKey(folderWorkspace, repo))
+}
+
 /**
  * Creates a worktree named after the folder workspace in one of its repositories. Creation takes
  * the active folder as its parent and doesn't navigate, so the new section appears in place.
@@ -42,20 +77,43 @@ export async function createFolderRepoWorktree(
   folderWorkspace: FolderWorkspace,
   repo: Repo
 ): Promise<void> {
+  const key = pendingKey(folderWorkspace, repo)
+  if (pendingCreates.has(key)) {
+    return
+  }
+  setPending(key, true)
+  try {
+    await createWhileStillInFolder(folderWorkspace, repo)
+  } finally {
+    setPending(key, false)
+  }
+}
+
+async function createWhileStillInFolder(
+  folderWorkspace: FolderWorkspace,
+  repo: Repo
+): Promise<void> {
   const name = folderWorkspace.name.trim()
   const hostId = getRepoExecutionHostId(repo)
+  const folderHostId = useAppStore.getState().activeWorkspaceExecutionHostId
   const taken = await mayHaveBranch(hostId, repo.id, branchLeafOf(name))
   const store = useAppStore.getState()
   // The parent is the active folder at create time; a user who moved on keeps their new view.
-  if (store.activeWorkspaceKey !== folderWorkspaceKey(folderWorkspace.id)) {
+  if (
+    store.activeWorkspaceKey !== folderWorkspaceKey(folderWorkspace.id) ||
+    store.activeWorkspaceExecutionHostId !== folderHostId
+  ) {
     return
   }
-  if (taken) {
+  const openComposer = (): void =>
     store.openModal('new-workspace-composer', {
       initialRepoId: repo.id,
+      initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, store.projectHostSetups),
       prefilledName: name,
       telemetrySource: 'sidebar'
     })
+  if (taken) {
+    openComposer()
     return
   }
   try {
@@ -95,6 +153,11 @@ export async function createFolderRepoWorktree(
       )
     )
   } catch (error) {
+    // Main refuses before creating anything; the composer is where the user picks run or skip.
+    if (error instanceof Error && error.message === SETUP_DECISION_REQUIRED) {
+      openComposer()
+      return
+    }
     toast.error(
       error instanceof Error && error.message
         ? error.message
