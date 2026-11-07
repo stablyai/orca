@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { FileText } from 'lucide-react'
 import { ExpandableMarkdownImage } from '@/components/sidebar/MarkdownImageLightbox'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
   GitHubUserAttachmentImage,
   isGitHubUserAttachmentUrl
@@ -20,7 +19,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { chatImageAccess } from '@/lib/local-file-access'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
@@ -37,6 +36,7 @@ import { resolveNativeChatFileLink } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { observeTranscriptVisibility } from './NativeChatTranscriptChrome'
 import { useNativeChatMediaHref } from './use-native-chat-media-href'
+import { useNativeChatLinkClick } from './native-chat-link-click-context'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
 const IMAGE_ACCESS = chatImageAccess()
@@ -44,7 +44,6 @@ const IMAGE_ACCESS = chatImageAccess()
 type MarkdownImageProps = {
   src?: string
   alt?: string
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }
 
 export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.Element | null {
@@ -76,11 +75,8 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
   )
 }
 
-function NativeChatMarkdownImagePreview({
-  src,
-  alt,
-  onLinkClick
-}: MarkdownImageProps): React.JSX.Element {
+function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React.JSX.Element {
+  const onLinkClick = useNativeChatLinkClick()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const linkedHref = useContext(NativeChatMarkdownImageLinkContext)
   const [open, setOpen] = useState(false)

@@ -1,5 +1,5 @@
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { OrcaRuntimeWithFileCommands } from '../../construction/runtime-file-command-state'
 import { RuntimeLinearCommands } from './runtime-linear-connection-commands'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'

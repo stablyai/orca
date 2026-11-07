@@ -1,8 +1,5 @@
-import { GitFork } from 'lucide-react'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
 import { NativeChatCliForkMenuItems } from '../tab-bar/NativeChatCliForkMenuItems'
-import { AgentSessionContextCopyMenuItem } from '../terminal-pane/AgentSessionContextCopyMenuItem'
+import { AgentSessionContextCopyMenuItem } from '../terminal-pane/clipboard/AgentSessionContextCopyMenuItem'
 import { useNativeChatQuickCommandsMenu } from './use-native-chat-quick-commands-menu'
 import {
   useNativeChatSessionContextActions,
@@ -26,19 +23,7 @@ export function useNativeChatStandaloneMenu({
       pane && source ? (
         <>
           {context.available ? (
-            <>
-              <DropdownMenuItem disabled={context.pending} onSelect={context.onFork}>
-                <GitFork />
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.8a7ddb8b8a',
-                  'Fork Agent Session…'
-                )}
-              </DropdownMenuItem>
-              <AgentSessionContextCopyMenuItem
-                disabled={context.pending}
-                onSelect={context.onCopy}
-              />
-            </>
+            <AgentSessionContextCopyMenuItem disabled={context.pending} onSelect={context.onCopy} />
           ) : null}
           <NativeChatCliForkMenuItems
             tab={{ id: pane.tabId, worktreeId: pane.worktreeId }}
@@ -49,11 +34,6 @@ export function useNativeChatStandaloneMenu({
           />
         </>
       ) : null,
-    dialogs: (
-      <>
-        {quickCommands.dialog}
-        {context.dialog}
-      </>
-    )
+    dialogs: quickCommands.dialog
   }
 }

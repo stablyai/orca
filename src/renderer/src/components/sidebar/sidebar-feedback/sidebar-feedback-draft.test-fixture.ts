@@ -1,7 +1,7 @@
 import { useStore } from 'zustand'
 import type { AppState } from '@/store/types'
 import { createFeedbackDraftSlice } from '@/store/slices/feedback-draft'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 
 const feedbackStore = createUIStore()
 feedbackStore.setState(

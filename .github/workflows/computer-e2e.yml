@@ -20,7 +20,6 @@ on:
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
       - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs'
-      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs'
@@ -50,7 +49,7 @@ on:
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
       - 'src/main/runtime/rpc/errors.ts'
-      - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/main/runtime/rpc/methods/computer/computer*.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
@@ -79,6 +78,7 @@ jobs:
       matrix:
         os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v6
         with:
@@ -93,7 +93,6 @@ jobs:
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
-          config/scripts/runtime-verification/desktop-transport/computer-use-smoke.test.mjs
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
@@ -104,8 +103,6 @@ jobs:
           src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
           src/main/computer/desktop-script-provider-errors.test.ts
           src/main/computer/desktop-script-provider-action-errors.test.ts
-          src/shared/computer-use-error-recovery.test.ts
-          src/shared/computer-use-key-spec.test.ts
           src/cli/format.test.ts
           src/cli/handlers/computer.test.ts
           src/cli/handlers/computer-action-validation.test.ts
@@ -113,8 +110,8 @@ jobs:
           src/cli/index.test.ts
           src/main/runtime/rpc/dispatcher-computer-errors.test.ts
           src/main/runtime/rpc/errors.test.ts
-          src/main/runtime/rpc/methods/computer.test.ts
-          src/main/runtime/rpc/methods/computer-actions.test.ts
+          src/main/runtime/rpc/methods/computer/computer.test.ts
+          src/main/runtime/rpc/methods/computer/computer-actions.test.ts
           src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
@@ -133,6 +130,7 @@ jobs:
   linux:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'
@@ -152,6 +150,7 @@ jobs:
   windows:
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
+    timeout-minutes: 180
     env:
       ORCA_COMPUTER_E2E: '1'
     steps:

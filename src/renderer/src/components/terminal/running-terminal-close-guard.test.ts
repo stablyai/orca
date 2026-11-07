@@ -9,7 +9,7 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 
@@ -183,31 +183,20 @@ describe('guardRunningTerminalClose', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('fails open and closes when the probe rejects (wedged relay / legacy provider)', async () => {
-    inspectRuntimeTerminalProcessMock.mockRejectedValue(new Error('rpc_timeout'))
-    const onClose = vi.fn()
-
-    guard(onClose)
-    await settleProbe()
-
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
-  })
-
-  it('fails open when a remote handle reports client-only unverifiable inspection', async () => {
+  // #33265: a host that cannot read its child processes must not let a close kill a running agent.
+  it('prompts when the host cannot observe child processes', async () => {
     inspectRuntimeTerminalProcessMock.mockResolvedValue({
       foregroundProcess: null,
       hasChildProcesses: false,
-      verdict: 'unverifiable',
-      reason: 'transport_loss'
+      childProcessEvidence: 'unverifiable'
     })
     const onClose = vi.fn()
 
     guard(onClose)
     await settleProbe()
 
-    expect(onClose).toHaveBeenCalledTimes(1)
-    expect(visibleRequest()).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })
 
   it('prompts once for a split tab where only the second pane is busy', async () => {

@@ -8,10 +8,10 @@ import {
   encodeDeviceProofMessage,
   type DeviceProofPurpose
 } from '../../../shared/remote-runtime/pairing/device-key-proof'
-import { DeviceRegistry } from '../device-registry'
-import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
+import { DeviceRegistry } from './server/pairing/device-registry'
+import { DEVICE_REGISTRY_FILENAME } from './server/pairing/mobile-pairing-files'
 import { SimulatedMobileE2EEV2Peer } from '../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
-import { registerSocketDeviceKey } from '../runtime-rpc/runtime-rpc-device-key-registration'
+import { registerSocketDeviceKey } from './server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
@@ -95,10 +95,19 @@ function freshRegistry(): DeviceRegistry {
 }
 
 describe('device-key authentication (host)', () => {
-  it('forks a token row per installation, then authenticates the key and keeps the token working', () => {
-    const registry = freshRegistry()
-    const legacy = registry.addDevice('Phone', 'mobile')
-    registry.updateLastSeen(legacy.deviceId)
+  it('forks a pre-ticket token row per installation, then authenticates the key and keeps the token working', () => {
+    // Rows paired before single-use tickets may be shared by several installations.
+    const dir = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
+    const legacy = {
+      deviceId: 'legacy-phone',
+      name: 'Phone',
+      token: 'legacy-token',
+      scope: 'mobile' as const,
+      pairedAt: 1,
+      lastSeenAt: 2
+    }
+    writeFileSync(join(dir, DEVICE_REGISTRY_FILENAME), JSON.stringify([legacy]))
+    const registry = new DeviceRegistry(dir)
     const { connect } = harness(registry)
 
     const migrating = connect(() => ({ deviceToken: legacy.token }))
@@ -150,6 +159,29 @@ describe('device-key authentication (host)', () => {
       })).reply
     ).toMatchObject({ type: 'e2ee_authenticated' })
     expect(registry.validateToken(legacy.token)?.deviceId).toBe(legacy.deviceId)
+  })
+
+  it('retires a ticket row once its saved-key fork signs in', () => {
+    const registry = freshRegistry()
+    const ticket = registry.addDevice('Browser', 'runtime')
+    const { connect } = harness(registry)
+    const migrating = connect(() => ({ deviceToken: ticket.token }))
+    const key = nacl.sign.keyPair()
+    const forked = registerSocketDeviceKey(registry, migrating.socket!, {
+      devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64'),
+      deviceProofB64: sign(key, 'register', migrating.transcriptHashB64)
+    })
+    expect(registry.validateToken(ticket.token)?.deviceId).toBe(ticket.deviceId)
+
+    const keyed = connect((hash) => ({
+      deviceId: forked.deviceId,
+      deviceProofB64: sign(key, 'auth', hash)
+    }))
+    expect(keyed.reply).toMatchObject({ type: 'e2ee_authenticated' })
+    expect(registry.validateToken(ticket.token)).toBeNull()
+    expect(connect(() => ({ deviceToken: ticket.token })).reply).not.toMatchObject({
+      type: 'e2ee_authenticated'
+    })
   })
 
   it('refuses a keyed row presented with a token, a replayed proof and a wrong-purpose proof', () => {

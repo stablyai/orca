@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   pathExists: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
 

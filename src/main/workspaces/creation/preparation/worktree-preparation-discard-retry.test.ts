@@ -22,17 +22,32 @@ describe('worktree preparation discard retries', () => {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
 
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
 
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/five')
     await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).not.toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
   })
 
   it('retries only the leaked paths belonging to the host being prepared', async () => {
@@ -59,18 +74,28 @@ describe('worktree preparation discard retries', () => {
       await prepareWorktreeCreateForRepo(store, otherRepo, base)
     }
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedHere, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedHere,
+      expect.anything(),
+      expect.any(String)
+    )
     expect(mocks.discard).toHaveBeenCalledWith(
       otherRepo.path,
       leakedElsewhere,
-      {},
+      expect.anything(),
       expect.any(String)
     )
 
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedHere, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedHere,
+      expect.anything(),
+      expect.any(String)
+    )
     expect(mocks.discard.mock.calls.some((call) => call[1] === leakedElsewhere)).toBe(false)
   })
 
@@ -116,6 +141,7 @@ describe('worktree preparation discard retries', () => {
         })
     )
     const failing = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    void failing.catch(() => {})
     await flushBackgroundWork()
     const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
 
@@ -127,12 +153,22 @@ describe('worktree preparation discard retries', () => {
     failCheckout(new Error('worktree add failed'))
     await failing.catch(() => {})
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
 
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
   })
 
   it('scopes retries to the WSL distro whose preparation leaked', async () => {
@@ -164,13 +200,13 @@ describe('worktree preparation discard retries', () => {
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       leakedOnUbuntu,
-      { wslDistro: 'Ubuntu' },
+      expect.objectContaining({ wslDistro: 'Ubuntu' }),
       expect.any(String)
     )
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       leakedOnDebian,
-      { wslDistro: 'Debian' },
+      expect.objectContaining({ wslDistro: 'Debian' }),
       expect.any(String)
     )
 
@@ -180,7 +216,7 @@ describe('worktree preparation discard retries', () => {
     expect(mocks.discard).toHaveBeenCalledWith(
       repo.path,
       leakedOnUbuntu,
-      { wslDistro: 'Ubuntu' },
+      expect.objectContaining({ wslDistro: 'Ubuntu' }),
       expect.any(String)
     )
     expect(mocks.discard.mock.calls.some((call) => call[1] === leakedOnDebian)).toBe(false)
@@ -204,7 +240,12 @@ describe('worktree preparation discard retries', () => {
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
     await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).not.toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
   })
 
   it("settles an evicted preparation's discard before the reset drops the registry", async () => {
@@ -216,6 +257,7 @@ describe('worktree preparation discard retries', () => {
         })
     )
     const failing = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+    void failing.catch(() => {})
     await flushBackgroundWork()
     const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
     mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
@@ -238,6 +280,11 @@ describe('worktree preparation discard retries', () => {
     mocks.discard.mockClear()
     await prepareWorktreeCreateForRepo(store, repo, 'origin/four')
     await flushBackgroundWork()
-    expect(mocks.discard).not.toHaveBeenCalledWith(repo.path, leakedPath, {}, expect.any(String))
+    expect(mocks.discard).not.toHaveBeenCalledWith(
+      repo.path,
+      leakedPath,
+      expect.anything(),
+      expect.any(String)
+    )
   })
 })

@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -38,9 +39,17 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Linking: { openURL: () => Promise.resolve() },
   Platform: { OS: 'ios', select: (o: Record<string, unknown>) => o.ios }
 }))
 vi.mock('lucide-react-native', () => ({ Check: 'Check', ChevronDown: 'ChevronDown', X: 'X' }))
+// The question renders through chat markdown; its diagram and copy-button leaves load native modules.
+vi.mock('../../../components/pr-sidebar/MermaidDiagram', () => ({
+  MermaidDiagram: 'MermaidDiagram'
+}))
+vi.mock('../../../components/MobileSourceCopyButton', () => ({
+  MobileSourceCopyButton: 'MobileSourceCopyButton'
+}))
 
 const indent = {
   question: 'Tabs or spaces?',
@@ -62,7 +71,7 @@ function render(
 ): typeof onAnswer {
   vi.useFakeTimers()
   act(() => {
-    tree = create(createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel }))
+    tree = createWithQueryClient(createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel }))
   })
   return onAnswer
 }
@@ -89,8 +98,11 @@ async function passAutoAdvanceBeat(): Promise<void> {
 
 const isHost = (node: { type: unknown }, name: string): boolean => node.type === name
 
+const textOf = (node: ReactTestInstance | string): string =>
+  typeof node === 'string' ? node : node.children.map(textOf).join('')
+// Question text renders as chat markdown, so match a Text by its whole rendered content.
 const shows = (text: string): boolean =>
-  tree.root.findAll((node) => isHost(node, 'Text') && node.props.children === text).length > 0
+  tree.root.findAll((node) => isHost(node, 'Text') && textOf(node) === text).length > 0
 
 afterEach(() => {
   act(() => tree.unmount())
@@ -165,7 +177,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         )
       }
       await act(async () => {
-        tree = create(createElement(Chat))
+        tree = createWithQueryClient(createElement(Chat))
       })
       const asked = {
         itemId: 'ask',
@@ -298,7 +310,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         )
       )
     act(() => {
-      tree = create(
+      tree = createWithQueryClient(
         createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
       )
     })

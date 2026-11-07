@@ -1,3 +1,5 @@
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '@/store'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
@@ -15,6 +17,7 @@ import { generationParamsToActionRecipe } from './text-generation-defaults'
 type SourceControlAiRecipePersistenceStoreSnapshot = Pick<AppState, 'settings' | 'repos'>
 
 export async function saveSourceControlAiActionRecipeForTarget({
+  hostId,
   getStoreState,
   updateSettings,
   updateRepo,
@@ -23,6 +26,7 @@ export async function saveSourceControlAiActionRecipeForTarget({
   recipe,
   customAgentCommand
 }: {
+  hostId?: ExecutionHostId
   getStoreState: () => SourceControlAiRecipePersistenceStoreSnapshot
   updateSettings: AppState['updateSettings']
   updateRepo: AppState['updateRepo']
@@ -38,7 +42,11 @@ export async function saveSourceControlAiActionRecipeForTarget({
   }
   const latestRepo =
     target.type === 'repo'
-      ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+      ? (state.repos.find((candidate) =>
+          hostId
+            ? repoMatchesHostIdentity(candidate, target.repoId, hostId)
+            : candidate.id === target.repoId
+        ) ?? null)
       : null
   const result = saveSourceControlActionRecipe({
     target,

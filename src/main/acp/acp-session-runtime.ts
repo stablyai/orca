@@ -28,6 +28,7 @@ import {
   SetSessionModelResponseSchema,
   SetSessionConfigOptionResponseSchema,
   SessionIdSchema,
+  type ClientCapabilities,
   type InitializeRequest,
   type InitializeResponse,
   type AuthenticateResponse,
@@ -51,6 +52,7 @@ export type AcpSessionRuntimeOptions = {
   /** OMP's typed busy refusal confirms this prompt never ran. */
   retryBusyPrompts?: boolean
   clientInfo?: InitializeRequest['clientInfo']
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation'>
   peer?: AcpPeerOptions
   onPermission?: AcpPermissionHandler
   /** After abort, handlers still reply or throw (-32800); close ends unanswered requests. */
@@ -115,7 +117,11 @@ export class AcpSessionRuntime {
       'initialize',
       {
         protocolVersion: ACP_PROTOCOL_VERSION,
-        clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+          ...this.options.clientCapabilities
+        },
         ...(this.options.clientInfo === undefined ? {} : { clientInfo: this.options.clientInfo })
       } satisfies InitializeRequest,
       InitializeResponseSchema
@@ -144,12 +150,16 @@ export class AcpSessionRuntime {
   }
 
   /** Reject core session methods for session-free discovery. */
-  async requestSessionFreeExtension(method: string, params: unknown): Promise<unknown> {
+  async requestSessionFreeExtension(
+    method: string,
+    params: unknown,
+    timeoutMs: number | null = null
+  ): Promise<unknown> {
     if (!method.includes('/') || method.startsWith('session/')) {
       throw new Error(`Not an ACP extension method: ${method}`)
     }
     await this.initialize()
-    return this.peer.request(method, params, { timeoutMs: null })
+    return this.peer.request(method, params, { timeoutMs })
   }
 
   /** Fork without starting a session here; requires advertised fork support. */
@@ -161,20 +171,25 @@ export class AcpSessionRuntime {
   /** Requires advertised session deletion support. */
   deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
 
-  start(options: AcpSessionStartOptions): Promise<AcpSessionStarted> {
+  start(
+    options: AcpSessionStartOptions,
+    received?: (started: AcpSessionStarted) => void
+  ): Promise<AcpSessionStarted> {
     if (this.started) {
       return Promise.resolve(this.started)
     }
     this.starting ??= this.initialize()
       .then((initialized) =>
-        setupAcpSession(initialized, options, (method, params, schema) =>
-          this.call(method, params, schema)
+        setupAcpSession(
+          initialized,
+          options,
+          (method, params, schema, accepted) => this.call(method, params, schema, accepted),
+          (started) => {
+            received?.(started)
+            this.started = started
+          }
         )
       )
-      .then((started) => {
-        this.started = started
-        return started
-      })
       .catch((error) => {
         this.starting = undefined
         throw error
@@ -223,25 +238,20 @@ export class AcpSessionRuntime {
   async setConfigOption(
     configId: SetSessionConfigOptionRequest['configId'],
     value: SetSessionConfigOptionRequest['value'],
-    meta?: Meta
+    meta?: Meta,
+    received?: (response: SetSessionConfigOptionResponse) => void
   ): Promise<SetSessionConfigOptionResponse> {
-    const sessionId = this.sessionId()
+    const params = { configId, sessionId: this.sessionId(), ...withMeta(meta) }
     const request =
       typeof value === 'boolean'
-        ? ({
-            configId,
-            value,
-            sessionId,
-            type: 'boolean',
-            ...withMeta(meta)
-          } satisfies SetSessionConfigOptionRequest)
-        : ({
-            configId,
-            value,
-            sessionId,
-            ...withMeta(meta)
-          } satisfies SetSessionConfigOptionRequest)
-    return this.call('session/set_config_option', request, SetSessionConfigOptionResponseSchema)
+        ? ({ ...params, value, type: 'boolean' } satisfies SetSessionConfigOptionRequest)
+        : ({ ...params, value } satisfies SetSessionConfigOptionRequest)
+    return this.call(
+      'session/set_config_option',
+      request,
+      SetSessionConfigOptionResponseSchema,
+      received
+    )
   }
 
   close(error?: Error): void {
@@ -260,8 +270,13 @@ export class AcpSessionRuntime {
     return this.started.sessionId
   }
 
-  private call<T>(method: string, params: unknown, schema: z.ZodType<T>): Promise<T> {
-    return callAcpSession(this.peer, method, params, schema, this.options.onAuthAnswered)
+  protected call<T>(
+    method: string,
+    params: unknown,
+    schema: z.ZodType<T>,
+    received?: (response: T) => void
+  ): Promise<T> {
+    return callAcpSession(this.peer, method, params, schema, this.options.onAuthAnswered, received)
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
@@ -276,22 +291,11 @@ export class AcpSessionRuntime {
     if (!request) {
       throw new AcpRpcError(-32602, 'Invalid ACP permission request')
     }
-    // The caller decides whether agent-initiated turns may request permission.
+    // Only the started session asks the caller; the caller decides who can answer.
     if (request.sessionId !== this.started?.sessionId) {
       return { outcome: { outcome: 'cancelled' } }
     }
-    // Defer the decision so a preceding refusal in the same chunk takes effect.
-    return answerAcpPermission(
-      request,
-      context,
-      (request, context) =>
-        this.prompts.waitingToRetry
-          ? { outcome: { outcome: 'cancelled' } }
-          : (this.options.onPermission?.(request, context) ?? {
-              outcome: { outcome: 'cancelled' }
-            }),
-      diagnose
-    )
+    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
   }
 
   private diagnose(message: string): void {

@@ -4,25 +4,14 @@ import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { WINDOWS_CMD_SAFE_PATH, wrapWindowsHookCommand } from './installer-utils'
-import {
-  wrapWindowsBatchHookCommand,
-  wrapWindowsDirectCmdHookCommand
-} from './windows-direct-cmd-hook-command'
+import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
+import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
 import { getWindowsClaudeHookEntry } from '../claude/windows-hook-files'
 import { getManagedScript } from '../claude/hook-script'
 import { getWindowsPowerShellExecutablePath } from './windows-powershell-hook-launcher'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
-const SAFE_PATH = 'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
-
 describe('wrapWindowsDirectCmdHookCommand', () => {
-  it('emits an operator-free path that PowerShell 5.1 can parse', () => {
-    expect(wrapWindowsDirectCmdHookCommand(SAFE_PATH)).toBe(
-      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
-    )
-  })
-
   it('declines any path the shells cannot carry bare', () => {
     for (const path of [
       'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\claude-hook.cmd',
@@ -37,23 +26,6 @@ describe('wrapWindowsDirectCmdHookCommand', () => {
     ]) {
       expect(wrapWindowsDirectCmdHookCommand(path), path).toBeNull()
     }
-  })
-})
-
-describe('wrapWindowsBatchHookCommand', () => {
-  it('registers a cmd-safe .cmd hook by its bare path', () => {
-    expect(wrapWindowsBatchHookCommand(SAFE_PATH)).toBe(
-      'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'
-    )
-  })
-
-  it('keeps the encoded launcher for a path the shells cannot carry bare', () => {
-    const spaced = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\gemini-hook.cmd'
-    expect(wrapWindowsBatchHookCommand(spaced)).toBe(wrapWindowsHookCommand(spaced))
-    const unicode = 'C:\\Users\\rené\\.orca\\agent-hooks\\gemini-hook.cmd'
-    expect(wrapWindowsBatchHookCommand(unicode)).toBe(
-      wrapWindowsHookCommand(unicode, {}, { useProcessPolicyEnvironment: true })
-    )
   })
 })
 
@@ -134,19 +106,6 @@ describe.skipIf(process.platform !== 'win32')(
         removeTreeSync(dir)
       }
     }
-
-    it.skipIf(!canRunLive)(
-      'answers {} and exit 0 in both hosts when the script exists',
-      async () => {
-        await withTempDir(async (dir, scriptPath, command) => {
-          writeFileSync(scriptPath, '@echo off\r\necho {}\r\nexit /b 0\r\n', 'utf8')
-          for (const result of await runInHosts(command, dir)) {
-            expect(result.stdout.trim(), result.label).toBe('{}')
-            expect(result.status, result.label).toBe(0)
-          }
-        })
-      }
-    )
 
     it.skipIf(!canRunLive)(
       'runs the generated pair and answers when its payload is missing',

@@ -1,4 +1,5 @@
-import { useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
@@ -10,8 +11,12 @@ import {
 import { getStructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import {
   resolveStructuredChatTabName,
+  type StructuredChatTabName,
   type StructuredChatTabNames
 } from './structured-chat-tab-name'
+import { isUnifiedTabOwnedByWorktree } from '@/lib/unified-tab-host-ownership'
+import type { Tab } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 const listeners = new Set<() => void>()
 let snapshot: StructuredChatTabNames = new Map()
@@ -138,8 +143,74 @@ export function subscribeStructuredChatTabNames(listener: () => void): () => voi
   }
 }
 
+type ScopedWorktree = Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
+type ChatNameEntry = readonly [Tab, StructuredChatTabName]
+
+const NO_AMBIGUOUS_WORKTREES: ReadonlySet<string> = new Set()
+const NO_CHAT_NAME_ENTRIES: readonly ChatNameEntry[] = []
+// Grouped once per published map, so a scoped read touches only its own workspace's chats.
+const entriesByWorktreeByNames = new WeakMap<
+  StructuredChatTabNames,
+  ReadonlyMap<string, readonly ChatNameEntry[]>
+>()
+
+function worktreeChatNameEntries(
+  names: StructuredChatTabNames,
+  worktree: ScopedWorktree
+): ChatNameEntry[] {
+  let byWorktree = entriesByWorktreeByNames.get(names)
+  if (!byWorktree) {
+    const grouped = new Map<string, ChatNameEntry[]>()
+    for (const entry of names) {
+      const bucket = grouped.get(entry[0].worktreeId)
+      if (bucket) {
+        bucket.push(entry)
+      } else {
+        grouped.set(entry[0].worktreeId, [entry])
+      }
+    }
+    byWorktree = grouped
+    entriesByWorktreeByNames.set(names, byWorktree)
+  }
+  // Why the builder's ownership check: a same-id workspace on another host is not this one.
+  return (byWorktree.get(worktree.id) ?? NO_CHAT_NAME_ENTRIES).filter(([tab]) =>
+    isUnifiedTabOwnedByWorktree(tab, worktree, NO_AMBIGUOUS_WORKTREES)
+  )
+}
+
+function subscribeNothing(): () => void {
+  return () => {}
+}
+
+/** One workspace's chat names: a name arriving for another workspace's chat neither re-renders
+ *  the caller nor changes the returned map. `tabsKey` is that workspace's tab list, whose identity
+ *  changes whenever the map's tab keys do. */
+export function useWorktreeStructuredChatTabNames(
+  worktree: ScopedWorktree | null,
+  tabsKey: unknown,
+  enabled: boolean
+): StructuredChatTabNames {
+  const signature = useAppViewExternalStore(
+    enabled && worktree ? subscribeStructuredChatTabNames : subscribeNothing,
+    () =>
+      enabled && worktree
+        ? JSON.stringify(
+            worktreeChatNameEntries(getStructuredChatTabNames(), worktree).map(([tab, value]) => [
+              tab.id,
+              value.savedName
+            ])
+          )
+        : ''
+  )
+  return useMemo(
+    () => new Map(worktree ? worktreeChatNameEntries(getStructuredChatTabNames(), worktree) : []),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- signature and tabsKey are what change the scoped names.
+    [signature, tabsKey, worktree?.id, worktree?.hostId, worktree?.runtimeOwnerEnvironmentId]
+  )
+}
+
 export function useStructuredChatTabNames(): StructuredChatTabNames {
-  return useSyncExternalStore(
+  return useAppViewExternalStore(
     subscribeStructuredChatTabNames,
     getStructuredChatTabNames,
     getStructuredChatTabNames

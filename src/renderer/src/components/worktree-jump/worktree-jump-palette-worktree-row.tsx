@@ -18,7 +18,7 @@ import {
   isPaletteCurrentWorktree,
   getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
-} from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/palette-repo-resolution'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import type { WorktreePaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'

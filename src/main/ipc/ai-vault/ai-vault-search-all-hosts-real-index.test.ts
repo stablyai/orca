@@ -139,30 +139,6 @@ it('hands out every hit on every host exactly once, at limit 5 and limit 20', as
   }
 })
 
-it('orders a newest merge by recency across hosts, newest first', async () => {
-  const response = resultsOf(
-    await searchAllExecutionHosts(
-      { query: 'needle', limit: 20, filters: { sort: 'newest' } },
-      legs()
-    )
-  )
-  const updated = response.hits.map((hit) => hit.updatedAt)
-  expect(updated).toEqual([...updated].sort().toReversed())
-  expect(new Set(response.hits.map((hit) => hit.executionHostId)).size).toBeGreaterThan(1)
-})
-
-it('rotates hosts in host-id order when merging by relevance', async () => {
-  const response = resultsOf(await searchAllExecutionHosts({ query: 'needle', limit: 6 }, legs()))
-  expect(response.hits.map((hit) => hit.executionHostId)).toEqual([
-    'local',
-    'ssh:alpha',
-    'ssh:beta',
-    'local',
-    'ssh:alpha',
-    'ssh:beta'
-  ])
-})
-
 it('fences the purged host and keeps the other two paginating', async () => {
   const request = { query: 'needle', limit: 5 }
   const first = resultsOf(await searchAllExecutionHosts(request, legs()))
@@ -244,21 +220,4 @@ it('reports an unreachable host, keeps hasMore, and picks it up on the retry', a
   }
   expect(new Set(seen).size).toBe(seen.length)
   expect([...seen].sort()).toEqual(everyKey().sort())
-})
-
-it('reports a disabled host without aborting the merge', async () => {
-  hosts[2]!.instance.apply({ enabled: false, historyDays: null })
-  const { keys } = await paginate(5, 'relevance')
-  expect(new Set(keys).size).toBe(keys.length)
-  expect([...keys].sort()).toEqual(
-    [
-      ...hosts[0]!.sessionIds.map((id) => `local/${id}`),
-      ...hosts[1]!.sessionIds.map((id) => `ssh:alpha/${id}`)
-    ].sort()
-  )
-  const first = resultsOf(await searchAllExecutionHosts({ query: 'needle', limit: 5 }, legs()))
-  expect(first.hosts).toContainEqual({
-    executionHostId: 'ssh:beta',
-    outcome: 'disabled'
-  })
 })

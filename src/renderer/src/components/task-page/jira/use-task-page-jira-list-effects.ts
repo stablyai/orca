@@ -18,7 +18,7 @@ import { isBareJiraIssueNumber } from '../../../../../shared/jira/jira-search-in
 import { JIRA_ITEM_LIMIT } from '../task-page-source-context'
 import { useTaskSearchDebouncedApply } from '../use-task-search-debounced-apply'
 import { readLinkedJiraIssues } from './task-page-jira-linked-issues'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { buildJiraPresetJql } from '../../../../../shared/jira/jira-preset-jql'
 import { restrictJiraQueryToProject } from '../../../../../shared/jira/jira-project-reference'
 export function useTaskPageJiraListEffects(model: TaskPageLinearCollectionEffectsModel) {

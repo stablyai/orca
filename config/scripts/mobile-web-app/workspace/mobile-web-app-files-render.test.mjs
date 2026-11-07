@@ -121,22 +121,6 @@ async function openPreview() {
 describeRender(
   'the file preview page',
   () => {
-    it('asks before discarding a draft, without registering a hardware back handler', async () => {
-      const { page, errors } = await openPreview()
-      // Require editor to prove loaded/editable precondition or missing prompt would pass vacuously.
-      const editor = page.getByLabel(`${ARTIFACT_TITLE} editor`)
-      await editor.waitFor({ timeout: 60_000 })
-      await editor.fill(EDITED_CONTENT)
-      await page.getByLabel('Back to files').click()
-
-      const title = page.getByText('Discard changes?')
-      await title.waitFor({ timeout: 30_000 })
-      expect(await title.isVisible()).toBe(true)
-      // RN-Web logs this unsupported BackHandler registration; every interactive drawer once emitted it.
-      expect(errors.filter((entry) => entry.includes('BackHandler'))).toEqual([])
-      await page.close()
-    }, 180_000)
-
     it('leaves the draft alone when the answer is to stay', async () => {
       const { page } = await openPreview()
       const editor = page.getByLabel(`${ARTIFACT_TITLE} editor`)

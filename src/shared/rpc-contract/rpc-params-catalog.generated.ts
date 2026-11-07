@@ -17,6 +17,7 @@ import {
   BrowserClientHostCommandResultParams,
   BrowserNetworkTunnelAttachParams
 } from '../browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/browser-client-host-request-protocol'
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import {
   BundledSkillAutoUpdateRequestSchema,
@@ -39,6 +40,8 @@ import {
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration-crew'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
+import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -86,6 +89,7 @@ import {
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
+  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from './antigravity-accounts-params'
@@ -153,9 +157,9 @@ import {
   Viewport,
   Wait
 } from './browser-params'
-import { ScreencastUnsubscribe } from './browser-screencast-params'
+import { ScreencastAck, ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
-import { ClientEventsUnsubscribeParams } from './client-events-params'
+import { ClientEventsSubscribeParams, ClientEventsUnsubscribeParams } from './client-events-params'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
@@ -252,7 +256,11 @@ import {
   FileSaveCommit
 } from './files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './files-target-params'
-import { TerminalArtifactFile, TerminalArtifactFileWrite } from './files-terminal-artifact-params'
+import {
+  TerminalArtifactFile,
+  TerminalArtifactFileChunk,
+  TerminalArtifactFileWrite
+} from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
   FolderWorkspacePathStatus,
@@ -278,6 +286,7 @@ import {
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRefs,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitResolveConflict,
@@ -287,6 +296,7 @@ import {
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
 import { BindableAccounts, ValidateAccountBinding } from './github-account-binding-params'
+import { UploadGitHubAttachment } from './github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github-issue-params'
 import {
   ClearProjectItemField,
@@ -354,6 +364,7 @@ import {
   IssuesList as IssuesListOfGitlabParams,
   JobTrace,
   MergeMr,
+  MergeRequestsList,
   RepoSelector as RepoSelectorOfGitlabParams,
   ResolveMRDiscussion,
   RetryJob,
@@ -509,12 +520,15 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginCatalogAddParams,
+  PluginCatalogRemoveParams,
   PluginDevEmitParams,
   PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
+  PluginInstallParams,
   PluginInvokeCommandParams,
   PluginOpenParams,
   PluginReadPanelEntryParams,
@@ -526,6 +540,8 @@ import {
   PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
+  PluginUninstallParams,
+  PluginUpdateParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -543,6 +559,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './project-runtime-params'
+import { RecipeVmWakeParams } from './recipe-vm-wake-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
@@ -647,6 +664,7 @@ import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
+  TerminalAckOutput,
   TerminalMultiplex,
   TerminalResizeForClient,
   TerminalSubscribe
@@ -712,8 +730,10 @@ import {
   WorktreeListParams,
   WorktreePsParams,
   WorktreeRemove,
+  WorktreeResolveCallerParent,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
+  WorktreeRunApprovedSetup,
   WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
   WorktreeSleepParams,
@@ -744,6 +764,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
+  'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
+  'accounts.antigravityChatAuthGet': null,
   'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
   'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
   'accounts.antigravityChatSignInStart': null,
@@ -782,6 +804,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launch': AgentLaunch,
   'agent.launchReplay': AgentLaunchReplay,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
@@ -871,6 +894,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.clientHost.fileChannel.read': BrowserClientFileChannelReadParams,
   'browser.clientHost.fileChannel.write': BrowserClientFileChannelWriteParams,
   'browser.clientHost.pageMetadata': BrowserClientPageMetadataParams,
+  'browser.clientHost.requestResult': BrowserClientHostRequestResultParams,
   'browser.clipboardRead': BrowserTarget,
   'browser.clipboardWrite': ClipboardWrite,
   'browser.console': LimitParam,
@@ -919,6 +943,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.profileList': null,
   'browser.reload': ExpectUrlBrowserTarget,
   'browser.screencast': Screencast,
+  'browser.screencast.ack': ScreencastAck,
   'browser.screencast.unsubscribe': ScreencastUnsubscribe,
   'browser.screenshot': Screenshot,
   'browser.scroll': Scroll,
@@ -1021,6 +1046,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.readDocPreviewChunk': DocPreviewFileReadChunk,
   'files.readPreview': FileOpen,
   'files.readTerminalArtifact': TerminalArtifactFile,
+  'files.readTerminalArtifactChunk': TerminalArtifactFileChunk,
   'files.readTerminalArtifactPreview': TerminalArtifactFile,
   'files.rename': FileRename,
   'files.replaceWithUpload': FileReplaceWithUpload,
@@ -1032,6 +1058,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
+  'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
   'files.watch': FileWatch,
   'files.write': FileWrite,
@@ -1074,6 +1101,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
   'git.rebaseFromBase': GitRebaseFromBase,
+  'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
   'git.remoteFileUrl': GitRemoteFileUrl,
   'git.resolveConflict': GitResolveConflict,
@@ -1131,6 +1159,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.updatePR': UpdatePr,
   'github.updatePRState': UpdatePrState,
   'github.updatePRTitle': UpdatePrTitle,
+  'github.uploadAttachment': UploadGitHubAttachment,
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
@@ -1144,7 +1173,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.listAssignableUsers': RepoSelectorOfGitlabParams,
   'gitlab.listIssues': IssuesListOfGitlabParams,
   'gitlab.listLabels': RepoSelectorOfGitlabParams,
-  'gitlab.listMRs': WorkItemsListOfGitlabParams,
+  'gitlab.listMRs': MergeRequestsList,
   'gitlab.listWorkItems': WorkItemsListOfGitlabParams,
   'gitlab.mergeMR': MergeMr,
   'gitlab.rateLimit': GitLabRateLimit,
@@ -1333,10 +1362,15 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
+  'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
+  'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plugins.catalogAdd': PluginCatalogAddParams,
+  'plugins.catalogList': null,
+  'plugins.catalogRemove': PluginCatalogRemoveParams,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devEmit': PluginDevEmitParams,
   'plugins.devHook': PluginDevEmitParams,
@@ -1345,6 +1379,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
+  'plugins.install': PluginInstallParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
   'plugins.open': PluginOpenParams,
@@ -1358,6 +1393,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.shotChrome': PluginShotChromeParams,
   'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
+  'plugins.uninstall': PluginUninstallParams,
+  'plugins.update': PluginUpdateParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
@@ -1404,8 +1441,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.automaticWork.resume': null,
   'runtime.automaticWork.status': null,
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
-  'runtime.clientEvents.subscribe': null,
+  'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
@@ -1481,6 +1519,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
   'status.get': StatusGetParams,
+  'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,
@@ -1557,9 +1596,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
   'worktree.ps': WorktreePsParams,
+  'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
   'worktree.rm': WorktreeRemove,
+  'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
   'worktree.sleep': WorktreeSleepParams,

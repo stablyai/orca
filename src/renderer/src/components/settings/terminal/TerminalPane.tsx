@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { getManageSessionsSearchEntries } from './terminal-window-setup-search'
 import {
   getTerminalAdvancedSearchEntries,

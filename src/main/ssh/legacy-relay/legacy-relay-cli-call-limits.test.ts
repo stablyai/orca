@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import '../../runtime/orchestration/db/contract-constants'
+import '../../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../runtime/orchestration/db/dispatch-row-writer'
+import '../../runtime/orchestration/db/attempt-outcome-projection'
 import { LEGACY_RELAY_CLI_BUSY, runLegacyRelayCliCall } from './legacy-relay-cli-call-limits'
 import { createLegacyRelayCliServer } from './legacy-relay-cli-server'
 

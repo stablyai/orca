@@ -200,7 +200,7 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press })
+  registerAutomationRunHistoryTests({ root, setTree })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,
@@ -507,7 +507,8 @@ describe('mobile automation navigation and setup', () => {
       loading: false,
       error: null,
       loadMore: vi.fn(),
-      reload: vi.fn()
+      reload: vi.fn(),
+      scope: null
     }
     await act(async () => {
       tree = create(
@@ -611,6 +612,24 @@ describe('mobile automation navigation and setup', () => {
       expect(current.enabled).toBe(false)
     }
   )
+  it('asks before Cancel drops an edited draft and closes an untouched one at once', async () => {
+    await mount()
+    await press('New automation')
+    await press('Cancel')
+    expect(root().findAllByType(AutomationEditor)).toHaveLength(0)
+    await press('New automation')
+    const name = () =>
+      root()
+        .findAllByType(AutomationField)
+        .find((node) => node.props.label === 'Name')!
+    await act(async () => name().props.onChange('Nightly digest'))
+    await press('Cancel')
+    const prompt = root().find(
+      (node) => String(node.type) === 'ConfirmModal' && node.props.visible === true
+    )
+    await act(async () => prompt.props.onCancel())
+    expect(name().props.value).toBe('Nightly digest')
+  })
   it('preserves an uncertain legacy create without issuing a second uncorrelated write', async () => {
     const port = await mount('legacy')
     await press('New automation')

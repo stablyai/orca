@@ -15,10 +15,14 @@ import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-sessio
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
+import {
+  useMobileHostModelCatalogUpgrade,
+  type HostModelCatalogCache
+} from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
   acceptedStructuredSessionSelectionOutcome,
+  structuredAgentSessionOptionAvailability,
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
@@ -28,6 +32,8 @@ const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
 export function useMobileStructuredAgentOptions(args: {
   agent: string | null
+  /** This world's last host lists for the chat's agent; absent, the picker waits for the host. */
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -35,6 +41,7 @@ export function useMobileStructuredAgentOptions(args: {
   turnId: string | null
   /** The chat has a turn or a send: its value picks keep the remembered new-chat model. */
   hasTurn?: boolean
+  unloadedTurnRevisions: number | undefined
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
   hostSupport: Pick<
@@ -48,8 +55,19 @@ export function useMobileStructuredAgentOptions(args: {
     | 'sendOptions'
   > | null
 }) {
-  const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
-    args
+  const {
+    agent,
+    modelCatalogCache,
+    client,
+    enabled,
+    fence,
+    mutate,
+    optionStamp,
+    sessionId,
+    turnId,
+    unloadedTurnRevisions,
+    hostSupport
+  } = args
   const optionCatalog = useMemo(
     () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
@@ -68,6 +86,9 @@ export function useMobileStructuredAgentOptions(args: {
     updateOptionState,
     conversationSupport,
     imageSupport,
+    threadGoalSupport,
+    rewindSupport,
+    rewindBlockedReason,
     receiveCatalog,
     isCurrentContext,
     controller,
@@ -80,6 +101,8 @@ export function useMobileStructuredAgentOptions(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
+    modelCatalogCache,
     client,
     optionStamp,
     sendSelection: hostSupport?.sendSelection === true,
@@ -109,11 +132,32 @@ export function useMobileStructuredAgentOptions(args: {
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
   const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  const readBaseOptionSnapshot = useCallback(
+    (view = readOptionState()) => {
+      const shown = structuredAgentSessionShownSnapshot(view)
+      const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
+      return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+    },
+    [acceptsPicks, legacyHostPermissions, readOptionState]
+  )
   const readOptionSnapshot = useCallback(() => {
-    const shown = structuredAgentSessionShownSnapshot(readOptionState())
-    const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
-    return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
-  }, [acceptsPicks, legacyHostPermissions, readOptionState])
+    const view = readOptionState()
+    return structuredAgentSessionOptionAvailability({
+      controller,
+      view,
+      snapshot: readBaseOptionSnapshot(view),
+      ready: acceptsPicks,
+      providerStarting,
+      isCurrentContext
+    })
+  }, [
+    controller,
+    readOptionState,
+    readBaseOptionSnapshot,
+    acceptsPicks,
+    providerStarting,
+    isCurrentContext
+  ])
   const optionSnapshot = readOptionSnapshot()
 
   const modelOption = optionSnapshot.find((row) => row.id === 'model')
@@ -123,6 +167,7 @@ export function useMobileStructuredAgentOptions(args: {
       hostSupport?.modelEffortDiscovery && modelOption?.kind.type === 'select'
         ? modelOption.kind.currentValue
         : undefined,
+    modelCatalogCache,
     client,
     sessionId,
     enabled,
@@ -145,7 +190,7 @@ export function useMobileStructuredAgentOptions(args: {
       controller,
       record: optionStateRef.current.record,
       view,
-      snapshot: readOptionSnapshot(),
+      snapshot: readBaseOptionSnapshot(),
       ready: acceptsPicks,
       providerStarting,
       existingChat: createdHere === undefined || args.hasTurn === true,
@@ -200,6 +245,7 @@ export function useMobileStructuredAgentOptions(args: {
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
       optionSnapshot,
+      admits: writer.admits,
       demandModelCatalog,
       setStructuredOption,
       readOptionSnapshot
@@ -211,9 +257,21 @@ export function useMobileStructuredAgentOptions(args: {
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
     compactInstructions:
       conversationSupport?.sessionId === sessionId && conversationSupport.compactInstructions,
+    /** The options read's word on whether the installed agent forks; absent until it answers. */
+    forkSupport:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.forkSupport : undefined,
+    contextUsageSupport:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.contextUsage : undefined,
+    threadGoalSupport: threadGoalSupport?.sessionId === sessionId ? threadGoalSupport : null,
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),
+    /** Undefined until this fence's options read answers. */
+    rewindSupport:
+      rewindSupport?.sessionId === sessionId && rewindSupport.fence === fence
+        ? rewindSupport
+        : undefined,
+    rewindBlockedReason,
     optionSnapshot,
     optionSurface,
     pendingOptionId: writer.pendingOptionId(controller, optionState.record),

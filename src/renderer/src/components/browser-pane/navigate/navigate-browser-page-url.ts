@@ -5,7 +5,7 @@ import {
   toWorktreeRelativePath
 } from '../../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken

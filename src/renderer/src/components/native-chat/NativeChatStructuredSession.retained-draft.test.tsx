@@ -4,7 +4,7 @@ import type * as LaunchRegistry from '@/lib/agent-session/launch/structured-agen
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks, launchModule } = await vi.hoisted(
   async () => {
@@ -49,6 +49,9 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-message', ()
 vi.mock('@/runtime/structured-agent-session-client', () =>
   moduleFactories.structuredAgentSessionClient()
 )
+vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
+  usePublishedMachineName: () => null
+}))
 vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
 vi.mock('./use-native-chat-font-size', () => moduleFactories.useNativeChatFontSize())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
@@ -58,7 +61,7 @@ vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList()
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
-vi.mock('@/runtime/use-managed-runtime-install', () => ({
+vi.mock('@/runtime/hosts/installation/use-managed-runtime-install', () => ({
   useManagedRuntimeInstall: () => install.observation
 }))
 

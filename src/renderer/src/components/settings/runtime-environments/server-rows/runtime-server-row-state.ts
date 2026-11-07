@@ -7,7 +7,7 @@ import { resolveHostDisplay } from '../../../../../../shared/host-display-resolu
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
@@ -31,6 +31,8 @@ export type RuntimeServerRowState = {
   problem: string | null
   probeFailed: boolean
   compatibilityBlocked: boolean
+  /** The host now runs a different server that refuses this computer's pairing. */
+  serverReplaced: boolean
   /** Last answered status, kept across a lost probe. */
   descriptorStatus: RuntimeStatus | null | undefined
   hostDescriptorText: string | null
@@ -83,7 +85,12 @@ export function useRuntimeServerRowState(
     machineName: descriptorStatus?.machineName,
     platform: descriptorStatus?.hostPlatform
   })
-  const compatibilityBlocked = !accessRevoked && effectiveDetails?.compatibility?.kind === 'blocked'
+  const serverReplaced =
+    snapshot?.verification === 'blocked' &&
+    !snapshot.retired &&
+    snapshot.blockedReason === 'server-replaced'
+  const compatibilityBlocked =
+    !accessRevoked && !serverReplaced && effectiveDetails?.compatibility?.kind === 'blocked'
   return {
     effectiveDetails,
     connectionState,
@@ -92,10 +99,17 @@ export function useRuntimeServerRowState(
     repairRoute,
     problem: accessRevoked
       ? getRevokedDescription(environment.name, repairRoute)
-      : getHostDetailsDescription(effectiveDetails),
+      : serverReplaced
+        ? translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.serverReplaced',
+            '{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server.',
+            { value0: environment.name }
+          )
+        : getHostDetailsDescription(effectiveDetails),
     probeFailed:
       !isReachable && effectiveDetails?.status === 'error' && Boolean(effectiveDetails.error),
     compatibilityBlocked,
+    serverReplaced,
     descriptorStatus,
     hostDescriptorText: hostDisplay.descriptorLine,
     title: hostDisplay.title

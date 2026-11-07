@@ -1,4 +1,4 @@
-import type { OrchestrationCompatibilityTerminalAuthority } from '../../runtime-terminal-contracts'
+import type { OrchestrationCompatibilityTerminalAuthority } from '../terminal-authority/orchestration-compatibility-authority'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { mainTerminalSourceInputs } from '../../terminal/surface/pty-pane-query'
 import { runtimeLayoutLoadContext } from '../../workspace-layout-projection'
@@ -7,9 +7,9 @@ import type {
   TerminalIdentityReadContext
 } from '../../terminal/query/terminal-identity-read-context'
 import type { RuntimeOrchestrationSenderNames } from '../../runtime-orchestration-sender-names'
-import type { OrchestrationDb } from '../db'
-import type { CrewReadDependencies } from './crew-read-model'
-import { conversationRecordReader } from '../structured-session-lineage'
+import type { OrchestrationDb } from '../db/orchestration-db'
+import type { CrewReadDependencies } from './crew-read-dependencies'
+import { conversationRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 import { peekOpenedAgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store-slot'
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from '../../runtime-store-contract'

@@ -7,8 +7,10 @@ import { structuredSessionNotices } from './native-chat-structured-session-notic
 import { useStructuredNativeChatSubmitReveal } from './use-structured-native-chat-submit-reveal'
 
 const permission = vi.hoisted(() => ({ capability: vi.fn(), settings: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: permission.capability,
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: permission.capability
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: permission.settings
 }))
 
@@ -79,7 +81,7 @@ it('sends no queued card and retries no start on a host held for its permission 
   })
   await act(() => result.current.queuedMessages.resume())
   await act(() => result.current.queuedMessages.steer('m1'))
-  expect(result.current.queuedMessages.steerHead()).toBe(false)
+  expect(result.current.queuedMessages.steerHead).toBeUndefined()
   expect(queuedMessages.resume).not.toHaveBeenCalled()
   expect(queuedMessages.steer).not.toHaveBeenCalled()
   expect(queuedMessages.steerHead).not.toHaveBeenCalled()

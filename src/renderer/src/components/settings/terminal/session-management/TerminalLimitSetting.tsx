@@ -16,7 +16,7 @@ import {
   isHostIdentityFenceCurrent,
   type HostIdentityFence
 } from '@/store/host-catalog-fencing'
-import type { HostRoute } from '@/runtime/runtime-client-target'
+import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getTerminalLimitSearchKeywords } from '../platform/terminal-advanced-platform-search'

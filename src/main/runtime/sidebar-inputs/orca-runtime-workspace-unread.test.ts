@@ -7,8 +7,8 @@ import { AgentHookServer } from '../../agent-hooks/server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
-import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
-import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
+import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs/session-tabs'
+import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs/sidebar-inputs'
 import { requireSwitchedOn } from './require-switched-on'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
@@ -26,7 +26,7 @@ import {
   storeRepo,
   storeWorktreeMeta,
   type PartialRuntimeStore
-} from '../runtime-store-partial-fixture'
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 

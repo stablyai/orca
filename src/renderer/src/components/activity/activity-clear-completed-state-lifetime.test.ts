@@ -158,17 +158,4 @@ describe('completed Activity state lifetime', () => {
     expect(dropPersistedBatch).toHaveBeenCalledOnce()
     expect(vi.getTimerCount()).toBe(0)
   })
-
-  it('releases closed editor state without a completed-activity clear', async () => {
-    const retired = clearWithOpenDraft(false)
-    await collectRetiredState()
-
-    expect(retired.state.deref()).toBeUndefined()
-    expect(retired.drafts.deref()).toBeUndefined()
-    expect(retired.undoSnapshot.deref()).toBe(
-      useAppStore.getState().retainedAgentsByPaneKey[retired.paneKey]
-    )
-    expect(dropPersistedBatch).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

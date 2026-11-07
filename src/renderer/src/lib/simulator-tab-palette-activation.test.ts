@@ -8,7 +8,7 @@ import type { AppState } from '@/store/types'
 
 const mocks = vi.hoisted(() => ({ activateAndRevealWorkspace: vi.fn() }))
 
-vi.mock('./worktree-activation', () => ({
+vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 

@@ -59,6 +59,32 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
+  it('draws the completed plan outside collapsed work', () => {
+    const plan: NativeChatMessage = {
+      ...text('plan', '# Proposed change', 'system'),
+      blocks: [{ type: 'text', text: '# Proposed change', presentation: 'plan-document' }]
+    }
+    const slots = build(
+      [
+        text('u', 'Plan the change.', 'user'),
+        text('preamble', 'Inspecting.'),
+        toolRun('work'),
+        plan
+      ],
+      {
+        turnStatuses: {
+          active: null,
+          completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+        }
+      }
+    )
+    expect(slots.map((slot) => [slot.message.id, slot.drawsMessage, slot.folded])).toEqual([
+      ['u', true, false],
+      ['preamble', true, false],
+      ['plan', true, false]
+    ])
+  })
+
   it("marks a row as continuing its turn only when the agent's next step follows", () => {
     const continuing = (messages: NativeChatMessage[]) =>
       build(messages)
@@ -75,6 +101,62 @@ describe('transcript slots', () => {
     expect(
       continuing([text('u', 'go', 'user'), text('answer', 'done'), text('u2', 'next', 'user')])
     ).toEqual(['u'])
+  })
+
+  it("gives a finished turn's actions to its last words, collapsed or expanded, though tools follow", () => {
+    const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
+    const messages = [
+      text('u', 'Inspect the config', 'user'),
+      text('a', 'I will look.'),
+      toolRun('b')
+    ]
+    const holder = (overrides: Partial<Parameters<typeof build>[1]>) =>
+      build(messages, {
+        turnStatuses: { active: null, completedByTurn: { u: settled } },
+        ...overrides
+      })
+        .filter((slot) => slot.endsResponse)
+        .map((slot) => slot.message.id)
+
+    expect(holder({})).toEqual(['a'])
+    expect(holder({ expandedTurnKeys: new Set(['u']) })).toEqual(['a'])
+    // Expanded, the tool sits right after it, which is what `continuesTurn` alone hid controls on.
+    const expanded = build(messages, {
+      turnStatuses: { active: null, completedByTurn: { u: settled } },
+      expandedTurnKeys: new Set(['u'])
+    })
+    expect(expanded.find((slot) => slot.message.id === 'a')?.continuesTurn).toBe(true)
+    // A running turn's frontier still offers nothing: its rows stay live.
+    const working = build(messages, { liveTurnKey: 'u', isWorking: true })
+    expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
+  })
+
+  it("keeps a turn's actions on its text, or on its image while folding hides the text", () => {
+    const image: NativeChatMessage = {
+      id: 'a-image',
+      role: 'assistant',
+      blocks: [{ type: 'image-ref', url: 'https://example.test/picture.png' }],
+      timestamp: 1,
+      source: 'transcript'
+    }
+    const messages = [
+      text('A', 'Show the picture', 'user'),
+      text('a-text', 'Here is the picture.'),
+      text('B', 'Inspect it next', 'user'),
+      image
+    ]
+    const settled: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
+    const holder = (expandedTurnKeys: ReadonlySet<string>) =>
+      build(messages, {
+        turnKeys: ['A', 'A', 'B', 'A'],
+        turnStatuses: { active: null, completedByTurn: { A: settled } },
+        expandedTurnKeys
+      })
+        .filter((slot) => slot.endsResponse)
+        .map((slot) => slot.message.id)
+
+    expect(holder(new Set())).toEqual(['a-image'])
+    expect(holder(new Set(['A']))).toEqual(['a-text'])
   })
 
   it('keeps a message whose only content is a turn status under it', () => {
@@ -119,6 +201,28 @@ describe('turn-owned grouping', () => {
     ).toEqual([
       ['a-answer', 1],
       ['b1', 2]
+    ])
+  })
+
+  it('keeps the opened pull request card when the turn ends in a run of tool calls', () => {
+    const slots = build([text('A', 'open a PR', 'user'), toolRun('create'), toolRun('checks')], {
+      openedPullRequests: new Map([
+        [
+          'A',
+          [
+            {
+              provider: 'github',
+              url: 'https://github.com/o/r/pull/3',
+              slug: { owner: 'o', repo: 'r', host: 'github.com' },
+              number: 3
+            }
+          ]
+        ]
+      ])
+    })
+    expect(slots.map((slot) => [slot.message.id, slot.openedPullRequests?.[0]?.number])).toEqual([
+      ['A', undefined],
+      ['create', 3]
     ])
   })
 

@@ -1,17 +1,17 @@
 import { expect, it, vi } from 'vitest'
-import { openDetectedFilePath } from '../terminal-pane/terminal-file-open-routing'
-import { createTerminalLinkTestDoubles } from '../terminal-pane/terminal-link-handlers-test-fixtures'
+import { openDetectedFilePath } from '../terminal-pane/links/files/terminal-file-open-routing'
+import { createTerminalLinkTestDoubles } from '../terminal-pane/links/terminal-link-handlers-test-fixtures'
 import {
   flushDoubleRaf,
   installTerminalLinkTestEnvironment
-} from '../terminal-pane/terminal-link-handlers-test-harness'
+} from '../terminal-pane/links/terminal-link-handlers-test-harness'
 import { nativeChatFileOpenDeps } from './native-chat-link-target-actions'
 
 const doubles = createTerminalLinkTestDoubles()
 const { storeState, statMock, openFileMock, openFilePathMock, runtimeEnvironmentCallMock } = doubles
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))

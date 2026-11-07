@@ -1,11 +1,11 @@
 import { memo, useContext } from 'react'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { MessageRow, type NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
+import { NativeChatOpenedPullRequestCard } from './NativeChatOpenedPullRequestCard'
 import { NativeChatSubagentSectionHead } from './NativeChatSubagentSectionHead'
 import { NativeChatSubagentEntries } from './NativeChatSubagentRun'
 import type { NativeChatSubagentDisclosure } from './native-chat-subagent-sections'
@@ -16,7 +16,9 @@ import type {
   NativeChatDiffTarget
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { NativeChatRewindContext } from './native-chat-rewind-context'
-import { nativeChatRowOffersRewind } from './native-chat-rewind-eligibility'
+import { nativeChatRowOffersRewind } from '../../../../shared/native-chat/native-chat-rewind-eligibility'
+import { NativeChatForkContext } from './native-chat-fork-context'
+import { nativeChatRowOffersFork } from '../../../../shared/native-chat/native-chat-fork-offer'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -28,12 +30,12 @@ export type NativeChatTranscriptRowContext = {
   revealedDiff: NativeChatDiffReveal | null
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   expandedTurnIds: ReadonlySet<string>
+  /** The conversation's newest turn, the only one an agent that forks at its tip can fork. */
+  latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
-  allowFileUriLinks: boolean
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
-  onLinkClick?: CommentMarkdownLinkClickHandler
   onToggleExpandedTurn: (turnKey: string) => void
   subagentDisclosure: NativeChatSubagentDisclosure
   onScrollMessageToTop: (element: HTMLElement) => void
@@ -50,6 +52,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
 }): React.JSX.Element {
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
+  const fork = useContext(NativeChatForkContext)
   const sectionClassName = cn(
     slot.depth > 0 && 'border-l-2 border-border/60 pl-3',
     slot.depth > 1 && 'ml-4'
@@ -77,7 +80,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       />
     )
   }
-  const { message, turnKey, status, receipt, turnDiff, workRun } = slot
+  const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun } = slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
@@ -94,13 +97,19 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   return (
     // The negative margin shortens the measured row, which is what moves the next one up.
-    <div className={cn('flex flex-col gap-5', slot.continuesTurn && '-mb-3', sectionClassName)}>
+    // A row whose actions hang into the gap keeps it whole, so they never cover the next row.
+    <div
+      className={cn(
+        'flex flex-col gap-5',
+        slot.continuesTurn && !(slot.endsResponse && !slot.activeTurnIsWorking) && '-mb-3',
+        sectionClassName
+      )}
+    >
       {/* A turn with no user bubble carries its bar above its first row. */}
       {slot.statusAbove ? statusRow : null}
       {!slot.drawsMessage ? null : receipt ? (
         <NativeChatResolutionReceipt
           body={receipt}
-          onLinkClick={context.onLinkClick}
           disclosureId={message.id}
           awaiting={isActionableStructuredAgentSessionPrompt(
             message.id,
@@ -122,9 +131,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           activeTurnIsWorking={slot.activeTurnIsWorking}
           trailingRun={slot.trailingRun}
           continuesTurn={slot.continuesTurn}
+          endsResponse={slot.endsResponse}
           onScrollMessageToTop={context.onScrollMessageToTop}
-          onLinkClick={context.onLinkClick}
-          allowFileUriLinks={context.allowFileUriLinks}
           deliveryNotice={deliveryNotice}
           subagentRoster={slot.subagentRoster}
           subagentDisclosure={context.subagentDisclosure}
@@ -137,12 +145,27 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               ? rewind
               : undefined
           }
+          fork={
+            fork &&
+            nativeChatRowOffersFork(
+              {
+                message,
+                inSubagentSection: slot.depth > 0,
+                turnWorking: slot.activeTurnIsWorking,
+                inLatestTurn: turnKey !== undefined && turnKey === context.latestTurnKey
+              },
+              fork
+            )
+              ? fork.rowAction
+              : undefined
+          }
           workRun={workRun}
         />
       )}
       {slot.statusAbove ? null : statusRow}
-      {turnDiff ? (
-        <NativeChatTurnDiffRollup diff={turnDiff} onLinkClick={context.onLinkClick} />
+      {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
+      {openedPullRequests ? (
+        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
       ) : null}
     </div>
   )

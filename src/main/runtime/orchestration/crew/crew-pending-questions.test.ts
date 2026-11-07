@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { fixture } from './crew-read-model.test-fixture'
-import { buildCrewSnapshot } from './crew-read-model'
+import { buildCrewSnapshot } from './crew-party-snapshot'
 
 it('decorates handed-back peer questions after row creation without flattening direct children', () => {
   const { db, deps, run, assign } = fixture()

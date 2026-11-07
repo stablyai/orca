@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import { NODE_PLATFORM_NAMES } from './mobile-runtime-host-platform'
 import { HOST_MACHINE_KINDS } from '../../../src/shared/host-machine-line'
@@ -20,7 +20,11 @@ export const hostStatusSchema = z.looseObject({
   capabilities: salvagedOptional('capabilities', z.array(z.string())),
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
   machineName: salvagedOptional('machineName', z.string()),
-  hostMachine: salvagedOptional('hostMachine', HostMachineSchema)
+  hostMachine: salvagedOptional('hostMachine', HostMachineSchema),
+  hostDescriptor: salvagedOptional(
+    'hostDescriptor',
+    z.looseObject({ installationId: salvagedOptional('installationId', z.string()) })
+  )
 })
 
 export type HostStatusReply = z.output<typeof hostStatusSchema>

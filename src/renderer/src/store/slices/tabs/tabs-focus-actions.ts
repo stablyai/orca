@@ -3,7 +3,8 @@ import {
   findTabAndWorktree,
   findTabByEntityInGroup,
   pushRecentTabId,
-  sanitizeRecentTabIds
+  sanitizeRecentTabIds,
+  selectActiveTabForWorktree
 } from '../tab-group-state'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
@@ -77,21 +78,7 @@ export function createTabsFocusActions(
   return {
     getTab: (tabId) => findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab ?? null,
 
-    getActiveTab: (worktreeId) => {
-      const state = get()
-      const groupId = state.activeGroupIdByWorktree[worktreeId]
-      const group = (state.groupsByWorktree[worktreeId] ?? []).find(
-        (candidate) => candidate.id === groupId
-      )
-      if (!group?.activeTabId) {
-        return null
-      }
-      return (
-        (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) => tab.id === group.activeTabId
-        ) ?? null
-      )
-    },
+    getActiveTab: (worktreeId) => selectActiveTabForWorktree(get(), worktreeId),
 
     findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
       findTabByEntityInGroup(

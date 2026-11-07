@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore, makePRRefreshWorktree } from '../store/slices/github-slice-test-harness'
+import { createTestStore, makePRRefreshWorktree } from '../store/github/github-slice-test-harness'
 
 import { visibleReviewWorktreeIdsForState } from './use-visible-review-refresh-reporting'
 

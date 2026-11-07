@@ -1,7 +1,7 @@
-import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout-serialization'
+import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/layout/terminal-layout-normalization'
 import { sanitizeTerminalLayoutPaneTitles } from '../../../../shared/workspace-layout/terminal-pane-title-sanitization'
 import type { AppState } from '@/store/types'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -17,7 +17,7 @@ import {
   isUnifiedTabActiveInActiveGroup
 } from './mobile-session-surfaces'
 import { resolveRuntimeTerminalTitle } from './sync-projections'
-import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
+import { resolveTerminalLayoutRoot } from '../hosted-terminals/actions/remote-terminal-layout-resolution'
 
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,
@@ -109,8 +109,12 @@ export function buildMobileTerminalSurfaceTabs(
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
-      ...(tabWideFallbackSafe && terminal.aiVaultTitle?.title.trim()
-        ? { aiVaultTitle: terminal.aiVaultTitle }
+      // This window's title sync owns the tab's session name; null tells paired desktops it has none.
+      ...(tabWideFallbackSafe
+        ? {
+            aiVaultTitle: terminal.aiVaultTitle?.title.trim() ? terminal.aiVaultTitle : null,
+            resolvesSessionTitle: true as const
+          }
         : {}),
       ...(tabWideFallbackSafe && inputs.generatedTitlesEnabled && terminal.generatedTitle?.trim()
         ? { generatedTitle: terminal.generatedTitle.trim() }

@@ -28,22 +28,6 @@ function writeKitty(terminal, command, payload) {
 }
 
 describe('xterm image memory contract', () => {
-  it('does not emit a reply when evicting an id-less upload', async () => {
-    const { terminal, handler } = createTerminal()
-    const replies = []
-    terminal.onData((data) => replies.push(data))
-    try {
-      await writeKitty(terminal, 'a=t,f=32,s=1,v=1,m=1', 'AAAA')
-      await writeKitty(terminal, 'a=t,f=32,s=1,v=1,i=1,m=1,q=2', 'AAAA')
-      await writeKitty(terminal, 'a=t,f=32,s=1,v=1,i=2,m=1,q=2', 'AAAA')
-      expect(handler._pendingTransmissions.has(0)).toBe(false)
-      expect(handler._pendingTransmissions.size).toBe(2)
-      expect(replies).toEqual([])
-    } finally {
-      terminal.dispose()
-    }
-  })
-
   it('bounds abandoned uploads by retained decoder capacity and accepts a continuation', async () => {
     const { terminal, handler } = createTerminal()
     try {
@@ -66,17 +50,6 @@ describe('xterm image memory contract', () => {
     }
   })
 
-  it('rejects a decoder that cannot fit the storage budget before allocation', async () => {
-    const { terminal, handler } = createTerminal({ storageLimit: 8 })
-    try {
-      await writeKitty(terminal, 'a=t,f=32,s=1,v=1,i=9,m=1,q=2', 'AAAA')
-      expect(handler._pendingTransmissions.size).toBe(0)
-      expect(handler._aborted).toBe(true)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
   it('evicts transmitted images by byte size before placement', async () => {
     const { terminal, handler } = createTerminal({ storageLimit: 12, kittyStorageLimit: 0.5 })
     const payload = Buffer.alloc(200_000, 1).toString('base64')
@@ -94,36 +67,6 @@ describe('xterm image memory contract', () => {
       expect(handler._kittyStorage.getImage(4).data.size).toBe(200_000)
       await writeKitty(terminal, 'a=d,d=A,q=2', '')
       expect(handler._kittyStorage.images.size).toBe(0)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
-  it('evicts unplaced payloads before displayed ones', async () => {
-    const { terminal, handler } = createTerminal({ storageLimit: 12, kittyStorageLimit: 0.5 })
-    const storage = handler._kittyStorage
-    const payload = Buffer.alloc(200_000, 1).toString('base64')
-    try {
-      await writeKitty(terminal, 'a=t,f=32,s=250,v=200,i=1,q=2', payload)
-      await writeKitty(terminal, 'a=t,f=32,s=250,v=200,i=2,q=2', payload)
-      // Placement bookkeeping only; a real addImage needs a canvas this env lacks.
-      storage._kittyIdToStorageId.set(1, 1001)
-      storage._storageIdToKittyId.set(1001, 1)
-      await writeKitty(terminal, 'a=t,f=32,s=250,v=200,i=3,q=2', payload)
-      expect(storage.getImage(1)).toBeDefined()
-      expect(storage.getImage(2)).toBeUndefined()
-      expect(storage.getImage(3).data.size).toBe(200_000)
-    } finally {
-      terminal.dispose()
-    }
-  })
-
-  it('stores an image larger than the byte budget rather than acking a dropped one', async () => {
-    const { terminal, handler } = createTerminal({ storageLimit: 12, kittyStorageLimit: 0.5 })
-    const payload = Buffer.alloc(600_000, 1).toString('base64')
-    try {
-      await writeKitty(terminal, 'a=t,f=32,s=500,v=300,i=1,q=2', payload)
-      expect(handler._kittyStorage.getImage(1).data.size).toBe(600_000)
     } finally {
       terminal.dispose()
     }

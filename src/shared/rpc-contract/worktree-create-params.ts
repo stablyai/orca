@@ -7,6 +7,7 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { LaunchSourceParam } from './launch-source-param'
+import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -89,6 +90,12 @@ export const WorktreeCreate = z
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
+    /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
+    crossStoreParent: CrossStoreParentRefSchema.optional(),
+    // No parent flag: the caller's own workspace implied it.
+    crossStoreParentInferredFrom: z
+      .enum(['env-workspace', 'terminal-context', 'cwd-context', 'orchestration-context'])
+      .optional(),
     cwdParentWorktree: OptionalString,
     // Absent on older clients: retain the existing cwd parent.
     cwdParentAmbiguous: z.literal(true).optional(),
@@ -109,6 +116,17 @@ export const WorktreeCreate = z
         typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
       )
       .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
+      .optional(),
+    // A malformed hash never matches, so the host skips setup rather than running unapproved content.
+    approvedSetupHash: z.string().max(128).optional(),
+    // Lenient: a longer list from a newer client is trimmed instead of failing the create.
+    approvedSetupHashes: z
+      .array(z.unknown())
+      .transform((hashes) =>
+        hashes
+          .filter((hash): hash is string => typeof hash === 'string' && hash.length <= 128)
+          .slice(0, 64)
+      )
       .optional(),
     // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
@@ -137,13 +155,19 @@ export const WorktreeCreate = z
   })
   .superRefine((params, ctx) => {
     assertLinkedWorkItemSourceContextMatch(params, ctx)
-    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
+    if (
+      (params.parentWorkspace || params.parentWorktree || params.crossStoreParent) &&
+      params.noParent === true
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
       })
     }
-    if (params.parentWorkspace && params.parentWorktree) {
+    if (
+      [params.parentWorkspace, params.parentWorktree, params.crossStoreParent].filter(Boolean)
+        .length > 1
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'

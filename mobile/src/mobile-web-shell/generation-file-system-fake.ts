@@ -3,7 +3,7 @@ import type { GenerationFileSystem } from './generation-store-file-system'
 // Share the adapter’s move/failure semantics across store suites so their in-memory disks cannot disagree.
 export const FAKE_GENERATION_ROOT = 'file:///cache/mobile-web'
 
-type FakeNode = { kind: 'directory' } | { kind: 'file'; bytes: Uint8Array }
+type FakeNode = { kind: 'directory' } | { kind: 'file'; bytes: Uint8Array; modifiedAt?: number }
 
 export type FakeGenerationFileSystem = GenerationFileSystem & {
   readonly writes: string[]
@@ -36,7 +36,7 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
       throw new Error('simulated disk-full write')
     }
     makeDirectory(parentOf(target))
-    nodes.set(target, { kind: 'file', bytes })
+    nodes.set(target, { kind: 'file', bytes, modifiedAt: Date.now() })
     writes.push(target.slice(ROOT.length + 1))
   }
 
@@ -98,12 +98,53 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
       const node = nodes.get(target)
       return node?.kind === 'file' ? new TextDecoder().decode(node.bytes) : null
     },
+    async readBytes(target) {
+      if (failReadAt !== null && target === uri(failReadAt)) {
+        throw new Error('simulated unreadable file')
+      }
+      const node = nodes.get(target)
+      return node?.kind === 'file' ? node.bytes : null
+    },
     async fileExists(target) {
       return nodes.get(target)?.kind === 'file'
     },
     async fileSize(target) {
       const node = nodes.get(target)
       return node?.kind === 'file' ? node.bytes.byteLength : null
+    },
+    async listFiles(target) {
+      if (nodes.get(target)?.kind !== 'directory') {
+        return []
+      }
+      return [...nodes.entries()].flatMap(([key, node]) =>
+        node.kind === 'file' &&
+        key.startsWith(`${target}/`) &&
+        !key.slice(target.length + 1).includes('/')
+          ? [
+              {
+                name: key.slice(target.length + 1),
+                size: node.bytes.byteLength,
+                modificationTime: node.modifiedAt ?? null
+              }
+            ]
+          : []
+      )
+    },
+    async summarizeDirectory(target) {
+      let size = 0
+      let entryCount = 0
+      for (const [key, node] of nodes.entries()) {
+        if (!key.startsWith(`${target}/`)) {
+          continue
+        }
+        if (!key.slice(target.length + 1).includes('/')) {
+          entryCount += 1
+        }
+        if (node.kind === 'file') {
+          size += node.bytes.byteLength
+        }
+      }
+      return { size, entryCount }
     },
     async copyFile(fromUri, toUri) {
       if (failReadAt !== null && fromUri === uri(failReadAt)) {
@@ -137,6 +178,18 @@ export function createFakeGenerationFileSystem(): FakeGenerationFileSystem {
           }
         }
       }
+    },
+    async moveFile(fromUri, toUri) {
+      const node = nodes.get(fromUri)
+      if (node?.kind !== 'file') {
+        throw new Error(`fake filesystem has no file at ${fromUri}`)
+      }
+      if (nodes.has(toUri)) {
+        throw new Error(`fake filesystem refuses to move onto ${toUri}`)
+      }
+      nodes.delete(fromUri)
+      makeDirectory(parentOf(toUri))
+      nodes.set(toUri, node)
     }
   }
 }

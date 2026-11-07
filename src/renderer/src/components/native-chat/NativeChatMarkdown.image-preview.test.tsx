@@ -25,11 +25,12 @@ import {
   repoFixture,
   worktreeFixture
 } from './native-chat-workspace-test-fixtures'
-import type * as TerminalFileOpenRouting from '@/components/terminal-pane/terminal-file-open-routing'
-import type * as HttpLinkRouting from '@/lib/http-link-routing'
+import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
+import type * as HttpLinkRouting from '@/lib/browser/navigation/http-link-routing'
 
 import * as imageCachePinning from '@/components/editor/document-images/local-image-cache-pinning'
 import { ImageVisibilityObserver } from './native-chat-image-visibility-observer.test-fixture'
+import { NativeChatLinkClickContext } from './native-chat-link-click-context'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFilePreview: vi.fn(),
@@ -37,14 +38,17 @@ const mocks = vi.hoisted(() => ({
   openHttpLink: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFilePreview: mocks.readRuntimeFilePreview
 }))
-vi.mock('@/components/terminal-pane/terminal-file-open-routing', async (importOriginal) => ({
-  ...(await importOriginal<typeof TerminalFileOpenRouting>()),
-  openDetectedFilePath: mocks.openDetectedFilePath
-}))
-vi.mock('@/lib/http-link-routing', async (importOriginal) => ({
+vi.mock(
+  '@/components/terminal-pane/links/files/terminal-file-open-routing',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof TerminalFileOpenRouting>()),
+    openDetectedFilePath: mocks.openDetectedFilePath
+  })
+)
+vi.mock('@/lib/browser/navigation/http-link-routing', async (importOriginal) => ({
   ...(await importOriginal<typeof HttpLinkRouting>()),
   openHttpLink: mocks.openHttpLink
 }))
@@ -90,13 +94,9 @@ function Transcript({
     <TooltipProvider>
       <NativeChatMarkdownImageOwnerContext.Provider value={owner}>
         <div ref={rootRef}>
-          <NativeChatMarkdown
-            content={content}
-            variant={variant}
-            growing={growing}
-            onLinkClick={onLinkClick}
-            allowFileUriLinks
-          />
+          <NativeChatLinkClickContext value={onLinkClick}>
+            <NativeChatMarkdown content={content} variant={variant} growing={growing} />
+          </NativeChatLinkClickContext>
           <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
         </div>
       </NativeChatMarkdownImageOwnerContext.Provider>
@@ -155,7 +155,7 @@ describe('native chat Markdown image preview', () => {
     const view = render(
       <TooltipProvider>
         <NativeChatMarkdownImageOwnerProvider tabId="chat-0" isVisible sessionId="session-0">
-          <NativeChatMarkdown content="![Chart](chart.png)" variant="document" allowFileUriLinks />
+          <NativeChatMarkdown content="![Chart](chart.png)" variant="document" />
         </NativeChatMarkdownImageOwnerProvider>
       </TooltipProvider>
     )

@@ -49,21 +49,6 @@
       "ordinal": 12,
       "value": {}
     },
-    "83ed906e3d41": {
-      "actionSheetRequestSeq": 1,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "terminalsLoaded": true
-    },
     "8c990409ac55": {
       "name": "worktree.activate#1",
       "ordinal": 5,
@@ -115,6 +100,22 @@
         "allowEmptyLoaded": false
       }
     },
+    "a98356c9153c": {
+      "actionSheetRequestSeq": 2,
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "appliedSnapshotMarker": {
+        "epoch": {
+          "$rpc": "null"
+        },
+        "version": -1
+      },
+      "closedTabTombstones": 0,
+      "initializedHandles": [],
+      "sessionTabs": [],
+      "terminalsLoaded": true
+    },
     "aa6511b23729": {
       "status": "fulfilled",
       "startedAt": 1500,
@@ -135,8 +136,8 @@
         "allowEmptyLoaded": true
       }
     },
-    "c7e9a0eef4ce": {
-      "actionSheetRequestSeq": 2,
+    "e022e11065b3": {
+      "actionSheetRequestSeq": 1,
       "activeHandle": {
         "$rpc": "null"
       },
@@ -148,6 +149,7 @@
       },
       "closedTabTombstones": 0,
       "initializedHandles": [],
+      "sessionTabs": [],
       "terminalsLoaded": true
     },
     "e927128e41fc": {
@@ -185,7 +187,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "83ed906e3d41",
+          "state": "e022e11065b3",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -204,7 +206,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "83ed906e3d41",
+          "state": "e022e11065b3",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -226,7 +228,7 @@
             "mount": "eb79a9b3682a",
             "unmount": "aa6511b23729"
           },
-          "state": "c7e9a0eef4ce",
+          "state": "a98356c9153c",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",

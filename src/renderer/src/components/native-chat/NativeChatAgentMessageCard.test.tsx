@@ -1,20 +1,22 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { render } from './native-chat-tooltip-test-harness'
 import { useAppStore } from '@/store'
+import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import {
   initialStore,
   from,
-  status,
-  resetSenderStore
+  resetSenderStore,
+  setSenderSessionStatus
 } from './native-chat-agent-sender.test-fixture'
-import * as terminalLinks from '@/components/terminal-pane/terminal-handle-links'
+import * as terminalLinks from '@/components/terminal-pane/links/handles/terminal-handle-links'
 import * as markdown from './NativeChatMarkdown'
 import * as display from '../../../../shared/agent-session/agent-message-display-text'
 import type * as SonnerModule from 'sonner'
-import type * as RuntimeRpc from '@/runtime/runtime-rpc-client'
+
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
@@ -87,7 +89,6 @@ it('reloads a positioned worker start into the shared card with full task, Copy 
   expect(projectStructuredItemToNativeChat(future)).toBeNull()
   expect(projectStructuredAgentStartItem({ ...item, shortened: true })).toBeNull()
   expect(projectStructuredItemToNativeChat(reloaded)).toBeNull()
-  height = 120
   const writeClipboardText = vi.fn(async () => {})
   vi.stubGlobal('api', { ui: { writeClipboardText } })
   render(
@@ -182,8 +183,8 @@ it.each([false, true])(
 )
 
 const navigation = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
-  ...(await original<typeof RuntimeRpc>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
+  ...(await original<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: navigation.rpc
 }))
 vi.mock('sonner', async (importOriginal) => {
@@ -199,46 +200,12 @@ vi.mock('sonner', async (importOriginal) => {
     )
   }
 })
-let height = 48
-let resize: () => void
-let disconnects = 0
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
   resetSenderStore()
   navigation.rpc.mockReset()
   navigation.toast.mockReset()
-  height = 48
-  disconnects = 0
-  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(() => {
-    return height
-  })
-  const computedStyle = getComputedStyle
-  vi.stubGlobal('getComputedStyle', (element: Element) => {
-    const style = computedStyle(element)
-    return new Proxy(style, {
-      get(target, key) {
-        if (key === 'lineHeight') {
-          return '24px'
-        }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the style facade delegates native properties to the real style receiver, including binding its methods below.
-        const value = target[key as keyof CSSStyleDeclaration]
-        return typeof value === 'function' ? value.bind(target) : value
-      }
-    })
-  })
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      constructor(callback: () => void) {
-        resize = callback
-      }
-      observe() {}
-      disconnect() {
-        disconnects++
-      }
-    }
-  )
 })
 afterEach(() => {
   cleanup()
@@ -255,7 +222,6 @@ function card(message: NativeChatMessage) {
       message={message}
       from={message.from!}
       runtimeContext={context}
-      allowFileUriLinks={false}
       onRefolded={() => {}}
     />
   )
@@ -300,15 +266,12 @@ function slots(message: NativeChatMessage, surrounding = false, working = false)
   })
 }
 
-it.each(['task', 'mail'] as const)(
+it.each(['task', 'mail', 'generic'] as const)(
   'keeps native %s progress independent from Markdown and reparses own edits',
   async (kind) => {
-    const paneKey = status(0).paneKey
-    const entry = {
-      ...status(0),
-      programStatus: { state: 'working' as const, progress: 40, observedAt: 2_000_000 }
-    }
-    useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry } })
+    const sessionId = testOrcaSessionId('progress-sender')
+    const entry = setSenderSessionStatus(sessionId)
+    const paneKey = entry.paneKey
     const prefix =
       kind === 'task' ? 'You are working inside Orca, a multi-agent IDE.\n=== TASK ===\n' : ''
     const message: NativeChatMessage = {
@@ -318,10 +281,15 @@ it.each(['task', 'mail'] as const)(
       timestamp: 1,
       from: {
         ...from,
+        senders: from.senders.map((sender, index) =>
+          index === 0 ? { ...sender, party: { ...sender.party, orcaSessionId: sessionId } } : sender
+        ),
         orchestration:
           kind === 'task'
             ? { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
-            : { message: 'mail-notice', mailbox: 'term_0', dispatchId: null, messages: [] }
+            : kind === 'mail'
+              ? { message: 'mail-notice', mailbox: 'term_0', dispatchId: null, messages: [] }
+              : null
       },
       blocks: [
         {
@@ -333,10 +301,11 @@ it.each(['task', 'mail'] as const)(
     const convert = vi.spyOn(display, 'agentMessageTranscriptText')
     const renderMarkdown = vi.spyOn(markdown, 'NativeChatMarkdown')
     let mounted = render(card(message))
-    if (kind === 'mail') {
-      expect(renderMarkdown).not.toHaveBeenCalled()
-      fireEvent.click(screen.getByRole('button', { name: 'Message from' }))
-    }
+    const heading = kind === 'task' ? 'Task from coordinator' : 'Message from'
+    expect(renderMarkdown).not.toHaveBeenCalled()
+    const toggle = () => screen.getByRole('button', { name: heading })
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle())
     expect(
       screen.getByText(kind === 'task' ? 'Task from coordinator' : 'Message from')
     ).toBeInTheDocument()
@@ -376,47 +345,12 @@ it.each(['task', 'mail'] as const)(
     expect(navigation.toast).toHaveBeenCalledWith(
       'The structured agent session is not available yet. Retry in a moment.'
     )
-    if (kind === 'task') {
-      expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
-      act(() => {
-        height = 120
-        resize()
-      })
-      const more = screen.getByRole('button', { name: 'Show more' })
-      expect(more).toHaveAttribute('aria-expanded', 'false')
-      const clip = document.getElementById(more.getAttribute('aria-controls')!)!
-      const first = screen.getByRole('link', { name: 'link' })
-      const second = screen.getByRole('link', { name: 'another link' })
-      const documentFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-      first.focus()
-      clip.scrollTop = 74
-      second.focus()
-      expect(second).toHaveFocus()
-      expect(clip.scrollTop).toBe(74)
-      documentFocus.mockReturnValue(false)
-      second.blur()
-      expect(clip.scrollTop).toBe(74)
-      documentFocus.mockReturnValue(true)
-      second.focus()
-      more.focus()
-      expect(more).toHaveFocus()
-      expect(clip.scrollTop).toBe(0)
-      expect(more).toHaveAttribute('aria-expanded', 'false')
-      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
-      expect(writeClipboardText).toHaveBeenCalledWith(text)
-      expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(text)
-      fireEvent.click(screen.getByRole('button', { name: 'Show more' }))
-      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
-        'aria-expanded',
-        'true'
-      )
-      fireEvent.click(screen.getByRole('button', { name: 'Show less' }))
-      act(() => {
-        height = 48
-        resize()
-      })
-      expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull()
-    }
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy message' })))
+    expect(writeClipboardText).toHaveBeenCalledWith(text)
+    expect(nativeChatSlotCopyText(slots(message), message.id)).toBe(text)
+    fireEvent.click(toggle())
+    expect(screen.queryByRole('link', { name: 'link' })).toBeNull()
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false')
     for (const remount of [false, true]) {
       if (remount) {
         mounted.unmount()
@@ -468,9 +402,7 @@ it.each(['task', 'mail'] as const)(
     for (const spy of [convert, renderMarkdown]) {
       expect(spy).not.toHaveBeenCalled()
     }
-    if (kind === 'mail') {
-      fireEvent.click(screen.getByRole('button', { name: 'Message from' }))
-    }
+    fireEvent.click(toggle())
     const edited = { ...message, blocks: [{ type: 'text' as const, text: `${prefix}Edited task` }] }
     mounted.rerender(card(edited))
     expect(screen.getByText('Edited task')).toBeInTheDocument()
@@ -492,8 +424,5 @@ it.each(['task', 'mail'] as const)(
       `${prefix}Edited task\n\nAnother paragraph`
     )
     mounted.unmount()
-    if (kind === 'task') {
-      expect(disconnects).toBeGreaterThan(0)
-    }
   }
 )

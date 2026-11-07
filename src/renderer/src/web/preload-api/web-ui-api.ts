@@ -179,6 +179,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = level
     },
     isMaximized: () => Promise.resolve(false),
+    isWindowActive: () => Promise.resolve(document.hasFocus()),
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so it never queues an open-settings or quit request.
     consumePendingOpenSettings: () => Promise.resolve(false),
@@ -221,6 +222,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onRequestTabClose: () => noopUnsubscribe,
     replyTabClose: () => {},
     onBrowserPageTabShortcut: () => noopUnsubscribe,
+    onToggleProjectsCollapse: () => noopUnsubscribe,
     onFocusBrowserAddressBar: () => noopUnsubscribe,
     onShowBrowserHistory: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
@@ -281,6 +283,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     minimize: () => {},
     maximize: () => {},
     onMaximizeChanged: () => noopUnsubscribe,
+    onWindowActiveChanged: () => noopUnsubscribe,
     requestClose: () => {},
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -16,6 +16,7 @@ import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-a
 import { DiffCommentSchema, MobileDiffReviewSchema } from '../diff-comment-schema'
 import { TaskSourceContextSchema } from '../task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
+import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 
 export const OptionalExecutionHostId = z
   .string()
@@ -106,6 +107,10 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+export const WorktreeRunApprovedSetup = WorktreeSelector.extend({
+  approvedSetupHash: z.string().min(1).max(128)
+})
+
 // Why optional: an older host strips the unknown field and marks its chats asleep as before.
 export const WorktreeSleepParams = WorktreeSelector.extend({
   markChatsAsleep: z.boolean().optional()
@@ -135,6 +140,16 @@ export function assertLinkedWorkItemSourceContextMatch(
     })
   }
 }
+
+/** A create's caller context, resolved by the caller's own Orca as its same-machine create would. */
+export const WorktreeResolveCallerParent = z.object({
+  envParentWorkspace: OptionalString,
+  callerTerminalHandle: OptionalString,
+  cwdParentWorktree: OptionalString,
+  cwdParentAmbiguous: z.literal(true).optional(),
+  /** The workspace note; a task id in it names its parent as on a same-machine create. */
+  comment: OptionalString
+})
 
 export const WorktreeSet = WorktreeSelector.extend({
   // Empty clears to branch/folder fallback; OptionalString would drop remote clears and restore the old name.
@@ -186,14 +201,19 @@ export const WorktreeSet = WorktreeSelector.extend({
   diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
+  /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
+  crossStoreParent: CrossStoreParentRefSchema.optional(),
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
-  if (params.parentWorktree && params.noParent === true) {
+  if ((params.parentWorktree || params.crossStoreParent) && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       message: 'Choose either --parent-worktree or --no-parent, not both.'
     })
+  }
+  if (params.parentWorktree && params.crossStoreParent) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose one parent.' })
   }
 })
 

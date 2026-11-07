@@ -4,7 +4,7 @@ import {
   makePaneKey,
   isTerminalLeafId
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
+import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { normalizeCompatibleAgentStatusEntryForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
@@ -38,8 +38,12 @@ export function toMirroredPaneKey(
   return makePaneKey(toWebTerminalSurfaceTabId(surface.parentTabId), leafId)
 }
 
+/** A host frame's agent status in this client's pane keys. `frameWorktreeId` is the worktree the
+ *  frame publishes: older hosts omit it on agents restored after a restart, and clients judge a
+ *  row's ownership (and retraction) by worktree, so every reader must see the same owner. */
 export function remapHostAgentStatus(
   surface: TerminalSurface,
+  frameWorktreeId: string,
   retainedSurface?: TerminalSurface
 ): AgentStatusEntry | null {
   if (!surface.agentStatus) {
@@ -53,10 +57,14 @@ export function remapHostAgentStatus(
     launchAgent: retainedSurface?.launchAgent ?? surface.launchAgent,
     hookAgent: surface.agentStatus.agentType
   })
+  const entry = normalizeCompatibleAgentStatusEntryForOwner(
+    surface.agentStatus,
+    ownerRecord?.agent,
+    { ownerIsLaunch: ownerRecord?.ownerIsLaunch === true }
+  )
   return {
-    ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerRecord?.agent, {
-      ownerIsLaunch: ownerRecord?.ownerIsLaunch === true
-    }),
+    ...entry,
+    worktreeId: entry.worktreeId || frameWorktreeId,
     paneKey,
     tabId: toWebTerminalSurfaceTabId(surface.parentTabId)
   }

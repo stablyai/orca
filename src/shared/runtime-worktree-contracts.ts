@@ -13,6 +13,8 @@ import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contract
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
   WorkspaceLineage,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -81,6 +83,10 @@ export type RuntimeWorktreePsSummary = {
   parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
   childWorktreeIds: string[]
+  /** This row's parent in another Orca store; lineage fields above stay null for it, so older readers show it standalone. */
+  crossStoreParent?: CrossStoreWorkspaceLineage
+  /** Its folder workspace parent; null for none, absent from older hosts. Lineage fields above stay null for it. */
+  workspaceLineage?: WorkspaceLineageEdge | null
   displayName: string
   workspaceStatus: string
   sortOrder: number
@@ -176,6 +182,8 @@ export type RuntimeWorktreeRecord = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store (worktree.show); older hosts omit it. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
@@ -183,6 +191,7 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']

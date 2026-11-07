@@ -1,5 +1,8 @@
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
-import { readRuntimeFileRange, statRuntimeReadTarget } from '@/runtime/runtime-file-range-client'
+import {
+  readRuntimeFileRange,
+  statRuntimeReadTarget
+} from '@/runtime/files/reads/runtime-file-range-client'
 import type { CsvFilePreview } from './csv-file-content'
 import {
   CSV_MAX_PAGE_BYTES,

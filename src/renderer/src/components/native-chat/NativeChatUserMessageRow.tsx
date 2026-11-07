@@ -1,10 +1,10 @@
+import { NativeChatSignInButton } from './NativeChatSignInButton'
 import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from './NativeChatRewindAction'
@@ -68,8 +68,6 @@ export function NativeChatUserMessageRow({
   prose,
   rowRef,
   onRefolded,
-  onLinkClick,
-  allowFileUriLinks,
   runtimeContext,
   structuredAttachments = false,
   rewind,
@@ -80,8 +78,6 @@ export function NativeChatUserMessageRow({
   prose: ReturnType<typeof deriveNativeChatRowContent>['prose']
   rowRef: React.RefObject<HTMLDivElement | null>
   onRefolded: () => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks: boolean
   structuredAttachments?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
   rewind?: NativeChatRewindSurface
@@ -104,8 +100,6 @@ export function NativeChatUserMessageRow({
           from={from}
           textAttachmentContent={structuredAttachments ? markdown : undefined}
           runtimeContext={runtimeContext}
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
           onRefolded={onRefolded}
         />
       ) : (
@@ -135,8 +129,6 @@ export function NativeChatUserMessageRow({
                       variant="document"
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}
-                      onLinkClick={onLinkClick}
-                      allowFileUriLinks={allowFileUriLinks}
                     />
                   )}
                 />
@@ -166,8 +158,9 @@ export function NativeChatUserMessageRow({
         />
       ) : null}
       {deliveryNotice?.text !== undefined ? (
-        <div className="flex max-w-[85%] items-center gap-2 text-2xs text-destructive/80">
+        <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
+          <NativeChatSignInButton failureKind={deliveryNotice.failureKind} />
           {deliveryNotice.onSend ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
               {translate('components.native-chat.queuedMessages.send', 'Send')}

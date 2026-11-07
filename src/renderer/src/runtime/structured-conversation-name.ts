@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import {
+  useAppStateViewActive,
+  useAppViewExternalStore,
+  useAppStateValue
+} from '@/store/app-state-view'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { Tab } from '../../../shared/tab-types'
 import { isAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,
   AgentSessionConversationName
 } from '../../../shared/agent-session/agent-session-wire'
-import { useAppStore } from '@/store'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
@@ -54,14 +58,20 @@ function useStructuredSessionSummaryField<T>(
   sessionId: string | null | undefined,
   read: (summary: AgentSessionConversationName | undefined) => T | null
 ): T | null {
+  const viewActive = useAppStateViewActive()
   const feed = useMemo(() => {
     const target = structuredAgentSessionTargetForHost(executionHostId)
     return target ? getStructuredAgentSessionStatusFeed(target) : null
   }, [executionHostId])
   const watched = sessionId ? feed : null
-  useEffect(() => watched?.activate(), [watched])
-  return useSyncExternalStore(
-    watched?.subscribe ?? noSubscription,
+  useEffect(() => (viewActive ? watched?.activate() : undefined), [viewActive, watched])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      watched && sessionId ? watched.subscribeSession(sessionId, listener) : noSubscription(),
+    [watched, sessionId]
+  )
+  return useAppViewExternalStore(
+    subscribe,
     () => read(sessionId ? watched?.getNamingSnapshot().get(sessionId) : undefined),
     () => null
   )
@@ -71,7 +81,9 @@ function useStructuredSessionSummaryField<T>(
 export function useStructuredChatTabConversationName(
   tab: Pick<Tab, 'entityId' | 'worktreeId' | 'executionHostId'> | undefined
 ): string | null {
-  const owner = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
+  const owner = useAppStateValue((state) =>
+    tab ? structuredAgentSessionOwnerForTab(state, tab) : null
+  )
   return useStructuredConversationName(owner, tab?.entityId)
 }
 
@@ -79,7 +91,9 @@ export function useStructuredChatTabConversationName(
 export function useStructuredChatTabNamingFailure(
   tab: Pick<Tab, 'entityId' | 'worktreeId' | 'executionHostId'> | undefined
 ): StructuredChatTabNamingFailure | null {
-  const owner = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
+  const owner = useAppStateValue((state) =>
+    tab ? structuredAgentSessionOwnerForTab(state, tab) : null
+  )
   const error = useStructuredConversationNamingError(owner, tab?.entityId)
   const sessionId = tab?.entityId
   return useMemo(

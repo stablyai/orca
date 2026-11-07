@@ -1,12 +1,16 @@
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { NativeChatExpandable } from './NativeChatExpandable'
+import {
+  NativeChatCardHideButton,
+  NATIVE_CHAT_HIDEABLE_CARD_CLASS
+} from './NativeChatCardHideButton'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { nativeChatEditFileBaseName } from '../../../../shared/native-chat/tools/native-chat-edit-model'
-import type { CommentMarkdownLinkClickHandler } from '../sidebar/CommentMarkdown'
 import {
   nativeChatTurnDiffEditFile,
   NATIVE_CHAT_TURN_DIFF_FILE_LIMIT,
@@ -14,13 +18,7 @@ import {
   type NativeChatTurnDiffFile
 } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 
-function TurnDiffFilePatches({
-  file,
-  onLinkClick
-}: {
-  file: NativeChatTurnDiffFile
-  onLinkClick?: CommentMarkdownLinkClickHandler
-}): React.JSX.Element {
+function TurnDiffFilePatches({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
   return (
     <div className="pl-2">
       {file.edits.map((edit) => {
@@ -29,7 +27,6 @@ function TurnDiffFilePatches({
           <NativeChatDiffCard
             key={`${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
             file={patch}
-            onLinkClick={onLinkClick}
             initialOpen
             disclosureKey={`turn-diff-card:${edit.target.messageId}:${edit.target.editKey}:${edit.fileIndex}`}
           />
@@ -39,13 +36,7 @@ function TurnDiffFilePatches({
   )
 }
 
-function TurnDiffFileRow({
-  file,
-  onLinkClick
-}: {
-  file: NativeChatTurnDiffFile
-  onLinkClick?: CommentMarkdownLinkClickHandler
-}): React.JSX.Element {
+function TurnDiffFileRow({ file }: { file: NativeChatTurnDiffFile }): React.JSX.Element {
   const name = nativeChatEditFileBaseName(file.path)
   const disclosureKey = `turn-diff:${file.edits[0]?.target.messageId}:${file.path}`
   const { open, setOpen } = useNativeChatDisclosure(disclosureKey, false)
@@ -68,18 +59,16 @@ function TurnDiffFileRow({
         <DiffLineCounts added={file.added} removed={file.removed} />
       </Button>
       <NativeChatExpandable open={open}>
-        <TurnDiffFilePatches file={file} onLinkClick={onLinkClick} />
+        <TurnDiffFilePatches file={file} />
       </NativeChatExpandable>
     </div>
   )
 }
 
 export function NativeChatTurnDiffRollup({
-  diff,
-  onLinkClick
+  diff
 }: {
   diff: NativeChatTurnDiff
-  onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element {
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
     `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
@@ -88,7 +77,9 @@ export function NativeChatTurnDiffRollup({
   const files = showAll ? diff.files : diff.files.slice(0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT)
   const remaining = diff.files.length - files.length
   return (
-    <div className="rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint">
+    <div
+      className={`${NATIVE_CHAT_HIDEABLE_CARD_CLASS} rounded-lg border border-chat-code-border p-2 text-xs text-chat-foreground-faint`}
+    >
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
         <span className="min-w-0 truncate">
           {translate('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
@@ -100,10 +91,18 @@ export function NativeChatTurnDiffRollup({
         {diff.truncated ? (
           <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
+        <NativeChatCardHideButton
+          updates={{ nativeChatTurnDiffSummary: false }}
+          settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
+          hiddenMessage={translate(
+            'components.native-chat.turnDiff.hidden',
+            "Orca won't show turn diffs anymore"
+          )}
+        />
       </div>
       <div className="space-y-1">
         {files.map((file) => (
-          <TurnDiffFileRow key={file.path} file={file} onLinkClick={onLinkClick} />
+          <TurnDiffFileRow key={file.path} file={file} />
         ))}
         {remaining > 0 ? (
           <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>

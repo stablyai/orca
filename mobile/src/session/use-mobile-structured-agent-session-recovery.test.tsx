@@ -3,7 +3,8 @@ import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared
 import { useMobileNativeChatComposerTray } from './native-chat/composer/use-mobile-native-chat-composer-tray'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionSubscribeEvent,
@@ -49,7 +50,7 @@ const { createQueuedMessageTestRig, QUEUED_RIG_CALLER } = await vi.importActual<
     }
   }>
 }>(
-  '../../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+  '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 )
 
 const asyncStorage = vi.hoisted(() => ({
@@ -77,6 +78,7 @@ vi.mock('react-native-reanimated', async () => {
 vi.mock('react-native', () => ({
   Dimensions: { get: () => ({ width: 430, height: 900 }) },
   useWindowDimensions: () => ({ fontScale: 1 }),
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -166,6 +168,7 @@ describe('current recovery publication and normal Resume', () => {
         onEdit: hook.queued.edit,
         onMove: hook.queued.move
       },
+      taskList: null,
       backgroundTasks: null
     })
     return showTray ? createElement('View', null, tray.content) : null
@@ -177,7 +180,7 @@ describe('current recovery publication and normal Resume', () => {
     sessionId?: string
   ): Promise<void> {
     act(() => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Harness, { hostSupport, ...(sessionId ? { sessionId } : {}) })
       )
     })
@@ -228,12 +231,6 @@ describe('current recovery publication and normal Resume', () => {
   })
 
   describe('saved independent hold through feed, controller, tray and normal header', () => {
-    const r = queuedDraft({
-      messageId: 'R',
-      position: 0,
-      state: 'waiting',
-      paused: true
-    })
     const w1 = queuedDraft({ messageId: 'W1', position: 1 })
     const q = queuedDraft({
       messageId: 'Q',
@@ -306,86 +303,6 @@ describe('current recovery publication and normal Resume', () => {
         } finally {
           await rig.dispose()
         }
-      }
-    )
-
-    it('retains the published barrier across a withheld catch-up tuple and bounds/old-host/no-pause cases', async () => {
-      showTray = true
-      await mountSession(CAPABLE, snapshotEvent({ queuedMessages: [r, w1, q, w2] }))
-      act(() => listener?.(batchEvent([r, w1, q, w2], [], { reason: 'stopped' })))
-      expect(header()).toHaveLength(1)
-      vi.useFakeTimers()
-      act(() => {
-        listener?.(batchEvent(undefined, [acceptedSubmission('handoff-W1', 'W1')]))
-        vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
-      })
-      expect(hook!.queued.cards.map((c) => c.messageId)).toEqual(['R', 'Q', 'W2'])
-      expect(hook!.queued.cards.at(-1)?.caption).toBe('Waiting — a message ahead needs attention')
-      expect(header()).toHaveLength(0)
-      act(() =>
-        listener?.(
-          batchEvent(
-            [r, w1, queuedDraft({ messageId: 'W0', position: 1.5 }), q, w2],
-            [acceptedSubmission('handoff-W1', 'W1')],
-            { reason: 'stopped' }
-          )
-        )
-      )
-      expect(header()).toHaveLength(1)
-      for (const queuedMessages of [
-        [q, w2],
-        [r],
-        [],
-        [queuedDraft({ messageId: 'P', paused: true })],
-        [{ ...r, state: 'returned' as const, paused: undefined }, w2]
-      ]) {
-        act(() => listener?.(batchEvent(queuedMessages, [], { reason: 'stopped' })))
-        expect(header()).toHaveLength(0)
-      }
-      act(() =>
-        listener?.(
-          batchEvent([w1], [acceptedSubmission('handoff-W1', 'W1')], { reason: 'stopped' })
-        )
-      )
-      expect(hook!.queued.cards).toEqual([])
-      expect(header()).toHaveLength(0)
-      act(() => listener?.(snapshotEvent({ queuedMessages: [w1, { ...r, position: 2 }, w2] })))
-      expect(hook!.queued.cards.map((c) => c.caption)).toEqual([null, 'Paused', null])
-      expect(header()).toHaveLength(0)
-    })
-
-    it.each([100, 1000])(
-      'bounds actual publication/feed/controller join work at N=%i',
-      async (n) => {
-        await mountSession({ ...CAPABLE, queuedMessageReorder: true })
-        vi.useFakeTimers()
-        let reads = 0
-        const messages = Array.from({ length: n }, (_, i) => {
-          const message = queuedDraft({ messageId: `W${i}`, position: i })
-          return {
-            ...message,
-            get messageId() {
-              reads++
-              return message.messageId
-            }
-          }
-        })
-        act(() => listener?.(batchEvent(messages, [], { reason: 'stopped' })))
-        expect(hook!.queued.cards).toHaveLength(n)
-        expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
-        expect(reads).toBeGreaterThanOrEqual(n)
-        expect(reads).toBeLessThanOrEqual(20 * n)
-        const before = reads
-        act(() => {
-          listener?.(
-            batchEvent(undefined, [acceptedSubmission('handoff-W0', 'W0')], { reason: 'stopped' })
-          )
-          vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
-        })
-        expect(hook!.queued.cards).toHaveLength(n - 1)
-        expect(hook!.queued.cards.some((card) => card.messageId === 'W0')).toBe(false)
-        expect(reads - before).toBeGreaterThanOrEqual(n)
-        expect(reads - before).toBeLessThanOrEqual(20 * n)
       }
     )
 

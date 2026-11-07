@@ -1,20 +1,22 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
 import { randomBytes } from 'node:crypto'
 import type { WebSocket } from 'ws'
-import type { DeviceEntry, DeviceRegistry } from '../device-registry'
-import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from '../ephemeral-device-rows'
-import { devicePrincipalOf } from '../device-principal'
+import type { DeviceEntry } from './server/pairing/device-entry'
+import type { DeviceRegistry } from './server/pairing/device-registry'
+import { EPHEMERAL_DEVICE_SWEEP_INTERVAL_MS } from './server/pairing/ephemeral-device-rows'
+import { devicePrincipalOf } from './server/pairing/device-principal'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel } from './e2ee-channel'
-import type { E2EEAuthenticatedDevice } from './mobile-e2ee-authenticated-device'
+import type { E2EEAuthenticatedDevice } from './server/mobile-e2ee-authenticated-device'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RpcBinarySender } from './rpc-binary-sender'
+import type { NetworkSourceClass } from './network-source-class'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
 export type MobileSocketTransportMetadata =
-  | { transport: 'direct' }
+  | { transport: 'direct'; sourceClass?: NetworkSourceClass }
   | {
       transport: 'relay'
       relayHostId: string
@@ -243,7 +245,14 @@ export class MobileSocketWiring {
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceId)
           // Do not delay e2ee_authenticated for the secure-file rewrite.
-          this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
+          this.deviceRegistry.updateLastSeenDeferred(
+            device.deviceId,
+            metadata.transport === 'direct' ? metadata.sourceClass : undefined,
+            channel.transcriptHashB64 ? 'v2' : 'legacy'
+          )
+          if (device.deviceToken === undefined) {
+            this.deviceRegistry.retireForkedTicket(device.deviceId)
+          }
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

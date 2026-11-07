@@ -1,29 +1,26 @@
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { FlatList, View, type ListRenderItem } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, FolderOpen, X } from 'lucide-react-native'
+import { useQueryClient, type QueryKey, type UseQueryResult } from '@tanstack/react-query'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
+import { useHostQueries, useHostQuery } from '../query/host-query'
+import { hostQueryKey, hostScopeKey } from '../query/host-query-key'
+import { hostScreenState } from '../query/host-query-screen-state'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
 import { connectionRetryAction } from '../transport/connection-retry-action'
+import type { ConnectionState } from '../transport/types'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { getDirectoryCacheState, type DirectoryCache, type FileExplorerRow } from './file-tree'
+import type { DirectoryCache, DirectoryState, FileExplorerRow } from './file-tree'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import {
-  beginDirectoryLoad,
-  createDirectoryLoadRevisions,
-  isCurrentDirectoryLoad,
-  resetDirectoryLoadRevisions,
-  type DirectoryLoadRevisions
-} from './directory-load-revisions'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import { directoryCacheFromFileList } from './file-list-fallback'
-import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
+import { fileDirectoryQuery, type DirectoryRead } from './mobile-file-explorer-operations'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
+import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -36,6 +33,66 @@ import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+
+const ROOT = { relativePath: '' }
+const NO_FOLDERS: ReadonlySet<string> = new Set()
+
+type FolderRead = Pick<UseQueryResult<DirectoryRead>, 'data' | 'error' | 'isFetching'>
+
+// Stable, so useQueries memoizes the folder reads; a loaded folder's background refetch changes nothing here.
+function pickFolderReads(results: UseQueryResult<DirectoryRead>[]): FolderRead[] {
+  return results.map(({ data, error, isFetching }) =>
+    data === undefined ? { data, error, isFetching } : { data, error: null, isFetching: false }
+  )
+}
+
+// Open folders whose parents are all open: only these are on screen, so only these refetch on reconnect.
+function shownFolders(expanded: ReadonlySet<string>): { relativePath: string }[] {
+  return [...expanded]
+    .filter((path) => {
+      const segments = path.split('/')
+      return segments.every(
+        (_, index) => index === 0 || expanded.has(segments.slice(0, index).join('/'))
+      )
+    })
+    .map((relativePath) => ({ relativePath }))
+}
+
+function folderPathOf(key: QueryKey): string | undefined {
+  const params: unknown = key[4]
+  return typeof params === 'object' &&
+    params !== null &&
+    'relativePath' in params &&
+    typeof params.relativePath === 'string'
+    ? params.relativePath
+    : undefined
+}
+
+// A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
+function folderState(read: FolderRead, connState: ConnectionState): DirectoryState {
+  switch (hostScreenState(read, connState)) {
+    case 'data':
+      return { entries: read.data?.kind === 'directory' ? read.data.entries : [] }
+    case 'empty-loading':
+      return { entries: [], loading: true }
+    case 'empty-error':
+      return {
+        entries: [],
+        error:
+          read.error?.message ||
+          translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
+      }
+    case 'empty-connecting':
+    case 'empty-offline':
+      return {
+        entries: [],
+        error:
+          connState === 'connected'
+            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
+            : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
+      }
+  }
+}
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -51,240 +108,88 @@ export function MobileFileExplorerPanel(props: {
   const executionHost = useWorkspaceExecutionHost()
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
-  const scopeRef = useRef('')
+  const queryClient = useQueryClient()
   const scope = JSON.stringify([hostId, executionHost, worktreeId])
-  scopeRef.current = scope
-  const directoryLoadRevisionsRef = useRef<DirectoryLoadRevisions>(createDirectoryLoadRevisions())
-  const pendingDirectoryRetriesRef = useRef<Set<string>>(new Set())
-  const directoryCacheRef = useRef<DirectoryCache>({})
+  const exec = executionHost ?? 'local'
+  const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
+  // Held with the scope it was opened in, so another worktree starts collapsed without an effect.
+  const [scopedExpanded, setScopedExpanded] = useState({ scope, paths: new Set<string>() })
+  const expanded = scopedExpanded.scope === scope ? scopedExpanded.paths : NO_FOLDERS
+  const setExpanded = useCallback<Dispatch<SetStateAction<Set<string>>>>(
+    (action) =>
+      setScopedExpanded((previous) => {
+        const current = previous.scope === scope ? previous.paths : new Set<string>()
+        return { scope, paths: typeof action === 'function' ? action(current) : action }
+      }),
+    [scope]
+  )
   const [panelWidth, setPanelWidth] = useState(0)
-  const [directoryCache, setDirectoryCache] = useState<DirectoryCache>({})
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
+  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
 
-  const loadDirectory = useCallback(
-    async (relativePath: string) => {
-      const scope = scopeRef.current
-      const loadToken = beginDirectoryLoad(directoryLoadRevisionsRef.current, scope, relativePath)
-      const rootLoad = relativePath === ''
+  const host = { hostId, client }
+  const rootQuery = useHostQuery(fileDirectoryQuery, host, target, ROOT)
+  const rootRead = rootQuery.data
+  // A legacy root already holds every folder.
+  const folders = useMemo(
+    () => (rootRead?.kind === 'directory' ? shownFolders(expanded) : []),
+    [expanded, rootRead?.kind]
+  )
+  const folderReads = useHostQueries(fileDirectoryQuery, host, target, folders, pickFolderReads)
 
-      if (!client || connState !== 'connected') {
-        const message =
-          connState === 'connected'
-            ? translate('files.fileExplorerPanel.connecting', 'Connecting to desktop...')
-            : translate('files.fileExplorerPanel.waiting', 'Waiting for desktop...')
-        if (rootLoad) {
-          const hasLoadedRoot =
-            (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
-          setLoading(false)
-          setError(hasLoadedRoot ? null : message)
-        } else {
-          setDirectoryCache((prev) => ({
-            ...prev,
-            [relativePath]: {
-              entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-              error: message
-            }
-          }))
-        }
-        return
-      }
-
-      const hadLoadedRoot =
-        rootLoad && (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
-      if (rootLoad) {
-        // Keep the cached tree during reconnect; a full-screen spinner unmounts the list and loses scroll.
-        if (!hadLoadedRoot) {
-          setLoading(true)
-        }
-        setError(null)
-      }
-      setDirectoryCache((prev) => ({
-        ...prev,
-        [relativePath]: {
-          entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-          loading: true
-        }
-      }))
-
-      try {
-        const response = await fileDirectoryRead.request(client, {
-          worktree: `id:${worktreeId}`,
-          relativePath
-        })
-        const directory = fileDirectoryRead.interpret(response)
-        if (!directory.accepted) {
-          const refusal = response.ok ? undefined : response.error
-          // Older desktops lack readDir in the mobile allowlist; fall back to capped files.list.
-          if (rootLoad && isMobileMethodUnavailableError(refusal?.code, refusal?.message)) {
-            const legacyReply = await legacyFileListRead.request(client, {
-              worktree: `id:${worktreeId}`
-            })
-            const legacy = legacyFileListRead.interpret(legacyReply)
-            if (legacy.accepted) {
-              if (
-                !isCurrentDirectoryLoad(
-                  directoryLoadRevisionsRef.current,
-                  scopeRef.current,
-                  loadToken
-                )
-              ) {
-                return
-              }
-              const legacyResult = legacy.value
-              setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
-              // Keep the truncation note because the capped list silently omits later files.
-              setLegacyListTruncated(legacyResult.truncated)
-              return
-            }
-            throw new Error(
-              (legacyReply.ok ? undefined : legacyReply.error)?.message ||
-                refusal?.message ||
-                translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
-            )
-          }
-          throw new Error(
-            refusal?.message ||
-              translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
-          )
-        }
-        if (
-          !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
-        ) {
-          return
-        }
-        const entries = directory.value
-        if (rootLoad) {
-          setLegacyListTruncated(false)
-        }
-        setDirectoryCache((prev) => ({
-          ...prev,
-          [relativePath]: { entries }
-        }))
-        return 'directory' as const
-      } catch (err) {
-        if (
-          !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
-        ) {
-          return
-        }
-        const message =
-          err instanceof Error
-            ? err.message
-            : translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
-        if (rootLoad) {
-          // Only cold loads show full-screen errors; failed background refreshes retain the cached tree.
-          setError(hadLoadedRoot ? null : message)
-        } else {
-          setDirectoryCache((prev) => ({
-            ...prev,
-            [relativePath]: {
-              entries: getDirectoryCacheState(prev, relativePath)?.entries ?? [],
-              error: message
-            }
-          }))
-        }
-      } finally {
-        if (
-          rootLoad &&
-          isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
-        ) {
-          setLoading(false)
-        }
-      }
-    },
-    [client, connState, worktreeId]
+  const refreshDirectory = useCallback(
+    (relativePath: string) =>
+      queryClient.refetchQueries({
+        queryKey: hostQueryKey(hostId, fileDirectoryQuery.family, target, { relativePath }),
+        exact: true
+      }),
+    [hostId, queryClient, target]
   )
 
-  useEffect(() => {
-    scopeRef.current = scope
-    resetDirectoryLoadRevisions(directoryLoadRevisionsRef.current)
-    pendingDirectoryRetriesRef.current.clear()
-    directoryCacheRef.current = {}
-    setDirectoryCache({})
-    setExpanded(new Set())
-    setLoading(true)
-    setError(null)
-    setLegacyListTruncated(false)
-  }, [scope])
-
-  useEffect(() => {
-    directoryCacheRef.current = directoryCache
-  }, [directoryCache])
-
-  const refreshExpandedDirectories = useEffectEvent(() => {
-    setDirectoryCache((previous) =>
-      Object.fromEntries(
-        Object.entries(previous).filter(([path]) => path === '' || expanded.has(path))
-      )
-    )
-    for (const relativePath of expanded) {
-      if (getDirectoryCacheState(directoryCacheRef.current, relativePath)) {
-        void loadDirectory(relativePath)
-      }
+  const directoryCache = useMemo((): DirectoryCache => {
+    if (rootRead?.kind === 'legacy') {
+      return rootRead.cache
     }
-  })
-
-  useEffect(() => {
-    let cancelled = false
-    resetDirectoryLoadRevisions(directoryLoadRevisionsRef.current)
-    setDirectoryCache((previous) =>
-      Object.fromEntries(
-        Object.entries(previous).map(([path, state]) => [
-          path,
-          state?.loading
-            ? {
-                entries: state.entries,
-                error: translate(
-                  'files.fileExplorerPanel.loadInterrupted',
-                  'Folder load interrupted'
-                )
-              }
-            : state
-        ])
-      )
-    )
-    void loadDirectory('').then((result) => {
-      // Legacy roots replace their entire synthesized cache; only readDir roots need child reads.
-      if (!cancelled && result === 'directory') {
-        refreshExpandedDirectories()
-      }
+    // Closed folders and earlier visits stay in the cache, so the filter searches every folder opened before.
+    const cached = queryClient.getQueriesData<DirectoryRead>({
+      queryKey: [...hostScopeKey(hostId), fileDirectoryQuery.family, target]
     })
-    return () => {
-      cancelled = true
-    }
-  }, [scope, loadDirectory])
-
-  useEffect(() => {
-    if (connState !== 'connected' || pendingDirectoryRetriesRef.current.size === 0) {
-      return
-    }
-    const pending = [...pendingDirectoryRetriesRef.current]
-    pendingDirectoryRetriesRef.current.clear()
-    for (const relativePath of pending) {
-      void loadDirectory(relativePath)
-    }
-  }, [connState, loadDirectory])
+    // fromEntries keeps a folder named __proto__ an own key; assignment would set the prototype.
+    return Object.fromEntries([
+      ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
+        const relativePath = folderPathOf(key)
+        return relativePath !== undefined && data?.kind === 'directory'
+          ? [[relativePath, { entries: data.entries }]]
+          : []
+      }),
+      ...folders.map(({ relativePath }, index): [string, DirectoryState] => [
+        relativePath,
+        folderState(folderReads[index], connState)
+      ])
+    ])
+  }, [connState, folderReads, folders, hostId, queryClient, rootRead, target])
 
   const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
-    useMobileFileExplorerRows({ scope, directoryCache, expanded, setExpanded, loadDirectory })
+    useMobileFileExplorerRows({
+      scope,
+      directoryCache,
+      expanded,
+      setExpanded,
+      loadDirectory: refreshDirectory
+    })
 
   const retryDirectory = useCallback(
     (relativePath: string) => {
       if (connState !== 'connected' && hostId) {
-        // The page cannot re-dial, but its queued read runs when the shell reconnects.
-        pendingDirectoryRetriesRef.current.add(relativePath)
+        // The page cannot re-dial; the connected edge refetches every folder on screen.
         void forceReconnect?.(hostId)
         return
       }
-      void loadDirectory(relativePath)
+      void refreshDirectory(relativePath)
     },
-    [connState, forceReconnect, hostId, loadDirectory]
+    [connState, forceReconnect, hostId, refreshDirectory]
   )
 
   const previewFile = useCallback(
@@ -313,6 +218,7 @@ export function MobileFileExplorerPanel(props: {
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
+        onOpenActions={openRowActions}
       />
     )
   }
@@ -336,7 +242,7 @@ export function MobileFileExplorerPanel(props: {
       }
       title={t('files.fileExplorerPanel.title', 'Files')}
       subtitle={
-        legacyListTruncated
+        rootRead?.kind === 'legacy' && rootRead.truncated
           ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
               worktreeLabel
             })
@@ -345,49 +251,64 @@ export function MobileFileExplorerPanel(props: {
     />
   )
 
-  // Revive the parked transport while disconnected (#5049); the connected effect retries loadDirectory.
+  // Revive the parked transport while disconnected (#5049); the connected edge then refetches the root.
   const rootRetry = connectionRetryAction({
     hostId,
     needsReconnect: connState !== 'connected',
     forceReconnect,
-    reload: () => void loadDirectory('')
+    reload: () => void rootQuery.refetch()
   })
-  const treeReady = !loading && !error && (rows.length > 0 || filtering)
-  const body = loading ? (
-    <MobileStateView loading title={t('files.fileExplorerPanel.loading', 'Loading files…')} />
-  ) : error && connState !== 'connected' ? (
-    <MobileOfflineState onReconnect={rootRetry} />
-  ) : error ? (
-    <MobileLoadErrorState error={error} onRetry={rootRetry} />
-  ) : rows.length === 0 && filtering ? (
-    <MobileNoMatchState
-      message={t(
-        'files.fileExplorerPanel.noMatchesHint',
-        'Only folders you have opened are searched.'
-      )}
-      onClear={() => setFilter('')}
-      clearLabel={t('files.fileExplorerPanel.clearFilter', 'Clear filter')}
-      bottomInset={filterBarHeight}
-    />
-  ) : rows.length === 0 ? (
-    <MobileStateView
-      icon={FolderOpen}
-      title={t('files.fileExplorerPanel.emptyState', 'No files found')}
-    />
-  ) : (
-    <FlatList
-      data={rows}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={[
-        styles.listContent,
-        treeReady && { paddingBottom: spacing.sm + filterBarHeight }
-      ]}
-      style={styles.list}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-    />
-  )
+  // Cached rows paint before the client attaches.
+  const rootScreen =
+    client || rootRead
+      ? hostScreenState(
+          { data: rootRead, error: rootQuery.error, isFetching: rootQuery.isFetching },
+          connState
+        )
+      : 'empty-connecting'
+  const treeReady = rootScreen === 'data' && (rows.length > 0 || filtering)
+  const body =
+    rootScreen !== 'data' && connState !== 'connected' ? (
+      <MobileOfflineState onReconnect={rootRetry} />
+    ) : rootScreen === 'empty-error' ? (
+      <MobileLoadErrorState
+        error={
+          rootQuery.error?.message ||
+          t('files.fileExplorerPanel.loadFailed', 'Unable to load files')
+        }
+        onRetry={rootRetry}
+      />
+    ) : rootScreen !== 'data' ? (
+      <MobileStateView loading title={t('files.fileExplorerPanel.loading', 'Loading files…')} />
+    ) : rows.length === 0 && filtering ? (
+      <MobileNoMatchState
+        message={t(
+          'files.fileExplorerPanel.noMatchesHint',
+          'Only folders you have opened are searched.'
+        )}
+        onClear={() => setFilter('')}
+        clearLabel={t('files.fileExplorerPanel.clearFilter', 'Clear filter')}
+        bottomInset={filterBarHeight}
+      />
+    ) : rows.length === 0 ? (
+      <MobileStateView
+        icon={FolderOpen}
+        title={t('files.fileExplorerPanel.emptyState', 'No files found')}
+      />
+    ) : (
+      <FlatList
+        data={rows}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          treeReady && { paddingBottom: spacing.sm + filterBarHeight }
+        ]}
+        style={styles.list}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      />
+    )
 
   // The embedded dock owns insets and layout; only the full-screen variant needs SafeAreaView and header chrome.
   return (
@@ -412,6 +333,7 @@ export function MobileFileExplorerPanel(props: {
           onCoveredHeightChange={setFilterBarHeight}
         />
       ) : null}
+      {rowActionsSheet}
     </View>
   )
 }

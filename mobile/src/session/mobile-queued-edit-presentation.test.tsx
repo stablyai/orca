@@ -35,6 +35,9 @@ import {
 
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
 vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('./native-chat/composer/MobileNativeChatContextUsageRing', () => ({
+  useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
+}))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
@@ -56,7 +59,7 @@ vi.mock('../components/bottom-drawer/bottom-drawer-modal-host-scope', () => ({
 }))
 
 const { queuedEditHost } = await vi.importActual<QueuedEditHostFixtureModule>(
-  '../../../src/main/native-chat/agent-session-journal/queued-edit-host.test-fixture'
+  '../../../src/main/native-chat/agent-session-journal/queued-messages/queued-edit-host.test-fixture'
 )
 const { AcpStructuredOptions } = await vi.importActual<AcpCommandOptionsFixtureModule>(
   '../../../src/main/acp/acp-structured-options'
@@ -175,6 +178,7 @@ describe('phone inline editor presentation', () => {
         ...drafts,
         agent: 'codex',
         sendStructured: session.sendWithOutcome,
+        holdUnconfirmed: session.holdUnconfirmed,
         onSendError: error
       })
       const text = useMobileNativeChatDraft(scope)
@@ -404,7 +408,7 @@ describe('phone inline editor presentation', () => {
       sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
     ).toBe(false)
     expect(state.hook!.queued.cards[0]?.images).toEqual(message.body.blocks)
-    expect(state.hook!.queued.cards[0]?.attribution).not.toBeNull()
+    expect(state.hook!.queued.cards[0]?.from).toBeDefined()
     expect(state.bottomText).toBe('')
   })
   it('saves a scanned model skill picked through More and Edit without dispatching a host command', async () => {

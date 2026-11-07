@@ -1,8 +1,9 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
 import { getWorktreeIdsWithStructuredChat } from '../sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import { selectIsSleepingWorktree } from '../sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import { hasSleepableWorkspaceActivity } from '../sidebar/workspace-actions/context-menu/workspace-lineage-menu-actions'
@@ -16,8 +17,8 @@ vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   return { useAppStore: createTestStore() }
 })
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClientModule>()),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({

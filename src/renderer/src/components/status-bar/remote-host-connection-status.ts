@@ -5,7 +5,7 @@ import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime
 import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   runtimeStatusForOverall,
   type HostStatus,
@@ -36,6 +36,21 @@ export type RuntimeHostBlockedCopy = {
   explanation: string
   /** Untranslated protocol detail, shown in the diagnostics box. */
   detail?: string
+}
+
+/** `repair`: a new access link re-pairs; `open-settings`: the server must be forgotten there first. */
+export type RuntimeHostBlockedRecovery = 'repair' | 'open-settings'
+
+/** The row action that can actually get a refused host back; null when only another surface can. */
+export function runtimeHostBlockedRecovery(
+  reason: RuntimeHostBlockedReason,
+  repairRoute: RuntimePairingRepairRoute
+): RuntimeHostBlockedRecovery | null {
+  if (reason === 'server-replaced') {
+    // Why not Connect: SSH access alone can't pair with the host's new server key.
+    return 'open-settings'
+  }
+  return reason === 'access-revoked' && repairRoute === 'access-link' ? 'repair' : null
 }
 
 export function runtimeHostBlockedCopy(
@@ -69,6 +84,23 @@ export function runtimeHostBlockedCopy(
                 'auto.components.status.bar.RuntimeHostStatusRow.connect_access_revoked_explanation',
                 'Connect to try again.'
               )
+    }
+  }
+  if (reason === 'server-replaced') {
+    return {
+      label: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced',
+        'Different server'
+      ),
+      summary: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_summary',
+        'This host now runs a different Orca server than the one this computer paired with'
+      ),
+      // Why: SSH access alone can't re-pin another server key, so reconnecting can't fix this.
+      explanation: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_explanation',
+        'Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server.'
+      )
     }
   }
   return {

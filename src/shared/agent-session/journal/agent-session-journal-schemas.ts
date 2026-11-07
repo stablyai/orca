@@ -5,7 +5,7 @@
 // Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
 // History pages lack row v: extensions must also remain safe for older clients.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -263,7 +263,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     providerFrame: ProviderFrame.optional(),
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
-    orcaStop: z.object({ cause: z.string().min(1) }).optional()
+    orcaStop: z.object({ cause: z.string().min(1) }).optional(),
+    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
   }),
   z.object({
     kind: z.literal('turn'),

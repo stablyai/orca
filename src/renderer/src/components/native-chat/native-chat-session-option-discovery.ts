@@ -14,15 +14,18 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath
 } from '@/lib/local-preflight-context'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-generation-client'
-import { getRuntimeGitScope, type RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import {
+  getRuntimeGitScope,
+  type RuntimeGitContext
+} from '@/runtime/source-control/git/runtime-git-client-context'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store/index'
-import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import { selectFileListWorktree } from '@/store/selectors'
 
 export type NativeChatModelDiscoveryContext = {
   hostKey: string
@@ -86,7 +89,7 @@ export function resolveWorktreeModelDiscoveryRuntime(
     target,
     prefs: state.settings,
     worktreeId,
-    worktreePath: worktreeId ? (findKnownWorktreeById(state, worktreeId)?.path ?? '') : '',
+    worktreePath: selectFileListWorktree(state, worktreeId)?.path ?? '',
     ...(connectionId ? { connectionId } : {})
   }
 }

@@ -1,14 +1,15 @@
 import { FakeAcpChild } from './acp-scripted-connection.test-fixture'
 export { FakeAcpChild, PID } from './acp-scripted-connection.test-fixture'
 
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi } from 'vitest'
+import { onTestFinished, vi } from 'vitest'
 import { z } from 'zod'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
   openProviderTimelineRig,
   SESSION,
@@ -19,7 +20,7 @@ import { type AcpScriptedAgent, tick, type FakeFrame } from './acp-scripted-agen
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { AcpStructuredSessionAdapter } from './acp-structured-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
-import { AgentSessionStartFailure } from '../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { AgentSessionStartFailure } from '../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 
 export const GROK = acpLaunchSpecFor('grok')!
 const RIG_ENV = { PATH: '/usr/bin', ORCA_PANE_KEY: 'tab-1:pane-1', ORCA_AGENT_HOOK_PORT: '1234' }
@@ -94,9 +95,21 @@ export async function openAcpAdapterRig(
   let opened: StructuredAgentSessionProviderOpenResult | null = null
   const startListeners = new Set<() => void>()
   const spec = options.spec ?? GROK
+  const dataDirectory =
+    options.deps?.dataDirectory ??
+    (spec.privateTempDirectory
+      ? await mkdtemp(process.platform === 'win32' ? join(tmpdir(), 'orca-acp-') : '/tmp/o')
+      : join(tmpdir(), 'orca-acp-adapter-rig'))
+  if (spec.privateTempDirectory && !options.deps?.dataDirectory) {
+    onTestFinished(() => rm(dataDirectory, { recursive: true, force: true }))
+  }
   // Use a scratch account folder for agents that prepare one.
   const { prepare, resolve, environment } = spec.account
-  const scratch = { launchEnv: {}, stateDirectory: tmpdir() }
+  const stateDirectory = prepare ? await mkdtemp(join(tmpdir(), 'orca-acp-account-')) : tmpdir()
+  if (prepare) {
+    onTestFinished(() => rm(stateDirectory, { recursive: true, force: true }))
+  }
+  const scratch = { launchEnv: {}, stateDirectory }
   const account = prepare ? environment(await resolve(scratch), {}) : {}
   const resolveLaunch: AcpStructuredSessionAdapterDeps['resolveLaunch'] =
     options.deps?.resolveLaunch ??
@@ -155,7 +168,7 @@ export async function openAcpAdapterRig(
       return child
     },
     readProcessStartTime: async () => 1_700_000_000_000,
-    dataDirectory: join(tmpdir(), 'orca-acp-adapter-rig'),
+    dataDirectory,
     onDispatchSettledLate: (settlement) => settled.push(settlement),
     mintGeneration: () => 'gen-acp',
     now: () => 5_000,

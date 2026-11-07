@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import './web-runtime-worktree-activation'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import './runtime-rpc-client'
+import './rpc/calls/runtime-rpc-call'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
@@ -9,9 +9,13 @@ import {
   resetWebAgentSessionHandoffsForTests
 } from './web-agent-session-handoff'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
-import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import {
+  ENVIRONMENT_ID,
+  WORKTREE_ID,
+  makeSnapshot
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   changedAgentPaneKeys: new Set<string>(),
@@ -69,7 +73,7 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverWebSessionTerminalOrphansBeforeApply
 }))
 
@@ -77,11 +81,11 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

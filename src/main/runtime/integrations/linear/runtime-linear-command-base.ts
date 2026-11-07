@@ -1,6 +1,6 @@
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 
 import { RuntimeLinearBrowseCommands } from './runtime-linear-browse-commands'
 

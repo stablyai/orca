@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
@@ -10,7 +11,8 @@ import type { StructuredAgentSessionHostSupport } from './mobile-structured-agen
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileNativeChatSessionLane } from './native-chat/use-mobile-native-chat-session-lane'
 import { useHostClient } from '../transport/host-client-hooks'
-import { useWorkspaceClient, WorkspaceServerContext } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { WorkspaceServerContext } from '../transport/workspace-server-context'
 import { scopeRpcClientToExecutionHost } from '../transport/execution-host-scoped-rpc-client'
 import type { RpcClientContextValue } from '../transport/rpc-client-context-contract'
 
@@ -136,7 +138,7 @@ describe('mobile structured queued messages', () => {
     sessionId?: string
   ): Promise<void> {
     await act(async () => {
-      renderer = create(
+      renderer = createWithQueryClient(
         createElement(Harness, { hostSupport, ...(sessionId ? { sessionId } : {}) })
       )
     })
@@ -387,7 +389,7 @@ describe('mobile structured queued messages', () => {
         }
       }
       await act(async () => {
-        renderer = create(createElement(Route, { hostId: 'a' }))
+        renderer = createWithQueryClient(createElement(Route, { hostId: 'a' }))
       })
       await act(async () => listener?.(working))
       expect(hook!.sendFollowUp).toEqual({ action: 'steer', offersChoice: true })

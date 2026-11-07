@@ -1,6 +1,6 @@
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
-import type { AgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import type { AgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,

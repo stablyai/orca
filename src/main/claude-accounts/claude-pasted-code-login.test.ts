@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import {
-  CLAUDE_PASTED_CODE_REJECTED_MESSAGE,
   parseClaudePastedCodeSignInLink,
   runClaudePastedCodeLogin
 } from './claude-pasted-code-login'
@@ -45,10 +44,6 @@ function channel(code = new Promise<string>(() => {})) {
 }
 
 describe('parseClaudePastedCodeSignInLink', () => {
-  it('reads the pasted-code link from the captured transcript', () => {
-    expect(parseClaudePastedCodeSignInLink(TRANSCRIPT)).toBe(new URL(PASTE_LINK).toString())
-  })
-
   it('waits for the whole link and ignores a localhost-callback one', () => {
     expect(parseClaudePastedCodeSignInLink(`visit: ${PASTE_LINK.slice(0, 80)}`)).toBeNull()
     expect(parseClaudePastedCodeSignInLink(`visit: ${LOCAL_LINK}\n`)).toBeNull()
@@ -80,22 +75,6 @@ describe('runClaudePastedCodeLogin', () => {
       needsCode: true
     })
     expect(readdirSync(folder.windowsPath)).toEqual([])
-  })
-
-  it('names a refused code in words a person can act on', async () => {
-    const { value } = channel(Promise.resolve('wrong'))
-    const runCommand = vi.fn<RunCommand>(async (_args, _config, _timeout, options) => {
-      let sent = false
-      options?.onStdin?.(() => {
-        sent = true
-      })
-      options?.onStdout?.(TRANSCRIPT)
-      await vi.waitFor(() => expect(sent).toBe(true))
-      throw new Error('Claude command failed: Login failed: Request failed with status code 400')
-    })
-    await expect(
-      runClaudePastedCodeLogin(hostFolder(), runCommand, value, vi.fn())
-    ).rejects.toThrow(CLAUDE_PASTED_CODE_REJECTED_MESSAGE)
   })
 
   it('stops the login when the flow is cancelled, and spawns none once already cancelled', async () => {

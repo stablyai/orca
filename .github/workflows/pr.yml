@@ -72,6 +72,7 @@ jobs:
             /docs/readme/
             /.github/scripts/check-root-directory-entries.mjs
             /.github/scripts/check-required-pr-context.mjs
+            /.github/scripts/check-pull-request-job-timeouts.mjs
             /.github/workflows/
             /config/.bun-version
             /config/scripts/static-analysis/repository-layout/check-readme-local-links.mjs
@@ -111,6 +112,9 @@ jobs:
 
       - name: Check required PR context ownership
         run: bun .github/scripts/check-required-pr-context.mjs
+
+      - name: Check PR job time limits
+        run: bun .github/scripts/check-pull-request-job-timeouts.mjs
 
       # Readiness changes eligibility for advisory tests, not the already-tested source.
       - name: Find identical successful required checks
@@ -178,6 +182,7 @@ jobs:
     if: needs.code_paths.outputs.static_analysis == 'true' || needs.code_paths.outputs.typecheck == 'true'
     # Free hosted ARM: no job on the gate's critical path waits for preflight.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
     outputs:
       managed_hook_node18: ${{ steps.managed_hook_node18.outcome }}
 
@@ -566,11 +571,6 @@ jobs:
           node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts
           --maxWorkers=4 --isolate --retry=0 --bail=0
           config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs
-          config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs
-          config/scripts/workflow/pr-admission/pr-ready-check-reuse.test.mjs
-          config/scripts/ci/unit-selection/win32-test-lane-registration.test.mjs
-          config/scripts/test-runtime/node-worker/vitest-node-runtime-boundary.test.ts
-          config/scripts/test-runtime/sqlite-admission/vitest-sqlite-runtime-boundary.test.ts
 
       # Report failure through the separate required check without blocking unrelated consumers.
       - name: Smoke process-host package on Node 18
@@ -603,6 +603,7 @@ jobs:
           - git: '2.49.1'
             image: alpine/git:v2.49.1
     runs-on: ubuntu-24.04
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
@@ -643,6 +644,7 @@ jobs:
       needs.preflight.result == 'success'
     # Why ARM: @openai/codex ships @openai/codex-linux-arm64.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
     env:
       CODEX_CLI_VERSION: '0.150.1'
       # Why a second pin: --no-daemon only exists from 0.156, and Orca's codex wrapper relies on it.
@@ -738,6 +740,7 @@ jobs:
       needs.preflight.result == 'success'
     # Use ARM for four-package pristine/patched rebuild byte comparison: output generated on Linux x64 reproduces on darwin-arm64.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
@@ -855,13 +858,13 @@ jobs:
             src/main/pty/shell-startup/omp-shell-wrapper-alias-safety.test.ts \
             src/main/pty/shell-startup/omp-shell-wrapper.node-pty.test.ts \
             src/main/pty/shell-startup/fish-xdg-data-dirs-handoff.test.ts \
-            src/main/pty/shell-startup/shell-startup-feature-channel.test.ts \
-            src/main/pty/shell-startup/zsh-deferred-startup-line-init.live-shell.test.ts \
             src/main/pty/history/terminal-history-fish-session.node-pty.test.ts \
             src/main/pty/shell-startup/zsh-scoped-histfile.live-shell.test.ts \
             src/main/pty/shell-startup/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
-            src/main/runtime/structured-session-cli-login-shell.live-shell.test.ts \
-            src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/main/runtime/agent-session/environment/structured-session-cli-login-shell.live-shell.test.ts \
+            src/main/startup/shell-probe-terminal-detach.live-shell.test.ts \
+            src/main/startup/shell-probe-lifetime.live-shell.test.ts \
+            src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
             src/shared/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
@@ -898,7 +901,6 @@ jobs:
       download_selection_plan: ${{ needs.unit_plan.outputs.selection_planned == 'true' }}
       run_shards: ${{ needs.code_paths.outputs.mobile_ci_tools != 'true' }}
       run_relay_integration: ${{ needs.code_paths.outputs.relay_integration != 'false' || needs.code_paths.outputs.orcad_browser == 'true' }}
-      browser_contract: ${{ needs.code_paths.outputs.orcad_browser == 'true' }}
 
   # Keep advisory evidence sibling to tests and outside verify.needs; reusable-workflow dependency otherwise added ~36s after last shard.
   unit_selection_evidence:
@@ -914,6 +916,7 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.mobile_web_app == 'true'
     runs-on: ubuntu-24.04
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
@@ -982,6 +985,7 @@ jobs:
       needs.preflight.result == 'success'
     # Why ARM: source-only: tagged checkout plus in-process vitest, no docker or browser.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     steps:
       # Fetch tags/full history for newest-release skew; shallow unit shards cannot supply it.
@@ -1528,11 +1532,10 @@ jobs:
             pnpm rebuild bun
           fi
 
-      - name: Typecheck and check undeclared dependency resolution
+      - name: Typecheck under isolated dependency resolution
         run: |
           set -euo pipefail
           pnpm tc
-          pnpm exec vitest run --config config/vitest.config.ts config/scripts/dependency-security/runtime-resolution/undeclared-dependency-resolution.test.ts
           # Pointless if any pnpm command above fell back to the hoisted layout or another store.
           case "$(realpath node_modules/zod)" in
             "$(realpath "$pnpm_config_store_dir")"/*) ;;

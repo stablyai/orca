@@ -10,7 +10,8 @@ import { buildAppFontFamily } from '@/lib/app-font-family'
 import { resolveEditorFontStack } from '@/lib/editor-typography'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../shared/terminal-themes/terminal-title-contrast'
-import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '../../hooks/theme/use-system-prefers-dark'
+import { terminalChatSelectionMix } from '@/lib/chat-selection-mix'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.
@@ -108,12 +109,25 @@ function applyTerminalChatColors(
       '--secondary': 'var(--muted)',
       '--secondary-foreground': 'var(--chat-foreground-strong)',
       '--ring': 'color-mix(in srgb, var(--chat-source-foreground) 44%, var(--chat-canvas))',
-      // Why: the terminal palette owns a matching chat, so a plugin theme's bubble yields too.
+      // Why: the terminal palette owns a matching chat, so a plugin theme's chat colors yield too.
       '--chat-user-message': 'initial',
+      '--chat-bold-foreground': 'initial',
+      '--chat-muted-foreground': 'initial',
+      '--chat-inline-code': 'initial',
+      '--chat-inline-code-foreground': 'initial',
+      '--chat-code-block': 'initial',
+      '--chat-selection': 'initial',
+      '--chat-selection-foreground': 'initial',
+      '--text-link': 'initial',
       '--chat-source-background': background,
       '--chat-source-foreground': foreground,
       '--chat-source-muted-foreground':
-        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))'
+        'color-mix(in srgb, var(--chat-source-foreground) 62%, var(--chat-canvas))',
+      // Why only here: under the Match Terminal app theme the root already carries a checked mix.
+      '--chat-selection-mix': `${terminalChatSelectionMix(
+        { foreground, background },
+        light ? 'light' : 'dark'
+      )}%`
     })
   }
   Object.assign(style, {

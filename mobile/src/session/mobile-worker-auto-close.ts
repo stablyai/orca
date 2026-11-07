@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { Timer } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

@@ -4,6 +4,7 @@ import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
 import { BROWSER_BASIC_COMMAND_SPECS } from './browser-basic'
 import { AUTOMATION_COMMAND_SPECS } from './automations'
 import { CORE_COMMAND_SPECS } from './core'
+import { CHAT_COMMAND_SPECS } from './chat'
 import { FILE_COMMAND_SPECS } from './file'
 import { PROJECT_COMMAND_SPECS } from './project'
 import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
@@ -29,7 +30,9 @@ import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 import { REFERENCE_COMMAND_SPECS } from './reference'
 import { PORTS_COMMAND_SPECS } from './ports'
 import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
+import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
+import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -45,6 +48,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_LAUNCH_COMMAND_SPECS,
+  ...CHAT_COMMAND_SPECS,
   ...CONNECTOR_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,
   ...SPEECH_COMMAND_SPECS,
@@ -62,5 +66,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PORTS_COMMAND_SPECS,
   ...PLUGIN_AUTHORING_COMMAND_SPECS,
   ...PLUGIN_RUNTIME_COMMAND_SPECS,
-  ...PLUGIN_VIEW_COMMAND_SPECS
+  ...PLUGIN_VIEW_COMMAND_SPECS,
+  ...PLUGIN_INSTALL_COMMAND_SPECS,
+  ...PAIR_COMMAND_SPECS
 ]

@@ -19,9 +19,14 @@ import { registerWslMoveMainRewriteStores } from '../persistence/moving-wsl-proj
 import { registerWslMoveOrchestrationHistoryStore } from '../persistence/moving-wsl-projects/wsl-move-orchestration-history-rewrite'
 import { orchestrationDbFile } from '../runtime/orchestration/db/orchestration-db-file'
 import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../shared/wsl-host-internal-gate'
-import { OrchestrationDb } from '../runtime/orchestration/db'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import '../runtime/orchestration/db/contract-constants'
+import '../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../runtime/orchestration/db/dispatch-row-writer'
+import '../runtime/orchestration/db/attempt-outcome-projection'
 import Database from '../sqlite/sync-database'
 import { AutomationService } from './service'
+import { tickAt } from './automation-service-tick.test-fixture'
 import { WSL_MOVE_IN_PROGRESS, WSL_MOVE_OWNED_BY_HOST } from './dispatch-refusal'
 import type * as PrecheckRunner from './precheck-runner'
 
@@ -69,27 +74,19 @@ function seedAutomation(store: Store, precheck = false): Automation {
 function attachedService(store: Store, publish = vi.fn()): AutomationService {
   const service = new AutomationService(store, {
     tickMs: 60_000,
-    onAutomationsChanged: publish
+    onAutomationsChanged: publish,
+    terminalLauncher: { launch: vi.fn(), available: () => true }
   })
-  service.setWebContents({ isDestroyed: () => false, send: vi.fn() })
+  service.start()
   return service
 }
 
-async function evaluateAt(
-  store: Store,
-  service: AutomationService,
-  automationId: string,
-  when: string
-): Promise<void> {
+async function evaluateAt(store: Store, automationId: string, when: string): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
   const before = nextRunAt()
-  vi.setSystemTime(new Date(when))
-  // Retry while the previous scheduler pass finishes flushing.
-  await vi.waitFor(() => {
-    service.setRendererReady()
-    expect(nextRunAt()).toBeGreaterThan(before ?? 0)
-  })
+  await tickAt(when)
+  await vi.waitFor(() => expect(nextRunAt()).toBeGreaterThan(before ?? 0))
 }
 
 let fenceDir: string
@@ -116,7 +113,8 @@ describe('scheduled automations under a WSL move', () => {
     seedWslMoveCutover(fenceDir, cutover('move-1', 'source-fenced', {}, { repoIds: ['r1'] }))
     const service = attachedService(store)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    service.stop()
 
     const runs = store.listAutomationRuns(automation.id)
     expect(runs).toHaveLength(1)
@@ -141,9 +139,10 @@ describe('scheduled automations under a WSL move', () => {
     const publish = vi.fn()
     const service = attachedService(store, publish)
 
-    await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-14T09:01:00')
-    await evaluateAt(store, service, automation.id, '2026-05-15T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-14T09:01:00')
+    await evaluateAt(store, automation.id, '2026-05-15T09:01:00')
+    service.stop()
 
     expect(store.listAutomationRuns(automation.id)).toEqual([])
     expect(publish).not.toHaveBeenCalled()
@@ -184,7 +183,8 @@ describe('scheduled automations under a WSL move', () => {
       expect(store.listAutomations()).toEqual([automation])
       const service = attachedService(store)
 
-      await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')
+      await evaluateAt(store, automation.id, '2026-05-13T09:01:00')
+      service.stop()
 
       expect(store.listAutomationRuns(automation.id)).toEqual([])
       expect(store.listAutomations()[0]?.nextRunAt).toBe(new Date('2026-05-14T09:00:00').getTime())
@@ -217,7 +217,7 @@ describe('scheduled automations under a WSL move', () => {
     const dispatcher = vi.fn()
     const service = new AutomationService(store, {
       tickMs: 60_000,
-      headlessDispatcher: dispatcher
+      terminalLauncher: { launch: dispatcher, available: () => true }
     })
 
     vi.setSystemTime(new Date('2026-05-13T09:01:00'))

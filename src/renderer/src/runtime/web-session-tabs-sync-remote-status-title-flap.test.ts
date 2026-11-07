@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { deriveGeneratedTabTitle } from '../../../shared/agent-status/presentation/agent-tab-title'
 import { getDefaultSettings } from '../../../shared/constants'
+import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
 import {
@@ -15,7 +16,7 @@ import {
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests,
   resolveRendererOwnedAgentStatusTiming
-} from '../components/terminal-pane/renderer-owned-agent-status-registry'
+} from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'
@@ -52,6 +53,10 @@ function makeHostSnapshot(args: {
   hostNow: number
   includeAgentStatus: boolean
   agentStatusOverrides?: Partial<AgentStatusEntry>
+  aiVaultTitle?: { agent: 'claude'; sessionId: string; title: string } | null
+  resolvesSessionTitle?: true
+  title?: string
+  status?: 'ready' | 'pending-handle'
 }): RuntimeMobileSessionTabsResult {
   return {
     worktree: WT,
@@ -64,12 +69,15 @@ function makeHostSnapshot(args: {
       {
         type: 'terminal',
         id: HOST_SURFACE_ID,
-        title: 'Terminal',
+        title: args.title ?? 'Terminal',
         parentTabId: HOST_TAB_ID,
         leafId: LEAF_ID,
         isActive: true,
-        status: 'ready',
-        terminal: 'terminal-1',
+        ...(args.status === 'pending-handle'
+          ? { status: 'pending-handle' as const, terminal: null }
+          : { status: 'ready' as const, terminal: 'terminal-1' }),
+        ...(args.aiVaultTitle !== undefined ? { aiVaultTitle: args.aiVaultTitle } : {}),
+        ...(args.resolvesSessionTitle ? { resolvesSessionTitle: true as const } : {}),
         ...(args.includeAgentStatus
           ? {
               agentStatus: {
@@ -431,5 +439,100 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         prompt: CLIENT_PROMPT
       })
     })
+  })
+})
+
+describe('remote-paired pane: host session name', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    resetRendererOwnedAgentStatusPanesForTests()
+  })
+
+  it('labels the mirrored tab with the host session name over the client first-prompt title', () => {
+    const store = seedPairedClientStore()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: true }),
+      T0
+    )
+    replayClientOscWorking(store, T0 + 1_000)()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 2,
+        hostNow: T0 + 2_000,
+        includeAgentStatus: true,
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' },
+        resolvesSessionTitle: true
+      }),
+      T0 + 2_000
+    )
+
+    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    expect(tab?.generatedTitle).toBe(EXPECTED_GENERATED_TITLE)
+    expect(resolveTerminalTabTitle(tab!, true)).toBe('Login cleanup')
+  })
+
+  it('follows a resolving host through a rename and a clear', () => {
+    const store = seedPairedClientStore()
+    const publish = (
+      snapshotVersion: number,
+      aiVaultTitle: { agent: 'claude'; sessionId: string; title: string } | null,
+      surface: { title?: string; status?: 'ready' | 'pending-handle' } = {}
+    ) =>
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion,
+          hostNow: T0 + snapshotVersion * 1_000,
+          includeAgentStatus: true,
+          aiVaultTitle,
+          resolvesSessionTitle: true,
+          ...surface
+        }),
+        T0 + snapshotVersion * 1_000
+      )
+    const mirrored = () =>
+      (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    publish(1, { agent: 'claude', sessionId: 'session-1', title: 'Old' }, { title: 'Old' })
+    // The host's own title already ranks the session name in.
+    publish(2, { agent: 'claude', sessionId: 'session-1', title: 'New' }, { title: 'New' })
+    expect(mirrored()?.aiVaultTitle?.title).toBe('New')
+
+    // An idle pane publishes the placeholder title while the host clears the name.
+    publish(3, null, { title: 'Terminal', status: 'pending-handle' })
+    expect(mirrored()?.aiVaultTitle).toBeUndefined()
+    expect(mirrored()?.sessionTitleFromHost).toBe(true)
+    expect(resolveTerminalTabTitle(mirrored()!, false)).toBe('Terminal')
+  })
+
+  it('takes a saved name back as cache once the host stops resolving it', () => {
+    const store = seedPairedClientStore()
+    const publish = (snapshotVersion: number, title: string, resolvesSessionTitle?: true) =>
+      applyHostSnapshot(
+        store,
+        makeHostSnapshot({
+          snapshotVersion,
+          hostNow: T0 + snapshotVersion * 1_000,
+          includeAgentStatus: true,
+          aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title },
+          ...(resolvesSessionTitle ? { resolvesSessionTitle } : {})
+        }),
+        T0 + snapshotVersion * 1_000
+      )
+    // The window resolves "New"; the host then restarts headless and republishes its saved "Old".
+    publish(1, 'New', true)
+    publish(2, 'Old')
+
+    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+    expect(tab?.aiVaultTitle?.title).toBe('New')
+    expect(tab?.sessionTitleFromHost).toBeUndefined()
   })
 })

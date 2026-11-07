@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionChildWorkProducer } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
@@ -15,7 +15,7 @@ import { CodexBackgroundCommandTracker } from './codex-background-command-tracke
 import { CodexChildWorkEvidence } from './codex-child-work-evidence'
 import type { CodexAbandonedCommand } from '../prompts/codex-prompt-registry'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
-import { boundSubagentLabel } from '../../../native-chat/agent-session-journal/journal-subagent-item'
+import { boundSubagentLabel } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
 
 export type CodexChildWorkSink = {
   deliver: (evidence: AgentChildWorkEvidence[]) => void
