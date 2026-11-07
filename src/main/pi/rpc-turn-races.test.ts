@@ -125,3 +125,36 @@ describe('Pi turn settlement races', () => {
     expect((await h.rig.turns())[0]?.outcome).toBe('failure')
   })
 })
+
+it.each([
+  'OAuth refresh failed for openai-codex: token refresh failed (400): invalid_grant',
+  // Pi 1.5.0 error text recorded by QA; the surrounding event is a fixture.
+  '401 {"type":"error","error":{"type":"authentication_error","message":"Invalid bearer token"},"request_id":"req_011Cgmh94VzHrfkrvN866JGF"}'
+])('keeps sign-in visible after an accepted turn fails: %s', async (errorMessage) => {
+  const h = await setup()
+  await h.start()
+  h.turns.receive({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      content: [],
+      stopReason: 'error',
+      errorMessage
+    }
+  })
+  h.turns.receive({ type: 'agent_settled' })
+  await h.flush()
+  const rows = await h.rig.rows()
+  expect(rows).toContainEqual(
+    expect.objectContaining({
+      body: expect.objectContaining({
+        kind: 'status',
+        failure: expect.objectContaining({
+          kind: 'notSignedIn',
+          detail: { text: errorMessage, audience: 'log' }
+        })
+      })
+    })
+  )
+  expect((await h.rig.turns())[0]?.outcome).toBe('failure')
+})

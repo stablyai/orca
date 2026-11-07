@@ -1180,7 +1180,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca bu sayfadan eşleştirmeyi reddetti: sayfa başka bir makinede şifrelenmemiş http kullanıyor, dolayısıyla ağ yolu üzerindeki herhangi biri sayfayı değiştirebilir ve eşleştirme kodunu ele geçirebilir. Web istemcisini https üzerinden, bu bilgisayarda localhost üzerinden veya bir SSH tüneli aracılığıyla açın. Yine de izin vermek için sunucu yöneticisi Orca'yı ORCA_ALLOW_INSECURE_WEB_PAIRING=1 ile yeniden başlatabilir.",
         "deviceDowngraded": "Bu Orca sunucusu artık bu tarayıcının oturum açma anahtarını desteklemiyor (sunucunun sürümü düşürülmüş olabilir). Sunucuyu güncelleyin veya bu tarayıcıyı tekrar eşleştirin.",
-        "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin."
+        "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin.",
+        "unauthorizedNewLink": "Yetkisiz erişim. Yeni bir eşleştirme bağlantısı isteyin."
       }
     },
     "store": {
@@ -6148,7 +6149,6 @@
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "Yerel kurulumu kaydet",
           "3933401d28": "Yapılandır",
           "31b8b01a45": "Ayarlar",
           "4a98f907ae": "Yeniden dene",
@@ -6163,7 +6163,15 @@
           "5bfd5c8779": "Kurulum betiklerini kapat",
           "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin."
+          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
+          "reviewSetupScript": "Kurulum betiğini incele"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "Kurulum betiğini incele",
+          "description": "Kaydedildiğinde, Orca {{repo}} için her worktree oluşturduğunda bu çalışır.",
+          "setupScript": "Kurulum betiği",
+          "archiveScript": "Arşiv betiği",
+          "save": "Yerel kurulumu kaydet"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "İptal",
@@ -8326,7 +8334,8 @@
           "copyPairingCode": "Eşleştirme kodunu kopyala",
           "diagnosticsCopied": "Tanılama bilgileri kopyalandı",
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
-          "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz."
+          "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
+          "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8840,7 +8849,9 @@
           "browserLinkLabel": "Tarayıcı bağlantısı",
           "accessLinkLabel": "Erişim bağlantısı",
           "accessLinkHelp": "Bunu diğer Orca'daki Sunucu ekle alanına yapıştırın.",
-          "staleAddressCreate": "Bağlantı adresi değişti. {{address}} için yeni bir bağlantı oluşturun."
+          "staleAddressCreate": "Bağlantı adresi değişti. {{address}} için yeni bir bağlantı oluşturun.",
+          "linkExpired": "Bağlantının süresi doldu",
+          "unusedLinkExpires": "Kullanılmayan bağlantının süresi {{time}} itibarıyla dolar"
         },
         "Settings": {
           "3bf149e873": "Proje Ayarları > {{value0}}",
@@ -9120,8 +9131,8 @@
           "proxyConnectionReuseHelp": "Yavaş ProxyCommand veya ProxyJump sunucuları üzerinden daha hızlı bağlantı sağlar. Yalnızca ssh_config yapılandırmanız sunucuya özgü Match veya %h kurallarına dayanmıyorsa etkinleştirin.",
           "reconnectOnLaunch": "Açılışta yeniden bağlan",
           "reconnectOnLaunchHelp": "Kapalıyken Orca, siz bağlanana kadar bu sunucuya ve onun üzerinden erişilen Orca sunucularına açılışta bağlanmaz.",
-          "allowRemoteCliControl": "Bu sunucudaki orca CLI aracının Orca'yı kontrol etmesine izin ver",
-          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucuda çalıştırılan orca komutlarının, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açmasına ve yönetmesine izin verir. Ayrıca bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin kendi gözetimli işleri için orkestrasyon komutlarını (check, inbox, send, ask, reply) çalıştırmasına izin verir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamazlar. Kapalı olduğunda yalnızca bu sunucunun kendi Orca sunucusuna erişirler.",
+          "allowRemoteCliControl": "Bu sunucunun kendi çalışma alanlarındaki Orca tarayıcı sekmelerini kontrol etmesine izin ver",
+          "allowRemoteCliControlHelp": "Yeni sunucular için varsayılan olarak açıktır. Bu sunucudaki ajanlar ve orca komutları, yalnızca bu sunucunun çalışma alanlarında ve yalnızca sunucu bağlıyken bu masaüstündeki Orca tarayıcı sekmelerini açabilir, okuyabilir ve kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bu sunucuda eski bir Orca sürümü tarafından başlatılan terminallerin orca orkestrasyon komutlarını çalıştırması için de bu ayarın açık olması gerekir. Dosyalarınızı, panonuzu veya çerezlerinizi okuyamaz.",
           "editTitle": "SSH sunucusunu düzenle",
           "addTitle": "SSH sunucusu ekle",
           "editDescription": "Bu makine için bağlantı bilgilerini güncelleyin. Değişiklikler bir sonraki bağlantıda uygulanır.",
@@ -11253,7 +11264,10 @@
               "micInput": "giriş",
               "micDevice": "cihaz",
               "micAirpods": "airpods",
-              "micDefault": "sistem varsayılanı"
+              "micDefault": "sistem varsayılanı",
+              "dictationLanguageTitle": "Dikte dili",
+              "dictationLanguageDescription": "Konuşma modeline hangi dili konuştuğunuzu söyleyin.",
+              "dictationLanguageKeyword": "dil"
             }
           }
         },
@@ -13257,7 +13271,8 @@
           "oneDescription": "Yayıncı: {{value0}}. Siz inceleyene kadar güncellenmeyecek.",
           "manyDescription": "Siz inceleyene kadar güncellenmeyecekler.",
           "review": "İncele",
-          "dismiss": "Kapat"
+          "dismiss": "Kapat",
+          "movedInstalled": "Siz inceleyene kadar kapalı kalır."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
@@ -16892,9 +16907,14 @@
           "55127a3706": "Dikte tamamlanamadı: {{value0}}",
           "bb7f599ee7": "Ayarları Aç",
           "2d5b9fabf9": "Mikrofon erişimi reddedildi. Sistem ayarlarından erişim verin, ardından Orca'yı yeniden başlatın.",
+          "noModel": "Konuşma modeli seçilmedi. Ayarlar > Ses bölümünden bir model indirin.",
+          "disabled": "Sesli dikte devre dışı. Ayarlar > Ses bölümünden etkinleştirin.",
+          "notReady": "Konuşma modeli hazır değil. Ayarlar > Ses bölümünden indirin.",
+          "unknownModel": "Seçili model artık kullanılamıyor. Ayarlar > Ses bölümünden başka bir model seçin.",
           "5d2c3e7ae3": "Konuşma algılanmadı.",
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
-          "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu."
+          "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
+          "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Dikteyi durdur",
@@ -16902,7 +16922,8 @@
           "f082d0cb9d": "İşleniyor…",
           "3de5a129e7": "Dinliyor",
           "4977162383": "Çok yüksek sesli",
-          "25f2b7a6a5": "Konuşuyor"
+          "25f2b7a6a5": "Konuşuyor",
+          "loadingModel": "Konuşma modeli yükleniyor…"
         }
       },
       "dashboard": {
@@ -18903,6 +18924,9 @@
           "cancel": "İptal",
           "add": "Katalog ekle",
           "body": "Bir bağlantı bu katalogdan {{value0}} öğesini göstermek istedi. Yalnızca güvendiğiniz kişilerin kataloglarını ekleyin."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -20495,6 +20519,15 @@
         "idleStopSearchTimeout": "zaman aşımı",
         "idleStopSearchKeepAlive": "canlı tut",
         "idleStopNever": "Asla"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} yalnızca kendisi için hazırlandığı dilleri yazıya döker, bu yüzden bu ayarı yok sayar.",
+          "unsupported": "{{model}} {{language}} dilini desteklemiyor, bu yüzden dili kendisi algılar.",
+          "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
+          "title": "Dikte dili",
+          "auto": "Otomatik algıla"
+        }
       }
     },
     "agentChildRow": {
@@ -22234,7 +22267,8 @@
     }
   },
   "browserTab": {
-    "agentDriving": "Bir ajan bu sayfayı kullanıyor"
+    "agentDriving": "Bir ajan bu sayfayı kullanıyor",
+    "controlledByHost": "{{host}} tarafından kontrol ediliyor"
   },
   "nativeChat": {
     "math": {
@@ -23215,5 +23249,14 @@
     "sameAsTextDefault": "Varsayılanla aynı · {{value0}}",
     "chatChoicesNote": "CLI bayrağı olmayan {{agent}} modeli veya çaba seçimleri sohbetlere uygulanır.",
     "composedChoicesNote": "{{agent}} için çaba ve hız seçimleri model argümanına dahil edilir."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}} bir tarayıcı sekmesini kontrol ediyor",
+    "description": "Bu SSH sunucusundaki ajanlar, sunucunun çalışma alanlarındaki Orca tarayıcı sekmelerini açıp kullanabilir. Kontrol ettiği sekmeler adını gösterir. Bunu Ayarlar > SSH bölümünden değiştirebilirsiniz.",
+    "stop": "Durdur",
+    "disallow": "İzin verme",
+    "stopped": "{{host}}, Orca yeniden başlatılana kadar tarayıcı sekmelerini kontrol etmeyecek.",
+    "disallowed": "{{host}} artık tarayıcı sekmelerini kontrol edemez. Ayarlar > SSH bölümünden yeniden açabilirsiniz.",
+    "failed": "{{host}} durdurulamadı. Tarayıcı kontrolünü Ayarlar > SSH bölümünden kapatın."
   }
 }

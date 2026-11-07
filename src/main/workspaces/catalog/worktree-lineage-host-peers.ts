@@ -18,13 +18,27 @@ import {
   mergeFolderWorkspace
 } from '../../ipc/worktrees/folder-workspace-model'
 import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import { withInlineFolderLineage } from './inline-folder-lineage'
 
 type HostPeerStore = Pick<
   RuntimeStore,
-  'getRepos' | 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost' | 'getAllWorktreeLineage'
+  | 'getRepos'
+  | 'getAllWorktreeMeta'
+  | 'getAllWorktreeMetaForHost'
+  | 'getAllWorktreeLineage'
+  | 'getAllWorkspaceLineage'
 >
 
+/** A listing's rows with their worktree lineage projected and their own folder parents attached. */
 export function projectWorktreeLineageWithHostPeers<T extends Worktree>(
+  store: HostPeerStore,
+  repo: Repo,
+  rows: readonly T[]
+) {
+  return withInlineFolderLineage(store, projectWorktreeLineage(store, repo, rows))
+}
+
+function projectWorktreeLineage<T extends Worktree>(
   store: HostPeerStore,
   repo: Repo,
   rows: readonly T[]

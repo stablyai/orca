@@ -110,7 +110,8 @@
       "pastePairingCode": "またはペアリングコードを貼り付け",
       "scanCodeStep": "QR コードをスキャン",
       "title": "デスクトップのペアリング",
-      "tryAgain": "再試行"
+      "tryAgain": "再試行",
+      "codeExpiredOrReplaced": "このペアリングコードは期限切れか、置き換えられました。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
       "defaultText": "標準（100%）",

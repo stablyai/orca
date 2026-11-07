@@ -32,6 +32,7 @@ export type PairingOfferServer = Pick<
     connectionMode?: MobilePairingConnectionMode
     name?: string
     rotate?: boolean
+    offerTtlMs?: number
   }): Promise<MobilePairingOffer>
 }
 
@@ -58,7 +59,13 @@ async function pairingAddress(
 
 export async function requestMobilePairingOffer(
   server: PairingOfferServer,
-  args: { address?: string; connectionMode?: MobilePairingConnectionMode; rotate?: boolean },
+  args: {
+    address?: string
+    connectionMode?: MobilePairingConnectionMode
+    rotate?: boolean
+    // Unset leaves the offer without an expiry, as headless serve/orcad mint today.
+    offerTtlMs?: number
+  },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<
   | PairingOfferUnavailable
@@ -74,7 +81,8 @@ export async function requestMobilePairingOffer(
     address: ip,
     connectionMode: args.connectionMode,
     rotate: args.rotate,
-    name: `Mobile ${new Date().toLocaleDateString()}`
+    name: `Mobile ${new Date().toLocaleDateString()}`,
+    offerTtlMs: args.offerTtlMs
   })
   if (!offer.available) {
     return offer
@@ -90,6 +98,7 @@ export async function requestRuntimePairingOffer(
     rotate?: boolean
     reach?: RuntimePairingReach
     grants?: readonly RuntimeDeviceGrant[]
+    offerTtlMs?: number
   },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<ReturnType<PairingOfferServer['createPairingOffer']>> {
@@ -118,7 +127,8 @@ export async function requestRuntimePairingOffer(
     scope: 'runtime',
     // Persist local reach so local authentication cannot expose the next launch to the LAN.
     reach: thisComputerOnly ? 'this-computer' : 'network',
-    grants: args.grants
+    grants: args.grants,
+    offerTtlMs: args.offerTtlMs
   })
 }
 

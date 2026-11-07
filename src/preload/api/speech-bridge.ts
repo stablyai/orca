@@ -31,7 +31,7 @@ export const speechApi = {
     hotwords: string[] | undefined,
     sessionId: string
   ): Promise<void> => ipcRenderer.invoke('speech:startDictation', modelId, hotwords, sessionId),
-  feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<void> =>
+  feedAudio: (samples: Float32Array, sampleRate: number, sessionId = 'desktop'): Promise<boolean> =>
     // Buffer preserves sample bytes across the contextBridge/IPC boundary.
     ipcRenderer.invoke(
       'speech:feedAudio',

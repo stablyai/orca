@@ -209,7 +209,8 @@ export class AcpTextTasks {
       const initialized = await waitForPromiseWithSignal(server.initialize(), taskSignal)
       const authMethodId = spec.authMethod?.({
         advertised: initialized.authMethods?.map((method) => method.id) ?? [],
-        env: launch.env
+        env: launch.env,
+        antigravityChatAuth: launch.antigravityChatAuth
       })
       if (spec.agent === 'grok' && grokTextTaskPreservesAccount(initialized, authMethodId)) {
         headless = true
@@ -239,6 +240,7 @@ export class AcpTextTasks {
             cwd,
             mcpServers: [],
             authMethodId,
+            authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
             ...(spec.agent === 'grok' ? { _meta: { yoloMode: false, autoMode: false } } : {})
           })
           .then((started) => {

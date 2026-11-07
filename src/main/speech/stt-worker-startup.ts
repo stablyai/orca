@@ -91,6 +91,7 @@ export function initializeSttWorker(
     files: readonly string[]
     hotwordsFilePath?: string
     modelingUnit?: string
+    language?: string
   }
 ): void {
   worker.postMessage({ type: 'init', ...input })

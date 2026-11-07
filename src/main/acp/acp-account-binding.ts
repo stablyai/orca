@@ -1,3 +1,4 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -18,7 +19,11 @@ export type AcpAccountBinding = {
   /** Throws if the pinned account belongs to another kind. */
   environment(home: AgentSessionAccountHome, env: Record<string, string>): Record<string, string>
   /** Runs before every spawn, never on reads. */
-  prepare?(env: Readonly<Record<string, string>>): Promise<void>
+  prepare?(
+    env: Readonly<Record<string, string>>,
+    antigravityChatAuth?: AntigravityChatAuthConfig,
+    assertCurrent?: () => void
+  ): Promise<void>
 }
 
 export function directoryAccountBinding(

@@ -747,7 +747,8 @@
       "runtimeAuth": {
         "insecureOrigin": "Orca가 이 페이지에서의 페어링을 거부했습니다. 이 페이지는 다른 컴퓨터에 있고 일반 http이므로 네트워크 경로에 있는 누구나 이 페이지를 대체하여 페어링 코드를 가져갈 수 있습니다. https로, 이 컴퓨터의 localhost에서, 또는 SSH 터널을 통해 웹 클라이언트를 여세요. 그래도 허용하려면 서버 운영자가 ORCA_ALLOW_INSECURE_WEB_PAIRING=1로 Orca를 다시 시작할 수 있습니다.",
         "deviceDowngraded": "이 Orca 서버는 더 이상 이 브라우저의 로그인 키를 지원하지 않습니다(다운그레이드되었을 수 있음). 서버를 업데이트하거나 이 브라우저를 다시 페어링하세요.",
-        "unauthorized": "권한이 없습니다. 이 웹 클라이언트를 다시 페어링하세요."
+        "unauthorized": "권한이 없습니다. 이 웹 클라이언트를 다시 페어링하세요.",
+        "unauthorizedNewLink": "권한이 없습니다. 새 페어링 링크를 요청하세요."
       }
     },
     "store": {
@@ -5520,7 +5521,6 @@
           "savedInProjectSettings": "이 <settings>프로젝트의 설정</settings>에 저장됨"
         },
         "SetupScriptPromptCardViews": {
-          "96a7f4198c": "로컬 설정 저장",
           "3933401d28": "구성",
           "31b8b01a45": "설정",
           "4a98f907ae": "다시 시도",
@@ -5535,7 +5535,15 @@
           "5bfd5c8779": "설정 스크립트 닫기",
           "detectedFromSource": "<source>{{source}}</source>에서 감지됨",
           "ignoresSharedSetup": "이 저장소는 공유 <yaml>orca.yaml</yaml> 설정 스크립트를 무시합니다. 로컬 명령을 추가하거나 설정에서 소스를 변경하세요.",
-          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요."
+          "foundSetupCommandIn": "<source>{{source}}</source>에서 설정 명령을 찾았습니다. 새 워크트리에서 실행하려면 저장하세요.",
+          "reviewSetupScript": "설정 스크립트 검토"
+        },
+        "SetupScriptReviewDialog": {
+          "title": "설정 스크립트 검토",
+          "description": "저장하면 Orca가 {{repo}}의 워크트리를 만들 때마다 실행됩니다.",
+          "setupScript": "설정 스크립트",
+          "archiveScript": "아카이브 스크립트",
+          "save": "로컬 설정 저장"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "취소",
@@ -7657,7 +7665,8 @@
           "copyPairingCode": "페어링 코드 복사",
           "diagnosticsCopied": "진단이 복사되었습니다.",
           "diagnosticsCopyFailed": "진단을 복사하지 못했습니다.",
-          "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다."
+          "5e2c7a1f84": "휴대폰에서 터미널을 사용하는 동안 Orca는 휴대폰 화면에 맞게 터미널을 축소합니다. 앱을 닫거나 다른 앱으로 전환할 때, 휴대폰 화면 크기를 유지할지(대화형 CLI 도구의 레이아웃 재배치 방지) 아니면 데스크톱 크기로 다시 조정할지 제어합니다. 배너에서 언제든지 '복원' 또는 '모두 복원'을 사용해 수동으로 크기를 조정할 수 있습니다.",
+          "codeRefreshesAutomatically": "코드는 자동으로 새로 고쳐집니다. 복사한 코드는 최대 10분 동안 사용할 수 있습니다."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "앱스토어",
@@ -8165,7 +8174,9 @@
           "browserLinkLabel": "브라우저 링크",
           "accessLinkLabel": "액세스 링크",
           "accessLinkHelp": "다른 Orca의 '서버 추가'에 붙여 넣으세요.",
-          "staleAddressCreate": "연결 주소가 바뀌었습니다. {{address}}용 새 링크를 만드세요."
+          "staleAddressCreate": "연결 주소가 바뀌었습니다. {{address}}용 새 링크를 만드세요.",
+          "linkExpired": "링크가 만료되었습니다",
+          "unusedLinkExpires": "사용하지 않은 링크는 {{time}}에 만료됩니다"
         },
         "Settings": {
           "3bf149e873": "프로젝트 설정 > {{value0}}",
@@ -8448,8 +8459,8 @@
           "editingPrefix": "편집 중",
           "reconnectOnLaunch": "시작 시 다시 연결",
           "reconnectOnLaunchHelp": "끄면 Orca가 시작될 때 이 호스트와 이 호스트를 통해 연결되는 Orca 서버를 직접 연결할 때까지 연결하지 않습니다.",
-          "allowRemoteCliControl": "이 호스트의 orca CLI가 Orca를 제어하도록 허용",
-          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트에서 실행한 orca 명령이 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 조작할 수 있게 하고, 이 호스트에서 이전 버전의 Orca가 시작한 터미널이 자신이 감독받는 작업에 대해 오케스트레이션 명령(check, inbox, send, ask, reply)을 실행할 수 있게 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다. 끄면 이 호스트 자체의 Orca 서버에만 접근합니다.",
+          "allowRemoteCliControl": "이 호스트가 작업 공간의 Orca 브라우저 탭을 제어하도록 허용",
+          "allowRemoteCliControlHelp": "새 호스트에서는 기본적으로 켜져 있습니다. 이 호스트의 에이전트와 orca 명령은 이 호스트의 작업 공간에서만, 연결되어 있는 동안에만 이 데스크톱의 Orca 브라우저 탭을 열고 읽고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 이 호스트에서 이전 버전의 Orca가 시작한 터미널에서 orca 오케스트레이션 명령을 실행하려면 이 설정도 켜져 있어야 합니다. 파일, 클립보드, 쿠키는 읽을 수 없습니다.",
           "addHost": "호스트 추가",
           "proxyConnectionReuse": "프록시 연결 하나를 재사용",
           "proxyConnectionReuseHelp": "느린 ProxyCommand 또는 ProxyJump 호스트를 통한 연결이 빨라집니다. ssh_config가 호스트별 Match 또는 %h 규칙에 의존하지 않는 경우에만 사용하세요."
@@ -10578,7 +10589,10 @@
               "micInput": "입력",
               "micDevice": "장치",
               "micAirpods": "에어팟",
-              "micDefault": "시스템 기본값"
+              "micDefault": "시스템 기본값",
+              "dictationLanguageTitle": "받아쓰기 언어",
+              "dictationLanguageDescription": "음성 모델에 말하는 언어를 알려 줍니다.",
+              "dictationLanguageKeyword": "언어"
             }
           }
         },
@@ -12725,7 +12739,8 @@
           "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
           "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
           "review": "검토",
-          "dismiss": "닫기"
+          "dismiss": "닫기",
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
@@ -16233,9 +16248,14 @@
           "55127a3706": "받아쓰기 실패: {{value0}}",
           "bb7f599ee7": "설정 열기",
           "2d5b9fabf9": "마이크 액세스가 거부되었습니다. 시스템 설정에서 액세스 권한을 부여한 다음 Orca를 다시 시작하세요.",
+          "noModel": "선택된 음성 모델이 없습니다. 설정 > 음성에서 다운로드하세요.",
+          "disabled": "음성 받아쓰기가 비활성화되어 있습니다. 설정 > 음성에서 활성화하세요.",
+          "notReady": "음성 모델이 준비되지 않았습니다. 설정 > 음성에서 다운로드하세요.",
+          "unknownModel": "선택한 모델을 더 이상 사용할 수 없습니다. 설정 > 음성에서 다른 모델을 선택하세요.",
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
-          "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다."
+          "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
+          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
         },
         "DictationIndicator": {
           "335e1bc6cb": "받아쓰기 중지",
@@ -16243,7 +16263,8 @@
           "f082d0cb9d": "처리 중…",
           "3de5a129e7": "듣는 중",
           "4977162383": "음량이 너무 큽니다",
-          "25f2b7a6a5": "말하는 중"
+          "25f2b7a6a5": "말하는 중",
+          "loadingModel": "음성 모델 불러오는 중…"
         }
       },
       "dashboard": {
@@ -18259,6 +18280,9 @@
           "cancel": "취소",
           "add": "카탈로그 추가",
           "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
+        },
+        "pluginNameDisambiguation": {
+          "nameWithPublisher": "{{value0}} ({{value1}})"
         }
       }
     },
@@ -19812,6 +19836,15 @@
         "idleStopSearchTimeout": "시간 제한",
         "idleStopSearchKeepAlive": "연결 유지",
         "idleStopNever": "사용 안 함"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}}은(는) 지원하는 언어만 받아쓰므로 이 설정을 사용하지 않습니다.",
+          "unsupported": "{{model}}은(는) {{language}}을(를) 지원하지 않아 언어를 자동으로 감지합니다.",
+          "description": "말하는 언어입니다. 자동 감지를 선택하면 모델이 매번 언어를 판단합니다.",
+          "title": "받아쓰기 언어",
+          "auto": "자동 감지"
+        }
       }
     },
     "agentChildRow": {
@@ -21921,7 +21954,8 @@
     "rowActions": "{{name}}에 대한 작업"
   },
   "browserTab": {
-    "agentDriving": "에이전트가 이 페이지를 사용 중입니다"
+    "agentDriving": "에이전트가 이 페이지를 사용 중입니다",
+    "controlledByHost": "{{host}}에서 제어 중"
   },
   "quitAndStopAllSessions": {
     "title": "완전히 종료",
@@ -22950,5 +22984,14 @@
   "wslDistroHold": {
     "terminalStopped": "WSL 배포판 {{distro}}이(가) 중지되어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요.",
     "terminalUnverifiable": "WSL 배포판 {{distro}}이(가) 실행 중인지 확인할 수 없어 Orca가 이 터미널을 시작하지 않았습니다. 배포판을 시작한 후 다시 시도하세요."
+  },
+  "remoteHostBrowserControl": {
+    "title": "{{host}}에서 브라우저 탭을 제어하고 있습니다",
+    "description": "이 SSH 호스트의 에이전트는 해당 작업 공간의 Orca 브라우저 탭을 열고 사용할 수 있습니다. 제어 중인 탭에는 호스트 이름이 표시됩니다. 설정 > SSH에서 변경할 수 있습니다.",
+    "stop": "중지",
+    "disallow": "허용 안 함",
+    "stopped": "Orca를 다시 시작할 때까지 {{host}}에서 브라우저 탭을 제어하지 않습니다.",
+    "disallowed": "{{host}}에서 더 이상 브라우저 탭을 제어할 수 없습니다. 설정 > SSH에서 다시 켤 수 있습니다.",
+    "failed": "{{host}}을(를) 중지하지 못했습니다. 설정 > SSH에서 브라우저 제어를 끄세요."
   }
 }

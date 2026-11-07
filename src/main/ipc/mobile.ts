@@ -18,6 +18,10 @@ import {
   encodeMobilePairingQr,
   type MobilePairingQrResult
 } from '../runtime/rpc/server/pairing/mobile-pairing-qr'
+import {
+  MOBILE_PAIRING_OFFER_TTL_MS,
+  RUNTIME_PAIRING_OFFER_TTL_MS
+} from '../runtime/rpc/server/pairing/pairing-offer-expiry'
 import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
 import {
   getWebSocketPort,
@@ -81,7 +85,8 @@ export function registerMobileHandlers(
         {
           address: args?.address,
           connectionMode: args?.connectionMode,
-          rotate: args?.rotate
+          rotate: args?.rotate,
+          offerTtlMs: MOBILE_PAIRING_OFFER_TTL_MS
         },
         getDefaultRouteInterfaceNames
       )
@@ -105,7 +110,8 @@ export function registerMobileHandlers(
         pairingUrl: offer.pairingUrl,
         endpoint: offer.endpoint,
         deviceId: offer.deviceId,
-        connectionMode: offer.connectionMode
+        connectionMode: offer.connectionMode,
+        expiresAt: offer.offerExpiresAt
       }
     }
   )
@@ -115,7 +121,12 @@ export function registerMobileHandlers(
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
       const offer = await requestRuntimePairingOffer(
         rpcServer,
-        { address: args?.address, rotate: args?.rotate, reach: args?.reach },
+        {
+          address: args?.address,
+          rotate: args?.rotate,
+          reach: args?.reach,
+          offerTtlMs: RUNTIME_PAIRING_OFFER_TTL_MS
+        },
         getDefaultRouteInterfaceNames
       )
       if (!offer.available) {
@@ -130,7 +141,8 @@ export function registerMobileHandlers(
         pairingUrl: offer.pairingUrl,
         webClientUrl: offer.webClientUrl,
         endpoint: offer.endpoint,
-        deviceId: offer.deviceId
+        deviceId: offer.deviceId,
+        expiresAt: offer.offerExpiresAt
       }
     }
   )

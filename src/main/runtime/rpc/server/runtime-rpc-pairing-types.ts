@@ -75,6 +75,8 @@ export type MobilePairingOfferAvailable = {
   endpoint: string
   deviceId: string
   webClientUrl: string | null
+  /** Null when the offer stays valid until scanned. */
+  offerExpiresAt: number | null
   /** Mode the offer actually encodes. */
   connectionMode: MobilePairingConnectionMode
 }

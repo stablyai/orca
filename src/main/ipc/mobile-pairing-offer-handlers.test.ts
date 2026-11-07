@@ -20,6 +20,10 @@ vi.mock('os', async (importOriginal) => ({
 }))
 
 import type { MobilePairingQrResult } from '../runtime/rpc/server/pairing/mobile-pairing-qr'
+import {
+  MOBILE_PAIRING_OFFER_TTL_MS,
+  RUNTIME_PAIRING_OFFER_TTL_MS
+} from '../runtime/rpc/server/pairing/pairing-offer-expiry'
 import { registerMobileHandlers } from './mobile'
 
 const LAN = {
@@ -60,14 +64,16 @@ const MOBILE_OFFER = {
   endpoint: 'ws://192.168.1.20:6768',
   deviceId: 'dev-1',
   connectionMode: 'local-only',
-  webClientUrl: null
+  webClientUrl: null,
+  offerExpiresAt: 1_000
 }
 const RUNTIME_OFFER = {
   available: true,
   pairingUrl: 'orca://pair#r',
   webClientUrl: 'http://192.168.1.20:6768/#r',
   endpoint: 'ws://192.168.1.20:6768',
-  deviceId: 'dev-2'
+  deviceId: 'dev-2',
+  offerExpiresAt: 2_000
 }
 
 describe('desktop pairing IPC handlers', () => {
@@ -117,7 +123,8 @@ describe('desktop pairing IPC handlers', () => {
         pairingUrl: 'orca://pair#x',
         endpoint: 'ws://192.168.1.20:6768',
         deviceId: 'dev-1',
-        connectionMode: 'local-only'
+        connectionMode: 'local-only',
+        expiresAt: 1_000
       })
       expect(calls).toEqual([
         {
@@ -126,7 +133,8 @@ describe('desktop pairing IPC handlers', () => {
             address: '100.64.1.20',
             connectionMode: 'local-only',
             rotate: true,
-            name: 'string'
+            name: 'string',
+            offerTtlMs: MOBILE_PAIRING_OFFER_TTL_MS
           }
         }
       ])
@@ -181,7 +189,8 @@ describe('desktop pairing IPC handlers', () => {
         pairingUrl: 'orca://pair#r',
         webClientUrl: 'http://192.168.1.20:6768/#r',
         endpoint: 'ws://192.168.1.20:6768',
-        deviceId: 'dev-2'
+        deviceId: 'dev-2',
+        expiresAt: 2_000
       })
       expect(calls).toEqual([
         { method: 'ensureNetworkExposure' },
@@ -192,7 +201,8 @@ describe('desktop pairing IPC handlers', () => {
             rotate: true,
             name: 'string',
             scope: 'runtime',
-            reach: 'network'
+            reach: 'network',
+            offerTtlMs: RUNTIME_PAIRING_OFFER_TTL_MS
           }
         }
       ])

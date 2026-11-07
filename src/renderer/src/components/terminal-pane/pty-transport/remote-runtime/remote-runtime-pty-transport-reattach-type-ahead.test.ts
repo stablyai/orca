@@ -15,7 +15,10 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamText
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { createDeferred, flushAsyncTicks } from '../../pty-connection-test-async'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '../../pty-connection/test-fixtures/pty-connection-test-async'
 import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
 

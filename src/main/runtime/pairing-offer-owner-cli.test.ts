@@ -62,7 +62,8 @@ describe('owner pairing offers', () => {
       pairingUrl: 'orca://pair#offer',
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'd1',
-      webClientUrl: null
+      webClientUrl: null,
+      offerExpiresAt: null
     }
     return {
       getNetworkExposureBindHost: () => '0.0.0.0',

@@ -112,7 +112,8 @@
       "pastePairingCode": "Ou coller le code d'appairage",
       "scanCodeStep": "Scannez le QR code",
       "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer"
+      "tryAgain": "Réessayer",
+      "codeExpiredOrReplaced": "Ce code d'appairage a expiré ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
     },
     "terminalSettings": {
       "defaultText": "Par défaut (100 %)",
