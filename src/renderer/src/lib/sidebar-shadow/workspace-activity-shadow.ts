@@ -1,4 +1,7 @@
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
@@ -15,7 +18,6 @@ import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts
 } from '../../../../shared/sidebar-list/workspace-activity-facts'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(

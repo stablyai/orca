@@ -1,4 +1,7 @@
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
@@ -9,7 +12,6 @@ import {
 } from '../../../../shared/execution-host'
 import type { DesktopSidebarFacts } from '../../../../shared/sidebar-list/desktop-sidebar-facts'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WindowFactsState = Pick<
   AppState,

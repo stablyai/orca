@@ -1,4 +1,7 @@
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
@@ -33,7 +36,6 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())

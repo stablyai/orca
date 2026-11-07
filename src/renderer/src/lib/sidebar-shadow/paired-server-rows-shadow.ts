@@ -1,4 +1,7 @@
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
@@ -14,7 +17,6 @@ import { describePairedServerHosts } from '../../../../shared/remote-runtime/hos
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { lineageStoreKeyOfRow } from '../../../../shared/worktree/cross-store-lineage-resolution'
 import { validCrossStoreLineage } from '../../../../shared/worktree/cross-store-lineage-records'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'

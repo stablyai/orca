@@ -1,9 +1,11 @@
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function getWorkspacePath(state: AppState, worktreeId: string): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
