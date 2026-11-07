@@ -20,6 +20,7 @@ const HOST_OPTIONS = [
   { id: 'ssh:work', kind: 'ssh', label: 'Work', detail: 'SSH', health: 'available' }
 ] as const
 
+/** A top-level or nested project group. */
 function group(id: string, parentGroupId: string | null = null, tabOrder = 0): ProjectGroup {
   return {
     id,
@@ -35,6 +36,7 @@ function group(id: string, parentGroupId: string | null = null, tabOrder = 0): P
   }
 }
 
+/** A project, on this machine unless `connectionId` names an SSH target. */
 function repo(id: string, projectGroupId: string | null, connectionId?: string): Repo {
   return {
     id,
@@ -47,6 +49,7 @@ function repo(id: string, projectGroupId: string | null, connectionId?: string):
   }
 }
 
+/** The main worktree of `owner`. */
 function worktree(owner: Repo): Worktree {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: row grouping reads only these fields.
   return {

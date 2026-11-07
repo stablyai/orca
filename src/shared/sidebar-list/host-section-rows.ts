@@ -171,6 +171,9 @@ export function addHostSectionRows(args: {
     }
     rowsByHostId.set(hostId, hostRows)
   }
+  /** A header no host claimed and that names no host itself. */
+  const isHostlessUnusedRow = (row: Extract<Row, { type: 'header' }>): boolean =>
+    !row.hostWorktreeCounts && !usedPendingRows.has(row)
   /** Places headers no row claimed: under their hosts if they name any, else above all hosts. */
   const flushUnusedPendingRows = (rows: readonly Extract<Row, { type: 'header' }>[]): void => {
     for (const row of rows) {
@@ -184,7 +187,7 @@ export function addHostSectionRows(args: {
         }
       }
     }
-    globalRows.push(...rows.filter((row) => !row.hostWorktreeCounts && !usedPendingRows.has(row)))
+    globalRows.push(...rows.filter(isHostlessUnusedRow))
   }
 
   /** Appends a row to its host's section, after any headers it still needs. */
