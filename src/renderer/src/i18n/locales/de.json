@@ -7226,7 +7226,8 @@
           "underDistro": "Dieser Host kann nur Ordner unter \\\\wsl.localhost\\{{value0}} hinzufügen."
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} ist leer"
+          "pathEmpty": "{{path}} ist leer",
+          "projectFolders": "Projektordner"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "Entdeckte Worktrees konnten nicht weiter ausgeblendet werden. Erneut versuchen.",

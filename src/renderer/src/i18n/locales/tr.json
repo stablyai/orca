@@ -7210,7 +7210,8 @@
           "underDistro": "Bu ana makineye yalnızca \\\\wsl.localhost\\{{value0}} altındaki klasörler eklenebilir."
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} boş"
+          "pathEmpty": "{{path}} boş",
+          "projectFolders": "Proje klasörleri"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "Bulunan worktree'ler gizli tutulamadı. Tekrar deneyin.",
