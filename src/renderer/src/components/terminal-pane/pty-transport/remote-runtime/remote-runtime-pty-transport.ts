@@ -3736,6 +3736,13 @@ export function createRemoteRuntimePtyTransport(
         }
         // Older hosts keep their existing pane request when these inputs require preparation.
         const composed = freshInputs && !prepared ? freshInputs : undefined
+        const promptRequest =
+          composed && promptPlan && freshLaunch
+            ? hostedAgentPromptRequest(promptPlan, freshLaunch.prompt, freshLaunch.promptDelivery)
+            : {
+                ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {})
+              }
 
         const ensureProviderSession = resumeProviderSessionToSend
           ? await agentProviderSessionForHostEnsure(
@@ -3784,19 +3791,10 @@ export function createRemoteRuntimePtyTransport(
                               worktreeId,
                               agent: launchAgentToSend!,
                               ...composed,
-                              ...(promptPlan && freshLaunch
-                                ? hostedAgentPromptRequest(
-                                    promptPlan,
-                                    freshLaunch.prompt,
-                                    freshLaunch.promptDelivery
-                                  )
-                                : {})
+                              ...promptRequest
                             })
                           }
-                        : {
-                            ...(agentPrompt ? { prompt: agentPrompt } : {}),
-                            ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {})
-                          }),
+                        : promptRequest),
                       ...(!composed && agentArgsOverride !== undefined
                         ? { agentArgs: agentArgsOverride }
                         : {}),
@@ -3813,7 +3811,7 @@ export function createRemoteRuntimePtyTransport(
           createEnvironmentId,
           epoch
         )
-        if (prepared && freshLaunch && agentPrompt !== freshLaunch.prompt) {
+        if (prepared && freshLaunch && !promptRequest.prompt) {
           promptPlan = {
             startupPlan: null,
             pasteDraftAfterLaunch: freshLaunch.prompt || null,
@@ -3908,13 +3906,22 @@ export function createRemoteRuntimePtyTransport(
             }
           )
             .catch(() => false)
-            .then((delivered) => {
-              if (!delivered) {
-                void import('@/lib/agent-launch-prompt-failure-notice').then(
-                  ({ notifyAgentLaunchPromptNotSent }) =>
-                    notifyAgentLaunchPromptNotSent(launchAgentToSend, freshLaunch.prompt)
-                )
-              }
+            .then(async (promptDelivered) => {
+              const { completeWebHostAgentLaunch } =
+                await import('@/lib/web-host-agent-launch-completion')
+              completeWebHostAgentLaunch({
+                agent: launchAgentToSend,
+                worktreeId,
+                activate: false,
+                prompt: freshLaunch.prompt,
+                submitFollowup: true,
+                hostTabId: createdTerminal.tabId,
+                provisionalTabId: tabId,
+                outcome: { status: 'created' },
+                promptDelivered,
+                legacyPreparationCancelled: false,
+                failureMessage: ''
+              })
             })
         }
       }

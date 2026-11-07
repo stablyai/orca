@@ -1,4 +1,4 @@
-import { createTerminalStreamFixtures } from '@/components/terminal-pane/remote-runtime-pty-transport-stream-fixtures'
+import { createHostSessionLaunchRuntimeFixture } from './remote-runtime-host-session-launch-test-fixture'
 import { ExplicitEnsure } from '../../../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/web-runtime-terminal-creation'
@@ -12,7 +12,8 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 }))
 const appStore = vi.hoisted(() => {
   const state = {
-    runtimeStatusByEnvironmentId: new Map()
+    runtimeStatusByEnvironmentId: new Map(),
+    tabsByWorktree: { 'repo1::/remote/wt': [{ id: 'tab-1' }] }
   }
   return { getState: vi.fn(() => state) }
 })
@@ -31,74 +32,22 @@ import {
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 describe('createRemoteRuntimePtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
-  const runtimeCall = vi.fn()
-  const runtimeSubscribe = vi.fn()
-  let subscriptionCallbacks: {
-    onResponse: (response: unknown) => void
-    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
-    onError?: (error: { code: string; message: string }) => void
-    onClose?: () => void
-  } | null = null
-  let unsubscribe: {
-    unsubscribe: () => void
-    sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
-  } | null = null
-  let unsubscribeFn: ReturnType<typeof vi.fn<() => void>> | null = null
+  const fixture = createHostSessionLaunchRuntimeFixture()
+  const {
+    runtimeCall,
+    runtimeSubscribe,
+    unsubscribe,
+    unsubscribeFn,
+    latestRemoteSubscribePayload
+  } = fixture
 
   beforeEach(() => {
     vi.resetModules()
     delivery.mockReset().mockResolvedValue(true)
+    appStore.getState().tabsByWorktree['repo1::/remote/wt'] = [{ id: 'tab-1' }]
     promptFailure.error.mockClear()
     promptFailure.copy.mockClear()
-    runtimeCall.mockReset()
-    runtimeSubscribe.mockReset()
-    subscriptionCallbacks = null
-    unsubscribeFn = vi.fn<() => void>()
-    unsubscribe = {
-      unsubscribe: unsubscribeFn,
-      sendBinary: vi.fn()
-    }
-    runtimeCall.mockImplementation(async (args: { method?: string }) =>
-      args.method === 'status.get'
-        ? {
-            id: 'rpc-status',
-            ok: true,
-            result: {
-              runtimeProtocolVersion: 3,
-              minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
-            },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-        : {
-            id: 'rpc-create',
-            ok: true,
-            result: {
-              terminal: {
-                handle: 'term-remote',
-                worktreeId: 'repo1::/remote/wt',
-                title: null,
-                surface: 'background'
-              }
-            },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-    )
-    runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
-        subscriptionCallbacks = callbacks
-        queueMicrotask(() => {
-          subscriptionCallbacks?.onResponse({
-            id: 'rpc-multiplex',
-            ok: true,
-            result: { type: 'ready' },
-            _meta: { runtimeId: 'runtime-remote' }
-          })
-        })
-        return unsubscribe
-      }
-    )
-
+    fixture.reset()
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -119,13 +68,6 @@ describe('createRemoteRuntimePtyTransport', () => {
       delete (globalThis as { window?: typeof window }).window
     }
   })
-
-  function latestRemoteSubscribePayload(): { streamId: number } {
-    return createTerminalStreamFixtures({
-      getCallbacks: () => subscriptionCallbacks,
-      sendBinary: vi.mocked(unsubscribe!.sendBinary)
-    }).latestSubscribePayload()
-  }
 
   it('round-trips a strict saved ensure and its actual refused shell result', async () => {
     const providerSession = { key: 'session_id' as const, id: 'C' }
@@ -228,7 +170,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     const { streamId } = latestRemoteSubscribePayload()
 
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotStart,
         streamId,
@@ -236,7 +178,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: encodeTerminalStreamJson({ kind: 'scrollback' })
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotChunk,
         streamId,
@@ -244,7 +186,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: encodeTerminalStreamText('hello')
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotEnd,
         streamId,
@@ -252,7 +194,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: new Uint8Array()
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Output,
         streamId,
@@ -365,7 +307,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
 
     applyHostWorktreeTerminalSleepState('env-1', started)
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Output,
         streamId,
@@ -684,8 +626,14 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(delivered?.beforePaste?.()).toBe(false)
   })
 
-  it('reports a failed single Aider prompt attempt once with Copy prompt', async () => {
-    delivery.mockResolvedValueOnce(false)
+  it('reports a failed single Aider prompt attempt once with Copy prompt after a transient detach', async () => {
+    let finishDelivery!: (delivered: boolean) => void
+    delivery.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishDelivery = resolve
+        })
+    )
     Object.assign(window.api, { ui: { writeClipboardText: promptFailure.copy } })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
@@ -697,6 +645,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       leafId: '11111111-1111-4111-8111-111111111111'
     })
     await transport.connect({ url: '', callbacks: {} })
+    transport.disconnect()
+    finishDelivery(false)
     await vi.dynamicImportSettled()
     expect(delivery).toHaveBeenCalledOnce()
     expect(promptFailure.error).toHaveBeenCalledOnce()
@@ -708,6 +658,32 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(promptFailure.error).toHaveBeenCalledOnce()
   })
 
+  it('silences a failed prompt attempt when its tab was deliberately closed before readiness', async () => {
+    let finishDelivery!: (delivered: boolean) => void
+    delivery.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishDelivery = resolve
+        })
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      launchAgent: 'codex',
+      launchToken: 'closed-prompt-launch',
+      freshAgentLaunch: { prompt: 'ship it', promptDelivery: 'draft' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    appStore.getState().tabsByWorktree['repo1::/remote/wt'] = []
+    await transport.destroy?.()
+    finishDelivery(false)
+    await vi.dynamicImportSettled()
+    expect(delivery).toHaveBeenCalledOnce()
+    expect(promptFailure.error).not.toHaveBeenCalled()
+  })
+
   it('keeps the existing pane request when an old host needs a prepared launch', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {
@@ -717,7 +693,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       agentLaunchPreferences: { mode: 'full-access' },
       freshAgentLaunch: {
         sessionOptions: { permissionMode: 'full-access' },
-        prompt: '',
+        prompt: 'fix permissions',
         promptDelivery: 'auto-submit'
       },
       tabId: 'tab-1',
@@ -737,6 +713,15 @@ describe('createRemoteRuntimePtyTransport', () => {
       ([args]) => args.method === 'terminal.createAgentSession'
     )?.[0]
     expect(create?.params).not.toHaveProperty('sessionOptions')
+    expect(create?.params).not.toHaveProperty('prompt')
+    expect(delivery).toHaveBeenCalledExactlyOnceWith(
+      { outcome: { status: 'created' }, hostTabId: undefined },
+      expect.objectContaining({
+        promptAfterReady: 'fix permissions',
+        submitPrompt: true,
+        forcePromptPaste: true
+      })
+    )
     transport.disconnect()
   })
 
