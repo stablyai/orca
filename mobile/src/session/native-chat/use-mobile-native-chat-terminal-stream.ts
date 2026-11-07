@@ -45,14 +45,19 @@ export function useMobileNativeChatTerminalStream(args: {
     rearmAttemptsRef.current.delete(handle)
     absentSinceExhaustionRef.current.delete(handle)
   }, [])
+  // Reclaiming a replaced stream also restores its rearm budget, or an exhausted one still refuses.
+  const clearReplacedMarkers = useCallback(() => {
+    args.replacedRef.current.forEach(forgetRearmState)
+    args.replacedRef.current.clear()
+  }, [args.replacedRef, forgetRearmState])
   // Only the page in front reclaims a replaced stream; background pages keep their markers.
   useFocusEffect(
     useCallback(() => {
       if (args.replacedRef.current.size > 0) {
-        args.replacedRef.current.clear()
+        clearReplacedMarkers()
         setRearmBudgetRevision((revision) => revision + 1)
       }
-    }, [args.replacedRef])
+    }, [args.replacedRef, clearReplacedMarkers])
   )
   const cancelHealthyStreamProof = useCallback(() => {
     if (healthyStreamProofRef.current) {
@@ -110,7 +115,7 @@ export function useMobileNativeChatTerminalStream(args: {
     const previousHandle = reconciledHandleRef.current
     if (previousHandle != null && previousHandle !== handle) {
       // Leaving a tab is the user's cue; coming back may take the stream again, split companions included.
-      args.replacedRef.current.clear()
+      clearReplacedMarkers()
     }
     reconciledHandleRef.current = handle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
@@ -182,7 +187,6 @@ export function useMobileNativeChatTerminalStream(args: {
     args.activeTabType,
     args.leaseOnlyRef,
     args.leaseReady,
-    args.replacedRef,
     args.showNativeChat,
     args.streamRevision,
     args.subscribe,
@@ -191,6 +195,7 @@ export function useMobileNativeChatTerminalStream(args: {
     args.unsubscribe,
     args.webReadyRef,
     cancelHealthyStreamProof,
+    clearReplacedMarkers,
     forgetRearmState,
     rearmBudgetRevision,
     webReadyRevision
