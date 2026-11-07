@@ -59,7 +59,7 @@ export function startStructuredAgentSessionLiveRead(args: {
   subscribe: StructuredAgentSessionLiveSubscribe
   /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
   coalesceMs?: number
-  /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it. */
+  /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it, and a rejection means no. */
   textAppend?: Promise<boolean>
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
@@ -232,7 +232,9 @@ export function startStructuredAgentSessionLiveRead(args: {
     unsubscribe = (): void => {}
     try {
       // Desktop passes none, so its subscribe still goes out in the same turn.
-      const textAppend = args.textAppend && !appendsRefused ? await args.textAppend : false
+      // A failed support check means no appends; it must not keep the transcript closed.
+      const textAppend =
+        args.textAppend && !appendsRefused ? await args.textAppend.catch(() => false) : false
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
