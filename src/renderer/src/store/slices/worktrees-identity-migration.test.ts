@@ -105,6 +105,7 @@ describe('migrateWorktreeIdentity', () => {
       recentlyClosedBrowserPagesByWorkspace: { browser1: [{ id: 'closed-page', worktreeId: OLD }] },
       unifiedTabsByWorktree: { [OLD]: [{ id: 'unified1', worktreeId: OLD }] },
       groupsByWorktree: { [OLD]: [{ id: 'group1', worktreeId: OLD }] },
+      splitLandingGroupIds: { group1: OLD },
       gitStatusByWorktree: { [OLD]: [{ path: 'a.ts' }] },
       gitStatusHeadByWorktree: { [OLD]: 'head-old' },
       gitBranchLineTotalByWorktree: { [OLD]: { added: 24, removed: 3, mergeBase: 'base-old' } },
@@ -163,6 +164,7 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.recentlyClosedBrowserPagesByWorkspace.browser1?.[0]?.worktreeId).toBe(NEW)
     expect(s.unifiedTabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(s.groupsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
+    expect(s.splitLandingGroupIds).toEqual({ group1: NEW })
     expect(s.gitStatusByWorktree[NEW]).toEqual([{ path: 'a.ts' }])
     expect(s.gitStatusHeadByWorktree[NEW]).toBe('head-old')
     expect(s.gitBranchLineTotalByWorktree[OLD]).toBeUndefined()
