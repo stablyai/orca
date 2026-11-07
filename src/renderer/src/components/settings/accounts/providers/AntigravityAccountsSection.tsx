@@ -23,6 +23,8 @@ import {
 } from '../../../provider-accounts/AntigravityChatSignInRow'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { formatTimeAgo } from '../../../status-bar/tooltip'
+import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
 
 function formatUsageReading(usage: ProviderRateLimits): string {
   return translate(
@@ -369,6 +371,10 @@ export function AntigravityAccountsSection({
             disabled={antigravityChatSignInBlocked(chatRuntime)}
           />
         </div>
+      ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+        <ChatUnavailableOnWindowsNote
+          label={translate('accounts.antigravity.title', 'Antigravity')}
+        />
       ) : null}
     </section>
   )

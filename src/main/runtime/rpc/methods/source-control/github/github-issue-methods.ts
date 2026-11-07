@@ -1,4 +1,6 @@
 import { defineMethod } from '../../../core'
+import { UploadGitHubAttachment } from '../../../../../../shared/rpc-contract/github-attachment-params'
+import { claimClipboardImageUpload } from '../../clipboard/clipboard'
 import {
   CreateIssue,
   Issue,
@@ -7,6 +9,17 @@ import {
 } from '../../../../../../shared/rpc-contract/github-issue-params'
 
 export const GITHUB_ISSUE_METHODS = [
+  defineMethod({
+    name: 'github.uploadAttachment',
+    permission: 'workspace',
+    params: UploadGitHubAttachment,
+    handler: (params, ctx) =>
+      ctx.runtime.uploadGitHubAttachment(
+        params,
+        claimClipboardImageUpload(params.uploadId, ctx),
+        ctx.signal
+      )
+  }),
   defineMethod({
     name: 'github.issue',
     permission: 'workspace',

@@ -74,7 +74,7 @@ describe('DictationIndicator', () => {
     }
     document.addEventListener(DICTATION_CONTROL_EVENT, listener)
 
-    render(<DictationIndicator />)
+    render(<DictationIndicator captureLive />)
     fireEvent.click(screen.getByRole('button', { name: 'Stop dictation' }))
 
     document.removeEventListener(DICTATION_CONTROL_EVENT, listener)

@@ -1,4 +1,4 @@
-import { prepareWorktreeCreationHooks } from '@/lib/workspace/creation/worktree-creation-hook-preparation'
+import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
 import {
   activateAndRevealWorktree,
@@ -45,10 +45,8 @@ export async function executeWorktreeCreation(
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
     : request
-  if (!trustedRequest) {
-    return
-  }
-  const preparedRequest = await prepareRequestForCreate(creationId, trustedRequest)
+  const preparedRequest =
+    trustedRequest && (await prepareRequestForCreate(creationId, trustedRequest))
   if (!preparedRequest) {
     return
   }
@@ -93,7 +91,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGiteaPR,
         preparedRequest.compareBaseRef,
         {
-          setupOnly: preparedRequest.setupOnly,
+          ...setupCreateArgs(preparedRequest),
           ...(preparedRequest.branchIntent ? { branchIntent: preparedRequest.branchIntent } : {}),
           ...(hostAgentLaunch ? { hostAgentLaunch } : {}),
           executionHostId: creationHostId,
@@ -117,7 +115,8 @@ export async function executeWorktreeCreation(
           ...(provisionedRoot ? { provisionedRoot } : {}),
           ...(preparedRequest.parentWorktreeId
             ? { parentWorktreeId: preparedRequest.parentWorktreeId }
-            : {})
+            : {}),
+          ...(preparedRequest.note ? { note: preparedRequest.note } : {})
         }
       )
   } catch (error) {

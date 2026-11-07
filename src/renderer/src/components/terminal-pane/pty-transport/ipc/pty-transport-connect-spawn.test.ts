@@ -1,10 +1,10 @@
 import {
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../../pty-connection-test-deps'
+} from '../../pty-connection/test-fixtures/pty-connection-test-deps'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyConnectionDeps } from '../../pty-connection-types'
-import type { ConnectCallbacks } from '../../pty-connection-test-pane-fixtures'
+import type { ConnectCallbacks } from '../../pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import { terminalAttachResult } from '../../../../../../shared/terminal/pty/lifecycle/terminal-attach-result'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
@@ -443,11 +443,14 @@ describe('createIpcPtyTransport', () => {
   it('paints an old image and delayed live bytes once without claiming their newer frontier', async () => {
     const { provenSpawnResponse } =
       await import('../../../../../../shared/terminal/pty/lifecycle/terminal-spawn-response')
-    const { bindPtyConnectionTestMocks } = await import('../../pty-connection-mocks.spec')
-    const { createInitialStoreState } = await import('../../pty-connection-test-store-fixtures')
-    const { buildPaneConnectionDeps } = await import('../../pty-connection-test-deps')
+    const { bindPtyConnectionTestMocks } =
+      await import('../../pty-connection/test-fixtures/pty-connection-mocks.spec')
+    const { createInitialStoreState } =
+      await import('../../pty-connection/test-fixtures/pty-connection-test-store-fixtures')
+    const { buildPaneConnectionDeps } =
+      await import('../../pty-connection/test-fixtures/pty-connection-test-deps')
     const { createMockTransport, createPaneContainer, LEAF_1 } =
-      await import('../../pty-connection-test-pane-fixtures')
+      await import('../../pty-connection/test-fixtures/pty-connection-test-pane-fixtures')
     const { Terminal } = await import('@xterm/xterm')
     const { FitAddon } = await import('@xterm/addon-fit')
     const { SearchAddon } = await import('@xterm/addon-search')
@@ -456,8 +459,9 @@ describe('createIpcPtyTransport', () => {
     const { isTerminalLeafId } =
       await import('../../../../../../shared/workspace-layout/stable-pane-id')
     const { installTerminalTestGlobals, restoreTerminalTestGlobals } =
-      await import('../../pty-connection-test-environment')
-    const { flushAsyncTicks } = await import('../../pty-connection-test-async')
+      await import('../../pty-connection/test-fixtures/pty-connection-test-environment')
+    const { flushAsyncTicks } =
+      await import('../../pty-connection/test-fixtures/pty-connection-test-async')
     let state = createInitialStoreState(() => state)
     const transports: ReturnType<typeof createMockTransport>[] = []
     bindPtyConnectionTestMocks({
@@ -469,7 +473,7 @@ describe('createIpcPtyTransport', () => {
     })
     await installTerminalTestGlobals()
     try {
-      const { connectPanePty } = await import('../../pty-connection')
+      const { connectPanePty } = await import('../../pty-connection/connect-pane-pty')
       const agentTitleMocks =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       for (const proof of ['interleaved', 'covered', 'no-flags'] as const) {

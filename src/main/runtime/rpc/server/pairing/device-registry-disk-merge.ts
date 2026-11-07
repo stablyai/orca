@@ -13,7 +13,9 @@ const EXTERNAL_EDIT_CHECK_INTERVAL_MS = 1000
  * - a row this process knew of that is gone from disk stays gone, never resurrected from memory;
  * - rows this save adds, and this save's version of rows still on disk, are kept;
  * - rows that appeared on disk since are kept, unless this process ever removed them: `removed`
- *   holds those ids, so a stale writer putting a revoked row back can't get it adopted.
+ *   holds those ids, so a stale writer putting a revoked row back can't get it adopted;
+ * - a sighting never goes backwards, so a stale writer cannot turn a paired row back into an
+ *   unscanned (expirable, rotatable) offer.
  */
 export function mergeDeviceRegistrySave(
   before: readonly DeviceEntry[],
@@ -24,10 +26,19 @@ export function mergeDeviceRegistrySave(
   const known = new Set([...before.map((device) => device.deviceId), ...removed])
   const onDisk = new Set(disk.devices.map((device) => device.deviceId))
   const saving = new Set(next.map((device) => device.deviceId))
+  const diskLastSeen = new Map(disk.devices.map((device) => [device.deviceId, device.lastSeenAt]))
   return [
-    ...next.filter((device) => onDisk.has(device.deviceId) || !known.has(device.deviceId)),
+    ...next
+      .filter((device) => onDisk.has(device.deviceId) || !known.has(device.deviceId))
+      .map((device) => withLatestSighting(device, diskLastSeen.get(device.deviceId))),
     ...disk.devices.filter((device) => !known.has(device.deviceId) && !saving.has(device.deviceId))
   ]
+}
+
+function withLatestSighting(device: DeviceEntry, diskLastSeenAt: number | undefined): DeviceEntry {
+  return diskLastSeenAt !== undefined && diskLastSeenAt > device.lastSeenAt
+    ? { ...device, lastSeenAt: diskLastSeenAt }
+    : device
 }
 
 /**
