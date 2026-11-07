@@ -105,12 +105,15 @@ export const MOBILE_WEB_APP_ROOT_RESET =
 // Use zero-specificity native parity: remove text-field focus rings only; keyboard buttons keep browser rings.
 // Disable body text selection/callout to prevent WebKit/Android long-press interference, including portaled modals; fields opt back in.
 // Stop the WebView rubber-banding the whole page (headers included) when an inner list hits its end; inner scrollers keep their bounce.
+// Hide textarea/input scrollbars and resize grippers: RN-Web multiline fields are HTML textareas; native TextInput paints neither.
 export const MOBILE_WEB_APP_NATIVE_PARITY_STYLE =
   '<style id="orca-native-parity">:where(input:focus,textarea:focus){outline:none}' +
   ':where(html){overscroll-behavior:none}' +
   ':where(body){-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}' +
   ':where(input,textarea,[contenteditable]){-webkit-user-select:text;user-select:text;' +
-  '-webkit-touch-callout:default}</style>'
+  '-webkit-touch-callout:default}' +
+  'textarea,input,[contenteditable]{scrollbar-width:none!important;-ms-overflow-style:none!important;resize:none!important}' +
+  'textarea::-webkit-scrollbar,input::-webkit-scrollbar,[contenteditable]::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>'
 
 const PAGE_ASYNC_STORAGE_MODULE = join(
   mobileDir,
@@ -558,7 +561,7 @@ export async function buildMobileWebAppBundle({
     '<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     // Empty favicon prevents repeated unmanifested /favicon.ico requests/403s; WebView needs no tab icon asset.
     '<link rel="icon" href="data:," />\n' +
-    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n<style id="orca-scrollbars">${scrollbarStyle}</style>\n</head>\n<body>\n<div id="root"></div>\n` +
+    `<title>Orca</title>\n${MOBILE_WEB_APP_ROOT_RESET}\n<style id="orca-scrollbars">${scrollbarStyle}</style>\n${MOBILE_WEB_APP_NATIVE_PARITY_STYLE}\n</head>\n<body>\n<div id="root"></div>\n` +
     `<script type="module" src="/${scriptAsset.path}"></script>\n</body>\n</html>\n`
   const indexBytes = Buffer.from(html, 'utf8')
   const indexAsset = {
