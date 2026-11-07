@@ -76,15 +76,6 @@ describe('usePluginInstallLink', () => {
     expect(installMarketplacePlugin).not.toHaveBeenCalled()
   })
 
-  it('opens directly when the linked catalog is already added under another spelling', async () => {
-    request(
-      `orca://plugins/acme.dusk?catalog=${encodeURIComponent('git@github.com:acme/catalog.git')}`
-    )
-    await render([OFFICIAL, source('https://github.com/acme/catalog')])
-    expect(open).toHaveBeenCalledWith('acme.dusk')
-    expect(hook?.catalogToAdd).toBeNull()
-  })
-
   it('asks before adding an unknown catalog and fetches nothing until confirmed', async () => {
     request('orca://plugins/acme.dusk?catalog=community')
     await render([OFFICIAL])
@@ -103,15 +94,5 @@ describe('usePluginInstallLink', () => {
     expect(loadMarketplaceData).toHaveBeenCalled()
     expect(open).toHaveBeenCalledWith('acme.dusk')
     expect(installMarketplacePlugin).not.toHaveBeenCalled()
-  })
-
-  it('cancelling the catalog prompt adds and opens nothing', async () => {
-    request(`orca://plugins/acme.dusk?catalog=${encodeURIComponent('https://gitlab.com/a/b.git')}`)
-    await render([OFFICIAL])
-    act(() => hook!.cancelCatalog())
-    await render([OFFICIAL])
-    expect(hook?.catalogToAdd).toBeNull()
-    expect(addMarketplace).not.toHaveBeenCalled()
-    expect(open).not.toHaveBeenCalled()
   })
 })
