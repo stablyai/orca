@@ -325,7 +325,7 @@ describe('current recovery publication and normal Resume', () => {
         vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
       })
       expect(hook!.queued.cards.map((c) => c.messageId)).toEqual(['W2', 'Q'])
-      expect(hook!.queued.pause).toBeNull()
+      expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
       expect(requestOf('agentSession.queuedMessageMove').params).toMatchObject({
         messageId: 'W2',
         beforeMessageId: 'W1'
