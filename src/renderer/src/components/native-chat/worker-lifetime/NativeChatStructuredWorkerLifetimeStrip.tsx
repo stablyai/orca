@@ -5,7 +5,7 @@ import {
   workerKeepOpenLabel
 } from '@/lib/worker-auto-close'
 import { NativeChatWorkerLifetimeStrip } from './NativeChatWorkerLifetimeStrip'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A temporary orchestration worker chat says when it closes, with Keep open, on its composer. */

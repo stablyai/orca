@@ -2,22 +2,25 @@ import { it, vi, expect, afterEach } from 'vitest'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { TEST_REPO } from './repo.test-fixture'
 import {
   nativeChatPastedTextToken,
   nativeChatPastedTextOperations
-} from '@/components/native-chat/native-chat-pasted-text-reference'
-import { promptSkillRefs } from '@/components/native-chat/native-chat-prompt-document'
+} from '@/components/native-chat/paste/native-chat-pasted-text-reference'
+import { promptSkillRefs } from '@/components/native-chat/composer/editor/native-chat-prompt-document'
 import {
   nativeChatPastedTextState,
   settleNativeChatPastedText
-} from '@/components/native-chat/native-chat-composer-pasted-text-references'
-import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
-import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
-import * as memory from '@/components/native-chat/native-chat-composer-draft-memory'
-import * as sources from '@/components/native-chat/native-chat-launch-draft-source'
+} from '@/components/native-chat/paste/native-chat-composer-pasted-text-references'
+import * as drafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as draftsOwner1 from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import * as draftsOwner2 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as draftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as draftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import * as draftsOwner5 from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import * as pending from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -27,7 +30,7 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
   pending.clearNativeChatPendingAttachmentsForTests()
   const storage = createMemoryNativeChatComposerDraftStorage()
   setNativeChatComposerDraftStorageForTests(storage)
-  await drafts.hydrateNativeChatComposerDrafts()
+  await draftsOwner1.hydrateNativeChatComposerDrafts()
   const store = createTestStore()
   const repo = {
     ...TEST_REPO,
@@ -59,35 +62,43 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
       ]
     }
   })
-  const control = drafts.nativeChatLaunchPromptDraftScopeKey('live::/x', 'claude', 'ssh:other')
-  drafts.updateNativeChatComposerDraft(control, { text: 'keep' }, 'immediate')
+  const control = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(
+    'live::/x',
+    'claude',
+    'ssh:other'
+  )
+  draftsOwner3.updateNativeChatComposerDraft(control, { text: 'keep' }, 'immediate')
   const untouched = vi.fn()
-  const unsubControl = drafts.subscribeToNativeChatComposerDraft(control, untouched)
+  const unsubControl = draftsOwner3.subscribeToNativeChatComposerDraft(control, untouched)
   const rows = Array.from({ length: count }, (_, i) => {
     const id = `repo::/w${i}`
-    const from = drafts.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'ssh:old')
-    const to = drafts.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'ssh:new')
-    drafts.updateNativeChatComposerDraft(from, rich(`/from${i}/SKILL.md`, `from${i}`), 'immediate')
-    drafts.updateNativeChatComposerDraft(to, rich(`/to${i}/SKILL.md`, `to${i}`), 'immediate')
-    drafts.writeLaunchSetupOptions(from, {
+    const from = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'ssh:old')
+    const to = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'ssh:new')
+    draftsOwner3.updateNativeChatComposerDraft(
+      from,
+      rich(`/from${i}/SKILL.md`, `from${i}`),
+      'immediate'
+    )
+    draftsOwner3.updateNativeChatComposerDraft(to, rich(`/to${i}/SKILL.md`, `to${i}`), 'immediate')
+    draftsOwner4.writeLaunchSetupOptions(from, {
       agent: 'claude',
       surface: 'terminal',
       choices: { model: 'source' }
     })
-    drafts.writeLaunchSetupOptions(to, {
+    draftsOwner4.writeLaunchSetupOptions(to, {
       agent: 'claude',
       surface: 'chat',
       choices: { model: 'target' }
     })
     const token = `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
-    drafts.appendToNativeChatComposerDraft(from, { text: nativeChatPastedTextToken(token) })
+    draftsOwner3.appendToNativeChatComposerDraft(from, { text: nativeChatPastedTextToken(token) })
     nativeChatPastedTextOperations.set(token, { scopeKey: from, text: 'held source bytes' })
-    const attempt = drafts.captureNativeChatComposerSubmission(from)
-    const targetAttempt = drafts.captureNativeChatComposerSubmission(to)
-    const stop = vi.fn(memory.subscribeToNativeChatComposerDraftAppend(from, vi.fn()))
+    const attempt = draftsOwner4.captureNativeChatComposerSubmission(from)
+    const targetAttempt = draftsOwner4.captureNativeChatComposerSubmission(to)
+    const stop = vi.fn(draftsOwner4.subscribeToNativeChatComposerDraftAppend(from, vi.fn()))
     attempt.stopObserving = stop
     if (i % 2) {
-      drafts.updateNativeChatComposerDraft(
+      draftsOwner3.updateNativeChatComposerDraft(
         from,
         { text: '', document: undefined, images: [] },
         'immediate'
@@ -95,8 +106,8 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
     }
     const changed = vi.fn()
     const targetChanged = vi.fn()
-    const unsubscribe = drafts.subscribeToNativeChatComposerDraft(from, changed)
-    const unsubTarget = drafts.subscribeToNativeChatComposerDraft(to, targetChanged)
+    const unsubscribe = draftsOwner3.subscribeToNativeChatComposerDraft(from, changed)
+    const unsubTarget = draftsOwner3.subscribeToNativeChatComposerDraft(to, targetChanged)
     pending.addNativeChatPendingAttachment(to, { id: `target-${i}`, path: '', pending: true })
     pending.addNativeChatPendingAttachment(from, { id: `source-${i}`, path: '', pending: true })
     return {
@@ -113,8 +124,8 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
       unsubTarget
     }
   })
-  drafts.flushNativeChatComposerDrafts()
-  await drafts.nativeChatComposerDraftWritesSettled()
+  draftsOwner5.flushNativeChatComposerDrafts()
+  await draftsOwner5.nativeChatComposerDraftWritesSettled()
   const copied = vi.fn()
   const update = storage.update
   vi.spyOn(storage, 'update').mockImplementation((scope, apply) =>
@@ -133,19 +144,19 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
   })
   const descriptor = { oldTargetId: 'old', newTargetId: 'new', repoIds: ['repo'] }
   store.getState().recordSshRepoReadoptions([descriptor])
-  drafts.flushNativeChatComposerDrafts()
-  await drafts.nativeChatComposerDraftWritesSettled()
+  draftsOwner5.flushNativeChatComposerDrafts()
+  await draftsOwner5.nativeChatComposerDraftWritesSettled()
   expect(copied).not.toHaveBeenCalled()
   expect(untouched).not.toHaveBeenCalled()
   const before = rows.map((row, i) => {
-    const held = drafts.readNativeChatComposerDraft(row.from)
+    const held = draftsOwner3.readNativeChatComposerDraft(row.from)
     expect(promptSkillRefs(held.document)).toEqual(
       (i % 2 ? [`/to${i}/SKILL.md`] : [`/to${i}/SKILL.md`, `/from${i}/SKILL.md`]).map((path) => ({
         name: 'review',
         path
       }))
     )
-    expect(sources.readLaunchSetupOptions(row.from)?.choices.model).toBe('target')
+    expect(draftsOwner2.readLaunchSetupOptions(row.from)?.choices.model).toBe('target')
     expect(pending.nativeChatPendingAttachmentSnapshot(row.from).map((chip) => chip.id)).toEqual([
       `target-${i}`,
       `source-${i}`
@@ -155,14 +166,18 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
     row.targetChanged.mockClear()
     return held
   })
-  const successor = drafts.nativeChatLaunchPromptDraftScopeKey(rows[0].id, 'claude', 'ssh:old')
-  drafts.updateNativeChatComposerDraft(successor, { text: 'old address reused' }, 'immediate')
+  const successor = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(
+    rows[0].id,
+    'claude',
+    'ssh:old'
+  )
+  draftsOwner3.updateNativeChatComposerDraft(successor, { text: 'old address reused' }, 'immediate')
   store.getState().recordSshRepoReadoptions([{ ...descriptor }])
   rows.forEach((row, i) => {
-    expect(drafts.readNativeChatComposerDraft(row.to)).toBe(before[i])
+    expect(draftsOwner3.readNativeChatComposerDraft(row.to)).toBe(before[i])
     expect(row.changed).not.toHaveBeenCalled()
   })
-  expect(drafts.readNativeChatComposerDraft(successor).text).toBe('old address reused')
+  expect(draftsOwner3.readNativeChatComposerDraft(successor).text).toBe('old address reused')
   const thirdRepo = { ...nextRepo, executionHostId: 'ssh:third' as const, connectionId: 'third' }
   store.setState({ repos: [nextRepo, thirdRepo] })
   store
@@ -180,16 +195,18 @@ it('accepted collision/replay and committed new-writer revocation', async () => 
     expect(row.stop).toHaveBeenCalled()
     expect(row.attempt.draft).toBeUndefined()
     expect(row.targetAttempt.draft).toBeUndefined()
-    expect(drafts.readNativeChatComposerDraft(row.from)).toBeDefined()
+    expect(draftsOwner3.readNativeChatComposerDraft(row.from)).toBeDefined()
     expect(pending.nativeChatPendingAttachmentSnapshot(row.from)).toHaveLength(2)
     row.unsubTarget()
   }
-  const fresh = drafts.nativeChatLaunchPromptDraftScopeKey(rows[0].id, 'claude', 'ssh:third')
-  drafts.updateNativeChatComposerDraft(fresh, rich('/fresh/SKILL.md', 'fresh'), 'immediate')
-  const held = drafts.readNativeChatComposerDraft(fresh)
-  rows.forEach((row) => drafts.finishNativeChatComposerSubmission(row.from, row.attempt, true))
-  expect(drafts.readNativeChatComposerDraft(fresh)).toBe(held)
-  expect(drafts.readNativeChatComposerDraft(control).text).toBe('keep')
+  const fresh = draftsOwner2.nativeChatLaunchPromptDraftScopeKey(rows[0].id, 'claude', 'ssh:third')
+  draftsOwner3.updateNativeChatComposerDraft(fresh, rich('/fresh/SKILL.md', 'fresh'), 'immediate')
+  const held = draftsOwner3.readNativeChatComposerDraft(fresh)
+  rows.forEach((row) =>
+    draftsOwner3.finishNativeChatComposerSubmission(row.from, row.attempt, true)
+  )
+  expect(draftsOwner3.readNativeChatComposerDraft(fresh)).toBe(held)
+  expect(draftsOwner3.readNativeChatComposerDraft(control).text).toBe('keep')
   unsubControl()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()

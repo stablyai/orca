@@ -1,5 +1,5 @@
-import { QueuedMessageImageCount } from './NativeChatQueuedMessageImageCount'
-import type { QueuedMessageDragPresentation } from './NativeChatQueuedMessageRows'
+import { QueuedMessageImageCount } from '@/components/native-chat/queue/NativeChatQueuedMessageImageCount'
+import type { QueuedMessageDragPresentation } from '@/components/native-chat/queue/NativeChatQueuedMessageRows'
 import { useId, useState } from 'react'
 import {
   AlertCircle,
@@ -22,9 +22,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
-import { agentSessionWriteNoticeText } from '../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { isMacPlatform } from '../native-chat-shortcut'
+import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
   queuedMessageCardLine,
   queuedMessageCardNeedsAttention,
@@ -32,21 +32,21 @@ import {
   queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import { NativeChatAgentMessageSenders } from '../NativeChatAgentMessageSenders'
-import { NativeChatPendingIcon } from './NativeChatPendingIcon'
-import type { QueuedMessagesPendingAction } from './use-structured-agent-session-queued-messages'
-import { useNativeChatClippedLine } from './use-native-chat-clipped-line'
+import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
+import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
+import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
+import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatQueuedMessageComposer,
   type QueuedEditAttachTarget
-} from './editing/NativeChatQueuedMessageComposer'
-import type { QueuedMessageInlineEditor } from './editing/native-chat-queued-edit-session'
-import { nativeChatImageLabelCopy } from '../media/images/native-chat-image-label'
+} from '@/components/native-chat/queue/editing/NativeChatQueuedMessageComposer'
+import type { QueuedMessageInlineEditor } from '@/components/native-chat/queue/editing/native-chat-queued-edit-session'
+import { nativeChatImageLabelCopy } from '@/components/native-chat/media/images/native-chat-image-label'
 import {
   NATIVE_CHAT_UNKERNED_CSS,
   nativeChatTextHasUnkernedRun
-} from '../native-chat-unkerned-runs'
+} from '@/components/native-chat/composer/editor/native-chat-unkerned-runs'
 
 /** The visible caption under the text; the default waiting hold needs none. */
 export function queuedMessageCardCaption(

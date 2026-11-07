@@ -2,14 +2,14 @@
 
 import { afterEach, expect, it } from 'vitest'
 import { structuredAgentSessionSendBody } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { clearNativeChatComposerDraftsForTests } from '../../../drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '../../../native-chat-composer-draft-store'
+} from '../../../drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '../../../drafts/native-chat-draft-scope'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
-import { promptSkillRefs } from '../../../native-chat-prompt-document'
+import { promptSkillRefs } from '../../../composer/editor/native-chat-prompt-document'
 
 afterEach(() => clearNativeChatComposerDraftsForTests())
 

@@ -36,7 +36,7 @@ import '../../../../shared/workspace-scope'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 const recoveryNotice = vi.hoisted(() => vi.fn())
 vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({

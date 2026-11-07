@@ -13,7 +13,7 @@ import type { TerminalPaneController } from '../../controller/use-terminal-pane-
 import {
   NativeChatPaneFileDropSurface,
   useNativeChatPaneFileDropClaim
-} from '@/components/native-chat/NativeChatPaneFileDropSurface'
+} from '@/components/native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import { TerminalPaneSurface } from '../../controller/TerminalPaneSurface'
 import { installOsFileDropCancellationGuard } from '@/lib/os-file-drop-cancellation-guard'
 

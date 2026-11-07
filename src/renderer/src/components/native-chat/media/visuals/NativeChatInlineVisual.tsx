@@ -19,7 +19,7 @@ import {
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { NATIVE_CHAT_VISUAL_RESERVED_HEIGHT, NativeChatVisualFrame } from './NativeChatVisualFrame'
 import { observeTranscriptVisibility } from '../images/native-chat-image-visibility'
-import { NativeChatForwardedGestureContext } from '../../native-chat-reader-scroll-input'
+import { NativeChatForwardedGestureContext } from '../../viewport/scroll/native-chat-reader-scroll-input'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { readNativeChatVisual } from './native-chat-visual-read-client'
 import { useNativeChatVisualDocument } from './use-native-chat-visual-document'

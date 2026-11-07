@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import { useAppStore } from '@/store'
 import { restoreTerminalFitToDesktop } from '../../terminal-pane/viewport/terminal-fit-restore'
-import type { NativeChatComposerNotice } from '../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
 
 /** Chat hides the terminal’s phone overlay and drafts hide its placeholder; keep the lock and Take back action in a notice. */
 export function useNativeChatMobileHoldNotice(

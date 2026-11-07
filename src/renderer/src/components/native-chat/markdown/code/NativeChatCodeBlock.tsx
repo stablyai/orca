@@ -4,11 +4,9 @@ import { WrapText } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
-import { NativeChatCopyButton } from '../../NativeChatCopyButton'
-import {
-  NativeChatMarkdownRowKeyContext,
-  useNativeChatDisclosure
-} from '../../native-chat-disclosure-store'
+import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
+import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
+import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 
 /** Code fences need their own copy target rather than the whole chat message. */

@@ -4,8 +4,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { useAppStore } from '@/store'
-import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../native-chat-pagination'
+import { useAppStore } from '@/store/index'
+import { NATIVE_CHAT_INITIAL_LIMIT } from '@/components/native-chat/viewport/history/native-chat-pagination'
 
 // Separate transports per owner make host changes observable.
 const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted(() => {
@@ -52,11 +52,11 @@ vi.mock('./native-chat-session-transport', () => ({
   getNativeChatSessionTransport: transportFactory
 }))
 
-import { useNativeChatLiveSession } from './use-native-chat-live-session'
+import { useNativeChatLiveSession } from '@/components/native-chat/session/terminal/read/use-native-chat-live-session'
 import type {
   UseNativeChatLiveSessionArgs,
   NativeChatLiveSession
-} from './native-chat-live-session-contract'
+} from '@/components/native-chat/session/terminal/read/native-chat-live-session-contract'
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {

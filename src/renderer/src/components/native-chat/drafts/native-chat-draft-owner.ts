@@ -1,9 +1,9 @@
 import type { AppState } from '../../../store/types'
-import type { NativeChatComposerDraftOwner } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   nativeChatDraftScopeTabId,
   structuredAgentSessionIdOfDraftScope
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   chatWorkspaceByTabId,
   structuredChatWorkspacesBySessionId
