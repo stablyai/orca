@@ -24,11 +24,14 @@ type CachedSessionResult = {
 
 const cachedSessionResults = new Map<string, CachedSessionResult>()
 
-/** Preview messages are hover-only; the list itself reads the summary fields. */
+/** Preview messages and prompt text are hover/continuation-only; the list reads the summary fields. */
 function stripPreviewSessions(result: AiVaultListResult): AiVaultListResult {
   const sessions: AiVaultSession[] = result.sessions
     .slice(0, MAX_PERSISTED_SESSIONS)
-    .map((session) => ({ ...session, previewMessages: [] }))
+    .map(({ lastUserPrompt: _prompt, ...session }) => ({
+      ...session,
+      previewMessages: []
+    }))
   return {
     ...result,
     sessions,
