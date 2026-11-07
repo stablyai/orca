@@ -4,7 +4,7 @@ import { makeState, titleResult } from './ai-vault-tab-title-test-fixture'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
 import { collectAiVaultTitleRequests } from './ai-vault-tab-title-requests'
-import type * as MountedTerminalTabRegistry from '@/runtime/mounted-terminal-tab-registry'
+import type * as MountedTerminalTabRegistry from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type * as TitleRequests from './ai-vault-tab-title-requests'
 
 vi.mock('./ai-vault-tab-title-requests', async (importOriginal) => {
@@ -12,17 +12,20 @@ vi.mock('./ai-vault-tab-title-requests', async (importOriginal) => {
   return { ...actual, collectAiVaultTitleRequests: vi.fn(actual.collectAiVaultTitleRequests) }
 })
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', async (importOriginal) => ({
-  ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
-  findRegisteredTerminalTab: () => ({
-    tab: {
-      getManager: () => ({
-        getNumericIdForLeaf: (leafId: string) =>
-          leafId === '00000000-0000-4000-8000-000000000001' ? 7 : 8
-      })
-    }
+vi.mock(
+  '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof MountedTerminalTabRegistry>()),
+    findRegisteredTerminalTab: () => ({
+      tab: {
+        getManager: () => ({
+          getNumericIdForLeaf: (leafId: string) =>
+            leafId === '00000000-0000-4000-8000-000000000001' ? 7 : 8
+        })
+      }
+    })
   })
-}))
+)
 let stop: (() => void) | undefined
 afterEach(() => {
   stop?.()

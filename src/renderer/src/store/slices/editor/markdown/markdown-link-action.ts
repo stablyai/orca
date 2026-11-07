@@ -8,7 +8,7 @@ import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resoluti
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown/link-routing/markdown-internal-links'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { getOpenedEditFileIdAfterOpen } from '../file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '../focus/editor-focus-reveal'

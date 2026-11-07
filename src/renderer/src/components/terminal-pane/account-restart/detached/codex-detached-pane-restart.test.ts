@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { registerRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import type { PublishedTab } from '../../../../../../shared/workspace-layout/workspace-layout-published'

@@ -22,9 +22,9 @@ import {
 import type { NativeChatLaunchPromptDelivery } from '@/lib/agent-session/launch/prompt/native-chat-launch-prompt-delivery'
 import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
-import { pairedHostClientCapabilities } from '@/runtime/paired-host-client-capabilities'
+import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,

@@ -9,9 +9,9 @@ import {
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/runtime-environment-pairing-refresh'
+import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
 vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({

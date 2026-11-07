@@ -4,7 +4,7 @@ import type {
   GitDiffResult
 } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
 
 /** Showing a diff tab or its Retry: a user act that may start a stopped WSL distro. Local only. */

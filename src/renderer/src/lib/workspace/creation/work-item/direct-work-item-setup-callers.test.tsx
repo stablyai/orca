@@ -14,7 +14,7 @@ import {
 } from '@/components/pull-request-page/checks/fix-launch'
 import * as preflight from './launch-work-item-direct-preflight'
 import * as preparation from './launch-work-item-direct-route-preparation'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { buildAgentDraftLaunchPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import ProjectViewWrapper from '@/components/github-project/ProjectViewWrapper'
 

@@ -14,13 +14,13 @@ const runtime = vi.hoisted(() => ({
 vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: runtime.subscribe
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
     runtime.contact.set(id, listener)
     return runtime.stopContact
   }
 }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   onRuntimeEnvironmentsRetired: (listener: (ids: readonly string[]) => void) => {
     runtime.retire.add(listener)
     return runtime.stopRetirement

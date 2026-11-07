@@ -13,7 +13,7 @@ import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
-} from '../../runtime/runtime-skills-client'
+} from '../../runtime/skills/configuration/runtime-skills-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   skillDeleteActionLabel,

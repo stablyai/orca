@@ -16,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   deleteIssueCommentBySlug: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 
 type Input = Parameters<typeof useChecksPanelCommentMutations>[0]
 

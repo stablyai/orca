@@ -21,7 +21,7 @@ import {
 import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,

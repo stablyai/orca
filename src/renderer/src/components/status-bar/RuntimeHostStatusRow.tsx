@@ -9,7 +9,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState

@@ -21,7 +21,7 @@ import type { SelectionOperation } from '../../../../shared/agent-session/option
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type * as launchModule from './launch/structured-agent-session-launch-create-call'
 import * as sessionClient from '@/runtime/structured-agent-session-client'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export async function assertProvisionalSelectionLifetime({
   launch,

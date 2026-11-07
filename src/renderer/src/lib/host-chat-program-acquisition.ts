@@ -12,13 +12,13 @@ import {
   subscribeChatProgramFacts,
   readChatProgramFactsVersion
 } from './host-chat-program'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
 import {
   acquireHostStructuredAgentAvailability,
   firstHostStructuredAgentAvailability
 } from '@/runtime/host-structured-agent-availability'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
+import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'

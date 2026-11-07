@@ -11,7 +11,7 @@ import {
   getRepoHostIdentityForParts,
   repoMatchesHostIdentity
 } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,

@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { notifyStructuredAttentionView } from '@/attention/agent-subject-read-actions'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
-import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/remote-runtime-terminal-snapshot-state'
+import { REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-policy'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson

@@ -13,7 +13,7 @@ import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

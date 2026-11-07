@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isFreshNonDoneAgentStatus } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { createAgentCompletionCoordinator } from '../../agent-completion/agent-completion-coordinator'
 import { dispatchAgentHookTerminalLifecycle } from '../../agent-completion/agent-hook-terminal-lifecycle'

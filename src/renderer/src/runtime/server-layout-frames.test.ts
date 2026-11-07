@@ -34,7 +34,7 @@ import {
   resetFrameDrawnServerWorkspacesForTests
 } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 const hoisted = vi.hoisted(

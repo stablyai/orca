@@ -2,7 +2,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 
 const discover = vi.hoisted(() => vi.fn<() => Promise<SkillDiscoveryResult>>())
-vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarget: discover }))
+vi.mock('@/runtime/skills/configuration/runtime-skills-client', () => ({
+  discoverSkillsForRuntimeTarget: discover
+}))
 
 import {
   discoverInstalledAgentSkills,

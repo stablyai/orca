@@ -23,7 +23,7 @@ vi.mock('@/runtime/layout-owner-command', () => ({
 vi.mock('../../../../store/index', () => ({
   useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) }
 }))
-vi.mock('@/runtime/web-runtime-terminal-buffer-actions', () => ({
+vi.mock('@/runtime/hosted-terminals/actions/web-runtime-terminal-buffer-actions', () => ({
   clearWebRuntimeTerminalBuffer: () => true
 }))
 vi.mock('@/lib/pane-manager/terminal-scrollback-clear', () => ({

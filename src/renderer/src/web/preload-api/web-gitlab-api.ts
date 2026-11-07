@@ -4,7 +4,7 @@ import {
   createRuntimeGitLabApi,
   RuntimeCapabilityMissingError
 } from '@/runtime/repository-gitlab/runtime-gitlab-api'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   assertEnvironmentPairing,
   callEnvironmentEnvelope,

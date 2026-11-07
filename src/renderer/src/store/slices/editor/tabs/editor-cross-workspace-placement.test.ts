@@ -14,7 +14,7 @@ import { buildHydratedTabState } from '../../tabs-hydration'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

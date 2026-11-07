@@ -7,7 +7,7 @@ import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fi
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '@/runtime/runtime-compatibility-test-fixture'
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   TERMINAL_PATH_ABSOLUTE_FILES_RUNTIME_CAPABILITY,
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY

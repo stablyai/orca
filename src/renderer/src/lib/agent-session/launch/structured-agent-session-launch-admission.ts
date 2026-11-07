@@ -29,7 +29,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { readAgentInventoryForTarget } from '@/lib/agent-detection-target-inventory'
-import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 
 export type AgentTerminalLaunchCompletion = {
   outcome: WebRuntimeTerminalCreateOutcome

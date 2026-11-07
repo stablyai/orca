@@ -4,7 +4,7 @@ import type { GhAccountBinding } from '../../../../shared/github/account-binding
 import { GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '@/web/web-runtime-request-registry'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { emitGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 import {
   getGitHubRuntimeRepoId,

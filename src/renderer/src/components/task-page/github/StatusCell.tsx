@@ -20,7 +20,7 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'

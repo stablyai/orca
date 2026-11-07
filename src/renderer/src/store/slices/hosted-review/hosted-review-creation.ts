@@ -4,7 +4,7 @@ import type {
   CreateHostedReviewResult,
   CreateStackedHostedReviewResult
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   findHostedReviewRepoByPath,
   hostedReviewRepoOwnerTarget

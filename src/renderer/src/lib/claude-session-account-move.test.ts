@@ -11,7 +11,7 @@ import type * as paneSelectionLane from './codex-pane-selection-lane'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import {
   findClaudeSwitchSessions,
   findQueuedClaudeRestartsOnAccount
@@ -21,7 +21,7 @@ import type { ClaudeHostFolders } from './claude-pane-account-folder'
 const laneByPtyId: Record<string, string> = {}
 let projectRuntime: ProjectExecutionRuntimeResolution | undefined
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(),
   confirmRuntimeTerminalForegroundProcess: vi.fn()
 }))

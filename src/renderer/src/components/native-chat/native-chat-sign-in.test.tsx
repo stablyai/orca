@@ -26,10 +26,10 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/agent-session/launch/pane/launch-agent-tab-order', () => ({
   persistAgentLaunchTabOrder: persistOrder
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminalOnHost: remoteCreate
 }))
-vi.mock('@/runtime/web-runtime-terminal-create-failure-notice', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-failure-notice', () => ({
   notifyWebRuntimeTerminalCreateFailure: notifyFailure
 }))
 vi.mock('@/lib/wsl-host-user-start', () => ({ startStoppedWslHostForUserAct: startHost }))

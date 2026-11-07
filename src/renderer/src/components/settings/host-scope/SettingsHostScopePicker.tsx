@@ -8,7 +8,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { SettingsHostScope } from './settings-host-scope'
 

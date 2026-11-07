@@ -99,7 +99,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => nul
 vi.mock('@/store/index', async () =>
   (await import('../../../launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
 )
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
@@ -170,7 +170,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
 vi.mock('@/runtime/local-structured-session-owner', () => ({
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => STRUCTURED_HOST_CAPABILITIES,
   ensureLocalRuntimeCapabilities: async () => STRUCTURED_HOST_CAPABILITIES,
   awaitLocalRuntimeCapabilities: () => ({ known: Promise.resolve([]), stop: () => {} })

@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { selectWorktreeHostConnectionPhase } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { WORKTREE_OWNER_NOT_READY_ERROR } from '../editor-panel-content-types'
 import type { Dispatch, SetStateAction } from 'react'
