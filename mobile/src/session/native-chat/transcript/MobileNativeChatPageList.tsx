@@ -244,7 +244,6 @@ export function MobileNativeChatPageList({
     }
     return () => {
       clearTimeout(settleTimer.current)
-      // A touch that ends while hidden never reports its end.
       touching.current = false
     }
   }, [])
