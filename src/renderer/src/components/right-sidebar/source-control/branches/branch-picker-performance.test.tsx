@@ -146,6 +146,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     repoId: 'repo',
     hostId: 'local',
     hostLabel: 'This computer',
+    workspaceLabel: 'repo',
     workspaces: makeWorkspaces(),
     onOpenWorkspace: vi.fn(),
     onSwitched: vi.fn()

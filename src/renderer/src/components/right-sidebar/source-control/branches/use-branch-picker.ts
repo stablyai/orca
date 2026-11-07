@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -28,6 +27,8 @@ export type BranchPickerOptions = {
   repoId: string
   hostId: ExecutionHostId
   hostLabel: string
+  /** Names the workspace in a result that arrives after the user moved on. */
+  workspaceLabel: string
   workspaces: ReadonlyMap<string, BranchWorkspace>
   onOpenWorkspace: (workspace: BranchWorkspace) => void
   onSwitched: (warning?: string) => void
@@ -133,7 +134,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
     () => branchPickerRows(localRows, localNames, currentRemote, query),
     [localRows, localNames, currentRemote, query]
   )
-  const { onOpenWorkspace, onSwitched, hostLabel } = options
+  const { onOpenWorkspace, onSwitched, hostLabel, workspaceLabel } = options
   const selectRef = useRef<(row: BranchPickerRow) => Promise<void>>(async () => {})
   const select = useCallback(
     async (row: BranchPickerRow) => {
@@ -167,7 +168,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
             : translate(
                 'sourceControl.branchPicker.switchFailedIn',
                 "Couldn't switch branches in {{workspace}}",
-                { workspace: basename(route.worktreePath) }
+                { workspace: workspaceLabel }
               ),
           {
             description:
@@ -202,7 +203,7 @@ export function useBranchPicker(options: BranchPickerOptions) {
         }
       }
     },
-    [route, hostLabel, onOpenWorkspace, onSwitched, setOpen]
+    [route, hostLabel, workspaceLabel, onOpenWorkspace, onSwitched, setOpen]
   )
   useEffect(() => {
     selectRef.current = select

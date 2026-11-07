@@ -86,6 +86,7 @@ it('keeps disk blockers authoritative and offers the existing branch after a col
     repoId: 'repo',
     hostId: 'local',
     hostLabel: 'This computer',
+    workspaceLabel: 'repo',
     workspaces: new Map(),
     onOpenWorkspace: vi.fn(),
     onSwitched: vi.fn()
@@ -180,6 +181,7 @@ it('delivers the original workspace outcome after the picker unmounts', async ()
         repoId="repo"
         hostId="local"
         hostLabel="This computer"
+        workspaceLabel="repo"
         workspaces={new Map()}
         onOpenWorkspace={vi.fn()}
         onSwitched={onSwitched}
@@ -219,6 +221,7 @@ it('renders a translated local-list recovery message', async () => {
           repoId="repo"
           hostId="local"
           hostLabel="This computer"
+          workspaceLabel="repo"
           workspaces={new Map()}
           onOpenWorkspace={vi.fn()}
           onSwitched={vi.fn()}
@@ -258,6 +261,7 @@ it('updates an open memoized row when the UI language changes', async () => {
           repoId="repo"
           hostId="local"
           hostLabel="This computer"
+          workspaceLabel="repo"
           workspaces={new Map([['held', { id: 'held', repoId: 'repo', path: '/held' }]])}
           onOpenWorkspace={vi.fn()}
           onSwitched={vi.fn()}

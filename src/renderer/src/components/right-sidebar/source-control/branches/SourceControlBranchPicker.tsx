@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { basename } from '@/lib/path'
+import { isWorkspaceSelected } from '@/lib/active-workspace-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getExecutionHostLabel } from '../../../../../../shared/execution-host'
@@ -48,17 +49,25 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       useAppStore.getState().setActiveWorktree(workspace.id, workspace.hostId),
     []
   )
-  const activeWorktreePath = activeWorktree?.path
+  const selectedHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId ?? null)
+  const resolvedHostLabel = hostLabel ?? getExecutionHostLabel(activeWorktree?.hostId ?? 'local')
+  // Worktree ids repeat across hosts, so a remote copy is named with its host.
+  const workspaceLabel = activeWorktree
+    ? (activeWorktree.hostId ?? 'local') === 'local'
+      ? basename(activeWorktree.path)
+      : `${basename(activeWorktree.path)} (${resolvedHostLabel})`
+    : ''
   const onSwitched = useCallback(
     (message?: string) => {
       if (message) {
         // The switch can land after the user moved on; name the workspace it happened in.
-        if (useAppStore.getState().activeWorktreeId === activeWorktreeId) {
+        const selection = { worktreeId: activeWorktreeId, executionHostId: selectedHostId }
+        if (isWorkspaceSelected(useAppStore.getState(), selection)) {
           toast.warning(message, { duration: 15000 })
         } else {
           toast.warning(
             translate('sourceControl.branchPicker.switchedIn', 'In {{workspace}}', {
-              workspace: basename(activeWorktreePath ?? '')
+              workspace: workspaceLabel
             }),
             { description: message, duration: 15000 }
           )
@@ -70,7 +79,8 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
     },
     [
       activeWorktreeId,
-      activeWorktreePath,
+      selectedHostId,
+      workspaceLabel,
       recordBranchSwitchOutcome,
       refreshActiveGitStatusAfterMutation
     ]
@@ -124,7 +134,8 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       }}
       repoId={activeRepo.id}
       hostId={activeWorktree.hostId ?? 'local'}
-      hostLabel={hostLabel ?? getExecutionHostLabel(activeWorktree.hostId ?? 'local')}
+      hostLabel={resolvedHostLabel}
+      workspaceLabel={workspaceLabel}
       workspaces={worktreeMap}
       onOpenWorkspace={onOpenWorkspace}
       onSwitched={onSwitched}
