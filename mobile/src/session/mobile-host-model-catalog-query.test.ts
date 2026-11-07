@@ -1,5 +1,5 @@
 import { createElement, useLayoutEffect } from 'react'
-import { act } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
@@ -55,8 +55,11 @@ async function mountCache(client: RpcClient) {
     })
     return null
   }
-  const renderer = await act(async () => createWithQueryClient(createElement(Probe)))
-  return { mounted, unmount: () => act(async () => renderer.unmount()) }
+  let renderer: ReactTestRenderer | null = null
+  await act(async () => {
+    renderer = createWithQueryClient(createElement(Probe))
+  })
+  return { mounted, unmount: () => act(async () => renderer?.unmount()) }
 }
 
 describe('useHostModelCatalogCache', () => {
