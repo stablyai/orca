@@ -86,6 +86,20 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   return data
 }
 
+// A read ahead of the user: skipped while the key holds current data, joins a read already out.
+export function prefetchHostQuery<TInput extends HostQueryParams, TData>(
+  queryClient: QueryClient,
+  query: HostQuery<TInput, TData>,
+  host: { hostId: string; client: RpcClient },
+  target: HostQueryTarget,
+  input: TInput
+): Promise<void> {
+  return queryClient.prefetchQuery({
+    ...hostQueryOptions(query, host.client, host.hostId, target, input),
+    staleTime: Infinity
+  })
+}
+
 // Without a client the observer still reads the cached entry, but never fetches.
 function observerOptions<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
