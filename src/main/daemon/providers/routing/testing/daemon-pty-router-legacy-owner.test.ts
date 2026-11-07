@@ -27,6 +27,12 @@ describe('DaemonPtyRouter keeps live sessions on their older daemon', () => {
     const legacy = createAdapter('legacy', ['claude-session'])
     vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
     vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    // Why: an unanswerable inventory is never proof of a drain, and the daemon still hosts it.
+    vi.mocked(legacy.requestIdleRetirement).mockResolvedValue({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
