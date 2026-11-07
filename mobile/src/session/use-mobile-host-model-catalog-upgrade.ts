@@ -79,11 +79,11 @@ export function useMobileHostModelCatalogUpgrade(args: {
     }
     let stale = false
     const key = `${agent}\u0000${sessionId}`
-    // A read sent before the chat's first turn or send answers for the account a new chat pins,
-    // and so does the listing it waits on, whichever later run picks that up.
-    const records =
-      recordsNewChat.current ||
-      (recordingWait.current === key && isHostModelListingWaitInFlight(key, client))
+    // A read sent before the chat's first turn or send answers for the account a new chat pins;
+    // so does the listing such a read waits on, whichever later run picks that up. Each new read decides alone.
+    const readRecords = recordsNewChat.current
+    const waitRecords =
+      readRecords || (recordingWait.current === key && isHostModelListingWaitInFlight(key, client))
     const params = {
       agent,
       sessionId,
@@ -103,7 +103,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
     const apply = (
       catalog: AgentSessionModelCatalogResult,
       settled = false,
-      event: 'demand' | 'progress' = 'demand'
+      event: 'demand' | 'progress' = 'demand',
+      records = readRecords
     ): void => {
       if (stale) {
         return
@@ -122,7 +123,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     }
     let leave: (() => void) | undefined
     const wait = () => {
-      recordingWait.current = records ? key : null
+      recordingWait.current = waitRecords ? key : null
       leave = joinHostModelListingWait(
         key,
         () => read(true),
@@ -131,7 +132,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
             return
           }
           if (listed) {
-            apply(listed, !listed.listingInProgress && listed.origin !== 'unknown', 'progress')
+            apply(
+              listed,
+              !listed.listingInProgress && listed.origin !== 'unknown',
+              'progress',
+              waitRecords
+            )
             if (listed.origin !== 'unknown' && !listed.listingInProgress) {
               onListingLanded?.()
             }
