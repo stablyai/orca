@@ -12,6 +12,7 @@ import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-sessio
 import type { MobileNativeChatSendErrorReporter } from './native-chat/use-mobile-native-chat-send-error'
 import {
   UNCONFIRMED_SEND_DEADLINE_MS,
+  UNCONFIRMED_SEND_MESSAGE,
   UNCONFIRMED_SEND_RESTORED_MESSAGE
 } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 import { returnMobileNativeChatInFlightSend } from './native-chat/composer/mobile-native-chat-draft-store'
@@ -219,7 +220,7 @@ export function useMobileStructuredSends(args: {
       hold(clientMessageId, () => {
         holdsRef.current.delete(clientMessageId)
         returnMobileNativeChatInFlightSend(send.id)
-        onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+        onSendError(send.command ? UNCONFIRMED_SEND_MESSAGE : UNCONFIRMED_SEND_RESTORED_MESSAGE)
       })
     }
   }, [hold, onSendError, recorded, savedInFlightVersion, sessionId])

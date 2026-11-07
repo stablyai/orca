@@ -128,12 +128,14 @@ export function useMobileNativeChatMessageSend(args: {
       if (syncComposer) {
         clearDraftForSend(origin, draftText)
       }
-      // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
-      const inFlightId = syncComposer
-        ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText)
-        : null
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
+      // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
+      const inFlightId = syncComposer
+        ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
+            command: classification !== 'chat'
+          })
+        : null
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
