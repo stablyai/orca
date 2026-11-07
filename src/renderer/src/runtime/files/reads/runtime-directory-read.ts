@@ -2,7 +2,7 @@ import type { DirEntry } from '../../../../../shared/filesystem-entry-types'
 import type { LocalFileAccess } from '../../../../../shared/local-file-access'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { assertLocalFilesystemFallbackAllowed, getRemoteFileArgs } from '../runtime-file-routing'
-import { callRuntimeRpc } from '../../runtime-rpc-client'
+import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 
 export async function readRuntimeDirectory(
   context: RuntimeFileOperationArgs,

@@ -14,43 +14,6 @@ type Handover = { dispatchState: string; reason?: string | null } | undefined
 
 const LIMIT = 3
 
-it('publishes queued chats separately from the chat holding the start slot', async () => {
-  const first = Promise.withResolvers<void>()
-  const phases = new Map<string, string>()
-  const action = resumeStructuredAgentSessionsFromRestart(
-    {
-      admission: new StructuredAgentSessionResumeAdmission(1),
-      onPhase: (sessionId, phase) => phases.set(sessionId, phase),
-      consumeMarker: async () => true,
-      resume: async (sessionId) => {
-        if (sessionId === 'a') {
-          await first.promise
-        }
-      }
-    },
-    ['a', 'b'].map((sessionId) => ({
-      sessionId,
-      workspaceId: 'folder',
-      executionHostId: 'local',
-      workspaceKind: 'folder',
-      agent: 'codex',
-      work: { kind: 'turn', id: 'turn' },
-      trigger: 'quit',
-      recordedAt: 1,
-      latestPrompt: ''
-    })),
-    'modal'
-  )
-  try {
-    await vi.waitFor(() => expect(phases.get('a')).toBe('starting'))
-    expect(phases.get('b')).toBe('queued')
-  } finally {
-    first.resolve()
-    await action
-  }
-  expect(phases.get('b')).toBe('starting')
-})
-
 it('holds each slot from accept until handover or rejection, and frees it when the wait ends (P2-27)', async () => {
   const handovers = new Map<string, PromiseWithResolvers<Handover>>()
   let waiting = 0

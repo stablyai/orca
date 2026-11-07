@@ -1,6 +1,7 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
 import { createTestStore, seedStore } from '../../store-test-helpers'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
 import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
@@ -26,8 +27,8 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 // Main answers the window's layout commands; the paired runtime's calls reach the mock.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   return runtimeRpcClientWithLayoutApply({ ...actual, callRuntimeRpc: mockCallRuntimeRpc })

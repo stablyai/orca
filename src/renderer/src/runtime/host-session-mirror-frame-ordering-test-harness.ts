@@ -26,12 +26,12 @@ import {
   hasHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from './host-session-mirror-hydration'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const initialState = useAppStore.getInitialState()
 

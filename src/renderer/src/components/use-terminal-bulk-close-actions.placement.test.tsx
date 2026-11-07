@@ -21,7 +21,7 @@ import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

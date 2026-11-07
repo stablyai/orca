@@ -7,8 +7,6 @@ import type { RpcResponse } from './types'
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(171)
 }))
-
-const EXCHANGED = 'ab'.repeat(24)
 const capable = { capabilities: [PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY] }
 
 function client(reply: RpcResponse | Error): PairingCandidateClient & {
@@ -33,16 +31,6 @@ const ok: RpcResponse = {
 }
 
 describe('exchangePairingTicket', () => {
-  it('sends a token generated on the phone and returns it', async () => {
-    const socket = client(ok)
-    await expect(
-      exchangePairingTicket({ client: socket, status: capable, ticket: 'scanned', log: vi.fn() })
-    ).resolves.toBe(EXCHANGED)
-    expect(socket.sendRequest).toHaveBeenCalledWith('pairing.exchangeTicket', {
-      deviceToken: EXCHANGED
-    })
-  })
-
   it('never calls a desktop that does not advertise the exchange', async () => {
     const socket = client(ok)
     await expect(

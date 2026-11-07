@@ -7025,7 +7025,8 @@
           "diagnosticsCopyFailed": "Falha ao copiar diagnósticos",
           "5e2c7a1f84": "Enquanto você usa um terminal no celular, o Orca o reduz para caber na tela. Ao fechar o aplicativo ou trocar para outro, isto controla se ele mantém o tamanho do celular (para que ferramentas interativas de CLI não reorganizem o conteúdo) ou volta ao tamanho do computador. Você sempre pode usar Restaurar ou Restaurar todos no aviso para redimensionar manualmente.",
           "codeRefreshesAutomatically": "O código é atualizado automaticamente. Um código copiado funciona por até 10 minutos.",
-          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo."
+          "legacyEncryption": "Usa uma criptografia mais antiga. Atualize o app Orca neste dispositivo.",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o app Orca neste telefone."
         },
         "SshPane": {
           "c0f1c80166": "Nenhum destino SSH configurado.",
@@ -8145,6 +8146,7 @@
           "6f6d5188ed": "Revogar {{value0}}",
           "434e4a6af6": "Link atual",
           "df142657a5": "Ainda não usado",
+          "olderPairingMethod": "Usa um método de pareamento antigo. Atualize o Orca no dispositivo que usa este link.",
           "b18d1764ef": "Usado por último em {{value0}}",
           "sshAccessCaveat": "Revogar aqui não impede que alguém com acesso SSH a este computador pareie novamente. Para impedir o acesso, remova o acesso SSH dessa pessoa.",
           "linkName": "Link · {{value0}}",

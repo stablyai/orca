@@ -11,7 +11,7 @@ afterEach(() => {
   expect(appStore.getState).not.toHaveBeenCalled()
 })
 
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 // Dismissal re-arms identical errors; otherwise a later fatal recurrence in the same outage can leave a dead pane without a visible surface.
 describe('remote runtime error surface dismissal', () => {

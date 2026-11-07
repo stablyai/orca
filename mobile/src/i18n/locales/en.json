@@ -148,6 +148,20 @@
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIBE ON",
+      "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
+      "automatic": "Automatic",
+      "phone": "This phone",
+      "computer": "Computer",
+      "phoneReady": "Ready on this phone",
+      "phoneNeedsDownload": "Needs a language download",
+      "phoneDownloading": "Downloading… {{progress}}%",
+      "phoneUnsupported": "Not available on this phone",
+      "download": "Download for this phone",
+      "downloadSize": "About {{size}} MB",
+      "phoneChecking": "Checking…"
     }
   },
   "common": {
@@ -608,7 +622,10 @@
       "microphoneInitFailed": "Failed to initialize microphone",
       "noSpeech": "No speech detected.",
       "microphoneInterrupted": "Voice dictation stopped because the microphone was interrupted. Try again.",
-      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again."
+      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again.",
+      "phoneUnavailable": "Dictation on this phone isn’t ready. Download it in Voice settings, or choose Automatic.",
+      "phoneFailed": "Dictation on this phone stopped working. Try again.",
+      "phoneBusy": "Dictation on this phone is still starting. Try again in a moment."
     }
   },
   "hostScreen": {

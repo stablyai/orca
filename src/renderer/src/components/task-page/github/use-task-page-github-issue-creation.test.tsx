@@ -33,7 +33,9 @@ vi.mock('@/store/index', async () => {
     )
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 vi.mock('@/components/github/GitHubMarkdownComposer', () => ({
   GitHubMarkdownComposer: () => null
 }))

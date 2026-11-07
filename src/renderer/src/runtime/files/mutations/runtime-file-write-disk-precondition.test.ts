@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/file-write-disk-precondition'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
-import { replaceRuntimeEnvironmentRevisions } from '../../runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall,

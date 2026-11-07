@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
 import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
 }))
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('@/runtime/layout-owner-command', () => ({ sendLayoutCommandToOwner: mocks.send }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
@@ -32,10 +34,13 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentStatusModule>()
-  return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
-})
+vi.mock(
+  '../../../../../../shared/agent-status/title/agent-title-status',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AgentStatusModule>()
+    return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
+  }
+)
 
 createStoreCascadesMockApi()
 

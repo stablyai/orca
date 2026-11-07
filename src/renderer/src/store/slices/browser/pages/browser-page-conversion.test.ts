@@ -1,6 +1,7 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
+
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore } from '../../store-test-helpers'
 import { makeWorktree } from '../../worktrees-slice-test-fixtures'
@@ -13,8 +14,8 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: vi.fn()
 }))
 // Main answers the window's layout commands (switch-on); every other call reaches the mock.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   return runtimeRpcClientWithLayoutApply({

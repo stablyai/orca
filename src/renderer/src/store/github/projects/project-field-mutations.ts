@@ -8,7 +8,7 @@ import type {
 } from '../../../../../shared/github/project-types'
 import type { GitHubProjectMutationResult } from '../../../../../shared/github/project-result-types'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { projectViewCacheKeyTarget, projectViewSourceScope } from '../cache/cache-identity'
 import { applyRowPatch, optimisticFieldValueFromMutation } from './project-cache'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'

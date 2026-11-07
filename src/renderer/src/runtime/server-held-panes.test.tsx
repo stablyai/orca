@@ -33,7 +33,7 @@ import {
 } from './server-layout-frames.test-fixture'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 const hoisted = vi.hoisted(
@@ -59,7 +59,9 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 vi.mock('./runtime-layout-client', () => ({
   subscribeRuntimeLayout: (...args: never[]) => hoisted.subscribe!(...args)
 }))
-vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc: hoisted.callRuntimeRpc }))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: hoisted.callRuntimeRpc
+}))
 vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null

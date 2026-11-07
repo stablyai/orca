@@ -18,7 +18,7 @@ import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 type SubscriptionCallbacks = {
   onResponse: (response: unknown) => void
@@ -80,7 +80,9 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
     vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
     }))

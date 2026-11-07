@@ -3,8 +3,8 @@ import { getRuntimeGitStatus } from './runtime-git-status-client'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../runtime-rpc-client'
+} from '../../rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../rpc/compatibility/runtime-compatibility-cache'
 
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()

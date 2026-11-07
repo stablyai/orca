@@ -41,8 +41,10 @@ vi.mock('./right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
     assertCurrent: mocks.assertCurrent
   })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.rpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
 }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({

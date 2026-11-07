@@ -8237,7 +8237,8 @@
           "diagnosticsCopyFailed": "無法複製診斷訊息",
           "5e2c7a1f84": "當您在手機上使用終端機時，Orca 會將其縮小以適合您的手機螢幕。當您關閉應用程式或切換離開時，此設定可控制終端機要保持手機尺寸（讓互動式 CLI 工具不會重新排版），還是調整回桌面尺寸。您隨時可以使用橫幅上的「還原」或「全部還原」來手動調整大小。",
           "codeRefreshesAutomatically": "配對碼會自動重新整理。複製的配對碼最多可使用 10 分鐘。",
-          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。"
+          "legacyEncryption": "使用舊版加密。請在此裝置上更新 Orca 應用程式。",
+          "olderPairingMethod": "使用較舊的配對方式。請更新這支手機上的 Orca App。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8644,6 +8645,7 @@
           "6f6d5188ed": "撤銷 {{value0}}",
           "434e4a6af6": "目前連結",
           "df142657a5": "尚未使用",
+          "olderPairingMethod": "使用較舊的配對方式。請更新使用此連結之裝置上的 Orca。",
           "b18d1764ef": "最後使用 {{value0}}",
           "linkName": "連結 · {{value0}}",
           "activeLinks": "有效連結",

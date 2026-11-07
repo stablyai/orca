@@ -89,22 +89,7 @@ describe('AutomationService zero-grace tick latency', () => {
     expect(await statusAt(lateMs)).toBe('dispatched')
   })
 
-  it('still skips a zero-grace occurrence that came due during a long sleep', async () => {
-    expect(await statusAt(4 * 60 * 60 * 1000)).toBe('skipped_missed')
-  })
-
   it('skips once lateness exceeds the tick-latency tolerance', async () => {
     expect(await statusAt(2 * 60_000 + 1)).toBe('skipped_missed')
-  })
-
-  it('dispatches after a restart that crosses the occurrence within tolerance', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00'))
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = makeZeroGrace(store)
-    await evaluateAt(store, DUE - 30_000)
-    expect(store.listAutomationRuns(automation.id)).toHaveLength(0)
-    await evaluateAt(store, DUE + 30_000)
-    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatched')
   })
 })

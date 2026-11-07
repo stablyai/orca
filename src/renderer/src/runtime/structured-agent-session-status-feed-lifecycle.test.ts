@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('./structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
-vi.mock('./runtime-rpc-client', () => ({ runtimeEnvironmentSupportsCapability: vi.fn() }))
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn()
+}))
 
 import {
   getStructuredAgentSessionStatusFeed,

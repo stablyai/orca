@@ -10,7 +10,7 @@ import {
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'
 import './web-session-close-intent'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { appPairedTerminalTabCloseIntentStore as STORE } from './paired-terminal-tab-close-intent-store'
 import {
   createPairedTerminalTabCloseIntentTestStore,
@@ -25,7 +25,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const { replayWebSessionTabCloses, intentStore } = vi.hoisted(() => {
   const holder: { current?: PairedTerminalTabCloseIntentTestStore } = {}

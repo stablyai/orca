@@ -3,7 +3,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import type { GetProjectViewTableResult } from '../../../../../shared/github/project-result-types'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   projectViewCacheKey,
   projectViewRequestKey,

@@ -18,7 +18,7 @@ import {
   getFileExplorerOperationOwner
 } from '../navigation/file-explorer-operation-owner'
 import { translate } from '@/i18n/i18n'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 type UseFileExplorerInlineInputParams = {
   activeWorktreeId: string | null

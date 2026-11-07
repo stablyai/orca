@@ -554,3 +554,157 @@ describe("mobile relay host catalog: the desktop sidebar's own view of server ro
     expect(marked(rows, 'hasHostSidebarActivity')).toEqual(['mine', 'server'])
   })
 })
+
+describe('mobile relay host catalog: the focused workspace context', () => {
+  const row = {
+    worktreeId: 'repo-1::/srv/app',
+    repoId: 'repo-1',
+    hostId: 'local',
+    path: '/srv/app',
+    branch: 'refs/heads/feature',
+    displayName: 'App feature'
+  }
+
+  it('answers from the rows the desktop already holds, without another fetch', async () => {
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockResolvedValue(psReply([row]))
+    const { catalog: hostCatalog } = catalog(hosts)
+    await hostCatalog.worktrees('runtime:env')
+    call.mockClear()
+
+    await expect(hostCatalog.workspaceContext('runtime:env', row.worktreeId)).resolves.toEqual({
+      worktreeId: row.worktreeId,
+      path: '/srv/app',
+      branch: 'refs/heads/feature',
+      displayName: 'App feature'
+    })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('fetches on a cache miss, then throttles repeated misses for the same workspace', async () => {
+    let now = 1_000
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockResolvedValue(psReply([row]))
+    const serverRows = new PairedServerRowsProducer({
+      hasDemand: () => false,
+      hostLabelOverrides: () => new Map()
+    })
+    serverRows.attach(hosts)
+    const hostCatalog = new MobileRelayHostCatalog({
+      hosts,
+      serverRows,
+      hostLabelOverrides: () => new Map(),
+      getWorkspaceSession: () => null,
+      now: () => now
+    })
+
+    await expect(
+      hostCatalog.workspaceContext('runtime:env', row.worktreeId)
+    ).resolves.toMatchObject({ displayName: 'App feature' })
+    expect(call).toHaveBeenCalledTimes(1)
+
+    await expect(hostCatalog.workspaceContext('runtime:env', 'repo-1::/gone')).resolves.toBeNull()
+    await expect(hostCatalog.workspaceContext('runtime:env', 'repo-1::/gone')).resolves.toBeNull()
+    expect(call).toHaveBeenCalledTimes(2)
+    now += 10_000
+    await expect(hostCatalog.workspaceContext('runtime:env', 'repo-1::/gone')).resolves.toBeNull()
+    expect(call).toHaveBeenCalledTimes(3)
+  })
+
+  it('answers null for an unreachable server or a non-server host without dialing', async () => {
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'unreachable') }
+    ])
+    const { catalog: hostCatalog } = catalog(hosts)
+
+    await expect(hostCatalog.workspaceContext('runtime:env', row.worktreeId)).resolves.toBeNull()
+    await expect(hostCatalog.workspaceContext('ssh:devbox', row.worktreeId)).resolves.toBeNull()
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('stops waiting on a hung server and answers null', async () => {
+    vi.useFakeTimers()
+    try {
+      const { hosts, call } = fakeHosts([
+        { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+      ])
+      call.mockReturnValue(new Promise(() => {}))
+      const { catalog: hostCatalog } = catalog(hosts)
+
+      let settled = false
+      const pending = hostCatalog
+        .workspaceContext('runtime:env', row.worktreeId)
+        .finally(() => (settled = true))
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(pending).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('mobile relay host catalog: the focused workspace context under panel polling', () => {
+  const id = 'repo-1::/srv/app'
+
+  it('lets many panels polling a hung server share one fetch and one bounded wait per window', async () => {
+    vi.useFakeTimers()
+    try {
+      const { hosts, call } = fakeHosts([
+        { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+      ])
+      call.mockReturnValue(new Promise(() => {}))
+      const { catalog: hostCatalog } = catalog(hosts)
+      const stalledMs: number[] = []
+      // A 2 s poll from 8 panels for 30 s: one bounded wait per 10 s miss window, not per panel or poll.
+      for (let tick = 0; tick < 15; tick += 1) {
+        const started = Date.now()
+        const polls = Array.from({ length: 8 }, () =>
+          hostCatalog.workspaceContext('runtime:env', id).then(() => Date.now() - started)
+        )
+        await vi.advanceTimersByTimeAsync(1_500)
+        stalledMs.push(...(await Promise.all(polls)))
+        await vi.advanceTimersByTimeAsync(500)
+      }
+      expect(stalledMs.filter((ms) => ms > 0)).toHaveLength(3)
+      expect(Math.max(...stalledMs)).toBeLessThanOrEqual(1_500)
+      // The hung fetch is joined, not reissued.
+      expect(call).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('throttles a server whose fetch fails instead of retrying it on every poll', async () => {
+    let now = 1_000
+    const { hosts, call } = fakeHosts([
+      { id: 'env', name: 'Box', snapshot: snapshot('env', 'live') }
+    ])
+    call.mockRejectedValue(new Error('transport_closed'))
+    const serverRows = new PairedServerRowsProducer({
+      hasDemand: () => false,
+      hostLabelOverrides: () => new Map()
+    })
+    serverRows.attach(hosts)
+    const hostCatalog = new MobileRelayHostCatalog({
+      hosts,
+      serverRows,
+      hostLabelOverrides: () => new Map(),
+      getWorkspaceSession: () => null,
+      now: () => now
+    })
+
+    for (let poll = 0; poll < 5; poll += 1) {
+      await expect(hostCatalog.workspaceContext('runtime:env', id)).resolves.toBeNull()
+      now += 2_000
+    }
+    expect(call).toHaveBeenCalledTimes(1)
+    await expect(hostCatalog.workspaceContext('runtime:env', id)).resolves.toBeNull()
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+})

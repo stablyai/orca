@@ -6,9 +6,9 @@ import {
 import { decodeJiraImageFrame } from '../../../../shared/jira/jira-image-stream-frame'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
-import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
-import { RuntimeRpcCallError } from '../runtime-rpc-result'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
+import { subscribeRuntimeEnvironment } from '../rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { RuntimeRpcCallError } from '../rpc/calls/runtime-rpc-result'
 
 export async function readRuntimeJiraImage(
   target: RuntimeClientTarget,

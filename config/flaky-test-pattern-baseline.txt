@@ -353,7 +353,6 @@
 1 test-no-real-time-wait:src/shared/git/status/git-branch-line-total-soft-deadline.test.ts
 2 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-auth-refusal.test.ts
 1 test-no-real-time-wait:src/shared/remote-runtime/control/remote-runtime-shared-control-standing-intent.test.ts
-1 test-no-real-time-wait:src/shared/remote-runtime/remote-runtime-outbound-admission.test.ts
 1 test-no-real-time-wait:src/shared/secure-file-windows.test.ts
 1 test-no-real-time-wait:src/shared/secure-path-windows-acl.win32.test.ts
 1 test-no-real-time-wait:src/shared/setup-agent-sequencing-codex-no-daemon.test.ts
@@ -813,7 +812,6 @@
 1 test-no-wall-clock:src/shared/automation-schedules.test.ts
 2 test-no-wall-clock:src/shared/crash-reporting.test.ts
 2 test-no-wall-clock:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
-1 test-no-wall-clock:src/shared/git/compatibility/git-binary-compatibility.test.ts
 1 test-no-wall-clock:src/shared/mobile-push-contract.test.ts
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
 1 test-no-wall-clock:src/shared/startup-command-staging.test.ts
@@ -889,7 +887,6 @@
 1 test-timeout-needs-reason:src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts
 4 test-timeout-needs-reason:src/main/git/refs/maintenance/repo-ref-maintenance-real-git.test.ts
 1 test-timeout-needs-reason:src/main/git/worktrees/removal/worktree-removal-real-git.test.ts
-1 test-timeout-needs-reason:src/main/hermes/hook-service.test.ts
 1 test-timeout-needs-reason:src/main/ipc/filesystem/filesystem-quick-open-options.integration.test.ts
 1 test-timeout-needs-reason:src/main/ipc/preflight-runnable-local-cli.test.ts
 1 test-timeout-needs-reason:src/main/ipc/worktrees/git/worktree-git-status-attribution-real-git.test.ts

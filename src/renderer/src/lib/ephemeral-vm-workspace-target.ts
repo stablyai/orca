@@ -18,7 +18,7 @@ import {
 } from '../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 export type PrepareEphemeralVmWorkspaceTargetArgs = {
   repoId: string

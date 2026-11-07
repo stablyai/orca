@@ -5,7 +5,7 @@ import {
   runtimeEnvironmentSubscribe,
   installRuntimeFileClientEnvironment
 } from '../runtime-file-client-test-harness'
-import { replaceRuntimeEnvironmentRevisions } from '../../runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 
 installRuntimeFileClientEnvironment()
 

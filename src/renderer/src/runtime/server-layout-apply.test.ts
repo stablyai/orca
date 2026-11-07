@@ -1,7 +1,8 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
-import type * as RuntimeRpcClientModule from './runtime-rpc-client'
+
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
@@ -36,7 +37,7 @@ import {
 } from './server-layout-frames.test-fixture'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 type Sent = { target: RuntimeClientTarget; params: unknown }
@@ -77,8 +78,8 @@ vi.mock('./web-session-tabs-sync/frame-drawn-server-workspaces', async (importOr
   ...(await importOriginal<typeof FrameDrawnModule>()),
   resyncMirroredServerWorkspace: hoisted.resync
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   return {
     ...actual,
     callRuntimeRpc: (target: RuntimeClientTarget, method: string, params?: unknown) => {

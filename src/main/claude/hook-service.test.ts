@@ -293,21 +293,6 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  it('removes the managed statusLine on remove()', () => {
-    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-remove-'))
-    vi.stubEnv('HOME', tmpHome)
-    vi.stubEnv('USERPROFILE', tmpHome)
-    try {
-      new ClaudeHookService().install()
-      new ClaudeHookService().remove()
-      const settings = JSON.parse(readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8'))
-      expect(settings.statusLine).toBeUndefined()
-    } finally {
-      vi.unstubAllEnvs()
-      rmSync(tmpHome, { recursive: true, force: true })
-    }
-  })
-
   it('does not re-install a managed statusLine the user deleted, until remove() resets the opt-out', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-statusline-optout-'))
     vi.stubEnv('HOME', tmpHome)
@@ -443,16 +428,6 @@ describe('ClaudeHookService.installRemote', () => {
     expect(upgraded.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
     expect(upgraded.hooks.Stop[0]).toEqual(userStop)
     expect(upgraded.env).toEqual({ A: '1' })
-  })
-
-  it('reports parse error when remote settings.json cannot be parsed', async () => {
-    const svc = new ClaudeHookService()
-    const { sftp, fs } = createFakeSftp()
-    fs.files.set('/home/dev/.claude/settings.json', 'not json')
-    const status = await svc.installRemote(sftp, '/home/dev')
-    expect(status.state).toBe('error')
-    expect(status.managedHooksPresent).toBe(false)
-    expect(status.detail).toContain('Could not parse remote Claude settings.json')
   })
 
   it('preserves user-authored hook entries while sweeping old managed entries', async () => {

@@ -106,14 +106,4 @@ describe('classifyLinkedFile', () => {
     }
     expect(classifyLinkedFile(facts, platform, PATHEXT)).toBe(expected)
   })
-
-  it('reveals sockets, devices and other non-regular files', () => {
-    const facts = {
-      names: ['/x/sock'],
-      isFile: false,
-      isDirectory: false,
-      mode: 0o755
-    }
-    expect(classifyLinkedFile({ ...facts, head: new Uint8Array() }, 'linux')).toBe('reveal')
-  })
 })

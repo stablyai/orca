@@ -21,7 +21,7 @@ import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
 import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {

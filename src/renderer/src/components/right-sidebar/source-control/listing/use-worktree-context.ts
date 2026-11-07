@@ -6,7 +6,7 @@ import {
 } from '../panel/worktree-scope'
 import { useMemo } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import type { AppState } from '@/store/types'

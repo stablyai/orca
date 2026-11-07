@@ -24,7 +24,9 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 
 const WT = FLOATING_TERMINAL_WORKTREE_ID
 

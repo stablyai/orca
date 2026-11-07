@@ -174,7 +174,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
   })
 
-  it('skips Cmd+B interception when the markdown editor is focused', () => {
+  it('leaves bold and logical link shortcuts to the focused markdown editor', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -215,23 +215,28 @@ describe('createMainWindow', () => {
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
-    const preventDefault = vi.fn()
+    const event = new Event('before-input-event', { cancelable: true })
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyB',
-        key: 'b',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: false
-      } as never
-    )
+    windowHandlers['before-input-event'](event, {
+      type: 'keyDown',
+      code: 'KeyB',
+      key: 'b',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: false
+    } as never)
 
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
+    windowHandlers['before-input-event'](event, {
+      type: 'keyDown',
+      code: 'KeyV',
+      key: 'k',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: false
+    })
+    expect(event.defaultPrevented).toBe(false)
   })
 
   it('lets the shortcut recorder capture app shortcuts before main interception', () => {

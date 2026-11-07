@@ -29,11 +29,12 @@ const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
 
 // Only capability-probe tests use the real list client; other cases inject transports.
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 const RUNTIME_AUTHORITY: AutomationAuthorityRef = {
   kind: 'runtime',

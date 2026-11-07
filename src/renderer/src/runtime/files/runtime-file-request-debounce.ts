@@ -1,4 +1,4 @@
-import { createRuntimeRpcAbortError } from '../abortable-runtime-environment-call'
+import { createRuntimeRpcAbortError } from '../rpc/calls/abortable-runtime-environment-call'
 
 /** Delays a runtime file request so typing settles before the host scans. */
 export function debounceRuntimeFileRequest<T>(

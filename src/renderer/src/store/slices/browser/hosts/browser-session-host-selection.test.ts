@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentCallRequest } from '../../../../runtime/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   createBrowserMockApi,
   createTestStore,

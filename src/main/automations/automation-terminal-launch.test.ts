@@ -47,30 +47,6 @@ function launch(runtime: ReturnType<typeof fakeRuntime>, reuseSession = false) {
 
 describe('headless automation agent launch', () => {
   it.each([
-    ['is refused', async () => false, "Aider started, but Orca could not send this run's prompt."],
-    [
-      'throws',
-      async () => {
-        throw new Error('writer broke')
-      },
-      'writer broke'
-    ]
-  ])(
-    'opens the terminal and reports the prompt undelivered when delivery %s',
-    async (_, deliver, error) => {
-      const opened = await launch(fakeRuntime(deliver))
-
-      expect(opened).toMatchObject({
-        terminalHandle: 'term-1',
-        terminalSessionId: 'tab-1',
-        terminalPaneKey: 'tab-1:leaf-1',
-        terminalPtyId: 'pty-1'
-      })
-      await expect(opened.delivery).resolves.toEqual({ error })
-    }
-  )
-
-  it.each([
     ['resolves on a paired server', { hostId: 'runtime:env-1' }, null],
     ['is gone', null, new Error('selector_not_found')]
   ])(

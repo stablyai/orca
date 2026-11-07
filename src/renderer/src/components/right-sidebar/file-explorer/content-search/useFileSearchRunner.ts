@@ -18,7 +18,7 @@ import {
 } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import type { SearchResult } from '../../../../../../shared/code-search-types'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 const SEARCH_DEBOUNCE_MS = 300
 const SEARCH_MAX_RESULTS = 2000

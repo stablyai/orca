@@ -10,7 +10,7 @@ import {
 } from '@/lib/browser/cookies/browser-google-cookie-clear'
 import { translate } from '@/i18n/i18n'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function useGoogleCookieClear(hostId: ExecutionHostId, profileId: string, label?: string) {
   const confirm = useConfirmationDialog()

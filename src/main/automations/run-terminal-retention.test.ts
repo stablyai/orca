@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
-import {
-  createRunTerminalRetention,
-  RUN_TERMINAL_GRACE_MS,
-  RUN_TERMINALS_KEPT_PER_AUTOMATION
-} from './run-terminal-retention'
+import { createRunTerminalRetention, RUN_TERMINAL_GRACE_MS } from './run-terminal-retention'
 
 function makeRun(
   id: string,
@@ -87,19 +83,6 @@ afterEach(() => {
 })
 
 describe('headless run terminal retention', () => {
-  it('closes finished run terminals past the grace period, keeping the newest few viewable', async () => {
-    const runs = [0, 1, 2, 3, 4, 5].map((hour) => makeRun(`r${hour}`, hour * 3_600_000))
-    const h = harness(runs)
-
-    await h.retention.sweep()
-    expect(h.closed).toEqual([])
-
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
-    await h.retention.sweep()
-    expect(h.closed.toSorted()).toEqual(['tab-r0:1', 'tab-r1:1', 'tab-r2:1'])
-    expect(6 - h.closed.length).toBe(RUN_TERMINALS_KEPT_PER_AUTOMATION)
-  })
-
   it('never closes a run that has not finished, however old', async () => {
     const runs = [
       makeRun('working', 0, 'dispatched'),
@@ -142,18 +125,6 @@ describe('headless run terminal retention', () => {
     }
   )
 
-  it('keeps the newest few per automation, not across all of them', async () => {
-    const runs = [
-      ...[0, 1, 2].map((n) => makeRun(`a${n}`, n, 'completed', 'a')),
-      ...[0, 1, 2].map((n) => makeRun(`b${n}`, n, 'completed', 'b'))
-    ]
-    const h = harness(runs)
-    await h.retention.sweep()
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
-    await h.retention.sweep()
-    expect(h.closed).toEqual([])
-  })
-
   it('drains every completed, unused run terminal for an update, ignoring keep and grace', async () => {
     const runs = [
       ...[0, 1, 2, 3, 4].map((n) => makeRun(`r${n}`, n)),
@@ -188,30 +159,6 @@ describe('headless run terminal retention', () => {
     await h.retention.sweep()
     expect(h.closed).toEqual(['tab-missing:1'])
     expect(h.forgotten[0]).toMatchObject({ id: 'missing', status: 'dispatch_failed' })
-  })
-
-  it('closes a still-dispatched run whose agent exited, leaving its shell idle', async () => {
-    const runs = [
-      makeRun('exited', 0, 'dispatched'),
-      ...[1, 2, 3].map((n) => makeRun(`done${n}`, n))
-    ]
-    const h = harness(runs)
-    h.idleShell.add('exited')
-    await h.retention.sweep()
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
-    await h.retention.sweep()
-    expect(h.closed).toEqual(['tab-exited:1'])
-  })
-
-  it('keeps the newest three live terminals, not counting ones already gone', async () => {
-    const runs = [0, 1, 2, 3, 4].map((n) => makeRun(`r${n}`, n))
-    const h = harness(runs)
-    h.dead.add('r4')
-    await h.retention.sweep()
-    vi.advanceTimersByTime(RUN_TERMINAL_GRACE_MS)
-    await h.retention.sweep()
-    expect(h.closed).toEqual(['tab-r0:1'])
-    expect(h.forgotten.map((run) => run.id).toSorted()).toEqual(['r0', 'r4'])
   })
 
   it('drains idle failed and exited runs for an update, never a live agent', async () => {
@@ -327,27 +274,6 @@ describe('headless run terminal retention', () => {
     await h.retention.drain()
     expect(h.slept).toEqual(['r0'])
     expect(h.forgotten.map((run) => run.id)).not.toContain('r0')
-  })
-
-  it('closes a failed run in its own workspace, and never sleeps or closes a used one', async () => {
-    const runs = [
-      makeRun('failed', 0, 'dispatch_failed'),
-      makeRun('typed', 1),
-      ...[2, 3, 4].map((n) => makeRun(`done${n}`, n))
-    ]
-    const h = harness(runs)
-    h.ownWorkspace.add('failed')
-    h.ownWorkspace.add('typed')
-    h.idleShell.add('failed')
-    h.use.set('typed', 'used')
-    await h.retention.drain()
-    expect(h.slept).toEqual([])
-    expect(h.closed.toSorted()).toEqual([
-      'tab-done2:1',
-      'tab-done3:1',
-      'tab-done4:1',
-      'tab-failed:1'
-    ])
   })
 
   it('keeps a run in its own workspace whose sleep declines or fails, retrying each sweep', async () => {

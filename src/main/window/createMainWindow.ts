@@ -24,6 +24,7 @@ import { mainWindowLoadErrorCode } from './main-window-load-error-code'
 import { installMainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { installMainWindowShortcutRouting } from './main-window-shortcut-routing'
 import { installMainWindowStateLifecycle } from './main-window-state-lifecycle'
+import { installMainWindowActivityRelay } from './main-window-activity'
 import { stopHiddenWindowFramePumpOnShow } from './hidden-window-frame-pump'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
@@ -204,6 +205,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)
   }
@@ -231,6 +233,7 @@ export function createMainWindow(
     closeWorkspaceSpaceWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
+    activity.dispose()
     focus.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)

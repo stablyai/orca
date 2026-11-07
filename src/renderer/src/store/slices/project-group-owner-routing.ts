@@ -10,7 +10,7 @@ import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree
 import {
   getRuntimeTargetHostId,
   ipcOrRuntimeTargetForHostId
-} from '@/runtime/runtime-client-target'
+} from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type ProjectGroupHostParts = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>

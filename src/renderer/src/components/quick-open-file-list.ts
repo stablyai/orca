@@ -36,7 +36,7 @@ import {
   getFileExplorerOperationRoute,
   useFileListOperationOwner
 } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export type RuntimeFileListState = {
   files: string[]
