@@ -3720,10 +3720,22 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   height: 14px;
 }
 
+/* The activity control's superscript is 11px and full sidebar foreground. On a 14px
+   reference icon that reads as a second label, so linked counts stay smaller and muted. */
 .workspace-reference-stack-count {
   position: absolute;
-  top: -8px;
-  right: -5px;
+  top: -6px;
+  right: -4px;
+  z-index: 3;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 9px;
+  color: var(--muted-foreground);
+  text-shadow: 0 1px 1px var(--worktree-sidebar);
+}
+
+.workspace-reference-stack-count[data-multiple-digits='true'] {
+  letter-spacing: -0.02em;
 }
 
 .icon-superscript-count {
