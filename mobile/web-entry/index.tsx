@@ -170,10 +170,11 @@ bootstrapShellPage({
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })
-    // Open-target boots stay lazy: the stack moves the URL to the target only when it mounts after the container.
-    const bootRoutes = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
-      ? null
-      : preloadBootRoutes(window.location.pathname)
+    // An open-target boot paints the shell's target first, so that is the screen to preload.
+    const openTarget = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
+    const bootRoutes = preloadBootRoutes(
+      openTarget ? new URL(openTarget, window.location.href).pathname : window.location.pathname
+    )
     // Activation settles to English on failure and preloads settle either way, so the page always mounts.
     void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes]).then(() =>
       createRoot(container).render(
