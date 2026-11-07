@@ -36,7 +36,9 @@ export function showDictationDisabledToast(): void {
 }
 
 export function showDictationStartErrorToast(message: string): void {
-  const hostMessage = hostDictationErrorMessage(compactIpcErrorMessage(message) ?? '')
+  // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
+  const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
+  const hostMessage = hostDictationErrorMessage(detail)
   if (hostMessage) {
     toast.error(hostMessage)
   } else if (message.includes('Permission') || message.includes('NotAllowed')) {
@@ -46,7 +48,7 @@ export function showDictationStartErrorToast(message: string): void {
         'Microphone access denied. Grant access in system settings, then restart Orca.'
       )
     )
-  } else if (message.includes('not ready')) {
+  } else if (message.includes('not ready') || detail.startsWith('voice_model_not_ready')) {
     toast(
       translate(
         'auto.components.dictation.DictationController.notReady',
