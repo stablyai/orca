@@ -158,10 +158,12 @@ export async function readPersistedTestAgentSessionStore(
     ) as PersistedAgentSessionRecord
   }
   for (const row of db
-    .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
+    .prepare(
+      "SELECT CASE WHEN typeof(operation_key) = 'text' THEN json_quote(operation_key) END AS operation_key_json, row_json FROM agent_session_operations ORDER BY rowid"
+    )
     .all()) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test read-back of rows the store wrote after validating them.
-    persisted.operations[String(row.operation_key)] = parsed(
+    persisted.operations[String(parsed(row.operation_key_json))] = parsed(
       row.row_json
     ) as AgentSessionOperationRow
   }
