@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import { isGrokAccessTokenFreshAt } from './grok-auth-expiry'
 
 export function getGrokHome(): string {
   return resolveGrokHomeDir()
@@ -127,12 +128,6 @@ export function readGrokAuthSession(): GrokAuthReadResult {
   }
 }
 
-const TOKEN_SKEW_MS = 5 * 60 * 1000
-
 export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {
-  if (session.expiresAtMs === null) {
-    // Missing expiry is inconclusive; the billing endpoint can still reject the token.
-    return true
-  }
-  return session.expiresAtMs - Date.now() > TOKEN_SKEW_MS
+  return isGrokAccessTokenFreshAt(session.expiresAtMs)
 }

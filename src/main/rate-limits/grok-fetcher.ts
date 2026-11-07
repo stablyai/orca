@@ -6,12 +6,8 @@ import type {
 } from '../../shared/rate-limit-types'
 import { abortSignalWithTimeout } from '../lib/abort-signal-with-timeout'
 import { classifyThrownUsageRequestError } from './usage-request-failure-kind'
-import {
-  isGrokAccessTokenFresh,
-  readGrokAuthSession,
-  type GrokAuthReadResult,
-  type GrokAuthSession
-} from './grok-auth'
+import { isGrokAccessTokenFresh, type GrokAuthSession } from './grok-auth'
+import { readGrokAuthForUsage, type GrokUsageAuthOptions } from './grok-session-refresh'
 
 // xAI requires the billing endpoint/headers used by Grok CLI.
 const GROK_CLI_PROXY_BASE =
@@ -279,11 +275,11 @@ async function fetchMonthlyUsageFallback(
   return { kind: 'window', window: mapMonthlyUsage(config), config }
 }
 
-// Grok CLI owns login/refresh; Orca only reads its session file.
+// Grok CLI owns login. Near expiry, Orca runs `grok sessions list` so the CLI refreshes auth.json.
 export async function fetchGrokRateLimits(
-  options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
+  options: GrokUsageAuthOptions = {}
 ): Promise<ProviderRateLimits> {
-  const readResult = options.authReadResult ?? readGrokAuthSession()
+  const readResult = await readGrokAuthForUsage(options)
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Grok — run grok login')
   }
