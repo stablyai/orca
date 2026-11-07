@@ -131,10 +131,6 @@ export const hostRepoLabelsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, Ho
       readHostSshTargetLabels(client),
       settledMetadataReply(() => hostPlatformRead.request(client))
     ])
-    // These reads degrade to empty on any failure; a dropped connection must not store empty badges as an answer.
-    if (client.getState() !== 'connected') {
-      throw new Error('Not connected: host labels')
-    }
     return { ...labels, platform: acceptedMetadata(platform, hostPlatformRead.interpret) ?? null }
   },
   staleTime: 60_000,
