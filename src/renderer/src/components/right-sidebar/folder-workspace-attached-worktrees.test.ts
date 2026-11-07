@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { resolveSidebarLineageParentIdentities } from '../../../../shared/sidebar-list/worktree-lineage-projection'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -186,9 +189,72 @@ it('includes resolved cross-store roots and their descendants without attaching 
     workspaceLineageByChildKey: {},
     worktreeLineageById: {},
     worktreesByRepo: { remote: [root, child], other: [twin] },
+    lineageParentIdentities: new Map([
+      ['ssh:box|remote-root', 'local|folder:folder-1'],
+      ['ssh:box|remote-child', 'ssh:box|remote-root']
+    ]),
     crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
   })
   expect(result.owners.map((owner) => owner.worktree.instanceId)).toEqual(['root', 'child'])
   expect(result.rootChildWorktrees).toEqual([root])
   expect(result.lineageChildrenByParentId.get('ssh:box|remote-root')).toEqual([child])
+})
+
+it('attaches cross-store roots only to the resolved host when folder IDs collide', () => {
+  const localFolder = makeFolder()
+  const pairedFolder: FolderWorkspace = { ...makeFolder(), executionHostId: 'runtime:paired' }
+  const root = makeWorktree({ id: 'root', hostId: 'local', instanceId: 'root-instance' })
+  const child = makeWorktree({ id: 'child', hostId: 'local', instanceId: 'child-instance' })
+  const worktreeLineageById = { child: edge(child, root, 5) }
+  const rows = [
+    root,
+    child,
+    ...[localFolder, pairedFolder].map((folder) => getFolderWorkspaceWorktree(folder))
+  ]
+  const lineageParentIdentities = resolveSidebarLineageParentIdentities(
+    worktreeLineageById,
+    new Map(rows.map((row) => [getWorktreeHostIdentity(row), row])),
+    new Map([
+      [
+        '',
+        {
+          installationId: 'local-installation',
+          crossStoreLineageByChildKey: {
+            [worktreeWorkspaceKey(root.id)]: {
+              childWorkspaceKey: worktreeWorkspaceKey(root.id),
+              childInstanceId: 'root-instance',
+              parent: {
+                installationId: 'paired-installation',
+                workspaceKey: 'folder:folder-1',
+                instanceId: 'folder-1'
+              },
+              origin: 'cli',
+              capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+              createdAt: 1
+            }
+          }
+        }
+      ],
+      ['paired', { installationId: 'paired-installation', crossStoreLineageByChildKey: {} }]
+    ])
+  )
+  const inputs = {
+    activeWorkspaceKey: 'folder:folder-1',
+    activeWorktreeId: null,
+    folderWorkspaces: [localFolder, pairedFolder],
+    workspaceLineageByChildKey: {},
+    worktreeLineageById,
+    worktreesByRepo: { local: [root, child] },
+    lineageParentIdentities,
+    crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
+  }
+
+  const local = getAttachedWorktreesForFolderWorkspace({ ...inputs, executionHostId: 'local' })
+  const paired = getAttachedWorktreesForFolderWorkspace({
+    ...inputs,
+    executionHostId: 'runtime:paired'
+  })
+
+  expect(local.childWorktrees).toEqual([])
+  expect(paired.owners.map((owner) => owner.worktree.id)).toEqual(['root', 'child'])
 })

@@ -1,6 +1,7 @@
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
@@ -156,7 +157,11 @@ export function getAttachedWorktreesForFolderWorkspace({
       add(row, lineage.createdAt)
     }
   }
+  const folderIdentity = getFolderWorkspaceHostIdentity(folderWorkspace)
   for (const child of crossStoreChildrenByFolderId.get(folderWorkspace.id) ?? []) {
+    if (lineageParentIdentities?.get(getWorktreeHostIdentity(child)) !== folderIdentity) {
+      continue
+    }
     add(
       child,
       getProjectedWorktreeLineage(child, worktreeLineageById)?.createdAt ?? child.createdAt ?? 0
