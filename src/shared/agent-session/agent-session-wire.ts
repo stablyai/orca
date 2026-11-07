@@ -224,6 +224,8 @@ export type AgentSessionStatusSummary = {
   effort?: string
   fastMode?: string
   serviceTier?: string
+  /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
+  interactionMode?: 'default' | 'plan'
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -247,6 +249,9 @@ export type AgentSessionStatusSummary = {
   /** The record's Sleep mark: the user's Sleep stopped this chat and nothing has been sent since.
    *  Absent from older hosts. */
   sleptAt?: number
+  /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
+   *  Absent from older hosts. */
+  hostProgram?: true
   /** Host-path directory the session is held to regardless of its workspace's current directory
    *  (a floating chat's pinned folder). Absent means resolve the workspace id; older hosts omit it. */
   launchDirectory?: string

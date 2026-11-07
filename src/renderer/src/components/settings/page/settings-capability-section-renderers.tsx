@@ -1,5 +1,5 @@
 import { AccountsPane } from '../accounts/AccountsPane'
-import { getProviderAccountsOwnerKey } from '@/runtime/runtime-provider-accounts-client'
+import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
 import { AgentDefaultSurfaceSection } from '../agents/surfaces/AgentDefaultSurfaceSection'
 import { ComputerUsePane } from '../computer-use/ComputerUsePane'

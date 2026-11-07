@@ -4,7 +4,7 @@ import {
   type AgentSessionAgentAvailability
 } from '../../../shared/agent-session/agent-session-agent-availability'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
+import { subscribeRuntimeRpc } from './rpc/subscriptions/runtime-rpc-subscribe'
 
 /** One agent-health projection per host/runtime/pairing serves all workspace menus. Restart/re-pair needs a new answer; reconnect/lost readers retain received snapshots. Initial failure has no roster and differs from a received empty frame. */
 export type HostStructuredAgentAvailability =

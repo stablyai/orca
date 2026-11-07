@@ -1,5 +1,6 @@
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

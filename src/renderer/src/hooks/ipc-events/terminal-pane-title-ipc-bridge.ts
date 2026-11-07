@@ -2,7 +2,7 @@ import {
   SET_TERMINAL_PANE_TITLE_EVENT,
   type SetTerminalPaneTitleDetail
 } from '@/constants/terminal'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { findTerminalTabWorktreeId } from '@/components/native-chat/native-chat-file-link'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { useAppStore } from '../../store'

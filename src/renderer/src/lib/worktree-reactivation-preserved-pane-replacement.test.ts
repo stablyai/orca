@@ -2,19 +2,19 @@ import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
-import { activateAndRevealWorktree } from './worktree-activation'
-import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
+import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
+import { waitForWorktreeAgentActivationGateForTests } from './workspace/activation/worktree-agent-activation-gate'
+import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './workspace/ownership/worktree-runtime-owner'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

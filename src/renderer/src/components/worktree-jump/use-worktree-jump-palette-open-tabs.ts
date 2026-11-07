@@ -1,15 +1,17 @@
 import { useMemo } from 'react'
-import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
-import { searchBrowserPages, type SearchableBrowserPage } from '@/lib/browser-palette-search'
+import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
+import {
+  searchBrowserPages,
+  type SearchableBrowserPage
+} from '@/lib/browser/palette/browser-palette-search'
 import { buildSearchableSimulatorTabs, searchSimulatorTabs } from '@/lib/simulator-palette-search'
 import type { SearchableSimulatorTab } from '@/lib/simulator-palette-search-types'
-import {
-  buildSearchableWorkspaceTabs,
-  type SearchableWorkspaceTab
-} from '@/lib/workspace-tab-palette-search'
-import { searchWorkspaceTabs } from '@/lib/workspace-tab-palette-results'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { buildSearchableWorkspaceTabEntries as buildSearchableWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-entry-builder'
+import type { SearchableWorkspaceTab } from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
-import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeIdentity } from '@/lib/workspace/search/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
   OpenTabPaletteItem,

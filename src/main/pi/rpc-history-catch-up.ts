@@ -1,8 +1,8 @@
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { runHistoryCatchUp } from '../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { runHistoryCatchUp } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import {
   createPiHistoryImportPlan,
   piBranchInTree,

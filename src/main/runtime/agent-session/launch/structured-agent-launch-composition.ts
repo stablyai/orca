@@ -4,8 +4,8 @@ import type { AgentSessionJournalIdentity } from '../../../../shared/agent-sessi
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
-import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/structured-agent-definition'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-support'
+import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
 import {
   createNativeChatVisualsDelivery,

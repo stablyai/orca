@@ -2,11 +2,11 @@ import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-age
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { FederationEffect } from './federation-effects'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 
 function fakes(created: { startupTerminal?: { handle: string } } = {}) {
   const terminalCreation: RuntimeTerminalCreate = {

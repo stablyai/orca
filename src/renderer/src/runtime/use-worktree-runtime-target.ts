@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { getActiveWorkspaceOwnerTarget } from '@/lib/resolved-worktree-execution-host'
 import {
   runtimeRpcTargetForAuthorityKey,
   runtimeTargetEnvironmentId,
   runtimeTargetForOwnerEnvironment
-} from './runtime-client-target'
+} from './rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   accountOwnerFor,

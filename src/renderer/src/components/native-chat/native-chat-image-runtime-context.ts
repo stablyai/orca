@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   resolveWorktreeOperationRouteResult,

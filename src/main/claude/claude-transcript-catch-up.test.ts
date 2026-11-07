@@ -3,10 +3,10 @@ import { createClaudeJournalTranslator } from './structured/journal/claude-struc
 import {
   isStructuredRewindTarget,
   structuredRewindCut
-} from '../native-chat/agent-session-wire/structured-rewind-cut'
+} from '../native-chat/agent-session-wire/rewind/structured-rewind-cut'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionHistory } from '../native-chat/agent-session-wire/agent-session-history-page'
-import { projectJournalBatch } from '../native-chat/agent-session-wire/agent-session-journal-batch'
+import { readAgentSessionHistory } from '../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import { projectJournalBatch } from '../native-chat/agent-session-wire/publication/history/agent-session-journal-batch'
 import {
   replacePage,
   mergeItems

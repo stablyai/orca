@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useAppStateViewActive, useAppViewExternalStore } from '@/store/app-state-view'
+import { useCallback, useEffect } from 'react'
 import {
   acquireHostStructuredAgentAvailability,
   readHostStructuredAgentAvailability,
@@ -22,15 +23,16 @@ type AvailabilityOwner = {
 export function useHostStructuredAgentAvailability(
   owner: AvailabilityOwner | null
 ): HostStructuredAgentAvailability | null {
+  const viewActive = useAppStateViewActive()
   const { executionHostId = '', runtimeId, pairingRevision, contact, hold = false } = owner ?? {}
   const read = useCallback(
     () => readHostStructuredAgentAvailability(executionHostId, runtimeId, pairingRevision),
     [executionHostId, runtimeId, pairingRevision]
   )
-  const availability = useSyncExternalStore(subscribeHostStructuredAgentAvailability, read, read)
+  const availability = useAppViewExternalStore(subscribeHostStructuredAgentAvailability, read, read)
   useEffect(() => {
     const target = structuredAgentSessionTargetForHost(executionHostId)
-    if (!hold || !target || runtimeId === undefined) {
+    if (!viewActive || !hold || !target || runtimeId === undefined) {
       return
     }
     return acquireHostStructuredAgentAvailability({
@@ -39,6 +41,6 @@ export function useHostStructuredAgentAvailability(
       runtimeId,
       pairingRevision
     })
-  }, [hold, executionHostId, runtimeId, pairingRevision, contact])
+  }, [hold, executionHostId, runtimeId, pairingRevision, contact, viewActive])
   return owner ? availability : null
 }

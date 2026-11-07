@@ -1,8 +1,9 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
-import { linearGetIssue, linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
-import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
-import type { LinearMutationResult, RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import { linearGetIssue, linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
+import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
+import type { LinearMutationResult } from '@/runtime/linear/runtime-linear-client'
+import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import type { LinearWorkflowState } from '../../../../../../shared/linear/workspace-types'
 import type {

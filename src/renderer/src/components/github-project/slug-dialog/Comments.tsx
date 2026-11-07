@@ -4,7 +4,7 @@ import { Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { gitHubSlugApiForTarget } from '@/runtime/github-slug-owner-api'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText

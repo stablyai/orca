@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { agentSessionThrownFailure } from '../../../../shared/agent-session/failures/agent-session-write-failure'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { agentSessionWriteFailureText } from './agent-session-write-notice-text'
 import { SessionOptionApplyError } from '../../../../shared/native-chat/input/native-chat-session-option-apply-failure'
 import { sessionOptionApplyErrorText } from './native-chat-session-option-apply-error-text'

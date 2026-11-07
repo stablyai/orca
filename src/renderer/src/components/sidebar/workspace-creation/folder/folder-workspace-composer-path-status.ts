@@ -8,6 +8,7 @@ import {
 } from '@/lib/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import { recomputeOn } from '@/lib/recompute-on'
 
 export function useFolderWorkspaceComposerPathStatus(
   projectGroup: ProjectGroup | null,
@@ -63,9 +64,9 @@ export function useFolderWorkspaceComposerPathStatus(
       return null
     }
     // Subscribe to writes, but let the TTL-aware accessor decide whether negative results remain authoritative.
-    void cachedPathStatusEntry
-    void cacheExpiryTick
-    return getFreshFolderWorkspacePathStatus(pathStatusRequest, pathStatusRouteOptions)
+    return recomputeOn([cachedPathStatusEntry, cacheExpiryTick], () =>
+      getFreshFolderWorkspacePathStatus(pathStatusRequest, pathStatusRouteOptions)
+    )
   }, [
     cachedPathStatusEntry,
     cacheExpiryTick,

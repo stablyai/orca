@@ -6,7 +6,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { OpenFile } from './editor'
+import type { OpenFile } from './editor/types/open-file'
 import { translate } from '@/i18n/i18n'
 
 /** Shape shared by the Claude/Codex/OpenCode usage-scanner namespaces. */

@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
+import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../../../../../shared/browser-guest-window-close'
 
 // Why not saved: like Chrome, a restored tab no longer counts as opened by its page.

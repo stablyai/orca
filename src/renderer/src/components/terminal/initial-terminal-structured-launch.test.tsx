@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   claimEmptyWorkspaceDefaultSurface,
   releaseEmptyWorkspaceDefaultSurface
-} from '@/lib/empty-workspace-default-surface-claims'
+} from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
@@ -38,25 +39,32 @@ vi.mock('@/store', () => {
     )
   }
 })
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({
+vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
   gateWorktreeAgentActivation: mocks.gate
 }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-status', () => ({
   hasStructuredAgentLaunchInWorktree: (worktreeId: string) =>
     ['claude', 'codex', 'grok'].some((agent) => mocks.launchStatus(worktreeId, agent) !== 'idle')
 }))
-vi.mock('@/lib/resume-sleeping-agent-session', () => ({
+vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: mocks.resume
 }))
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => mocks.authority
 }))
-vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
-  pruneParkedTerminalWatchers: vi.fn(),
-  terminalWatcherLiveWorkspaceIds: () => new Set(),
-  syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
-  disposeAllParkedTerminalWatchers: vi.fn()
+vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
+  syncParkedTerminalTabWatchersForWorkspaces: vi.fn()
 }))
+
+vi.mock(
+  '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    pruneParkedTerminalWatchers: vi.fn(),
+    terminalWatcherLiveWorkspaceIds: () => new Set(),
+    disposeAllParkedTerminalWatchers: vi.fn()
+  })
+)
 
 const PENDING_INTENT = { callerProvidesSurface: false, seedUserDefaultSurface: true }
 

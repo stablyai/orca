@@ -8,7 +8,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from '../web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } from './sync-key'
 import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'

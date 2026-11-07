@@ -4,7 +4,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { FileLinkExists } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import {

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { useAppStore } from '@/store'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import type { BrowserChromeToolAction } from './browser-chrome-toolbar'

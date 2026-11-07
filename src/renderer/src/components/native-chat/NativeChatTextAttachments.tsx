@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { createContext, useCallback, useContext, useState, useMemo, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   nativeChatTextAttachmentPaths,
   chatTextAttachmentName

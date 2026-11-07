@@ -7,7 +7,7 @@ import { creatorFirstParent } from './crew-rules'
 import { createCrewPartyRegistry, type Party } from './crew-parties'
 import { readCrewAssignments, type CrewAssignmentRow } from './crew-query'
 import { createCrewSourceInputs } from './crew-source-inputs'
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
 export function createCrewHostDerivation(
   deps: CrewReadDependencies,

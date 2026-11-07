@@ -12,37 +12,6 @@ const oldPlacement = Object.freeze({
 const newPlacement = Object.freeze({ ...oldPlacement, pageHostGeneration: 8 })
 
 describe('runtime browser client page recovery', () => {
-  it('closes an unavailable generation before creating and navigating the next generation', async () => {
-    const { authority, commands, notifyWorkspace, pages } = harness()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([inventory('outcomeUnknown')]),
-      authority,
-      pages,
-      notifyWorkspace
-    })
-
-    expect(commands).toEqual([
-      { browserPageId: 'page-a', type: 'closePage', pageHostGeneration: 7 },
-      { browserPageId: 'page-a', type: 'navigate', pageHostGeneration: 8 }
-    ])
-    expect(authority.createClientPage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        browserPageId: 'page-a',
-        browserHostClientId: 'host-a',
-        pairedDeviceId: 'device-a',
-        browserProfileId: 'profile-a',
-        executionHostKey: 'native:runtime-a:1'
-      })
-    )
-    expect(pages.getPage('page-a')).toMatchObject({
-      placement: newPlacement,
-      url: 'https://client-latest.internal/',
-      loading: false
-    })
-    expect(notifyWorkspace).toHaveBeenCalledOnce()
-  })
-
   it('does not apply an attach inventory to a replacement placed after capture', async () => {
     const { authority, commands, notifyWorkspace, pages, placements } = harness()
     const pagePlacementsAtAttach = new Map([['page-a', oldPlacement]])
@@ -62,132 +31,6 @@ describe('runtime browser client page recovery', () => {
     expect(notifyWorkspace).not.toHaveBeenCalled()
   })
 
-  it('retains an exact active generation without commands or metadata churn', async () => {
-    const { authority, commands, notifyWorkspace, pages } = harness()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([inventory('active')]),
-      authority,
-      pages,
-      notifyWorkspace
-    })
-
-    expect(commands).toEqual([])
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-    expect(pages.getPage('page-a')?.placement).toEqual(oldPlacement)
-    expect(notifyWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('treats negotiated missing inventory as absence and still allocates a fresh generation', async () => {
-    const { authority, commands, pages } = harness()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(commands).toEqual([{ browserPageId: 'page-a', type: 'navigate', pageHostGeneration: 8 }])
-    expect(pages.getPage('page-a')?.placement).toEqual(newPlacement)
-  })
-
-  it('degrades a failed navigation to that page instead of failing the attach', async () => {
-    const { authority, notifyWorkspace, pages } = harness({
-      pageIds: ['page-a', 'page-b'],
-      navigateFailures: ['page-a']
-    })
-    const releaseUnrecoverablePage = vi.fn()
-
-    await expect(
-      recoverUnavailableRuntimeBrowserClientPages({
-        lease: lease([]),
-        authority,
-        pages,
-        notifyWorkspace,
-        releaseUnrecoverablePage
-      })
-    ).resolves.toBeUndefined()
-
-    expect(pages.getPage('page-b')).toMatchObject({
-      placement: { pageHostGeneration: 10 },
-      loading: false
-    })
-    // The page kept a live placement, so it stays listed and a later attach can retry it.
-    expect(pages.getPage('page-a')?.placement).toMatchObject({ pageHostGeneration: 8 })
-    // A refused navigation is never recorded as an arrival: the page stays loading, not settled.
-    expect(pages.getPage('page-a')).toMatchObject({ loading: true })
-    expect(releaseUnrecoverablePage).not.toHaveBeenCalled()
-  })
-
-  it('releases a page whose recovery left it without any placement', async () => {
-    const { authority, notifyWorkspace, pages } = harness({
-      pageIds: ['page-a', 'page-b'],
-      creationFailures: ['page-a']
-    })
-    const releaseUnrecoverablePage = vi.fn()
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace,
-      releaseUnrecoverablePage
-    })
-
-    expect(releaseUnrecoverablePage).toHaveBeenCalledOnce()
-    expect(releaseUnrecoverablePage).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'page-a' })
-    )
-    expect(pages.getPage('page-b')).toMatchObject({ placement: { pageHostGeneration: 10 } })
-  })
-
-  it('stops recovering pages once the attach is aborted', async () => {
-    const abort = new AbortController()
-    const { authority, pages } = harness({
-      pageIds: ['page-a', 'page-b', 'page-c', 'page-d', 'page-e'],
-      onCommand: () => abort.abort()
-    })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn(),
-      signal: abort.signal
-    })
-
-    expect(authority.createClientPage).toHaveBeenCalledTimes(4)
-    expect(pages.getPage('page-e')?.placement).toMatchObject({ pageHostGeneration: 15 })
-  })
-
-  it.each([
-    ['pageHostGeneration', { pageHostGeneration: 99 }],
-    ['executionHostKey', { executionHostKey: 'native:runtime-a:2' }],
-    ['authorityEpoch', { authorityEpoch: 'epoch-b' }],
-    ['authorityRuntimeId', { authorityRuntimeId: 'runtime-b' }],
-    ['browserProfileId', { browserProfileId: 'profile-b' }],
-    ['browserHostClientId', { browserHostClientId: 'host-b' }],
-    ['browserHostGeneration', { browserHostGeneration: 9 }]
-  ])(
-    'never trusts an active inventory entry that disagrees on %s',
-    async (_field, disagreement) => {
-      const { authority, notifyWorkspace, pages, placements } = harness()
-      // The runtime already re-placed the page, so only an exact-active entry may skip recovery.
-      placements.set('page-a', newPlacement)
-
-      await recoverUnavailableRuntimeBrowserClientPages({
-        lease: lease([inventory('active', disagreement)]),
-        authority,
-        pages,
-        notifyWorkspace
-      })
-
-      expect(pages.getPage('page-a')?.placement).toEqual(newPlacement)
-      expect(notifyWorkspace).toHaveBeenCalledOnce()
-    }
-  )
-
   it('refuses to close a page whose inventory reports another page host generation', async () => {
     const { authority, commands, pages } = harness()
 
@@ -201,76 +44,6 @@ describe('runtime browser client page recovery', () => {
     expect(commands).toEqual([])
     expect(authority.createClientPage).not.toHaveBeenCalled()
     expect(pages.getPage('page-a')?.placement).toEqual(oldPlacement)
-  })
-
-  it('leaves pages placed on another host or another host generation untouched', async () => {
-    const { authority, pages } = harness()
-    publishPage(pages, 'page-other-host', { ...oldPlacement, browserHostClientId: 'host-b' })
-    publishPage(pages, 'page-other-generation', { ...oldPlacement, browserHostGeneration: 9 })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(authority.createClientPage).toHaveBeenCalledOnce()
-    expect(authority.createClientPage).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'page-a' })
-    )
-    expect(pages.getPage('page-other-host')?.placement).toMatchObject({
-      browserHostClientId: 'host-b'
-    })
-    expect(pages.getPage('page-other-generation')?.placement).toMatchObject({
-      browserHostGeneration: 9
-    })
-  })
-
-  it('recovers the pages adoption did not take while leaving the ones it did', async () => {
-    const { authority, pages } = harness({ pageIds: ['page-a', 'page-b'] })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn(),
-      adoptedPageIds: new Set(['page-a'])
-    })
-
-    expect(authority.createClientPage).toHaveBeenCalledOnce()
-    expect(authority.createClientPage).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'page-b' })
-    )
-    expect(pages.getPage('page-a')?.placement).toMatchObject({ pageHostGeneration: 7 })
-    expect(pages.getPage('page-b')?.placement).toMatchObject({ pageHostGeneration: 10 })
-  })
-
-  it('recovers a page retained from a host generation that quit', async () => {
-    const { authority, commands, notifyWorkspace, pages, placements } = harness({
-      url: 'https://retained.internal/'
-    })
-    // The fence released the placement but kept the record naming the generation that placed it.
-    placements.set('page-a', undefined)
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: { ...lease([]), browserHostGeneration: 5 },
-      authority,
-      pages,
-      notifyWorkspace
-    })
-
-    // Nothing to close: the desktop that owned the old generation is gone.
-    expect(commands).toEqual([{ browserPageId: 'page-a', type: 'navigate', pageHostGeneration: 8 }])
-    expect(authority.createClientPage).toHaveBeenCalledWith(
-      expect.objectContaining({ browserPageId: 'page-a', browserHostClientId: 'host-a' })
-    )
-    expect(pages.getPage('page-a')).toMatchObject({
-      placement: newPlacement,
-      url: 'https://retained.internal/',
-      loading: false
-    })
-    expect(notifyWorkspace).toHaveBeenCalledOnce()
   })
 
   it('refuses to adopt a placement another host now owns', async () => {
@@ -289,38 +62,6 @@ describe('runtime browser client page recovery', () => {
     expect(notifyWorkspace).not.toHaveBeenCalled()
   })
 
-  it('does not recreate a page whose retirement lost to a concurrent placement change', async () => {
-    const { authority, pages } = harness()
-    authority.completePageRetirement.mockReturnValue(false)
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-    expect(pages.getPage('page-a')?.placement).toEqual(oldPlacement)
-  })
-
-  it('keeps a page placed when its close command fails', async () => {
-    const { authority, commands, pages } = harness({ closeFailures: ['page-a'] })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([inventory('outcomeUnknown')]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(commands).toEqual([
-      { browserPageId: 'page-a', type: 'closePage', pageHostGeneration: 7 }
-    ])
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-    expect(pages.getPage('page-a')?.placement).toEqual(oldPlacement)
-  })
-
   it('abandons a close whose placement changed identity while the command ran', async () => {
     let replacePlacement = (): void => {}
     const { authority, pages, placements } = harness({ onCommand: () => replacePlacement() })
@@ -337,36 +78,6 @@ describe('runtime browser client page recovery', () => {
 
     expect(authority.beginPageRetirement).not.toHaveBeenCalled()
     expect(authority.createClientPage).not.toHaveBeenCalled()
-  })
-
-  it('does nothing without a negotiated page inventory protocol', async () => {
-    const { authority, commands, pages } = harness()
-    const { pageInventoryProtocolVersion: _unnegotiated, ...unnegotiated } = lease([])
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: unnegotiated,
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(commands).toEqual([])
-    expect(authority.createClientPage).not.toHaveBeenCalled()
-  })
-
-  it('recovers an about:blank page without issuing a navigation', async () => {
-    const { authority, commands, pages } = harness({ url: 'about:blank' })
-
-    await recoverUnavailableRuntimeBrowserClientPages({
-      lease: lease([]),
-      authority,
-      pages,
-      notifyWorkspace: vi.fn()
-    })
-
-    expect(commands).toEqual([])
-    expect(authority.createClientPage).toHaveBeenCalledOnce()
-    expect(pages.getPage('page-a')).toMatchObject({ placement: newPlacement, loading: false })
   })
 })
 

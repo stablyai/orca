@@ -3,7 +3,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useAppStore } from '@/store/index'
 import { latestLookupGeneration } from '@/store/lookup-generation-sequence'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import type { ChecksPanelManualRefreshInput } from './manual-refresh-dependencies'
 
 /** Reviews and links name the provider first; an unlinked branch falls back to the remote's provider, not GitHub. */

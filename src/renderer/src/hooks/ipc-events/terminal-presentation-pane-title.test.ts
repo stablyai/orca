@@ -6,7 +6,7 @@ import {
   seedStore
 } from '../../store/slices/store-test-helpers'
 import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
@@ -33,7 +33,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwner.isMain
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

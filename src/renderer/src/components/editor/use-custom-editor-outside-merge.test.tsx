@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
 
 vi.mock('./external-changes/ExternalFileChangeBanner', () => ({

@@ -17,7 +17,7 @@ import {
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 import {
   claudeProviderHandle,

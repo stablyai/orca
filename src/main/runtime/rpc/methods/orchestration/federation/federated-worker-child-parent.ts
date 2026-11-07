@@ -1,11 +1,11 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readCallerStoreInstallationId } from '../../../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 
 /**
  * `--on <server> --worktree new-child`: the server's new worktree nests under the coordinator's

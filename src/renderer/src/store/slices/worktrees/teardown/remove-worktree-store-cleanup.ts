@@ -78,10 +78,8 @@ export function applyRemoveWorktreeSuccessState(
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
-      recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
       defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
         s.defaultTerminalTabsAppliedByWorktreeId
       ),
@@ -101,6 +99,7 @@ export function applyRemoveWorktreeSuccessState(
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
       expandedDirs: omitByWorktree(s.expandedDirs),
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
       gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),

@@ -6,7 +6,7 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearListProjects } from '@/runtime/runtime-linear-project-client'
+import { linearListProjects } from '@/runtime/linear/runtime-linear-project-client'
 import {
   collectionWithWorkspaceError,
   emptyLinearCollection,

@@ -1,10 +1,10 @@
-import type { RunRow } from '../../types'
+import type { RunRow } from '../orchestration-records'
 import {
   mailboxAddressOf,
   runBoundToCoordinator,
   runCoordinatorKey,
   type OrchestrationCoordinatorKey
-} from '../../orchestration-caller-identity'
+} from '../../addressing/orchestration-caller-identity'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../shared/orchestration-run-pagination'
 import {
   isEquivalentPaneKey,

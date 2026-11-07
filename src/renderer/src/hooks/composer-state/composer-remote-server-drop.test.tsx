@@ -3,11 +3,11 @@
 import { act, renderHook } from '@testing-library/react'
 import { createRef } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
-  clearRuntimeCompatibilityCacheForTests,
+  clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests

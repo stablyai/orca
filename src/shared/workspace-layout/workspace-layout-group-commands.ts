@@ -1,5 +1,6 @@
 // Share headless group moves with the runtime. Create each split group with its tab atomically; empty groups never persist.
 
+import { canonicalTabGap } from './workspace-layout-client-visibility'
 import type { TabGroupLayoutNode } from '../tab-types'
 import { buildHeadlessTabGroupMove, buildHeadlessTabGroupSplit } from './tab-group-moves'
 import { moveGroupLeafBeside, moveGroupLeafBesideBranch } from './tab-group-layout-tree'
@@ -31,7 +32,11 @@ function anchoredMoveIndex(targetOrder: readonly string[], command: CommandOf<'m
   return at === -1 ? command.index : at + 1
 }
 
-export function moveTab(model: WorkspaceLayoutModel, command: CommandOf<'moveTab'>): Applied {
+export function moveTab(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'moveTab'>,
+  context: LayoutContext
+): Applied {
   const workspace = model.workspaces[command.workspace]!
   const source = sourceGroupOf(workspace, command.tabId)
   if (!source) {
@@ -41,9 +46,16 @@ export function moveTab(model: WorkspaceLayoutModel, command: CommandOf<'moveTab
   if (!target) {
     return refuse('group_not_found')
   }
-  const index = anchoredMoveIndex(
-    target.tabOrder.filter((id) => id !== command.tabId),
-    command
+  const order = target.tabOrder.filter((id) => id !== command.tabId)
+  const visibleIds = context.visibility
+    ? new Set(workspace.tabs.filter(context.visibility).map((tab) => tab.id))
+    : undefined
+  const shown = visibleIds ? order.filter((id) => visibleIds.has(id)) : order
+  const index = canonicalTabGap(
+    order,
+    workspace.tabs,
+    anchoredMoveIndex(shown, command),
+    context.visibility
   )
   if (source.id === command.toGroupId) {
     const tabOrder = source.tabOrder.filter((id) => id !== command.tabId)
@@ -105,6 +117,12 @@ export function splitGroup(
   }
   if (!workspace.groups.some((group) => group.id === command.besideGroupId)) {
     return refuse('group_not_found')
+  }
+  if (context.visibility && source.id === command.besideGroupId) {
+    const visibleIds = new Set(workspace.tabs.filter(context.visibility).map((tab) => tab.id))
+    if (source.tabOrder.filter((id) => visibleIds.has(id)).length === 1) {
+      return refuse('invalid_params')
+    }
   }
   if (source.tabOrder.length === 1 && source.id !== command.besideGroupId) {
     // Moving a group’s sole tab beside another group preserves the source group ID.

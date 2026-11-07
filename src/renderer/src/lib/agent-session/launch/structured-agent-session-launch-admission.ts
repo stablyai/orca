@@ -1,4 +1,4 @@
-import { terminalLaunchOpened } from '@/lib/launch-agent-in-new-tab-host-agents'
+import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
@@ -6,12 +6,12 @@ import { useAppStore } from '@/store/index'
 import {
   adoptAgentSessionLaunchVerdict,
   type AgentSessionLaunchPlan
-} from '@/lib/agent-session-launch-plan'
+} from './routing/agent-session-launch-plan'
 import {
   admitStructuredLaunchOnHost,
   type StructuredLaunchAdmission
 } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
-import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/empty-workspace-default-surface-claims'
+import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import {
   notifyExplicitChatFailure,
   notifyHostDeclined,
@@ -21,15 +21,15 @@ import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/la
 import type {
   StructuredAgentLaunchHooks,
   StructuredAgentLaunchSettlement
-} from '@/lib/structured-agent-launch-settlement'
+} from './continuation/structured-agent-launch-settlement'
 import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
-import type { LaunchAgentInNewTabArgs } from '@/lib/launch-agent-in-new-tab-args'
+import type { LaunchAgentInNewTabArgs } from './new-tab/launch-agent-in-new-tab-args'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { readAgentInventoryForTarget } from '@/lib/agent-detection-target-inventory'
-import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 
 export type AgentTerminalLaunchCompletion = {
   outcome: WebRuntimeTerminalCreateOutcome
@@ -86,7 +86,7 @@ export async function openDeclinedStructuredLaunchTerminal(args: {
   terminal?: DeclinedStructuredLaunchTerminalOptions
 }): Promise<StructuredLaunchTerminal> {
   // Loaded late: the new-tab launcher begins these launches.
-  const { launchAgentInNewTabWithOutcome } = await import('@/lib/launch-agent-in-new-tab')
+  const { launchAgentInNewTabWithOutcome } = await import('./new-tab/launch-agent-in-new-tab')
   const result = launchAgentInNewTabWithOutcome({
     ...args.terminal,
     agent: args.plan.agent,

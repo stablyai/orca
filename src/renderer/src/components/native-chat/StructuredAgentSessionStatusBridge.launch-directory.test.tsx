@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
@@ -13,7 +14,6 @@ import {
 } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
-import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
@@ -59,8 +59,8 @@ vi.mock('@/store', async () => {
   return { useAppStore }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof RuntimeRpcClientModule>()),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 

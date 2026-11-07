@@ -7,7 +7,7 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type {
   StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventSink
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
 import {

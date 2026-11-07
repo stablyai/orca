@@ -1,5 +1,26 @@
 import type * as Monaco from 'monaco-editor'
-import type { PluginThemeTokenColorRule } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
+
+/** A VS Code theme's `tokenColors` entry, as plugin themes and Orca's bundled themes write it. */
+type TokenColorRule = {
+  scope?: string | readonly string[]
+  settings: { foreground?: string; fontStyle?: string }
+}
+
+// Why: the markdown grammar namespaces its tokens so its rules never recolor another language's.
+export const MARKDOWN_TOKEN_PREFIX = 'md.'
+
+// Markdown scopes Dark+ / Light+ leave to the scope they sit in, so themes can style them; each
+// falls back to that scope's style (`# Title` text is `entity.name.section` in `markup.heading`).
+const MARKDOWN_NESTED_SCOPES: Record<string, readonly string[]> = {
+  // Why `.markdown`: fence grammars (ini, LaTeX) emit their own `entity.name.section.*`.
+  'entity.name.section.markdown': ['markup.heading'],
+  'punctuation.definition.heading.markdown': ['markup.heading'],
+  'markup.quote': [],
+  'meta.separator': []
+}
+
+/** Scopes the markdown tokenizer emits for themes even where the built-in colors leave them plain. */
+export const MARKDOWN_THEMABLE_SCOPES = Object.keys(MARKDOWN_NESTED_SCOPES)
 
 // Monaco's languages and the plugin-syntax legend emit Monaco token names, not TextMate scopes, so
 // each name reads the scope a VS Code theme would color it by. Longest Monaco prefix wins; a name
@@ -82,8 +103,8 @@ const BUILT_IN_SPECIFIC_TOKENS = [
 
 type Resolved = { foreground?: string; fontStyle?: string }
 
-function selectors(rule: PluginThemeTokenColorRule): string[] {
-  const scopes = Array.isArray(rule.scope) ? rule.scope : [rule.scope]
+function selectors(rule: TokenColorRule): string[] {
+  const scopes = typeof rule.scope === 'string' ? [rule.scope] : (rule.scope ?? [])
   // Why skip descendant selectors (`a b`): Monaco tokens carry no scope stack to match them.
   return scopes
     .flatMap((scope) => scope.split(','))
@@ -93,7 +114,7 @@ function selectors(rule: PluginThemeTokenColorRule): string[] {
 
 /** TextMate-style match: the longest selector that is a dot-prefix of `scope`, later rules
  *  winning ties, resolved per setting as VS Code does. */
-function resolveScope(rules: readonly PluginThemeTokenColorRule[], scope: string): Resolved {
+function resolveScope(rules: readonly TokenColorRule[], scope: string): Resolved {
   const best: { foreground?: [number, string]; fontStyle?: [number, string] } = {}
   for (const rule of rules) {
     for (const selector of selectors(rule)) {
@@ -127,7 +148,7 @@ function scopeChain(token: string): string[] {
 function rule(
   token: string,
   scopes: readonly string[],
-  tokenColors: readonly PluginThemeTokenColorRule[],
+  tokenColors: readonly TokenColorRule[],
   color: (value: string) => string | null
 ): Monaco.editor.ITokenThemeRule[] {
   let foreground: string | undefined
@@ -150,20 +171,78 @@ function rule(
   ]
 }
 
+/** A rule per simple selector in `tokenColors`, for grammars that hand Monaco raw scopes, which
+ *  Monaco's dotted-prefix rule match resolves exactly like TextMate's. */
+export function scopeTokenRules(
+  tokenColors: readonly TokenColorRule[],
+  color: (value: string) => string | null
+): Monaco.editor.ITokenThemeRule[] {
+  return [...new Set(tokenColors.flatMap(selectors))].flatMap((scope) =>
+    rule(scope, [scope], tokenColors, color)
+  )
+}
+
+/** Rules for the markdown grammar's `md.`-prefixed tokens. */
+export function markdownTokenRules(
+  tokenColors: readonly TokenColorRule[],
+  color: (value: string) => string | null,
+  scopeRules = scopeTokenRules(tokenColors, color)
+): Monaco.editor.ITokenThemeRule[] {
+  return [
+    ...scopeRules.map((scopeRule) => ({
+      ...scopeRule,
+      token: `${MARKDOWN_TOKEN_PREFIX}${scopeRule.token}`
+    })),
+    ...Object.entries(MARKDOWN_NESTED_SCOPES).flatMap(([scope, parents]) =>
+      rule(
+        `${MARKDOWN_TOKEN_PREFIX}${scope}`,
+        [scope, ...parents],
+        [...tokenColors, ...nestedSelectorRules(tokenColors, scope, parents)],
+        color
+      )
+    )
+  ]
+}
+
+const isWithin = (scope: string, selector: string): boolean =>
+  scope === selector || scope.startsWith(`${selector}.`)
+
+/** A theme's `parent scope` descendant selectors (`markup.heading entity.name`), as rules for
+ *  `scope` itself so they outrank its plain selectors, as the deeper TextMate match would. */
+function nestedSelectorRules(
+  tokenColors: readonly TokenColorRule[],
+  scope: string,
+  parents: readonly string[]
+): TokenColorRule[] {
+  return tokenColors.flatMap((tokenColor) => {
+    const scopes =
+      typeof tokenColor.scope === 'string' ? [tokenColor.scope] : (tokenColor.scope ?? [])
+    const matches = scopes
+      .flatMap((selector) => selector.split(','))
+      .map((selector) => selector.trim().split(/\s+/))
+      .some(
+        (parts) =>
+          parts.length === 2 &&
+          parents.some((parent) => isWithin(parent, parts[0])) &&
+          isWithin(scope, parts[1])
+      )
+    return matches ? [{ scope, settings: tokenColor.settings }] : []
+  })
+}
+
 /** Monaco token rules from a theme's `tokenColors`; `color` returns an opaque `#rrggbb` or null
  *  to drop a foreground (unparseable or unreadable on the editor background). */
 export function pluginMonacoTokenRules(
-  tokenColors: readonly PluginThemeTokenColorRule[],
+  tokenColors: readonly TokenColorRule[],
   color: (value: string) => string | null
 ): Monaco.editor.ITokenThemeRule[] {
-  // Why the selectors as tokens too: vendored TextMate grammars hand Monaco raw scopes, which
-  // Monaco's dotted-prefix rule match resolves exactly like TextMate's.
-  const rawScopes = [...new Set(tokenColors.flatMap(selectors))]
+  const scopeRules = scopeTokenRules(tokenColors, color)
   const monacoTokens = [
     ...new Set([...Object.keys(MONACO_TOKEN_SCOPES), ...BUILT_IN_SPECIFIC_TOKENS])
   ]
   return [
-    ...rawScopes.flatMap((scope) => rule(scope, [scope], tokenColors, color)),
+    ...scopeRules,
+    ...markdownTokenRules(tokenColors, color, scopeRules),
     ...monacoTokens.flatMap((token) => rule(token, scopeChain(token), tokenColors, color))
   ]
 }

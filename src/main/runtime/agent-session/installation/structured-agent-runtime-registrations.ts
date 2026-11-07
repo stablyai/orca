@@ -11,7 +11,7 @@ import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-s
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
