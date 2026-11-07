@@ -252,9 +252,21 @@ it('retains an edited Fix checks request through the PR-page Start handoff', asy
   expect(mocks.createWorktree.mock.calls[0].at(-1)).toEqual({ executionHostId: 'runtime:env-b' })
   expect(mocks.createWorktree).toHaveBeenCalledOnce()
   expect(mocks.createWorktree.mock.calls[0][3]).toBe('run')
-  expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-    expect.objectContaining({ content: 'My edited prompt', agent: 'claude', submit: true })
+  expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+    'repo-1::/repo/worktree',
+    expect.objectContaining({
+      startup: expect.objectContaining({
+        launchAgent: 'claude',
+        freshAgentLaunch: expect.objectContaining({
+          agentArgs: '--model opus',
+          sessionOptions: { model: 'claude-opus-5-5[1m]' },
+          prompt: 'My edited prompt',
+          promptDelivery: 'submit-after-ready'
+        })
+      })
+    })
   )
+  expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
 })
 
 it.each(['Start work', 'Use item'])(

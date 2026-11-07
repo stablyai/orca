@@ -15,6 +15,16 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 
 /** Announces a create that finished after the user left its creation surface, instead of pulling them to it. */
 export function showWorktreeCreationReadyToast(
+  ...args: Parameters<typeof createWorktreeCreationReadyToast>
+): void {
+  try {
+    createWorktreeCreationReadyToast(...args)
+  } catch (error) {
+    console.error('worktree create: ready toast failed', args[0].id, error)
+  }
+}
+
+function createWorktreeCreationReadyToast(
   worktree: Pick<Worktree, 'id' | 'repoId' | 'displayName' | 'branch' | 'path' | 'hostId'>,
   creationHostId?: ExecutionHostId
 ): void {

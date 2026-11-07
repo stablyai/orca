@@ -43,6 +43,7 @@ export async function pasteDraftWhenAgentReady(args: {
   onUnconfirmedDelivery?: () => void
   /** The launch pane's PTY once its spawn says the agent started there; null when it didn't. */
   launchPty?: Promise<string | null>
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout, onUnconfirmedDelivery } =
     args
@@ -93,7 +94,8 @@ export async function pasteDraftWhenAgentReady(args: {
     content,
     submit: submit === true,
     agent,
-    inputKind: 'launch'
+    inputKind: 'launch',
+    beforePaste: args.beforePaste
   })
 }
 
@@ -170,6 +172,7 @@ async function sendBracketedPasteToAgent(args: {
   submit: boolean
   agent?: TuiAgent
   inputKind: TerminalInputKind
+  beforePaste?: () => boolean
 }): Promise<boolean> {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
@@ -177,6 +180,9 @@ async function sendBracketedPasteToAgent(args: {
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
+      if (args.beforePaste?.() === false) {
+        return false
+      }
       const pasted = await sendAgentDraftPasteContentNow(ptyId, content, inputKind)
       if (!pasted || !submit) {
         return pasted

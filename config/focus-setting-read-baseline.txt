@@ -215,7 +215,6 @@
 7 src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 1 src/renderer/src/hooks/useUnreadDockBadge.ts
 2 src/renderer/src/hooks/useWindowsTerminalCapabilityOwnerKey.ts
-1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
 6 src/renderer/src/lib/browser/navigation/http-link-destinations.ts
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts

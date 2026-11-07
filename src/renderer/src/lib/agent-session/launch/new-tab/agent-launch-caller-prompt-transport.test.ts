@@ -83,6 +83,7 @@ function commandCarries(text: string): boolean {
   return queuedStartupCommand(store)?.includes(text) ?? false
 }
 
+const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 const PROMPT = 'Explain the failing check and propose a fix.'
 
 // Cover each injection mode: argv embeds text, paste waits for TUI readiness, and env keeps text off command lines.
@@ -162,8 +163,6 @@ describe('agent launch caller prompt transport', () => {
       (row) => [`${row.agent} (${row.mode}) on ${row.promptDelivery}`, row] as const
     )
   )('delivers a prompt to %s the way its agent supports', async (_label, row) => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
     const result = launchAgentInNewTab({
       requestId: 'request-3',
       agent: row.agent,
@@ -195,7 +194,6 @@ describe('agent launch caller prompt transport', () => {
   it('reports an undelivered submit-after-ready prompt without throwing at the caller', async () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(false)
     const onPromptDelivered = vi.fn()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
       requestId: 'request-6',
