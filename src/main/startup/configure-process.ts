@@ -319,7 +319,7 @@ export function enableMainProcessGpuFeatures(): void {
   }
 
   if (process.platform === 'darwin') {
-    // Graphite can retain corrupt Metal tiles after idle. Keep this macOS fix unconditional if GPU fallback ever expands beyond win32.
+    // Graphite can retain corrupt Metal tiles after idle. Keep this macOS fix unconditional if GPU fallback ever expands beyond win32|linux.
     app.commandLine.appendSwitch('disable-skia-graphite')
   }
 
