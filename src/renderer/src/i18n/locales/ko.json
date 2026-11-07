@@ -505,6 +505,7 @@
         "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
         "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
         "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
+        "gigaamV3Ru": "러시아어 전용. Sber의 GigaAM v3. 문장 부호와 대소문자 지원.",
         "whisperTiny": "90개 이상 언어 지원. Parakeet보다 정확도는 낮지만 지원 언어가 가장 다양합니다.",
         "senseVoice": "중국어, 영어, 일본어, 한국어, 광둥어를 지원하며 언어를 자동으로 감지합니다.",
         "gpt4oMiniTranscribe": "정확도가 높고 비용이 저렴한 클라우드 전사. OpenAI API 키가 필요합니다.",

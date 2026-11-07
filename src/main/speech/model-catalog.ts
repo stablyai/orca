@@ -107,6 +107,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'gigaam-v3-ctc-punct-ru-int8',
+    label: 'GigaAM v3 RU',
+    description: 'Russian only. GigaAM v3 by Sber. Punctuation and capitalization.',
+    type: 'nemo-ctc',
+    provider: 'local',
+    language: 'ru',
+    ...getSpeechModelDownloadMetadata('gigaam-v3-ctc-punct-ru-int8'),
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',
