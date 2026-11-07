@@ -3,12 +3,11 @@ import {
   AgentSessionJournalError,
   JournalOutcomeDecodeError
 } from '../writing/journal-write-guards'
-import { JOURNAL_OUTCOME_FORMAT_3 } from './journal-outcome-format-3'
 import type Database from '../../../sqlite/sync-database'
 
 /** The newest record format this build reads, and the one it writes. Each stored record carries its
  * own format; older formats keep their frozen decoders and are never rewritten. */
-export const JOURNAL_OUTCOME_FORMAT = JOURNAL_OUTCOME_FORMAT_3
+export const JOURNAL_OUTCOME_FORMAT = 3
 /** Builds before outcome records refuse a row of this version wherever it sits in the epoch.
  * Under this version, how the input rows before the marker fold into keys and values is frozen: the
  * tail's records were written over that reading. A build that reads old rows into different keys or
