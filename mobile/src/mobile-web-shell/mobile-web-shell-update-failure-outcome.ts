@@ -9,8 +9,8 @@ import {
   type MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
-// Troubleshoot's record of a failed download: what was offered, what was cached, and where the session landed.
-export function recordUpdateFailure(
+// Troubleshoot's record of a failed update: what was offered, what was cached, and where the session landed.
+export function updateFailureRecordEffect(
   session: MobileWebShellSession,
   cause: MobileWebShellUpdateFailureCause,
   landed: MobileWebShellSessionState

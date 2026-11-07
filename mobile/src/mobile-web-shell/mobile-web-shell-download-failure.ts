@@ -3,7 +3,7 @@ import {
   readFailureSide,
   type MobileWebShellUpdateFailureCause
 } from './mobile-web-shell-update-failure'
-import { recordUpdateFailure } from './mobile-web-shell-update-failure-outcome'
+import { updateFailureRecordEffect } from './mobile-web-shell-update-failure-outcome'
 import { cachedGenerationWall, gateState, gateVerdict } from './mobile-web-shell-gates'
 import { openByOwnRoutes } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
@@ -16,7 +16,7 @@ export function onDownloadFailed(
   const decided = decideDownloadFailed(session, cause)
   return {
     ...decided,
-    effects: [...decided.effects, recordUpdateFailure(session, cause, decided.session.state)]
+    effects: [...decided.effects, updateFailureRecordEffect(session, cause, decided.session.state)]
   }
 }
 
