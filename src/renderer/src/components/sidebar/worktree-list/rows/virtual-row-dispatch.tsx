@@ -37,12 +37,14 @@ import {
 } from './item-row'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
+import { getHostSectionRowInset } from './indentation'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeVirtualRowContext = {
   renderRows: RenderRow[]
   firstHeaderIndex: number
+  firstHostHeaderIndex: number
   activeStickyHeaderIndexRef: React.MutableRefObject<number | null>
   activeStickyHostIndexRef: React.MutableRefObject<number | null>
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
@@ -176,7 +178,7 @@ function renderLineageGroupVirtualRow(
 }
 
 // Each row renderer owns its frame because sticky headers, lineage groups and plain cards position differently.
-export function renderWorktreeVirtualRow(
+function renderWorktreeVirtualRowFrame(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
   vItem: VirtualItem,
@@ -289,4 +291,25 @@ export function renderWorktreeVirtualRow(
       {renderWorktreeItemRow(ctx.item, row, false)}
     </div>
   )
+}
+
+/** Renders a row's frame, inset under its host header so the sidebar reads as a tree. */
+export function renderWorktreeVirtualRow(
+  ctx: WorktreeVirtualRowContext,
+  row: RenderRow,
+  vItem: VirtualItem,
+  t?: Translate
+): React.JSX.Element | null {
+  const frame = renderWorktreeVirtualRowFrame(ctx, row, vItem, t)
+  const inset = getHostSectionRowInset({
+    rowType: row.type,
+    index: vItem.index,
+    firstHostHeaderIndex: ctx.firstHostHeaderIndex
+  })
+  if (!frame || inset === 0) {
+    return frame
+  }
+  // Why: every row type owns its frame, so the shared inset is applied to whichever frame it built.
+  const framed: React.ReactElement<{ style?: React.CSSProperties }> = frame
+  return React.cloneElement(framed, { style: { ...framed.props.style, paddingLeft: inset } })
 }

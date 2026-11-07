@@ -12,6 +12,7 @@ type NoticeRowFrameProps = {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   className?: string
+  style?: React.CSSProperties
   children: React.ReactNode
 }
 
@@ -20,6 +21,7 @@ function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
   className = 'absolute left-0 right-0 top-0',
+  style,
   children
 }: NoticeRowFrameProps): React.JSX.Element {
   return (
@@ -31,7 +33,7 @@ function NoticeRowFrame({
       data-index={vItem.index}
       ref={measureVirtualRowElement}
       className={className}
-      style={{ transform: getVirtualRowTransform(vItem.start) }}
+      style={{ ...style, transform: getVirtualRowTransform(vItem.start) }}
     >
       {children}
     </div>

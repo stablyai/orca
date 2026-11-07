@@ -53,6 +53,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
   return {
     renderRows: args.renderRows,
     firstHeaderIndex: args.firstHeaderIndex,
+    firstHostHeaderIndex: args.renderRows.findIndex((row) => row.type === 'host-header'),
     activeStickyHeaderIndexRef: args.virtualization.activeStickyHeaderIndexRef,
     activeStickyHostIndexRef: args.virtualization.activeStickyHostIndexRef,
     measureVirtualRowElement: args.measureVirtualRowElement,
