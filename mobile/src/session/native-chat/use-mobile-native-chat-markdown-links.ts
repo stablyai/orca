@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-path'
 import {
   githubReferenceRepo,

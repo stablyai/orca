@@ -67,7 +67,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 // Main answers the window's chat-tab open (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

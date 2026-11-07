@@ -3,7 +3,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
-import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
+import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { InitialTerminalOptions } from '@/lib/workspace/activation/worktree-activation-store-contract'
 import type {

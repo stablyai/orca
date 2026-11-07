@@ -26,7 +26,7 @@ import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
   RemoteRuntimeSnapshotOutcome,
   RemoteRuntimeSnapshotRequestOptions
-} from '../../../runtime/remote-runtime-terminal-multiplexer-types'
+} from '../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import type {
   AcceptedInputOptions,
   PtyPreconnectInputEntry
@@ -312,6 +312,7 @@ export type IpcPtyTransportOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   agentLaunch?: AgentPaneLaunchRequest
+  trustWorktreeId?: string
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null

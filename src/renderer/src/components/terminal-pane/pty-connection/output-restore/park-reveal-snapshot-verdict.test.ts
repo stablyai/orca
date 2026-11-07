@@ -8,7 +8,9 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const writeTerminalOutput = vi.hoisted(() => vi.fn())
 
-vi.mock('../../terminal-freeze-breadcrumbs', () => ({ recordTerminalFreezeBreadcrumb: vi.fn() }))
+vi.mock('../../render-health/diagnostics/terminal-freeze-breadcrumbs', () => ({
+  recordTerminalFreezeBreadcrumb: vi.fn()
+}))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({ writeTerminalOutput }))
 
 const IMAGE = { data: 'PROMPT $ ', cols: 80, rows: 24, seq: 7, source: 'headless' as const }

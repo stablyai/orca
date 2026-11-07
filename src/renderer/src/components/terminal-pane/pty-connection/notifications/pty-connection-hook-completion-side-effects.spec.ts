@@ -595,7 +595,7 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('preserves replacement-agent title side effects through the process replacement veto', async () => {
       const { dispatchAgentHookTerminalLifecycle } =
-        await import('../../agent-hook-terminal-lifecycle')
+        await import('../../agent-completion/agent-hook-terminal-lifecycle')
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks7 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')

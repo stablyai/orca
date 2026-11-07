@@ -119,6 +119,7 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  hostContextLabel?: string
   /** Workspaces nested under this folder; set only when it has any. */
   lineageChildCount?: number
   lineageChildWorktreeIds?: readonly string[]

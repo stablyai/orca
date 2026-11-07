@@ -1,4 +1,4 @@
-import { unwrapRuntimeRpcResult } from '../../../src/renderer/src/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-result'
 import type { AutomationRun } from '../../../src/shared/automations-types'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'

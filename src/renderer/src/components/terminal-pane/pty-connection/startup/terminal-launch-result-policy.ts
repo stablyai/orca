@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/index'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { ReattachPayloadSession } from '../reattach/reattach-payload-session'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
-import type { PtyPaneStartup } from '../../pty-connection-types'
+import type { PtyPaneStartup } from './pty-pane-startup'
 
 type SavedStartup = ColdRestoreAgentResumeStartup | PtyPaneStartup
 

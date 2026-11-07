@@ -4,7 +4,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { useAppStore } from '@/store/index'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

@@ -10,12 +10,12 @@ import { createTabsSlice } from './slices/tabs'
 import { createUISlice } from './slices/ui'
 import { createSettingsSlice } from './slices/settings'
 import { createKeybindingsSlice } from './slices/keybindings'
-import { createGitHubSlice } from './slices/github'
-import { createHostedReviewSlice } from './slices/hosted-review'
-import { createLinearSlice } from './slices/linear'
+import { createGitHubSlice } from './github/github'
+import { createHostedReviewSlice } from './slices/hosted-review/hosted-review'
+import { createLinearSlice } from './slices/linear/linear'
 import { createPreflightSlice } from './slices/preflight'
-import { createJiraSlice } from './slices/jira'
-import { createEditorSlice } from './slices/editor'
+import { createJiraSlice } from './slices/jira/jira'
+import { createEditorSlice } from './slices/editor/create-editor-slice'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
 import { createWorkspaceSpaceSlice } from './slices/workspace-space'
@@ -25,7 +25,7 @@ import {
   createMuseUsageSlice,
   createOpenCodeUsageSlice
 } from './slices/usage-provider-slices'
-import { createBrowserSlice } from './slices/browser'
+import { createBrowserSlice } from './slices/browser/create-browser-slice'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
 import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
@@ -40,7 +40,7 @@ import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import { createWorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
-import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
+import { createPullRequestGenerationSlice } from './slices/hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
@@ -55,7 +55,7 @@ import { createStructuredChatSleptAtSlice } from './slices/structured-chat-slept
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { createWorkspaceGridViewSlice } from './slices/workspace-grid-view'
 import { e2eConfig } from '@/lib/e2e-config'
-import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import {
   registerHttpLinkStoreAccessor,
   registerHttpLinkGroupActionAvailability,
@@ -216,9 +216,9 @@ if ((import.meta.env.DEV || e2eConfig.exposeStore) && typeof window !== 'undefin
   if (e2eConfig.exposeStore) {
     testWindow.__webRuntimeSessionE2E = {
       createTerminal: async (args: Parameters<typeof createWebRuntimeSessionTerminal>[0]) =>
-        (await import('@/runtime/web-runtime-terminal-creation')).createWebRuntimeSessionTerminal(
-          args
-        )
+        (
+          await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation')
+        ).createWebRuntimeSessionTerminal(args)
     }
   }
 }

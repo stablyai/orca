@@ -19,7 +19,7 @@ import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/i
 import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 import {
@@ -45,6 +45,7 @@ import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-histo
 import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
+import { useNativeChatRailWake } from './use-native-chat-rail-wake'
 import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
@@ -287,10 +288,19 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
+  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
+  const onTranscriptScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      onScroll(event)
+      sustainRail()
+    },
+    [onScroll, sustainRail]
+  )
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
-  }, [beginNavigation, recordReaderScroll])
+    wakeRail()
+  }, [beginNavigation, recordReaderScroll, wakeRail])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -342,14 +352,14 @@ export function NativeChatMessageList({
           <div className="relative min-h-0 flex-1">
             <div
               ref={scrollRef}
-              onScroll={onScroll}
+              onScroll={onTranscriptScroll}
               onCopy={copyChatMathSelection}
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
               data-native-chat-scroll
               aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
-              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >
               {showOlderHistory ? (
                 <NativeChatOlderHistoryRow
@@ -382,6 +392,7 @@ export function NativeChatMessageList({
             </div>
             <NativeChatMessageRail
               rail={rail}
+              railRef={railRef}
               scrollRef={scrollRef}
               onSelect={navigation.selectRailItem}
               onReaderScroll={readerInput.railWheel}

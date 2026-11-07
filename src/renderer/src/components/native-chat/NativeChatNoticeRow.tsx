@@ -214,7 +214,11 @@ export function NativeChatNoticeRow({
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
-  const antigravitySignInContent = nativeChatAntigravitySignInContent(failure?.kind, agentName)
+  const antigravitySignInContent = nativeChatAntigravitySignInContent(
+    failure?.kind,
+    agentName,
+    failure?.account
+  )
   const usageLimitContinue =
     block.usageLimitTurnItemId !== undefined &&
     block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId

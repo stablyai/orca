@@ -13,8 +13,10 @@ vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: rpc.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 

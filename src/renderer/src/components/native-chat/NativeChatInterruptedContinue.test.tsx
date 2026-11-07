@@ -48,7 +48,7 @@ vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: async () => {}
 }))
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-label', () => ({

@@ -13,8 +13,8 @@ afterEach(() => {
 
 import '../../../../../../shared/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 
@@ -35,6 +35,56 @@ const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTranspor
 describe('createRemoteRuntimePtyTransport', () => {
   beforeEach(() => {
     resetRemoteRuntimeTransport()
+  })
+
+  it('retries failed section trust negotiation before creating the agent with its owner', async () => {
+    vi.useFakeTimers()
+    try {
+      let reachable = false
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'status.get') {
+          if (!reachable) {
+            throw Object.assign(new Error('Timed out waiting for the remote Orca runtime.'), {
+              code: 'runtime_timeout'
+            })
+          }
+          return {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: ['agent-session.host-authority.v1', 'agent-session.trust-worktree.v1']
+            }
+          }
+        }
+        return { ok: true, result: { terminal: { handle: 'section-agent' } } }
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'folder-x',
+        trustWorktreeId: 'worktree-y',
+        launchAgent: 'claude'
+      })
+      try {
+        await transport.connect({ url: '', callbacks: {} })
+        expect(runtimeCall.mock.calls.every(([args]) => args.method === 'status.get')).toBe(true)
+
+        reachable = true
+        await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@section-agent'))
+        const creates = runtimeCall.mock.calls.filter(
+          ([args]) => args.method === 'terminal.createAgentSession'
+        )
+        expect(creates).toHaveLength(1)
+        expect(creates[0][0].params).toMatchObject({
+          worktree: 'id:folder-x',
+          trustWorktreeId: 'worktree-y'
+        })
+      } finally {
+        transport.destroy?.()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('retries an unknown terminal-create outcome exactly once with the same mutation id', async () => {

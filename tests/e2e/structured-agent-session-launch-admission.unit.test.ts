@@ -8,7 +8,8 @@ import { normalizeLoadedGlobalSettings } from '../../src/main/persistence/loadin
 import { prepareLoadedTerminalSettings } from '../../src/main/persistence/loading-store/prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from '../../src/main/persistence/loading-store/prepare-loaded-profile-settings'
 import { useNativeChatHostPermissionGate } from '@/components/native-chat/use-native-chat-host-permission-gate'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as runtimeRpcCapability from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import * as runtimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import type * as HostPermission from '@/runtime/structured-chat-host-permission'
 import type { Worktree } from '../../src/shared/worktree/types'
 
@@ -44,7 +45,7 @@ vi.mock('@/runtime/structured-chat-host-permission', async (importOriginal) => (
   readStructuredChatHostPermissionVerdict: mocks.hostPermission
 }))
 // Switch-on, main opens this machine's chats and its frames draw them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -438,7 +439,7 @@ describe('a structured chat launch on a paired server', () => {
         answerCapability = resolve
       })
       const capabilityRead = vi
-        .spyOn(runtimeRpc, 'runtimeEnvironmentSupportsCapability')
+        .spyOn(runtimeRpcCapability, 'runtimeEnvironmentSupportsCapability')
         .mockReturnValue(capability)
       let answerSettings: (value: {
         settings: { agentDefaultArgs: Record<string, string> }
@@ -448,7 +449,7 @@ describe('a structured chat launch on a paired server', () => {
           answerSettings = resolve
         }
       )
-      const settingsRead = vi.spyOn(runtimeRpc, 'callRuntimeRpc').mockReturnValue(hostSettings)
+      const settingsRead = vi.spyOn(runtimeRpcCall, 'callRuntimeRpc').mockReturnValue(hostSettings)
       mocks.createSupport.mockResolvedValue({ supported: true })
       const mounted = renderHook(() =>
         useNativeChatHostPermissionGate(

@@ -12,7 +12,7 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () =
 vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   unregisterPtyDataHandlers: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
+vi.mock('@/components/terminal-pane/snapshots/shutdown-buffer-captures', () => ({
   shutdownBufferCaptures: vi.fn()
 }))
 

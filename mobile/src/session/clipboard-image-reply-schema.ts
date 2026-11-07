@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 // Require uploadId because every append/commit/abort addresses that slot.
 export const clipboardImageUploadSlotSchema = z.looseObject({ uploadId: z.string() })

@@ -31,8 +31,8 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
   )
 }
 
@@ -52,7 +52,7 @@ export function mirrorTabViewModeToHost(
     return
   }
   const worktreeId = found.worktreeId
-  void import('@/runtime/web-runtime-terminal-actions').then(({ setWebRuntimeTabProps }) =>
-    setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
+  void import('@/runtime/hosted-terminals/actions/web-runtime-tab-properties').then(
+    ({ setWebRuntimeTabProps }) => setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }

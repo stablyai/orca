@@ -10,7 +10,7 @@ import {
   holdTerminalTabsForStartup,
   releaseStartupTerminalTabHold
 } from './terminal/startup-terminal-tab-hold'
-import { hasRegisteredRuntimeTerminalTab } from '../runtime/mounted-terminal-tab-registry'
+import { hasRegisteredRuntimeTerminalTab } from '../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout } from './terminal/split-group-mount'
 import { isParkRestorableTerminalPty } from './terminal-pane/parking/retention/terminal-hidden-view-parking'
 import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'

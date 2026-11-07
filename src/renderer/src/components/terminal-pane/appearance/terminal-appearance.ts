@@ -5,6 +5,7 @@ import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appea
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 
@@ -25,7 +26,7 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../../shared/terminal/protocol/queries/terminal-view-attributes'
-import { publishTerminalViewAttributes } from '../terminal-view-attributes-publisher'
+import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
@@ -216,7 +217,7 @@ export function applyTerminalAppearance(
     const paneSize = getTerminalFontSizeOverride(pane.leafId)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
-      fontFamily: buildFontFamily(settings.terminalFontFamily),
+      fontFamily: buildFontFamily(pluginFontFamilyWhenLoaded(settings.terminalFontFamily)),
       fontWeight: terminalFontWeights.fontWeight,
       fontWeightBold: terminalFontWeights.fontWeightBold,
       lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)

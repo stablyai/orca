@@ -1,4 +1,8 @@
-import { LEAF_1, LEAF_2, unboundSplitLayout } from '../../terminal-pane-tab-detach-fixture'
+import {
+  LEAF_1,
+  LEAF_2,
+  unboundSplitLayout
+} from '../../layout/detach/terminal-pane-tab-detach-fixture'
 import type { AppState } from '@/store/types'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
 import './recovery/remote-runtime-pty-recovery-state'
@@ -7,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn<() => AppState>(() => {
@@ -18,7 +22,7 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 // Why: the recovery portals read a pairing-refusal hook this pane-binding test doesn't exercise.
-vi.mock('../../use-managed-pairing-refused', () => ({
+vi.mock('./recovery/use-managed-pairing-refused', () => ({
   useManagedPairingRefusedEnvironmentId: () => null
 }))
 
@@ -329,7 +333,8 @@ describe('remote runtime pane binding ownership', () => {
           expect(await connecting).toBeUndefined()
           await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
           expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-          const { createPaneRecoveryReconnect } = await import('../../TerminalPaneRecoveryPortals')
+          const { createPaneRecoveryReconnect } =
+            await import('./recovery/TerminalPaneRecoveryPortals')
           reachable = true
           const retryRecovery = transport.retryRecovery
           let accepted: boolean | undefined

@@ -1,3 +1,5 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-work-item-params'
 import {
   GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
@@ -9,14 +11,14 @@ import {
   GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as complete
 } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+
 import {
   lookupGitHubWorkItemDetailsForSource,
   lookupGitHubWorkItemForSource,
   lookupGitHubWorkItemByOwnerRepoForSource
 } from './github-work-item-source-lookup'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   clearRuntimeEnvironmentConnectionGenerations,
   setRuntimeEnvironmentConnectionGenerationForTests
@@ -24,8 +26,8 @@ import {
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { useAppStore } from '@/store/index'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { capturePRCheckContract } from '../../pr-check-observation-contract'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
 import { lookupCmdJGitHubUrlWorkItem } from '../../cmd-j-github-url-lookup'
@@ -35,11 +37,21 @@ vi.mock('@/store/index', async () => {
   return { useAppStore: create(() => ({ repos: [], runtimeStatusByEnvironmentId: new Map() })) }
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async () => {
-  const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async () => {
+  const actual = await vi.importActual<typeof RuntimeRpcCallModule>(
+    '@/runtime/rpc/calls/runtime-rpc-call'
+  )
   return {
     ...actual,
-    callRuntimeRpc: vi.fn(),
+    callRuntimeRpc: vi.fn()
+  }
+})
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async () => {
+  const actual = await vi.importActual<typeof RuntimeCapabilityProofModule>(
+    '@/runtime/rpc/compatibility/runtime-capability-proof'
+  )
+  return {
+    ...actual,
     runtimeEnvironmentSupportsCapability: vi.fn().mockResolvedValue(false)
   }
 })

@@ -4,7 +4,7 @@ import type { AgentLaunchSettings } from '../../../../../shared/agent-launch/cho
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useAppStore } from '@/store/index'
 import { useStructuredAgentSessionOwnPermissionState } from '@/runtime/structured-agent-session-host-capability'
-import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
+import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import {
   readHostAgentLaunchSettings,
   subscribeHostAgentLaunchSettings

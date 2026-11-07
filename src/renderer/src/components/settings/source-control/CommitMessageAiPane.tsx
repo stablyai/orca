@@ -21,7 +21,7 @@ import {
   type CommitMessageModelCapability
 } from '../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getRuntimeGitScope } from '../../../runtime/runtime-git-client-context'
+import { getRuntimeGitScope } from '../../../runtime/source-control/git/runtime-git-client-context'
 import { useAppStore } from '../../../store/index'
 import { CustomAgentCommandField } from './CustomAgentCommandField'
 import { Label } from '../../ui/label'

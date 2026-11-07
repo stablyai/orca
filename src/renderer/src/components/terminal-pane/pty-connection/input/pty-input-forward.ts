@@ -1,12 +1,15 @@
-import { subscribeToTerminalInputData } from '../../terminal-user-input-signal'
-import { isPassiveTerminalInputReport } from '../../terminal-passive-input-report'
+import { subscribeToTerminalInputData } from '../../input/terminal-user-input-signal'
+import { isPassiveTerminalInputReport } from '../../input/terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../../input/ime/terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../../shared/terminal/protocol/queries/terminal-query-reply'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { isPaneReplaying } from '../../replay-guard'
-import { isXtermMouseReport, isXtermWheelCursorKey } from '../../terminal-pointer-input-sequences'
-import { shouldDropQuarantinedTerminalInput } from '../../terminal-input-quarantine'
+import { isPaneReplaying } from '../../snapshots/replay-guard'
+import {
+  isXtermMouseReport,
+  isXtermWheelCursorKey
+} from '../../input/pointer/terminal-pointer-input-sequences'
+import { shouldDropQuarantinedTerminalInput } from '../../input/terminal-input-quarantine'
 import {
   TERMINAL_FOCUS_IN_SEQUENCE,
   TERMINAL_FOCUS_OUT_SEQUENCE

@@ -10,7 +10,7 @@ import {
 } from './workspace-reference-fixtures.test-support'
 vi.mock('@/store', async () => {
   const browserWindow = globalThis.window
-  const { createTestStore } = await import('@/store/slices/github-slice-test-harness')
+  const { createTestStore } = await import('@/store/github/github-slice-test-harness')
   globalThis.window = browserWindow
   return { useAppStore: createTestStore() }
 })

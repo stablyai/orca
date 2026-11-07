@@ -7,8 +7,8 @@ import type {
   CrewSubscriptionAttemptCallbacks
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/runtime-rpc-subscribe'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import type { RuntimeRpcSubscriptionHandlers } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import { useOrchestrationCrew } from './use-orchestration-crew'
 
@@ -51,7 +51,7 @@ const rig = vi.hoisted(() => {
     }
   }
 })
-vi.mock('@/runtime/runtime-rpc-subscribe', () => ({
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
   subscribeRuntimeRpc: vi.fn(
     async (
       target: RuntimeClientTarget,

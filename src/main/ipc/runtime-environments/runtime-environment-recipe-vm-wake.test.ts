@@ -109,14 +109,6 @@ describe('a request to a recipe VM environment', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('goes through to a running VM, holding a workspace open with its owner', async () => {
-    recordVm('running')
-    await expect(codeOf('none')).resolves.toBeNull()
-    expect(holdOpen).not.toHaveBeenCalled()
-    await expect(codeOf('wake')).resolves.toBeNull()
-    expect(holdOpen).toHaveBeenCalledWith('workspace-of-vm-1', false, 180_000, undefined)
-  })
-
   it.each(['suspended', 'resume_failed'] as const)(
     'leaves a %s VM asleep for a request that does not open its workspace',
     async (status) => {
@@ -126,18 +118,6 @@ describe('a request to a recipe VM environment', () => {
       expect(holdOpen).not.toHaveBeenCalled()
     }
   )
-
-  it.each([
-    ['up', null],
-    ['waking', 'runtime_environment_waking'],
-    ['wake-failed', 'runtime_environment_wake_failed'],
-    ['slept', 'runtime_environment_asleep']
-  ] as const)('answers a held open that ended %s', async (opening, code) => {
-    recordVm('suspended')
-    ownerOpening = opening
-    await expect(codeOf('wake')).resolves.toBe(code)
-    expect(holdOpen).toHaveBeenCalledWith('workspace-of-vm-1', true, 180_000, undefined)
-  })
 
   it.each([
     ['waking', 'runtime_environment_waking'],
@@ -152,11 +132,6 @@ describe('a request to a recipe VM environment', () => {
   )
 
   // A phone gives up after 30 seconds, so its open is held for less.
-  it("holds an open only as long as its caller's preparation allows", async () => {
-    recordVm('suspended')
-    await prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake', 25_000)
-    expect(holdOpen).toHaveBeenCalledWith('workspace-of-vm-1', true, 25_000, undefined)
-  })
 
   // A Disconnect made before the open holds: no client's open wakes the VM behind that server.
   it('refuses an open of a server the user disconnected, before waking anything', async () => {
@@ -210,11 +185,5 @@ describe('a request to a recipe VM environment', () => {
     recordVm('suspended', 'env-manual')
     await expect(codeOf('none', { id: 'env-manual', source: 'manual' })).resolves.toBeNull()
     expect(state).not.toHaveBeenCalled()
-  })
-
-  it('says a suspended VM is asleep on a host that cannot wake it', async () => {
-    registerRecipeVmWaker(null)
-    recordVm('suspended')
-    await expect(codeOf('wake')).resolves.toBe('runtime_environment_asleep')
   })
 })

@@ -23,7 +23,7 @@ vi.mock('./terminal-drop-shell', () => ({
 vi.mock('./terminal-drop-path-writer', () => ({
   writeTerminalDropPathsToCapturedTarget: mocks.write
 }))
-vi.mock('../../terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: mocks.activity }))
+vi.mock('../terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: mocks.activity }))
 vi.mock('./terminal-native-file-drop-destination', () => ({
   handleNativeTerminalFileDrop: vi.fn()
 }))

@@ -11,7 +11,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { useAllWorktrees } from '@/store/selectors'
 import type { LinearComment } from '../../../shared/linear/issue-types'
-import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
+import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
 import {
   initLinearIssueEditState,
   type LinearItemDrawerProps,

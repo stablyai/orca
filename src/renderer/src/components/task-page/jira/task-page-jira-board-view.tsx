@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
 import { classifyTransitionRequirements } from '../../../../../shared/jira/jira-transition-fields'
 import type {

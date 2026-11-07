@@ -10,11 +10,11 @@ export {
   resolveEditorOwnerRoute,
   type EditorFileOperationProvenance
 } from './editor-file-operation-provenance'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { resolveWorkspaceDirectory } from './workspace-directory'
 import { getFileConnectionOwnerFromState } from './connection-owner-resolution'
@@ -73,7 +73,8 @@ export function getEditorFileReadContext(
         state,
         file.worktreeId,
         file.runtimeEnvironmentId,
-        file.runtimeEnvironmentId !== undefined
+        file.runtimeEnvironmentId !== undefined,
+        file.externalSshTargetId ? toSshExecutionHostId(file.externalSshTargetId) : undefined
       )
   const route = provenance.generation.route
   const workspaceScope = parseWorkspaceKey(file.worktreeId)

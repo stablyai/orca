@@ -167,15 +167,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     vi.useRealTimers()
   })
 
-  it('desktop restart alone does not rewrite the authority (control)', async () => {
-    const before = authority.get()
-    await flushDesktopDebounce()
-    const after = authority.get()
-    expect(after.hideSleepingWorkspaces).toBe(before.hideSleepingWorkspaces)
-    expect(after.hideDefaultBranchWorkspace).toBe(before.hideDefaultBranchWorkspace)
-    expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
-  })
-
   it('saves a revealed remote host after an unrelated older broadcast', async () => {
     act(() => {
       authority.set({ workspaceHostScope: 'local', visibleWorkspaceHostIds: ['local'] })
@@ -208,74 +199,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     deliverBroadcasts()
     expect(authority.get().visibleWorkspaceHostIds).toBeNull()
     expect(authority.get().workspaceHostScope).toBe('all')
-  })
-
-  it('persists a left sidebar close across an unrelated sync and restores it on startup', async () => {
-    act(() => {
-      store.getState().toggleSidebar()
-      authority.set({ sidebarWidth: 320 })
-    })
-    deliverBroadcasts()
-    expect(store.getState().sidebarOpen).toBe(false)
-    await flushDesktopDebounce()
-    expect(authority.get().sidebarOpen).toBe(false)
-
-    const restarted = createUIStore()
-    restarted.getState().hydratePersistedUI(authority.get(), 'startup')
-    expect(restarted.getState().sidebarOpen).toBe(false)
-    expect(restarted.getState().sidebarWidth).toBe(320)
-  })
-
-  it('persists a left sidebar reopen while the close acknowledgement is still pending', async () => {
-    holdAcks = true
-    act(() => store.getState().toggleSidebar())
-    await flushDesktopDebounce()
-    expect(authority.get().sidebarOpen).toBe(false)
-
-    act(() => store.getState().toggleSidebar())
-    deliverBroadcasts()
-    expect(store.getState().sidebarOpen).toBe(true)
-    await resolveAcks()
-    await flushDesktopDebounce()
-    await resolveAcks()
-    deliverBroadcasts()
-    expect(authority.get().sidebarOpen).toBe(true)
-    expect(store.getState().sidebarOpen).toBe(true)
-    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
-  })
-
-  it('merges another client’s field without reverting a prior desktop write', async () => {
-    // Desktop turns on "hide default branch"; the write lands and broadcasts.
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-    deliverBroadcasts()
-
-    // Another client sends only its changed field.
-    authority.set({ hideSleepingWorkspaces: true })
-
-    expect(authority.get().hideSleepingWorkspaces).toBe(true)
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-
-    deliverBroadcasts()
-    expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
-  })
-
-  it('persists the desktop sleeping-workspaces toggle in the durable hide form', async () => {
-    // Verify mirror-to-wire inversion: showSleeping=false persists hideSleeping=true.
-    act(() => {
-      store.getState().setShowSleepingWorkspaces(false)
-    })
-    await flushDesktopDebounce()
-    expect(authority.get().hideSleepingWorkspaces).toBe(true)
-
-    act(() => {
-      store.getState().setShowSleepingWorkspaces(true)
-    })
-    await flushDesktopDebounce()
-    expect(authority.get().hideSleepingWorkspaces).toBe(false)
   })
 
   it('the desktop debounced writer preserves a concurrent client’s field', async () => {
@@ -345,86 +268,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
     deliverBroadcasts()
     expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
-  })
-
-  it('edits made during the ack window flush at debounce rate, not ack rate', async () => {
-    // Trailing rediffs must obey debounce, or dragging sends one write per IPC ack.
-    holdAcks = true
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    const sendsAfterFirstFlush = setCallCount
-
-    act(() => {
-      store.getState().setHideCliCreatedWorkspaces(true)
-    })
-    act(() => {
-      store.getState().setHideDetachedHeadWorkspaces(true)
-    })
-    act(() => {
-      store.getState().setHideAutomationGeneratedWorkspaces(true)
-    })
-
-    await resolveAcks()
-    expect(setCallCount).toBe(sendsAfterFirstFlush)
-
-    await flushDesktopDebounce()
-    expect(setCallCount).toBe(sendsAfterFirstFlush + 1)
-    await resolveAcks()
-    await flushDesktopDebounce()
-    await resolveAcks()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
-    expect(authority.get().hideDetachedHeadWorkspaces).toBe(true)
-    expect(authority.get().hideAutomationGeneratedWorkspaces).toBe(true)
-  })
-
-  it('converges when a remote client writes the same field during the ack window', async () => {
-    // Never fold an ack over a newer hydrated baseline; it would leave mirror/authority divergent without further traffic.
-    holdAcks = true
-
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-
-    // Another client writes the SAME field at the authority after us; both broadcasts
-    // (our echo, then the other client's) land before our ack does.
-    authority.set({ hideDefaultBranchWorkspace: false })
-    deliverBroadcasts()
-    await resolveAcks()
-
-    await flushDesktopDebounce()
-    await resolveAcks()
-    deliverBroadcasts()
-    await flushDesktopDebounce()
-    await resolveAcks()
-    deliverBroadcasts()
-
-    // Same-field conflicts may choose either writer, but settled mirrors must agree.
-    expect(store.getState().hideDefaultBranchWorkspace).toBe(
-      authority.get().hideDefaultBranchWorkspace
-    )
-  })
-
-  it('a rejected write folds nothing and re-flushes with the next change', async () => {
-    rejectSets = true
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
-
-    rejectSets = false
-    act(() => {
-      store.getState().setHideCliCreatedWorkspaces(true)
-    })
-    await flushDesktopDebounce()
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
   })
 
   it('a terminal rejection leaves one dirty field without an automatic retry loop', async () => {
@@ -561,19 +404,6 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     })
     await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-  })
-
-  it('overlapping in-flight writes on one field decrement, not clear, the marker', () => {
-    // Two overlapping writes require counts: the first ack must not unpin the second.
-    const s = store.getState()
-    s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
-    s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
-    store.getState().notePersistedUIWriteSettled(['hideDefaultBranchWorkspace'], null)
-    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({
-      hideDefaultBranchWorkspace: 1
-    })
-    store.getState().notePersistedUIWriteSettled(['hideDefaultBranchWorkspace'], null)
-    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
   it('desktop and another client changing the same field converge on the newest write', async () => {

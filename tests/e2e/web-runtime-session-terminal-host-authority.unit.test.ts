@@ -1,4 +1,4 @@
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { launchAgentInWebHostTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import {
   independentActionEffortPlan,
@@ -6,10 +6,8 @@ import {
 } from './prepared-action-launch.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
-import {
-  deliverCreatedWebRuntimeAgentSessionPrompt,
-  createWebRuntimeSessionTerminal
-} from '../../src/renderer/src/runtime/web-runtime-terminal-creation'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from '../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+import { createWebRuntimeSessionTerminal } from '../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { peekWebSessionFocusIntent } from '../../src/renderer/src/runtime/web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from '../../src/renderer/src/runtime/web-session-close-intent'
 import {
@@ -20,8 +18,8 @@ import {
   makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
-} from '../../src/renderer/src/runtime/web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from '../../src/renderer/src/runtime/runtime-environment-bridge-fixture'
+} from '../../src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../src/renderer/src/runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   changedAgentPaneKeys: new Set<string>(),

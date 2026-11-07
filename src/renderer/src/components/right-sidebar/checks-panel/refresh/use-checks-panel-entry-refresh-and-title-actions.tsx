@@ -1,9 +1,9 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
 import { toast } from 'sonner'
 
 import type { ChecksPanelContextState } from '../use-checks-panel-context-state'

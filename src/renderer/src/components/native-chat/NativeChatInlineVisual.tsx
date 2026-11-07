@@ -13,7 +13,10 @@ import { translate } from '@/i18n/i18n'
 import { fileArtifactSourceKey } from '@/lib/file-artifact-source-key'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { basename } from '@/lib/path'
-import { getRuntimeTargetHostId, runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  runtimeTargetEnvironmentId
+} from '@/runtime/rpc/targets/runtime-client-target'
 import { NATIVE_CHAT_VISUAL_RESERVED_HEIGHT, NativeChatVisualFrame } from './NativeChatVisualFrame'
 import { observeTranscriptVisibility } from './NativeChatTranscriptChrome'
 import { NativeChatForwardedGestureContext } from './native-chat-reader-scroll-input'

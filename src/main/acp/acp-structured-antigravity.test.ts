@@ -179,6 +179,112 @@ it('runs the chat permission mode picked mid-chat as the server mode on the next
   ])
 })
 
+it('restarts a host agy chat with the skip-permissions flag only while it has Full access', async () => {
+  const hostSpec = ANTIGRAVITY.hostBackend!.spec
+  let resumed = false
+  const { rig, host, fence, ready } = await openHostRig({
+    spec: ANTIGRAVITY,
+    initialize: RESUMES,
+    script: (agent) => {
+      agent.on('session/resume', (frame) => agent.reply(frame, {}))
+      agent.on('session/prompt', (frame) => agent.reply(frame, { stopReason: 'end_turn' }))
+      agent.on('session/set_config_option', (frame) => {
+        const { value } = z.object({ value: z.string() }).parse(frame.params)
+        const options = ['default', 'accept-edits', 'plan'].map((id) => ({ value: id, name: id }))
+        const mode = { id: 'mode', name: 'Mode', category: 'mode', type: 'select', options }
+        agent.reply(frame, { configOptions: [{ ...mode, currentValue: value }] })
+      })
+    },
+    deps: {
+      resolveLaunch: async ({ permissionMode }) => {
+        const fullAccess = permissionMode === 'full-access'
+        return {
+          ...(await launch(() => resumed, hostSpec)()),
+          args: hostSpec.args({ fullAccess, pluginDir: null }),
+          fullAccess
+        }
+      }
+    }
+  })
+  const attach = hostTestAttachParams(null, {
+    provider: 'antigravity',
+    agent: 'antigravity',
+    accountHome: { variable: 'GEMINI_HOME', path: '/home/me/.gemini' },
+    providerHandle: undefined
+  })
+  expect(await host.attach(CALLER, attach)).toMatchObject({ ok: true })
+  await ready()
+  resumed = true
+  const runs: unknown[] = []
+  let child = rig.child()
+  for (const value of ['full-access', 'ask']) {
+    const fields = { key: 'permissionMode', value }
+    const fingerprint = { method: 'agentSession.setOption', sessionId: HOST_TEST_SESSION, fields }
+    const envelope = {
+      sessionId: HOST_TEST_SESSION,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: fence(),
+      payloadFingerprint: computeAgentSessionPayloadFingerprint(fingerprint)
+    }
+    expect(await host.setOption(CALLER, { envelope, ...fields })).toMatchObject({ ok: true })
+    await send(host, value)
+    const previous = child
+    child = await waitFor(() => {
+      expect(rig.child()).not.toBe(previous)
+      expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
+      return rig.child()
+    })
+    const options = await rig.adapter.readOptions({ sessionId: HOST_TEST_SESSION, fence: fence() })
+    runs.push({
+      args: child.launch.args,
+      resumed: framesOf(child, 'session/resume').length,
+      mode: framesOf(child, 'session/set_config_option')[0]?.params,
+      reported: options.current.reportedPermissionMode
+    })
+  }
+  expect(runs).toEqual([
+    {
+      args: ['acp', '--dangerously-skip-permissions'],
+      resumed: 1,
+      mode: expect.objectContaining({ configId: 'mode', value: 'default' }),
+      reported: 'full-access'
+    },
+    {
+      args: ['acp'],
+      resumed: 1,
+      mode: expect.objectContaining({ configId: 'mode', value: 'default' }),
+      reported: 'ask'
+    }
+  ])
+})
+
+it("leaves a Full access host chat's plan approval to the person", async () => {
+  let answered = false
+  const rig = await openAcpAdapterRig({
+    spec: ANTIGRAVITY.hostBackend!.spec,
+    launch: { args: ['acp', '--dangerously-skip-permissions'], fullAccess: true },
+    script: (agent) =>
+      agent.on('session/prompt', () => {
+        // agy's flag does not approve plans, so it still asks.
+        void agent
+          .request('plan', 'session/request_permission', {
+            sessionId: PROVIDER_SESSION,
+            toolCall: { toolCallId: 'plan-1', title: 'Approve plan' },
+            options: [{ optionId: 'proceed', name: 'Proceed', kind: 'allow_once' }]
+          })
+          .then(() => {
+            answered = true
+          })
+      })
+  })
+  await rig.acquire({ permissionMode: 'full-access' })
+  await sendHello(rig, 'send-1')
+  await waitFor(async () =>
+    expect((await rig.rig.rows()).some((row) => row.body.kind === 'approval')).toBe(true)
+  )
+  expect(answered).toBe(false)
+})
+
 it('refuses a new start while its sign-in changes, and stops one already starting', async () => {
   const gate = ANTIGRAVITY.launchGate!
   const rig = await openAcpAdapterRig({

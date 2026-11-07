@@ -217,7 +217,7 @@ export async function openAttachedHostRig(
       })
       script?.(agent)
     },
-    deps: { resolveLaunch: launch(() => resumed), ...adapterDeps }
+    deps: { resolveLaunch: launch(() => resumed, adapterDeps.spec), ...adapterDeps }
   })
   expect(await rig.host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
   await rig.ready()

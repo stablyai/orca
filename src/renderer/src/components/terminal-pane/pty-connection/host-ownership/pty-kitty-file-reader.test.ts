@@ -5,8 +5,10 @@ import { readTerminalKittyFile } from '@/lib/pane-manager/terminal-kitty-file-re
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { installPtyKittyFileReader } from './pty-kitty-file-reader'
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), revision: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   captureRuntimeEnvironmentRequestRevision: mocks.revision
 }))
 const cleanups: (() => void)[] = []
