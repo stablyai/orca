@@ -187,6 +187,7 @@ export function useMobileStructuredAgentOptions(args: {
     fence,
     newLaunch: createdHere !== undefined,
     ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    hasTurn: args.hasTurn,
     optionCatalog,
     activeOptionRecordRef,
     updateOptionState,
