@@ -70,12 +70,15 @@ function retryPendingFrame(subscriber: ActiveBrowserScreencastSubscriber): void 
   if (!bytes || (subscriber.frameCredit && !subscriber.frameCredit.credit.canSend())) {
     return
   }
-  // Count ghost refusals only on produced frames, never retries.
-  if (sendSubscriberFrame(subscriber, bytes) === 'handled') {
-    subscriber.pendingFrame = null
-    subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
-  } else {
+  const outcome = sendSubscriberFrame(subscriber, bytes)
+  if (outcome === 'backlogged' || outcome === 'refused') {
     schedulePendingFrameRetry(subscriber)
+    return
+  }
+  subscriber.pendingFrame = null
+  // Count ghost refusals only on produced frames, never retries.
+  if (outcome === 'handled') {
+    subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
   }
 }
 
