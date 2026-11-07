@@ -3734,6 +3734,12 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   text-shadow: 0 1px 1px var(--worktree-sidebar);
 }
 
+/* Sleeping cards remap muted text to a 34% mix, about 2.5:1 at this size.
+   Use the card's own dimmed text color so the count stays readable in both themes. */
+[data-worktree-sleeping-dim] .workspace-reference-stack-count {
+  color: var(--foreground);
+}
+
 .workspace-reference-stack-count[data-multiple-digits='true'] {
   letter-spacing: -0.02em;
 }
