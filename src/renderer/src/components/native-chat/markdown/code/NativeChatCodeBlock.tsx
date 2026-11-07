@@ -1,3 +1,4 @@
+// @protected-copy: preserve code controls used by approval prompts.
 import React, { useContext } from 'react'
 import { WrapText } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
