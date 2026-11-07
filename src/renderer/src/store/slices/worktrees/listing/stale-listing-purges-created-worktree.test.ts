@@ -252,7 +252,11 @@ describe('a listing versioned before an applied create', () => {
   })
 })
 
-import * as launchDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as launchDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as launchDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as launchDraftsOwner2 from '@/components/native-chat/drafts/native-chat-draft-scope'
+import * as launchDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as launchDraftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { recentlyRenamedWorktreeIdExpiry } from '@/hooks/ipc-events/worktree-event-runtime'
 
 it.each([
@@ -270,21 +274,25 @@ it.each([
     recentlyRenamedWorktreeIdExpiry.clear()
     const store = createTestStore()
     seedCreatedWorkspaceWithPendingLaunch(store, true)
-    const scope = launchDrafts.nativeChatLaunchPromptDraftScopeKey(CREATED_ID, 'claude', 'local')
-    const other = launchDrafts.nativeChatLaunchPromptDraftScopeKey(
+    const scope = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+      CREATED_ID,
+      'claude',
+      'local'
+    )
+    const other = launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(
       CREATED_ID,
       'claude',
       'ssh:other'
     )
-    const ordinary = launchDrafts.structuredAgentSessionDraftScopeKey('existing-chat')
+    const ordinary = launchDraftsOwner2.structuredAgentSessionDraftScopeKey('existing-chat')
     for (const key of [scope, other, ordinary]) {
-      launchDrafts.updateNativeChatComposerDraft(
+      launchDraftsOwner3.updateNativeChatComposerDraft(
         key,
         { text: 'keep', owner: { workspaceId: CREATED_ID, executionHostId: 'local' } },
         'immediate'
       )
     }
-    const attempt = launchDrafts.captureNativeChatComposerSubmission(scope)
+    const attempt = launchDraftsOwner4.captureNativeChatComposerSubmission(scope)
     if (kind === 'renamed') {
       recentlyRenamedWorktreeIdExpiry.set(CREATED_ID, 1_000 + 20_000)
     }
@@ -317,7 +325,7 @@ it.each([
     })
     expect(attempt.draft?.text).toBe('keep')
     for (const key of [other, ordinary]) {
-      expect(launchDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+      expect(launchDraftsOwner3.readNativeChatComposerDraft(key).text).toBe('keep')
     }
     launchDrafts.clearNativeChatComposerDraftsForTests()
     recentlyRenamedWorktreeIdExpiry.clear()
@@ -332,12 +340,12 @@ it('nested listing does not add a separate setup-death policy before a refused e
   )
   seedStore(store, { worktreesByRepo: { [REPO_ID]: rows } })
   const scopes = rows.map(({ id }) =>
-    launchDrafts.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
+    launchDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(id, 'codex', 'local')
   )
   scopes.forEach((key) =>
-    launchDrafts.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
+    launchDraftsOwner3.updateNativeChatComposerDraft(key, { text: 'task' }, 'immediate')
   )
-  const attempts = scopes.map(launchDrafts.captureNativeChatComposerSubmission)
+  const attempts = scopes.map(launchDraftsOwner4.captureNativeChatComposerSubmission)
   const parentReply =
     Promise.withResolvers<Awaited<ReturnType<typeof window.api.worktrees.remove>>>()
   vi.mocked(window.api.worktrees.remove).mockReturnValueOnce(parentReply.promise)

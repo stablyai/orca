@@ -17,9 +17,6 @@ import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-c
 const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
 
-const subscribeToPairings = (onChange: () => void): (() => void) =>
-  onRuntimeEnvironmentRevisionsChanged(onChange)
-
 type FileLinkHostEpoch = {
   /** The SSH connection generation while connected; null while it is not. */
   sshUp: string | null
@@ -41,7 +38,7 @@ function useFileLinkHostEpoch(
       : undefined
     return status ? `${status.connectionGeneration ?? 0}:${status.hostContactEpoch ?? 0}` : ''
   })
-  const pairing = useSyncExternalStore(subscribeToPairings, () =>
+  const pairing = useSyncExternalStore(onRuntimeEnvironmentRevisionsChanged, () =>
     runtimeEnvironmentId ? getRuntimeEnvironmentRevision(runtimeEnvironmentId) : undefined
   )
   return { sshUp, runtime: `${runtimeStatus}|${pairing ?? ''}` }

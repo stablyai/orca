@@ -5,7 +5,7 @@ import { agentSessionRefusalCauseParts } from '../../../../../../shared/agent-se
 import type { StructuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { joinSentences } from '../../../../../../shared/sentence-joining'
-import { agentSessionWriteNoticeText } from '../../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import {
   isNativeChatSignInFailureKind,
   nativeChatSignInLabel,
@@ -14,7 +14,7 @@ import {
 import type {
   NativeChatComposerNotice,
   NativeChatComposerNoticeContent
-} from '../../native-chat-composer-notice'
+} from '../../composer/controls/native-chat-composer-notice'
 
 function nativeChatLaunchNotice({
   lifecycle,

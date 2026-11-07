@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { translate } from '@/i18n/i18n'
 import { updaterMessageText } from '@/lib/updater-message-copy'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
@@ -61,27 +61,23 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
   }
 
   return (
-    <section key="updates" className="space-y-4">
-      <div
-        onClick={(event) => {
-          if (event.altKey) {
-            setChannelSwitcherRevealed((revealed) => !revealed)
-          }
-        }}
-      >
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
-            'Updates'
-          )}
-          description={translate(
-            'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
-            'Current version: {{value0}}',
-            { value0: appVersion ?? '...' }
-          )}
-        />
-      </div>
-
+    <SettingsGroup
+      key="updates"
+      title={translate(
+        'auto.components.settings.GeneralUpdateSettingsSection.f2b1ccc12a',
+        'Updates'
+      )}
+      onHeaderClick={(event) => {
+        if (event.altKey) {
+          setChannelSwitcherRevealed((revealed) => !revealed)
+        }
+      }}
+      description={translate(
+        'auto.components.settings.GeneralUpdateSettingsSection.d91ebfb87e',
+        'Current version: {{value0}}',
+        { value0: appVersion ?? '...' }
+      )}
+    >
       <SearchableSetting
         title={translate(
           'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
@@ -92,7 +88,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
           'Check for app updates and install a newer Orca version.'
         )}
         keywords={['update', 'version', 'release notes', 'download']}
-        className="space-y-3"
+        className="space-y-3 py-3"
       >
         <div className="flex items-center gap-3">
           <Button
@@ -296,6 +292,6 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
-    </section>
+    </SettingsGroup>
   )
 }

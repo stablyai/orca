@@ -1,4 +1,4 @@
-import type { NativeChatComposerHandle } from '../../../native-chat-composer-types'
+import type { NativeChatComposerHandle } from '../../../composer/native-chat-composer-types'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { returnMessageToComposer } from '../../structured/delivery/structured-agent-session-message-hand-back'
 import { translate } from '@/i18n/i18n'
@@ -17,7 +17,7 @@ import {
   readPendingSendCache,
   writePendingSendCache
 } from './native-chat-pending'
-import type { NativeChatDeliveryNotice } from '../../../NativeChatMessageRow'
+import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { ReadState } from '../read/native-chat-live-session-contract'
 
 /** Wait for transcript evidence after lost write acknowledgment; mobile uses the same hold. */

@@ -34,19 +34,19 @@ import { createTestStore, seedStore } from '../../../testing/app-store-test-fixt
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
-import { setNativeChatComposerDraftOwnerResolver } from '@/components/native-chat/native-chat-composer-draft-memory'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import { setNativeChatComposerDraftOwnerResolver } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   settleNativeChatPendingAttachment
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 
 const WT1 = 'repo1::/path/wt1'

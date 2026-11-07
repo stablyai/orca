@@ -61,81 +61,79 @@ export function AgentRuntimeSetting({
   }
 
   return (
-    <section className="space-y-3">
-      <SettingsRow
-        label={translate('auto.components.settings.AgentRuntimeSetting.label', 'Agent runtime')}
-        alignTop
-        description={getDescription(runtimeDefault, wslAvailable, wslCapabilitiesLoading)}
-        control={
-          <div className="flex w-52 flex-col items-stretch gap-2">
-            <SettingsSegmentedControl<AgentRuntimeSegment>
-              ariaLabel={translate(
-                'auto.components.settings.AgentRuntimeSetting.label',
-                'Agent runtime'
-              )}
-              value={runtimeDefault.kind}
-              onChange={handleRuntimeChange}
-              equalWidth
-              options={[
-                {
-                  value: 'windows-host',
-                  label: getHostRuntimeLabel()
-                },
-                {
-                  value: 'wsl',
-                  label: translate('auto.components.settings.AgentRuntimeSetting.wsl', 'WSL'),
-                  disabled: wslCapabilitiesLoading || !wslAvailable || !nextWslDistro
+    <SettingsRow
+      label={translate('auto.components.settings.AgentRuntimeSetting.label', 'Agent runtime')}
+      alignTop
+      description={getDescription(runtimeDefault, wslAvailable, wslCapabilitiesLoading)}
+      control={
+        <div className="flex w-52 flex-col items-stretch gap-2">
+          <SettingsSegmentedControl<AgentRuntimeSegment>
+            ariaLabel={translate(
+              'auto.components.settings.AgentRuntimeSetting.label',
+              'Agent runtime'
+            )}
+            value={runtimeDefault.kind}
+            onChange={handleRuntimeChange}
+            equalWidth
+            options={[
+              {
+                value: 'windows-host',
+                label: getHostRuntimeLabel()
+              },
+              {
+                value: 'wsl',
+                label: translate('auto.components.settings.AgentRuntimeSetting.wsl', 'WSL'),
+                disabled: wslCapabilitiesLoading || !wslAvailable || !nextWslDistro
+              }
+            ]}
+          />
+          {runtimeDefault.kind === 'wsl' ? (
+            <Select
+              value={runtimeDefault.distro ?? NO_DISTRO_VALUE}
+              onValueChange={(distro) => {
+                if (distro !== NO_DISTRO_VALUE) {
+                  updateAgentRuntime({
+                    localWindowsRuntimeDefault: { kind: 'wsl', distro }
+                  })
                 }
-              ]}
-            />
-            {runtimeDefault.kind === 'wsl' ? (
-              <Select
-                value={runtimeDefault.distro ?? NO_DISTRO_VALUE}
-                onValueChange={(distro) => {
-                  if (distro !== NO_DISTRO_VALUE) {
-                    updateAgentRuntime({
-                      localWindowsRuntimeDefault: { kind: 'wsl', distro }
-                    })
+              }}
+              disabled={wslCapabilitiesLoading || !wslAvailable}
+            >
+              <SelectTrigger size="sm" className="w-full min-w-52">
+                <SelectValue
+                  placeholder={
+                    wslCapabilitiesLoading
+                      ? translate(
+                          'auto.components.settings.AgentRuntimeSetting.loadingWsl',
+                          'Loading WSL'
+                        )
+                      : translate(
+                          'auto.components.settings.AgentRuntimeSetting.selectDistro',
+                          'Select distro'
+                        )
                   }
-                }}
-                disabled={wslCapabilitiesLoading || !wslAvailable}
-              >
-                <SelectTrigger size="sm" className="w-full min-w-52">
-                  <SelectValue
-                    placeholder={
-                      wslCapabilitiesLoading
-                        ? translate(
-                            'auto.components.settings.AgentRuntimeSetting.loadingWsl',
-                            'Loading WSL'
-                          )
-                        : translate(
-                            'auto.components.settings.AgentRuntimeSetting.selectDistro',
-                            'Select distro'
-                          )
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {!runtimeDefault.distro ? (
-                    <SelectItem value={NO_DISTRO_VALUE}>
-                      {translate(
-                        'auto.components.settings.AgentRuntimeSetting.selectDistro',
-                        'Select distro'
-                      )}
-                    </SelectItem>
-                  ) : null}
-                  {distroOptions.map((distro) => (
-                    <SelectItem key={distro} value={distro}>
-                      {distro}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-          </div>
-        }
-      />
-    </section>
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {!runtimeDefault.distro ? (
+                  <SelectItem value={NO_DISTRO_VALUE}>
+                    {translate(
+                      'auto.components.settings.AgentRuntimeSetting.selectDistro',
+                      'Select distro'
+                    )}
+                  </SelectItem>
+                ) : null}
+                {distroOptions.map((distro) => (
+                  <SelectItem key={distro} value={distro}>
+                    {distro}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+        </div>
+      }
+    />
   )
 }
 

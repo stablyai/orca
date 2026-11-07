@@ -12,7 +12,7 @@ import {
 const harness =
   'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts'
 const structuredSessionHarness =
-  'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
 
 const unitHarnesses = [
   harness,

@@ -4,15 +4,15 @@ import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/na
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
-} from '../../../native-chat-composer-target'
+} from '../../../composer/submit/native-chat-composer-target'
 import {
   sendNativeChatMessageVerified,
   typeNativeChatCommand
-} from '../../../native-chat-runtime-send'
+} from '../../terminal/send/native-chat-runtime-send'
 import {
   cancelNativeChatPtySends,
   waitForNativeChatPtyIdle
-} from '../../../native-chat-pty-send-queue'
+} from '../../terminal/send/native-chat-pty-send-queue'
 import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver

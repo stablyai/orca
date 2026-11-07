@@ -3,12 +3,10 @@ import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
-import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
+import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visual-owner'
 import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
-
-export type { NativeChatViewProps } from './native-chat-view-types'
 
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (

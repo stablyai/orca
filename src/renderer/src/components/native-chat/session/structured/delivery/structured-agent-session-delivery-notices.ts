@@ -10,8 +10,8 @@ import type { AgentJournalSubmission } from '../../../../../../../shared/agent-s
 import { structuredAgentSessionRejectionParts } from '../../../../../../../shared/agent-session/failures/structured-agent-session-rejection-words'
 import { structuredAgentSessionRejectedShownInPlace } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
-import { agentSessionWriteNoticeText } from '../../../agent-session-write-notice-text'
-import type { NativeChatDeliveryNotice } from '../../../NativeChatMessageRow'
+import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
+import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 /** One shared value, so a rebuilt map re-renders no row still sending. */

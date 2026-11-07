@@ -60,7 +60,7 @@ export function BrowserPasswordsSection(props: BrowserPasswordsSectionProps): Re
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <BrowserPasswordsProfile key={props.browserProfileId} {...props} />
     </SearchableSetting>

@@ -11,7 +11,11 @@ afterEach(() => {
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from './repo.test-fixture'
-import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as drafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as draftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as draftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as draftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import * as draftsOwner4 from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 
 it('retires a pending launch snapshot only after the real project removal commits', async () => {
   drafts.clearNativeChatComposerDraftsForTests()
@@ -26,9 +30,9 @@ it('retires a pending launch snapshot only after the real project removal commit
       'repo-1': [makeWorktree({ id: 'repo-1::/w1', repoId: 'repo-1', hostId: 'local' })]
     }
   })
-  const key = drafts.nativeChatLaunchPromptDraftScopeKey('repo-1::/w1', 'codex', 'local')
-  drafts.updateNativeChatComposerDraft(key, { text: 'project task' }, 'immediate')
-  const submission = drafts.captureNativeChatComposerSubmission(key)
+  const key = draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-1::/w1', 'codex', 'local')
+  draftsOwner2.updateNativeChatComposerDraft(key, { text: 'project task' }, 'immediate')
+  const submission = draftsOwner3.captureNativeChatComposerSubmission(key)
   const removal = store.getState().removeProject('repo-1', { hostId: 'local' })
   await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
   store.setState((state) => ({
@@ -39,31 +43,30 @@ it('retires a pending launch snapshot only after the real project removal commit
       ]
     }
   }))
-  const late = drafts.nativeChatLaunchPromptDraftScopeKey('repo-1::/w2', 'claude', 'local')
-  drafts.updateNativeChatComposerDraft(late, { text: 'late task' }, 'immediate')
+  const late = draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo-1::/w2', 'claude', 'local')
+  draftsOwner2.updateNativeChatComposerDraft(late, { text: 'late task' }, 'immediate')
   refused.reject(new Error('refused'))
   await removal
-  expect(drafts.readNativeChatComposerDraft(late).text).toBe('late task')
+  expect(draftsOwner2.readNativeChatComposerDraft(late).text).toBe('late task')
   expect(submission.draft?.text).toBe('project task')
   await store.getState().removeProject('repo-1', { hostId: 'local' })
   expect(remove).toHaveBeenCalledTimes(2)
-  expect(drafts.readNativeChatComposerDraft(late).text).toBe('')
+  expect(draftsOwner2.readNativeChatComposerDraft(late).text).toBe('')
   expect(submission.draft).toBeUndefined()
-  expect(drafts.readNativeChatComposerDraft(key).text).toBe('')
-  drafts.finishNativeChatComposerSubmission(key, submission, true)
-  expect(drafts.readNativeChatComposerDraft(key).text).toBe('')
+  expect(draftsOwner2.readNativeChatComposerDraft(key).text).toBe('')
+  draftsOwner2.finishNativeChatComposerSubmission(key, submission, true)
+  expect(draftsOwner2.readNativeChatComposerDraft(key).text).toBe('')
   drafts.clearNativeChatComposerDraftsForTests()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
-import * as memory from '@/components/native-chat/native-chat-composer-draft-memory'
-import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
-import * as persistence from '@/components/native-chat/native-chat-composer-draft-persistence'
+import * as pending from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import * as persistence from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 
 it.each([10, 100])(
   'one committed project removal retires current/source-only return writers while preserving ordinary pre-call cleanup at %i owners',
@@ -75,7 +78,7 @@ it.each([10, 100])(
     const storage = createMemoryNativeChatComposerDraftStorage()
     storage.loadAll = () => loaded.promise
     setNativeChatComposerDraftStorageForTests(storage)
-    const hydration = drafts.hydrateNativeChatComposerDrafts()
+    const hydration = draftsOwner4.hydrateNativeChatComposerDrafts()
     vi.stubGlobal('window', {
       api: { repos: { removeForHost: vi.fn(() => remove.promise) }, pty: { kill: vi.fn() } }
     })
@@ -89,24 +92,24 @@ it.each([10, 100])(
     await vi.waitFor(() => expect(window.api.repos.removeForHost).toHaveBeenCalledOnce())
     const ids = Array.from({ length: count }, (_, i) => `repo-1::/w${i}`)
     const controls = [
-      drafts.nativeChatLaunchPromptDraftScopeKey(ids[0], 'codex', 'ssh:other'),
-      drafts.nativeChatLaunchPromptDraftScopeKey('other::/live', 'claude', 'local')
+      draftsOwner1.nativeChatLaunchPromptDraftScopeKey(ids[0], 'codex', 'ssh:other'),
+      draftsOwner1.nativeChatLaunchPromptDraftScopeKey('other::/live', 'claude', 'local')
     ]
     const snapshots = ids.map((id, i) => {
-      const scope = drafts.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'local')
-      drafts.updateNativeChatComposerDraft(
+      const scope = draftsOwner1.nativeChatLaunchPromptDraftScopeKey(id, 'claude', 'local')
+      draftsOwner2.updateNativeChatComposerDraft(
         scope,
         { text: `task ${i}`, images: [{ id: `image-${i}`, path: `/image-${i}` }] },
         'immediate'
       )
-      const attempt = drafts.captureNativeChatComposerSubmission(scope)
+      const attempt = draftsOwner3.captureNativeChatComposerSubmission(scope)
       const observer = vi.fn()
-      const stop = vi.fn(memory.subscribeToNativeChatComposerDraftAppend(scope, observer))
+      const stop = vi.fn(draftsOwner3.subscribeToNativeChatComposerDraftAppend(scope, observer))
       attempt.stopObserving = stop
       if (i % 2) {
-        drafts.updateNativeChatComposerDraft(scope, { text: '', images: [] }, 'immediate')
+        draftsOwner2.updateNativeChatComposerDraft(scope, { text: '', images: [] }, 'immediate')
       }
-      const unsubscribe = drafts.subscribeToNativeChatComposerDraft(scope, vi.fn())
+      const unsubscribe = draftsOwner2.subscribeToNativeChatComposerDraft(scope, vi.fn())
       pending.addNativeChatPendingAttachment(scope, {
         id: `batch-chip-${i}`,
         path: '',
@@ -120,13 +123,13 @@ it.each([10, 100])(
       return { scope, attempt, unsubscribe, stop, observer, pendingListener, unsubscribePending }
     })
     const liveAttempts = controls.map((key, i) => {
-      drafts.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
+      draftsOwner2.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
       pending.addNativeChatPendingAttachment(key, {
         id: `control-chip-${i}`,
         path: '',
         pending: true
       })
-      return drafts.captureNativeChatComposerSubmission(key)
+      return draftsOwner3.captureNativeChatComposerSubmission(key)
     })
     // W2 arrives during RPC; the final source has no catalog row at all.
     store.setState({
@@ -138,8 +141,8 @@ it.each([10, 100])(
     })
     const visits = { loading: 0, record: 0, listener: 0, submission: 0, pending: 0, chips: 0 }
     const originalLoading = persistence.deleteLoadingNativeChatComposerDraftsWhere
-    const originalSubmissions = memory.retireNativeChatComposerSubmissionsWhere
-    vi.spyOn(memory, 'retireNativeChatComposerSubmissionsWhere').mockImplementation((match) =>
+    const originalSubmissions = draftsOwner3.retireNativeChatComposerSubmissionsWhere
+    vi.spyOn(draftsOwner3, 'retireNativeChatComposerSubmissionsWhere').mockImplementation((match) =>
       originalSubmissions((...args) => {
         visits.submission++
         return match(...args)
@@ -196,24 +199,24 @@ it.each([10, 100])(
       expect(stop).toHaveBeenCalledOnce()
       expect(pendingListener).toHaveBeenCalledTimes(i === 0 ? 1 : 0)
       expect(observer).not.toHaveBeenCalled()
-      expect(drafts.readNativeChatComposerDraft(scope).text).toBe(
+      expect(draftsOwner2.readNativeChatComposerDraft(scope).text).toBe(
         i === 0 || i % 2 ? '' : `task ${i}`
       )
       expect(pending.nativeChatPendingAttachmentSnapshot(scope)).toHaveLength(i === 0 ? 0 : 1)
-      drafts.finishNativeChatComposerSubmission(scope, attempt, true)
+      draftsOwner2.finishNativeChatComposerSubmission(scope, attempt, true)
       unsubscribe()
       unsubscribePending()
     }
-    expect(drafts.readNativeChatComposerDraft(`loading:${ids[0]}`).text).toBe('')
-    expect(drafts.readNativeChatComposerDraft(`loading:${ids[1]}`).text).toBe('loaded')
-    const freshScope = drafts.nativeChatLaunchPromptDraftScopeKey(ids[0], 'claude', 'local')
-    drafts.updateNativeChatComposerDraft(freshScope, { text: 'fresh lifetime' }, 'immediate')
+    expect(draftsOwner2.readNativeChatComposerDraft(`loading:${ids[0]}`).text).toBe('')
+    expect(draftsOwner2.readNativeChatComposerDraft(`loading:${ids[1]}`).text).toBe('loaded')
+    const freshScope = draftsOwner1.nativeChatLaunchPromptDraftScopeKey(ids[0], 'claude', 'local')
+    draftsOwner2.updateNativeChatComposerDraft(freshScope, { text: 'fresh lifetime' }, 'immediate')
     snapshots.forEach(({ scope, attempt }) =>
-      drafts.finishNativeChatComposerSubmission(scope, attempt, true)
+      draftsOwner2.finishNativeChatComposerSubmission(scope, attempt, true)
     )
-    expect(drafts.readNativeChatComposerDraft(freshScope).text).toBe('fresh lifetime')
+    expect(draftsOwner2.readNativeChatComposerDraft(freshScope).text).toBe('fresh lifetime')
     controls.forEach((key, i) => {
-      expect(drafts.readNativeChatComposerDraft(key).text).toBe('keep')
+      expect(draftsOwner2.readNativeChatComposerDraft(key).text).toBe('keep')
       expect(liveAttempts[i].draft?.text).toBe('keep')
       expect(pending.nativeChatPendingAttachmentSnapshot(key)).toHaveLength(1)
     })

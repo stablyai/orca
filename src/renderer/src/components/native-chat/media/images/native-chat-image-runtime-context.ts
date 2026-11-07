@@ -17,7 +17,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
-import { resolveNativeChatTabDirectory } from '../../native-chat-tab-directory'
+import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
 import { resolveOwner } from '@/lib/resolve-owner'
 import { useMemo } from 'react'
 import { shallow } from 'zustand/shallow'

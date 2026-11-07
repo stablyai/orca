@@ -4,7 +4,7 @@ import {
   type StructuredAgentSessionAction
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
-import type { NativeChatOlderPageResult } from '../../../native-chat-pagination'
+import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 import { readStructuredAgentSessionOlderPage } from './structured-agent-session-older-page-read'
 
 export function createStructuredAgentSessionOlderPageLoader({

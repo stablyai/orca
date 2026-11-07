@@ -1,4 +1,4 @@
-import { projectStructuredAgentSessionMessages } from '../../../structured-agent-session-message-projection'
+import { projectStructuredAgentSessionMessages } from '@/components/native-chat/conversation/projection/structured-agent-session-message-projection'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -13,27 +13,27 @@ import {
   send,
   sendCalls,
   phases
-} from './structured-agent-session-message-sender.test-fixture'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender.test-fixture'
 
 import {
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
   runtimes
-} from './structured-agent-session-send-runtime'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import {
   resetStructuredAgentSessionSendsForTests,
   sendStructuredAgentSessionMessage,
   settleStructuredAgentSessionSendsFromJournal,
   stopStructuredAgentSessionSends
-} from './structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice,
   structuredAgentSessionSendOut,
   subscribeToStructuredAgentSessionPendingSends
-} from './structured-agent-session-pending-sends'
-import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
-import { getStructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner'
-import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { structuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/structured-agent-session-delivery-notices'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 describe('structured agent session message sender', () => {

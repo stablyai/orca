@@ -168,14 +168,13 @@ export function ReleaseChannelSection(): React.JSX.Element {
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
+  const title = translate('auto.components.settings.ReleaseChannelSection.title', 'Release channel')
+
   return (
-    <section className="space-y-4">
+    <div data-settings-row="" className="space-y-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.ReleaseChannelSection.title',
-            'Release channel'
-          )}
+          title={title}
           description={translate(
             'auto.components.settings.ReleaseChannelSection.description',
             'Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.'
@@ -344,6 +343,6 @@ export function ReleaseChannelSection(): React.JSX.Element {
           </p>
         ) : null}
       </div>
-    </section>
+    </div>
   )
 }

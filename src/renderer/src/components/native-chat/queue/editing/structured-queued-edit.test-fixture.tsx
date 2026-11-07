@@ -20,11 +20,11 @@ import type {
 import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionQueuedEdit } from './use-structured-agent-session-queued-edit'
 import { projectQueuedMessageCards } from '../../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import { clearNativeChatDraftCacheForTests } from '../../native-chat-draft-cache'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../drafts/native-chat-draft-reset'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '../../native-chat-composer-draft-storage'
+} from '../../drafts/native-chat-composer-draft-storage'
 import type {
   StructuredAgentSessionWrite,
   StructuredAgentSessionWriteOutcome

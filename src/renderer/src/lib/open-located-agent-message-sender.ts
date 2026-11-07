@@ -22,7 +22,7 @@ import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
 import {
   agentMessageSenderUnavailableText,
   type AgentMessageSenderTarget
-} from '@/components/native-chat/native-chat-agent-message-sender-target'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
