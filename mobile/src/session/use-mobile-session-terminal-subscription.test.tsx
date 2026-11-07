@@ -88,6 +88,7 @@ function subscriptionHarness(opts: {
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef: { current: new Set<string>() },
+    replacedHandlesRef: { current: new Set<string>() },
     initializedHandlesRef,
     terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },

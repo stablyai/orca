@@ -2,7 +2,9 @@ import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import * as nativeChatTerminalStream from './native-chat/mobile-native-chat-terminal-stream'
 import {
+  adoptTerminalDisplayMode,
   createMobileTerminalStreamLifetime,
+  noteTerminalStreamTakeover,
   subscribeMobileTerminalSafely
 } from './mobile-terminal-stream-subscribe'
 import { mobileTerminalSnapshotByteBudget } from './terminal-snapshot-byte-budget'
@@ -28,6 +30,7 @@ export function useMobileSessionTerminalSubscription(
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
+    replacedHandlesRef,
     initializedHandlesRef,
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
@@ -65,6 +68,11 @@ export function useMobileSessionTerminalSubscription(
       }
       if (subscribingHandlesRef.current.has(handle)) {
         logSkippedGate('subscribe-in-flight')
+        return false
+      }
+      // Another surface of this phone holds the stream; taking it back would start an eviction loop.
+      if (replacedHandlesRef.current.has(handle)) {
+        logSkippedGate('replaced-by-sibling')
         return false
       }
       const covered = nativeChatTerminalStream.isTerminalCoveredByNativeChat(
@@ -135,16 +143,6 @@ export function useMobileSessionTerminalSubscription(
       // A path switch replays this listener on a new stream whose snapshot covers output the old one never delivered.
       let snapshotStreamId: unknown
 
-      const adoptDisplayMode = (displayMode: unknown) => {
-        if (displayMode !== 'auto' && displayMode !== 'phone' && displayMode !== 'desktop') {
-          return
-        }
-        // Reuse mode Map on no-op frames so every stream pass cannot rerender the route.
-        setTerminalModes((prev) =>
-          prev.get(handle) === displayMode ? prev : new Map(prev).set(handle, displayMode)
-        )
-      }
-
       // Send viewport in subscribe so host fitting precedes snapshot serialization without a focus/fit race.
       const stopStream = subscribeMobileTerminalSafely(
         client,
@@ -163,6 +161,7 @@ export function useMobileSessionTerminalSubscription(
           const data = result as Record<string, unknown>
           diagnostics.firstStreamEvent(handle, seq, data.type)
           if (data.type === 'end' || data.type === 'error') {
+            noteTerminalStreamTakeover(data, handle, replacedHandlesRef.current)
             lifetime.end()
             return
           }
@@ -230,7 +229,7 @@ export function useMobileSessionTerminalSubscription(
             ref.init({ cols, rows, initialData, preserveScroll: true, oscLinks, kittyFlags, frame })
             initializedHandlesRef.current.add(handle)
             snapshotStreamId = data.streamId
-            adoptDisplayMode(data.displayMode)
+            adoptTerminalDisplayMode(setTerminalModes, handle, data.displayMode)
             // Refit after DOM settles because init can see transient scrollWidth.
             lifetime.scheduleSettledFit(ref)
             // Measure viewport-less subscriptions after init, then retry within the bounded per-handle budget.
@@ -290,7 +289,7 @@ export function useMobileSessionTerminalSubscription(
             } else {
               getTerminalRef(handle)?.resize(cols, rows, terminalFrameRef.current)
             }
-            adoptDisplayMode(data.displayMode)
+            adoptTerminalDisplayMode(setTerminalModes, handle, data.displayMode)
             lifetime.scheduleSettledFit(getTerminalRef(handle))
           }
         },

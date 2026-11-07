@@ -9,6 +9,7 @@ describe('useMobileNativeChatTerminalStream', () => {
   const subscriptionsRef = { current: new Map<string, () => void>() }
   const subscribingRef = { current: new Set<string>() }
   const leaseOnlyRef = { current: new Set<string>() }
+  const replacedRef = { current: new Set<string>() }
   const webReadyRef = { current: new Set(['terminal-1']) }
   let subscribeOpensLeaseOnly = false
   const registerSubscription = (handle: string): boolean => {
@@ -66,6 +67,7 @@ describe('useMobileNativeChatTerminalStream', () => {
       subscriptionsRef,
       subscribingRef,
       leaseOnlyRef,
+      replacedRef,
       webReadyRef,
       subscribe,
       unsubscribe

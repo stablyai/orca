@@ -89,6 +89,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const terminalUnsubsRef = useRef<Map<string, () => void>>(new Map())
   const subscribingHandlesRef = useRef<Set<string>>(new Set())
   const leaseOnlyHandlesRef = useRef<Set<string>>(new Set())
+  // Handles whose stream another surface of this phone took over; they wait for the user instead of rearming.
+  const replacedHandlesRef = useRef<Set<string>>(new Set())
   const initializedHandlesRef = useRef<Set<string>>(new Set())
   const terminalDiagnosticsRef = useRef(new MobileTerminalDiagnostics())
   const viewportResubscribeBudgetRef = useRef(new TerminalViewportResubscribeBudget())
@@ -196,6 +198,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     terminalUnsubsRef,
     subscribingHandlesRef,
     leaseOnlyHandlesRef,
+    replacedHandlesRef,
     initializedHandlesRef,
     terminalDiagnosticsRef,
     viewportResubscribeBudgetRef,
