@@ -9,6 +9,7 @@ import { restoreJournalSqlFailure } from './journal-sql-failure'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
+import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
@@ -77,6 +78,14 @@ export class JournalSqlOwner {
     return response.results
   }
 
+  async maintain(operation: JournalSqlMaintenance): Promise<JournalSqlMaintenanceResult> {
+    const response = await this.request({ type: 'maintenance', operation })
+    if (response.type !== 'maintenance') {
+      throw new Error('journal writer returned no maintenance result')
+    }
+    return response.result
+  }
+
   close(): Promise<void> {
     this.closed ??= this.finishClose().catch((error: unknown) => {
       this.closed = undefined
@@ -94,7 +103,13 @@ export class JournalSqlOwner {
     }
     const id = ++this.nextId
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, write: command.type !== 'close' })
+      this.pending.set(id, {
+        resolve,
+        reject,
+        write:
+          command.type !== 'close' &&
+          !(command.type === 'maintenance' && command.operation.kind === 'projection-state')
+      })
       try {
         this.worker.postMessage({ id, command } satisfies JournalSqlRequest)
       } catch (error) {
