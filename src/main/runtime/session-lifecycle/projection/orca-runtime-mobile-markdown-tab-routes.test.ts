@@ -19,8 +19,8 @@ import {
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { FILE_METHODS } from '../../rpc/methods/files'
-import { SESSION_TAB_MARKDOWN_METHODS } from '../../rpc/methods/session-tab-markdown-methods'
+import { FILE_METHODS } from '../../rpc/methods/files/files'
+import { SESSION_TAB_MARKDOWN_METHODS } from '../../rpc/methods/session-tabs/session-tab-markdown-methods'
 
 // Authorization is out of scope; both runtimes use unregistered temporary workspaces.
 vi.mock('../../files/chat-scratch-file-root', async (importOriginal) => ({

@@ -3,7 +3,7 @@ import { ChevronDown, Clipboard, FolderOpen, GitBranch } from 'lucide-react'
 
 import { LinearIssueEditSection, type LinearEditState } from '@/components/LinearItemDrawer'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
+import { buildLinearIssueContextSnapshot } from '@/lib/work-items/linear/linear-issue-context-snapshot'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { translate } from '@/i18n/i18n'
 import { buildLinearIssueBranchName } from '@/components/linear-issue-workspace-text'

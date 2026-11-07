@@ -4,7 +4,7 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 
 export function usePersonalProjectOrderSupported(): boolean {
   const observation = useSyncExternalStore(

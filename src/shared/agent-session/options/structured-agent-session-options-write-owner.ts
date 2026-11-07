@@ -49,11 +49,61 @@ export function acceptedStructuredSessionSelectionOutcome(
   return { kind: 'accepted', options: options ?? { [pick.key]: pick.value } }
 }
 
+type WriteAdmissionContext = Pick<
+  WriteContext,
+  'controller' | 'view' | 'snapshot' | 'ready' | 'providerStarting' | 'isCurrentContext'
+>
+
+export function admitsStructuredAgentSessionOption(
+  context: WriteAdmissionContext,
+  id: string,
+  value: SessionOptionValue
+): boolean {
+  const { controller, view } = context
+  const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+  const pending =
+    !context.providerStarting &&
+    id !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+    controller.isPending(id)
+  return !(
+    !context.isCurrentContext() ||
+    !context.ready ||
+    (!view.catalog && id !== 'interactionMode') ||
+    encoded === null ||
+    (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
+      value === 'own' &&
+      !view.permissionOwnSupported) ||
+    !canSetStructuredAgentSessionOption(view, id, value, context.snapshot, context.ready, pending)
+  )
+}
+
+/** Presentation uses the same admission rule as live picks, without feeding it back into the writer. */
+export function structuredAgentSessionOptionAvailability(
+  context: WriteAdmissionContext
+): SessionOptionDescriptor[] {
+  return context.snapshot.map((descriptor) =>
+    descriptor.id === 'interactionMode' && descriptor.kind.type === 'select'
+      ? {
+          ...descriptor,
+          settable:
+            descriptor.settable &&
+            admitsStructuredAgentSessionOption(
+              context,
+              descriptor.id,
+              descriptor.kind.currentValue ?? 'default'
+            )
+        }
+      : descriptor
+  )
+}
+
 /** One action transaction over the existing finite operation controller. */
 export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteContext) {
   let receipt: IssueReceipt | undefined
   let attachment = 0
   return {
+    admits: (id: string, value: SessionOptionValue) =>
+      admitsStructuredAgentSessionOption(read(), id, value),
     pendingOptionId(
       controller: StructuredSessionSelectionController,
       record: WriteContext['record']
@@ -78,27 +128,7 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       const context = read()
       const { controller, view } = context
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
-      const pending =
-        !context.providerStarting &&
-        id !== AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
-        controller.isPending(id)
-      if (
-        !context.isCurrentContext() ||
-        !context.ready ||
-        !view.catalog ||
-        encoded === null ||
-        (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
-          value === 'own' &&
-          !view.permissionOwnSupported) ||
-        !canSetStructuredAgentSessionOption(
-          view,
-          id,
-          value,
-          context.snapshot,
-          context.ready,
-          pending
-        )
-      ) {
+      if (!admitsStructuredAgentSessionOption(context, id, value) || encoded === null) {
         return false
       }
       const issuedAttachment = attachment

@@ -1,5 +1,5 @@
 import { readCodexThreadId, readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../../shared/agent-session/agent-session-wire'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'

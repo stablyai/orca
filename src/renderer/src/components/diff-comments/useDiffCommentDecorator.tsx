@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -44,6 +45,7 @@ type DecoratorArgs = {
     startLine?: number
     body: string
   }) => Promise<boolean>
+  imageUploadAddress?: GitHubImageIntake['address']
   draftPlaceholder?: string
   draftSubmitLabel?: string
   canOpenDraft?: boolean
@@ -73,6 +75,7 @@ export function useDiffCommentDecorator({
   pendingCommentTarget = null,
   addNoteShortcutEnabled = false,
   onCreateComment,
+  imageUploadAddress,
   draftPlaceholder,
   draftSubmitLabel,
   canOpenDraft,
@@ -112,6 +115,7 @@ export function useDiffCommentDecorator({
   onPendingScrollConsumedRef.current = onPendingScrollConsumed
 
   const { onAddCommentClickRef, isDraftOpen } = useDiffCommentDraftZone({
+    imageUploadAddress,
     captureCreateComment,
     editor,
     monacoModelIdentity,

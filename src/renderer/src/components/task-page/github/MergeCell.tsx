@@ -14,7 +14,7 @@ import {
 } from '@/components/github/pull-request-confirmation-copy'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 import { LoaderCircle, GitMerge, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { resolveTaskPullRequestRepo } from './task-page-github-review-model'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function PRMergeCell({
   item,
   repo,

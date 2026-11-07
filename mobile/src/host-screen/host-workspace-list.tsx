@@ -1,7 +1,7 @@
+import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import { useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -29,10 +29,11 @@ import {
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
 import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import type { Section, WorkspaceListItem } from '../worktree/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { buildRepoLookById } from './host-repo-looks'
+import { buildRepoLookById, type RepoLook } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
@@ -96,6 +97,105 @@ export function HostWorkspaceList({
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(worktreeCardProperties, { compactWorktreeCards, newCardStyle }),
     [worktreeCardProperties, compactWorktreeCards, newCardStyle]
+  )
+  const sectionCounts = useMemo(
+    () => new Map(rawSections.map((section) => [section.key, section.data.length])),
+    [rawSections]
+  )
+  const { collapsedGroups } = controller
+  const { groupBy, agentActivityDisplayMode } = state.view
+  const { toggleCollapsed, toggleWorktreeLineage } = settings
+  const { setActionTarget } = state
+  const { openWorktreeSession } = actions
+  const statusLive = connState === 'connected'
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: Section }) => {
+      const collapseKey = section.collapseKey ?? section.key
+      const projectKey =
+        section.repo && controller.projectCatalog
+          ? resolveProjectPreferenceKey(
+              section.repo.id,
+              controller.projectCatalog.setups,
+              getRepoExecutionHostId(section.repo)
+            )
+          : null
+      const pinned = projectKey
+        ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
+        : false
+      return (
+        <HostSectionHeader
+          title={section.title}
+          icon={section.icon}
+          isProjectGroup={section.isProjectGroup}
+          projectGroupDepth={section.projectGroupDepth}
+          pendingCreations={section.pendingCreations}
+          collapseKey={collapseKey}
+          collapsed={collapsedGroups.has(collapseKey)}
+          count={section.count ?? sectionCounts.get(section.key) ?? 0}
+          pending={pendingCollapseKeys.has(collapseKey)}
+          groupByRepo={groupBy === 'repo'}
+          repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
+          onToggle={toggleCollapsed}
+          pinRepo={projectKey && settings.supportsPersonalProjectOrder ? section.repo : undefined}
+          pinLabel={
+            pinned
+              ? t('hostScreen.project.unpin', 'Unpin project')
+              : t('hostScreen.project.pin', 'Pin project')
+          }
+          projectPinned={pinned}
+          onToggleProjectPin={settings.toggleProjectPin}
+        />
+      )
+    },
+    [
+      collapsedGroups,
+      sectionCounts,
+      pendingCollapseKeys,
+      groupBy,
+      repoLookById,
+      toggleCollapsed,
+      controller.projectCatalog,
+      state.view.personalProjectOrder,
+      settings.supportsPersonalProjectOrder,
+      settings.toggleProjectPin,
+      t
+    ]
+  )
+
+  const renderItem = useCallback(
+    ({ item: { row: item, view } }: { item: WorkspaceListItem }) => (
+      <WorktreeListRow
+        item={item}
+        view={view}
+        isReadOnly={isReadOnly}
+        // Only inline agents show times, so other rows skip the 30 s clock.
+        now={cardDetails.inlineAgents && item.agents?.length ? now : 0}
+        status={getWorktreeDotStatus(item)}
+        repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
+        repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
+        hideRepo={groupBy === 'repo' && !view.showProjectName}
+        cardDetails={cardDetails}
+        agentActivityDisplayMode={agentActivityDisplayMode}
+        onPress={openWorktreeSession}
+        onAgentPress={openWorktreeSession}
+        statusLive={statusLive && !view.hostContextHealthLabel}
+        onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
+        onToggleLineage={toggleWorktreeLineage}
+      />
+    ),
+    [
+      isReadOnly,
+      cardDetails,
+      now,
+      repoLookById,
+      groupBy,
+      agentActivityDisplayMode,
+      openWorktreeSession,
+      statusLive,
+      setActionTarget,
+      toggleWorktreeLineage
+    ]
   )
 
   // Group headers can exist before any row loads; the state then sits under them, not above the title.
@@ -203,105 +303,7 @@ export function HostWorkspaceList({
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
-          renderSectionHeader={({ section }) => {
-            const pendingCreations = section.pendingCreations?.map((creation) => (
-              <HostPendingCreationRow key={creation.key} creation={creation} />
-            ))
-            if (!section.title) {
-              return pendingCreations ? <>{pendingCreations}</> : null
-            }
-            const collapseKey = section.collapseKey ?? section.key
-            const isCollapsed = controller.collapsedGroups.has(collapseKey)
-            const count =
-              section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
-            const repoSectionLook =
-              state.view.groupBy === 'repo' && section.repo
-                ? repoLookById.get(section.repo.id)
-                : null
-            const repoSectionColor = repoSectionLook?.color ?? null
-            const repoSectionIcon = repoSectionLook?.icon ?? null
-            const projectKey =
-              section.repo && controller.projectCatalog
-                ? resolveProjectPreferenceKey(
-                    section.repo.id,
-                    controller.projectCatalog.setups,
-                    getRepoExecutionHostId(section.repo)
-                  )
-                : null
-            const projectPinned = projectKey
-              ? state.view.personalProjectOrder?.projects[projectKey]?.pinned === true
-              : false
-            return (
-              <>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.sectionHeader,
-                    section.projectGroupDepth
-                      ? {
-                          paddingLeft:
-                            WORKTREE_ROW_LAYOUT.indicatorInset +
-                            projectGroupHeaderIndent(section.projectGroupDepth)
-                        }
-                      : null,
-                    pressed && { backgroundColor: colors.translucentFill }
-                  ]}
-                  onPress={() => settings.toggleCollapsed(collapseKey)}
-                >
-                  <View style={styles.sectionChevron}>
-                    <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>
-                      <ChevronRight size={12} color={colors.textMuted} />
-                    </DisclosureChevron>
-                  </View>
-                  {section.icon === 'pin' && (
-                    <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  )}
-                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
-                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
-                  ) : state.view.groupBy === 'repo' ? (
-                    <View style={styles.sectionRepoIcon}>
-                      <MobileRepoIcon
-                        repoIcon={repoSectionIcon}
-                        size={14}
-                        color={repoSectionColor ?? colors.textSecondary}
-                      />
-                    </View>
-                  ) : null}
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                  <Text style={styles.sectionCount}>{count}</Text>
-                  {projectKey && section.repo && settings.supportsPersonalProjectOrder ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        projectPinned
-                          ? t('hostScreen.project.unpin', 'Unpin project')
-                          : t('hostScreen.project.pin', 'Pin project')
-                      }
-                      hitSlop={8}
-                      onPress={(event) => {
-                        event.stopPropagation()
-                        if (section.repo) {
-                          void settings.toggleProjectPin(section.repo)
-                        }
-                      }}
-                    >
-                      <Pin
-                        size={14}
-                        color={projectPinned ? colors.textPrimary : colors.textMuted}
-                      />
-                    </Pressable>
-                  ) : null}
-                  {pendingCollapseKeys.has(collapseKey) && (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.textMuted}
-                      style={styles.sectionPendingSpinner}
-                    />
-                  )}
-                </Pressable>
-                {pendingCreations}
-              </>
-            )
-          }}
+          renderSectionHeader={renderSectionHeader}
           ItemSeparatorComponent={ListSeparator}
           // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
           refreshControl={
@@ -312,32 +314,103 @@ export function HostWorkspaceList({
               colors={[colors.textSecondary]}
             />
           }
-          renderItem={({ item: { row: item, view } }) => (
-            <WorktreeListRow
-              item={item}
-              view={view}
-              isReadOnly={isReadOnly}
-              now={now}
-              status={getWorktreeDotStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
-              repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-              hideRepo={state.view.groupBy === 'repo' && !view.showProjectName}
-              cardDetails={cardDetails}
-              agentActivityDisplayMode={state.view.agentActivityDisplayMode}
-              onPress={actions.openWorktreeSession}
-              onAgentPress={actions.openWorktreeSession}
-              statusLive={connState === 'connected' && !view.hostContextHealthLabel}
-              onLongPress={
-                item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
-              }
-              onToggleLineage={settings.toggleWorktreeLineage}
-            />
-          )}
+          renderItem={renderItem}
         />
       )}
     </>
   )
 }
+
+// Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.
+const HostSectionHeader = memo(function HostSectionHeader(props: {
+  title: string
+  icon: Section['icon']
+  isProjectGroup: boolean | undefined
+  projectGroupDepth: number | undefined
+  pendingCreations: Section['pendingCreations']
+  collapseKey: string
+  collapsed: boolean
+  count: number
+  pending: boolean
+  groupByRepo: boolean
+  repoLook: RepoLook | null | undefined
+  onToggle: (collapseKey: string) => void
+  pinRepo?: Section['repo']
+  pinLabel: string
+  projectPinned: boolean
+  onToggleProjectPin: HostScreenController['settings']['toggleProjectPin']
+}) {
+  useMobileColorScheme()
+  const pendingCreations = props.pendingCreations?.map((creation) => (
+    <HostPendingCreationRow key={creation.key} creation={creation} />
+  ))
+  if (!props.title) {
+    return pendingCreations ? <>{pendingCreations}</> : null
+  }
+  return (
+    <>
+      <Pressable
+        style={({ pressed }) => [
+          styles.sectionHeader,
+          props.projectGroupDepth
+            ? {
+                paddingLeft:
+                  WORKTREE_ROW_LAYOUT.indicatorInset +
+                  projectGroupHeaderIndent(props.projectGroupDepth)
+              }
+            : null,
+          pressed && { backgroundColor: colors.translucentFill }
+        ]}
+        onPress={() => props.onToggle(props.collapseKey)}
+      >
+        <View style={styles.sectionChevron}>
+          <DisclosureChevron expanded={!props.collapsed} collapsedDeg={0} expandedDeg={90}>
+            <ChevronRight size={12} color={colors.textMuted} />
+          </DisclosureChevron>
+        </View>
+        {props.icon === 'pin' && (
+          <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
+        )}
+        {props.groupByRepo && props.isProjectGroup ? (
+          <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+        ) : props.groupByRepo ? (
+          <View style={styles.sectionRepoIcon}>
+            <MobileRepoIcon
+              repoIcon={props.repoLook?.icon ?? null}
+              size={14}
+              color={props.repoLook?.color ?? colors.textSecondary}
+            />
+          </View>
+        ) : null}
+        <Text style={styles.sectionTitle}>{props.title}</Text>
+        <Text style={styles.sectionCount}>{props.count}</Text>
+        {props.pinRepo ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={props.pinLabel}
+            hitSlop={8}
+            onPress={(event) => {
+              event.stopPropagation()
+              if (props.pinRepo) {
+                void props.onToggleProjectPin(props.pinRepo)
+              }
+            }}
+          >
+            <Pin size={14} color={props.projectPinned ? colors.textPrimary : colors.textMuted} />
+          </Pressable>
+        ) : null}
+        {props.pending && (
+          <ActivityIndicator
+            size="small"
+            color={colors.textMuted}
+            style={styles.sectionPendingSpinner}
+          />
+        )}
+      </Pressable>
+      {pendingCreations}
+    </>
+  )
+})
 
 function ListSeparator() {
   useMobileColorScheme()

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from './worktree-activation'
+import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
 import {
   repo,
   worktree
@@ -8,10 +8,10 @@ import {
 import { getDefaultUIState } from '../../../shared/constants'
 import { mutatePersonalProjectOrder } from '../../../shared/personal-project-order-writes'
 import { RecordProjectOpenParams } from '../../../shared/rpc-contract/personal-project-order-params'
-import type { PendingWorktreeCreation } from './pending-worktree-creation'
+import type { PendingWorktreeCreation } from './workspace/creation/pending-worktree-creation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
-vi.mock('../runtime/local-runtime-capabilities', () => ({
+vi.mock('../runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => ['ui.personalProjectOrder.v1']
 }))
 

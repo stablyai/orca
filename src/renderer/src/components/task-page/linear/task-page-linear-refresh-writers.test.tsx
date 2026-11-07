@@ -20,7 +20,7 @@ import {
   mapLinearIssueRead,
   pendingLinearIssueWrites
 } from '@/store/slices/linear/linear-issue-publication'
-import { writeLinearIssue } from '@/lib/linear-issue-write'
+import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 import { useState } from 'react'
@@ -34,7 +34,7 @@ import { useTaskPageDetailRouting } from '../use-task-page-detail-routing'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import { expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor, render, fireEvent, screen } from '@testing-library/react'
-import { deferred } from '../../../store/slices/linear-slice-test-harness'
+import { deferred } from '../../../store/slices/linear/linear-slice-test-harness'
 import { clearLinearRequestMaps } from '../../../store/slices/linear/linear-slice-request-state'
 
 const schedules = [

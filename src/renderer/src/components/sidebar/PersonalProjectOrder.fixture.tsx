@@ -1,4 +1,4 @@
-import { refreshLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { refreshLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { useRef } from 'react'

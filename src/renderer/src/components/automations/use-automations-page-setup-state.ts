@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
-import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { getAutomationHostTargetFromKey, type AutomationHostTarget } from './automation-host-client'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'

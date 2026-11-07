@@ -5,7 +5,6 @@ import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
 import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing-copy'
 import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
-
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
 import { BrowserUseSetup } from './use/BrowserUsePane'
@@ -37,12 +36,12 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isMacUserAgent } from '@/lib/user-agent-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
-import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 type BrowserPaneProps = {

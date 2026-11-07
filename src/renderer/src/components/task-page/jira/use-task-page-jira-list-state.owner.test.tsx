@@ -8,14 +8,10 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import { useTaskPageJiraListState } from './use-task-page-jira-list-state'
 
 const transport = vi.hoisted(() => ({ priorities: vi.fn() }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
-  jiraListPrioritiesForTarget: transport.priorities,
-  jiraListPriorities: transport.priorities
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
+  jiraListPrioritiesForTarget: transport.priorities
 }))
-vi.mock('@/runtime/runtime-jira-detail-client', () => ({
-  jiraListPrioritiesForTarget: transport.priorities,
-  jiraListPriorities: transport.priorities
-}))
+vi.mock('@/runtime/jira/runtime-jira-client', () => ({ jiraListPriorities: transport.priorities }))
 
 function fixture(
   accountHostId: ExecutionHostId = 'runtime:account',

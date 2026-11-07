@@ -4,12 +4,15 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 vi.mock('@/runtime/sync-runtime-graph', () => ({
   scheduleRuntimeGraphSync: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
-  ensurePtyDispatcher: vi.fn(),
+  ensurePtyDispatcher: vi.fn()
+}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   unregisterPtyDataHandlers: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
+vi.mock('@/components/terminal-pane/snapshots/shutdown-buffer-captures', () => ({
   shutdownBufferCaptures: vi.fn()
 }))
 

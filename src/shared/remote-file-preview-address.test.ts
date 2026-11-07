@@ -15,8 +15,16 @@ describe('parseRemoteFilePreviewAddress', () => {
     { relativePath: 'a\0.mp4' },
     { expectedEnvironmentPairingRevision: 1.5 },
     { expectedEnvironmentPairingRevision: '4' },
-    { worktree: '' }
+    { worktree: '' },
+    { grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
   ])('refuses %o', (override) => {
     expect(parseRemoteFilePreviewAddress({ ...address, ...override })).toBeNull()
+  })
+
+  it('accepts a granted file only by its absolute host path', () => {
+    const { relativePath: _relativePath, ...base } = address
+    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
+    expect(parseRemoteFilePreviewAddress(granted)).toEqual(granted)
+    expect(parseRemoteFilePreviewAddress({ ...granted, absolutePath: 'tmp/clip.mp4' })).toBeNull()
   })
 })

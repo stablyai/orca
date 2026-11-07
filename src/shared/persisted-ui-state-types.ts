@@ -1,3 +1,4 @@
+import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { PersonalProjectOrder } from './personal-project-order'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
@@ -32,6 +33,7 @@ import type { PersistedAutomationHostFilter } from './automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {
+  gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
   /** Paired-server project removals still owed to their server; optional so older builds ignore it. */
   pendingRuntimeRepoRemovals?: PendingRuntimeRepoRemoval[]
   jiraSavedFilterState?: JiraSavedFilterState
@@ -140,6 +142,8 @@ export type PersistedUIState = {
   _cursorStatusBarDefaultAdded?: boolean
   /** One-shot migration flag for adding the default-on ZCode status item. */
   _zcodeStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Muse status item. */
+  _museStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   /** Why: this is client-side presentation, not a provider/account or execution-host setting. */

@@ -5,8 +5,8 @@ import {
   MODEL_TERMINAL_HANDLE,
   type ModelLinkMode
 } from './remote-terminal-input-model-link'
-import { resetRemoteRuntimeTerminalMultiplexersForTests } from '../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
-import { createRemoteRuntimePtyTransport } from '../../src/renderer/src/components/terminal-pane/remote-runtime-pty-transport'
+import { resetRemoteRuntimeTerminalMultiplexersForTests } from '../../src/renderer/src/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+import { createRemoteRuntimePtyTransport } from '../../src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport'
 import { iterateTerminalInputChunks } from '../../src/shared/terminal/input/terminal-input'
 
 // Exercise real transport/multiplexer/journal → host dispatcher/ledger across lossy, buffered, late-delivered frames, refused writes and runtime restarts.

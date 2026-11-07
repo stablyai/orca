@@ -32,8 +32,6 @@ export function renderMobileTasksSearchControl(
     providerLabel,
     query,
     setAppliedQuery,
-    setCreateBody,
-    setCreateTitle,
     setGithubProjectSearch,
     setQuery,
     setShowCreateTask,
@@ -110,11 +108,7 @@ export function renderMobileTasksSearchControl(
                   ? translate('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
                   : translate('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
               disabled: !taskUiReady,
-              onPress: () => {
-                setCreateTitle('')
-                setCreateBody('')
-                setShowCreateTask(true)
-              }
+              onPress: () => setShowCreateTask(true)
             }
           : undefined
       }

@@ -13,8 +13,8 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses
 } from '@/components/tab-bar/drop-indicator'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { buildFontFamily } from '@/lib/monospace-font-family'

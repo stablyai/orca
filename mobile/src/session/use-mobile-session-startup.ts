@@ -1,12 +1,18 @@
+import { useEffect, useMemo, useRef } from 'react'
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import { recordPersonalProjectRouteIntent } from '../worktree/personal-project-route-intent'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { useEffect } from 'react'
 import { translate } from '../i18n/mobile-i18n'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { hostQueryKey } from '../query/host-query-key'
 import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import type { MobileSessionTab } from './mobile-session-route-types'
+import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 import type { RpcResponse } from '../transport/types'
+
+const LAST_TABS_META = { streamBacked: true }
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const executionHost = useWorkspaceExecutionHost()
@@ -19,8 +25,10 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     client,
     setTerminals,
     terminalsRef,
+    sessionTabs,
     setSessionTabs,
     appliedSnapshotMarkerRef,
+    appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
     setTerminalsLoaded,
     setActiveHandle,
@@ -49,6 +57,20 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     fetchTerminals,
     ensureSessionTabs
   } = scope
+  const queryClient = useQueryClient()
+  const exec = useWorkspaceExecutionHost() ?? 'local'
+  const lastTabsKey = useMemo(
+    () => hostQueryKey(hostId, 'session.tabs', { exec, worktree: worktreeId }, {}),
+    [hostId, exec, worktreeId]
+  )
+  // Never fetched: this hook writes the entry, and observing it holds it until 10 min after leaving.
+  useQuery({
+    queryKey: lastTabsKey,
+    queryFn: skipToken,
+    meta: LAST_TABS_META,
+    notifyOnChangeProps: []
+  })
+  const seedRevisionRef = useRef(0)
   useEffect(() => {
     // Reset reused-route state so the next workspace cannot inherit stale UI or snapshot gates.
     sessionTabActionSheetRequestSeqRef.current += 1
@@ -77,7 +99,13 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    setSessionTabs([])
+    // Paint the last strip until the host's snapshot replaces it (which treats it as the previous strip); offline keeps the empty-state body.
+    const lastTabs =
+      connState === 'connected'
+        ? queryClient.getQueryData<MobileSessionTab[]>(lastTabsKey)
+        : undefined
+    seedRevisionRef.current = appliedSessionTabsRevisionRef.current
+    setSessionTabs(lastTabs ? withoutSessionTabHostOwnership(lastTabs) : [])
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
@@ -95,9 +123,15 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     clearTerminalCache,
     setSplitTerminalHandles,
     terminalPaneViewportsRef,
-    hostId,
-    worktreeId
+    lastTabsKey
   ])
+
+  useEffect(() => {
+    // Only strips this visit took from the host; writing back the seed would pass it off as fresh.
+    if (appliedSessionTabsRevisionRef.current > seedRevisionRef.current) {
+      queryClient.setQueryData(lastTabsKey, sessionTabs)
+    }
+  }, [queryClient, lastTabsKey, sessionTabs])
 
   // Every setTimeout goes through addTimer into `timers`, which the returned cleanup clears.
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup

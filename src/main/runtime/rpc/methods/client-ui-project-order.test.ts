@@ -4,7 +4,7 @@ import { getDefaultUIState } from '../../../../shared/constants'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { CLIENT_UI_METHODS } from './client-ui'
+import { CLIENT_UI_METHODS } from './client-state/client-ui'
 
 function host(initial: PersistedUIState = getDefaultUIState()) {
   let ui = initial

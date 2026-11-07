@@ -51,6 +51,8 @@ export const AGENT_SESSION_FAILURE_COPY = {
     "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
   antigravityNotSignedIn:
     "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+  antigravitySystemNotSignedIn:
+    "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
   agentCommandNotSignedIn:
     'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
   interactiveAgentNotSignedIn:
@@ -102,6 +104,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
   claudeEffortInvalid:
     'Claude effort is invalid; choose low, medium, high, xhigh, or max and send again.',
   modelUnavailable: "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
+  modelNotSelected:
+    '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
+  modelUnavailableUpdate:
+    "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
   pluginInputRequired:
     '{{agent}} stopped because the "{{plugin}}" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.',

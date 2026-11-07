@@ -16,8 +16,8 @@ import {
   parkUntilHostSessionMirrorHydrates,
   resetHostSessionMirrorHydrationForTests
 } from '../../src/renderer/src/runtime/host-session-mirror-hydration'
-import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/host-live-terminal-probe'
-import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/runtime-environment-revision'
+import { clearHostLiveTerminalProbesForTests } from '../../src/renderer/src/runtime/hosted-terminals/inventory/host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from '../../src/renderer/src/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/web-session-tabs-sync/store-patch'
 
 const ENVIRONMENT_ID = 'env-live-unpublished'

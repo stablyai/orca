@@ -3,7 +3,7 @@ import {
   conflictOverviewView,
   conflictOverviewViewsKey
 } from '@/store/slices/editor/buffers/editor-buffer-conflict-overview'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'

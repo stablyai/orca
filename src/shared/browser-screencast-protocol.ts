@@ -113,6 +113,14 @@ export function encodeBrowserScreencastFrame(frame: BrowserScreencastFrame): Uin
   return out
 }
 
+/** The seq of an encoded frame, read from its header without decoding the metadata. */
+export function readBrowserScreencastFrameSeq(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < HEADER_BYTES) {
+    return null
+  }
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true)
+}
+
 export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreencastFrame | null {
   if (bytes.byteLength < HEADER_BYTES) {
     return null

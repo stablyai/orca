@@ -38,6 +38,9 @@ type AutomationDetailProps = {
   now: number
   onRunNow: (automation: Automation) => void
   onEdit: (automation: Automation) => void
+  /** Moves a row its host's Orca server now serves onto that server. */
+  onMigrate?: (automation: Automation) => void
+  isMigrating?: boolean
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
 }
@@ -123,6 +126,8 @@ export function AutomationDetail({
   now,
   onRunNow,
   onEdit,
+  onMigrate,
+  isMigrating,
   onToggle,
   onDelete
 }: AutomationDetailProps): React.JSX.Element {
@@ -177,9 +182,14 @@ export function AutomationDetail({
           <div className="flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold">{automation.name}</h2>
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
-              {automation.enabled
-                ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
-                : translate('auto.components.automations.enablement.paused', 'Paused')}
+              {!automation.enabled
+                ? translate('auto.components.automations.enablement.paused', 'Paused')
+                : hostEntry?.servedBy
+                  ? translate(
+                      'auto.components.automations.AutomationDetail.needsMigration',
+                      'Needs migration'
+                    )
+                  : translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -245,7 +255,26 @@ export function AutomationDetail({
         </div>
       </div>
 
-      {automation.executionTargetType === 'ssh' ? (
+      {hostEntry?.servedBy ? (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
+          <span className="min-w-0">
+            {translate(
+              'auto.components.automations.AutomationDetail.migrateNotice',
+              '{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.',
+              { host: hostEntry.label }
+            )}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="shrink-0"
+            disabled={isMigrating}
+            onClick={() => onMigrate?.(automation)}
+          >
+            {translate('auto.components.automations.AutomationDetail.migrate', 'Migrate')}
+          </Button>
+        </div>
+      ) : automation.executionTargetType === 'ssh' ? (
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
           {translate(
             'auto.components.automations.AutomationDetail.dbef8dc110',
@@ -254,7 +283,7 @@ export function AutomationDetail({
         </div>
       ) : null}
 
-      {runNowAvailability?.canRunNow === false ? (
+      {runNowAvailability?.canRunNow === false && !hostEntry?.servedBy ? (
         <div className="rounded-md border border-border/50 bg-muted/40 p-3 text-sm text-muted-foreground shadow-sm">
           {runNowAvailability.message}
         </div>

@@ -4,7 +4,7 @@ import type { BrowserTabCreateResult } from '../../../shared/runtime-types'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from './rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
 import { waitForWebRuntimeBrowserPageMaterialization } from './web-runtime-browser-materialization-wait'
@@ -32,7 +32,7 @@ import {
 } from './web-runtime-browser-creation-e2e-fault'
 import { isWebRuntimeSessionActive } from './web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import { registerPairedBrowserTabCreator } from '../store/slices/browser/paired-browser-tab-creator'
+import { registerPairedBrowserTabCreator } from '../store/slices/browser/tabs/paired-browser-tab-creator'
 import {
   forgetStagedBrowserTabHandover,
   wasStagedBrowserTabHandedToFrames

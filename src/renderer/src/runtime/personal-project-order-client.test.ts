@@ -12,10 +12,10 @@ const fixture = vi.hoisted(() => {
   const capabilities: string[] = []
   return { capabilities, call: vi.fn<(...args: unknown[]) => Promise<unknown>>() }
 })
-vi.mock('./local-runtime-capabilities', () => ({
+vi.mock('./hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => fixture.capabilities
 }))
-vi.mock('./runtime-rpc-client', () => ({
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => fixture.call(...args)
 }))
 const initial = useAppStore.getState()

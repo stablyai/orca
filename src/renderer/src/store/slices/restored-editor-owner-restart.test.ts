@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
-import { buildWorkspaceSessionPayload } from '../../lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '../../lib/workspace/persistence/workspace-session'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

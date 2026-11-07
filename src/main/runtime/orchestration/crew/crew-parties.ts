@@ -1,4 +1,4 @@
-import { canonicalOrcaSessionFromEdges } from '../canonical-orca-session-id'
+import { canonicalOrcaSessionFromEdges } from '../addressing/session-lineage/canonical-orca-session-id'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
@@ -7,9 +7,11 @@ import {
   parseOrcaSessionAddress
 } from '../../../../shared/orca-session-address'
 import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
-import { createCanonicalSessionPaneResolver, clearedInto } from '../structured-session-lineage'
-import type { CrewReadDependencies } from './crew-read-model'
-import type { CrewIdentityRead } from './crew-party-snapshot'
+import {
+  createCanonicalSessionPaneResolver,
+  clearedInto
+} from '../addressing/session-lineage/structured-session-lineage'
+import type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 export type Party = AgentMessageSender['party'] & { paneKey: string | null }
 

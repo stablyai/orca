@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import {
@@ -6,8 +6,8 @@ import {
   newerPersonalProjectOrder
 } from '../../../shared/personal-project-order'
 import type { ProjectOrderBy } from '../../../shared/ui-chrome-types'
-import { ensureLocalRuntimeCapabilities } from './local-runtime-capabilities'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { ensureLocalRuntimeCapabilities } from './hosts/capabilities/local-runtime-capabilities'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 
 const writer = createBrowserUuid()
 let seq = 0

@@ -42,8 +42,13 @@ export function useNativeChatNamingFailure(
     [target]
   )
   useEffect(() => feed?.activate(), [feed])
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      feed && sessionId ? feed.subscribeSession(sessionId, listener) : noSubscription(),
+    [feed, sessionId]
+  )
   const regenerating = useSyncExternalStore(
-    feed?.subscribe ?? noSubscription,
+    subscribe,
     () => (sessionId ? (feed?.getNamingActive(sessionId) ?? null) : null),
     () => null
   )

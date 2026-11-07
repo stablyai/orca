@@ -23,6 +23,8 @@ export type ManagedServerActions = {
   stop: (selector: string) => Promise<OrcadManagedStopResult>
   cancelStop: (selector: string) => Promise<OrcadManagedCancelStopResult>
   forget: (selector: string) => Promise<OrcadManagedForgetResult>
+  /** Forget only while another saved entry still manages the same server. */
+  forgetRedundant: (selector: string) => Promise<OrcadManagedForgetResult>
 }
 
 let registered: ManagedServerActions | null = null

@@ -12,18 +12,16 @@ import {
   start,
   draft,
   startLegacyActionLaunch
-} from '../../structured-agent-session-launch-create-message.test-fixture'
-import { registerCreateSelectionAdmissionTests } from '../../structured-agent-session-launch-selection-admission.test-fixture'
-import { registerCreateHydrationTests } from '../../structured-agent-session-launch-hydration.test-fixture'
-import { registerCreateCompletionTests } from '../../structured-agent-session-launch-completion.test-fixture'
+} from './structured-agent-session-launch-create-message.test-fixture'
+import { registerCreateSelectionAdmissionTests } from './structured-agent-session-launch-selection-admission.test-fixture'
+import { registerCreateHydrationTests } from './structured-agent-session-launch-hydration.test-fixture'
+import { registerCreateCompletionTests } from './structured-agent-session-launch-completion.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { structuredAgentSessionStopControl } from '../../../../../shared/agent-session/view/structured-agent-session-stop-control'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  registerActionEffortCreateTests,
-  registerCreateSelectionTests
-} from '../../structured-agent-session-launch-action-effort.test-fixture'
+import { registerActionEffortCreateTests } from './structured-agent-session-launch-action-effort.test-fixture'
+import { registerCreateSelectionTests } from './structured-agent-session-create-selection.test-fixture'
 
 import {
   startStructuredAgentLaunch,
@@ -51,7 +49,7 @@ import {
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchRecord
 } from './structured-agent-session-launch-persistence'
-import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
+import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import { markStructuredAgentSessionLaunchPublished } from './structured-agent-session-launch-publication'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
@@ -69,7 +67,7 @@ import {
   SendParams
 } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 
 let restoreCatalogStore: (() => void) | undefined
 describe('the first message owned by create', () => {

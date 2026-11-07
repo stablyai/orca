@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 // Use notify for haptics so frequent row taps cannot fill the 64-slot request window. The envelope owns v to avoid an import cycle.
 
