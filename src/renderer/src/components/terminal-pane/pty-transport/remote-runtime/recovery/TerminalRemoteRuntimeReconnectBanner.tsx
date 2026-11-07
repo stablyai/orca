@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import type { VisiblePtyRecoveryState } from './terminal-remote-runtime-recovery-ui-state'
 import type { WslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
@@ -32,9 +33,12 @@ type BannerProps = {
   awaitingSignIn?: boolean
 }
 
-function reconnectAction(onReconnect: () => void): { label: string; onClick: () => void } {
+function reconnectAction(
+  onReconnect: () => void,
+  t: Translate = translate
+): { label: string; onClick: () => void } {
   return {
-    label: translate(
+    label: t(
       'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.reconnectButton',
       'Reconnect'
     ),
@@ -53,6 +57,7 @@ export function TerminalRemoteRuntimeReconnectBanner({
   onOpenReplacedServerSettings = null,
   awaitingSignIn = false
 }: BannerProps): React.JSX.Element {
+  const t = useTranslate()
   if (wslHostUnavailable) {
     return <WslHostUnavailableBanner reason={wslHostUnavailable} />
   }
@@ -61,16 +66,16 @@ export function TerminalRemoteRuntimeReconnectBanner({
       <RemoteRuntimeRecoveryCard
         icon="stopped"
         data={{ 'data-terminal-remote-runtime-reconnect-banner': 'server-replaced' }}
-        title={translate(
+        title={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedTitle',
           'This host runs a different Orca server'
         )}
-        body={translate(
+        body={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedBody',
           'Orca connects to the host as a different SSH user, or its server was reinstalled, so reconnecting can’t restore this terminal. Forget this server in Settings, then connect the SSH host to pair with its current server.'
         )}
         action={{
-          label: translate(
+          label: t(
             'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.serverReplacedButton',
             'Open server settings'
           ),
@@ -84,15 +89,15 @@ export function TerminalRemoteRuntimeReconnectBanner({
       <RemoteRuntimeRecoveryCard
         icon="stopped"
         data={{ 'data-terminal-remote-runtime-reconnect-banner': 'pairing-refused' }}
-        title={translate(
+        title={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.pairingRefusedTitle',
           'This host no longer accepts this computer'
         )}
-        body={translate(
+        body={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.pairingRefusedBody',
           "Orca couldn't pair with it again over SSH. Nothing on the host was stopped. Reconnect to try again."
         )}
-        action={reconnectAction(onReconnect)}
+        action={reconnectAction(onReconnect, t)}
       />
     )
   }
@@ -101,16 +106,16 @@ export function TerminalRemoteRuntimeReconnectBanner({
       <RemoteRuntimeRecoveryCard
         icon="sign-in"
         data={{ 'data-terminal-remote-runtime-reconnect-banner': 'ssh-sign-in' }}
-        title={translate(
+        title={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.signInTitle',
           'Waiting for SSH sign-in'
         )}
-        body={translate(
+        body={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.signInBody',
           'This terminal continues by itself once you sign in to the host.'
         )}
         action={{
-          label: translate(
+          label: t(
             'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.signInButton',
             'Sign in'
           ),
@@ -124,21 +129,21 @@ export function TerminalRemoteRuntimeReconnectBanner({
       <RemoteRuntimeRecoveryCard
         icon="stopped"
         data={{ 'data-terminal-remote-runtime-reconnect-banner': 'disconnected' }}
-        title={translate(
+        title={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedTitle',
           'Remote runtime disconnected'
         )}
-        body={translate(
+        body={t(
           'auto.components.terminal.pane.TerminalRemoteRuntimeReconnectBanner.disconnectedBody',
           'Automatic retries stopped. Reconnect to resume this terminal session.'
         )}
         tailscaleHost={tailscaleHost}
-        action={reconnectAction(onReconnect)}
+        action={reconnectAction(onReconnect, t)}
       />
     )
   }
   const cause = paneRecoveryCause(recovery)
-  const copy = remoteRuntimeRecoveryCopy(cause, serverName)
+  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
   return (
     <RemoteRuntimeRecoveryCard
       icon={copy.retrying ? 'retrying' : 'waiting'}
@@ -152,7 +157,7 @@ export function TerminalRemoteRuntimeReconnectBanner({
       tailscaleHost={
         cause === 'connection-lost' || cause === 'waiting-for-server' ? tailscaleHost : null
       }
-      action={copy.retrying ? null : reconnectAction(onReconnect)}
+      action={copy.retrying ? null : reconnectAction(onReconnect, t)}
     />
   )
 }

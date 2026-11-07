@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { Translate } from '@/i18n/use-translate'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -78,7 +79,8 @@ export function buildTabAgentLaunchOptions(
 
 export function buildTabAgentLaunchOptionsFromRows(
   rows: readonly NewTabAgentMenuRow[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  t?: Translate
 ): TabAgentLaunchOption[] {
   return rows.map((row) => {
     const base = buildTabAgentLaunchOptions([row.agent], commandOverrides)[0]
@@ -86,9 +88,9 @@ export function buildTabAgentLaunchOptionsFromRows(
       ...base,
       agent: row.agent,
       aliases: base?.aliases ?? [],
-      label: rowLabel(row),
+      label: rowLabel(row, t),
       disabled: row.kind === 'chat-unavailable',
-      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : undefined,
+      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason, t) : undefined,
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -97,7 +99,8 @@ export function buildTabAgentLaunchOptionsFromRows(
 
 export function buildAgentPickerLaunchOptions(
   entries: readonly AgentPickerEntry[],
-  commandOverrides: Partial<Record<TuiAgent, string>> = {}
+  commandOverrides: Partial<Record<TuiAgent, string>> = {},
+  t?: Translate
 ): TabAgentLaunchOption[] {
   return entries.flatMap((entry) => {
     const row = entry.rows.find((row) =>
@@ -106,7 +109,7 @@ export function buildAgentPickerLaunchOptions(
         : row.kind === 'cli' || row.kind === 'terminal'
     )
     return row
-      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides).map((option) => ({
+      ? buildTabAgentLaunchOptionsFromRows([row], commandOverrides, t).map((option) => ({
           ...option,
           label: entry.label,
           pickerEntry: entry
