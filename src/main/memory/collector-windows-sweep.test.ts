@@ -18,8 +18,12 @@ const { appMetricsMock, runProcessMock, execMock, listRegisteredPtysMock } = vi.
 }))
 
 vi.mock('child_process', () => ({
-  exec: (cmd: string, opts: unknown, cb: (err: Error | null, out: { stdout: string }) => void) =>
-    execMock(cmd, opts, cb)
+  execFile: (
+    file: string,
+    _args: string[],
+    opts: unknown,
+    cb: (err: Error | null, out: { stdout: string }) => void
+  ) => execMock(file, opts, cb)
 }))
 
 // Mock the process wrapper; this suite verifies queries, while wrapper tests cover launch policy.
