@@ -11,7 +11,7 @@ import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active
 import { resolveTerminalAgentTabShortcut } from '../terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   LANDING_ACTION_BUTTON_CLASS,
   LandingBrand,
@@ -41,7 +41,8 @@ export function SplitPaneLanding({
   // Why: paired web clients without browser streaming hide browser creation, as the tab menu does.
   const browserEnabled = useAppStore(
     (state) =>
-      getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state === 'enabled'
+      getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
+      'enabled'
   )
   const newAgentShortcut = useShortcutKeyDetails('tab.newAgent')
   const newTerminalShortcut = useShortcutKeyDetails('tab.newTerminal')
