@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, View, type LayoutChangeEvent } from 'react-native'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import {
+  createRepeatingDirectionHandle,
+  PaneEdgeNavigationOverlay,
+  scrollPaneViewport,
+  type EdgeDirection,
+  type EdgeNavigationTarget
+} from '../navigation/edge-arrows/edge-navigation-context'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
 import { useMobilePrCommentActions } from '../session/use-mobile-pr-comment-actions'
 import { usePRCommentCardActions } from './pr-sidebar/PRCommentsSection'
@@ -89,6 +96,43 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
     setContentRowWidth((prev) => (prev === width ? prev : width))
   }, [])
 
+  const navStateRef = useRef({ controller, onBack })
+  navStateRef.current = { controller, onBack }
+  const canMoveNextFile = controller.currentIndex + 1 < controller.filteredQueue.length
+  const diffObscured =
+    controller.sheet !== null || (presentationMode === 'overlay' && controller.showPRSidebar)
+  const diffEdgeTarget = useMemo<EdgeNavigationTarget>(
+    () => ({
+      id: `diff-review:${controller.worktreeId}:${String(canMoveNextFile)}`,
+      kind: 'content-window',
+      obscured: diffObscured,
+      canNavigate: (direction: EdgeDirection) =>
+        direction === 'right' ? canMoveNextFile : true,
+      preparePress: (direction: EdgeDirection, paneNode?: unknown) => {
+        if (direction === 'up' || direction === 'down') {
+          return createRepeatingDirectionHandle(() => {
+            scrollPaneViewport(paneNode, direction)
+          }, true)
+        }
+        return createRepeatingDirectionHandle(() => {
+          const { controller: cur, onBack: goBack } = navStateRef.current
+          if (direction === 'left') {
+            if (cur.currentIndex > 0) {
+              cur.moveFile('previous')
+            } else {
+              goBack()
+            }
+            return
+          }
+          if (cur.currentIndex + 1 < cur.filteredQueue.length) {
+            cur.moveFile('next')
+          }
+        }, false)
+      }
+    }),
+    [canMoveNextFile, controller.worktreeId, diffObscured]
+  )
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <MobileDiffReviewHeader
@@ -131,25 +175,28 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
               <Text style={styles.actionErrorText}>{controller.actionError}</Text>
             </View>
           ) : null}
-          <MobileDiffReviewBody
-            commentsByLine={controller.commentsByLine}
-            currentItem={item}
-            diffState={controller.diffState}
-            filteredCount={controller.filteredQueue.length}
-            screenState={controller.screenState}
-            staleCommentIds={controller.staleCommentIds}
-            threadsByLine={controller.threadsByLine}
-            threadActions={threadActions}
-            selectedRange={selectedRange}
-            onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
-            scrollToLine={controller.scrollToLine}
-            onScrolledToLine={controller.clearScrollToLine}
-            onEditNote={controller.openEditComposer}
-            onRetry={controller.retryAction ?? undefined}
-            offline={controller.connState !== 'connected'}
-            filter={controller.filter}
-            onBack={onBack}
-          />
+          <View style={diffBodyPaneStyle}>
+            <MobileDiffReviewBody
+              commentsByLine={controller.commentsByLine}
+              currentItem={item}
+              diffState={controller.diffState}
+              filteredCount={controller.filteredQueue.length}
+              screenState={controller.screenState}
+              staleCommentIds={controller.staleCommentIds}
+              threadsByLine={controller.threadsByLine}
+              threadActions={threadActions}
+              selectedRange={selectedRange}
+              onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
+              scrollToLine={controller.scrollToLine}
+              onScrolledToLine={controller.clearScrollToLine}
+              onEditNote={controller.openEditComposer}
+              onRetry={controller.retryAction ?? undefined}
+              offline={controller.connState !== 'connected'}
+              filter={controller.filter}
+              onBack={onBack}
+            />
+            <PaneEdgeNavigationOverlay target={diffEdgeTarget} />
+          </View>
           {item ? (
             <MobileDiffReviewFooter
               busyAction={controller.busyAction}
@@ -205,3 +252,10 @@ export function MobileDiffReviewScreenView({ controller, hostConnection, onBack 
     </SafeAreaView>
   )
 }
+
+const diffBodyPaneStyle = {
+  flex: 1,
+  minHeight: 0,
+  position: 'relative',
+  overflow: 'hidden'
+} as const

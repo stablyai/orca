@@ -4,6 +4,7 @@ import {
   Columns2,
   Folder,
   GitBranch,
+  Layers,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -11,6 +12,7 @@ import {
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { useGlobalEdgeNavigation } from '../navigation/edge-arrows/edge-navigation-state'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -26,6 +28,7 @@ type Props = {
 export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsCollapsed }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const edgeNav = useGlobalEdgeNavigation()
   const {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
@@ -103,8 +106,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       onPress: handleOpenQuickCommands
     }
   ]
-  const view: ActionSheetAction[] =
-    canSplitTerminals || terminalSplitActive
+  const view: ActionSheetAction[] = [
+    ...(canSplitTerminals || terminalSplitActive
       ? [
           {
             id: 'terminalLayout',
@@ -114,7 +117,19 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
             onPress: () => setShowTerminalLayout(true)
           }
         ]
-      : []
+      : []),
+    ...(edgeNav
+      ? [
+          {
+            id: 'edgeArrows',
+            label: t('session.header.edgeArrows', '4-side edge arrows'),
+            icon: Layers,
+            closeBeforePress: true,
+            onPress: () => edgeNav.setSheetVisible(true)
+          }
+        ]
+      : [])
+  ]
   const tabs: ActionSheetAction[] = actionsCollapsed
     ? [
         {

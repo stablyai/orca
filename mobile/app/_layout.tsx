@@ -31,6 +31,7 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'
+import { GlobalEdgeNavigationProvider } from '../src/navigation/edge-arrows/GlobalEdgeNavigationProvider'
 import { useFollowDeviceUiLocale } from '../src/i18n/use-follow-device-ui-locale'
 import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
@@ -189,6 +190,7 @@ export default function RootLayout() {
         <View style={styles.root} onLayout={onNavigatorLayout}>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
           <SideRailProvider>
+            <GlobalEdgeNavigationProvider>
             <SideSafeArea>
               <Stack
                 screenOptions={{
@@ -237,6 +239,7 @@ export default function RootLayout() {
                 />
               </Stack>
             </SideSafeArea>
+            </GlobalEdgeNavigationProvider>
           </SideRailProvider>
         </View>
       </OrcaQueryProvider>

@@ -185,11 +185,15 @@ export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   markdownFrame: {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
+    overflow: 'hidden',
     backgroundColor: colors.bgBase
   },
   browserFrame: {
     flex: 1,
     minHeight: 0,
+    position: 'relative',
+    overflow: 'hidden',
     backgroundColor: colors.bgBase
   },
   markdownEditor: {

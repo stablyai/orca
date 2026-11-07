@@ -59,7 +59,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
       <View style={styles.kavInner}>
         <MobileSessionHeader controller={controller} details={details} />
         <MobileWorkerAutoCloseStrip controller={controller} />
-        <MobileSessionContentRow controller={controller} />
+        <MobileSessionContentRow controller={controller} obscured={obscured} />
       </View>
       <AnchoredDetailCardLayer
         card={details}
