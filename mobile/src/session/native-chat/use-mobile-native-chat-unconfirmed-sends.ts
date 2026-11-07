@@ -19,7 +19,29 @@ export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 export const UNCONFIRMED_SEND_MESSAGE = 'Delivery unconfirmed — check chat before retrying'
 export const UNCONFIRMED_SEND_RESTORED_MESSAGE = 'Not confirmed. Restored to the box.'
 
-type HeldSend = UnconfirmedSend & { inFlightId: string | null; onUnconfirmed: () => void }
+type HeldSend = UnconfirmedSend & {
+  inFlightId: string | null
+  onUnconfirmed: () => void
+  // Saved before the page closed: its tail may have scrolled out of the loaded window.
+  restored: boolean
+}
+
+function landedHolds(
+  messages: readonly NativeChatMessage[],
+  entries: readonly HeldSend[]
+): Set<HeldSend> {
+  const loaded = new Set(messages.map((message) => message.id))
+  // A tail outside the window can't bound the echo, so any echo in the window confirms a restored send.
+  const probes = entries.map((entry) =>
+    entry.restored &&
+    entry.baselineTailMessageId !== null &&
+    !loaded.has(entry.baselineTailMessageId)
+      ? { ...entry, baselineTailMessageId: null }
+      : entry
+  )
+  const landed = new Set<UnconfirmedSend>(findLandedUnconfirmedSends(messages, probes))
+  return new Set(entries.filter((_entry, index) => landed.has(probes[index]!)))
+}
 
 export function useMobileNativeChatUnconfirmedSends(args: {
   draftKey: string | null
@@ -66,10 +88,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
       const isActiveTranscript =
         activeDraftKeyRef.current === entry.draftKey &&
         (entry.pendingKey === null || activePendingKeyRef.current === entry.pendingKey)
-      if (
-        isActiveTranscript &&
-        findLandedUnconfirmedSends(messagesRef.current, [entry]).length > 0
-      ) {
+      if (isActiveTranscript && landedHolds(messagesRef.current, [entry]).size > 0) {
         settleMobileNativeChatInFlightSend(entry.inFlightId)
         return
       }
@@ -100,7 +119,8 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         baselineTailMessageId: origin.boundary.afterMessageId ?? null,
         deadline: null,
         inFlightId,
-        onUnconfirmed
+        onUnconfirmed,
+        restored: false
       })
     },
     [hold]
@@ -122,6 +142,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         baselineTailMessageId: send.baselineTailMessageId,
         deadline: null,
         inFlightId: send.id,
+        restored: true,
         // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
         onUnconfirmed: send.queuedDuringWork
           ? () => onSendError(UNCONFIRMED_SEND_MESSAGE)
@@ -153,11 +174,10 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         entry.draftKey === draftKey &&
         (entry.pendingKey === null || entry.pendingKey === pendingKey)
     )
-    const landed = findLandedUnconfirmedSends(messages, relevant)
-    if (landed.length === 0) {
+    const landedSet = landedHolds(messages, relevant)
+    if (landedSet.size === 0) {
       return
     }
-    const landedSet = new Set<UnconfirmedSend>(landed)
     for (const entry of unconfirmedRef.current) {
       if (landedSet.has(entry)) {
         clearTimeout(entry.deadline ?? undefined)

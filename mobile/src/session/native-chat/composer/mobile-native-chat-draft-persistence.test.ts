@@ -30,10 +30,7 @@ import {
   resetMobileNativeChatDraftStoreForTests,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
-import {
-  beginMobileNativeChatInFlightSend,
-  noteMobileNativeChatInFlightMessageId
-} from './mobile-native-chat-in-flight-sends'
+import { beginMobileNativeChatInFlightSend } from './mobile-native-chat-in-flight-sends'
 import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const storage = vi.hoisted(() => new Map<string, string>())
@@ -77,6 +74,16 @@ const deviceStore: PageDeviceStore = {
       }
     }
     return { written: true }
+  }
+}
+
+function userMessage(id: string, text: string): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: [{ type: 'text', text }],
+    timestamp: null,
+    source: 'transcript'
   }
 }
 
@@ -291,8 +298,12 @@ describe('mobile native-chat draft persistence', () => {
     }
 
     // The page sends and dies before the outcome comes back: only the clearing write reached the store.
-    async function sendThenKill(text: string, kind: 'terminal' | 'structured'): Promise<string> {
-      await mount(createElement(TerminalChat, { messages: [] }))
+    async function sendThenKill(
+      text: string,
+      kind: 'terminal' | 'structured',
+      messages: NativeChatMessage[] = []
+    ): Promise<string> {
+      await mount(createElement(TerminalChat, { messages }))
       act(() => drafts?.setComposerText(text))
       const origin = drafts?.captureSendOrigin(text)
       if (!origin) {
@@ -308,10 +319,11 @@ describe('mobile native-chat draft persistence', () => {
     function beginAfterClear(
       origin: NonNullable<ReturnType<NonNullable<typeof drafts>['captureSendOrigin']>>,
       text: string,
-      kind: 'terminal' | 'structured'
+      kind: 'terminal' | 'structured',
+      clientMessageId?: string
     ): string {
       drafts?.clearDraftForSend(origin, text)
-      const id = beginMobileNativeChatInFlightSend(origin, kind, text)
+      const id = beginMobileNativeChatInFlightSend(origin, kind, text, clientMessageId)
       if (!id) {
         throw new Error('the send was not saved')
       }
@@ -359,6 +371,20 @@ describe('mobile native-chat draft persistence', () => {
       expect(storedRow()).toBeNull()
     })
 
+    it('keeps a terminal-chat send whose tail scrolled out of the reopened window', async () => {
+      vi.useFakeTimers()
+      publishPageDeviceStore(deviceStore)
+      await sendThenKill('ship it', 'terminal', [userMessage('old', 'earlier question')])
+
+      await mount(createElement(TerminalChat, { messages: [userMessage('u1', 'ship it')] }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000)
+      })
+
+      expect(draftText(TAB_A)).toBe('')
+      expect(onSendError).not.toHaveBeenCalled()
+    })
+
     it('restores a structured send the journal never recorded, and not one it did', async () => {
       vi.useFakeTimers()
       publishPageDeviceStore(deviceStore)
@@ -372,10 +398,7 @@ describe('mobile native-chat draft persistence', () => {
         if (!origin) {
           throw new Error('the chat has no send origin')
         }
-        noteMobileNativeChatInFlightMessageId(
-          beginAfterClear(origin, text, 'structured'),
-          clientMessageId
-        )
+        beginAfterClear(origin, text, 'structured', clientMessageId)
       }
       await settle()
       act(() => renderer?.unmount())

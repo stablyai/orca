@@ -7,7 +7,7 @@ import {
 // Typed text outlives the page: each owner keeps one row, saved after typing settles and at once when emptied.
 const SAVE_DEBOUNCE_MS = 250
 
-/** Where a row lives. A read that fails leaves the row unreadable for the page; a write answers whether it stuck. */
+/** Where a row lives. A failed read leaves the row unloaded; a write answers whether it stuck. */
 export type DurableDraftRowBackend = {
   read: () => Promise<{ readonly ok: true; readonly value: unknown } | { readonly ok: false }>
   write: (value: unknown) => Promise<boolean>
@@ -24,7 +24,7 @@ export type DurableDraftRowOwner = {
 
 export type DurableDraftRow = {
   readonly key: string
-  readonly state: () => 'pending' | 'loaded' | 'unreadable'
+  readonly state: () => 'pending' | 'loaded'
   /** Reads the row once per page; later calls wait for every earlier read and write. */
   load: () => Promise<void>
   save: (timing: 'immediate' | 'deferred') => void
@@ -35,7 +35,7 @@ type Row = {
   backend: DurableDraftRowBackend | null
   // Every read and write of the row runs in order, the load first.
   chain: Promise<void>
-  state: 'pending' | 'loaded' | 'unreadable'
+  state: 'pending' | 'loaded'
   // What the backend holds; undefined after a failed write, so the next save cannot match it.
   written: string | undefined
   timer: ReturnType<typeof setTimeout> | null
@@ -91,8 +91,8 @@ async function load(row: Row): Promise<void> {
   row.backend ??= row.owner.backend()
   const read = await row.backend.read()
   if (!read.ok) {
-    // A shell that refuses this page the row refuses it for the whole page, so the load is not retried.
-    row.state = 'unreadable'
+    // A dropped or refused read is retried, backend re-picked, at the next save; until then the text stays in memory.
+    row.backend = null
     return
   }
   row.state = 'loaded'
