@@ -1,6 +1,8 @@
 import { parseQoderSessionFile } from './scanners/qoder/session-scanner-qoder-parser'
 import { parseCodebuddySessionFile } from './scanners/codebuddy/session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
+import { splitHermesSqliteCandidate } from './scanners/hermes/session-scanner-hermes-sqlite-paths'
+import { parseHermesSqliteSession } from './scanners/hermes/session-scanner-hermes-sqlite'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './scanners/devin/session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './scanners/antigravity/session-scanner-antigravity-parser'
@@ -124,8 +126,18 @@ export async function parseAgentSessionFile(
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)
-    case 'hermes':
+    case 'hermes': {
+      const sqliteCandidate = splitHermesSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        return parseHermesSqliteSession({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform,
+          messages
+        })
+      }
       return parseHermesSessionFile(candidate.file, platform, messages, signal)
+    }
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform, messages)
     case 'openclaw':
