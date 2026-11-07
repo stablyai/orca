@@ -5,7 +5,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { showSingleFlightOpenDialog } from './single-flight-open-dialog'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
-  customAppIconFileExtensions,
+  CUSTOM_APP_ICON_FILE_EXTENSIONS,
   importCustomAppIcon,
   readCustomAppIconPreview,
   removeCustomAppIcon
@@ -22,7 +22,7 @@ export function registerCustomAppIconHandlers(store: Store): void {
           filters: [
             {
               name: translateMain('native.dialog.appIconImage', 'App icon image'),
-              extensions: customAppIconFileExtensions()
+              extensions: CUSTOM_APP_ICON_FILE_EXTENSIONS
             }
           ]
         },

@@ -743,7 +743,7 @@
         "customKeyword": "custom",
         "importKeyword": "import",
         "importErrors": {
-          "unsupportedFormat": "Unsupported image format.",
+          "unsupportedFormat": "Unsupported image. Pick a PNG or JPEG file.",
           "unreadable": "Could not read the selected file.",
           "tooLarge": "Image is larger than {{max}} MB.",
           "notSquare": "App icons must be square.",

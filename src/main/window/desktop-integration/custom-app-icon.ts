@@ -16,7 +16,17 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 const STORED_ICON_SIDE = 1024
 const PREVIEW_ICON_SIDE = 192
 
-type CustomAppIconFormat = 'png' | 'jpeg' | 'ico'
+// Why not ICO/ICNS: Electron decodes ICNS nowhere and ICO only on Windows, at a single size.
+export const CUSTOM_APP_ICON_FILE_EXTENSIONS = ['png', 'jpg', 'jpeg']
+
+// Imports and removals share one file, so they run one at a time.
+let customAppIconMutations: Promise<unknown> = Promise.resolve()
+
+function enqueueCustomAppIconMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const result = customAppIconMutations.then(mutation, mutation)
+  customAppIconMutations = result.catch(() => {})
+  return result
+}
 
 export function getCustomAppIconPath(): string {
   return join(getCanonicalUserDataPath(), 'app-icon', 'custom.png')
@@ -26,24 +36,9 @@ export function hasCustomAppIcon(): boolean {
   return existsSync(getCustomAppIconPath())
 }
 
-export function customAppIconFileExtensions(
-  platform: NodeJS.Platform = process.platform
-): string[] {
-  // Electron decodes ICO only on Windows, so other platforms never offer it.
-  return platform === 'win32' ? ['png', 'jpg', 'jpeg', 'ico'] : ['png', 'jpg', 'jpeg']
-}
-
-function sniffFormat(bytes: Uint8Array): CustomAppIconFormat | null {
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
-    return 'png'
-  }
-  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
-    return 'jpeg'
-  }
-  if (bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0) {
-    return 'ico'
-  }
-  return null
+function isPngOrJpeg(bytes: Uint8Array): boolean {
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+  return isPng || (bytes[0] === 0xff && bytes[1] === 0xd8)
 }
 
 class CustomAppIconImportError extends Error {
@@ -67,8 +62,7 @@ async function decodeCustomAppIcon(sourcePath: string): Promise<Electron.NativeI
   const bytes = await readFile(sourcePath).catch(() => {
     throw new CustomAppIconImportError('unreadable')
   })
-  const format = sniffFormat(bytes)
-  if (!format || (format === 'ico' && process.platform !== 'win32')) {
+  if (!isPngOrJpeg(bytes)) {
     throw new CustomAppIconImportError('unsupportedFormat')
   }
   // Read the header before decoding so a decompression bomb never reaches the native decoder.
@@ -85,8 +79,7 @@ async function decodeCustomAppIcon(sourcePath: string): Promise<Electron.NativeI
   if (dimensions.width > CUSTOM_APP_ICON_MAX_SIDE) {
     throw new CustomAppIconImportError('tooBig')
   }
-  const image =
-    format === 'ico' ? nativeImage.createFromPath(sourcePath) : nativeImage.createFromBuffer(bytes)
+  const image = nativeImage.createFromBuffer(bytes)
   if (image.isEmpty()) {
     throw new CustomAppIconImportError('undecodable')
   }
@@ -96,7 +89,11 @@ async function decodeCustomAppIcon(sourcePath: string): Promise<Electron.NativeI
 }
 
 /** Validates the picked image and stores it as a normalized PNG inside userData. */
-export async function importCustomAppIcon(sourcePath: string): Promise<CustomAppIconImportResult> {
+export function importCustomAppIcon(sourcePath: string): Promise<CustomAppIconImportResult> {
+  return enqueueCustomAppIconMutation(() => storeCustomAppIcon(sourcePath))
+}
+
+async function storeCustomAppIcon(sourcePath: string): Promise<CustomAppIconImportResult> {
   let image: Electron.NativeImage
   try {
     image = await decodeCustomAppIcon(sourcePath)
@@ -129,6 +126,6 @@ export function readCustomAppIconPreview(): string | null {
   return image.isEmpty() ? null : previewDataUrl(image)
 }
 
-export async function removeCustomAppIcon(): Promise<void> {
-  await rm(getCustomAppIconPath(), { force: true })
+export function removeCustomAppIcon(): Promise<void> {
+  return enqueueCustomAppIconMutation(() => rm(getCustomAppIconPath(), { force: true }))
 }
