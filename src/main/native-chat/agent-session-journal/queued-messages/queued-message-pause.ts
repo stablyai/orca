@@ -1,10 +1,9 @@
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type * as journalTypes from '../../../../shared/agent-session/journal/agent-session-journal-types'
 // Derive pauses from journal state: failed turns, personal Stop, clear and reopen.
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalStopEvent, JournalTombstoneRow } from '../durable-rows/journal-row-schema'
 
 export type QueuePauseReason = 'stopped' | 'failed' | 'cleared' | 'restarted'
@@ -41,7 +40,7 @@ type QueueCard = {
   holdReason: string | null
   queuedAt: AgentJournalCursor | null
   unattended?: boolean
-  body?: AgentJournalMessageItem
+  body?: journalTypes.AgentJournalMessageItem
 }
 
 export function createJournalQueuePauseMarks(): JournalQueuePauseMarks {
@@ -331,7 +330,7 @@ export function resumableQueuePause(
  *  pause, whoever sent it, so the pause is not shown meanwhile; a refusal shows it again. A send
  *  made before a Stop lifts nothing, so it never counts. */
 export function queuePauseLiftOnItsWay<
-  Submission extends Pick<AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>
+  Submission extends Pick<journalTypes.AgentJournalSubmission, 'dispatchState' | 'acceptedSequence'>
 >(
   pause: DerivedQueuePause,
   submissions: readonly Submission[],

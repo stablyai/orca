@@ -1,7 +1,10 @@
 import type Database from '../../../sqlite/sync-database'
 import { readCommandReceipt } from '../writing/command-receipt-table'
 import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import {
+  orchestrationMailNotice,
+  USER_MESSAGE_SOURCE
+} from '../../../../shared/agent-session/agent-session-message-source'
 import { legacyQueuePositions } from './legacy-queue-positions'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type {
@@ -11,7 +14,6 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionJournal } from '../journal-store'
