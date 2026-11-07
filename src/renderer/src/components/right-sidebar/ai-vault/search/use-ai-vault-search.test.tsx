@@ -230,3 +230,32 @@ it('revalidates active search without losing hits, accepting old pages, or touch
   await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
   expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
 })
+
+it('keeps the last hits on screen until a newer query answers, ignoring the older reply', async () => {
+  const hit = (sessionId: string) => ({ ...searchHit(), sessionId })
+  let answerOld = (_response: AiVaultSearchResponse): void => {}
+  searchSessions
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('first')] })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerOld = resolve
+        })
+    )
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('newest')] })
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'n' } } }
+  )
+  await debounce()
+  rerender({ request: { query: 'ne' } })
+  await debounce()
+  rerender({ request: { query: 'nee' } })
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['first'])
+  expect(result.current.answered).toBe(false)
+  await debounce()
+  await act(async () => answerOld({ ...searchResults(), hits: [hit('older')] }))
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['newest'])
+  expect(result.current.answered).toBe(true)
+  unmount()
+})
