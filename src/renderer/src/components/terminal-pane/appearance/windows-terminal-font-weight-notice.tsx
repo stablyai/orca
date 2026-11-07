@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { isWindowsDesktopClient } from '@/lib/windows-path-access'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { WINDOWS_TERMINAL_FONT_WEIGHT } from '../../../../../shared/terminal/appearance/terminal-platform-defaults'
@@ -57,20 +58,21 @@ function TerminalFontWeightChoice(): React.JSX.Element {
   const switchId = useId()
   const weight = useAppStore((s) => s.settings?.terminalFontWeight ?? WINDOWS_TERMINAL_FONT_WEIGHT)
   const fontFamily = useAppStore((s) => buildFontFamily(s.settings?.terminalFontFamily ?? ''))
+  const fontSize = useAppStore((s) => s.settings?.terminalFontSize)
   return (
     // Sonner treats a drag that starts outside a button as a swipe; keep it from dismissing mid-choice.
     <div className="mt-2 space-y-2" onPointerDown={(event) => event.stopPropagation()}>
       <div
         aria-hidden
-        className="truncate rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-sm text-foreground"
-        style={{ fontFamily, fontWeight: weight }}
+        className="truncate rounded-md border border-border/70 bg-muted/35 px-2.5 py-1.5 text-sm text-popover-foreground"
+        style={{ fontFamily, fontSize, fontWeight: weight }}
       >
         {SAMPLE_TEXT}
       </div>
       <div className="flex items-center justify-between gap-3">
-        <label htmlFor={switchId} className="text-sm text-foreground">
+        <Label htmlFor={switchId} className="text-sm text-popover-foreground">
           {translate('terminal.windowsFontWeight.lighterText', 'Lighter terminal text')}
-        </label>
+        </Label>
         <Switch
           id={switchId}
           checked={weight === WINDOWS_TERMINAL_FONT_WEIGHT}
