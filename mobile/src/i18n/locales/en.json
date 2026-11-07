@@ -160,7 +160,8 @@
       "phoneDownloading": "Downloading… {{progress}}%",
       "phoneUnsupported": "Not available on this phone",
       "download": "Download for this phone",
-      "downloadSize": "About {{size}} MB"
+      "downloadSize": "About {{size}} MB",
+      "phoneChecking": "Checking…"
     }
   },
   "common": {
@@ -623,7 +624,8 @@
       "microphoneInterrupted": "Voice dictation stopped because the microphone was interrupted. Try again.",
       "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again.",
       "phoneUnavailable": "Dictation on this phone isn’t ready. Download it in Voice settings, or choose Automatic.",
-      "phoneFailed": "Dictation on this phone stopped working. Try again."
+      "phoneFailed": "Dictation on this phone stopped working. Try again.",
+      "phoneBusy": "Dictation on this phone is still starting. Try again in a moment."
     }
   },
   "hostScreen": {

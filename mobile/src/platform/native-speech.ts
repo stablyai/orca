@@ -42,6 +42,11 @@ type EngineState = { live: Session | null }
 
 const engineStates = new WeakMap<NativeSpeechEngine, EngineState>()
 
+// A slow speech service is not an unsupported phone: callers ask again rather than remember it.
+export function isSpeechBusyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'busy'
+}
+
 // A newer engine's code the shipped page does not know still means "use the computer".
 function failureOf(code: string): BridgeSpeechFailure {
   return BRIDGE_SPEECH_FAILURES.find((known) => known === code) ?? 'failed'
@@ -87,13 +92,17 @@ export function createNativeSpeechServer(engine: NativeSpeechEngine): NativeSpee
 
   async function status(locale: string): Promise<unknown> {
     // Answer the preference even when the recognizer can't say, so This phone never falls to the computer.
+    // A slow service is reported as busy, never unsupported, so the page asks again on its next dictation.
     const [preference, available] = await Promise.all([
       engine.readPreference(),
-      engine.availability(locale).catch(() => null)
+      engine
+        .availability(locale)
+        .catch((error: unknown) => (isSpeechBusyError(error) ? ('busy' as const) : null))
     ])
-    return available === null
-      ? { status: 'unsupported', locale: null, preference }
-      : { status: available.status, locale: available.locale, preference }
+    if (available === 'busy' || available === null) {
+      return { status: available ?? 'unsupported', locale: null, preference }
+    }
+    return { status: available.status, locale: available.locale, preference }
   }
 
   async function start(locale: string): Promise<unknown> {

@@ -1469,7 +1469,8 @@
       "microphonePermissionDenied": "마이크 권한이 거부되었습니다.",
       "noSpeech": "음성이 감지되지 않았습니다.",
       "phoneUnavailable": "이 휴대폰의 받아쓰기가 준비되지 않았습니다. 음성 설정에서 다운로드하거나 자동을 선택하세요.",
-      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요."
+      "phoneFailed": "이 휴대폰의 받아쓰기가 중단되었습니다. 다시 시도하세요.",
+      "phoneBusy": "이 휴대폰의 받아쓰기가 아직 시작 중입니다. 잠시 후 다시 시도하세요."
     }
   },
   "host": {
@@ -2836,7 +2837,8 @@
       "phoneDownloading": "다운로드 중… {{progress}}%",
       "phoneUnsupported": "이 휴대폰에서는 사용할 수 없음",
       "download": "이 휴대폰에 다운로드",
-      "downloadSize": "약 {{size}}MB"
+      "downloadSize": "약 {{size}}MB",
+      "phoneChecking": "확인 중…"
     }
   },
   "sourceControl": {

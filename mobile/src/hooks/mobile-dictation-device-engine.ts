@@ -14,7 +14,7 @@ export type MobileDictationEngine =
 export type MobileDictationRoute =
   | { kind: 'host' }
   | { kind: 'device'; fallback: boolean }
-  | { kind: 'phone-unavailable' }
+  | { kind: 'phone-unavailable'; busy: boolean }
 
 // Automatic uses the phone when it is ready; This phone never sends audio to the computer; Computer is today's path.
 export async function chooseMobileDictationRoute(
@@ -36,7 +36,8 @@ export async function chooseMobileDictationRoute(
   if (status.status === 'ready') {
     return { kind: 'device', fallback }
   }
-  return fallback ? { kind: 'host' } : { kind: 'phone-unavailable' }
+  // Busy is never remembered: Automatic uses the computer this once and the next dictation asks again.
+  return fallback ? { kind: 'host' } : { kind: 'phone-unavailable', busy: status.status === 'busy' }
 }
 
 // Arms the phone's recognizer; null means it refused or failed, and the caller decides between the computer and an error.
@@ -106,6 +107,13 @@ export function phoneDictationUnavailableMessage(): string {
   return translate(
     'hooks.useMobileDictation.phoneUnavailable',
     'Dictation on this phone isn’t ready. Download it in Voice settings, or choose Automatic.'
+  )
+}
+
+export function phoneDictationBusyMessage(): string {
+  return translate(
+    'hooks.useMobileDictation.phoneBusy',
+    'Dictation on this phone is still starting. Try again in a moment.'
   )
 }
 

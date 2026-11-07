@@ -45,6 +45,7 @@ export type SpeechDownloadProgressEvent = { locale: string; fraction: number }
 
 type SpeechNativeModule = {
   // Never prompts and never downloads. Must be cheap: called before every dictation.
+  // Rejects with code 'busy' when the OS speech service didn't answer in time; asking again later is safe.
   speechAvailability?: (locale: string) => Promise<SpeechAvailability>
   // Installs the assets for locale; resolves true when ready, false when it failed or isn't possible.
   speechDownload?: (locale: string) => Promise<boolean>
