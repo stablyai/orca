@@ -1,4 +1,5 @@
 import type { ModelManager } from './model-manager'
+import type { SpawnSttWorkerProcess } from './stt-worker-process'
 import { startSttDictation } from './stt-session-start'
 import { createSttSessionState, type SttSessionState } from './stt-session-state'
 import { prepareSttModelForDeletion, stopSttDictation } from './stt-session-stop'
@@ -17,8 +18,8 @@ export type SttEventSink = (event: SttEvent) => void
 export class SttService {
   private readonly state: SttSessionState
 
-  constructor(modelManager: ModelManager) {
-    this.state = createSttSessionState(modelManager)
+  constructor(modelManager: ModelManager, spawnWorker: SpawnSttWorkerProcess) {
+    this.state = createSttSessionState(modelManager, spawnWorker)
   }
 
   startDictation(
@@ -45,9 +46,7 @@ export class SttService {
     if (this.state.cloudSession) {
       return this.state.cloudSession.feedAudio(samples, sampleRate)
     }
-    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate }, [
-      samples.buffer as ArrayBuffer
-    ])
+    this.state.worker?.postMessage({ type: 'feed', samples, sampleRate })
     return false
   }
 
