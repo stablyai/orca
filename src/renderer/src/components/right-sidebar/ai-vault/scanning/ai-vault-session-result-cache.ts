@@ -32,24 +32,56 @@ function stripPreviewSessions(result: AiVaultListResult): AiVaultListResult {
   return { ...result, sessions }
 }
 
+/** Validate the persisted shape before trusting a decoded entry as a cache hit. */
 function readPersistedCache(): Map<string, CachedSessionResult> {
   try {
     const raw = localStorage.getItem(PERSIST_KEY)
     if (!raw) {
       return new Map()
     }
-    const parsed = JSON.parse(raw) as [string, CachedSessionResult][]
-    return new Map(parsed)
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return new Map()
+    }
+    const entries = new Map<string, CachedSessionResult>()
+    for (const item of parsed) {
+      if (!Array.isArray(item) || typeof item[0] !== 'string') {
+        continue
+      }
+      const entry = item[1] as Partial<CachedSessionResult> | null
+      if (
+        entry &&
+        typeof entry.executionHostScope === 'string' &&
+        (typeof entry.limit === 'number' || entry.limit === 'unlimited') &&
+        Array.isArray(entry.result?.sessions)
+      ) {
+        entries.set(item[0], entry as CachedSessionResult)
+      }
+    }
+    return entries
   } catch {
     return new Map()
   }
 }
 
-function writePersistedCache(entries: Map<string, CachedSessionResult>): void {
+/** One serialization path: strip the persisted duplicate and write; clear the old copy if the write fails. */
+function persistCurrentCache(): void {
   try {
-    localStorage.setItem(PERSIST_KEY, JSON.stringify([...entries]))
+    const entries = [...cachedSessionResults].map(([key, entry]) => {
+      const { persisted: _persisted, ...rest } = entry
+      return [key, { ...rest, result: entry.persisted ?? entry.result }] as [
+        string,
+        CachedSessionResult
+      ]
+    })
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(entries))
   } catch {
-    // Quota exceeded: the in-memory cache still works; only restart speed is lost.
+    // Quota exceeded: drop the stale copy rather than leave it behind; the in-memory cache still works.
+    try {
+      localStorage.removeItem(PERSIST_KEY)
+    } catch {
+      // Even removal failed; nothing more to do.
+    }
   }
 }
 
@@ -121,14 +153,7 @@ export function cacheAiVaultSessionResult(args: {
     }
     cachedSessionResults.delete(oldestKey)
   }
-  writePersistedCache(
-    new Map(
-      [...cachedSessionResults].map(([key, entry]) => [
-        key,
-        { ...entry, result: entry.persisted ?? entry.result }
-      ])
-    )
-  )
+  persistCurrentCache()
 }
 
 export function resetAiVaultSessionResultCacheForTest(): void {
@@ -146,12 +171,5 @@ export function invalidateAiVaultSessionResults(host: ExecutionHostScope): void 
       cachedSessionResults.delete(key)
     }
   }
-  writePersistedCache(
-    new Map(
-      [...cachedSessionResults].map(([key, entry]) => [
-        key,
-        { ...entry, result: entry.persisted ?? entry.result }
-      ])
-    )
-  )
+  persistCurrentCache()
 }

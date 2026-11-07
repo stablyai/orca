@@ -290,3 +290,35 @@ it('seeds the session list cache from localStorage so a restart shows the last l
   expect(cached).not.toBeNull()
   expect(cached?.sessions[0]?.title).toBe('Persisted session')
 })
+
+it('returns null for corrupt or wrong-shape persisted cache payloads', () => {
+  localStorage.setItem('orca.aiVault.sessionListCache.v1', 'not json at all')
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+
+  localStorage.setItem('orca.aiVault.sessionListCache.v1', JSON.stringify({ wrong: 'shape' }))
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+
+  localStorage.setItem(
+    'orca.aiVault.sessionListCache.v1',
+    JSON.stringify([['key', { executionHostScope: 'local', limit: 50 }]])
+  )
+  expect(
+    readCachedAiVaultSessionList({
+      scopePaths: ['/repo'],
+      executionHostScope: 'local',
+      sessionLimit: 50
+    })
+  ).toBeNull()
+})
