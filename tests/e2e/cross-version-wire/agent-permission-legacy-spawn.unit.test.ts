@@ -14,13 +14,13 @@ import {
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../../src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'
-import { AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/agent-session'
+import { AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/terminal/agent-session'
 import { YOLO_TUI_AGENT_ENV } from '../../../src/shared/agent-launch/permissions/tui-agent-permissions'
-import { createRuntimeAgentBackgroundTerminal } from '../../../src/renderer/src/lib/runtime-agent-background-create'
+import { createRuntimeAgentBackgroundTerminal } from '../../../src/renderer/src/lib/agent-session/launch/background/runtime-agent-background-create'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/launch-agent-web-host-tab'
+import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
 import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from '../../../src/renderer/src/runtime/web-session-close-intent'
@@ -86,7 +86,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

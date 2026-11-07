@@ -1,16 +1,17 @@
+import { claudeBuildPermissionMode } from '../../claude-plan-approval-mode'
 import { claudeStartedUnechoedSend } from '../../claude-command-lifecycle'
 import { claudeExecutionObservations } from '../claude-structured-execution-observations'
 import { dispatchClaudeTurn } from '../claude-structured-dispatch'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
-import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/structured-agent-session-option-error'
-import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
-import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/structured-agent-session-operation-settlement'
+import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
+import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { AgentSessionPreDispatchError } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-operation-settlement'
 import {
   createStructuredAgentSessionLogger,
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import {
@@ -57,6 +58,18 @@ export async function applyClaudeMessageOptions(
       setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs),
       signal
     )
+  }
+  throwIfSignalAborted(signal)
+  if (options.interactionMode !== undefined) {
+    const mode = options.interactionMode === 'plan' ? 'plan' : claudeBuildPermissionMode(session)
+    await waitForPromiseWithSignal(
+      session.connection.setPermissionMode(mode, { timeoutMs }),
+      signal
+    )
+    session.appliedInputOptions.set('interactionMode', options.interactionMode)
+    if (options.interactionMode === 'default') {
+      session.appliedInputOptions.set('buildPermissionMode', mode)
+    }
   }
   throwIfSignalAborted(signal)
 }

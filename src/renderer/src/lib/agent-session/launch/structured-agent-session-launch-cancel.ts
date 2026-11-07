@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../sh
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { markStructuredAgentLaunchCancellation } from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
 import { cancelStructuredAgentLaunchOnLocalHost } from './structured-agent-session-local-launch-cancel'
-import { forgetStructuredSessionSelection } from '../../structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '../options/structured-agent-session-selection-controller'
 import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
 import {
   removeStructuredLaunchSlot,

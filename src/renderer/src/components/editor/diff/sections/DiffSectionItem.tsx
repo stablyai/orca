@@ -43,6 +43,7 @@ export function DiffSectionItem({
   openSectionTitle,
   onOpenPreview,
   renderHeaderTrailingContent,
+  imageUploadAddress,
   onAddLineComment,
   addLineCommentLabel,
   addLineCommentPlaceholder,
@@ -126,6 +127,7 @@ export function DiffSectionItem({
   )
 
   useDiffCommentDecorator({
+    imageUploadAddress,
     captureCreateComment: !onAddLineComment,
     commentOwner,
     editor: hasLineCommentAction ? modifiedEditor : null,

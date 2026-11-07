@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import {
   getWorktreePaletteSelectionItemIds,
   CREATE_WORKTREE_ITEM_ID
-} from '@/lib/worktree-palette-create-action'
+} from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {

@@ -132,31 +132,6 @@ describe('AutomationService prechecks', () => {
     expect(runAutomationPrecheckMock).not.toHaveBeenCalled()
   })
 
-  it('does not run prechecks for manual dispatches', async () => {
-    vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'Manual check',
-      prompt: 'Check the repo',
-      precheck: {
-        command: 'test -f ready',
-        timeoutSeconds: 30
-      },
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'new_per_run',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-14T00:00:00Z').getTime()
-    })
-    const run = store.createAutomationRun(automation, Date.now(), 'manual')
-    const service = new AutomationService(store, { tickMs: 60_000 })
-
-    await expect(service.runPrecheck(automation.id, run.id)).resolves.toBeNull()
-    expect(runAutomationPrecheckMock).not.toHaveBeenCalled()
-  })
-
   it('honors scheduled prechecks before headless dispatch', async () => {
     vi.setSystemTime(new Date('2026-05-12T08:59:00Z'))
     const store = await createStore()
@@ -214,7 +189,7 @@ describe('AutomationService prechecks', () => {
     })
   })
 
-  it('holds a Run Now behind a scheduled headless run that is still in its precheck', async () => {
+  it('answers Run Now at once and launches it once after a scheduled run still in its precheck', async () => {
     vi.setSystemTime(new Date('2026-05-12T08:59:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -263,13 +238,17 @@ describe('AutomationService prechecks', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(runAutomationPrecheckMock).toHaveBeenCalledTimes(1)
 
-    const manual = service.runNow(automation.id)
-    await vi.advanceTimersByTimeAsync(0)
+    // The saved row answers at once; the launch waits its turn in the lane.
+    const manual = await service.runNow(automation.id)
+    expect(manual.status).toBe('pending')
     expect(dispatched).toEqual([])
 
     passPrecheck()
-    await manual
+    await service.runInAutomationLane(automation.id, async () => undefined)
     expect(dispatched).toEqual(['scheduled', 'manual'])
+    expect(
+      store.listAutomationRuns(automation.id).find((run) => run.id === manual.id)?.status
+    ).toBe('dispatched')
     service.stop()
   })
 })

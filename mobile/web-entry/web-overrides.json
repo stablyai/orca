@@ -2,6 +2,14 @@
   "$comment": "Every .web.* sibling the Route A web build resolves ahead of its native file. One entry per documented React Native Web gap; config/scripts/mobile-web-app-web-overrides.test.mjs fails on an unlisted one, a listed file that is gone, or one with no native sibling.",
   "overrides": [
     {
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerAllocation.web.tsx",
+      "reason": "The shipping host page measures the active editor's real chrome and menu reservation against the lower chat allocation, preserving native field sizing outside that DOM layout. Geometry consumers stay isolated from menu and queue rows."
+    },
+    {
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerMenuLayer.web.tsx",
+      "reason": "The phone session renders in the host-served page. Suggestions must escape the queued editor’s scrolling clip while staying inside the chat’s stacking and visibility ancestry. DOM geometry and ancestor scroll/resize events anchor that portal; the native fallback retains its existing inline rendering."
+    },
+    {
       "file": "src/transport/client-context.web.tsx",
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
     },
@@ -212,6 +220,14 @@
     {
       "file": "src/platform/shell-storage.web.ts",
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
+    },
+    {
+      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
+    },
+    {
+      "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
+      "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
     }
   ]
 }

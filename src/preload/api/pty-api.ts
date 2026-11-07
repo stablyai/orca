@@ -1,3 +1,4 @@
+import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
@@ -54,6 +55,7 @@ export type PtyApi = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    trustWorktreeId?: string
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
     worktreeId?: string
@@ -77,6 +79,8 @@ export type PtyApi = {
     spawnIntent?: SpawnIntent
     // A restore no user act asked for; main holds it for a stopped WSL distro. Older mains ignore it.
     wslPassiveRestore?: true
+    // The user's "let agents ask" answer for this launch; older mains ignore it.
+    skipAgentWorkspaceTrust?: true
     agentLaunch?: AgentPaneLaunchRequest
     // Main emits agent_started only after a successful spawn.
     telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
@@ -121,6 +125,8 @@ export type PtyApi = {
   onWriteUnavailable?: (callback: (payload: { id: string }) => void) => () => void
   resize: (id: string, cols: number, rows: number) => void
   claimViewport: (id: string, cols: number, rows: number) => void
+  /** Who besides this window is viewing or typing into these PTYs; empty for unknown ids. */
+  getTerminalAttention: (ids: string[]) => Promise<Record<string, RuntimeTerminalAttention>>
   reportGeometry: (id: string, cols: number, rows: number) => void
   signal: (id: string, signal: string) => void
   clearBuffer: (id: string) => void

@@ -28,13 +28,21 @@ import {
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/index'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/runtime-environment-manual-disconnect'
-import { setDesktopBrowserBridgeControl } from './desktop-browser-bridge-reconcile'
+import {
+  isDesktopBrowserBridgeHostStopped,
+  setDesktopBrowserBridgeControl
+} from './desktop-browser-bridge-reconcile'
+import {
+  noticeDesktopBrowserBridgeHostControl,
+  registerDesktopBrowserBridgeHostControlIpc,
+  type DesktopBrowserBridgeHostControlDeps
+} from './desktop-browser-bridge-host-control'
 import { markRemoteCliDrivenWorkspace } from '../../browser/desktop-browser-bridge/remote-cli-driven-workspaces'
 import { persistedStore } from '../ssh/ssh-ipc-context'
 import { localSshBrowserTargetIdForSession } from '../../browser/routing/local-host-partitions/local-ssh-browser-partitions'
@@ -54,8 +62,10 @@ export function listDesktopBrowserBridgeCandidates(
   connections: Pick<SshConnectionManager, 'getState'> | null
 ): DesktopBrowserBridgeCandidate[] {
   const candidates: DesktopBrowserBridgeCandidate[] = []
-  for (const target of getSshTargetRegistryStore()?.listTargets() ?? []) {
-    if (!isRemoteCliControlAllowed(target)) {
+  // Why: a managed host's eligibility follows its orcad claim, not whether it is listed in SSH
+  // settings; environment recipes connect runtime-owned targets that are claimed the same way.
+  for (const target of getSshTargetRegistryStore()?.getOrcadRuntimeClaims().listTargets() ?? []) {
+    if (!isRemoteCliControlAllowed(target) || isDesktopBrowserBridgeHostStopped(target.id)) {
       continue
     }
     if (connections?.getState(target.id)?.status !== 'connected') {
@@ -94,6 +104,12 @@ export function installDesktopBrowserBridge(options: {
     return
   }
   const { userDataPath, runtime, getMainWindow } = options
+  const hostControlDeps = (): DesktopBrowserBridgeHostControlDeps => ({
+    settings: persistedStore,
+    targets: getSshTargetRegistryStore(),
+    endHostActivity: (targetId) => browserManager.endAgentCommandsFromHost(targetId)
+  })
+  registerDesktopBrowserBridgeHostControlIpc(hostControlDeps)
   let dispatcher: RpcDispatcher | null = null
   const getDispatcher = (): RpcDispatcher => {
     dispatcher ??= new RpcDispatcher({
@@ -146,6 +162,7 @@ export function installDesktopBrowserBridge(options: {
         request,
         {
           environmentId: candidate.environmentId,
+          targetId: candidate.targetId,
           hostLabel: candidate.hostLabel,
           resolveWorkspace: (scope) =>
             rendererResolveRemoteCliWorkspace(getMainWindow, {
@@ -154,7 +171,10 @@ export function installDesktopBrowserBridge(options: {
               // The renderer knows tabs, not the popups they open.
               ...(scope.page ? { pageId: browserManager.getOwningTabIdForPage(scope.page) } : {})
             }),
-          markWorkspaceDriven: markRemoteCliDrivenWorkspace,
+          markWorkspaceDriven: (workspaceId) => {
+            markRemoteCliDrivenWorkspace(workspaceId)
+            noticeDesktopBrowserBridgeHostControl(candidate, getMainWindow, hostControlDeps())
+          },
           isHostBrowsingRouted: () => isSshTargetBrowsingRouted(candidate.targetId),
           isGuestRoutedThroughHost: (webContentsId) => {
             const guest = webContents.fromId(webContentsId)

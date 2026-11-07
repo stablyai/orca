@@ -1,16 +1,19 @@
 import type * as React from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks } from './pty-connection-test-async'
-import { createManager, createPane } from './pty-connection-test-pane-fixtures'
+import { flushAsyncTicks } from './pty-connection/test-fixtures/pty-connection-test-async'
+import {
+  createManager,
+  createPane
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
 import {
   launchWorkspaceState,
   perClientLoader,
@@ -32,8 +35,8 @@ import {
   windowSpawnRequest,
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
-import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
-import { createPaneManagerOptionsTestContext } from './terminal-pane-manager-options-test-context'
+import { mockPanePtyArgs } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
+import { createPaneManagerOptionsTestContext } from './mounting/terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -48,22 +51,28 @@ vi.mock('@/store', async () =>
 )
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: () => false }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), message: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useCallback: <T>(fn: T): T => fn }
 })
 // Row 8: what precedes the launch (setup policy and hooks trust) is decided, not asked.
-vi.mock('@/lib/launch-work-item-direct-preflight', async (importOriginal) => ({
+vi.mock('@/lib/workspace/creation/setup/workspace-setup-preparation', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  resolveDirectSetupDecision: async () => ({ kind: 'decided', decision: 'inherit' })
+  inspectRequiredWorkspaceSetup: async () => ({ kind: 'decided', decision: 'inherit' })
 }))
-vi.mock('@/lib/ensure-hooks-confirmed', () => ({ ensureHooksConfirmed: async () => 'run' }))
+vi.mock('@/lib/ensure-hooks-confirmed', () => ({
+  ensureHooksConfirmed: async () => 'run',
+  ensureHooksApproved: async () => ({ decision: 'run' })
+}))
 vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   hasCachedWindowsTerminalCapabilities: () => true,
@@ -76,14 +85,14 @@ vi.mock('@/lib/windows-terminal-capabilities', async (importOriginal) => ({
 }))
 
 const load = perClientLoader(async () => ({
-  launch: await import('@/lib/launch-agent-in-new-tab'),
+  launch: await import('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'),
   quick: await import('@/lib/run-quick-command-in-new-tab'),
   vault: await import('@/lib/launch-ai-vault-session'),
-  resume: await import('@/lib/ai-vault-resume-command'),
-  pane: await import('./pty-connection'),
-  paneOptions: await import('./terminal-pane-manager-options'),
+  resume: await import('@/lib/agent-session/resume/history/ai-vault-resume-command'),
+  pane: await import('./pty-connection/connect-pane-pty'),
+  paneOptions: await import('./mounting/terminal-pane-manager-options'),
   defaults: await import('@/lib/pane-manager/pane-terminal-options'),
-  lifecycle: await import('./terminal-pane-lifecycle-primitives'),
+  lifecycle: await import('./mounting/queued-initial-cwd'),
   workspaceStart: await loadWorkspaceStartModules()
 }))
 

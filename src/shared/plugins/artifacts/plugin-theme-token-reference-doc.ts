@@ -83,7 +83,6 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 
 // Why: these mix per mode in main.css, which the derivation rules cannot express.
 const MODE_MIXES: Partial<Record<PluginAppThemeToken, string>> = {
-  '--worktree-sidebar-active': 'a translucent wash of `--worktree-sidebar-foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
   '--chat-user-message': '`--foreground` mixed lightly into the chat background'
 }

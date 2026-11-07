@@ -19,7 +19,7 @@ const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))
 
-const { activateAndRevealWorkspace } = await import('./worktree-activation')
+const { activateAndRevealWorkspace } = await import('./workspace/activation/worktree-activation')
 
 const projectGroup: ProjectGroup = {
   id: 'group-1',

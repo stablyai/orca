@@ -112,7 +112,8 @@
       "pastePairingCode": "Ou colar o código de pareamento",
       "scanCodeStep": "Escaneie o código QR",
       "title": "Parear com desktop",
-      "tryAgain": "Tentar novamente"
+      "tryAgain": "Tentar novamente",
+      "codeExpiredOrReplaced": "Este código de pareamento expirou ou foi substituído. Mostre um novo código no computador e escaneie novamente."
     },
     "terminalSettings": {
       "defaultText": "Padrão (100%)",
@@ -190,6 +191,7 @@
       "sendMessage": "Enviar mensagem",
       "sendQueue": "Colocar na fila",
       "sendSteer": "Orientar",
+      "sendSteerQueued": "Orientar o próximo",
       "sendQueueHint": "Executa depois do turno atual",
       "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
@@ -223,13 +225,16 @@
       "historyRepaired": "Não foi possível carregar parte do histórico deste chat."
     },
     "message": {
-      "copyMessage": "Copiar mensagem"
+      "copyMessage": "Copiar mensagem",
+      "forkFromResponse": "Criar ramificação a partir desta resposta",
+      "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
     },
     "messageActionsSheet": {
       "clipboardRejected": "A área de transferência rejeitou o texto.",
       "copyFailed": "Falha ao copiar",
       "copyMessage": "Copiar mensagem",
-      "selectText": "Selecionar texto"
+      "selectText": "Selecionar texto",
+      "rewind": "Voltar até aqui"
     },
     "nativeChatImageViewer": {
       "closeImage": "Fechar imagem",
@@ -304,7 +309,8 @@
       "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
       "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
       "signIn": "Entrar",
-      "signInHint": "Abre um terminal no computador que executa este chat"
+      "signInHint": "Abre um terminal no computador que executa este chat",
+      "forkedFrom": "Ramificado de"
     },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
@@ -577,12 +583,19 @@
     "usageLimit": {
       "reached": "{{agent}} atingiu seu limite de uso.",
       "reachedNamed": "{{agent}} atingiu seu limite de {{window}}.",
-      "resetsAt": "Renovação do limite: {{when}}",
       "theAgent": "O agente",
       "windowCredits": "uso extra",
       "windowSession": "sessão",
       "windowWeekly": "uso semanal",
-      "windowWeeklyModel": "uso semanal do modelo"
+      "windowWeeklyModel": "uso semanal do modelo",
+      "switchAccount": "Trocar conta",
+      "autoContinueCancelFailed": "Não foi possível cancelar a continuação automática. Tente novamente.",
+      "autoContinueCancel": "Não continuar",
+      "statusResetAt": "Redefinido às {{time}}",
+      "statusResetsAt": "Redefine às {{time}}",
+      "statusContinuesShortly": "O Orca continuará em breve",
+      "statusContinuesThen": "O Orca continuará então",
+      "statusWontContinue": "O Orca não continuará automaticamente"
     },
     "useImageUpload": {
       "attachFailed": "Falha ao anexar",
@@ -633,9 +646,36 @@
       "attachmentsUnsupported": "Remova os anexos antes de definir um objetivo.",
       "pause": "Pausar",
       "resume": "Retomar"
+    },
+    "rewind": {
+      "title": "Voltar até aqui?",
+      "confirmation": "Descartar esta mensagem e tudo depois dela? A mensagem volta ao campo de texto para você editar e enviar novamente. As alterações nos arquivos em disco são mantidas.",
+      "confirm": "Voltar",
+      "unsupported": "Este chat não permite voltar a uma mensagem anterior.",
+      "historyNotPaginated": "Este chat antigo do Codex não permite voltar a uma mensagem anterior. Inicie um novo chat para usar Voltar até aqui.",
+      "busy": "Disponível quando o agente estiver ocioso e não houver nada neste chat aguardando sua resposta.",
+      "staleEpoch": "A conversa mudou. Confira as mensagens mais recentes e tente novamente.",
+      "invalidTarget": "Não é possível voltar a esta mensagem na conversa. Nada foi alterado.",
+      "historyLimit": "Esta conversa é longa demais para voltar a uma mensagem anterior. Nada foi alterado.",
+      "providerRefused": "O agente não conseguiu voltar a esta mensagem.",
+      "proofMismatch": "O histórico do agente não corresponde a este chat. Confira a conversa antes de continuar.",
+      "outcomeUnknown": "O Orca não conseguiu confirmar se a conversa voltou a uma mensagem anterior. Ele verifica antes de enviar sua próxima mensagem.",
+      "refused": "O Orca não conseguiu voltar a esta mensagem. Confira a conversa antes de continuar.",
+      "unavailable": "Aguarde o término da conexão do chat.",
+      "outcomeUnknownReturned": "O Orca não conseguiu confirmar se a conversa voltou a esta mensagem. Sua mensagem está de volta no campo de texto, e o Orca verifica a conversa antes de enviar sua próxima mensagem.",
+      "timeout": "O chat não foi atualizado depois de voltar a esta mensagem. Abra novamente para ver a versão mais recente.",
+      "pending": "Aguarde a conversa voltar à mensagem anterior."
+    },
+    "fork": {
+      "busy": "Outro chat ou terminal está abrindo. Aguarde e tente ramificar o chat do {{agent}} novamente.",
+      "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação. Ela pode ter sido aberta; confira o histórico de sessões antes de tentar novamente.",
+      "failed": "{{agent}} não conseguiu ramificar este chat. {{detail}}",
+      "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente."
     }
   },
   "common": {
+    "details": "Detalhes",
+    "hideDetails": "Ocultar detalhes",
     "back": "Voltar",
     "cancel": "Cancelar",
     "close": "Fechar",
@@ -836,8 +876,8 @@
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "repairHint": "Toque para parear novamente com seu desktop",
+      "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
-      "updateDesktopHint": "Atualize o Orca no desktop e entre na sua conta para se conectar de qualquer lugar",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
     },
     "hostDiagnosticsLink": {
@@ -868,6 +908,13 @@
       "openImage": "Abrir imagem",
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha"
+    },
+    "markdownCallout": {
+      "note": "Nota",
+      "tip": "Dica",
+      "important": "Importante",
+      "warning": "Aviso",
+      "caution": "Cuidado"
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
@@ -1075,6 +1122,12 @@
     "mermaidDiagram": {
       "expand": "Expandir diagrama",
       "label": "Diagrama Mermaid"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Plano",
+        "exitPlanMode": "Sair do modo de planejamento"
+      }
     }
   },
   "connection": {
@@ -1504,7 +1557,8 @@
       "removeHost": "Remover host",
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "sleep": "Suspender",
-      "unpin": "Desafixar"
+      "unpin": "Desafixar",
+      "rename": "Renomear"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -1586,6 +1640,12 @@
       "thisComputer": "Este computador",
       "waitingForDesktop": "Ainda aguardando o desktop",
       "workspaceOptions": "Opções do espaço de trabalho"
+    },
+    "workspaceRenameSheet": {
+      "title": "Renomear espaço de trabalho",
+      "emptyUsesBranch": "Deixe em branco para usar o nome da branch.",
+      "emptyUsesFolder": "Deixe em branco para usar o nome da pasta.",
+      "failed": "Não foi possível renomear o espaço de trabalho. {{reason}}"
     }
   },
   "navigation": {
@@ -2079,6 +2139,8 @@
       "managedAccountEnvOverride": "Esta inicialização do Claude define suas próprias variáveis de login da Anthropic. Remova-as para usar uma conta gerenciada do Claude.",
       "managedAccountUnsupported": "Embora uma conta do Claude tenha sido adicionada no WSL, os chats do Claude precisam de uma conta do Claude no Windows.",
       "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
+      "modelUnavailableUpdate": "{{agent}} não conseguiu usar {{detail}}. Atualize o {{agent}} para {{minimumVersion}} ou posterior para mantê-lo após reiniciar, ou selecione outro modelo e envie novamente.",
+      "modelNotSelected": "{{agent}} não tem nenhum modelo selecionado. Verifique a seleção de modelo e o login do {{agent}} e envie novamente.",
       "noTurnToStop": "{{agent}} não tinha nenhuma interação em andamento para interromper.",
       "notDelivered": "Esta mensagem não foi entregue.",
       "notDeliveredSendAgain": "Esta mensagem não foi entregue. Envie-a novamente para continuar.",
@@ -2126,7 +2188,8 @@
       "usageLimitWindowWeeklyModel": "uso semanal do modelo",
       "waitForBackgroundTasks": "Aguarde a conclusão das tarefas em segundo plano.",
       "waitForStart": "Aguarde o agente terminar de iniciar.",
-      "writeFailed": "O Orca não conseguiu repassar esta mensagem ao agente, por isso ela não foi enviada."
+      "writeFailed": "O Orca não conseguiu repassar esta mensagem ao agente, por isso ela não foi enviada.",
+      "pluginInputRequired": "{{agent}} parou porque o plugin \"{{plugin}}\" está aguardando uma entrada em um painel de terminal. Desative o plugin para sessões de chat ou execute a tarefa em um terminal {{agent}}."
     },
     "fileReader": {
       "copyReviewNotes": "Copiar notas de revisão",
@@ -2359,7 +2422,8 @@
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
-      "allowAutoClose": "Permitir fechamento automático"
+      "allowAutoClose": "Permitir fechamento automático",
+      "renameTerminalFailed": "Não foi possível renomear o terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -3344,7 +3408,8 @@
       "moreFields_one": "+{{count}} campo",
       "moreFields_other": "+{{count}} campos",
       "noItems": "Nenhum item no projeto",
-      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}"
+      "pullRequestSubtitle": "Pull request · {{repository}}{{number}}",
+      "linkedPullRequestsOverflow": "+{{count}} mais"
     },
     "githubProjectPickers": {
       "add": "Adicionar",
@@ -4044,6 +4109,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "O painel original do agente está indisponível. A saída salva permanece aqui.",
       "openAgent": "Abrir agente",
       "retryHistory": "Tentar histórico novamente",
+      "fullOutputUnavailable": "Não foi possível carregar a saída completa.",
+      "retryFullOutput": "Tentar novamente",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Nenhuma execução correspondente no histórico carregado. Carregue mais para continuar.",
       "noMatchingRunsYet": "Ainda não há execuções correspondentes.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4085,7 +4152,11 @@
       "notReported": "Não informado",
       "searchOptions": "Buscar opções",
       "task": "Tarefa",
-      "review": "Revisar"
+      "review": "Revisar",
+      "discardChangesTitle": "Descartar alterações?",
+      "discardChangesMessage": "As edições não salvas nesta automação serão perdidas.",
+      "discard": "Descartar",
+      "keepEditing": "Continuar editando"
     },
     "orphanIssues": {
       "hostReselection": "Edite esta automação e selecione novamente seu host antes de executá-la.",

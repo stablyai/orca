@@ -1,6 +1,11 @@
-import type { WorktreeLineage, WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import {
+  isCrossStoreInferredSource,
+  type CrossStoreInferredSource,
+  type CrossStoreParentRef,
+  type WorktreeLineage,
+  type WorkspaceLineage
+} from '../../../../shared/worktree/lineage-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 import {
   type WorkspaceKey,
@@ -9,15 +14,14 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
+import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage-row-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import {
-  readAllWorktreeMetaForHost,
-  worktreeRowTarget
-} from '../../../persistence/host-qualified-worktree-meta'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
-import { isWslMoveWorktreeBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
+import { assertParentInAnotherStore } from './cross-store-parent-store-check'
+import { savedInstanceIdReader } from './saved-lineage-reads'
+import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import {
   RuntimeLineageError,
   LINEAGE_PARENT_AMBIGUOUS,
@@ -34,33 +38,7 @@ type RuntimeWorktreeLineageDependencies = {
   getStore(): RuntimeStore | null
   getDb(): OrchestrationDb | null
   resolveWorktree(selector: string): Promise<ResolvedWorktree>
-  listResolvedWorktrees(): Promise<ResolvedWorktree[]>
   showTerminal(handle: string): Promise<{ worktreeId: string }>
-}
-
-/** Read ownership-scoped metadata without migration; validation must not adopt another host's legacy row. */
-function savedInstanceIdReader(
-  store: RuntimeStore,
-  hostId: ExecutionHostId | undefined
-): (id: string) => string | undefined {
-  if (!hostId) {
-    return (id) => store.getWorktreeMeta(id)?.instanceId
-  }
-  const repos = store.getRepos()
-  const ownerCounts = new Map<string, number>()
-  for (const repo of repos) {
-    ownerCounts.set(repo.id, (ownerCounts.get(repo.id) ?? 0) + 1)
-  }
-  const reposOnHost = new Map(
-    repos.filter((repo) => getRepoExecutionHostId(repo) === hostId).map((repo) => [repo.id, repo])
-  )
-  const metaById = readAllWorktreeMetaForHost(store, hostId)
-  return (id) => {
-    const repo = reposOnHost.get(getRepoIdFromWorktreeId(id))
-    return repo
-      ? getRepoOwnedWorktreeMeta(repo, id, metaById, ownerCounts.get(repo.id) ?? 0)?.instanceId
-      : undefined
-  }
 }
 
 export class RuntimeWorktreeLineageController {
@@ -87,6 +65,9 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
+    if (resolution.kind === 'crossStore') {
+      await assertParentInAnotherStore(resolution.parent, () => this.readStoreInstallationId())
+    }
     const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
     if (
       retained.kind === 'lineage' &&
@@ -96,6 +77,57 @@ export class RuntimeWorktreeLineageController {
       throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
     }
     return retained
+  }
+
+  /** The parent a same-store create would infer from this caller context, as a ref for a child in
+   * another store. `installationId` is the runtime's published identity, never created here. A
+   * reason replaces the ref when none is valid or contexts conflict. */
+  async resolveCallerParentForAnotherStore(
+    input: Pick<
+      WorktreeLineageInput,
+      | 'envParentWorkspace'
+      | 'callerTerminalHandle'
+      | 'cwdParentWorktree'
+      | 'cwdParentAmbiguous'
+      | 'comment'
+    >,
+    installationId: string | undefined
+  ): Promise<
+    { parent: CrossStoreParentRef; source: CrossStoreInferredSource } | { reason: string }
+  > {
+    let resolution: WorktreeLineageResolution
+    try {
+      resolution = await this.resolveCreate(input)
+    } catch (error) {
+      return { reason: error instanceof Error ? error.message : String(error) }
+    }
+    if (resolution.kind !== 'lineage') {
+      const conflict =
+        resolution.kind === 'none' &&
+        resolution.warnings.some((warning) => warning.code === 'LINEAGE_PARENT_CONTEXT_CONFLICT')
+      return {
+        reason: conflict
+          ? "this terminal's contexts name different workspaces."
+          : "Orca couldn't find this terminal's workspace."
+      }
+    }
+    const { parent, capture } = resolution
+    const ref = crossStoreParentRefOfRow(
+      installationId,
+      parent.type === 'folder' ? { id: parent.workspaceKey } : parent.worktree
+    )
+    if (!ref) {
+      return { reason: "Orca couldn't confirm this workspace's identity." }
+    }
+    if (!isCrossStoreInferredSource(capture.source)) {
+      return { reason: "Orca couldn't tell which workspace this command runs in." }
+    }
+    return { parent: ref, source: capture.source }
+  }
+
+  /** This store's identity; the published descriptor reads the same file at the canonical path. */
+  async readStoreInstallationId(): Promise<string | undefined> {
+    return await readStoreInstallationId(null, getCanonicalUserDataPath())
   }
 
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
@@ -192,7 +224,8 @@ export class RuntimeWorktreeLineageController {
       const terminal = await this.deps.showTerminal(handle)
       return {
         source: 'orchestration-context',
-        parent: await this.resolveWorktreeParent(`id:${terminal.worktreeId}`),
+        // As for the caller's own terminal: a task made in a folder workspace names that folder.
+        parent: await this.resolveParent(`id:${terminal.worktreeId}`),
         taskId
       }
     } catch {
@@ -200,60 +233,11 @@ export class RuntimeWorktreeLineageController {
     }
   }
 
-  async hydrate(): Promise<void> {
-    const store = this.deps.getStore()
-    if (!store?.getWorktreeLineage || !store.setWorktreeLineage) {
-      return
-    }
-    for (const worktree of await this.deps.listResolvedWorktrees()) {
-      if (
-        store.getWorktreeLineage(worktree.id) ||
-        !worktree.instanceId ||
-        isWslMoveWorktreeBlocked(worktree.id, worktree.hostId, worktree.path)
-      ) {
-        continue
-      }
-      const taskId = worktree.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
-      if (!taskId) {
-        continue
-      }
-      const candidate = await this.resolveTaskCandidate(taskId)
-      if (
-        !candidate?.parent.instanceId ||
-        candidate.parent.type !== 'worktree' ||
-        candidate.parent.worktree.id === worktree.id
-      ) {
-        continue
-      }
-      try {
-        this.validateParent(worktree, candidate.parent.worktree)
-      } catch {
-        continue
-      }
-      const target = worktreeRowTarget(store, worktree)
-      if (!target) {
-        continue
-      }
-      store.setWorktreeLineage(target, {
-        worktreeId: worktree.id,
-        worktreeInstanceId: worktree.instanceId,
-        parentWorktreeId: candidate.parent.worktree.id,
-        parentWorktreeInstanceId: candidate.parent.instanceId,
-        origin: 'orchestration',
-        capture: { source: 'orchestration-context', confidence: 'inferred' },
-        taskId,
-        createdAt: Date.now()
-      })
-    }
-  }
-
   async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
-    await this.hydrate()
     return this.deps.getStore()?.getAllWorktreeLineage?.() ?? {}
   }
 
   async listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
-    await this.hydrate()
     return this.deps.getStore()?.getAllWorkspaceLineage?.() ?? {}
   }
 }

@@ -1,3 +1,5 @@
+import { checkAcpLaunchVersion } from './acp-launch-version'
+export { checkAcpLaunchVersion } from './acp-launch-version'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -8,34 +10,26 @@ import {
 } from '../native-chat/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
+import {
+  resolveAntigravityChatAuthConfig,
+  type AntigravityChatAuthConfig
+} from '../../shared/antigravity-chat-auth-config'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { assertAntigravityChatAuthPublished } from '../antigravity/antigravity-chat-auth-publication'
 import { delimiter } from 'node:path'
 import { homedir } from 'node:os'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  agentSessionProviderHandleChainHead,
-  type AgentSessionProviderHandleChain
-} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import type { resolveCliCommand } from '../../shared/node-cli-command-resolution'
-import {
-  checkAgentCliVersion,
-  type AgentCliVersionCheck,
-  type AgentCliVersionReader
-} from '../agent-launch/preflight/agent-cli-version-probe'
+import type { AgentCliVersionReader } from '../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
 } from '../node-runtime/managed-runtime-release'
 import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
-import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
-import {
-  isProviderTimelineTurnInNamespace,
-  providerTimelineKeyPart,
-  spelledProviderTimelineItemKey
-} from '../native-chat/agent-session-timeline/provider-timeline-identity'
+import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import {
@@ -44,17 +38,21 @@ import {
   withNativeChatVisualsEnv
 } from '../native-chat/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-specs'
-import { acpSessionNotRestoredItem } from './acp-session-reopen-failure'
+import { nothingExchangedOn } from './acp-structured-resume-history'
+import { acpUnannouncedLosses } from './acp-session-reopen-failure'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
 export type AcpStructuredLaunch = StructuredAgentCommand & {
   spec: AcpLaunchSpec
+  antigravityChatAuth?: AntigravityChatAuthConfig
   args: string[]
   cwd: string
   /** Sealed for spawns; recovery reads use the unsealed agent environment. */
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** The saved model the launch line carries. */
+  launchModel?: string
   resume: {
     sessionId: string
     key: string
@@ -75,13 +73,16 @@ export type AcpStructuredLaunchPartDeps = {
   dataDirectory: string
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
+export type AcpLaunchSettings = StructuredAgentCommandSettings &
+  Partial<Pick<GlobalSettings, 'antigravityChatAuth'>>
+
 export type AcpLaunchInvocationDeps = {
   operation?: StructuredAgentResolutionOperation
   /** Reread per acquisition. */
   resolveEnvironment: () => Promise<Record<string, string>>
   resolveLaunchEnv?: (agent: string) => Record<string, string>
   /** Reread per acquisition; absent uses the stock command. */
-  resolveCommandSettings?: () => StructuredAgentCommandSettings
+  resolveCommandSettings?: () => AcpLaunchSettings
   /** Optional environment refresh after a missing-program lookup. */
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Resolves relative PATH entries against the launch directory. */
@@ -90,6 +91,12 @@ export type AcpLaunchInvocationDeps = {
   AcpStructuredLaunchPartDeps,
   'resolveCommand' | 'homePath' | 'inheritedEnv' | 'dataDirectory'
 >
+
+export type AcpLaunchInvocation = StructuredAgentCommand & {
+  env: Record<string, string>
+  envToDelete: string[]
+  antigravityChatAuth?: AntigravityChatAuthConfig
+}
 
 /** Prefer explicit commands, then managed releases, then complete pinned copies on PATH. */
 export function resolveAcpLaunchCommand(
@@ -132,28 +139,12 @@ export function resolveAcpLaunchCommand(
   return { command: pinned || spec.command, prefixArgs: [] }
 }
 
-export async function checkAcpLaunchVersion(
-  spec: AcpLaunchSpec,
-  launch: Pick<AcpStructuredLaunch, 'command' | 'prefixArgs' | 'cwd' | 'env'>,
-  wantVersion: boolean,
-  read?: AgentCliVersionReader
-): Promise<AgentCliVersionCheck> {
-  if (!spec.minimumVersions && !wantVersion) {
-    return { status: 'unknown', version: null }
-  }
-  return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
-    spec.minimumVersions ?? [],
-    read
-  )
-}
-
 /** Resolve chats and probes consistently; optionally refresh once after a missing-program lookup. */
 export function resolveAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
-): Promise<StructuredAgentCommand & { env: Record<string, string>; envToDelete: string[] }> {
+): Promise<AcpLaunchInvocation> {
   return resolveAgainAfterRefreshOnMissingProgram(
     () => readAcpLaunchInvocation(spec, accountHome, deps),
     deps.refreshEnvironmentAfterMiss,
@@ -166,7 +157,7 @@ async function readAcpLaunchInvocation(
   spec: AcpLaunchSpec,
   accountHome: AgentSessionAccountHome,
   deps: AcpLaunchInvocationDeps
-): Promise<StructuredAgentCommand & { env: Record<string, string>; envToDelete: string[] }> {
+): Promise<AcpLaunchInvocation> {
   assertStructuredAgentResolutionCurrent(deps.operation)
   const base = await deps.resolveEnvironment()
   assertStructuredAgentResolutionCurrent(deps.operation)
@@ -176,11 +167,21 @@ async function readAcpLaunchInvocation(
   })
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
   Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, {
-    ...deps,
-    ...(deps.resolveCommandSettings ? { commandSettings: deps.resolveCommandSettings() } : {})
-  })
-  return { ...invocation, env, envToDelete }
+  const commandSettings = deps.resolveCommandSettings?.()
+  if (spec.agent === 'antigravity') {
+    assertAntigravityChatAuthPublished(commandSettings?.antigravityChatAuth)
+  }
+  const antigravityChatAuth =
+    spec.agent === 'antigravity'
+      ? resolveAntigravityChatAuthConfig(commandSettings?.antigravityChatAuth)
+      : undefined
+  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  return {
+    ...invocation,
+    env,
+    envToDelete,
+    ...(antigravityChatAuth ? { antigravityChatAuth } : {})
+  }
 }
 
 export function acpStructuredLaunchPart(
@@ -189,10 +190,8 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
-    const { env, envToDelete, command, prefixArgs } = await resolveAcpLaunchInvocation(
-      spec,
-      record.accountHome,
-      {
+    const { env, envToDelete, command, prefixArgs, antigravityChatAuth } =
+      await resolveAcpLaunchInvocation(spec, record.accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -202,8 +201,7 @@ export function acpStructuredLaunchPart(
         ...(deps.homePath ? { homePath: deps.homePath } : {}),
         ...(deps.inheritedEnv ? { inheritedEnv: deps.inheritedEnv } : {}),
         dataDirectory: deps.dataDirectory
-      }
-    )
+      })
     const cwd = await basis.launchDirectory()
     const visuals = spec.visualsSkill ? await basis.visuals() : null
     // PATH may have changed since chat creation.
@@ -228,13 +226,19 @@ export function acpStructuredLaunchPart(
       : null
     const fullAccess = basis.permissionMode === 'full-access'
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+    // A load restores the conversation's own model, and a stale role there would stop the agent
+    // before it opens; resumed chats apply their model through the session instead.
+    const model = spec.launchesWithModel && !head ? record.options?.model : undefined
+    const args = spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null, model })
     return {
       launch: {
         spec,
+        ...(antigravityChatAuth ? { antigravityChatAuth } : {}),
         command,
         prefixArgs,
-        args: [...prefixArgs, ...spec.args({ fullAccess, pluginDir: skill?.pluginDir ?? null })],
+        args: [...prefixArgs, ...args],
         fullAccess,
+        ...(model ? { launchModel: model } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,
@@ -243,7 +247,11 @@ export function acpStructuredLaunchPart(
                 head.origin === 'created' &&
                 nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId),
               unannouncedLosses: () =>
-                unannouncedLosses(deps.readJournal, identity.sessionId, record.providerHandleChain)
+                acpUnannouncedLosses(
+                  deps.readJournal,
+                  identity.sessionId,
+                  record.providerHandleChain
+                )
             }
           : null
       },
@@ -257,68 +265,4 @@ export function acpStructuredLaunchPart(
       ]
     }
   }
-}
-
-/** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */
-function nothingExchangedOn(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  nativeId: string
-): boolean {
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return false
-  }
-  if (!load) {
-    return true
-  }
-  if (load.damage || load.newer) {
-    return false
-  }
-  for (const item of load.state.items.values()) {
-    const turn = readAgentJournalTurn(item.body)
-    if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
-      return false
-    }
-  }
-  return true
-}
-
-/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
-function unannouncedLosses(
-  readJournal: AcpStructuredLaunchPartDeps['readJournal'],
-  sessionId: string,
-  chain: AgentSessionProviderHandleChain
-): string[] {
-  const lost = chain.flatMap((link) =>
-    link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
-  )
-  if (lost.length === 0) {
-    return []
-  }
-  let load: JournalLoad | null
-  try {
-    load = readJournal(sessionId)
-  } catch {
-    return []
-  }
-  if (!load) {
-    return lost
-  }
-  if (load.damage || load.newer) {
-    return []
-  }
-  const written = new Set<string>()
-  for (const itemId of load.state.items.keys()) {
-    const identity = parseAgentJournalItemKey(itemId)
-    const spelled =
-      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
-    if (spelled !== null) {
-      written.add(spelled)
-    }
-  }
-  // Warnings survive even if the replacement session that wrote them is superseded.
-  return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }

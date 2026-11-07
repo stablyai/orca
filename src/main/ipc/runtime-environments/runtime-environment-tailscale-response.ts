@@ -5,7 +5,7 @@ import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hi
 export function withTailscaleHintForResponse<TResult>(
   response: RuntimeRpcResponse<TResult>,
   endpoint: string,
-  environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment'>
+  environment: Pick<KnownRuntimeEnvironment, 'orcadDeployment' | 'sshAccess'>
 ): RuntimeRpcResponse<TResult> {
   if (response.ok === true) {
     return response

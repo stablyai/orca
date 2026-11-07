@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
 import { useWslHostUnavailableReason } from './use-wsl-host-unavailable-reason'
-import { useManagedPairingRefusedEnvironmentId } from './use-managed-pairing-refused'
+import {
+  useManagedPairingRefusedEnvironmentId,
+  useManagedServerReplaced
+} from './use-managed-pairing-refused'
 import { CalmRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import {
   useRetryingOutageEnvironmentId,
@@ -20,7 +23,7 @@ import { useAppStore } from '@/store'
 import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from './terminal-error-accumulation'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
@@ -66,6 +69,20 @@ export function TerminalPaneRecoveryPortals({
     controller
   const wslHostUnavailable = useWslHostUnavailableReason(controller.worktreeId)
   const pairingRefusedEnvironmentId = useManagedPairingRefusedEnvironmentId(controller.worktreeId)
+  const serverReplaced = useManagedServerReplaced(pairingRefusedEnvironmentId)
+  // Why Settings, not Connect: SSH access alone can't pair with the host's new server key.
+  const openReplacedServerSettings = useCallback(() => {
+    if (!pairingRefusedEnvironmentId) {
+      return
+    }
+    const state = useAppStore.getState()
+    state.openSettingsTarget({
+      pane: 'servers',
+      repoId: null,
+      sectionId: pairingRefusedEnvironmentId
+    })
+    state.openSettingsPage()
+  }, [pairingRefusedEnvironmentId])
   const ownerEnvironmentId = useWorkspaceRuntimeEnvironmentId(controller.worktreeId)
   // One subscription for both the card and the retry: one listener per mounted surface.
   const ownerWslHost = useAppStore((state) =>
@@ -190,6 +207,7 @@ export function TerminalPaneRecoveryPortals({
             onReconnect={onReconnect}
             wslHostUnavailable={wslHostUnavailable}
             pairingRefused={pairingRefusedEnvironmentId !== null}
+            onOpenReplacedServerSettings={serverReplaced ? openReplacedServerSettings : null}
             awaitingSignIn={awaitingSignIn}
           />,
           pane.container,

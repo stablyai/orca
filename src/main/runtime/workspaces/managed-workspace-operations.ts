@@ -1,4 +1,4 @@
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { RuntimeWorktreeListResult } from '../../../shared/runtime-worktree-contracts'
@@ -116,7 +116,25 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
 
   async showManagedWorktree(worktreeSelector: string, requiredHostId?: ExecutionHostId) {
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector, { requiredHostId })
-    return { ...worktree, linkedItems: getWorkspaceAttachments(worktree) }
+    const childKey = worktreeWorkspaceKey(worktree.id)
+    const crossStoreLineage = this.store?.getCrossStoreWorkspaceLineage?.(childKey)
+    const workspaceLineage = this.store?.getWorkspaceLineage?.(childKey)
+    return {
+      ...worktree,
+      linkedItems: getWorkspaceAttachments(worktree),
+      // This row's same-store parent record (a folder parent has no worktree lineage); a same-path
+      // twin's record reads as none.
+      workspaceLineage:
+        workspaceLineage &&
+        (!workspaceLineage.childInstanceId ||
+          workspaceLineage.childInstanceId === worktree.instanceId)
+          ? workspaceLineage
+          : null,
+      // A parent on another machine; the same-store lineage fields stay null for it.
+      ...(crossStoreLineage && crossStoreLineage.childInstanceId === worktree.instanceId
+        ? { crossStoreLineage }
+        : {})
+    }
   }
 
   /**

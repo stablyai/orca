@@ -10,6 +10,8 @@ export type DictationMeterAnalyzerState = DictationMeterState & {
   noiseFloor: number
   smoothedLevel: number
   clippingUntil: number
+  /** The `now` of the last chunk measured as speech; 0 until then. */
+  lastSpeechAt: number
 }
 
 export const DEFAULT_DICTATION_METER: DictationMeterState = {
@@ -32,7 +34,8 @@ export function createDictationMeterAnalyzerState(): DictationMeterAnalyzerState
     lastUpdatedAt: 0,
     noiseFloor: 0.008,
     smoothedLevel: 0,
-    clippingUntil: Number.NEGATIVE_INFINITY
+    clippingUntil: Number.NEGATIVE_INFINITY,
+    lastSpeechAt: 0
   }
 }
 
@@ -71,16 +74,18 @@ export function analyzeDictationAudioChunk(
   const smoothing = rawLevel > previous.smoothedLevel ? 0.58 : 0.2
   const smoothedLevel = previous.smoothedLevel + (rawLevel - previous.smoothedLevel) * smoothing
   const clippingUntil = peak >= CLIPPING_THRESHOLD ? now + CLIPPING_HOLD_MS : previous.clippingUntil
+  const isSpeaking = smoothedLevel >= 0.1 || peak >= 0.18
 
   return {
     level: smoothedLevel,
     peak,
-    isSpeaking: smoothedLevel >= 0.1 || peak >= 0.18,
+    isSpeaking,
     isClipping: now <= clippingUntil,
     lastUpdatedAt: now,
     noiseFloor,
     smoothedLevel,
-    clippingUntil
+    clippingUntil,
+    lastSpeechAt: isSpeaking ? now : previous.lastSpeechAt
   }
 }
 

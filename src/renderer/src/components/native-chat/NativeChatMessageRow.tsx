@@ -1,5 +1,6 @@
 import { memo, useRef } from 'react'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind'
+import type { NativeChatForkRowAction } from './use-native-chat-fork'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
@@ -11,8 +12,7 @@ import { deriveNativeChatRowContent } from '../../../../shared/native-chat/trans
 import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { nativeChatNoticeBlock } from '../../../../shared/native-chat/native-chat-notice'
-import { nativeChatStoppedBeforeStartLabel } from './native-chat-stopped-before-start-row'
-import { nativeChatBlocksInOwnWords } from '../../../../shared/native-chat/native-chat-stopped-before-start'
+import { nativeChatMessageRowBlocks } from './native-chat-message-row-words'
 import { ProviderFrameRow } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type {
@@ -32,11 +32,13 @@ export type NativeChatDeliveryNotice =
       onEdit?: never
       onSend?: never
       detail?: never
+      failureKind?: never
     }
   | {
       sending?: never
       text: string
       detail?: string
+      failureKind?: string
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
@@ -54,6 +56,8 @@ export type MessageRowProps = {
   trailingRun?: boolean
   /** Hover controls would overlap the next row. */
   continuesTurn?: boolean
+  /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
+  endsResponse?: boolean
   /** Align this message's top to the top of the scroll viewport. */
   onScrollMessageToTop: (el: HTMLElement) => void
   deliveryNotice?: NativeChatDeliveryNotice
@@ -66,6 +70,8 @@ export type MessageRowProps = {
   runtimeContext?: RuntimeFileOperationArgs | null
   /** On a user row: discards it and everything after it. */
   rewind?: NativeChatRewindSurface
+  /** On a finished response of the chat's own agent: forks the chat through its turn. */
+  fork?: NativeChatForkRowAction
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }
@@ -95,7 +101,7 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatBlocksInOwnWords(message.blocks, nativeChatStoppedBeforeStartLabel())
+  const blocks = nativeChatMessageRowBlocks(message)
   // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content

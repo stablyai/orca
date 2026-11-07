@@ -210,6 +210,7 @@ export function useMobileNativeChatController(args: {
     captureSendOrigin,
     clearDraftForSend,
     restoreRejectedDraft,
+    holdUnconfirmed: structuredNativeChat.holdUnconfirmed,
     onSendError
   })
 
@@ -291,6 +292,7 @@ export function useMobileNativeChatController(args: {
       ? structuredNativeChat.interruptedContinue
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
+    nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
@@ -301,6 +303,8 @@ export function useMobileNativeChatController(args: {
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
-    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
+    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
+    nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
+    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
   }
 }

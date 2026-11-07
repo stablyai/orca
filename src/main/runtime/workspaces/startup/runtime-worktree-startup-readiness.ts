@@ -16,7 +16,7 @@ import type {
 import {
   deliverTerminalAgentLaunchPrompt,
   type TerminalPromptRuntime
-} from '../../rpc/methods/agent-launch-terminal-prompt'
+} from '../../rpc/methods/agent-launch/agent-launch-terminal-prompt'
 
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'

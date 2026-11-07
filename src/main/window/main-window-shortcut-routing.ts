@@ -21,6 +21,11 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import {
+  nativeChatPromptClaimsShortcut,
+  textInputOwnsComposition,
+  type TextShortcutInput
+} from '../../shared/text-input-shortcut-policy'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -37,9 +42,18 @@ export function installMainWindowShortcutRouting(args: {
     options: {
       isAutoRepeat: boolean
       focusedShortcutContext: KeybindingMatchOptions
+      input: TextShortcutInput
     }
   ): boolean => {
     const { focusedShortcutContext, isAutoRepeat } = options
+    // The IPC carries no key event; preserve prompt editing before consuming a destructive chord.
+    if (
+      action.type === 'deleteCurrentWorkspace' &&
+      focusedShortcutContext.context !== 'terminal' &&
+      nativeChatPromptClaimsShortcut(options.input, process.platform, 'workspace.delete')
+    ) {
+      return false
+    }
     if (
       focus.isFloatingTerminalInputFocused() &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
@@ -147,8 +161,12 @@ export function installMainWindowShortcutRouting(args: {
       terminalShortcutPolicy: terminalShortcutContext.terminalShortcutPolicy
     }
 
+    if (textInputOwnsComposition(input)) {
+      doubleTapDetector.reset()
+    }
+
     // Bare modifiers emit no terminal bytes, so raw-stream double taps cannot steal readline input.
-    if (input.type === 'keyDown' || input.type === 'keyUp') {
+    if (!textInputOwnsComposition(input) && (input.type === 'keyDown' || input.type === 'keyUp')) {
       const detected = doubleTapDetector.process(
         toModifierDoubleTapEvent({
           type: input.type,
@@ -173,7 +191,8 @@ export function installMainWindowShortcutRouting(args: {
           doubleTapAction &&
           dispatchResolvedWindowShortcutAction(event, doubleTapAction, {
             isAutoRepeat: false,
-            focusedShortcutContext: terminalShortcutContext
+            focusedShortcutContext: terminalShortcutContext,
+            input: { ...input, doubleTapModifier: detected.modifier }
           })
         ) {
           // preventDefault only the emitting keydown so the renderer detector can't also fire for the same gesture.
@@ -220,7 +239,8 @@ export function installMainWindowShortcutRouting(args: {
 
     dispatchResolvedWindowShortcutAction(event, action, {
       isAutoRepeat: Boolean(input.isAutoRepeat),
-      focusedShortcutContext: terminalShortcutContext
+      focusedShortcutContext: terminalShortcutContext,
+      input
     })
   })
 

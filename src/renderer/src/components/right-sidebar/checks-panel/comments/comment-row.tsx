@@ -1,3 +1,8 @@
+import { GitHubImageTextarea } from '@/components/github/GitHubImageTextarea'
+import {
+  useGitHubImagePending,
+  type GitHubImageIntake
+} from '@/components/github/use-github-image-uploads'
 import React, { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -9,7 +14,7 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../../../shared/github/comment-types'
-import type { PRCommentGroupActionState } from '@/lib/pr-comment-action-state'
+import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
 import { translate } from '@/i18n/i18n'
@@ -25,6 +30,7 @@ import {
 import { isMutablePRConversationComment } from '../../../../../../shared/github/pr-comment-mutability'
 
 export function CommentRow({
+  imageUploadAddress,
   comment,
   botAuthorOverrides,
   isReply,
@@ -45,6 +51,7 @@ export function CommentRow({
   onQueueForAgent,
   onOpenLocation
 }: {
+  imageUploadAddress?: GitHubImageIntake['address']
   comment: PRComment
   botAuthorOverrides: ReadonlySet<string>
   isReply: boolean
@@ -69,6 +76,7 @@ export function CommentRow({
   onQueueForAgent?: () => void
   onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
+  const images = useGitHubImagePending()
   const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
@@ -98,6 +106,9 @@ export function CommentRow({
   const handleSaveEdit = useCallback(
     async (event: React.MouseEvent): Promise<void> => {
       event.stopPropagation()
+      if (images.pendingRef.current) {
+        return
+      }
       const trimmedDraft = draft.trim()
       if (!onEditComment || !trimmedDraft || trimmedDraft === comment.body) {
         setEditing(false)
@@ -113,7 +124,7 @@ export function CommentRow({
         setSubmittingEdit(false)
       }
     },
-    [comment, draft, onEditComment]
+    [comment, draft, images.pendingRef, onEditComment]
   )
 
   const handleDelete = useCallback((): void => {
@@ -121,7 +132,8 @@ export function CommentRow({
   }, [comment, onDeleteComment])
 
   const trimmedDraft = draft.trim()
-  const canSaveEdit = !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
+  const canSaveEdit =
+    !images.pending && !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
   const relativeTime = formatPrCommentRelativeTime(comment.createdAt, now)
 
   const authorAvatar = comment.authorAvatarUrl ? (
@@ -294,10 +306,15 @@ export function CommentRow({
               presentation.useCardLayout ? 'px-3 pb-3' : isReply ? 'pl-5' : 'pl-[22px]'
             )}
           >
-            <textarea
+            <GitHubImageTextarea
+              imageUpload={
+                imageUploadAddress
+                  ? { address: imageUploadAddress, onPending: images.onPending }
+                  : undefined
+              }
               autoFocus
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onValueChange={setDraft}
               onClick={(event) => event.stopPropagation()}
               className="min-h-[60px] w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-[11px] leading-snug text-foreground"
             />

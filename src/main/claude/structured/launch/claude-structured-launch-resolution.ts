@@ -245,6 +245,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId,
         claudeConfigDir,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       }))
     // Fixed homes can be checked before the final account-routing recheck.
@@ -275,6 +276,7 @@ export function claudeStructuredLaunchPart(
         providerSessionId: fork.sourceSessionId,
         claudeConfigDir: launchHome,
         recordHome: accountHome.path,
+        cwd,
         hasTranscript: deps.hasTranscript
       })
     }

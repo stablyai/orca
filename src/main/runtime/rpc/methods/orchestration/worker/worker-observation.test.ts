@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { inspectWorkerTerminal } from './worker-observation'
 
 import { exposeDispatchContext } from './dispatch-context-exposure'
-import type { DispatchContextRow } from '../../../../orchestration/types'
+import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 
 const DISPATCH_ID = 'ctx-worker'
 const TERMINAL_HANDLE = 'term-worker'

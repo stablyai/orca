@@ -7,8 +7,8 @@ import {
   type FileLinkHost,
   type FileLinkPathExistence,
   type FileLinkTarget
-} from '@/components/terminal-pane/terminal-file-link-target'
-import { getTerminalFileContext } from '@/components/terminal-pane/terminal-file-path-mapping'
+} from '@/components/terminal-pane/links/files/terminal-file-link-target'
+import { getTerminalFileContext } from '@/components/terminal-pane/host-files/terminal-file-path-mapping'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
 import {
   createNativeChatFileLinkChecker,

@@ -18,6 +18,8 @@ export function useNativeChatOlderHistoryAutoload({
   historyKey,
   isVisible,
   hasMore,
+  autoLoad = true,
+  onManualLoad,
   loadingEarlier,
   loadEarlier
 }: {
@@ -26,6 +28,8 @@ export function useNativeChatOlderHistoryAutoload({
   historyKey: string
   isVisible: boolean
   hasMore: boolean
+  autoLoad?: boolean
+  onManualLoad?: () => void
   loadingEarlier: boolean
   /** Joins the page already in flight, if any. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
@@ -35,7 +39,7 @@ export function useNativeChatOlderHistoryAutoload({
   const [failedHistoryKey, setFailedHistoryKey] = useState<string | null>(null)
 
   const canObserve = typeof IntersectionObserver !== 'undefined'
-  const isAutoLoadEnabled = canObserve && failedHistoryKey !== historyKey
+  const isAutoLoadEnabled = autoLoad && canObserve && failedHistoryKey !== historyKey
   const shouldObserve = isAutoLoadEnabled && isVisible && hasMore && !loadingEarlier
 
   // Let the lane own in-flight state so abandoned reads cannot strand a latch; stop on no progress to prevent endless observer reloads.
@@ -50,6 +54,7 @@ export function useNativeChatOlderHistoryAutoload({
   const loadPageFromObserver = useEffectEvent(loadPage)
 
   const loadEarlierManually = (): void => {
+    onManualLoad?.()
     setFailedHistoryKey(null)
     loadPage()
   }

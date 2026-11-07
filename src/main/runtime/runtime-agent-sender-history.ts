@@ -16,9 +16,9 @@ import {
 import {
   createCanonicalSessionResolver,
   type AgentSessionRecordReader
-} from './orchestration/structured-session-lineage'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 
 export type AgentSenderPrincipal = AgentSenderPublication['principals'][number]
 /** A live terminal as this host runs it now. */

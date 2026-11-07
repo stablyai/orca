@@ -1,14 +1,18 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { canCloseTerminalPane, terminalPaneCloseLabel } from './terminal-pane-close-affordance'
+import {
+  canCloseTerminalPane,
+  terminalPaneCloseLabel
+} from './layout/close/terminal-pane-close-affordance'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import type { PtyTransport } from './pty-transport-types'
-import { TerminalPaneHeaderDropSurface } from './TerminalPaneHeaderDropSurface'
+import type { PtyTransport } from './pty-transport/pty-transport-types'
+import { TerminalPaneHeaderDropSurface } from './input/file-drop/TerminalPaneHeaderDropSurface'
 import { TerminalPaneResumeInChatButton } from './TerminalPaneResumeInChatButton'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { NativeChatSettingsButton } from '../native-chat/NativeChatSettingsButton'

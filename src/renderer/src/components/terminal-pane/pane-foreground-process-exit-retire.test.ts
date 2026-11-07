@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { resolveTitleDerivedPaneAgent } from '../sidebar/workspace-card/activity/title-derived-pane-agent-identity'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
-import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
+import { createAgentCompletionCoordinator } from './agent-completion/agent-completion-coordinator'
 import {
   createDeferred,
   flushAsyncTicks,
   processResult,
   useAgentCompletionCoordinatorLifecycle
-} from './agent-completion-coordinator-test-harness'
+} from './agent-completion/agent-completion-coordinator-test-harness'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 
 // Wires the pane's tracker and completion monitor the way pane-agent-identity.ts and
-// terminal-keydown-fit.ts do, for a pane whose shell emits no OSC 133 command marks.
+// agent-identity/pane-agent-completion.ts do, for a pane whose shell emits no OSC 133 command marks.
 function createUnmarkedPane(args: { visible: boolean }) {
   let entry: PaneForegroundAgentEntry | undefined
   let foreground: string | null = 'codex'

@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { OrchestrationDb } from '../../db'
+import { OrchestrationDb } from '../orchestration-db'
+import '../contract-constants'
+import '../messages/mailbox-routing-page'
+import '../dispatch-row-writer'
+import '../attempt-outcome-projection'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/protocol-version'
-import type { WorkerTerminalOwnershipState } from '../../worker-terminal-ownership'
+import type { WorkerTerminalOwnershipState } from '../../terminal-authority/release/worker-terminal-ownership'
 
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 

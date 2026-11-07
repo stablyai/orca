@@ -180,7 +180,11 @@ export const AutomationRuns = z.object({
   automationId: OptionalString,
   expectedOwner: ExpectedOwner,
   limit: OptionalPositiveInt,
-  cursor: OptionalString
+  cursor: OptionalString,
+  /** Reply with a byte-bounded page of rows whose output is cut to a preview. */
+  preview: OptionalBoolean,
+  /** Reply with this one full run as `{ run }`; requires `automationId`. */
+  runId: OptionalString
 })
 
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
@@ -263,6 +267,7 @@ export const AutomationCreate = z.object({
   workspaceMode: AutomationWorkspaceMode,
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule,
@@ -287,6 +292,7 @@ export const AutomationUpdateFields = z.object({
   // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
+  setupTrustHash: z.string().max(128).optional(),
   reuseSession: OptionalBoolean,
   timezone: OptionalString,
   rrule: AutomationSchedule.optional(),

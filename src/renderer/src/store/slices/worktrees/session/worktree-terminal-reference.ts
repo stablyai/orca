@@ -23,7 +23,7 @@ import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/wor
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { findRepoForHost } from '../../repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
-import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 

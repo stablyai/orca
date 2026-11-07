@@ -3,7 +3,7 @@ import {
   type WorkerTerminalResourceRow,
   WORKER_RELEASABLE_STATES,
   WORKER_TERMINAL_AUTO_RELEASE_LIVE_SQL
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 

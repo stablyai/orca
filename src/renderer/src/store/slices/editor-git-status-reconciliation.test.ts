@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createEditorStore } from './editor-slice-test-harness'
+import { createEditorStore, createEditorTabsStore } from './editor-slice-test-harness'
 import { makeFolderWorkspace } from './worktrees-slice-test-fixtures'
 
 const { toastErrorMock } = vi.hoisted(() => ({
@@ -424,7 +424,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
     /** A folder workspace on paired server env-1, or a plain local worktree. */
     function storeFor(onServer: boolean) {
-      const store = createEditorStore()
+      const store = createEditorTabsStore()
       if (onServer) {
         store.setState({
           folderWorkspaces: [
@@ -468,7 +468,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       store
         .getState()
         .openConflictReviewFile(
-          `${worktreeId}::conflict-review`,
+          store.getState().openFiles.find((file) => file.mode === 'conflict-review')!.id,
           worktreeId,
           '/repo',
           conflictEntry,
@@ -505,8 +505,9 @@ describe('createEditorSlice conflict status reconciliation', () => {
         conflictStatus: 'unresolved'
       })
       expect(
-        state.openFiles.find((file) => file.id === `${worktreeId}::conflict-review`)?.conflictReview
-          ?.selectedFileId
+        state.openFiles.find(
+          (file) => file.mode === 'conflict-review' && file.worktreeId === worktreeId
+        )?.conflictReview?.selectedFileId
       ).toBe(fileId)
     })
 

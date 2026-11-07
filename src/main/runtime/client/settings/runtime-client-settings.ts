@@ -110,6 +110,11 @@ export class RuntimeClientSettingsController {
       nativeChatAutoContinueAfterUsageLimit:
         settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
+      // A paired browser dictates through this host, which refuses unless these allow it.
+      voice: {
+        enabled: settings.voice?.enabled === true,
+        sttModel: settings.voice?.sttModel ?? ''
+      },
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Mirror the host preference; delivery still depends on queue capability.
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
@@ -153,6 +158,8 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (
+      // An explicit enable while already enabled is a repair request (`orca agent hooks on`), so a wiped hook config reinstalls.
+      updates.agentStatusHooksEnabled === true ||
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
       (updates.disabledTuiAgents !== undefined &&

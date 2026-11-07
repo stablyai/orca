@@ -14,12 +14,26 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
-import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatLaunchDraft } from './drafts/native-chat-launch-prompt'
 import type { NativeChatAfterStopSend } from './native-chat-composer-target'
 import type { NativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
 import type { NativeChatRecallSource } from './native-chat-sent-prompt-history'
 import type { NativeChatSendFollowUp } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+
+export type NativeChatComposerImageAttachment = {
+  id: string
+  /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
+  path: string
+  connectionId?: string
+  /** Show clipboard thumbnails immediately, without waiting for disk/upload completion. */
+  previewUrl?: string
+  /** True while the pasted image is still being written to disk or uploaded. */
+  pending?: boolean
+  /** The file's name while it uploads: a dropped or picked file, not a pasted image. */
+  pendingName?: string
+  /** Set on an image the draft names but can't send: the file to attach again. */
+  unavailableName?: string
+}
 
 export type NativeChatComposerErrorDetail = {
   /** Error text Orca did not write, shown apart and copyable. */
@@ -171,7 +185,8 @@ export type NativeChatComposerHandle = {
   insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
-  insertTypedText: (text: string) => boolean
+  /** Dictated text is spaced from the text around the caret. */
+  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean

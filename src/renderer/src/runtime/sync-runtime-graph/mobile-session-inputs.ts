@@ -1,3 +1,5 @@
+import { pendingTabRevision, pendingEntityWorkspaceIds } from '@/runtime/layout-owner-pending-tabs'
+import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
 import type { AppState } from '@/store/types'
@@ -52,6 +54,59 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   graphState.cachedOpenFileIndexesSource = openFiles
   graphState.cachedOpenFileIndexes = { byWorktreeAndId, idsByWorktree }
   return graphState.cachedOpenFileIndexes
+}
+
+type PlacementOpenFileIndexes = OpenFileIndexes & { crossPlacedWorkspaces: ReadonlySet<string> }
+const placementFileIndexes = new WeakMap<
+  AppState['unifiedTabsByWorktree'],
+  WeakMap<OpenFileIndexes, { revision: number; projection: PlacementOpenFileIndexes }>
+>()
+
+/** Preserve legacy tabless publication, excluding only content placed exclusively elsewhere. */
+export function excludeCrossPlacedEditorFiles(
+  indexes: OpenFileIndexes,
+  tabs: AppState['unifiedTabsByWorktree']
+): PlacementOpenFileIndexes {
+  let byFiles = placementFileIndexes.get(tabs)
+  const cached = byFiles?.get(indexes)
+  const revision = pendingTabRevision()
+  if (cached?.revision === revision) {
+    return cached.projection
+  }
+  byFiles ??= new WeakMap()
+  placementFileIndexes.set(tabs, byFiles)
+  const placements = editorPlacementIndex(tabs).workspacesByEntityId
+  const crossPlacedWorkspaces = new Set<string>()
+  let result: PlacementOpenFileIndexes = { ...indexes, crossPlacedWorkspaces }
+  for (const [owner, files] of indexes.byWorktreeAndId) {
+    const excluded = [...files.keys()].filter((id) => {
+      const workspaces = new Set([...(placements.get(id) ?? []), ...pendingEntityWorkspaceIds(id)])
+      for (const workspaceId of workspaces) {
+        if (workspaceId !== owner && !indexes.byWorktreeAndId.get(workspaceId)?.has(id)) {
+          crossPlacedWorkspaces.add(workspaceId)
+        }
+      }
+      return workspaces.size > 0 && !workspaces.has(owner)
+    })
+    if (!excluded.length) {
+      continue
+    }
+    if (result.byWorktreeAndId === indexes.byWorktreeAndId) {
+      result = {
+        byWorktreeAndId: new Map(indexes.byWorktreeAndId),
+        idsByWorktree: new Map(indexes.idsByWorktree),
+        crossPlacedWorkspaces
+      }
+    }
+    const remaining = new Map(files)
+    for (const id of excluded) {
+      remaining.delete(id)
+    }
+    result.byWorktreeAndId.set(owner, remaining)
+    result.idsByWorktree.set(owner, [...remaining.keys()])
+  }
+  byFiles.set(indexes, { revision, projection: result })
+  return result
 }
 
 export function buildMobileSessionAgentStatusByWorktree(

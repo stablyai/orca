@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
-} from '@/lib/pr-comment-audience-labels'
+} from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import type { PRCommentGroup } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -107,6 +107,7 @@ export function ConversationTabActivity({
             {issueConversationEntries.map((entry) =>
               entry.kind === 'comment' ? (
                 <ConversationTabCommentCard
+                  itemType={item.type}
                   key={entry.id}
                   comment={entry.comment}
                   {...commentCardProps}
@@ -129,6 +130,7 @@ export function ConversationTabActivity({
         <div className="flex min-w-0 flex-col gap-3">
           {visibleCommentGroups.map((group) => (
             <ConversationTabCommentGroup
+              itemType={item.type}
               key={group.kind === 'thread' ? group.root.id : group.comment.id}
               group={group}
               {...commentCardProps}
