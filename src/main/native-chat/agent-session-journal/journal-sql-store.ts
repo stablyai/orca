@@ -90,9 +90,10 @@ export class SqlAgentSessionJournal {
 
   /** Nonthrowing publication runs on the command lane, after receipts have adopted COMMIT. */
   observeCommits(listener: (commit: JournalWriterCommit) => void): () => void {
-    this.listener = listener
+    const registered: typeof listener = (commit) => listener(commit)
+    this.listener = registered
     return () => {
-      if (this.listener === listener) {
+      if (this.listener === registered) {
         this.listener = undefined
       }
     }
