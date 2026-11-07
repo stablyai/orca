@@ -160,6 +160,7 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
       isTuiAgent(agentLaunchAuthority.launchAgent)
     ) {
       pty.launchToken = agentLaunchAuthority.launchToken
+      pty.launchUndecided = false
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
       // Why: a restart that runs in main (wake, worker reopen) replays the recipe; drop it and it comes back bare.
@@ -170,7 +171,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
     if (
       binding?.launchUndecided &&
       pty.launchToken === null &&
-      pty.incarnationId === binding.incarnationId
+      // An older relay reports no incarnation; that still can't prove the launch gone.
+      (pty.incarnationId ?? undefined) === binding.incarnationId
     ) {
       pty.launchUndecided = true
     }

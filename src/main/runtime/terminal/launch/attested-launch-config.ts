@@ -4,16 +4,23 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 
 export type PtyLaunchFacts = Pick<
   RuntimePtyWorktreeRecord,
-  'launchToken' | 'launchAgent' | 'launchConfig' | 'launchUndecided'
+  | 'launchToken'
+  | 'launchAgent'
+  | 'launchConfig'
+  | 'launchUndecided'
+  | 'launchIncarnationId'
+  | 'incarnationId'
 >
 
-/** The note of the Orca launch main still holds for this PTY as `agent`; a typed agent gets none.
+/** The note of the Orca launch main still holds for this PTY's process as `agent`; a typed agent gets none.
  *  A wrapper launch (Claude agent teams) reports its wrapped agent, which is still that launch. */
 export function attestedLaunchConfig(
   pty: PtyLaunchFacts | null | undefined,
   agent: string | null | undefined
 ): SleepingAgentLaunchConfig | undefined {
   return pty?.launchToken &&
+    // A launch recorded before its process id was known belongs to the process until a replacement.
+    (!pty.launchIncarnationId || pty.launchIncarnationId === pty.incarnationId) &&
     pty.launchConfig &&
     agent &&
     pty.launchAgent &&

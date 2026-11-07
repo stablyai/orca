@@ -6,10 +6,27 @@ import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalida
 
 /** Main's admitted launch, kept in the daemon so a reattach after a main restart can re-arm it. */
 export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInvalidateAllHandlesForPty {
+  private readonly reattachedLaunchChecks = new Map<string, symbol>()
+
   abstract readLaunchedAgentForeground(
     ptyId: string,
     agent: TuiAgent
   ): Promise<LaunchedAgentForeground>
+
+  /** Newer evidence (a later attach, a finished command) outranks a foreground read still in flight. */
+  protected supersedeReattachedLaunchCheck(ptyId: string): void {
+    this.reattachedLaunchChecks.delete(ptyId)
+  }
+
+  /** A finished command proves no earlier launch still runs in this PTY; returns its record. */
+  protected settleReattachedLaunch(ptyId: string): RuntimePtyWorktreeRecord | undefined {
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.launchUndecided = false
+    }
+    this.supersedeReattachedLaunchCheck(ptyId)
+    return pty
+  }
 
   /** Keep main's admitted launch in the daemon, which outlives main. */
   protected armDaemonLaunchNote(ptyId: string, pty: RuntimePtyWorktreeRecord): void {
@@ -28,6 +45,7 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     reattach: { incarnationId: string; launchAgent: TuiAgent; launchNote?: DaemonLaunchNote | null }
   ): Promise<void> {
     const { launchNote, launchAgent, incarnationId } = reattach
+    this.supersedeReattachedLaunchCheck(ptyId)
     if (pty.launchToken) {
       return
     }
@@ -40,11 +58,18 @@ export abstract class OrcaRuntimeWithDaemonLaunchNote extends OrcaRuntimeWithInv
     if (!launchNote) {
       return
     }
+    const check = Symbol(ptyId)
+    this.reattachedLaunchChecks.set(ptyId, check)
     const foreground = await this.readLaunchedAgentForeground(ptyId, launchAgent).catch(
       () => 'unknown' as const
     )
+    const current = this.reattachedLaunchChecks.get(ptyId) === check
+    if (current) {
+      this.reattachedLaunchChecks.delete(ptyId)
+    }
     // A launch main already holds for this PTY is newer than anything the reattach can say.
     if (
+      !current ||
       this.ptysById.get(ptyId) !== pty ||
       pty.incarnationId !== incarnationId ||
       pty.launchToken
