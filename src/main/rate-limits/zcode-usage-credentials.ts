@@ -6,11 +6,14 @@ import {
   localZcodeCredentialHost,
   type ZcodeCredentialHost
 } from '../zcode/zcode-v2-plan-credentials'
+import { readZcodeV2StartPlanCredential } from '../zcode/zcode-v2-start-plan-credentials'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 
 const SUPPORTED_HOSTS = new Set(['api.z.ai', 'open.bigmodel.cn', 'dev.bigmodel.cn'])
 const CREDENTIAL_IDENTITY_KEY = randomBytes(32)
 export const ZCODE_PLAN_CREDENTIAL_SOURCE = 'orca-plan'
+export const ZCODE_START_PLAN_CREDENTIAL_SOURCE = 'zcode-start-plan'
+export const ZCODE_START_PLAN_ORIGIN = 'https://zcode.z.ai'
 export type ZcodePlanCredential = { apiKey: string; baseUrl: string }
 export type ZcodeUsageCredentials = { apiKey: string; quotaUrl: string; authProvenance: string }
 export type ZcodeUsageCredentialOptions = {
@@ -126,6 +129,38 @@ export function hasZcodeCliPlanCredentials(configPath?: string): boolean {
   return readZcodeUsageCredentials({ configPath }).status === 'ok'
 }
 
+export type ZcodeStartPlanCredential = {
+  jwt: string
+  deviceMid: string
+  authProvenance: string
+}
+
+/** Stable non-secret identity of the Start Plan session credential for staleness comparisons. */
+export function resolveZcodeStartPlanProvenance(jwt: string): string {
+  return createHmac('sha256', CREDENTIAL_IDENTITY_KEY)
+    .update(JSON.stringify([ZCODE_START_PLAN_CREDENTIAL_SOURCE, ZCODE_START_PLAN_ORIGIN, jwt]))
+    .digest('hex')
+}
+
+/** Reads the ZCode Start Plan session credential, or null when the store has no usable session. */
+export function readZcodeStartPlanCredential(
+  options: ZcodeUsageCredentialOptions = {}
+): ZcodeStartPlanCredential | null {
+  // An explicit legacy fixture path never probes the developer's credential store.
+  if (options.configPath && !options.credentialHost) {
+    return null
+  }
+  const read = readZcodeV2StartPlanCredential(options.credentialHost ?? localZcodeCredentialHost())
+  if (read.status !== 'ok') {
+    return null
+  }
+  return {
+    jwt: read.jwt,
+    deviceMid: read.deviceMid,
+    authProvenance: resolveZcodeStartPlanProvenance(read.jwt)
+  }
+}
+
 export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolean {
   if (
     !usage.usageMetadata?.authProvenance ||
@@ -133,6 +168,10 @@ export function isZcodeUsageCredentialCurrent(usage: ProviderRateLimits): boolea
     usage.usageMetadata.credentialSource === ZCODE_PLAN_CREDENTIAL_SOURCE
   ) {
     return true
+  }
+  if (usage.usageMetadata.credentialSource === ZCODE_START_PLAN_CREDENTIAL_SOURCE) {
+    const startPlan = readZcodeStartPlanCredential()
+    return startPlan !== null && startPlan.authProvenance === usage.usageMetadata.authProvenance
   }
   const current = readZcodeUsageCredentials()
   return (

@@ -1,4 +1,5 @@
 import {
+  readZcodeStartPlanCredential,
   readZcodeUsageCredentials,
   resolveUsageCredentials,
   ZCODE_PLAN_CREDENTIAL_SOURCE,
@@ -6,6 +7,7 @@ import {
   type ZcodeUsageCredentials,
   type ZcodeUsageCredentialOptions
 } from './zcode-usage-credentials'
+import { fetchZcodeStartPlanUsage } from './zcode-start-plan-usage-fetcher'
 export {
   hasZcodeCliPlanCredentials,
   ZCODE_PLAN_CREDENTIAL_SOURCE,
@@ -131,6 +133,24 @@ export async function fetchZcodeRateLimits(
     planCredential?: ZcodePlanCredential | null
     signal?: AbortSignal
   } = {}
+): Promise<ProviderRateLimits> {
+  const codingPlan = await fetchCodingPlanUsage(options)
+  // A saved key pins the coding-plan account; never mix in the ZCode login's Start Plan usage.
+  if (codingPlan.status === 'ok' || options.planCredential) {
+    return codingPlan
+  }
+  const startPlan = readZcodeStartPlanCredential(options)
+  if (!startPlan) {
+    return codingPlan
+  }
+  return fetchZcodeStartPlanUsage(startPlan, options.signal)
+}
+
+async function fetchCodingPlanUsage(
+  options: ZcodeUsageCredentialOptions & {
+    planCredential?: ZcodePlanCredential | null
+    signal?: AbortSignal
+  }
 ): Promise<ProviderRateLimits> {
   const plan = options.planCredential
   const saved = plan
