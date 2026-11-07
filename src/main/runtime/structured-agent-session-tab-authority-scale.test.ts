@@ -6,7 +6,7 @@ import {
 } from './agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { stopStructuredAgentSessionRuntime } from './agent-session/structured-agent-session-runtime'
 import { closeTestStores } from '../persistence/persistence-test-harness'
-import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { chatTabCommandsSettled } from './orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   readPersistedTestAgentSessionStore,

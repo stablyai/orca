@@ -11,16 +11,16 @@ import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktr
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
-import { findPendingWorktreeCreationId } from './pending-worktree-creation'
-import { openableFolderWorkspace } from './worktree-activation'
+import { findPendingWorktreeCreationId } from './workspace/creation/pending-worktree-creation'
+import { openableFolderWorkspace } from './workspace/activation/worktree-activation'
 import { wakeWorkspaceAgents } from './worktree-activation-agent-wake'
-import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
-import { buildActivationStateTransition } from './worktree-activation-visit'
+import { liftSidebarFiltersHidingWorktree } from './workspace/activation/worktree-activation-sidebar-filters'
+import { buildActivationStateTransition } from './workspace/activation/worktree-activation-visit'
 import {
   getKnownExecutionHostIdForWorktree,
   getUnstampedExecutionHostId,
   runtimeEnvironmentIdOrLocalUnlessTwin
-} from './worktree-runtime-owner'
+} from './workspace/ownership/worktree-runtime-owner'
 import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
 
 /** Show an addressed chat's workspace on its host without starting anything there. False when

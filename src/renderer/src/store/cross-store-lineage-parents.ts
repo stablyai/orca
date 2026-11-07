@@ -1,15 +1,23 @@
 import {
   buildCrossStoreLineageView,
   OWN_LINEAGE_STORE_KEY,
+  resolveCrossStoreLineageParents,
   type CrossStoreLineageView
 } from '../../../shared/worktree/cross-store-lineage-resolution'
+import { getFolderWorkspaceWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   resolveSidebarLineageParentIdentities,
   type SidebarLineageParentIdentities
 } from '../../../shared/sidebar-list/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  pickFolderLineageRecord,
+  readInlineFolderLineage
+} from '../../../shared/worktree/folder-lineage-parents'
 import { getIndexedAllWorktrees } from './worktree-repo-index'
-import { selectWorktreesByRepo } from './workspace-record-selectors'
+import { selectFolderWorkspaces, selectWorktreesByRepo } from './workspace-record-selectors'
 import type { AppState } from './types'
 
 type CrossStoreLineageInputs = Pick<
@@ -20,7 +28,8 @@ type CrossStoreLineageInputs = Pick<
   | 'ownLineageInstallationId'
   | 'runtimeStatusByEnvironmentId'
   | 'removedRuntimeEnvironmentIds'
->
+> &
+  Partial<Pick<AppState, 'workspaceLineageByChildKey' | 'folderWorkspaces'>>
 
 function buildView(state: CrossStoreLineageInputs): CrossStoreLineageView {
   const { [OWN_LINEAGE_STORE_KEY]: own, ...paired } = state.crossStoreLineageByStoreKey
@@ -46,9 +55,7 @@ export function selectLineageStoreInstallationId(
 }
 
 let cached: {
-  rowsByRepo: AppState['worktreesByRepo']
-  worktreeLineageById: AppState['worktreeLineageById']
-  crossStoreLineageByStoreKey: AppState['crossStoreLineageByStoreKey']
+  inputs: readonly unknown[]
   identityKey: string
   parents: SidebarLineageParentIdentities
 } | null = null
@@ -61,7 +68,9 @@ function resolutionInputs(state: CrossStoreLineageInputs): readonly unknown[] {
     state.crossStoreLineageByStoreKey,
     state.ownLineageInstallationId,
     state.runtimeStatusByEnvironmentId,
-    state.removedRuntimeEnvironmentIds
+    state.removedRuntimeEnvironmentIds,
+    state.workspaceLineageByChildKey,
+    selectFolderWorkspaces(state)
   ]
 }
 
@@ -70,8 +79,9 @@ let lastCall: {
   result: SidebarLineageParentIdentities | undefined
 } | null = null
 
-/** Sidebar parents over every visible store, or undefined while no store holds a cross-store record
- * (the sidebar then resolves same-store parents exactly as before). */
+/** Sidebar parents over every visible store, folder workspaces included, or undefined while no store
+ * holds a cross-store record or a folder workspace parent (the sidebar then resolves same-store
+ * parents exactly as before). */
 export function selectSidebarLineageParentIdentities(
   state: CrossStoreLineageInputs
 ): SidebarLineageParentIdentities | undefined {
@@ -86,38 +96,122 @@ export function selectSidebarLineageParentIdentities(
   return result
 }
 
+function hasCrossStoreRecords(state: CrossStoreLineageInputs): boolean {
+  // Partial store snapshots (tests, early boot) may lack the slice.
+  return Object.values(state.crossStoreLineageByStoreKey ?? {}).some(
+    (records) => Object.keys(records).length > 0
+  )
+}
+
+function hasFolderParentRecords(state: CrossStoreLineageInputs): boolean {
+  if ((selectFolderWorkspaces(state)?.length ?? 0) === 0) {
+    return false
+  }
+  return (
+    Object.values(state.workspaceLineageByChildKey ?? {}).some((record) =>
+      record.parentWorkspaceKey.startsWith('folder:')
+    ) ||
+    // A paired server reports each row's own folder parent, which the merged records can miss.
+    getIndexedAllWorktrees(selectWorktreesByRepo(state)).some((row) =>
+      Boolean(readInlineFolderLineage(row))
+    )
+  )
+}
+
 function resolveSidebarParents(
   state: CrossStoreLineageInputs
 ): SidebarLineageParentIdentities | undefined {
-  // Partial store snapshots (tests, early boot) may lack the slice.
-  if (
-    !Object.values(state.crossStoreLineageByStoreKey ?? {}).some(
-      (records) => Object.keys(records).length > 0
-    )
-  ) {
+  const crossStore = hasCrossStoreRecords(state)
+  const folderParents = hasFolderParentRecords(state)
+  if (!crossStore && !folderParents) {
     return undefined
   }
-  const view = buildView(state)
-  const identityKey = storeIdentityKey(view)
-  const worktreesByRepo = selectWorktreesByRepo(state)
+  const view = crossStore ? buildView(state) : undefined
+  const identityKey = view ? storeIdentityKey(view) : ''
+  // Status probes churn the status map; only store identities change resolution.
+  const inputs = [
+    selectWorktreesByRepo(state),
+    state.worktreeLineageById,
+    state.crossStoreLineageByStoreKey,
+    state.workspaceLineageByChildKey,
+    selectFolderWorkspaces(state)
+  ]
   if (
-    cached?.rowsByRepo === worktreesByRepo &&
-    cached.worktreeLineageById === state.worktreeLineageById &&
-    cached.crossStoreLineageByStoreKey === state.crossStoreLineageByStoreKey &&
-    cached.identityKey === identityKey
+    cached?.identityKey === identityKey &&
+    inputs.every((input, index) => input === cached?.inputs[index])
   ) {
     return cached.parents
   }
-  const rows = new Map(
-    getIndexedAllWorktrees(worktreesByRepo).map((row) => [getWorktreeHostIdentity(row), row])
-  )
-  const parents = resolveSidebarLineageParentIdentities(state.worktreeLineageById, rows, view)
-  cached = {
-    rowsByRepo: worktreesByRepo,
-    worktreeLineageById: state.worktreeLineageById,
-    crossStoreLineageByStoreKey: state.crossStoreLineageByStoreKey,
-    identityKey,
-    parents
+  const rows = new Map<string, Worktree>()
+  for (const row of [
+    ...getIndexedAllWorktrees(selectWorktreesByRepo(state)),
+    // Folder rows parent through their own records and through other stores' records.
+    ...(selectFolderWorkspaces(state) ?? []).map((folder) => getFolderWorkspaceWorktree(folder))
+  ]) {
+    rows.set(getWorktreeHostIdentity(row), row)
   }
+  const workspaceLineage = state.workspaceLineageByChildKey ?? {}
+  const parents = resolveSidebarLineageParentIdentities(
+    state.worktreeLineageById,
+    rows,
+    view,
+    folderParents
+      ? (row) => pickFolderLineageRecord(workspaceLineage[worktreeWorkspaceKey(row.id)], row)
+      : undefined
+  )
+  cached = { inputs, identityKey, parents }
   return parents
+}
+
+type FolderChildrenInputs = CrossStoreLineageInputs & Pick<AppState, 'folderWorkspaces'>
+
+const NO_FOLDER_CHILDREN: ReadonlyMap<string, readonly Worktree[]> = new Map()
+
+let lastFolderChildrenCall: {
+  inputs: readonly unknown[]
+  result: ReadonlyMap<string, readonly Worktree[]>
+} | null = null
+
+/** Workspaces in other stores whose saved parent is a folder workspace, by folder workspace id.
+ * The folder panels list them with the folder's own children. */
+export function selectCrossStoreFolderChildrenById(
+  state: FolderChildrenInputs
+): ReadonlyMap<string, readonly Worktree[]> {
+  const inputs = [...resolutionInputs(state), selectFolderWorkspaces(state)]
+  const previous = lastFolderChildrenCall
+  if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
+    return previous.result
+  }
+  const result = resolveFolderChildren(state)
+  lastFolderChildrenCall = { inputs, result }
+  return result
+}
+
+function resolveFolderChildren(
+  state: FolderChildrenInputs
+): ReadonlyMap<string, readonly Worktree[]> {
+  const folderWorkspaces = selectFolderWorkspaces(state) ?? []
+  if (folderWorkspaces.length === 0 || !hasCrossStoreRecords(state)) {
+    return NO_FOLDER_CHILDREN
+  }
+  const folderIdByRow = new Map(
+    folderWorkspaces.map((folder) => [getFolderWorkspaceWorktree(folder), folder.id])
+  )
+  const rows = new Map<string, Worktree>()
+  for (const row of [
+    ...getIndexedAllWorktrees(selectWorktreesByRepo(state)),
+    ...folderIdByRow.keys()
+  ]) {
+    rows.set(getWorktreeHostIdentity(row), row)
+  }
+  const childrenById = new Map<string, Worktree[]>()
+  for (const [childIdentity, parent] of resolveCrossStoreLineageParents(rows, buildView(state))) {
+    const folderId = folderIdByRow.get(parent)
+    const child = rows.get(childIdentity)
+    if (folderId === undefined || !child || child.isArchived) {
+      continue
+    }
+    childrenById.set(folderId, [...(childrenById.get(folderId) ?? []), child])
+  }
+  return childrenById.size > 0 ? childrenById : NO_FOLDER_CHILDREN
 }

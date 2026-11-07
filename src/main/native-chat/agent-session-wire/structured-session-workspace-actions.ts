@@ -1,10 +1,10 @@
-import { createStructuredAgentSessionWorkspaceSleeper } from './structured-agent-session-workspace-sleep'
-import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
-import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
-import type { StructuredConversationCommandController } from './structured-conversation-command-controller'
-import type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-conversation-lifetime'
-import { structuredAgentSessionConversationClosable } from './structured-agent-session-host-lifetime'
+import { createStructuredAgentSessionWorkspaceSleeper } from './termination/structured-agent-session-workspace-sleep'
+import type { StructuredAgentSessionHostRuntimeState } from './host/structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionTaskQueue } from './host/structured-agent-session-task-queue'
+import type { StructuredAgentSessionConversations } from './host/structured-agent-session-conversations'
+import type { StructuredConversationCommandController } from './operations/structured-conversation-command-controller'
+import type { StructuredAgentSessionConversationLifetime } from './termination/structured-agent-session-conversation-lifetime'
+import { structuredAgentSessionConversationClosable } from './termination/structured-agent-session-host-lifetime'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation,

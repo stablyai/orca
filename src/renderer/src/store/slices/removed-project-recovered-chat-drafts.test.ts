@@ -13,12 +13,12 @@ import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { resolveNativeChatDraftOwner } from '@/lib/native-chat-draft-owner'
+import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 import { createChatDraftRemovalReceipt } from './worktrees/teardown/chat-draft-removal-receipt'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))

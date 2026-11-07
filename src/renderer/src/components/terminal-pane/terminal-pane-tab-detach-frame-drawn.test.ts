@@ -4,7 +4,7 @@ import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
 import { createStoreCascadesMockApi } from '../../store/slices/store-cascades-test-harness'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { buildLayoutFrameSlices } from '../../store/workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from '../../store/workspace-layout-frame-store-patch'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
@@ -25,7 +25,9 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRunti
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))

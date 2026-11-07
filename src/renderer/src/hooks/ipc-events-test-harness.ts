@@ -105,7 +105,7 @@ export async function loadIpcEventsHarness(
     useAppStore: { subscribe: vi.fn(() => () => {}), getState: () => storeState }
   }))
   vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     activateAndRevealWorkspace,
     ensureWorktreeHasInitialTerminal: vi.fn()
@@ -216,6 +216,7 @@ export async function loadIpcEventsHarness(
           listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialRequest: () => () => {},
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},

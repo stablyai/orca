@@ -38,7 +38,7 @@
 5 src/main/project-groups/folder-workspace-path-status.ts
 1 src/main/workspaces/catalog/provisioned-root-ssh-adoption.ts
 2 src/main/workspaces/catalog/repo-git-username-enrichment.ts
-1 src/main/runtime/rpc/methods/agent-launch-worktree-creation.ts
+1 src/main/runtime/rpc/methods/agent-launch/agent-launch-worktree-creation.ts
 1 src/main/runtime/workspaces/catalog/runtime-managed-worktree-queries.ts
 3 src/main/runtime/runtime-reference-agents.ts
 1 src/main/runtime/workspaces/catalog/runtime-worktree-selection.ts

@@ -19,10 +19,8 @@ import {
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
-  projectResolvedWorktreeScans,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
-  type ResolvedWorktreeRowsJoin,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
@@ -39,7 +37,6 @@ import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/wo
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from './runtime-worktree-scan-state'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import * as ScanCache from './runtime-worktree-scan-cache'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 

@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 
 const TAB = 'worker-tab'
 const LEAF = '11111111-1111-4111-8111-111111111111'

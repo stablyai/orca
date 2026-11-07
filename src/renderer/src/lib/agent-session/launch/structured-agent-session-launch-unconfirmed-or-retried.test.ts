@@ -79,7 +79,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 // The structured route hands the launch's own delivery result back unchanged.
-vi.mock('@/lib/launch-agent-in-new-tab', async () => {
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', async () => {
   const launch = await import('./structured-agent-session-launch')
   return {
     launchAgentInNewTab: (args: {

@@ -14,7 +14,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
 
-vi.mock('./worktree-runtime-owner', () => ({
+vi.mock('./workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 

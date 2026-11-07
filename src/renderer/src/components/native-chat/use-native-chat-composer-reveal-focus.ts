@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-helpers'
-import { scheduleNextFrame } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
+import { scheduleNextFrame } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 import { registerNativeChatPane } from './native-chat-composer-mount'

@@ -116,8 +116,11 @@ async function rightClickActiveTerminalSurface(page: Page): Promise<void> {
   await page.mouse.click(point.x, point.y, { button: 'right' })
 }
 
-async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ BrowserWindow, ipcMain }) => {
+async function installClipboardReadTerminalBlurRepro(
+  app: ElectronApplication,
+  focusMoveScript: string
+): Promise<void> {
+  await app.evaluate(({ BrowserWindow, ipcMain }, focusMoveScript) => {
     type ClipboardReadHandler = (event: unknown, ...args: unknown[]) => unknown
     const global = globalThis as unknown as {
       __orcaOriginalClipboardReadTextHandler?: ClipboardReadHandler
@@ -136,22 +139,14 @@ async function installClipboardReadTerminalBlurRepro(app: ElectronApplication): 
       const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
       await Promise.all(
         windows.map((window) =>
-          window.webContents
-            .executeJavaScript(
-              `
-              (document.activeElement && document.activeElement.blur && document.activeElement.blur());
-              document.body.tabIndex = -1;
-              document.body.focus();
-            `
-            )
-            .catch(() => undefined)
+          window.webContents.executeJavaScript(focusMoveScript).catch(() => undefined)
         )
       )
       // Why: reproduce the focus churn window before the async clipboard read resolves.
       await new Promise((resolve) => setTimeout(resolve, 0))
       return global.__orcaOriginalClipboardReadTextHandler!(event, ...args)
     })
-  })
+  }, focusMoveScript)
 }
 
 async function restoreClipboardReadTerminalBlurRepro(app: ElectronApplication): Promise<void> {
@@ -231,7 +226,7 @@ test.describe('terminal paste ownership', () => {
     }
   })
 
-  test('keyboard paste survives transient terminal blur during clipboard read', async ({
+  test('keyboard paste lands unless another input takes focus during clipboard read', async ({
     electronApp,
     orcaPage,
     testRepoPath
@@ -247,27 +242,62 @@ test.describe('terminal paste ownership', () => {
     const scriptPath = path.join(testRepoPath, `.orca-paste-blur-${runId}.mjs`)
     writeFileSync(scriptPath, pasteEchoScript(runId))
     let scriptStarted = false
+    // Why: executeJavaScript shares one global scope, so a top-level const would clash on the next case.
+    const focusOutside = (tag: string): string => `
+      (() => {
+        const el = document.createElement('${tag}');
+        el.tabIndex = -1;
+        el.dataset.e2ePasteFocus = '';
+        document.body.appendChild(el);
+        el.focus();
+      })();
+    `
+    // Dictation tools and overlays move focus mid-paste; only another input may take the paste.
+    const cases = [
+      {
+        name: 'blur to body',
+        focusMoveScript: `
+          (document.activeElement && document.activeElement.blur && document.activeElement.blur());
+          document.body.tabIndex = -1;
+          document.body.focus();
+        `,
+        lands: true
+      },
+      { name: 'non-input control', focusMoveScript: focusOutside('div'), lands: true },
+      { name: 'text input', focusMoveScript: focusOutside('input'), lands: false }
+    ]
 
     try {
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       scriptStarted = true
       await waitForTerminalOutput(orcaPage, `PASTE_READY_${runId}`, 10_000)
 
-      const payload = `ORCA_E2E_TRANSIENT_BLUR_PASTE_${runId}`
-      const encodedPayload = Buffer.from(payload, 'utf8').toString('base64')
-      await clearTerminalPtyWriteLog(electronApp)
-      await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), payload)
-      await focusActiveTerminalInput(orcaPage)
-      await installClipboardReadTerminalBlurRepro(electronApp)
+      for (const [index, { name, focusMoveScript, lands }] of cases.entries()) {
+        const payload = `ORCA_E2E_FOCUS_MOVE_PASTE_${runId}_${index}`
+        const encodedPayload = Buffer.from(payload, 'utf8').toString('base64')
+        await clearTerminalPtyWriteLog(electronApp)
+        await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), payload)
+        await focusActiveTerminalInput(orcaPage)
+        await installClipboardReadTerminalBlurRepro(electronApp, focusMoveScript)
 
-      await orcaPage.keyboard.press(keyboardPasteChords()[0])
-      await waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
+        await orcaPage.keyboard.press(keyboardPasteChords()[0])
+        await (lands
+          ? waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
+          : expect(
+              orcaPage.getByText('Paste cancelled: terminal focus changed before paste started.')
+            ).toBeVisible())
 
-      const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'transient blur PTY write count').toBe(1)
+        const writes = (await readTerminalPtyWrites(electronApp)).join('')
+        expect(countOccurrences(writes, payload), `${name} PTY write count`).toBe(lands ? 1 : 0)
+        await restoreClipboardReadTerminalBlurRepro(electronApp)
+        await orcaPage.evaluate(() =>
+          document.querySelectorAll('[data-e2e-paste-focus]').forEach((el) => el.remove())
+        )
+      }
     } finally {
       await restoreClipboardReadTerminalBlurRepro(electronApp).catch(() => undefined)
       if (scriptStarted) {
+        await focusActiveTerminalInput(orcaPage).catch(() => undefined)
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
       rmSync(scriptPath, { force: true })

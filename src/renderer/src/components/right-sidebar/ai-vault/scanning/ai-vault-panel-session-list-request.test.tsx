@@ -42,7 +42,7 @@ vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
     STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
   ]
 }))
-vi.mock('@/lib/agent-session-launch-plan', async (importOriginal) => ({
+vi.mock('@/lib/agent-session/launch/routing/agent-session-launch-plan', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   structuredAgentSessionLaunchFeasible: () => true
 }))

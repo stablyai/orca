@@ -3,18 +3,18 @@ import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import * as sleepingResume from './resume-sleeping-agent-session'
+import * as sleepingResume from './agent-session/resume/resume-sleeping-agent-session'
 import * as pruneModule from './retire-moved-structured-session-placement'
 import * as workspaceWake from './worktree-activation-agent-wake'
 import * as webActivation from '@/runtime/web-runtime-worktree-activation'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import { showStructuredChatWorkspace } from './structured-chat-workspace-navigation'
-import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import { waitForWorktreeAgentActivationGateForTests } from './workspace/activation/worktree-agent-activation-gate'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
-} from './worktree-activation-created-agent.test-fixture'
-import { registerWorktreeActivationReset } from './worktree-activation.test-fixture'
+} from './workspace/activation/worktree-activation-created-agent.test-fixture'
+import { registerWorktreeActivationReset } from './workspace/activation/worktree-activation.test-fixture'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/runtime-rpc-client', async (original) => ({

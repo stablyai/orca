@@ -3,8 +3,8 @@ import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publi
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
-import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
+import { openLinearIssueWorkspaceOrStart } from '@/lib/work-items/linear/linear-issue-workspace-open'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { useAppStore } from '@/store'

@@ -12,7 +12,7 @@ import {
   type SearchUrlOptions
 } from '../../../../shared/browser-url'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   classifyTabEntryQuery,
   getTabEntryAbsolutePathRemoteBlockedMessage,

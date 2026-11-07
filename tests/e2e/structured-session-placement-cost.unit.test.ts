@@ -15,7 +15,7 @@ import * as recordRows from '../../src/main/runtime/agent-session/records/agent-
 import * as storeDraft from '../../src/main/runtime/agent-session/records/agent-session-store-draft'
 import * as attribution from '../../src/main/runtime/agent-session/agent-session-runtime-attribution'
 import { sessionCrewChanges } from '../../src/main/runtime/orchestration/crew/crew-changes'
-import { StructuredAgentSessionHostRuntimeState } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-runtime-state'
+import { StructuredAgentSessionHostRuntimeState } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host-runtime-state'
 import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { Tab } from '../../src/shared/tab-types'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'

@@ -1,4 +1,4 @@
-import { subscribeToPtyData } from '../terminal-pane/pty-data-sidecar-subscriptions'
+import { subscribeToPtyData } from '../terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'

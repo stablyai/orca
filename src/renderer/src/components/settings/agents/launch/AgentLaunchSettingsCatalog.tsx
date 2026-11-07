@@ -53,7 +53,10 @@ import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
 import { buildCodexSessionSourceHomeControl } from '../../../agent/launch-settings/codex-session-source-home-control'
 import { buildAgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
-import { AgentChatRuntimeArea } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import {
+  AgentChatRuntimeArea,
+  chatUnavailableOnThisDesktop
+} from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
@@ -226,7 +229,7 @@ export function AgentLaunchSettingsCatalog({
     isDetected,
     isEnabled: isTuiAgentEnabled(agent.id, settings.disabledTuiAgents),
     isDefault: isDetected && settings.defaultTuiAgent === agent.id,
-    cmdOverride: isDetected ? settings.agentCmdOverrides[agent.id] : undefined,
+    cmdOverride: settings.agentCmdOverrides[agent.id],
     argsOverride:
       choicesSupported && settings.agentChoices
         ? (settings.agentChoices.userArgs[agent.id] ?? '')
@@ -264,7 +267,14 @@ export function AgentLaunchSettingsCatalog({
         agent: settings.defaultTuiAgent === agent.id ? 'blank' : agent.id
       }),
     onSetEnabled: (enabled) => save({ type: 'availability', agent: agent.id, enabled }),
-    onSaveOverride: (value) => mutate({ type: 'command', agent: agent.id, value }),
+    onSaveOverride: async (value) => {
+      const changed = value !== (settings.agentCmdOverrides[agent.id] ?? '')
+      await mutate({ type: 'command', agent: agent.id, value })
+      // Detection probes the override; local inventories reset on the settings change, a host's need a refresh.
+      if (changed && !local) {
+        void refresh()
+      }
+    },
     onSaveArgs: (value) =>
       typed
         ? saveUserArgs(agent.id, agent.label, value)
@@ -305,7 +315,7 @@ export function AgentLaunchSettingsCatalog({
         : undefined,
       chatRuntime:
         chatAgents.includes(agent.id) &&
-        managedChatAgents.has(agent.id) &&
+        (managedChatAgents.has(agent.id) || chatUnavailableOnThisDesktop(agent.id)) &&
         isTuiAgentEnabled(agent.id, settings.disabledTuiAgents) ? (
           <AgentChatRuntimeArea agent={agent.id} label={agent.label} />
         ) : undefined

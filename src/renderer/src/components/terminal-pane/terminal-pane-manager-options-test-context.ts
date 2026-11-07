@@ -27,7 +27,6 @@ export function createPaneManagerOptionsTestContext(
       getTabWideAgentHintLeafId: () => null,
       containerRef: { current: null },
       expandedStyleSnapshotRef: { current: new Map() },
-      paneFontSizesRef: { current: new Map() },
       paneCwdRef: { current: new Map() },
       panePtyBindingsRef: {
         current: new Map<number, PanePtyBinding>(binding ? [[1, binding]] : [])

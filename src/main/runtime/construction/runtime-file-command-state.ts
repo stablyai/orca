@@ -39,7 +39,7 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 import { createRuntimeEditorFileOpener } from '../files/editor-open-through-layout-owner'
 import { resolveNativeChatMediaPath } from '../../native-chat/native-chat-media-path'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -295,6 +295,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
   })
 
   protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
+    resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })

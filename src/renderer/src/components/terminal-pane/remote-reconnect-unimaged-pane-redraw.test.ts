@@ -1,25 +1,25 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks } from './pty-connection-test-async'
+import { flushAsyncTicks } from './pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   type ConnectCallbacks,
   type MockTransport
-} from './pty-connection-test-pane-fixtures'
+} from './pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+} from './pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from './pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from './pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
+} from './pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 // Without a recovered host image, idle differential TUIs need a real one-row resize then restoration; same-size SIGWINCH does not force Node repaint (#26887).
 
@@ -32,12 +32,15 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+  const { buildAgentStatusModuleMock } =
+    await import('./pty-connection/test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 vi.mock('./cache-timer-seeding', () => ({ shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false) }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
   return { ...actual, useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn }
@@ -49,11 +52,13 @@ const nextQueuedTransport = (): MockTransport => {
   }
   return next
 }
-vi.mock('./pty-transport', () => ({ createIpcPtyTransport: vi.fn(() => nextQueuedTransport()) }))
-vi.mock('./remote-runtime-pty-transport', () => ({
+vi.mock('./pty-transport/ipc/pty-transport', () => ({
+  createIpcPtyTransport: vi.fn(() => nextQueuedTransport())
+}))
+vi.mock('./pty-transport/remote-runtime/remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(() => nextQueuedTransport())
 }))
-vi.mock('./pty-dispatcher', async (importOriginal) => ({
+vi.mock('./pty-transport/delivery/pty-dispatcher', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getEagerPtyBufferHandle: vi.fn(() => undefined)
 }))
@@ -85,7 +90,7 @@ async function connectVisibleRemotePane(
   outcome: (() => Promise<Outcome>) | Outcome,
   opts: { visible?: boolean } = {}
 ): Promise<ReconnectedPane> {
-  const { connectPanePty } = await import('./pty-connection')
+  const { connectPanePty } = await import('./pty-connection/connect-pane-pty')
   const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = vi.fn()

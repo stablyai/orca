@@ -1,18 +1,11 @@
-import { journalInputSourceBody } from './journal-input-source'
-import { journalInputOrder } from './journal-input-order'
-import { JournalWriteProjection } from './journal-write-projection'
+import { journalInputSourceBody } from './input-order/journal-input-source'
+import { journalInputOrder } from './input-order/journal-input-order'
+import { JournalWriteProjection } from './writing/journal-write-projection'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { randomUUID } from 'node:crypto'
-import { retireCoveredJournalFloor } from './journal-commit'
-import { createJournalPublicReader, renderJournalStatus } from './journal-public-read'
-import type {
-  AgentJournalAcceptanceReceipt,
-  AgentJournalItemBody,
-  AgentJournalMessageItem,
-  AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalTurnLifecycle
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { retireCoveredJournalFloor } from './context-epochs/journal-commit'
+import { createJournalPublicReader, renderJournalStatus } from './projection/journal-public-read'
+import type * as journal from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentJournalItemIdentity,
   AgentJournalCursor,
@@ -23,41 +16,44 @@ import type { AgentSessionContextUsage } from '../../../shared/agent-session/age
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { journalWroteBeforeOpen } from './journal-cursor'
-import type { JournalHostDatabase } from './journal-host-database'
+import { journalWroteBeforeOpen } from './replay/journal-cursor'
+import type { JournalHostDatabase } from './database/journal-host-database'
 import {
   markJournalPendingSubmissionsUnknown,
   rejectJournalPendingSubmissions,
   rejectJournalQueuedSubmissions
-} from './journal-pending-submission-recovery'
-import {
-  createJournalReducerState,
-  resolveJournalItemId,
-  type JournalReducerState
-} from './journal-reducer'
-import { journalTombstoneRowBuilder } from './journal-row-builders'
-import type {
-  AgentSessionJournalOptions,
-  JournalItemLinkageVisitor,
-  JournalLifecycleBatchInput,
-  JournalPlannedLifecycleBatchInput,
-  JournalTombstoneInput
-} from './journal-store-contracts'
+} from './submissions/journal-pending-submission-recovery'
+import { createJournalReducerState, type JournalReducerState } from './projection/journal-reducer'
+
+import { resolveJournalItemId } from './projection/journal-item-echo'
+
+import { journalTombstoneRowBuilder } from './writing/journal-row-builders'
+import type * as contracts from './journal-store-contracts'
 import {
   journalQueueResumeRowBuilder,
   journalQueueReopenRowBuilder,
   journalStopEventRowBuilder
-} from './journal-stop-and-resume-rows'
-import type { AgentJournalEpochReason, JournalStopEvent, JournalRow } from './journal-row-schema'
-import type { JournalOperationReceipt } from './journal-row-writer'
-import { JournalWriteQueue } from './journal-write-queue'
-import { journalItemExecutionFence, journalItemProvenance } from './journal-item-provenance'
-import { createJournalStoreCollaborators } from './journal-store-collaborators'
-import { journalThreadGoalSource, type JournalThreadGoalSource } from './journal-thread-goal-source'
+} from './context-epochs/journal-stop-and-resume-rows'
+import type {
+  AgentJournalEpochReason,
+  JournalStopEvent,
+  JournalRow
+} from './durable-rows/journal-row-schema'
+import type { JournalOperationReceipt } from './writing/journal-row-writer'
+import { JournalWriteQueue } from './writing/journal-write-queue'
+import {
+  journalItemExecutionFence,
+  journalItemProvenance
+} from './projection/journal-item-provenance'
+import { createJournalStoreCollaborators } from './store-lifecycle/journal-store-collaborators'
+import {
+  journalThreadGoalSource,
+  type JournalThreadGoalSource
+} from './projection/journal-thread-goal-source'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
-import * as journalInput from './journal-input-obligations'
-import * as journalContext from './journal-context-cursor'
+import * as journalInput from './input-order/journal-input-obligations'
+import * as journalContext from './context-epochs/journal-context-cursor'
 
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
@@ -86,7 +82,7 @@ export class AgentSessionJournal {
   readonly stops: JournalCollaborators['stops']
   readonly context: JournalCollaborators['context']
 
-  constructor(options: AgentSessionJournalOptions) {
+  constructor(options: contracts.AgentSessionJournalOptions) {
     this.identity = options.identity
     this.database = options.database
     this.state = createJournalReducerState(options.identity.sessionId, '')
@@ -202,26 +198,27 @@ export class AgentSessionJournal {
 
   /** Visit without allocating/sorting a snapshot. */
   visitItems = (
-    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+    visit: (itemId: string, sequence: number, body: journal.AgentJournalItemBody) => void
   ): void => this.visitItemsWithLinkage(visit)
 
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
-  itemBody = (itemId: string): AgentJournalItemBody | null => this.item(itemId)?.body ?? null
+  itemBody = (itemId: string): journal.AgentJournalItemBody | null =>
+    this.item(itemId)?.body ?? null
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
     this.state.stoppedHistoryCarried
 
-  submissionBody = (clientMessageId: string): AgentJournalMessageItem | null =>
+  submissionBody = (clientMessageId: string): journal.AgentJournalMessageItem | null =>
     journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
 
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
-  item = (itemId: string): AgentJournalRenderItem | null =>
+  item = (itemId: string): journal.AgentJournalRenderItem | null =>
     journalInput.readJournalInputItem(this.state, itemId)
 
   /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
    *  earlier run of this session left. */
-  visitItemsWithLinkage = (visit: JournalItemLinkageVisitor): void =>
+  visitItemsWithLinkage = (visit: contracts.JournalItemLinkageVisitor): void =>
     journalInput.visitJournalInputItems(this.state, visit)
 
   /** Remember publication even after a rewind removes the row. */
@@ -229,10 +226,10 @@ export class AgentSessionJournal {
     this.state.items.has(itemId) || this.state.tombstones.has(itemId)
 
   /** Read the journal's running turn without allocating a snapshot; host projection decides current work. */
-  runningTurn = (): { item: AgentJournalRenderItem; turnId: string } | null =>
+  runningTurn = (): { item: journal.AgentJournalRenderItem; turnId: string } | null =>
     runningStructuredAgentSessionTurnItemBySequence(this.state.items.values())
 
-  newestTurn = (): AgentJournalTurnLifecycle | null =>
+  newestTurn = (): journal.AgentJournalTurnLifecycle | null =>
     readAgentJournalTurn(journalInputOrder(this.state).newestTurn.read()?.body)
 
   threadGoalSource = (): JournalThreadGoalSource =>
@@ -257,7 +254,7 @@ export class AgentSessionJournal {
   /** Excludes client actions and recovery bookkeeping. */
   lastProviderActivityAt = (fence: number) => this.state.providerActivityAt.get(fence)
 
-  submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
+  submissions = (): journal.AgentJournalSubmission[] => [...this.state.submissions.values()]
 
   historyOrigin = () => this.state.historyOrigin
 
@@ -267,7 +264,7 @@ export class AgentSessionJournal {
     this.inputOrder.unsettledSubmissions().filter((entry) => entry.dispatchState === 'pending')
 
   /** Reconnecting clients read durable acceptance instead of resending. */
-  receiptFor = (clientMessageId: string): AgentJournalAcceptanceReceipt | null =>
+  receiptFor = (clientMessageId: string): journal.AgentJournalAcceptanceReceipt | null =>
     journalContext.journalContextReceipt(this.state, clientMessageId)
 
   physicalCursor = (): AgentJournalCursor => journalContext.physicalJournalCursor(this.state)
@@ -301,7 +298,7 @@ export class AgentSessionJournal {
 
   appendTombstone(
     identity: AgentJournalItemIdentity,
-    { fence }: JournalTombstoneInput,
+    { fence }: contracts.JournalTombstoneInput,
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     const itemId = agentJournalItemKey(identity)
@@ -313,7 +310,7 @@ export class AgentSessionJournal {
 
   withdrawGoalObjective(
     identity: AgentJournalItemIdentity,
-    options: JournalTombstoneInput
+    options: contracts.JournalTombstoneInput
   ): Promise<AgentJournalCursor> {
     return this.appendTombstone(
       identity,
@@ -348,11 +345,11 @@ export class AgentSessionJournal {
     }
   }
 
-  appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
+  appendLifecycleBatch(input: contracts.JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.lifecycleBatchAppender.append(input)
   }
 
-  appendPlannedLifecycleBatch = (input: JournalPlannedLifecycleBatchInput) =>
+  appendPlannedLifecycleBatch = (input: contracts.JournalPlannedLifecycleBatchInput) =>
     this.lifecycleBatchAppender.appendPlanned(input)
 
   appendSteps: typeof this.stepWriter.append = (steps) => this.stepWriter.append(steps)
@@ -380,7 +377,7 @@ export class AgentSessionJournal {
   rejectQueuedSubmissions = (
     fence: number,
     rejection: AgentJournalDispatchRejection,
-    which?: (submission: AgentJournalSubmission) => boolean
+    which?: (submission: journal.AgentJournalSubmission) => boolean
   ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** Reset provider presentation and invalidate public cursors, retaining canonical input. */

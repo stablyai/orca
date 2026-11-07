@@ -4,10 +4,10 @@ import {
   parseWorkerTerminalPriorOwnerIds
 } from './orchestration/db/pane-key-match'
 import { getFollowUpDispatch } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
 import { potentiallyLiveRemoteAttachmentSql } from './orchestration/db/federation/remote-attachment-liveness'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import {
   tolerant,
   agentSenderExecutionKey as executionKey,

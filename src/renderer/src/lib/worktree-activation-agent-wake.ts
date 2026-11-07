@@ -1,9 +1,9 @@
 import { useAppStore } from '@/store'
-import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
-import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import type { GatedEmptyWorkspaceReseedIntent } from './worktree-initial-terminal-seeding'
+import { gateAndReseedEmptyWorkspace } from './workspace/activation/worktree-activation-gated-empty-reseed'
+import type { GatedEmptyWorkspaceReseedIntent } from './workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 
 const canInspectAgentActivationInventory = (): boolean =>
   typeof window !== 'undefined' &&

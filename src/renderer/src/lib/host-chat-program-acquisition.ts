@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import type { ProspectiveWorkspace } from './agent-launch-route-input'
+import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'
 import {
   agentsOfferedForLaunch,
   resolveChatProgramContext,
@@ -16,6 +16,7 @@ import {
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { AppState } from '@/store/types'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getDetectionTargetIdentityForWorktree,
@@ -89,11 +90,12 @@ export async function acquireAgentLaunchChoices(
   workspace: ProspectiveWorkspace,
   detect: () => Promise<readonly TuiAgent[] | null>,
   signal?: AbortSignal,
-  totalDeadline = false
+  totalDeadline = false,
+  getState: () => AppState = useAppStore.getState
 ) {
-  let bound = resolveChatProgramContext(useAppStore.getState(), workspace)
+  let bound = resolveChatProgramContext(getState(), workspace)
   let target = workspace.worktreeId
-    ? getDetectionTargetIdentityForWorktree(useAppStore.getState(), workspace.worktreeId)
+    ? getDetectionTargetIdentityForWorktree(getState(), workspace.worktreeId)
     : null
   let ended = false
   let lease = holdChatProgramFacts(bound)
@@ -105,9 +107,9 @@ export async function acquireAgentLaunchChoices(
     rejectCancelled(failure)
   }
   const check = (): void => {
-    const next = resolveChatProgramContext(useAppStore.getState(), workspace)
+    const next = resolveChatProgramContext(getState(), workspace)
     const nextTarget = workspace.worktreeId
-      ? getDetectionTargetIdentityForWorktree(useAppStore.getState(), workspace.worktreeId)
+      ? getDetectionTargetIdentityForWorktree(getState(), workspace.worktreeId)
       : null
     if (
       (bound.executionHostId && next.executionHostId !== bound.executionHostId) ||
@@ -166,7 +168,7 @@ export async function acquireAgentLaunchChoices(
       }
     } while (!ended)
     const inventory = workspace.worktreeId
-      ? readAgentInventoryForWorktree(useAppStore.getState(), workspace.worktreeId)
+      ? readAgentInventoryForWorktree(getState(), workspace.worktreeId)
       : null
     const trustworthy = inventory
       ? inventory.state === 'successful' || inventory.ids?.length
@@ -175,7 +177,7 @@ export async function acquireAgentLaunchChoices(
       : detected
     return {
       detected: trustworthy,
-      offered: agentsOfferedForLaunch(useAppStore.getState(), workspace, trustworthy)
+      offered: agentsOfferedForLaunch(getState(), workspace, trustworthy)
     }
   } finally {
     ended = true

@@ -2,14 +2,14 @@ import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
   type HttpLinkActionDestinations
-} from '@/lib/http-link-destinations'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+} from '@/lib/browser/navigation/http-link-destinations'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { AppState } from '@/store/types'
 import {
   buildFileLinkActions,
   type FileLinkActions,
   type TerminalFileLinkActionDeps
-} from '@/components/terminal-pane/terminal-file-link-actions'
+} from '@/components/terminal-pane/links/files/terminal-file-link-actions'
 import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { useAppStore } from '../../store'
 import {

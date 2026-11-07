@@ -1,4 +1,4 @@
-import { isImageDropPath } from '../terminal-pane/terminal-drop-image-path'
+import { isImageDropPath } from '../../../../shared/image-path-paste'
 import { NATIVE_CHAT_PASTE_FOLDER } from '../../../../shared/native-chat/input/native-chat-paste-folder'
 import { isNativeChatPastedImagePath } from '../../../../shared/native-chat/native-chat-image-label'
 export {

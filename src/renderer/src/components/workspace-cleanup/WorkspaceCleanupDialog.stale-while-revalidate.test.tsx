@@ -44,7 +44,7 @@ vi.mock('sonner', () => ({
   })
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: holders.activateAndRevealWorktree
 }))
 

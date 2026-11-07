@@ -30,6 +30,7 @@
   },
   "files": [
     "src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx",
+    "src/session/native-chat/transcript/mobile-native-chat-recorded-projection.test.ts",
     "../src/types/build-constants.d.ts"
   ],
   "include": [],

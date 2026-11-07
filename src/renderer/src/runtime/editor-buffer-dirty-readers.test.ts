@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'
-import { buildEditorSessionData } from '../lib/workspace-session'
+import { buildEditorSessionData } from '../lib/workspace/persistence/workspace-session'
 import { buildRuntimeMobileOpenFilesProjection } from './sync-runtime-graph/sync-projections'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
 import { makeState } from './sync-runtime-graph-test-harness'

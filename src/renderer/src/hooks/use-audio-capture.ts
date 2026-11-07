@@ -8,6 +8,7 @@ import {
   toPublicDictationMeterState,
   type DictationMeterState
 } from '../../../shared/dictation-audio-meter'
+import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -24,14 +25,12 @@ type StartAudioCaptureOptions = {
   microphoneDeviceLabel?: string | null
   /** Fires when the live input device disappears mid-capture */
   onCaptureLost?: () => void
+  /** Fires when the host's session accepts no more audio (cloud upload cap) */
+  onAudioLimitReached?: () => void
 }
 
 export type StartAudioCaptureResult = {
   fellBackToDefaultMicrophone: boolean
-}
-
-type StopAudioCaptureOptions = {
-  preserveBufferedAudio?: boolean
 }
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
@@ -219,6 +218,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           }
           void window.api.speech
             .feedAudio(samples, actualRate, sessionIdRef.current)
+            .then((limitReached) => limitReached && options.onAudioLimitReached?.())
             .catch(() => undefined)
         }
 
@@ -314,7 +314,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const getCapturedChunkCount = useCallback(() => capturedChunkCountRef.current, [])
 
   const stop = useCallback(
-    (options: StopAudioCaptureOptions = {}) => {
+    (options: StopCaptureOptions = {}) => {
       startRequestRef.current += 1
       isCapturingRef.current = false
       bufferAudioRef.current = false
@@ -327,9 +327,12 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     [cleanupCaptureResources, resetBufferedAudio, resetMeter]
   )
 
+  const finish = useAudioCaptureStopTail(isCapturingRef, startRequestRef, stop)
+
   return {
     start,
     stop,
+    finish,
     flushBufferedAudio,
     discardBufferedAudio,
     getCapturedChunkCount,

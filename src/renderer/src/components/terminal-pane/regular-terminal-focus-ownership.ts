@@ -3,7 +3,7 @@ import {
   refreshTerminalImeInputContext,
   scheduleNextFrame,
   type TerminalImeInputContextRefocusScheduler
-} from './terminal-ime-input-context-refresh'
+} from './input/ime/terminal-ime-input-context-refresh'
 
 export type TerminalInputFocusSync = (focused: boolean) => void
 export type RefocusScheduler = TerminalImeInputContextRefocusScheduler

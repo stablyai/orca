@@ -22,7 +22,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, clientId },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -37,6 +37,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       const state = {
         runtime,
         connectionId,
+        viewerDeviceId: clientId,
         sendBinary,
         registerBinaryStreamHandler,
         signal,

@@ -60,13 +60,13 @@ vi.mock('./NativeChatPaneFileDropSurface', () => ({
 vi.mock('../tab-group/RetainedPaneHost', () => ({
   RetainedPaneHost: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', async (original) => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   focusRendererTerminalHandle: transport.focusRenderer
 }))
 
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
-import * as sleepingResume from '@/lib/resume-sleeping-agent-session'
+import * as sleepingResume from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import * as openExistingStructuredSession from '@/lib/open-existing-structured-session'
 import { structuredSessionOpenFeedback } from '@/lib/activate-ai-vault-structured-session'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'

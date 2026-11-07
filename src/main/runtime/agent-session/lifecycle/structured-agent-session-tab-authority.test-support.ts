@@ -1,5 +1,5 @@
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   readPersistedTestAgentSessionStore,
@@ -8,7 +8,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,18 +20,14 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import {
-  createStore,
-  closeTestStores,
-  testState
-} from '../../../persistence/persistence-test-harness'
+import * as persistence from '../../../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../../../orca-profiles/profile-storage-paths'
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
@@ -45,19 +41,28 @@ export let root: string
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-tab-authority-'))
-  testState.dir = root
+  persistence.testState.dir = root
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 afterEach(async () => {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
-  await closeTestStores()
+  await persistence.closeTestStores()
   await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  protected override structuredAgentCatalogDependencies() {
+    const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
+    return {
+      ...super.structuredAgentCatalogDependencies(),
+      resolveClaudeCommand: missing,
+      resolveCodexCommand: missing
+    }
+  }
+
   protected override async refreshMobileSessionPtyRecords() {
     return new Set<string>()
   }
@@ -72,7 +77,7 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 export async function authorityProfile(
   ids: string[] = [B],
   options: { visible?: string[]; records?: string[] } = {},
-  profile = createStore()
+  profile = persistence.createStore()
 ) {
   initOrcaProfilePaths()
   const group = profile.createProjectGroup({
@@ -255,9 +260,9 @@ export async function physicalReload(rig: AuthorityRig) {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
-  await closeTestStores()
+  await persistence.closeTestStores()
   await closeTestJournalHostDatabases()
-  const profile = createStore()
+  const profile = persistence.createStore()
   const fresh = await openAuthorityRuntime({ ...rig, profile }, new AuthorityRuntime(profile))
   await fresh.runtime.restoreStructuredAgentSessionTabs()
   await chatTabCommandsSettled()
