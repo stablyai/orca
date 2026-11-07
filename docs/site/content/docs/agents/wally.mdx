@@ -1,0 +1,85 @@
+---
+title: How to use Wally models in Orca ADE
+description: Run open-weight models from Wally in OpenCode, Claude Code, Codex, and other CLI agents inside Orca worktrees.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+[Wally](https://www.runwally.com) by RunAnywhere serves open-weight models such as DeepSeek V4.1 Flash, GLM-5.3 Flash, and Kimi K3 through an OpenAI-compatible API. Wally works in Orca through the agent harness you already use: point the harness at Wally, then launch it from Orca's picker or an Orca terminal.
+
+Orca supplies the isolated worktree, terminal panes, browser tab, review flow, and session management. Your Wally account and agent config supply the model access.
+
+<Callout title="Prerequisite">
+  OpenCode and other harnesses need a Wally API key from the [RunAnywhere
+  console](https://console.runanywhere.ai); the Wally CLI signs in through the browser instead.
+  Wally bills usage per token; see [pricing](https://www.runwally.com/pricing). Orca does not
+  include or resell Wally access.
+</Callout>
+
+<Callout title="Source">
+  The live model list is public at `https://inference.runanywhere.ai/v1/models`, with each model's
+  context window, output limit, input types, and price. Check it before substituting a model; the
+  [Wally API docs](https://docs.runanywhere.ai/wally-cloud/api) cover the request format.
+</Callout>
+
+## OpenCode
+
+OpenCode ships Wally as the `wally` provider and reads the key from `WALLY_API_KEY`. To use it in Orca:
+
+1. Open **Settings → Agents** and expand **OpenCode**.
+1. In **Environment**, add `WALLY_API_KEY=<your key>`. You can export it from your shell profile instead.
+1. In **Arguments**, add `--model wally/deepseek-v4.1-flash`, or pick a `wally/` model with `/models` inside OpenCode.
+1. Launch OpenCode from the agent picker.
+
+Run `opencode models` with the key set to list the `wally/` models your OpenCode version knows. On SSH or remote hosts, install OpenCode and set the key on the host that runs the workspace.
+
+## Claude Code, Codex, and other agents through the Wally CLI
+
+The [Wally CLI](https://docs.runanywhere.ai/integrations) starts Claude Code, Codex, OpenCode, and other agents already pointed at a Wally model. Install it on macOS (Apple Silicon) or Linux (x86_64 or arm64, glibc 2.39 or newer):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/RunanywhereAI/wally/main/install.sh | sh
+```
+
+On Windows, install it from PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/RunanywhereAI/wally/main/install.ps1 | iex
+```
+
+Open a new terminal so `wally` is on your `PATH`, then sign in once:
+
+```bash
+wally account login
+```
+
+Then run the agent you want in an Orca terminal in the worktree:
+
+```bash
+wally claude-code -m deepseek-v4.1-flash
+wally codex -m deepseek-v4.1-flash
+wally opencode --cloud -m glm-5.3-flash
+```
+
+Run `wally --help` for the other agents it can start.
+
+## Other OpenAI-compatible harnesses
+
+For agent harnesses that expose an OpenAI-compatible provider:
+
+1. Open the harness settings outside or inside Orca.
+1. Choose the OpenAI-compatible provider option, or the Wally provider option if the harness has one.
+1. Set the base URL to `https://inference.runanywhere.ai/v1`.
+1. Add your Wally API key.
+1. Set the model name, for example `deepseek-v4.1-flash` or `glm-5.3-flash`.
+1. Set the context window size from the model list if the harness exposes that field.
+1. Enable image input only for models whose `input_modalities` include `image`.
+
+| Model                 | Context   | Max output | Input       |
+| --------------------- | --------- | ---------- | ----------- |
+| `deepseek-v4.1-flash` | 1,048,576 | 65,536     | Text, image |
+| `glm-5.3-flash`       | 1,048,576 | 131,072    | Text        |
+
+After saving, launch the harness from Orca's agent picker. Orca will run the same configured CLI in the selected worktree.
+
+The key rule is simple: configure Wally wherever the harness stores provider/model settings, then let Orca launch that harness in the right worktree.
