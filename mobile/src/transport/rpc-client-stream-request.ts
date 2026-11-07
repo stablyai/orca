@@ -6,7 +6,9 @@ export type RpcStreamingListener = (result: unknown) => void
 
 export type RpcStreamSubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
+  // Repeat these top-level fields on subscription replay and unsubscribe.
   envelope?: RpcEnvelopeFields
+  // The owner decides when a new connection may re-send this stream (a page waits for its verdict).
   holdReplay?: RpcStreamReplayHold
 }
 

@@ -57,16 +57,12 @@ export function createBridgeVerdictHold(
   let openAtInit: boolean | null = null
   let parked: DesktopBound[] = []
   // Keyed by page stream id: a later connection's re-send replaces the one it superseded.
-  let replays = new Map<string, () => void>()
-  const waiting = (): boolean => parked.length > 0 || replays.size > 0
+  const replays = new Map<string, () => void>()
+  // While anything waits, later frames wait behind it so the verdict's flush keeps page order.
+  const passes = (): boolean => open() && parked.length === 0 && replays.size === 0
   const take = (): DesktopBound[] => {
     const taken = parked
     parked = []
-    return taken
-  }
-  const takeReplays = (): (() => void)[] => {
-    const taken = [...replays.values()]
-    replays = new Map()
     return taken
   }
   return {
@@ -80,10 +76,9 @@ export function createBridgeVerdictHold(
         parked = parked.filter((held) => held.id !== message.id)
         return false
       }
-      // While anything waits, later frames wait behind it so the verdict's flush keeps page order.
       if (
         !isDesktopBound(message) ||
-        (open() && !waiting()) ||
+        passes() ||
         message.method === 'status.get' ||
         PHONE_ONLY_NATIVE_VERBS.has(message.method)
       ) {
@@ -97,7 +92,7 @@ export function createBridgeVerdictHold(
       return false
     },
     holdReplay: (id, resend) => {
-      if (open() && !waiting()) {
+      if (passes()) {
         return false
       }
       replays.set(id, resend)
@@ -109,12 +104,14 @@ export function createBridgeVerdictHold(
       }
       // Streams the page already held resume before anything it sent while it waited.
       if (open()) {
-        takeReplays().forEach((resend) => resend())
+        const resends = [...replays.values()]
+        replays.clear()
+        resends.forEach((resend) => resend())
         take().forEach(dispatch)
       }
     },
     settle: (notify) => {
-      replays = new Map()
+      replays.clear()
       for (const message of take()) {
         if (notify) {
           sendError(message.id, new BridgeHostDisposedError())

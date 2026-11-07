@@ -77,7 +77,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const verdict = createBridgeVerdictHold(options.readHostStatus, sendError)
   const subscriptions = new BridgeHostSubscriptions({
     client,
-    holdReplay: (id, resend) => verdict.holdReplay(id, resend),
+    holdReplay: verdict.holdReplay,
     post: sendJson,
     onBinaryFrameDropped: ({ id, bytes, droppedOnStream }) => {
       options.onDiagnostic?.({ kind: 'binary-frame-dropped', id, bytes, dropped: droppedOnStream })
