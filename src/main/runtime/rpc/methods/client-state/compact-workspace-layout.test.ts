@@ -75,3 +75,24 @@ it('keeps both existing layouts writable to an older strict host', async () => {
     })
   ).toMatchObject({ ok: true, result: { settings: { compactWorktreeCards: false } } })
 })
+
+it('lets an older client leave a compact header using its existing layout picker', async () => {
+  const dispatcher = new RpcDispatcher({ runtime: runtime(), methods: CLIENT_UI_METHODS })
+  await dispatcher.dispatch({
+    id: 'header',
+    authToken: 'tok',
+    method: 'settings.update',
+    params: { compactWorktreeCards: false, compactWorktreeHeader: true }
+  })
+  expect(
+    await dispatcher.dispatch({
+      id: 'old-client',
+      authToken: 'tok',
+      method: 'settings.update',
+      params: { compactWorktreeCards: true }
+    })
+  ).toMatchObject({
+    ok: true,
+    result: { settings: { compactWorktreeCards: true, compactWorktreeHeader: false } }
+  })
+})

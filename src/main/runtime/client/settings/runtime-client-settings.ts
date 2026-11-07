@@ -141,6 +141,12 @@ export class RuntimeClientSettingsController {
     this.store.updateSettings(
       {
         ...otherUpdates,
+        // An older client's layout picker cannot name the compact-header flag.
+        ...(beforeSettings.compactWorktreeHeader === true &&
+        updates.compactWorktreeCards !== undefined &&
+        updates.compactWorktreeHeader === undefined
+          ? { compactWorktreeHeader: false }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(

@@ -65,18 +65,25 @@ const layout: TerminalLayoutSnapshot = {
 function fixture(
   compact: boolean,
   expanded = false,
-  identity = { title: 'main', branch: 'main', width: 360 }
+  identity: { title: string; branch: string; width: number; folderPath?: string; head?: string } = {
+    title: 'main',
+    branch: 'main',
+    width: 360
+  }
 ) {
+  const previewRepo = identity.folderPath ? { ...repo, kind: 'folder' as const } : repo
   const previewWorkspace = {
     ...workspace,
     displayName: identity.title,
-    branch: `refs/heads/${identity.branch}`
+    branch: identity.branch ? `refs/heads/${identity.branch}` : '',
+    path: identity.folderPath ?? workspace.path,
+    head: identity.head ?? workspace.head
   }
   return defineFixture({
     width: identity.width,
     store: {
       settings: { ...getDefaultSettings('/home/fixture'), compactWorktreeHeader: compact },
-      repos: [repo],
+      repos: [previewRepo],
       worktreesByRepo: { [repo.id]: [previewWorkspace] },
       activeWorktreeId: workspace.id,
       activeWorkspaceExecutionHostId: 'local',
@@ -115,7 +122,12 @@ function fixture(
           <span>Projects</span>
           <SidebarWorkspaceOptionsMenu />
         </div>
-        <WorktreeCard worktree={previewWorkspace} repo={repo} isActive nativeDragEnabled={false} />
+        <WorktreeCard
+          worktree={previewWorkspace}
+          repo={previewRepo}
+          isActive
+          nativeDragEnabled={false}
+        />
       </div>
     ),
     interact: expanded
@@ -143,4 +155,17 @@ export const narrow = fixture(true, true, {
   title: 'Image editor',
   branch: 'feature/image-comments',
   width: 260
+})
+
+export const folder = fixture(true, true, {
+  title: 'Assets',
+  branch: '',
+  width: 360,
+  folderPath: '/home/fixture/projects/assets'
+})
+export const detached = fixture(true, true, {
+  title: 'Inspect commit',
+  branch: '',
+  width: 360,
+  head: 'abc1234567890abcdef1234567890abcdef12345678'
 })

@@ -96,8 +96,8 @@ export function useHostViewSettings(args: {
           ? withPendingViewChanges(applyDesktopViewSettings(viewRef.current, ui), waiting)
           : viewRef.current
         if (hostSettings.accepted) {
-          const { compactWorktreeCards, compactWorktreeHeader, newCardStyle } = hostSettings.value
-          next = { ...next, compactWorktreeCards, compactWorktreeHeader, newCardStyle }
+          const { compactWorktreeCards, newCardStyle } = hostSettings.value
+          next = { ...next, compactWorktreeCards, newCardStyle }
         }
         if (next !== viewRef.current) {
           applyViewState(next)
@@ -211,10 +211,7 @@ export function useHostViewSettings(args: {
       if (!client) {
         return
       }
-      const updates = getWorktreeCardModeUpdates(
-        layout === 'compact' ? 'Compact' : 'Default',
-        viewRef.current
-      )
+      const updates = getWorktreeCardModeUpdates(layout === 'compact' ? 'Compact' : 'Default')
       void (async () => {
         try {
           const reply = await hostCardLayoutWrite.request(client, updates.settings)
@@ -227,8 +224,7 @@ export function useHostViewSettings(args: {
         persistViewSettings(
           {
             worktreeCardProperties: updates.ui.worktreeCardProperties,
-            compactWorktreeCards: updates.settings.compactWorktreeCards,
-            compactWorktreeHeader: false
+            compactWorktreeCards: updates.settings.compactWorktreeCards
           },
           { cardLayoutPreset: true }
         )

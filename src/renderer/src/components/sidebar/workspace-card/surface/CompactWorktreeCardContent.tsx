@@ -21,6 +21,9 @@ export function CompactWorktreeCardContent({
   const presentation = buildWorktreeCardPresentation(card)
   const branchLabel =
     !card.isFolder && card.branch !== card.visibleCardTitle.trim() ? card.branch : undefined
+  const hoverIdentity = card.isFolder
+    ? card.worktree.path
+    : (card.detachedHeadDisplay?.sidebarLabel ?? card.identityDisplay ?? card.branch)
   const indicators = (
     <>
       {renderWorktreeCardIndicators(card)}
@@ -38,7 +41,7 @@ export function CompactWorktreeCardContent({
   const renderHeader = (summary: React.ReactNode): React.ReactElement => (
     <WorktreeCardIdentityHover
       card={card}
-      branchName={card.identityDisplay ?? card.branch}
+      branchName={hoverIdentity}
       workspaceTitle={card.visibleCardTitle}
     >
       <div data-compact-workspace-header="true">
