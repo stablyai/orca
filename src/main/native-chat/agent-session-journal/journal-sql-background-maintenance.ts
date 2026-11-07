@@ -29,11 +29,11 @@ export class JournalSqlBackgroundMaintenance {
     this.running ??= this.run().finally(() => {
       this.running = undefined
     })
-    return this.running.then(() => {
-      if (!this.stopped.signal.aborted && (this.discover || this.sweep)) {
-        return this.requestSweep()
-      }
-    })
+    return this.running.then(() =>
+      !this.stopped.signal.aborted && (this.discover || this.sweep)
+        ? this.requestSweep()
+        : undefined
+    )
   }
 
   stop(): void {

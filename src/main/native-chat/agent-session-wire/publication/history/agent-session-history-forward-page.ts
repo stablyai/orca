@@ -30,7 +30,7 @@ export function readAgentSessionForwardHistory(
   cursor: AgentJournalCursor | undefined,
   limit: number,
   reader: Pick<HistoryReader, 'form' | 'budgetBytes'>,
-  readSnapshot: (ids: ReadonlySet<string>) => AgentJournalSnapshot
+  readSnapshot: (ids: Set<string>) => AgentJournalSnapshot
 ): AgentSessionHistoryResult {
   if (!cursor) {
     // Why: forward paging replays rows after a position; without one there is

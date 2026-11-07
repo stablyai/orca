@@ -19,8 +19,13 @@ import { JournalProjectionStaleError } from './journal-sql-meta'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
-import type { AgentSessionHistoryRequest } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentSessionHistoryPage,
+  AgentSessionHistoryRequest
+} from '../../../shared/agent-session/agent-session-wire'
 import { join } from 'node:path'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
@@ -235,7 +240,10 @@ it('shrinks forward rows before advancing and refreshes a dependent Stop note fr
   )
   await fixture.journal.appendItem(
     { provider: 'orca', clientMessageId: 'stop:turn-1' },
-    { kind: 'status', text: 'Waiting', failure: { kind: 'cancelUnconfirmed' } },
+    {
+      kind: 'status',
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+    },
     { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn-1' } }
   )
   const held = fixture.journal.cursor()
@@ -253,7 +261,7 @@ it('shrinks forward rows before advancing and refreshes a dependent Stop note fr
   )
   const db = convert()
   const reader = { budgetBytes: 1024, form: measureHistoryItem }
-  const pages = []
+  const pages: AgentSessionHistoryPage[] = []
   let cursor = held
   for (;;) {
     const page = readJournalSqlHistoryPage(
