@@ -119,7 +119,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       if (outcome === 'unknown') {
         // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
         settleMobileNativeChatInFlightSend(inFlightId)
-        restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+        if (queued) {
+          intent?.onHandBack?.()
+        } else {
+          restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+        }
         return outcome
       }
       settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')

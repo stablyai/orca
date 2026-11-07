@@ -116,6 +116,23 @@ describe('useMobileNativeChatOfflineQueue', () => {
     expect(readMobileNativeChatOfflineSends(SCOPE)).toEqual([])
   })
 
+  it('keeps a queued message paused when its send hands it back before returning', async () => {
+    const send = vi.fn<Send>(async (_text, intent) => {
+      intent?.onHandBack?.()
+      return true
+    })
+    await mount('disconnected', send)
+    await act(async () => {
+      await queue?.send('/compact')
+    })
+    await reconnect(send)
+
+    expect(send).toHaveBeenCalledOnce()
+    expect(
+      readMobileNativeChatOfflineSends(SCOPE).map(({ text, paused }) => [text, paused])
+    ).toEqual([['/compact', 'failed']])
+  })
+
   it('brings an unconfirmed queued message back paused instead of sending it again', async () => {
     let handBack: (() => void) | undefined
     const send = vi.fn<Send>(async (_text, intent) => {

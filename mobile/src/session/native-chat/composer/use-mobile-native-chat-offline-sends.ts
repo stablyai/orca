@@ -77,7 +77,9 @@ export function useMobileNativeChatOfflineQueue(args: {
       beginMobileNativeChatOfflineSend(target, queued.id)
       // A tab closed meanwhile took its queue with it; a late answer must not bring one back.
       const destination = mobileNativeChatDraftDestination(target)
+      let handedBack = false
       const putBack = () => {
+        handedBack = true
         if (destination.active) {
           returnMobileNativeChatOfflineSend(target, queued)
         }
@@ -91,7 +93,8 @@ export function useMobileNativeChatOfflineQueue(args: {
           onHandBack: putBack
         })
       } finally {
-        settleMobileNativeChatOfflineSend(target, queued.id, sent)
+        // A hand-back during the send (a lost command reply) already returned it paused; keep it.
+        settleMobileNativeChatOfflineSend(target, queued.id, sent && !handedBack)
         drainingRef.current = false
         setDraining(false)
       }
