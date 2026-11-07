@@ -21,6 +21,7 @@ import {
 } from './journal-sql-conversion'
 import { sweepJournalSqlProjectionPage } from './journal-sql-projection-sweep'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
+import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
 import { journalSqlControlSnapshot } from './journal-sql-control-export.test-fixture'
 import { journalSqlLifecycleRows } from './journal-sql-reducer-rows.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
@@ -117,4 +118,64 @@ it('sweeps a retired epoch in bounded pages and keeps every current one', () => 
   expect(pages).toBeGreaterThan(1)
   expect(rows('retired')).toBe(0)
   expect(rows('current')).toBe(kept)
+})
+
+it('upgrades the prior physical shape before reconverting stale metadata, preserving saved history', () => {
+  const { db } = database
+  database.transaction((tx) => {
+    publishTestJournalEpoch(tx, 'session', 'epoch')
+    publishJournalOutcomeEpoch(tx, 'session', 'epoch', journalSqlLifecycleRows()).adopt()
+    convertJournalSqlProjection(tx, 'session')
+  })
+  const sources = () => ({
+    rows: db.prepare('SELECT * FROM journal_rows').all(),
+    outcomes: db.prepare('SELECT * FROM journal_outcomes').all(),
+    epochs: db.prepare('SELECT * FROM journal_outcome_epochs').all()
+  })
+  const saved = sources()
+  const expected = journalSqlControlSnapshot(
+    new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
+  )
+  db.exec(`DROP INDEX journal_proj_items_named_turn;
+    CREATE INDEX journal_proj_items_named_turn ON journal_proj_items(session_id,epoch,turn_id)
+      WHERE turn_id IS NOT NULL;`)
+  for (const index of db
+    .prepare(
+      "SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name='journal_proj_items'"
+    )
+    .all()) {
+    if (
+      typeof index.sql === 'string' &&
+      /message_role|command_entry|lifecycle_state|assistant_prose|turn_scope_kind/.test(index.sql)
+    ) {
+      db.exec(`DROP INDEX "${String(index.name)}"`)
+    }
+  }
+  for (const column of [
+    'message_role',
+    'command_entry',
+    'lifecycle_state',
+    'assistant_prose',
+    'turn_scope_kind'
+  ]) {
+    db.exec(`ALTER TABLE journal_proj_items DROP COLUMN ${column}`)
+  }
+  db.exec('UPDATE journal_proj_meta SET schema_version=1')
+  initializeJournalSqlProjection(db)
+  expect(currentJournalSqlEpoch(db, 'session')).toBeNull()
+  expect(sources()).toEqual(saved)
+  expect(
+    db.prepare("SELECT sql FROM sqlite_master WHERE name='journal_proj_items_named_turn'").get()
+      ?.sql
+  ).toContain('hidden=0')
+  database.transaction((tx) => convertJournalSqlProjection(tx, 'session'))
+  expect(currentJournalSqlEpoch(db, 'session')).toBe('epoch')
+  expect(
+    journalSqlControlSnapshot(
+      new JournalSqlReducer(new JournalSqlScope(db, 'session', 'epoch'), 'epoch').state
+    )
+  ).toEqual(expected)
+  initializeJournalSqlProjection(db)
+  expect(currentJournalSqlEpoch(db, 'session')).toBe('epoch')
+  expect(sources()).toEqual(saved)
 })

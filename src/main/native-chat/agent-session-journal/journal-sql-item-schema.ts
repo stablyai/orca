@@ -1,3 +1,7 @@
+export const JOURNAL_SQL_NAMED_TURN_INDEX = `CREATE INDEX IF NOT EXISTS journal_proj_items_named_turn
+  ON journal_proj_items(session_id, epoch, turn_id, sequence DESC, sequence_index DESC, ordinal DESC)
+  WHERE turn_id IS NOT NULL AND hidden=0;`
+
 export function journalSqlItemSchema(): string {
   return `
 CREATE TABLE IF NOT EXISTS journal_proj_item_versions (
@@ -35,9 +39,9 @@ CREATE TABLE IF NOT EXISTS journal_proj_items (
   subagent_group_key TEXT,
   subagent_names TEXT,
   message_role TEXT,
-  command_entry INTEGER NOT NULL,
+  command_entry INTEGER NOT NULL DEFAULT 0,
   lifecycle_state TEXT,
-  assistant_prose INTEGER NOT NULL,
+  assistant_prose INTEGER NOT NULL DEFAULT 0,
   turn_scope_kind TEXT,
   PRIMARY KEY (session_id, epoch, entry_key)
 ) WITHOUT ROWID;
@@ -50,9 +54,7 @@ CREATE INDEX IF NOT EXISTS journal_proj_items_subagent
 CREATE INDEX IF NOT EXISTS journal_proj_items_turn
   ON journal_proj_items(session_id, epoch, sequence DESC, ordinal DESC)
   WHERE turn_id IS NOT NULL OR context_clear=1;
-CREATE INDEX IF NOT EXISTS journal_proj_items_named_turn
-  ON journal_proj_items(session_id, epoch, turn_id, sequence DESC, sequence_index DESC, ordinal DESC)
-  WHERE turn_id IS NOT NULL AND hidden=0;
+${JOURNAL_SQL_NAMED_TURN_INDEX}
 CREATE INDEX IF NOT EXISTS journal_proj_items_clear
   ON journal_proj_items(session_id, epoch, sequence DESC) WHERE context_clear=1;
 CREATE INDEX IF NOT EXISTS journal_proj_items_live_work

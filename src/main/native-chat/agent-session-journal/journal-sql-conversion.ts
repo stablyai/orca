@@ -5,6 +5,7 @@ import { JournalOutcomeItemProvenance } from './journal-outcome-item-provenance'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
+import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
 import { exportJournalControlState } from './journal-sql-control-export'
 import {
   beginJournalSqlConversion,
@@ -133,7 +134,7 @@ export function convertJournalSqlProjection(
     throw new Error('journal projection conversion requires its transaction')
   }
   // The projection's tables exist only once a chat converts, so builds without a consumer stay dark.
-  db.exec(journalSqlProjectionSchema())
+  initializeJournalSqlProjection(db)
   const conversion = prepareJournalSqlConversion(db, sessionId)
   if (!conversion) {
     return null

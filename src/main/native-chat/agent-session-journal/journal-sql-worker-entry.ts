@@ -14,7 +14,7 @@ import {
   applyJournalSqlMaintenance,
   journalSqlMaintenanceIsNormal
 } from './journal-sql-maintenance'
-import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
+import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
 
 if (
   !parentPort ||
@@ -44,7 +44,7 @@ try {
   batch = new JournalSqlBatch(db)
   commands = new JournalSqlCommand(db, stateDirectory)
   if (!readOnly) {
-    db.exec(journalSqlProjectionSchema())
+    initializeJournalSqlProjection(db)
     checkpoint = new JournalCheckpointOwner(db, workerData.filename)
   }
   reply({ type: 'ready', readOnly })
