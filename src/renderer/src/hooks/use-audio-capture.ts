@@ -7,12 +7,12 @@ import {
   type DictationCaptureWorkletOptions
 } from '@/components/dictation/dictation-capture-worklet-protocol'
 import { DICTATION_SAMPLE_RATE } from '../../../shared/rpc-contract/speech-params'
+import { DICTATION_METER_WINDOW_MS } from '../../../shared/dictation-audio-meter'
 import { useAudioCaptureMeter, type DictationMeterPublisher } from './use-audio-capture-meter'
 import { useAudioCaptureStopTail, type StopCaptureOptions } from './use-audio-capture-stop-tail'
 
 type BufferedAudioChunk = {
   samples: Float32Array
-  sampleRate: number
   sessionId: string
 }
 
@@ -38,7 +38,7 @@ const MAX_BUFFERED_AUDIO_BYTES = 8 * 1024 * 1024
 const CAPTURE_WORKLET_OPTIONS: DictationCaptureWorkletOptions = {
   outputSampleRate: DICTATION_SAMPLE_RATE,
   frameSamples: DICTATION_SAMPLE_RATE / 10,
-  levelWindowMs: 50
+  levelWindowMs: DICTATION_METER_WINDOW_MS
 }
 
 export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
@@ -89,14 +89,14 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       return
     }
     bufferedAudioBytesRef.current -= chunk.samples.byteLength
-    bufferedAudioSecondsRef.current -= chunk.samples.length / chunk.sampleRate
+    bufferedAudioSecondsRef.current -= chunk.samples.length / DICTATION_SAMPLE_RATE
   }, [])
 
   const appendBufferedAudioChunk = useCallback(
     (chunk: BufferedAudioChunk) => {
       bufferedAudioRef.current.push(chunk)
       bufferedAudioBytesRef.current += chunk.samples.byteLength
-      bufferedAudioSecondsRef.current += chunk.samples.length / chunk.sampleRate
+      bufferedAudioSecondsRef.current += chunk.samples.length / DICTATION_SAMPLE_RATE
 
       // Bound recent buffering while worker/model startup hangs to prevent unlimited renderer memory growth.
       while (
@@ -108,6 +108,21 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       }
     },
     [removeOldestBufferedAudioChunk]
+  )
+
+  // The one place a 16 kHz frame leaves capture: the startup buffer or the speech host.
+  const deliverFrame = useCallback(
+    (samples: Float32Array, onAudioLimitReached?: () => void) => {
+      if (bufferAudioRef.current) {
+        appendBufferedAudioChunk({ samples, sessionId: sessionIdRef.current })
+        return
+      }
+      void window.api.speech
+        .feedAudio(samples, DICTATION_SAMPLE_RATE, sessionIdRef.current)
+        .then((limitReached) => limitReached && onAudioLimitReached?.())
+        .catch(() => undefined)
+    },
+    [appendBufferedAudioChunk]
   )
 
   const start = useCallback(
@@ -149,10 +164,10 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         contextRef.current = context
 
         // Explicitly resume AudioContext because Chromium may suspend it pending a user gesture.
-        if (context.state === 'suspended') {
-          await context.resume()
-        }
-        await context.audioWorklet.addModule(captureWorkletUrl)
+        await Promise.all([
+          context.state === 'suspended' ? context.resume() : undefined,
+          context.audioWorklet.addModule(captureWorkletUrl)
+        ])
         if (startRequestRef.current !== startRequest || streamRef.current !== stream) {
           if (contextRef.current === context) {
             contextRef.current = null
@@ -187,18 +202,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
             return
           }
           capturedChunkCountRef.current += 1
-          if (bufferAudioRef.current) {
-            appendBufferedAudioChunk({
-              samples: data.samples,
-              sampleRate: DICTATION_SAMPLE_RATE,
-              sessionId: sessionIdRef.current
-            })
-            return
-          }
-          void window.api.speech
-            .feedAudio(data.samples, DICTATION_SAMPLE_RATE, sessionIdRef.current)
-            .then((limitReached) => limitReached && options.onAudioLimitReached?.())
-            .catch(() => undefined)
+          deliverFrame(data.samples, options.onAudioLimitReached)
         }
 
         source.connect(processor)
@@ -253,13 +257,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         throw err
       }
     },
-    [
-      appendBufferedAudioChunk,
-      cleanupCaptureResources,
-      measureLevel,
-      resetBufferedAudio,
-      resetMeter
-    ]
+    [cleanupCaptureResources, deliverFrame, measureLevel, resetBufferedAudio, resetMeter]
   )
 
   const flushBufferedAudio = useCallback(async () => {
@@ -275,7 +273,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           break
         }
         removeOldestBufferedAudioChunk()
-        await window.api.speech.feedAudio(chunk.samples, chunk.sampleRate, chunk.sessionId)
+        await window.api.speech.feedAudio(chunk.samples, DICTATION_SAMPLE_RATE, chunk.sessionId)
       }
     } finally {
       if (bufferedAudioGenerationRef.current === flushGeneration) {

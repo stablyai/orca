@@ -1,6 +1,6 @@
 // Runs in AudioWorkletGlobalScope, off the renderer's main thread.
 import { measureDictationAudioChunk } from '../../../../shared/dictation-audio-meter'
-import { StreamingSincResampler } from './sinc-resampler'
+import { StreamingSincResampler } from '../../../../shared/streaming-sinc-resampler'
 import {
   DICTATION_CAPTURE_WORKLET_NAME,
   type DictationCaptureWorkletMessage,
@@ -18,6 +18,7 @@ declare function registerProcessor(
 
 class DictationCaptureProcessor extends AudioWorkletProcessor {
   private readonly resampler: StreamingSincResampler
+  // The transfer detaches each sent frame, so its length can't be read back.
   private readonly frameSamples: number
   private frame: Float32Array
   private frameLength = 0

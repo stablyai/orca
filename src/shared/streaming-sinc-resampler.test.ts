@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { StreamingSincResampler } from './sinc-resampler'
+import { StreamingSincResampler } from './streaming-sinc-resampler'
 
 function tone(frequency: number, sampleRate: number, length: number): Float32Array {
   return Float32Array.from({ length }, (_, index) =>

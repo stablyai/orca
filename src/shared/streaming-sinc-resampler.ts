@@ -4,12 +4,7 @@ const TABLE_STEPS_PER_CROSSING = 256
 // Cutoff as a share of the lower Nyquist, leaving room for the filter's transition band.
 const ROLLOFF = 0.9
 
-let kernelTable: Float32Array | null = null
-
-function getKernelTable(): Float32Array {
-  if (kernelTable) {
-    return kernelTable
-  }
+function buildKernelTable(): Float32Array {
   const length = ZERO_CROSSINGS * TABLE_STEPS_PER_CROSSING
   // One trailing zero lets the interpolation read past the last tap.
   const table = new Float32Array(length + 2)
@@ -20,9 +15,10 @@ function getKernelTable(): Float32Array {
     const window = 0.42 + 0.5 * Math.cos(Math.PI * r) + 0.08 * Math.cos(2 * Math.PI * r)
     table[index] = (Math.sin(Math.PI * x) / (Math.PI * x)) * window
   }
-  kernelTable = table
   return table
 }
+
+const KERNEL_TABLE = buildKernelTable()
 
 /** Windowed-sinc resampler for a continuous stream fed in arbitrary-sized blocks. */
 export class StreamingSincResampler {
@@ -30,7 +26,6 @@ export class StreamingSincResampler {
   private readonly step: number
   private readonly scale: number
   private readonly halfWidth: number
-  private readonly table: Float32Array
   private history: Float32Array
   private historyLength: number
   // Input index (into history) of the next output sample.
@@ -42,7 +37,6 @@ export class StreamingSincResampler {
     this.step = inputRate / outputRate
     this.scale = Math.min(1, outputRate / inputRate) * ROLLOFF
     this.halfWidth = ZERO_CROSSINGS / this.scale
-    this.table = getKernelTable()
     // Leading zeros put the first output on the first input sample.
     this.historyLength = Math.ceil(this.halfWidth)
     this.position = this.historyLength
@@ -59,7 +53,8 @@ export class StreamingSincResampler {
     if (this.output.length < maxOutput) {
       this.output = new Float32Array(maxOutput)
     }
-    const { history, table, scale, halfWidth } = this
+    const { history, scale, halfWidth } = this
+    const table = KERNEL_TABLE
     const tableScale = scale * TABLE_STEPS_PER_CROSSING
     const lastIndex = this.historyLength - 1
     let count = 0

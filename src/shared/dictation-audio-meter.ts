@@ -20,6 +20,9 @@ export const DEFAULT_DICTATION_METER: DictationMeterState = {
   isClipping: false
 }
 
+// Desktop and phone both feed the analyzer one window this long; its smoothing is tuned to it.
+export const DICTATION_METER_WINDOW_MS = 50
+
 const CLIPPING_THRESHOLD = 0.98
 const CLIPPING_HOLD_MS = 500
 
