@@ -52,6 +52,11 @@ import {
   refuseAgentSessionMutation
 } from './structured-agent-session-mutation-refusals'
 
+type RecordedOperationReplay<TValue> =
+  | Omit<Extract<AgentSessionMutationResult<TValue>, { ok: true }>, 'cursor'>
+  | Extract<AgentSessionMutationResult<TValue>, { ok: false }>
+  | 'rerun'
+
 export type AgentSessionMutationSessionPreparation =
   | { ok: true }
   | { ok: false; refusal: AgentSessionWireRefusal }
@@ -181,7 +186,7 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
       admission.row
     )
     if (replayed !== 'rerun') {
-      return replayed
+      return replayed.ok ? { ...replayed, cursor: await journal.reads.cursor() } : replayed
     }
     // No durable effect landed; require first-run lease admission even if a refused ledger row exists.
     const rerun = admitAgentSessionMutation({
@@ -208,7 +213,13 @@ async function admitAndRunAgentSessionMutationUnchecked<TValue>(
     context
   })
   return outcome.ok
-    ? { ok: true, replayed: false, fence, cursor: journal.cursor(), value: outcome.value }
+    ? {
+        ok: true,
+        replayed: false,
+        fence,
+        cursor: await journal.reads.cursor(),
+        value: outcome.value
+      }
     : refuseAgentSessionMutation(outcome.refusal)
 }
 
@@ -256,7 +267,10 @@ async function answerRecordedOperation<TValue>(
     return 'rerun'
   }
   const context = mutationReplayContext(request, journal, current.record)
-  return replayRecordedOperation(request, context, current.decision.row)
+  const replayed = replayRecordedOperation(request, context, current.decision.row)
+  return replayed !== 'rerun' && replayed.ok
+    ? { ...replayed, cursor: await journal.reads.cursor() }
+    : replayed
 }
 
 /** Reconstruct the recorded answer; rerun only when no durable effect landed. */
@@ -273,7 +287,7 @@ export function replayRecordedOperation<TValue>(
   },
   context: AgentSessionReplayContext,
   row: AgentSessionOperationRow
-): AgentSessionMutationResult<TValue> | 'rerun' {
+): RecordedOperationReplay<TValue> {
   const replay = resolveAgentSessionReplayOutcome({
     operationId: envelope.clientOperationId,
     outcome: row.outcome,
@@ -289,7 +303,6 @@ export function replayRecordedOperation<TValue>(
         ok: true,
         replayed: true,
         fence: context.fence,
-        cursor: context.journal.cursor(),
         value: replay.value
       }
     : 'rerun'

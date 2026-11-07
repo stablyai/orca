@@ -1,13 +1,12 @@
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { isStructuredAgentSessionCommandTurnId } from '../operations/structured-agent-session-command-turn'
 
 /** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
-export type SendSettlementJournal = Pick<AgentSessionJournal, 'submission' | 'cursor'> & {
+export type SendSettlementJournal = Pick<AgentSessionJournal['reads'], 'submission' | 'cursor'> & {
   attemptEnded?: (clientMessageId: string) => boolean
   activeTurnId: () => string | null
   behindCommand?: (clientMessageId: string) => boolean
@@ -45,12 +44,12 @@ export const STRUCTURED_AGENT_SESSION_START_WAIT_MS = 120_000
 const MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION = 64
 const MAX_SEND_SETTLEMENT_WAITERS = 1_024
 
-function settledSend(
+async function settledSend(
   journal: SendSettlementJournal,
   clientMessageId: string,
-  until: SendSettlementPoint,
-  submission: AgentJournalSubmission | undefined = journal.submission(clientMessageId)
-): SendSettlement {
+  until: SendSettlementPoint
+): Promise<SendSettlement> {
+  const submission = await journal.submission(clientMessageId)
   if (!submission) {
     return 'missing'
   }
@@ -66,7 +65,7 @@ function settledSend(
         )
   return waiting
     ? 'pending'
-    : { cursor: journal.cursor(), value: { clientMessageId, submission: observed } }
+    : { cursor: await journal.cursor(), value: { clientMessageId, submission: observed } }
 }
 
 function runningCommand(journal: SendSettlementJournal): boolean {
@@ -96,19 +95,18 @@ export class StructuredAgentSessionSendSettlement {
     if (signal?.aborted) {
       return Promise.reject(abortError(signal))
     }
-    const immediate = settledSend(this.journalFor(sessionId), clientMessageId, until)
-    if (immediate === 'missing') {
-      return Promise.reject(new Error('agent session send disappeared before settlement'))
-    }
-    if (immediate !== 'pending') {
-      return Promise.resolve(immediate)
-    }
+    const journal = this.journalFor(sessionId)
     const existingSession = this.waiters.get(sessionId)
     if (
       this.waiterCount >= MAX_SEND_SETTLEMENT_WAITERS ||
       (existingSession?.size ?? 0) >= MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION
     ) {
-      return Promise.resolve(undefined)
+      return settledSend(journal, clientMessageId, until).then((result) => {
+        if (result === 'missing') {
+          throw new Error('agent session send disappeared before settlement')
+        }
+        return result === 'pending' ? undefined : result
+      })
     }
     return new Promise((resolve, reject) => {
       const waiter: SendSettlementWaiter = {
@@ -126,6 +124,8 @@ export class StructuredAgentSessionSendSettlement {
       session.add(waiter)
       this.waiters.set(sessionId, session)
       this.waiterCount += 1
+      // Register before reading so a publication during the read cannot be lost.
+      void this.settle(sessionId, waiter, journal)
       if (signal) {
         const onAbort = (): void => {
           this.remove(sessionId, waiter)
@@ -147,19 +147,30 @@ export class StructuredAgentSessionSendSettlement {
       return
     }
     for (const waiter of waiters) {
-      const result = settledSend(
-        journal,
-        waiter.clientMessageId,
-        waiter.until,
-        journal.submission(waiter.clientMessageId)
-      )
-      if (result !== 'pending') {
+      void this.settle(sessionId, waiter, journal)
+    }
+  }
+
+  private async settle(
+    sessionId: string,
+    waiter: SendSettlementWaiter,
+    journal: SendSettlementJournal
+  ): Promise<void> {
+    try {
+      const result = await settledSend(journal, waiter.clientMessageId, waiter.until)
+      if (result === 'pending' || !this.waiters.get(sessionId)?.has(waiter)) {
+        return
+      }
+      this.remove(sessionId, waiter)
+      if (result === 'missing') {
+        waiter.reject(new Error('agent session send disappeared before settlement'))
+      } else {
+        waiter.resolve(result)
+      }
+    } catch (error) {
+      if (this.waiters.get(sessionId)?.has(waiter)) {
         this.remove(sessionId, waiter)
-        if (result === 'missing') {
-          waiter.reject(new Error('agent session send disappeared before settlement'))
-        } else {
-          waiter.resolve(result)
-        }
+        waiter.reject(error instanceof Error ? error : new Error(String(error)))
       }
     }
   }
@@ -202,9 +213,9 @@ export function sendSettlementReading(
   work: () => StructuredAgentSessionCurrentWork
 ): SendSettlementJournal {
   return {
-    submission: (id) => journal.submission(id),
+    submission: (id) => journal.reads.submission(id),
     attemptEnded: (id) => journal.queuedMessages.attemptEnded(id),
-    cursor: () => journal.cursor(),
+    cursor: () => journal.reads.cursor(),
     activeTurnId: () => work().activeTurnId(),
     behindCommand: (id) => journal.inputOrder.forced(id)
   }

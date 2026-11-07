@@ -69,7 +69,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
             const journal = sessions.get(read.sessionId)?.journal
             try {
               return journal
-                ? { ...read, observedCursor: await journal.readInOrder(journal.cursor) }
+                ? { ...read, observedCursor: await journal.readInOrder(journal.reads.cursor) }
                 : read
             } catch (error) {
               deps.logger.warn('capturing a workspace attention boundary failed', {

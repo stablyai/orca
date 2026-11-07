@@ -202,12 +202,13 @@ export async function rewindStructuredAgentSession(
             }
           )
           context.publish(sessionId, journal)
+          const cursor = await journal.reads.cursor()
           return {
             ok: true,
             value: {
               itemId: params.itemId,
-              epoch: journal.cursor().epoch,
-              ...(contextFloor ? { sequence: journal.cursor().sequence } : {})
+              epoch: cursor.epoch,
+              ...(contextFloor ? { sequence: cursor.sequence } : {})
             }
           }
         }
@@ -217,7 +218,7 @@ export async function rewindStructuredAgentSession(
       ? {
           ...result,
           fence: store.getConversation(sessionId)?.currentFence ?? result.fence,
-          cursor: context.sessions.get(sessionId)!.journal.cursor()
+          cursor: await context.sessions.get(sessionId)!.journal.reads.cursor()
         }
       : result
   }

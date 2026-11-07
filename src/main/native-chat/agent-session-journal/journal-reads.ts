@@ -20,6 +20,8 @@ export type JournalItemFilter = {
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
+  // Builder B: context metadata used by options reports.
+  contextFloor(): Promise<AgentJournalCursor | null>
   cursor(): Promise<AgentJournalCursor>
   physicalCursor(): Promise<AgentJournalCursor>
   lastActivityAt(): Promise<number>
@@ -47,10 +49,14 @@ export type AgentSessionJournalReads = {
 
 /** The synchronous readers today's in-memory journal already answers. */
 type FoldedJournalReads = {
-  [K in Exclude<keyof AgentSessionJournalReads, 'visitItems'>]: (
+  [K in Exclude<keyof AgentSessionJournalReads, 'visitItems' | 'contextFloor'>]: (
     ...args: Parameters<AgentSessionJournalReads[K]>
   ) => Awaited<ReturnType<AgentSessionJournalReads[K]>>
-} & { visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void }
+} & {
+  visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void
+  // Builder B: context metadata stays fold-backed until the database reader replaces it.
+  context: { floor(): AgentJournalCursor | null }
+}
 
 /** Answers at call time, so an awaited answer reflects writes admitted before the call. */
 export function foldedJournalReads(journal: FoldedJournalReads): AgentSessionJournalReads {
@@ -64,6 +70,8 @@ export function foldedJournalReads(journal: FoldedJournalReads): AgentSessionJou
       }
     }
   return {
+    // Builder B: read through the context controller without retaining a copy.
+    contextFloor: now(() => journal.context.floor()),
     cursor: now(journal.cursor),
     physicalCursor: now(journal.physicalCursor),
     lastActivityAt: now(journal.lastActivityAt),

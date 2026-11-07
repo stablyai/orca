@@ -28,11 +28,8 @@ export async function prepareForkFounding(
 export function readForkHydration(
   journal: AgentSessionJournal,
   fence: number,
-  store: AgentSessionRecordStore
+  store: AgentSessionRecordStore,
+  sessionId: string
 ) {
-  return readAgentSessionHydrationPage(
-    journal,
-    fence,
-    forkHistoryReader(store, journal.currentRead().sessionId)
-  )
+  return readAgentSessionHydrationPage(journal, fence, forkHistoryReader(store, sessionId))
 }
