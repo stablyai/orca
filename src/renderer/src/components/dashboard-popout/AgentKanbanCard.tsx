@@ -188,7 +188,7 @@ type AgentKanbanCardProps = {
   repoIcon?: RepoIcon | null
   now: number
   /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
-  onOpenTerminal: (card: DashboardCard) => void
+  onOpenTerminal: (card: DashboardCard, event: MouseEvent) => void
 }
 
 export const AgentKanbanCard = memo(
@@ -223,7 +223,7 @@ export const AgentKanbanCard = memo(
       >
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={(event) => onOpenTerminal(card, event.nativeEvent)}
           className="flex w-full flex-col gap-1.5 text-left focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <div className="flex w-full items-center gap-1.5">
@@ -306,7 +306,7 @@ export const AgentKanbanCard = memo(
 
         <button
           type="button"
-          onClick={() => onOpenTerminal(card)}
+          onClick={(event) => onOpenTerminal(card, event.nativeEvent)}
           className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <Tooltip>
