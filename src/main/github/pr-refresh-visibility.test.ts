@@ -4,7 +4,7 @@ const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
-vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+vi.mock('./pr-refresh-renderer-port', () => moduleMocks.rendererPortModuleMock(coordinatorMocks))
 
 import { makeCandidate } from './pr-refresh-coordinator-test-harness'
 import { refreshKey } from './pr-refresh-candidate-policy'

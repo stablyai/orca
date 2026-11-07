@@ -17,7 +17,7 @@ const CREATE_COMMANDS: readonly { provider: Provider; command: RegExp }[] = [
 
 // Where a shell starts a command, past `NAME=value` assignments and wrappers like `timeout 60`.
 // A create command anywhere else, as in `echo "gh pr create"`, is text, not a command that runs.
-const COMMAND_START =
+export const COMMAND_START =
   '(?:^|[;&|({`\\n]|\\b(?:do|then|else)\\s)\\s*(?:(?:\\w+=\\S*|env|time|nohup|timeout\\s+\\S+)\\s+)*'
 const CREATE_RUNS = CREATE_COMMANDS.map(({ provider, command }) => ({
   provider,
@@ -41,7 +41,7 @@ function createCount(code: string): number {
 }
 
 /** The commands a script runs, without the text it carries. */
-function shellCode(script: string): string {
+export function shellCode(script: string): string {
   return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
@@ -49,8 +49,24 @@ function shellCode(script: string): string {
   )
 }
 
+// Redirections outside quotes: an fd copy or close (`2>&1`, `>&2`, `<&-`), or a file target
+// (`>out`, `2>>log`, `&>log`, `>|f`, `< in`). Quoted text and escapes match first and stay.
+const FD = '(?:(?<=^|\\s)\\d+)?'
+const TARGET = `(?:[^\\s;&|<>()'"\\\\]|\\\\[\\s\\S]|'[^']*'|"(?:\\\\[\\s\\S]|[^"\\\\])*")+`
+const TEXT_OR_REDIRECTION = new RegExp(
+  `(${QUOTED_OR_COMMENT.source})|${FD}[<>]&(?:\\d+|-)(?=$|\\s)|(?:${FD}(?:>>|>\\||<>|>|<)|&>>|&>)\\s*${TARGET}`,
+  'gmu'
+)
+
+/** A command with its unquoted redirections removed, so `git push 2>&1` reads as `git push`. */
+export function withoutShellRedirections(command: string): string {
+  return command.replace(TEXT_OR_REDIRECTION, (match, text: string | undefined) =>
+    text === undefined ? ' ' : match
+  )
+}
+
 /** A script split at command separators that sit outside quotes. */
-function shellSegments(script: string): string[] {
+export function shellSegments(script: string): string[] {
   const segments: string[] = []
   let current = ''
   let quote: string | null = null
@@ -73,7 +89,9 @@ function shellSegments(script: string): string[] {
       continue
     }
     const pair = script.slice(index, index + 2)
-    if (pair === '&&' || pair === '||' || char === ';' || char === '|' || char === '\n') {
+    // `>|` is a clobbering redirection, not a pipe.
+    const pipe = char === '|' && script[index - 1] !== '>'
+    if (pair === '&&' || pair === '||' || char === ';' || pipe || char === '\n') {
       segments.push(current)
       current = ''
       if (pair === '&&' || pair === '||') {

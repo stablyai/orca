@@ -313,6 +313,8 @@ async function startOrcadRuntime(
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
+  // The daemon has no window to wait for; its CI-line watches start with the runtime.
+  runtime.startPullRequestWatches()
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,
