@@ -43,7 +43,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../../lib/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -53,7 +53,7 @@ import {
   type PersistedUIWriteBaseline,
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields
-} from '../persisted-ui-write-baseline'
+} from './persisted-ui-write-baseline'
 import {
   hydrateTrustedOrcaHooks,
   hydrateUnexpectedSignoutDismissal,
