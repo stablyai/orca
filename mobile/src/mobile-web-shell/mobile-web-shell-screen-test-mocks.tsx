@@ -101,6 +101,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
       requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
     }),
+    // The store module loads the pairing keychain, whose native module the react-native mock lacks.
+    '../device-store/device-store': () => ({ processDeviceStore: () => ({}) }),
     'expo-file-system': () => ({
       File: class {
         readonly size = 0
