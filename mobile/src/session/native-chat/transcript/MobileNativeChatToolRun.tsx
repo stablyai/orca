@@ -67,7 +67,7 @@ function PulsingText({
   const reducedMotion = useContext(MobileNativeChatReplyRevealsContext)?.reducedMotion ?? true
   const pulse = useWorkingPulse(pulsing && !reducedMotion)
   return (
-    <Animated.Text ref={pulse.ref} style={[style, pulse.style]} numberOfLines={2}>
+    <Animated.Text ref={pulse.ref} style={[style, pulse.style]} numberOfLines={1}>
       {children}
     </Animated.Text>
   )
