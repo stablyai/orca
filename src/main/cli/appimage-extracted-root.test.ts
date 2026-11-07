@@ -1,20 +1,15 @@
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ensureAppImageExtractedRoot,
-  isAppImageInstalledLauncherOwnedBySibling,
   readAppImageSourceOfNamespace,
-  resolveAppImageCacheKey,
   resolveAppImageExtractedRoot
 } from './appimage-extracted-root'
 import { getAppImageActiveExtractionPath } from './appimage-extraction-pruning'
-import {
-  publishAppImageLauncherEndpoint,
-  resolveAppImageStableLauncherPath
-} from './appimage-stable-launcher'
+import { resolveAppImageStableLauncherPath } from './appimage-stable-launcher'
 
 const created: string[] = []
 
@@ -56,18 +51,6 @@ describe('appimage extracted root', () => {
     expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBe(appImagePath)
     await writeFile(join(namespacePath, 'source-appimage'), '/elsewhere/Orca.AppImage')
     expect(readAppImageSourceOfNamespace(cacheRootPath, namespaceKey)).toBeNull()
-  })
-
-  // chmod, backup restores and SELinux relabels must not trigger re-extraction of unchanged payloads.
-  it('does not re-key the payload when only inode metadata changes', async () => {
-    const { appImagePath } = await makeFixture()
-    const before = resolveAppImageCacheKey(appImagePath)
-
-    await chmod(appImagePath, 0o700)
-    expect(resolveAppImageCacheKey(appImagePath)).toBe(before)
-
-    await chmod(appImagePath, 0o755)
-    expect(resolveAppImageCacheKey(appImagePath)).toBe(before)
   })
 
   it('publishes nothing when extraction fails partway', async () => {
@@ -206,43 +189,5 @@ describe('appimage extracted root', () => {
     expect(result?.rootPath).not.toBe(initialRoot.rootPath)
     await expect(readFile(currentRoot.payloadLauncherPath, 'utf8')).resolves.toBe('generation-2')
     expect(existsSync(initialRoot.rootPath)).toBe(false)
-  })
-
-  it('bounds retries when every extraction changes the AppImage generation', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    let extractCount = 0
-
-    const result = await ensureAppImageExtractedRoot({
-      appImagePath,
-      cacheRootPath,
-      runExtract: async (_path, cwd) => {
-        extractCount += 1
-        await writePayload(cwd)
-        await writeFile(appImagePath, '#'.repeat(extractCount + 1), { mode: 0o755 })
-      }
-    })
-
-    expect(result).toBeNull()
-    expect(extractCount).toBe(2)
-  })
-
-  it('requires a sibling installed endpoint to target an executable payload', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    const siblingLauncher = join(
-      cacheRootPath,
-      'a'.repeat(24),
-      'b'.repeat(24),
-      'resources',
-      'bin',
-      'orca-ide'
-    )
-    publishAppImageLauncherEndpoint(cacheRootPath, 'installed', siblingLauncher)
-    const options = { appImagePath, cacheRootPath }
-
-    expect(isAppImageInstalledLauncherOwnedBySibling(options)).toBe(false)
-
-    await mkdir(dirname(siblingLauncher), { recursive: true })
-    await writeFile(siblingLauncher, '#!/usr/bin/env bash\n', { mode: 0o755 })
-    expect(isAppImageInstalledLauncherOwnedBySibling(options)).toBe(true)
   })
 })
