@@ -111,7 +111,7 @@
       "scanCodeStep": "QR 코드를 스캔하세요",
       "title": "데스크톱과 페어링",
       "tryAgain": "다시 시도",
-      "codeExpiredOrReplaced": "이 페어링 코드는 만료되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
+      "codeNoLongerValid": "이 페어링 코드는 만료되었거나 이미 사용되었거나 교체되었습니다. 데스크톱에서 새 코드를 표시한 후 다시 스캔하세요."
     },
     "terminalSettings": {
       "defaultText": "기본 (100%)",
