@@ -24,7 +24,8 @@ import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import {
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
   antigravityHostAccountHome,
-  antigravityHostAcpAnswers,
+  agyUsesApiKey,
+  antigravityHostAcpReady,
   hasAgyCredential,
   hasManagedAntigravityChatSignIn,
   isAntigravityHostAccountHome
@@ -133,15 +134,17 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_HOST_LAUNCH_SPEC,
     pins: isAntigravityHostAccountHome,
-    // Someone signed in to Orca's own Chat keeps it; the host's agy needs its own sign-in.
+    // Someone signed in to Orca's own Chat keeps it; the host's agy needs a sign-in that serves
+    // sessions, not an API-key provider whose key the host launch drops.
     select: async ({ command, env, envToDelete, homePath, stateDirectory, settings }) =>
       savedChatAuthIsPersonal(settings.antigravityChatAuth) &&
       antigravityChatSignIn.get().value.auth !== 'signedIn' &&
       !(await hasManagedAntigravityChatSignIn(
         join(stateDirectory, ANTIGRAVITY_CHAT_HOME_FOLDER)
       )) &&
+      !(await agyUsesApiKey(homePath)) &&
       (await hasAgyCredential(homePath)) &&
-      (await antigravityHostAcpAnswers(command, env, envToDelete))
+      (await antigravityHostAcpReady(command, env, envToDelete))
         ? antigravityHostAccountHome(homePath)
         : null
   }

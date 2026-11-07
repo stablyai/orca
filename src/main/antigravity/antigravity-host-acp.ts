@@ -1,7 +1,7 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
 import { existsSync } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import {
@@ -21,7 +21,7 @@ export const ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION = '1.5.2'
 /** agy keeps its sign-in and conversations here and ignores GEMINI_HOME, so this only pins the chat. */
 const AGY_HOME_FOLDER = '.gemini'
 const PROBE_TIMEOUT_MS = 5_000
-const FAILED_CHECK_RETRY_MS = 5 * 60_000
+const RECHECK_MS = 5 * 60_000
 
 export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse): boolean {
   const capabilities = initialized.agentCapabilities
@@ -32,7 +32,9 @@ export function isCompatibleAntigravityHostAcp(initialized: InitializeResponse):
     compareAppVersions(version, ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION) >= 0 &&
     initialized.protocolVersion === 1 &&
     capabilities?.loadSession === true &&
-    Boolean(capabilities.sessionCapabilities?.resume)
+    Boolean(capabilities.sessionCapabilities?.resume) &&
+    // Readiness is checked by listing sessions.
+    Boolean(capabilities.sessionCapabilities?.list)
   )
 }
 
@@ -54,8 +56,12 @@ export function isAntigravityHostAccountHome(home: AgentSessionAccountHome): boo
 type HostCheck = { identity: string; answer: Promise<boolean>; retryAt?: number }
 const checks = new Map<string, HostCheck>()
 
-/** Whether `command acp` initializes as a compatible server; a failed check waits before retrying. */
-export async function antigravityHostAcpAnswers(
+class IncompatibleHostAcp extends Error {}
+
+/** Whether `command acp` initializes as a compatible server that serves session requests. An
+ *  incompatible binary is not asked again; a sign-in can lapse or a hung agy recover, so any other
+ *  answer is checked again after a while. */
+export async function antigravityHostAcpReady(
   command: string,
   env: Record<string, string>,
   envToDelete: string[],
@@ -72,17 +78,52 @@ export async function antigravityHostAcpAnswers(
   }
   const check: HostCheck = {
     identity,
+    retryAt: now() + RECHECK_MS,
     answer: initializeAntigravityAcp(
       () => ({ command, args: ['acp'], env, envToDelete }),
-      PROBE_TIMEOUT_MS
-    ).then(isCompatibleAntigravityHostAcp, () => {
-      // A hung or crashing agy must not delay every chat start and availability read.
-      check.retryAt = now() + FAILED_CHECK_RETRY_MS
-      return false
-    })
+      PROBE_TIMEOUT_MS,
+      undefined,
+      async (connection, initialized, folder) => {
+        if (!isCompatibleAntigravityHostAcp(initialized)) {
+          throw new IncompatibleHostAcp()
+        }
+        // A present keychain item does not prove agy can sign in silently; session requests
+        // answer "Authentication required" until it has. Unlike session/new, listing writes no
+        // conversation into agy's history.
+        await connection.listSessions(folder)
+      }
+    ).then(
+      () => true,
+      (error: unknown) => {
+        if (error instanceof IncompatibleHostAcp) {
+          check.retryAt = undefined
+        }
+        return false
+      }
+    )
   }
   checks.set(command, check)
   return check.answer
+}
+
+/** Whether agy's settings select an API-key model provider; host chats drop inherited keys. */
+export async function agyUsesApiKey(homePath: string): Promise<boolean> {
+  const text = await readFile(
+    join(homePath, AGY_HOME_FOLDER, 'antigravity-cli', 'settings.json'),
+    'utf8'
+  ).catch(() => null)
+  if (text === null) {
+    return false
+  }
+  try {
+    const settings: unknown = JSON.parse(text)
+    return typeof settings === 'object' && settings !== null && 'modelProvider' in settings
+      ? Boolean(settings.modelProvider)
+      : false
+  } catch {
+    // Settings agy may read differently than JSON.parse could select a provider.
+    return true
+  }
 }
 
 /** Whether Orca's own Chat sign-in has left credentials in its managed home or a folder inside it. */

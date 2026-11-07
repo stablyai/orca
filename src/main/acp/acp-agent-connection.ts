@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -240,6 +241,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   stderrTail(): string {
     return this.managed.stderrTail().trim()
+  }
+
+  /** Requires advertised session listing support. */
+  listSessions(cwd: string): Promise<unknown> {
+    return this.call('session/list', { cwd }, z.unknown())
   }
 
   /** First managed exit observation, including processless spawn failure. */
