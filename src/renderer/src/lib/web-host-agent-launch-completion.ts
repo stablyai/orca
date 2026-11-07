@@ -19,7 +19,6 @@ export function completeWebHostAgentLaunch(args: {
   promptDelivered: boolean
   submitFollowup?: boolean
   hostTabId?: string
-  provisionalTabId?: string
 }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion {
   const { outcome, promptDelivered, hostTabId } = args
   if (outcome.status === 'failed') {
@@ -36,16 +35,7 @@ export function completeWebHostAgentLaunch(args: {
   if (hasPrompt && promptDelivered) {
     args.onPromptDelivered?.()
   }
-  const failureNotified =
-    hasPrompt &&
-    !promptDelivered &&
-    (!args.provisionalTabId ||
-      (useAppStore.getState().tabsByWorktree[args.worktreeId] ?? []).some(
-        (tab) =>
-          tab.id === args.provisionalTabId ||
-          (hostTabId &&
-            tab.id === toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(hostTabId)))
-      ))
+  const failureNotified = hasPrompt && !promptDelivered
   if (failureNotified) {
     notifyAgentLaunchPromptNotSent(args.agent, args.submitFollowup ? args.prompt : undefined)
   }

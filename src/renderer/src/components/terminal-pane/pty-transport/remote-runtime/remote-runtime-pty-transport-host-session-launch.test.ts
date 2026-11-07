@@ -12,8 +12,7 @@ vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
 }))
 const appStore = vi.hoisted(() => {
   const state = {
-    runtimeStatusByEnvironmentId: new Map(),
-    tabsByWorktree: { 'repo1::/remote/wt': [{ id: 'tab-1' }] }
+    runtimeStatusByEnvironmentId: new Map()
   }
   return { getState: vi.fn(() => state) }
 })
@@ -44,7 +43,6 @@ describe('createRemoteRuntimePtyTransport', () => {
   beforeEach(() => {
     vi.resetModules()
     delivery.mockReset().mockResolvedValue(true)
-    appStore.getState().tabsByWorktree['repo1::/remote/wt'] = [{ id: 'tab-1' }]
     promptFailure.error.mockClear()
     promptFailure.copy.mockClear()
     fixture.reset()
@@ -656,32 +654,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.dynamicImportSettled()
     expect(delivery).toHaveBeenCalledOnce()
     expect(promptFailure.error).toHaveBeenCalledOnce()
-  })
-
-  it('silences a failed prompt attempt when its tab was deliberately closed before readiness', async () => {
-    let finishDelivery!: (delivered: boolean) => void
-    delivery.mockImplementationOnce(
-      () =>
-        new Promise<boolean>((resolve) => {
-          finishDelivery = resolve
-        })
-    )
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('env-1', {
-      worktreeId: 'repo1::/remote/wt',
-      launchAgent: 'codex',
-      launchToken: 'closed-prompt-launch',
-      freshAgentLaunch: { prompt: 'ship it', promptDelivery: 'draft' },
-      tabId: 'tab-1',
-      leafId: '11111111-1111-4111-8111-111111111111'
-    })
-    await transport.connect({ url: '', callbacks: {} })
-    appStore.getState().tabsByWorktree['repo1::/remote/wt'] = []
-    await transport.destroy?.()
-    finishDelivery(false)
-    await vi.dynamicImportSettled()
-    expect(delivery).toHaveBeenCalledOnce()
-    expect(promptFailure.error).not.toHaveBeenCalled()
   })
 
   it('keeps the existing pane request when an old host needs a prepared launch', async () => {

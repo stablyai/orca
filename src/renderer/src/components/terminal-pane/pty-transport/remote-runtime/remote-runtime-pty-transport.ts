@@ -3916,7 +3916,6 @@ export function createRemoteRuntimePtyTransport(
                 prompt: freshLaunch.prompt,
                 submitFollowup: true,
                 hostTabId: createdTerminal.tabId,
-                provisionalTabId: tabId,
                 outcome: { status: 'created' },
                 promptDelivered,
                 legacyPreparationCancelled: false,
