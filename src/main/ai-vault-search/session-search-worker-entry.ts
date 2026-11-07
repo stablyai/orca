@@ -119,8 +119,8 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
   if (c.op === 'open') {
     if (c.reader) {
       reader = new SyncDatabase(c.path, { readonly: true, fileMustExist: true })
-      reader.pragma('query_only = ON')
       engine = new SessionSearchEngine(reader, { retentionCutoffMs: c.cutoff })
+      reader.pragma('query_only = ON')
       return { id }
     }
     const onMessagesChanged = (n: number): void => {

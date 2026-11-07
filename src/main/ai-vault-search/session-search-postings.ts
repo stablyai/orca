@@ -24,6 +24,16 @@ export class SessionSearchPostings {
     private readonly acceptsSession: (id: number) => boolean = () => true
   ) {}
 
+  examinePosting(): boolean {
+    // The first row beyond the shared budget is the request's only exhaustion probe.
+    if (this.remaining === 0) {
+      this.exhausted = true
+      return false
+    }
+    this.remaining--
+    return true
+  }
+
   *matching(expression: string): Generator<MessageRow> {
     let window = this.windows.get(expression)
     if (!window) {
@@ -48,12 +58,9 @@ export class SessionSearchPostings {
       'SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid IN (SELECT ?)'
     )
     for (const posting of statement.iterate(...values)) {
-      // The first row beyond the shared budget is the request's only exhaustion probe.
-      if (this.remaining === 0) {
-        this.exhausted = true
+      if (!this.examinePosting()) {
         return
       }
-      this.remaining--
       window.after = Number(posting.rowid)
       const row = message.get(window.after)
       if (!row || !this.acceptsSession(Number(row.session_row_id))) {

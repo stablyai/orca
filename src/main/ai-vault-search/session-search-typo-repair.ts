@@ -39,11 +39,13 @@ export class SessionSearchTypoRepair {
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
   constructor(private readonly db: SyncDatabase) {
-    // Term order uses the vocab index and keeps the candidate cutoff independent of orphan counts.
+    // Why: row vocabulary computes full doclist counts before returning even one term.
+    db.exec(
+      "CREATE VIRTUAL TABLE IF NOT EXISTS temp.session_search_vocab USING fts5vocab(main,messages_fts,'instance')"
+    )
     this.candidatesByPrefix = db.prepare(
-      `SELECT term FROM messages_vocab
-       WHERE term >= ? AND term < ? AND length(term) BETWEEN ? AND ?
-       ORDER BY term LIMIT ?`
+      `SELECT term, length(term) AS term_length FROM temp.session_search_vocab
+       WHERE term >= ? AND term < ? ORDER BY term`
     )
   }
 
@@ -89,7 +91,7 @@ export class SessionSearchTypoRepair {
     prefix: string,
     postings: SessionSearchPostings
   ): string | null {
-    const counted = this.ranked(lowered, prefix)
+    const counted = this.ranked(lowered, prefix, postings)
       .slice(0, MAX_VISIBILITY_PROBES)
       .map((candidate) => ({
         ...candidate,
@@ -104,23 +106,44 @@ export class SessionSearchTypoRepair {
       .term
   }
 
-  private ranked(lowered: string, prefix: string): { term: string; score: number }[] {
-    return this.candidates(prefix, lowered.length)
+  private ranked(
+    lowered: string,
+    prefix: string,
+    postings: SessionSearchPostings
+  ): { term: string; score: number }[] {
+    return this.candidates(prefix, lowered.length, postings)
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term) }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || (left.term < right.term ? -1 : 1))
   }
 
-  private candidates(prefix: string, length: number): { term: string }[] {
+  private candidates(
+    prefix: string,
+    length: number,
+    postings: SessionSearchPostings
+  ): { term: string }[] {
+    if (postings.exhausted) {
+      return []
+    }
     const last = prefix.charCodeAt(prefix.length - 1)
     const upper = prefix.slice(0, -1) + String.fromCharCode(last + 1)
-    const rows = this.candidatesByPrefix.all(
-      prefix,
-      upper,
-      Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK),
-      length + LENGTH_SLACK,
-      MAX_CANDIDATES
-    )
-    return rows.flatMap((row) => (typeof row.term === 'string' ? [{ term: row.term }] : []))
+    const terms = new Set<string>()
+    for (const row of this.candidatesByPrefix.iterate(prefix, upper)) {
+      if (!postings.examinePosting()) {
+        break
+      }
+      const term = row.term
+      if (
+        typeof term === 'string' &&
+        Number(row.term_length) >= Math.max(MIN_TERM_LENGTH - 1, length - LENGTH_SLACK) &&
+        Number(row.term_length) <= length + LENGTH_SLACK
+      ) {
+        terms.add(term)
+        if (terms.size >= MAX_CANDIDATES) {
+          break
+        }
+      }
+    }
+    return Array.from(terms, (term) => ({ term }))
   }
 }

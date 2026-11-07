@@ -96,3 +96,18 @@ it('keeps capitalized hits when the spelling probe and OR share a crowded window
     await index.close()
   }
 })
+
+it('reports an absent query as limited when tool vocabulary exhausts its posting budget', async () => {
+  const index = await openSessionSearchHarness('ss-posting-vocabulary')
+  try {
+    index.db.exec('BEGIN')
+    addSyntheticSession(index.db, { id: 1, text: 'ti000000', role: 'tool', rows: 10001 })
+    index.db.exec('COMMIT')
+    const result = index.engine.search({ query: 'timeout' })
+    expect(result.planner.repairedTerms).toBeUndefined()
+    expect(result.hits).toEqual([])
+    expect(result.truncated.candidates).toBe(true)
+  } finally {
+    await index.close()
+  }
+})
