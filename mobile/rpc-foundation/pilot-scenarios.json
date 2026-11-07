@@ -7395,34 +7395,6 @@
       ]
     },
     {
-      "id": "components-codex-capability",
-      "operation": "components.codex-reset-capability",
-      "family": "components.codex-reset-capability",
-      "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "probe",
-          "id": "probe"
-        },
-        {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["accounts.codex-reset-credit.v1"]
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
       "family": "host.view-settings",
