@@ -142,6 +142,41 @@ describe('Store', () => {
     expect(restored.getFolderWorkspace(workspace.id)?.folderPath).toBe('/workspace/platform-next ')
   })
 
+  it('keeps first-task naming pending until the folder title changes or is explicitly settled', async () => {
+    const store = createStore()
+    store.updateSettings({ workspaceTitleLanguage: 'zh' })
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'manual'
+    })
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      name: 'Initial title',
+      pendingFirstAgentMessageRename: true
+    })
+
+    store.updateFolderWorkspace(workspace.id, { name: ' Initial title ' })
+    store.flush()
+    const restored = createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.pendingFirstAgentMessageRename).toBe(true)
+
+    restored.updateFolderWorkspace(workspace.id, { name: 'Manual title' })
+    expect(restored.getFolderWorkspace(workspace.id)?.pendingFirstAgentMessageRename).toBe(false)
+
+    restored.updateFolderWorkspace(workspace.id, {
+      name: 'Another initial title',
+      pendingFirstAgentMessageRename: true
+    })
+    expect(restored.getFolderWorkspace(workspace.id)?.pendingFirstAgentMessageRename).toBe(true)
+
+    restored.updateFolderWorkspace(workspace.id, {
+      name: 'Another initial title',
+      pendingFirstAgentMessageRename: false
+    })
+    expect(restored.getFolderWorkspace(workspace.id)?.pendingFirstAgentMessageRename).toBe(false)
+  })
+
   it('backfills folder-scope SSH provenance from grouped repos despite unrelated same-path SSH repos', async () => {
     writeDataFile({
       schemaVersion: 1,

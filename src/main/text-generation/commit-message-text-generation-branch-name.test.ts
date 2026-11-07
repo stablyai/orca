@@ -54,6 +54,33 @@ describe('generateBranchNameFromContext', () => {
     })
   })
 
+  it.each(['{"branch":"修复登录","title":"修复登录"}', '{"title":"修复登录"}'])(
+    'accepts a usable title without a usable branch for title-only requests: %s',
+    async (stdout) => {
+      const result = await generateBranchNameFromContext(
+        {
+          firstPrompt: '修复登录',
+          workspaceTitleLanguage: '中文（简体）',
+          workspaceTitleOnly: true
+        },
+        { agentId: 'custom', model: '', customAgentCommand: 'agent' },
+        {
+          kind: 'remote',
+          cwd: '/repo',
+          missingBinaryLocation: 'remote PATH',
+          execute: async () => ({ stdout, stderr: '', exitCode: 0, timedOut: false })
+        }
+      )
+
+      expect(result).toEqual({
+        success: true,
+        slug: '',
+        displayName: '修复登录',
+        agentLabel: 'agent'
+      })
+    }
+  )
+
   it.each(['custom', 'kimi'] as const)('%s branch slug', async (agentId) => {
     const result = await generateBranchNameFromContext(
       { firstPrompt: 'Fix login flow' },

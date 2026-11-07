@@ -21,13 +21,16 @@ import { retryFailedGeneration } from './first-work-generation-backoff'
 export function firstWorkNamingContext(
   settings: ReturnType<FirstWorkBranchRenameDeps['getSettings']>,
   firstPrompt: string,
-  assistantMessage: string | undefined
+  assistantMessage: string | undefined,
+  includeWorkspaceTitle = true
 ): BranchNameWorkContext {
-  const workspaceTitleLanguage = resolveWorkspaceTitleLanguage(
-    settings,
-    (hasAppEnvironment() ? getAppEnvironment().getSystemLocale?.() : undefined) ??
-      Intl.DateTimeFormat().resolvedOptions().locale
-  )
+  const workspaceTitleLanguage = includeWorkspaceTitle
+    ? resolveWorkspaceTitleLanguage(
+        settings,
+        (hasAppEnvironment() ? getAppEnvironment().getSystemLocale?.() : undefined) ??
+          Intl.DateTimeFormat().resolvedOptions().locale
+      )
+    : undefined
   return {
     firstPrompt,
     assistantMessage,
@@ -69,7 +72,7 @@ function canRenamePendingWorkspaceTitle(
   )
 }
 
-function canRenameFirstWorkDisplayName(
+export function canRenameFirstWorkDisplayName(
   worktreeId: string,
   deps: FirstWorkBranchRenameDeps
 ): boolean {
@@ -137,7 +140,7 @@ export async function runWorkspaceTitleAutoRename(
   }
 
   const generated = await generateBranchNameFromContext(
-    firstWorkNamingContext(settings, prompt, assistantMessage),
+    { ...firstWorkNamingContext(settings, prompt, assistantMessage), workspaceTitleOnly: true },
     resolvedParams.params,
     target
   )

@@ -1,5 +1,3 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -25,8 +23,6 @@ import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
 } from '../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
-import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import * as workspaceNaming from './first-work-workspace-title-rename'
 import { isWslMoveRepoBlocked } from '../persistence/moving-wsl-projects/wsl-move-background-backoff'
@@ -37,43 +33,14 @@ import {
   retryFailedGeneration
 } from './first-work-generation-backoff'
 
-export type FirstWorkBranchRenameEvent = {
-  paneKey: string
-  /** Untrusted agent echo; use only as a fallback. */
-  worktreeId: string | undefined
-  tabId: string | undefined
-  state: string
-  prompt: string | undefined
-  assistantMessage: string | undefined
-  isReplay: boolean | undefined
-}
-
-export type FirstWorkBranchRenameDeps = {
-  getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
-    Parameters<typeof getConfiguredBranchPrefix>[0] &
-    Partial<
-      Pick<GlobalSettings, 'autoRenameBranchFromWork' | 'workspaceTitleLanguage' | 'uiLanguage'>
-    >
-  getRepo: (repoId: string) => Repo | undefined
-  getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
-  getCurrentDisplayName: (worktreeId: string) => string | undefined
-  getFolderWorkspacePath?: (worktreeId: string) => string | undefined
-  isFolderWorkspaceWslMoveBlocked?: (worktreeId: string) => boolean
-  isPendingFirstAgentMessageRename?: (worktreeId: string) => boolean
-  /** Require Orca creation provenance before renaming a branch. */
-  canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
-  setDisplayName: (worktreeId: string, displayName: string) => void
-  /** Best-effort local folder alignment after the branch rename. */
-  renameWorktreeFolder?: (worktreeId: string, newLeaf: string) => Promise<boolean>
-  /** Null clears the badge; failureOutput supplies bounded local diagnostics. */
-  setRenameError: (
-    worktreeId: string,
-    error: string | null,
-    failureOutput?: AgentGenerationFailureOutput | null
-  ) => void
-  resolveWorktreeIdForTab: (tabId: string) => string | undefined
-  onRenamed: (repoId: string) => void
-}
+import type {
+  FirstWorkBranchRenameDeps,
+  FirstWorkBranchRenameEvent
+} from './first-work-branch-rename-types'
+export type {
+  FirstWorkBranchRenameDeps,
+  FirstWorkBranchRenameEvent
+} from './first-work-branch-rename-types'
 
 // Cache only definitive verdicts; transient failures must remain retryable.
 const inFlightWorktreeIds = new Set<string>()
@@ -247,7 +214,12 @@ async function runAutoRename(
   }
 
   const generated = await generateBranchNameFromContext(
-    workspaceNaming.firstWorkNamingContext(settings, prompt, assistantMessage),
+    workspaceNaming.firstWorkNamingContext(
+      settings,
+      prompt,
+      assistantMessage,
+      workspaceNaming.canRenameFirstWorkDisplayName(worktreeId, deps)
+    ),
     params,
     target
   )
@@ -294,13 +266,20 @@ async function runAutoRename(
       (slugLeaf) => computeBranchName(slugLeaf, settings, username),
       currentBranch
     )
-    if (!newBranch || newBranch === currentBranch) {
+    if (!newBranch) {
       return stop(`no distinct unique branch name for slug "${slug}"`, true)
     }
 
     // Awaited name lookups can outlive the start of a WSL move.
     if (isWslMoveRepoBlocked(repo)) {
       return retry('a WSL move started before the branch rename')
+    }
+    if (newBranch === currentBranch) {
+      if (generated.displayName) {
+        updateDisplayName(leaf, generated.displayName)
+        deps.onRenamed(repo.id)
+      }
+      return stop('generated branch already selected', true)
     }
     await renameCurrentBranch(exec, newBranch)
     return newBranch

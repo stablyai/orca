@@ -184,8 +184,11 @@ export class FolderWorkspacePersistenceOperations {
       updates = { ...updates, linkedTaskSourceContext: linkedUpdates.linkedTaskSourceContext }
     }
     if (updates.name !== undefined) {
-      workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
-      workspace.pendingFirstAgentMessageRename = false
+      const name = normalizeFolderWorkspaceName(updates.name, workspace.name)
+      if (name !== workspace.name) {
+        workspace.pendingFirstAgentMessageRename = false
+      }
+      workspace.name = name
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
       const previous = workspace.folderPath

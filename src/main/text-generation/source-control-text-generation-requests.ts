@@ -238,8 +238,12 @@ export async function generateBranchName(input: {
   }
   let error = 'Generated branch name was empty after sanitization.'
   try {
-    const name = parseGeneratedBranchName(result.rawOutput, Boolean(context.workspaceTitleLanguage))
-    if (name.slug) {
+    const name = parseGeneratedBranchName(
+      result.rawOutput,
+      Boolean(context.workspaceTitleLanguage),
+      context.workspaceTitleOnly
+    )
+    if (name.slug || (context.workspaceTitleOnly && name.displayName)) {
       return { success: true, ...name, agentLabel: result.agentLabel }
     }
   } catch {

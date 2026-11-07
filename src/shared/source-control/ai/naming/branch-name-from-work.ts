@@ -76,6 +76,7 @@ export type BranchNameWorkContext = {
    *  the rename fires as soon as work begins, before a reply may exist. */
   assistantMessage?: string
   workspaceTitleLanguage?: string
+  workspaceTitleOnly?: boolean
 }
 
 export function buildLocalizedWorkspaceNamePrompt(prompt: string, language: string): string {
@@ -92,17 +93,24 @@ export function buildLocalizedWorkspaceNamePrompt(prompt: string, language: stri
 
 export function parseGeneratedBranchName(
   raw: string,
-  localized: boolean
+  localized: boolean,
+  titleOnly = false
 ): { slug: string; displayName?: string } {
   if (!localized) {
     return { slug: sanitizeBranchSlug(raw) }
   }
   assertJsonTextStructureWithinLimits(raw, { structuralTokens: 16, nestingDepth: 2 })
   const parsed: unknown = JSON.parse(raw)
-  if (!parsed || typeof parsed !== 'object' || !('branch' in parsed) || !('title' in parsed)) {
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    !('title' in parsed) ||
+    (!titleOnly && !('branch' in parsed))
+  ) {
     throw new Error('Expected branch and title fields.')
   }
-  const slug = typeof parsed.branch === 'string' ? sanitizeBranchSlug(parsed.branch) : ''
+  const slug =
+    'branch' in parsed && typeof parsed.branch === 'string' ? sanitizeBranchSlug(parsed.branch) : ''
   const displayName =
     typeof parsed.title === 'string' ? sanitizeGeneratedConversationName(parsed.title) : null
   if (!displayName) {
