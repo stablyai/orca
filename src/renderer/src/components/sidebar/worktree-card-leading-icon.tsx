@@ -7,7 +7,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { ShellIcon } from '../tab-bar/shell-icons'
+import { ShellIcon, shellIconKind } from '../tab-bar/shell-icons'
 import {
   decodeLeadingTabIcon,
   selectWorktreeLeadingTabs,
@@ -20,18 +20,37 @@ import { slotLabel } from './WorktreeCardSlot'
 
 const LAYERS = ['front', 'l1', 'l2', 'l3'] as const
 
+/** Generic shells get a tile-sized terminal face; the 24px tab-strip glyph turns blocky at 15px. */
+function TerminalTileFace(): React.JSX.Element {
+  return (
+    <span className="worktree-card-leading-terminal" aria-hidden>
+      <svg width="18" height="15" viewBox="0 0 18 15">
+        <path
+          d="M4.25 4.5 7 7.25 4.25 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path d="M8.5 10h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    </span>
+  )
+}
+
 function TabGlyph({ icon }: { icon: LeadingTabIcon }): React.JSX.Element {
   switch (icon.kind) {
     case 'agent':
-      return <AgentIcon agent={icon.agent} size={13} />
+      return <AgentIcon agent={icon.agent} size={11} />
     case 'shell':
-      return <ShellIcon shell={icon.shell} size={13} />
+      return <ShellIcon shell={icon.shell} size={11} />
     case 'browser':
-      return <BrowserFavicon faviconUrl={icon.faviconUrl} className="size-[13px]" />
+      return <BrowserFavicon faviconUrl={icon.faviconUrl} className="size-[11px]" />
     case 'file':
-      return <FileTypeIcon filePath={icon.filePath} className="size-[13px]" />
+      return <FileTypeIcon filePath={icon.filePath} className="size-[11px]" />
     case 'simulator':
-      return <Smartphone className="size-[13px]" aria-hidden />
+      return <Smartphone className="size-[11px]" aria-hidden />
   }
 }
 
@@ -67,7 +86,7 @@ export function WorktreeCardLeadingIcon({
     >
       {icons.length === 0 ? (
         <span className="worktree-card-leading-tile" data-layer="front">
-          <FolderIcon open={false} className="size-[13px] text-muted-foreground" />
+          <FolderIcon open={false} className="size-[11px] text-muted-foreground" />
         </span>
       ) : (
         // Back to front so later layers paint over earlier ones without z-index fights.
@@ -79,10 +98,12 @@ export function WorktreeCardLeadingIcon({
               data-layer={LAYERS[index]}
               data-kind={icon.kind}
             >
-              {icon.kind === 'shell' ? (
-                // Shell icons are already landscape tiles (21x18 of 24); at 25px they fill this one.
+              {icon.kind === 'shell' && shellIconKind(icon.shell) === 'generic' ? (
+                <TerminalTileFace />
+              ) : icon.kind === 'shell' ? (
+                // Shell icons are already landscape tiles (21x18 of 24); at 21px they fill this one.
                 <span className="worktree-card-leading-fill" aria-hidden>
-                  <ShellIcon shell={icon.shell} size={25} />
+                  <ShellIcon shell={icon.shell} size={21} />
                 </span>
               ) : (
                 <>

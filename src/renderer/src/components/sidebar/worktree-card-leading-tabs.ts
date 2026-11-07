@@ -3,6 +3,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { selectTabBarAgentProjections } from '../tab-bar/tab-agent-types-by-tab-id'
+import { orderWorktreeLeadingTabs } from './worktree-card-leading-tab-order'
 
 /** The card's leading icon shows this many tabs: the front one and up to three layered behind it. */
 export const LEADING_TAB_LIMIT = 4
@@ -78,17 +79,9 @@ function iconForTab(state: AppState, tab: Tab, worktreeId: string): LeadingTabIc
   }
 }
 
-/** The worktree's most recently focused tabs, newest first, encoded for shallow comparison. */
+/** The worktree's leading tabs in the sidebar sort's order, encoded for shallow comparison. */
 export function selectWorktreeLeadingTabs(state: AppState, worktreeId: string): string[] {
-  const tabs = state.unifiedTabsByWorktree[worktreeId]
-  if (!tabs || tabs.length === 0) {
-    return []
-  }
-  // Focus order is calmer than output order: the stack doesn't reshuffle while you watch.
-  return tabs
-    .toSorted(
-      (a, b) => (b.lastFocusedAt ?? 0) - (a.lastFocusedAt ?? 0) || b.createdAt - a.createdAt
-    )
+  return orderWorktreeLeadingTabs(state, worktreeId)
     .slice(0, LEADING_TAB_LIMIT)
     .map((tab) => encode(iconForTab(state, tab, worktreeId)))
 }

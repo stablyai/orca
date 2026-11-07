@@ -1796,8 +1796,8 @@ html.native-shell .app-layout {
   position: relative;
   display: inline-block;
   flex-shrink: 0;
-  width: 22px;
-  height: 18px;
+  width: 18px;
+  height: 15px;
 }
 
 .worktree-card-leading-tile {
@@ -1807,9 +1807,9 @@ html.native-shell .app-layout {
   display: grid;
   place-items: center;
   overflow: hidden;
-  width: 22px;
-  height: 18px;
-  border-radius: 5px;
+  width: 18px;
+  height: 15px;
+  border-radius: 4px;
   transform-origin: 50% 0;
   background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, var(--worktree-sidebar));
   /* The shadow this card casts on the one behind it; the rim lives on ::after, above the fill. */
@@ -1840,6 +1840,19 @@ html.native-shell .app-layout {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.worktree-card-leading-terminal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(255 255 255 / 0.92);
+  background: linear-gradient(to bottom, #3a3a3c, #161618);
+}
+
+.worktree-card-leading-terminal > svg {
+  filter: drop-shadow(0 0 1.5px rgb(255 255 255 / 0.35));
 }
 
 /* Gloss, top highlight and a hairline rim, painted over the fill so same-color stacks keep their edges. */
@@ -1903,12 +1916,12 @@ html.native-shell .app-layout {
 .worktree-card-leading-badge {
   position: absolute;
   z-index: 5;
-  left: 15px;
+  left: 12px;
   bottom: -4px;
   display: grid;
   place-items: center;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   background: var(--worktree-sidebar);
 }

@@ -112,6 +112,26 @@ function GenericTerminalIcon({ size = 14 }: { size?: number }): React.JSX.Elemen
   )
 }
 
+export type ShellIconKind = 'powershell' | 'cmd' | 'wsl' | 'git-bash' | 'generic'
+
+export function shellIconKind(shell: string | null | undefined): ShellIconKind {
+  const normalized = (shell ?? '').toLowerCase()
+  const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
+  if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
+    return 'powershell'
+  }
+  if (normalized === 'cmd.exe') {
+    return 'cmd'
+  }
+  if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
+    return 'wsl'
+  }
+  if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
+    return 'git-bash'
+  }
+  return 'generic'
+}
+
 export function ShellIcon({
   shell,
   size = 14
@@ -119,19 +139,16 @@ export function ShellIcon({
   shell: string | null | undefined
   size?: number
 }): React.JSX.Element {
-  const normalized = (shell ?? '').toLowerCase()
-  const normalizedName = normalized.replaceAll('\\', '/').split('/').pop()
-  if (normalized === 'powershell.exe' || normalized === 'pwsh.exe') {
-    return <PowerShellIcon size={size} />
+  switch (shellIconKind(shell)) {
+    case 'powershell':
+      return <PowerShellIcon size={size} />
+    case 'cmd':
+      return <CmdIcon size={size} />
+    case 'wsl':
+      return <WslIcon size={size} />
+    case 'git-bash':
+      return <GitBashIcon size={size} />
+    case 'generic':
+      return <GenericTerminalIcon size={size} />
   }
-  if (normalized === 'cmd.exe') {
-    return <CmdIcon size={size} />
-  }
-  if (normalized === 'wsl.exe' || normalized.startsWith('wsl')) {
-    return <WslIcon size={size} />
-  }
-  if (normalized === WINDOWS_GIT_BASH_SHELL || normalizedName === 'bash.exe') {
-    return <GitBashIcon size={size} />
-  }
-  return <GenericTerminalIcon size={size} />
 }

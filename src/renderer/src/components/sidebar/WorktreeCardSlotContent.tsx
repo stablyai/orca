@@ -217,7 +217,7 @@ export function WorktreeCardSlotContent({
     <>
       {agentLines}
       {open && showLineageChildChip ? (
-        <div className="mt-[3px] flex min-w-0 pr-1.5 pl-[28px]">
+        <div className="mt-[3px] flex min-w-0 pr-1.5 pl-6">
           <WorktreeCardChildrenChip
             childIdentities={lineageChildIdentities}
             lineageSource={descendants}
@@ -294,7 +294,7 @@ export function WorktreeCardSlotContent({
               disabled={isDeleting || affiliateListMode}
               showUnreadEmphasis={titleBold}
               dimReadTitle
-              className="text-[13px] leading-5"
+              className="text-xs leading-5"
               editingClassName="flex-1"
               titleWrapper={presentation.titleWrapper}
               onEditingChange={affiliateListMode ? undefined : setTitleRenaming}
@@ -362,7 +362,7 @@ export function WorktreeCardSlotContent({
           </div>
           {showDetailsRow ? (
             <div
-              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-1.5 pl-[28px]"
+              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-1.5 pl-6"
               data-worktree-card-details-row=""
             >
               {presentation.hasMetaRow ? (
