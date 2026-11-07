@@ -19,6 +19,8 @@ export function spawnSttUtilityProcess(): SttWorkerProcess {
   })
   logSttWorkerStderr(child.stderr)
   child.on('message', (message) => worker.receiveMessage(message))
+  // A V8 fatal error is always followed by exit, which reports it; unheard, it would throw in main.
+  child.on('error', () => undefined)
   child.on('exit', (code) => worker.receiveExit(code))
   return worker
 }

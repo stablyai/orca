@@ -16,11 +16,17 @@ export function spawnSttForkedProcess(): SttWorkerProcess {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
+  const kill = (): void => {
+    child.kill('SIGKILL')
+  }
   const worker = new SttWorkerChildProcess({
     // The callback swallows sends that race the child's exit; exit reports the failure.
     send: (message) => child.connected && child.send(message, () => undefined),
-    kill: () => child.kill('SIGKILL')
+    kill
   })
+  // A child stuck in native code can't hear the IPC disconnect, so orcad's exit takes it down.
+  process.once('exit', kill)
+  child.once('close', () => process.off('exit', kill))
   logSttWorkerStderr(child.stderr)
   child.on('message', (message) => worker.receiveMessage(message))
   child.on('error', (error) => worker.receiveError(error))
