@@ -10,8 +10,9 @@ import {
 import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from '../../../shared/agent-session/agent-session-permission-modes-capability'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 
 /** `unverified`: the host could not say what it runs, so nothing may start there yet. */
 export type StructuredChatHostPermissionVerdict = ChatPermissionHostVerdict | { kind: 'unverified' }

@@ -42,6 +42,15 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       'The repository changed after Orca checked it. Try again.'
     )
   }
+  // Why: a fork of an official template keeps its reserved id/publisher, and this refusal used to
+  // fall through to a generic failure with no hint to rename (#12598). Checked before the Git
+  // heuristic because a reserved key such as `github.x` contains "git".
+  if (detail.includes('reserved for official orca plugins')) {
+    return translate(
+      'auto.components.settings.pluginError.installReservedIdentity',
+      'This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change "id" in orca-plugin.json so it doesn’t start with "orca-", and set "publisher" to your own name.'
+    )
+  }
   if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
     return translate(
       'auto.components.settings.pluginError.installGit',

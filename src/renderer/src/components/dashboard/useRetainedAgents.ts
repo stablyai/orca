@@ -138,7 +138,9 @@ export function useRetainedAgentsSync(): void {
     TerminalTab,
     TerminalTab
   > | null>(null)
-  tabTopologyProjectionRef.current ??= createRetainedAgentsTabTopologyProjection()
+  if (tabTopologyProjectionRef.current == null) {
+    tabTopologyProjectionRef.current = createRetainedAgentsTabTopologyProjection()
+  }
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)

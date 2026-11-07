@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from './rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -7,9 +8,8 @@ import {
   type RuntimeMobileSessionTabsResult
 } from '../../../shared/runtime-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
-import type * as RuntimeRpcClientModule from './runtime-rpc-client'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
+import type * as WebRuntimeTerminalCreationModule from './hosted-terminals/creation/web-runtime-terminal-creation'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
@@ -33,33 +33,39 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
 
-vi.mock('./runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
-  return { ...actual, runtimeEnvironmentSupportsCapability: mocks.hostAnswersEmptyWorktree }
+vi.mock('./rpc/compatibility/runtime-capability-proof', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeCapabilityProofModule>()
+  return {
+    ...actual,
+    runtimeEnvironmentSupportsCapability: mocks.hostAnswersEmptyWorktree
+  }
 })
 
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverSnapshot
 }))
 
-vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+vi.mock('./hosted-terminals/creation/web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
-  return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
+  return {
+    ...actual,
+    createWebRuntimeSessionTerminal: mocks.createTerminal
+  }
 })
 
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-runtime-initial-terminal-bootstrap'
-import { resetWebRuntimeWakeTerminalRespawnForTests } from './web-runtime-wake-terminal-respawn'
+import { resetWebRuntimeInitialTerminalBootstrapForTests } from './web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from './hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'

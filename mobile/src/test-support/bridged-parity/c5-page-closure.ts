@@ -15,7 +15,6 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
     'aivault-history-screen-listed': 'write-ordinal',
     'aivault-history-screen-worktrees': 'write-ordinal',
     'matrix-aivault.history-screen-platform-status': 'result-absent-settlement',
-    'matrix-aivault.history-screen-status.get-2': 'result-absent-settlement',
     'matrix-aivault.history-screen-worktree.ps-1': 'result-absent-settlement'
   },
   'aiVault.resume-launch': {

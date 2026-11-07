@@ -505,3 +505,21 @@ describe('a pending manifest left by an older build', () => {
     expect(fs.paths().some((path) => path.startsWith(`${HOST}/generations`))).toBe(false)
   })
 })
+
+// Commit deletes the old build first, so it must not run under a page still loading that build's chunks.
+describe('an update staged behind a live page', () => {
+  it('stays staged while a page reads the old build, and the next read after it commits', async () => {
+    const fs = createFakeFileSystem()
+    const store = createGenerationStore({ fileSystem: fs })
+    await activate(store, HOST)
+    const release = store.holdGeneration(HOST)
+    store.deferCommit(await store.stageGeneration(HOST, buildResult(SECOND)))
+
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(true)
+
+    release()
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
+  })
+})

@@ -12,7 +12,7 @@ import * as relations from '../../src/main/linear/issue-relation-write'
 import { LinearWriteFailure } from '../../src/main/linear/linear-issue-write-support'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-rpc'
-import { LINEAR_AGENT_ACCESS_METHODS } from '../../src/main/runtime/rpc/methods/linear-agent-access'
+import { LINEAR_AGENT_ACCESS_METHODS } from '../../src/main/runtime/rpc/methods/integrations/linear/linear-agent-access'
 
 const writeId = '11111111-1111-4111-8111-111111111111'
 const issue = {

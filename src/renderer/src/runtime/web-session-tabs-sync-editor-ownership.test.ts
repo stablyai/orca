@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionFileTab } from '../../../shared/runtime-types'
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import {
@@ -10,7 +10,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 const filePath = '/repo/readme.txt'
 const hostTab: RuntimeMobileSessionFileTab = {

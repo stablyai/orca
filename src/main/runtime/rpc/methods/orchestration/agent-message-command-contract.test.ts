@@ -7,24 +7,24 @@ import { sendRequest } from '../../../../../cli/runtime/transport'
 import type { RuntimeMetadata } from '../../../../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../../../../shared/runtime-rpc-envelope'
 import { OrchestrationMutationExecutor } from '../../orchestration-mutation-executor'
-import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/agent-session-item-wire-form'
+import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/publication/history/agent-session-item-wire-form'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
-import { STATUS_METHODS } from '../status'
+import { STATUS_METHODS } from '../host-management/status'
 import { eraseRpcMethods } from '../../core'
 import { partialRuntimeStore } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
-import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createQueuedMessageTestRig,
-  eventually,
   QUEUED_RIG_CALLER,
   type QueuedMessageTestRig
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import {
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { agentMessageDisplayText } from '../../../../../shared/agent-session/agent-message-display-text'
 import { readAgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
@@ -54,7 +54,7 @@ import {
   agentMessageHeading,
   agentMessageSenderCanOpen
 } from '../../../../../shared/agent-session/agent-message-presentation'
-import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabase } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const h = createOrchestrationRpcHarness()
 let rig: QueuedMessageTestRig | undefined

@@ -1,6 +1,6 @@
 import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from './rpc/environment-revisions/runtime-environment-revision'
 
 // Managed SSH hosts reach this desktop's own browser through the desktop browser bridge instead.
 function hostsBrowserPagesOn(

@@ -8,7 +8,7 @@ import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
-import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
+import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox/terminal-pointer/mailbox-pointer-pty-write'
 import { sendTerminalStreamInput } from './rpc/methods/terminal/terminal-input-delivery'
 import { makeStore } from './rpc/server/runtime-rpc-worktree-store-fixtures'
 import {

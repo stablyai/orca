@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
@@ -25,7 +25,7 @@ import {
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
 } from '@/components/native-chat/native-chat-agent-message-sender-target'
-import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,

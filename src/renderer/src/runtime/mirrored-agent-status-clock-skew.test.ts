@@ -8,7 +8,7 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { isExplicitAgentStatusFresh } from '../lib/pane-agent-evidence'
 import type { AppState } from '../store/types'
 import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
-import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/renderer-owned-agent-status-registry'
+import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 

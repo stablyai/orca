@@ -246,7 +246,13 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  useEffect(() => () => clearTimeout(settleTimer.current), [])
+  // A hidden chat keeps its hold but loses the timer; settle it again when the chat shows.
+  useEffect(() => {
+    if (heldRef.current) {
+      settle.current()
+    }
+    return () => clearTimeout(settleTimer.current)
+  }, [])
 
   const drawAndFetch = useCallback(
     (s: Scroller) => {
@@ -382,8 +388,9 @@ export function MobileNativeChatPageList({
         return
       }
       const byReader = own.current === null || Math.abs(s.scrollTop - own.current) >= 1
-      own.current = null
+      // RN Web repeats the last scroll event 100 ms after scrolling stops; keep our write so that repeat is ours too.
       if (byReader) {
+        own.current = null
         readerScrolledAt.current = Date.now()
       }
       onEndDistance(Math.max(0, -s.scrollTop), byReader)

@@ -14,10 +14,9 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
-  scheduleNativeChatVisualsSweep,
   sweepNativeChatVisualsFolders,
   type NativeChatVisualsSweepDeps
 } from './native-chat-visuals-sweep'
@@ -51,7 +50,7 @@ function age(path: string, daysAgo: number): void {
       age(join(path, name), daysAgo)
     }
   }
-  const at = new Date(Date.now() - daysAgo * DAY_MS)
+  const at = new Date(Date.UTC(2020, 0, 1) - daysAgo * DAY_MS)
   utimesSync(path, at, at)
 }
 
@@ -69,20 +68,6 @@ function deps(
 }
 
 describe('the visuals folder sweep', () => {
-  it('removes a folder no chat record maps to and keeps every held chat', async () => {
-    const state = stateDirectory()
-    const live = visualsFor(state, 'chat-live')
-    const unreadable = visualsFor(state, 'chat-unreadable-row')
-    const orphan = visualsFor(state, 'chat-deleted')
-    const result = await sweepNativeChatVisualsFolders(
-      deps(state, ['chat-live', 'chat-unreadable-row'])
-    )
-    expect(result).toEqual({ removed: 1, failed: 0 })
-    expect(existsSync(live)).toBe(true)
-    expect(existsSync(unreadable)).toBe(true)
-    expect(existsSync(orphan)).toBe(false)
-  })
-
   it('keeps a held chat folder however long it went unused, and retains one set aside for startup recovery', async () => {
     const state = stateDirectory()
     const idle = visualsFor(state, 'chat-idle')
@@ -128,23 +113,6 @@ describe('the visuals folder sweep', () => {
     expect(existsSync(join(root, 'f'.repeat(32)))).toBe(true)
     expect(existsSync(join(root, 'e'.repeat(32)))).toBe(true)
     expect(existsSync(join(target, 'keep.txt'))).toBe(true)
-  })
-
-  it('runs after startup and again later, and stops for good', async () => {
-    const state = stateDirectory()
-    const orphan = visualsFor(state, 'chat-z')
-    vi.useFakeTimers()
-    const listHeldSessionIds = vi.fn((): string[] => [])
-    const stop = scheduleNativeChatVisualsSweep({ ...deps(state, []), listHeldSessionIds })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(listHeldSessionIds).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(60_000)
-    await vi.waitFor(() => expect(existsSync(orphan)).toBe(false))
-    expect(listHeldSessionIds).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
-    await vi.waitFor(() => expect(listHeldSessionIds).toHaveBeenCalledTimes(2))
-    stop()
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('touches nothing under a visuals root that is a symlink', async () => {

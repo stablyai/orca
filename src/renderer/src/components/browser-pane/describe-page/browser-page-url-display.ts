@@ -5,7 +5,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'
 

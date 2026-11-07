@@ -1,8 +1,8 @@
+import { useAppStateValue } from '@/store/app-state-view'
 import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
-import { useAppStore } from '@/store'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
 import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
 import type { AppState } from '@/store/types'
@@ -34,15 +34,15 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
     parentPaneKey !== undefined &&
     parsePaneKey(parentPaneKey)?.tabId === agent.tab.id
   const cannotOwnTabName = agent.rowSource === 'subagent' || usesParentTab
-  const generatedTitlesEnabled = useAppStore(
+  const generatedTitlesEnabled = useAppStateValue(
     (s) => !cannotOwnTabName && s.settings?.tabAutoGenerateTitle === true
   )
-  const liveTab = useAppStore((s) =>
+  const liveTab = useAppStateValue((s) =>
     cannotOwnTabName
       ? undefined
       : getIndexedTab(s.tabsByWorktree[agent.tab.worktreeId], agent.tab.id)
   )
-  const structuredTab = useAppStore((s) =>
+  const structuredTab = useAppStateValue((s) =>
     cannotOwnTabName
       ? undefined
       : structuredChatTabById(s.unifiedTabsByWorktree, agent.tab.worktreeId, agent.tab.id)
@@ -51,7 +51,7 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
   // Parse once per render; selectors run on every store write and must stay allocation-free.
   const ownLeafId = cannotOwnTabName ? null : parsePaneKey(agent.paneKey)?.leafId
   // Select this split pane’s primitive title so sibling focus/title changes cannot rename or re-render its row.
-  const paneLiveTitle = useAppStore((s) =>
+  const paneLiveTitle = useAppStateValue((s) =>
     cannotOwnTabName
       ? undefined
       : resolveAgentRowPaneLiveTitle(

@@ -9,8 +9,8 @@ import { JsonlRpcResponseError } from '../jsonl-rpc/peer'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { applyPiRpcSessionOption } from './rpc-options'
 import { PiRpcPromptError, preparePiRpcPrompt, type PiRpcPrompt } from './rpc-prompt'
 import type { PiRpcSession, PiRpcSessionDeps } from './rpc-session'

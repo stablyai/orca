@@ -11,7 +11,7 @@ import type {
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
+import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/work-items/github/github-work-item-details-cache-events'
 
 // Bound cached details for instant reopen; refresh stale entries on open. See docs/gh-work-item-drawer-cache.md.
 export const WORK_ITEM_DETAILS_CACHE_MAX = 50

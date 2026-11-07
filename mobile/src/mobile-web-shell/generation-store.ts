@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   MobileWebBundleManifestReadSchema,
   type MobileWebBundleManifestRead
@@ -8,6 +7,8 @@ import type {
   MobileWebBundleReusableAssets
 } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
+import { createGenerationHostOrder, parseJson, withHostLast } from './generation-host-order'
+import { createDeferredCommits } from './generation-deferred-commits'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
@@ -22,7 +23,6 @@ import {
 
 const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
-const HOST_INDEX_FILE_NAME = 'hosts.json'
 
 export const MAX_CACHED_HOSTS = 6
 
@@ -50,7 +50,13 @@ export type GenerationStore = {
     reusable?: MobileWebBundleReusableAssets
   ): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
+  // Commit later: the next readActiveGeneration for this host with no readers commits it, because commit deletes the old build.
+  deferCommit(staged: StagedGeneration): void
+  // A mounted page reading this host's active build; release when it stops reading it.
+  holdGeneration(hostKey: string): () => void
+  hasDeferredCommit(hostKey: string, buildId: string): boolean
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
+  // Once per store, which is once per launch: a later sweep would delete stages waiting to commit.
   sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
@@ -61,13 +67,11 @@ export type GenerationStore = {
   forgetHostUpdateFailures(hostId: string): Promise<void>
 }
 
-// Recency only: unreadable or legacy timestamp indexes count as empty, making unlisted hosts first to evict.
-const HostOrderSchema = z.array(z.string())
-
 export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
 }): GenerationStore {
   const fs = options.fileSystem
+  const hostOrder = createGenerationHostOrder(fs)
   // Accept only handles minted here; structural lookalikes must not authorize renaming or deleting caller-selected directories.
   const issuedHandles = new WeakSet<StagedGeneration>()
   const reuseSources = new WeakMap<
@@ -75,33 +79,16 @@ export function createGenerationStore(options: {
     ReturnType<typeof reusableAssetsOf>
   >()
 
+  const deferred = createDeferredCommits()
+  // Only this store writes the tree, so a read answer stays true until it changes it.
+  const activeMemo = new Map<string, ActiveGeneration>()
+  let swept = false
+
   const hostRoot = (hostKey: string): string => joinUri(fs.rootUri, requireHostKey(hostKey))
   const generationsRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), GENERATIONS_DIRECTORY_NAME)
   const stagingRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
-
-  async function readHostOrder(): Promise<readonly string[]> {
-    // Index read failures lose eviction order only; the next activation rewrites it.
-    const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME)).catch(() => null)
-    const parsed = text === null ? null : HostOrderSchema.safeParse(parseJson(text))
-    return parsed?.success === true ? parsed.data : []
-  }
-
-  async function writeHostOrder(order: readonly string[]): Promise<void> {
-    // Index write failures must not reject an activation already on disk; the next activation rewrites it.
-    await fs
-      .writeText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME), JSON.stringify(order))
-      .catch(() => undefined)
-  }
-
-  // No eviction pass: touching recency does not add a host.
-  async function touchHost(hostKey: string): Promise<void> {
-    const order = await readHostOrder()
-    if (order.at(-1) !== hostKey) {
-      await writeHostOrder(withHostLast(order, hostKey))
-    }
-  }
 
   async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
     const entries = await fs.list(fs.rootUri)
@@ -121,6 +108,8 @@ export function createGenerationStore(options: {
   }
 
   async function dropHostTree(hostKey: string): Promise<void> {
+    activeMemo.delete(hostKey)
+    deferred.drop(hostKey)
     await fs.delete(hostRoot(hostKey))
   }
 
@@ -135,7 +124,7 @@ export function createGenerationStore(options: {
     for (const host of evicted) {
       await dropHostTree(host)
     }
-    await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
+    await hostOrder.write(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
   async function readActive(
@@ -223,6 +212,12 @@ export function createGenerationStore(options: {
 
   async function commit(staged: StagedGeneration): Promise<ActiveGeneration> {
     requireIssuedHandle(staged)
+    // Any other stage waiting for this host is older than the build committed now.
+    const waiting = deferred.drop(staged.hostKey)
+    if (waiting !== null && waiting.directory !== staged.directory) {
+      await fs.delete(waiting.directory).catch(() => undefined)
+    }
+    activeMemo.delete(staged.hostKey)
     const generations = generationsRoot(staged.hostKey)
     const target = joinUri(generations, staged.buildId)
     const active: ActiveGeneration = {
@@ -238,7 +233,7 @@ export function createGenerationStore(options: {
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
       // A same-build redownload still updates recency, or an active host could be evicted first.
-      await touchHost(staged.hostKey)
+      await hostOrder.touch(staged.hostKey)
       await fs.delete(staged.directory)
       return active
     }
@@ -257,15 +252,26 @@ export function createGenerationStore(options: {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
-    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey))
+    await enforceHostLimit(withHostLast(await hostOrder.read(), staged.hostKey))
     return active
   }
 
+  async function commitDeferred(hostKey: string): Promise<void> {
+    const waiting = deferred.takeUnread(hostKey)
+    if (waiting === null) {
+      return
+    }
+    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
+    await commit(waiting).catch(() => fs.delete(waiting.directory).catch(() => undefined))
+  }
+
   async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
-    const active = await readActive(hostKey)
+    await commitDeferred(hostKey)
+    const active = activeMemo.get(hostKey) ?? (await readActive(hostKey))
     // Opening counts as use even if the host’s bundle was downloaded long ago.
     if (active !== null) {
-      await touchHost(hostKey)
+      activeMemo.set(hostKey, active)
+      await hostOrder.touch(hostKey)
     }
     return active
   }
@@ -282,17 +288,21 @@ export function createGenerationStore(options: {
   }
 
   async function sweep(): Promise<void> {
+    if (swept) {
+      return
+    }
     // Sweep every host’s tmp tree; interrupted downloads may belong to a host this launch never opens.
     for (const host of await listHostDirectories()) {
       await fs.delete(joinUri(fs.rootUri, host.name, STAGING_DIRECTORY_NAME))
     }
+    swept = true
   }
 
   async function deleteHost(hostKey: string): Promise<void> {
     await dropHostTree(hostKey)
-    const order = await readHostOrder()
+    const order = await hostOrder.read()
     if (order.includes(hostKey)) {
-      await writeHostOrder(order.filter((key) => key !== hostKey))
+      await hostOrder.write(order.filter((key) => key !== hostKey))
     }
   }
 
@@ -310,6 +320,14 @@ export function createGenerationStore(options: {
     stageGeneration: (hostKey, result, signal, reusable) =>
       serialize(() => stage(hostKey, result, signal, reusable)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
+    deferCommit: (staged) => {
+      const replaced = deferred.defer(requireIssuedHandle(staged))
+      if (replaced !== null) {
+        void serialize(() => fs.delete(replaced.directory)).catch(() => undefined)
+      }
+    },
+    holdGeneration: deferred.hold,
+    hasDeferredCommit: deferred.waits,
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
     sweepStagedGenerations: () => serialize(sweep),
@@ -322,22 +340,10 @@ export function createGenerationStore(options: {
   }
 }
 
-function withHostLast(order: readonly string[], hostKey: string): string[] {
-  return [...order.filter((key) => key !== hostKey), hostKey]
-}
-
 // Use the forward-compatible reader on disk too; newer desktop fields must not force redownload every launch.
 function parseManifest(text: string): MobileWebBundleManifestRead | null {
   const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
   return parsed.success ? parsed.data : null
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
 }
 
 function requireHostKey(hostKey: string): string {

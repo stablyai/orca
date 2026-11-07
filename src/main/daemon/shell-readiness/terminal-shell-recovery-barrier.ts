@@ -64,6 +64,11 @@ export class TerminalShellRecoveryBarrier {
     this.scanAndRelease(emission)
   }
 
+  /** The barrier scans every byte before any consumer, so this is the host's view of ?1004. */
+  get focusReportingArming(): number | null {
+    return this.scanner.focusReportingArming
+  }
+
   getOwner(): TerminalOwner | undefined {
     return this.scanner.owner
   }

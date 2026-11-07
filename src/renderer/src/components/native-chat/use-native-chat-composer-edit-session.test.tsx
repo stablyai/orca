@@ -75,7 +75,7 @@ it('lands late dictation in the composer draft after a click moved focus to its 
     throw new Error('missing captured target')
   }
   screen.getByRole('button', { name: 'Stop dictation' }).focus()
-  act(() => insertText('dictated words', target))
-  act(() => insertText(' and more', target))
+  act(() => void insertText('dictated words', target))
+  act(() => void insertText(' and more', target))
   expect(readNativeChatComposerDraft(scope).text).toBe('dictated words and more')
 })

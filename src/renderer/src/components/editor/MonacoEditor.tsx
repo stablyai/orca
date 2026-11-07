@@ -6,10 +6,9 @@ import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { monacoTypographyOptions } from '@/lib/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { isLinuxUserAgent } from '../../lib/user-agent-platform'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { toEditorModelUri } from './model-lifetime/identity/editor-model-uri'
@@ -17,6 +16,7 @@ import { getEditorModelOwnerKey } from './model-lifetime/identity/editor-model-o
 import { NO_RESOURCE_EVIDENCE, type WorkspaceResource } from '@/lib/workspace-copy-owner'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
+import { buildEditorUnicodeHighlightOptions } from './editor-unicode-highlight-options'
 import { useMonacoRevealScheduler } from './use-monaco-reveal-scheduler'
 import type { MonacoContentSyncMode } from './monaco-content-sync'
 import { useMonacoContentSyncBridge } from './use-monaco-content-sync-bridge'
@@ -307,10 +307,7 @@ export default function MonacoEditor({
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,
-          unicodeHighlight: {
-            ambiguousCharacters: language !== 'markdown',
-            invisibleCharacters: true
-          },
+          unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
           tabSize: 2,
           readOnly,
           scrollbar: autoHeight

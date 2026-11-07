@@ -4,7 +4,7 @@ import {
   boundToolInput,
   JOURNAL_RUNNING_PREVIEW_LIMITS,
   journalToolPayload
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+} from '../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { piRpcMessageEventSchema, piRpcToolEventSchema } from './rpc-protocol'
 import type { PiRpcContextUsage } from './rpc-context-usage'

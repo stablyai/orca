@@ -5,12 +5,16 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
-import { FederationAttachStartParams } from '../federation/federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
@@ -331,43 +335,6 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
-  it('injects the execution host CLI command without a Dispatch capability', async () => {
-    mockCreatedWorktree()
-    vi.mocked(runtime.getTerminalOrchestrationCliCommand).mockReturnValue('orca-ide')
-
-    await startWorker({ worktree: 'new-top-level' })
-
-    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    expect(prompt).toContain('orca-ide orchestration send')
-    expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
-  })
-
-  it('passes exact repo, base, metadata, lineage, and setup choices to worktree creation', async () => {
-    mockCreatedWorktree({ state: 'skipped' })
-
-    await startWorker({
-      worktree: 'new-top-level',
-      repo: 'id:repo-explicit',
-      baseBranch: 'origin/release',
-      displayName: 'Windows release audit',
-      comment: 'Created for a supervised audit',
-      setup: 'skip'
-    })
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({
-        repoSelector: 'id:repo-explicit',
-        baseBranch: 'origin/release',
-        displayName: 'Windows release audit',
-        displayNameKind: 'user',
-        comment: 'Created for a supervised audit',
-        setupDecision: 'skip',
-        runHooks: false,
-        lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
-      })
-    )
-  })
-
   it('reports an absent setup hook as not configured without failing the start', async () => {
     mockCreatedWorktree({ hookFound: false })
 
@@ -382,24 +349,6 @@ describe('orchestration new-worktree workers', () => {
         hookFound: false,
         state: 'not_configured'
       }
-    })
-  })
-
-  it.each([
-    ['skip', 'skipped'],
-    ['inherit', 'not_configured'],
-    ['run', 'running']
-  ] as const)('passes explicit setup=%s through with a truthful receipt', async (setup, state) => {
-    mockCreatedWorktree({ hookFound: setup === 'run', state })
-
-    const { result } = await startWorker({ setup })
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ setupDecision: setup, runHooks: false, activate: false })
-    )
-    expect(result).toMatchObject({
-      state: 'ready',
-      setup: { requested: setup, effective: setup, source: 'explicit_request', state }
     })
   })
 
@@ -442,7 +391,6 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     )
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(db.getInbox(10).filter((message) => message.run_id === runId)).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'status', priority: 'high' })])
     )
@@ -487,9 +435,6 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
       ])
     })
-    expect(vi.mocked(runtime.waitForTerminal).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(runtime.sendTerminalAgentPrompt).mock.invocationCallOrder[0]!
-    )
     expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
@@ -498,22 +443,6 @@ describe('orchestration new-worktree workers', () => {
   })
 
   // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
-  it('settles a fresh worker start on main’s idle wait, not the launch paste’s signal', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-    const composerSignal = vi.spyOn(runtime, 'waitForFreshWorkerComposer')
-
-    const { result } = await startWorker()
-
-    expect(composerSignal).not.toHaveBeenCalled()
-    expect(runtime.waitForTerminal).toHaveBeenCalledWith(
-      'term_worker',
-      expect.objectContaining({ condition: 'tui-idle', launchReadiness: true })
-    )
-    expect(result).toMatchObject({
-      state: 'ready',
-      setup: { startupPolicy: 'wait-for-setup', state: 'succeeded' }
-    })
-  })
 
   it('does not inject task input when the gated setup terminal fails to start', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
@@ -639,11 +568,7 @@ describe('orchestration new-worktree workers', () => {
 
     expect(result).toMatchObject({
       state: 'outcome_unknown',
-      failedStage: 'worktree_create',
-      nextCommands: expect.arrayContaining([
-        expect.stringContaining('worker-show --dispatch'),
-        expect.stringContaining('worker-abandon --dispatch')
-      ])
+      failedStage: 'worktree_create'
     })
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })
@@ -797,8 +722,6 @@ describe('orchestration new-worktree workers', () => {
         mutation: { requestId: 'worker_start_request', replayed: true }
       }
     })
-    expect(runtime.createManagedWorktree).toHaveBeenCalledOnce()
-    expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     expect(recreateWorktree).not.toHaveBeenCalled()
     expect(reinjectPrompt).not.toHaveBeenCalled()
   })

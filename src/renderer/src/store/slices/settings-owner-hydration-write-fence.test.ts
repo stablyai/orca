@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { createTestStore } from './store-test-helpers'
-import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
+import { markRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 it('does not overwrite a settings write with an older owner hydration', async () => {
   let resolveSettingsRead!: (settings: GlobalSettings) => void

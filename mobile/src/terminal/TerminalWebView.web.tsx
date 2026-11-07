@@ -45,7 +45,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     const controller = useTerminalWebViewController(props, {
       post,
       // The page has no separate content process; losing its modules also loses this component.
-      pingsOnForegroundRecovery: () => false
+      pingsOnForegroundRecovery: () => false,
+      coalesce: false
     })
     const { clearEngineError, engineError, handle, receive, resetReadiness } = controller
     // Reload replaces the host div as well as the document so xterm cannot inherit the old mount.

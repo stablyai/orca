@@ -1,5 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
-import { guardParserHandler } from '@/components/terminal-pane/terminal-parser-handler-guard'
+import { guardParserHandler } from '@/components/terminal-pane/emulation/terminal-parser-handler-guard'
 
 // SerializeAddon omits private DECSET 1006/1016 encoding, so snapshots would make phones send legacy reports to SGR-only TUIs. Mirror parser state for in-band replay.
 

@@ -26,7 +26,7 @@ import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
 } from '@/store/slices/runtime-environment-ssh-selectors'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {

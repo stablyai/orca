@@ -2,6 +2,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderLineageEdgeOf } from '../../../../shared/worktree/folder-lineage-parents'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
@@ -10,6 +11,7 @@ import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace
 import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
 import type { RuntimeStore } from '../../runtime-store-contract'
+import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 export function buildRuntimeWorktreePsSummaries(args: {
@@ -20,6 +22,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const summaries = new Map<string, RuntimeWorktreePsSummary>()
   const ghCache = args.store?.getGitHubCache?.()
   const crossStoreLineage = args.store?.getAllCrossStoreWorkspaceLineage?.() ?? {}
+  const workspaceLineage = args.store?.getAllWorkspaceLineage?.()
   for (const { worktree, repo } of withOwnerRepos(
     args.resolvedWorktrees,
     args.store?.getRepos() ?? []
@@ -69,6 +72,14 @@ export function buildRuntimeWorktreePsSummaries(args: {
       parentWorktreeId: worktree.parentWorktreeId,
       childWorktreeIds: worktree.childWorktreeIds,
       ...(crossStoreParent ? { crossStoreParent } : {}),
+      ...(workspaceLineage
+        ? {
+            workspaceLineage: folderLineageEdgeOf(
+              workspaceLineage[worktreeWorkspaceKey(worktree.id)],
+              worktree.instanceId
+            )
+          }
+        : {}),
       displayName: worktree.displayName,
       workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
       sortOrder: meta?.sortOrder ?? 0,
@@ -99,7 +110,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const projectGroupById = new Map(
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
-  for (const folderWorkspace of args.store?.getFolderWorkspaces?.() ?? []) {
+  for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
     if (!projectGroup?.parentPath) {
       continue
@@ -109,6 +120,8 @@ export function buildRuntimeWorktreePsSummaries(args: {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,
       repoId: worktree.repoId,
+      // The phone names a row's machine from hostId; without it an SSH folder reads as local.
+      hostId: worktree.hostId,
       repo: projectGroup.name,
       path: worktree.path,
       branch: worktree.branch,

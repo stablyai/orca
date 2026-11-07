@@ -1,4 +1,4 @@
-import type { RemoteBrowserPageHandle } from '../store/slices/browser'
+import type { RemoteBrowserPageHandle } from '../store/slices/browser/browser-slice-contract'
 
 type RestoredBrowserHandleSource = {
   // Optional: reachability can be observed before the browser slice has any handles to offer.

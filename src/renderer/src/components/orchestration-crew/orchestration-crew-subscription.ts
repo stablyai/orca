@@ -1,15 +1,15 @@
-import { subscribeRuntimeRpc } from '@/runtime/runtime-rpc-subscribe'
+import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 import {
   createRuntimeCrewSubscriptionAttempt,
   RuntimeCrewSetupError
-} from '@/runtime/runtime-crew-subscribe'
+} from '@/runtime/rpc/subscriptions/runtime-crew-subscribe'
 import {
   CrewFrame,
   emptyCrew,
   type OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration-crew'
 import { runtimeHostStatusBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
+import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import type { CrewFollowSource } from './orchestration-crew-follow'
 
 export const UNKNOWN_CREW = emptyCrew('unknown')

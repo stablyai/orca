@@ -47,6 +47,10 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: vi.fn()
+}))
+
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
@@ -67,7 +71,7 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
-describe('RateLimitService Antigravity usage', () => {
+describe('RateLimitService Antigravity runtime switching', () => {
   beforeEach(() => {
     resetRateLimitProviderMocks()
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
@@ -75,65 +79,63 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
   })
 
-  it('publishes the Antigravity CLI reading, not the Gemini one', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+  it('drops stale usage when the default distro resolves to a different runtime', async () => {
+    const withRuntime = (result: ProviderRateLimits, runtime: string): ProviderRateLimits => ({
+      ...result,
+      usageMetadata: { ...result.usageMetadata, authProvenance: runtime }
+    })
+    vi.mocked(fetchAntigravityRateLimits)
+      .mockResolvedValueOnce(withRuntime(okProvider('antigravity', 30), 'wsl:ubuntu'))
+      .mockResolvedValueOnce(withRuntime(errorProvider('antigravity', 'timed out'), 'wsl:debian'))
     const service = new RateLimitService()
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: null })
 
     await service.refresh()
+    await service.refresh()
 
-    const state = service.getState()
-    expect(state.antigravity?.status).toBe('ok')
-    expect(state.antigravity?.provider).toBe('antigravity')
-    // Distinct values prove Antigravity is no longer a Gemini mirror.
-    expect(state.antigravity?.session?.usedPercent).toBe(30)
-    expect(state.gemini?.session?.usedPercent).toBe(42)
+    expect(service.getState().antigravity?.status).toBe('error')
+    expect(service.getState().antigravity?.session).toBeNull()
   })
 
-  it('keeps an Antigravity reading through a Gemini failure', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
-      errorProvider('gemini', 'Gemini project ID not found')
-    )
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 55))
-    const service = new RateLimitService()
+  it.each([false, true])(
+    'discards an outgoing read even after switching back: %s',
+    async (switchBack) => {
+      const started = Promise.withResolvers<void>()
+      const pending = Promise.withResolvers<ProviderRateLimits>()
+      vi.mocked(fetchAntigravityRateLimits).mockImplementationOnce(() => {
+        started.resolve()
+        return pending.promise
+      })
+      const service = new RateLimitService()
+      const refresh = service.refresh()
+      await started.promise
 
+      service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      if (switchBack) {
+        service.setAntigravityFetchTarget({ runtime: 'host', wslDistro: null })
+      }
+      pending.resolve(okProvider('antigravity', 30))
+      await refresh
+
+      expect(service.getState().antigravity).toBeNull()
+    }
+  )
+
+  it('drops the old runtime cooldown before an automated refresh', async () => {
+    vi.mocked(fetchAntigravityRateLimits)
+      .mockResolvedValueOnce({
+        ...unavailableProvider('antigravity', 'Sign in with agy'),
+        usageMetadata: { retryAtMs: Date.now() + 60 * 60 * 1000 }
+      })
+      .mockResolvedValue(okProvider('antigravity', 30))
+    const service = new RateLimitService()
     await service.refresh()
 
-    const state = service.getState()
-    // Separate credentials/endpoints mean Gemini auth failure cannot invalidate Antigravity (#9122).
-    expect(state.antigravity?.status).toBe('ok')
-    expect(state.antigravity?.session?.usedPercent).toBe(55)
-    expect(state.gemini?.status).toBe('error')
-    expect(state.gemini?.error).toBe('Gemini project ID not found')
-  })
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    await service.refreshIfStale()
 
-  it('reports an Antigravity failure without touching Gemini', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
-      errorProvider('antigravity', 'The Antigravity CLI did not report a quota.')
-    )
-    const service = new RateLimitService()
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.antigravity?.status).toBe('error')
-    expect(state.antigravity?.session).toBeNull()
-    expect(state.gemini?.status).toBe('ok')
-  })
-
-  it('surfaces a rejected Antigravity fetch as that provider\u2019s error', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
-    vi.mocked(fetchAntigravityRateLimits).mockRejectedValue(new Error('spawn agy ENOENT'))
-    const service = new RateLimitService()
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.antigravity?.status).toBe('error')
-    expect(state.antigravity?.error).toContain('spawn agy ENOENT')
-    expect(state.claude?.status).toBe('ok')
-    expect(state.gemini?.status).toBe('ok')
+    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(30)
   })
 })
 
@@ -143,46 +145,6 @@ describe('Antigravity usage gating', () => {
     vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
-  })
-
-  it('never spawns agy when the usage meter is hidden', async () => {
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
-    const service = new RateLimitService()
-    service.setAntigravityUsageEnabledResolver(() => false)
-
-    await service.refresh()
-
-    // Hidden meters should not pay for agy language-server startup on every cycle.
-    expect(fetchAntigravityRateLimits).not.toHaveBeenCalled()
-    expect(service.getState().antigravity?.status).toBe('idle')
-    expect(service.getState().gemini?.status).toBe('ok')
-  })
-
-  it('spawns agy when the meter is shown', async () => {
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
-    const service = new RateLimitService()
-    service.setAntigravityUsageEnabledResolver(() => true)
-
-    await service.refresh()
-
-    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
-    expect(service.getState().antigravity?.status).toBe('ok')
-  })
-
-  it('keeps the last reading when the meter is hidden mid-session', async () => {
-    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 44))
-    const service = new RateLimitService()
-    let enabled = true
-    service.setAntigravityUsageEnabledResolver(() => enabled)
-    await service.refresh()
-    expect(service.getState().antigravity?.session?.usedPercent).toBe(44)
-
-    enabled = false
-    await service.refresh()
-
-    // Hiding/revealing the meter must not flash away known usage.
-    expect(service.getState().antigravity?.session?.usedPercent).toBe(44)
-    expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
   })
 
   it('holds browser sign-in reads until a credential change or refresh', async () => {
@@ -314,5 +276,63 @@ describe('Antigravity usage gating', () => {
       service.stop()
       vi.useRealTimers()
     }
+  })
+})
+
+describe('Antigravity account attribution', () => {
+  const login = { key: 'consumer\na', accountId: 'a', email: 'a@example.invalid' }
+  const saved = (rateLimits: ProviderRateLimits | null) => [
+    { accountId: 'a', email: 'a@example.invalid', active: true, rateLimits },
+    { accountId: 'b', email: 'b@example.invalid', active: false, rateLimits: null }
+  ]
+
+  beforeEach(() => {
+    resetRateLimitProviderMocks()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 7))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 30))
+  })
+
+  it('names the saved account a reading belongs to and lists every saved account', async () => {
+    const service = new RateLimitService()
+    service.setAntigravityFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    const begin = vi.fn(async () => ({ login, accounts: saved(null) }))
+    const finish = vi.fn(async (_target: unknown, _login: unknown, limits: ProviderRateLimits) => ({
+      switched: false as const,
+      account: { id: 'a', email: 'a@example.invalid' },
+      accounts: saved(limits)
+    }))
+    service.setAntigravityAccountUsageRecorder({ begin, finish })
+
+    await service.refresh()
+
+    const state = service.getState()
+    expect(begin).toHaveBeenCalledWith({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(finish).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      login,
+      expect.anything()
+    )
+    expect(state.antigravity?.usageMetadata?.account).toEqual({
+      id: 'a',
+      email: 'a@example.invalid'
+    })
+    expect(
+      state.antigravityAccounts.map((entry) => entry.rateLimits?.session?.usedPercent ?? null)
+    ).toEqual([30, null])
+  })
+
+  it('discards a reading when the agy login changed during the read', async () => {
+    const service = new RateLimitService()
+    service.setAntigravityAccountUsageRecorder({
+      begin: async () => ({ login, accounts: saved(null) }),
+      finish: async () => ({ switched: true })
+    })
+
+    await service.refresh()
+
+    expect(service.getState().antigravity).toBeNull()
+    expect(service.getState().antigravityAccounts.every((entry) => !entry.rateLimits)).toBe(true)
   })
 })

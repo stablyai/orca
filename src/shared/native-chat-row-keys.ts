@@ -78,6 +78,17 @@ function sourcesByRow(
   })
 }
 
+const NO_MOVES: ReadonlyMap<string, string | undefined> = new Map()
+
+function sameRowIds(
+  previous: readonly NativeChatMessage[],
+  rows: readonly NativeChatMessage[]
+): boolean {
+  return (
+    previous.length === rows.length && previous.every((row, index) => row.id === rows[index]!.id)
+  )
+}
+
 export function assignNativeChatRowKeys(
   previous: Assigned | null,
   rows: readonly NativeChatMessage[],
@@ -86,9 +97,12 @@ export function assignNativeChatRowKeys(
   scopeOf?: (row: NativeChatMessage) => string | undefined,
   preparedSources?: () => readonly Sources[]
 ): Pick<Assigned, 'sources'> & {
-  keyById: Map<string, string>
-  moved: Map<string, string | undefined>
+  keyById: ReadonlyMap<string, string>
+  moved: ReadonlyMap<string, string | undefined>
 } {
+  if (!fresh && previous && sameRowIds(previous.rows, rows)) {
+    return { keyById: previous.keyById, moved: NO_MOVES }
+  }
   const keyById = new Map<string, string>()
   const taken = new Set<string>()
   const take = (row: NativeChatMessage, key: string): void => {
