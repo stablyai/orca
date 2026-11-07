@@ -11274,7 +11274,10 @@
               "micInput": "Eingabe",
               "micDevice": "Gerät",
               "micAirpods": "airpods",
-              "micDefault": "Systemstandard"
+              "micDefault": "Systemstandard",
+              "dictationLanguageTitle": "Diktiersprache",
+              "dictationLanguageDescription": "Teile dem Sprachmodell mit, welche Sprache du sprichst.",
+              "dictationLanguageKeyword": "Sprache"
             }
           }
         },
@@ -20522,6 +20525,15 @@
         "idleStopSearchTimeout": "Zeitlimit",
         "idleStopSearchKeepAlive": "aktiv halten",
         "idleStopNever": "Nie"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} transkribiert nur die Sprachen, für die es gebaut wurde, und ignoriert diese Einstellung.",
+          "unsupported": "{{model}} unterstützt {{language}} nicht und erkennt die Sprache daher selbst.",
+          "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
+          "title": "Diktiersprache",
+          "auto": "Automatisch erkennen"
+        }
       }
     },
     "agentChildRow": {

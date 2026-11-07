@@ -10585,7 +10585,10 @@
               "micInput": "输入",
               "micDevice": "设备",
               "micAirpods": "耳机",
-              "micDefault": "系统默认"
+              "micDefault": "系统默认",
+              "dictationLanguageTitle": "听写语言",
+              "dictationLanguageDescription": "告诉语音模型你说的是哪种语言。",
+              "dictationLanguageKeyword": "语言"
             }
           }
         },
@@ -19826,6 +19829,15 @@
         "idleStopSearchTimeout": "超时",
         "idleStopSearchKeepAlive": "保持活动",
         "idleStopNever": "从不"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} 只能转写它支持的语言，因此会忽略此设置。",
+          "unsupported": "{{model}} 不支持{{language}}，因此会自动检测语言。",
+          "description": "你说的语言。选择自动检测时，模型每次都会自行判断语言。",
+          "title": "听写语言",
+          "auto": "自动检测"
+        }
       }
     },
     "agentChildRow": {

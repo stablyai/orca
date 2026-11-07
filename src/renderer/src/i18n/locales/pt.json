@@ -6562,7 +6562,10 @@
               "micInput": "entrada",
               "micDevice": "dispositivo",
               "micAirpods": "airpods",
-              "micDefault": "padrão do sistema"
+              "micDefault": "padrão do sistema",
+              "dictationLanguageTitle": "Idioma do ditado",
+              "dictationLanguageDescription": "Informe ao modelo de voz qual idioma você fala.",
+              "dictationLanguageKeyword": "idioma"
             }
           }
         },
@@ -21484,6 +21487,15 @@
         "idleStopSearchTimeout": "tempo limite",
         "idleStopSearchKeepAlive": "manter ativo",
         "idleStopNever": "Nunca"
+      },
+      "voice": {
+        "dictationLanguage": {
+          "ignored": "{{model}} só transcreve os idiomas para os quais foi criado, por isso ignora esta configuração.",
+          "unsupported": "{{model}} não suporta {{language}}, por isso detecta o idioma sozinho.",
+          "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
+          "title": "Idioma do ditado",
+          "auto": "Detectar automaticamente"
+        }
       }
     },
     "jiraIssueAssigneeField": {
