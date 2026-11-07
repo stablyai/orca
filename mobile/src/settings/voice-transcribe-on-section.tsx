@@ -43,8 +43,11 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
   }
 }
 
-// Assets are only ever downloaded on this tap, so say the size first. The OS reports none up front; these are measured (iOS en-US was 456 MB).
-const PHONE_SPEECH_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = { ios: 450 }
+// Assets are only ever downloaded on this tap, so say the size first. The OS reports none up front; these are measured for en-US (iOS 456 MB, Android's system pack 63 MB).
+const PHONE_SPEECH_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
+  ios: 450,
+  android: 65
+}
 
 function downloadSizeText(t: Translate): string | undefined {
   const size = PHONE_SPEECH_DOWNLOAD_MB[Platform.OS]
