@@ -3,6 +3,7 @@ import { textActionArgumentsOwnModel } from '../../../../shared/agent-launch/pic
 import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
+  agentLaunchSetupRowGroups,
   agentLaunchSetupCatalogState as catalogState
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
@@ -97,14 +98,14 @@ export function AgentLaunchSetupPanel({
     disabled,
     argumentsKnown
   })
-  const renderOptions = (rows: SessionOptionDescriptor[]) =>
+  const renderOptions = (rows: SessionOptionDescriptor[], layout?: 'inline') =>
     rows.length ? (
       <NativeChatSessionOptionRows
         options={rows}
         shownReason={null}
         pendingIds={new Set()}
         divided={false}
-        layout="settings"
+        layout={layout ?? 'settings'}
         onSet={(option, value) => {
           if (entry.textGeneration && value === 'arguments') {
             return
@@ -143,6 +144,9 @@ export function AgentLaunchSetupPanel({
     },
     argumentsView.context
   )
+  const rowGroups = agentLaunchSetupRowGroups(optionRows, mode === 'launch')
+  // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
+  const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
@@ -287,10 +291,11 @@ export function AgentLaunchSetupPanel({
         </CommandList>
       </Command>
       <div className="grid min-w-0 grid-cols-1 gap-2.5 border-t border-border px-3 pt-2.5 pb-1">
-        {renderOptions(
-          optionRows.filter((row) => row.id !== 'fastMode' && row.id !== 'serviceTier')
-        )}
-        {!entry.textGeneration ? (
+        {mode === 'launch'
+          ? renderOptions([...rowGroups.level, ...rowGroups.speed], 'inline')
+          : null}
+        {renderOptions(rowGroups.rest)}
+        {editsDefaults ? (
           <div>
             <AgentPermissionMenu
               agentId={entry.agent}
@@ -320,10 +325,8 @@ export function AgentLaunchSetupPanel({
             />
           </div>
         ) : null}
-        {renderOptions(
-          optionRows.filter((row) => row.id === 'fastMode' || row.id === 'serviceTier')
-        )}
-        {!entry.textGeneration && entry.surfaces.includes('terminal') ? (
+        {mode === 'select' ? renderOptions(rowGroups.speed) : null}
+        {editsDefaults && entry.surfaces.includes('terminal') ? (
           <div>
             <Collapsible open={argumentsOpen} onOpenChange={setArgumentsOpen}>
               <CollapsibleTrigger asChild>

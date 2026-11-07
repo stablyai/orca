@@ -68,9 +68,6 @@ it.each(['claude', 'codex'] as const)(
       )!
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
-    fireEvent.change(panel().querySelector('textarea')!, {
-      target: { value: '--add-dir "authored exact path"' }
-    })
     changePrompt(
       panel().querySelector<HTMLElement>('[contenteditable]')!,
       'keep @/repo/exact-file.ts'
@@ -100,37 +97,23 @@ it.each(['claude', 'codex'] as const)(
       )
     )
     fireEvent.click(configure())
-    expect(panel().querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(
-      '--add-dir "authored exact path"'
-    )
+    expect(panel().querySelector('textarea[aria-label="Arguments"]')).toBeNull()
     expect(panel().querySelector('[contenteditable]')?.textContent).toContain('exact-file.ts')
     launch.mockReturnValueOnce(false)
-    fireEvent.keyDown(panel().querySelector('textarea')!, { key: 'Enter' })
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledOnce())
     const inputs = agentPickerLaunchInputs(launch.mock.lastCall![1], refreshed)
-    expect(inputs).toMatchObject({
-      agentArgs: '--add-dir "authored exact path"',
-      sessionOptions: { model: 'selected', effort: 'high' }
-    })
+    expect(inputs).toMatchObject({ sessionOptions: { model: 'selected', effort: 'high' } })
     expect(compilePickerTerminalLaunch(launch.mock.lastCall![1], refreshed)).toMatchObject({
       ok: true,
       tokens:
         agent === 'claude'
-          ? [
-              'claude',
-              '--add-dir',
-              'authored exact path',
-              '--model',
-              'selected',
-              '--effort',
-              'high'
-            ]
+          ? ['claude', '--dangerously-skip-permissions', '--model', 'selected', '--effort', 'high']
           : [
               'codex',
               '-c',
               'disable_paste_burst=true',
-              '--add-dir',
-              'authored exact path',
+              '--dangerously-bypass-approvals-and-sandbox',
               '-m',
               'selected',
               '-c',
@@ -144,10 +127,7 @@ it.each(['claude', 'codex'] as const)(
     )
     fireEvent.click(getByRole(document.body, 'button', { name: 'Launch terminal' }))
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(2))
-    expect(launch.mock.lastCall![1]).toMatchObject({
-      prompt: 'keep @/repo/exact-file.ts',
-      argumentsOwner: refreshed.ownerKey
-    })
+    expect(launch.mock.lastCall![1]).toMatchObject({ prompt: 'keep @/repo/exact-file.ts' })
     await waitFor(() =>
       expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(refreshed)).text).toBe('')
     )

@@ -1,6 +1,7 @@
 import { useImperativeHandle, useRef, type Ref } from 'react'
-import { CornerDownLeft } from 'lucide-react'
+import { CornerDownLeft, MessageSquare, SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -45,16 +46,21 @@ export function AgentLaunchSurfaceButtons({
   entry,
   disabled,
   primary,
+  prominent,
   onSelect
 }: {
   entry: AgentPickerEntry
   disabled?: boolean
   primary: AgentPickerSurface
+  /** Launch is the popover's main action, so its buttons split the full row. */
+  prominent?: boolean
   onSelect: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
   const platform = getShortcutPlatform()
+  const surfaceIcon = (surface: AgentPickerSurface) =>
+    surface === 'chat' ? <MessageSquare /> : <SquareTerminal />
   return (
-    <div className="grid max-w-full auto-cols-fr grid-flow-col gap-2">
+    <div className={cn('grid max-w-full auto-cols-fr grid-flow-col gap-2', prominent && 'w-full')}>
       {agentPickerButtonOrder(entry).map((next) => {
         const isPrimary = next === primary
         const label =
@@ -65,7 +71,7 @@ export function AgentLaunchSurfaceButtons({
           <Button
             key={next}
             type="button"
-            size="xs"
+            size={prominent ? 'sm' : 'xs'}
             className="min-w-0 w-full"
             aria-label={label}
             aria-keyshortcuts={
@@ -75,7 +81,8 @@ export function AgentLaunchSurfaceButtons({
             variant={isPrimary ? 'default' : 'outline'}
             onClick={() => onSelect(next)}
           >
-            <span className="truncate">{label}</span>
+            {prominent ? surfaceIcon(next) : null}
+            <span className={cn('truncate', prominent && 'mr-auto')}>{label}</span>
             <span aria-hidden="true">
               <ShortcutKeyCombo
                 keys={formatKeybinding(isPrimary ? 'Enter' : 'Mod+Enter', platform)}
@@ -130,11 +137,12 @@ export function AgentLaunchSetupFooter({
           onLaunch={(prompt) => onLaunch(surface.current, prompt)}
         />
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
+      <div className="flex items-center px-3 pb-3">
         <AgentLaunchSurfaceButtons
           entry={entry}
           disabled={disabled}
           primary={entry.defaultSurface}
+          prominent
           onSelect={launch}
         />
       </div>

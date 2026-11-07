@@ -123,7 +123,7 @@ it.each(
     (['claude', 'codex'] as const).map((agent) => ({ route, agent }))
   )
 )(
-  'preserves refused $route $agent setup prompts and selected skill paths through the actual terminal launcher',
+  'preserves $route $agent setup prompts and selected skill paths through the actual terminal launcher',
   async ({ route, agent }) => {
     const selected: AgentPickerEntry = {
       ...entry,
@@ -143,23 +143,6 @@ it.each(
       })
     }
     fireEvent.click(document.querySelector(`button[aria-label="Configure ${selected.label}"]`)!)
-    const argumentsInput = document.querySelector('textarea[aria-label="Arguments"]')!
-    fireEvent.change(argumentsInput, { target: { value: '--model "unterminated' } })
-    changePrompt(editor(), 'review this change')
-    await act(async () => button('Launch terminal').click())
-    expect(dispatch).toHaveBeenCalledOnce()
-    expect(dispatch.mock.results[0]).toMatchObject({ type: 'return', value: null })
-    expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
-    expect(document.querySelector('textarea[aria-label="Arguments"]')).not.toBeNull()
-
-    // The old Arguments Enter gesture reaches the same refusal without consuming its prompt.
-    await act(async () => fireEvent.keyDown(argumentsInput, { key: 'Enter' }))
-    expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(dispatch.mock.results[1]).toMatchObject({ type: 'return', value: null })
-    expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
-
-    fireEvent.change(argumentsInput, { target: { value: '--add-dir docs' } })
     act(() =>
       promptEditor(editor()).commands.setContent({
         type: 'doc',
