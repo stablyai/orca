@@ -84,10 +84,11 @@ function plan(
   record: WorkspaceLineage | undefined,
   worktrees: Worktree[] = [nested, other],
   hidden: Worktree[] = [],
-  repos: Repo[] = [repo]
+  repos: Repo[] = [repo],
+  folders: FolderWorkspace[] = [folder]
 ): Row[] {
   const rows = new Map(
-    [...worktrees, ...hidden, getFolderWorkspaceWorktree(folder)].map((entry) => [
+    [...worktrees, ...hidden, ...folders.map(getFolderWorkspaceWorktree)].map((entry) => [
       getWorktreeHostIdentity(entry),
       entry
     ])
@@ -111,8 +112,12 @@ function plan(
     importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
     pendingCreations: [],
-    folderWorkspaces: [folder],
+    folderWorkspaces: folders,
     defaultHostId: 'local',
+    hostLabelById: new Map([
+      ['local', 'Local Mac'],
+      ['runtime:env-1', 'windows 2']
+    ]),
     pinnedDisplayPolicy: 'single-location',
     filterRepoIds: []
   }).render(new Set())
@@ -215,5 +220,13 @@ describe('folder workspaces as sidebar parents', () => {
       'other',
       'folder Release children=0'
     ])
+  })
+
+  it('names the machine on a folder card when workspaces span machines', () => {
+    const remoteFolder = { ...folder, executionHostId: 'runtime:env-1' as const }
+    const folderRow = plan('none', undefined, [other], [], [repo], [remoteFolder]).find(
+      (entry) => entry.type === 'folder-workspace'
+    )
+    expect(folderRow?.type === 'folder-workspace' && folderRow.hostContextLabel).toBe('windows 2')
   })
 })
