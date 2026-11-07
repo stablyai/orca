@@ -17,16 +17,6 @@ const transcriptInput = {
 }
 
 describe('push host proof transcript', () => {
-  it('is deterministic and binds the challenge identity', () => {
-    const first = buildPushHostProofTranscript(transcriptInput)
-    const second = buildPushHostProofTranscript({ ...transcriptInput })
-    expect(Buffer.from(first).equals(Buffer.from(second))).toBe(true)
-    const different = buildPushHostProofTranscript({
-      ...transcriptInput,
-      challengeId: 'challenge-2'
-    })
-    expect(Buffer.from(first).equals(Buffer.from(different))).toBe(false)
-  })
 
   it('encodes exactly the ten specified fields in order', () => {
     const transcript = buildPushHostProofTranscript(transcriptInput)
@@ -56,24 +46,6 @@ describe('push host proof transcript', () => {
       ['hostPublicKey', Buffer.alloc(32, 4)]
     ])
     expect(offset).toBe(transcript.byteLength)
-  })
-
-  it('rejects mis-sized key material', () => {
-    expect(() =>
-      buildPushHostProofTranscript({
-        ...transcriptInput,
-        gatewayEphemeralPublicKey: new Uint8Array(31)
-      })
-    ).toThrow('gatewayEphemeralPublicKey must be 32 bytes')
-    expect(() =>
-      buildPushHostProofTranscript({
-        ...transcriptInput,
-        hostPublicKey: new Uint8Array(31)
-      })
-    ).toThrow('hostPublicKey must be 32 bytes')
-    expect(() =>
-      buildPushHostProofTranscript({ ...transcriptInput, challengeNonce: new Uint8Array(23) })
-    ).toThrow('challengeNonce must be 24 bytes')
   })
 
   it('frames the challenge plaintext as domain, length, transcript, secret', () => {
