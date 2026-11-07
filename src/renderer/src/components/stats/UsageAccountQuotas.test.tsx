@@ -377,7 +377,7 @@ describe('account quota coverage', () => {
     expect(screen.getAllByRole('progressbar')).toHaveLength(4)
     expect(screen.getByText('Model group · 1h')).toBeInTheDocument()
     expect(screen.getByText('Session · 5h')).toBeInTheDocument()
-    expect(screen.getByText('Weekly · wk')).toBeInTheDocument()
+    expect(screen.getByText('Weekly')).toBeInTheDocument()
     expect(screen.getByText('Fable · wk')).toBeInTheDocument()
   })
 })

@@ -70,7 +70,10 @@ export function UsageAccountQuotaCard({
           <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs">
             <span className="text-muted-foreground">
               {label}
-              {window.windowMinutes > 0 ? ` · ${formatWindowLabel(window.windowMinutes)}` : ''}
+              {window.windowMinutes > 0 &&
+              !(window === provider.weekly && window.windowMinutes === 10080)
+                ? ` · ${formatWindowLabel(window.windowMinutes)}`
+                : ''}
             </span>
             <span className="tabular-nums text-foreground">
               {translate('stats.usage.quota.used', '{{percent}}% used', {
