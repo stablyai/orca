@@ -13,7 +13,7 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
   FILE_OWNER_UNRESOLVED_MESSAGE,
   getRuntimeTargetForFileOwner

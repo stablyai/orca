@@ -18,7 +18,7 @@ import { SourceControlScopeProvider } from './worktree-scope'
 const git = vi.hoisted(() => ({
   commit: vi.fn<(context: { connectionId?: string }, message: string) => Promise<unknown>>()
 }))
-vi.mock('@/runtime/runtime-git-sync-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-sync-client', () => ({
   commitRuntimeGit: git.commit,
   completeRuntimeGitMerge: vi.fn()
 }))

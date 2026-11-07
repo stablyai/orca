@@ -2,8 +2,8 @@ import {
   createPathExistenceBatch,
   type PathExistenceResult
 } from '../../../../../../shared/path-existence-batch'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { runtimePathsExist } from '@/runtime/runtime-path-existence-batch'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
 
 type PathGroup = {

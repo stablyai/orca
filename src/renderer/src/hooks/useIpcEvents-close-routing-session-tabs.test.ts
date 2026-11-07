@@ -39,7 +39,8 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
-    const { createEditorTabsStore } = await import('../store/slices/editor-slice-test-harness')
+    const { createEditorTabsStore } =
+      await import('../store/slices/editor/editor-slice-test-harness')
     const store = createEditorTabsStore()
 
     await useIpcEventsForCloseRouting({

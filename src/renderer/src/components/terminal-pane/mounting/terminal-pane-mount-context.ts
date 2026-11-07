@@ -1,9 +1,10 @@
+import type {
+  HttpLinkActionDestinations as TerminalHttpLinkActionDestinations,
+  HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
+} from '@/lib/browser/navigation/http-link-destinations'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { DeferredSplitPaneHandoffHandle } from '../layout/split/deferred-split-pane-handoff'
-import type {
-  TerminalHttpLinkActionDestinations,
-  TerminalLinkRoutingPreferenceRequester
-} from '../links/http/terminal-url-link-hit-testing'
+
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
 import type { TerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'

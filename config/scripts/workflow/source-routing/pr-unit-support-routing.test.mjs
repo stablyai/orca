@@ -18,8 +18,8 @@ const structuredSessionHarness =
 const unitHarnesses = [
   harness,
   structuredSessionHarness,
-  'src/renderer/src/store/slices/editor-slice-test-harness.ts',
-  'src/renderer/src/store/slices/browser-slice-test-harness.ts',
+  'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts',
+  'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts',
   'src/renderer/src/runtime/web-runtime-session-test-harness.ts',
   'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts'
 ]
@@ -33,7 +33,7 @@ const supportBridges = new Set([
   // Closed-saving-view save suites' rig; it builds on the autosave rig above.
   'src/renderer/src/components/editor/save/queue/editor-save-closed-view.test-fixture.ts',
   // Browser suites' store with main drawing their tabs; it takes the browser harness's store.
-  'src/renderer/src/store/slices/browser-slice-drawn-from-main.test-fixture.ts'
+  'src/renderer/src/store/slices/browser/browser-slice-drawn-from-main.test-fixture.ts'
 ])
 
 function productConsumers(file, graph, unitFiles) {

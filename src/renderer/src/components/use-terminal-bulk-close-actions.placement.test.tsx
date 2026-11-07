@@ -8,7 +8,7 @@ import {
   EDITOR_PLACEMENT,
   seedEditorPlacementConsumers,
   drawEditorPlacementConsumers
-} from '@/store/slices/editor-placement-consumers.test-fixture'
+} from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 import { useTerminalEditorCloseFoundation } from './use-terminal-editor-close-foundation'
 import { useTerminalEditorCloseQueue } from './use-terminal-editor-close-queue'

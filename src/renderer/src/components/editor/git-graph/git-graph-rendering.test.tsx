@@ -19,12 +19,12 @@ import type { GitHistoryResult } from '../../../../../shared/git/history/git-his
 import * as graph from '../../../../../shared/git/history/git-history-graph'
 
 const { getHistory, getRefs } = vi.hoisted(() => ({ getHistory: vi.fn(), getRefs: vi.fn() }))
-vi.mock('@/runtime/runtime-git-status-client', async (original) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
   getRuntimeGitHistory: getHistory,
   getRuntimeGitRefs: getRefs
 }))
-vi.mock('@/runtime/runtime-git-diff-client', async (original) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original) => ({
   ...(await original<object>()),
   getRuntimeGitCommitCompare: vi.fn(async () => ({ summary: { status: 'ready' }, entries: [] }))
 }))

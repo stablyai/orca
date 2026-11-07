@@ -1,6 +1,9 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { createRuntimeGitLabApi, RuntimeCapabilityMissingError } from '@/runtime/runtime-gitlab-api'
+import {
+  createRuntimeGitLabApi,
+  RuntimeCapabilityMissingError
+} from '@/runtime/repository-gitlab/runtime-gitlab-api'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
 import {
   assertEnvironmentPairing,

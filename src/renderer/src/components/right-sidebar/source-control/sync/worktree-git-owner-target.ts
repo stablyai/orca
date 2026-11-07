@@ -4,7 +4,7 @@ import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-targe
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
+import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
 import type { AttachedWorktreeOwner } from '../../folder-workspace-attached-worktrees'
 
 export function sourceControlFileWatchRuntimeEnvironmentId(

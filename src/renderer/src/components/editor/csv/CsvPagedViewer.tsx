@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { readRuntimeFileRange } from '@/runtime/runtime-file-range-client'
+import { readRuntimeFileRange } from '@/runtime/files/reads/runtime-file-range-client'
 import { translate } from '@/i18n/i18n'
 import { detectCsvDelimiter } from './csv-parse'
 import { CsvFooter, csvChosenDelimiter } from './CsvViewer'

@@ -24,7 +24,7 @@ const status: JiraConnectionStatus = {
   activeSiteId: 'site-1',
   viewer: { ...self, email: null }
 }
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
   jiraListAssignableUsersForTarget: boundary.search,
   jiraSearchUsers: vi.fn()
 }))

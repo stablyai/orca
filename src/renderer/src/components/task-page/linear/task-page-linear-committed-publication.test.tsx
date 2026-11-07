@@ -16,7 +16,7 @@ import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-deta
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
-import { deferred } from '../../../store/slices/linear-slice-test-harness'
+import { deferred } from '../../../store/slices/linear/linear-slice-test-harness'
 
 import { Suspense, startTransition, useState, useLayoutEffect } from 'react'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'

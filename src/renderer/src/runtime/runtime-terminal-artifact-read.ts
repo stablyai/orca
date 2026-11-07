@@ -1,5 +1,5 @@
-import type { RuntimeReadableFileContent } from './runtime-file-client-types'
-import { readRemoteFileContent } from './runtime-remote-file-content'
+import type { RuntimeReadableFileContent } from './files/runtime-file-client-types'
+import { readRemoteFileContent } from './files/reads/runtime-remote-file-content'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { chatScratchFileAddress } from './runtime-chat-scratch-file-address'
 import {

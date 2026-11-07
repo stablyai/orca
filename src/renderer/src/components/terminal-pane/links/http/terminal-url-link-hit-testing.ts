@@ -27,11 +27,11 @@ type UrlLinkHitTestDeps = {
   sourceTabId?: string | null
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   linkActionContext?: TerminalLinkActionContext | null
-  actionDestinations?: TerminalHttpLinkActionDestinations
+  actionDestinations?: HttpLinkActionDestinations
   actionDestination?: string
-  forceDestination?: TerminalHttpLinkDestination
+  forceDestination?: HttpLinkDestination
 }
 
 type UrlLinkClickFallbackDeps = {
@@ -39,20 +39,14 @@ type UrlLinkClickFallbackDeps = {
   sourceTabId?: string | null
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
-  requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
   getLinkActionContext?: () => TerminalLinkActionContext | null
-  getActionDestinations?: () => TerminalHttpLinkActionDestinations
+  getActionDestinations?: () => HttpLinkActionDestinations
 }
 
 export type HttpLinkClickFallbackBinding = IDisposable & {
   ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
-
-export type TerminalHttpLinkDestination = HttpLinkDestination
-
-export type TerminalHttpLinkActionDestinations = HttpLinkActionDestinations
-
-export type TerminalLinkRoutingPreferenceRequester = HttpLinkRoutingPreferenceRequester
 
 function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || (event.button !== 0 && event.button !== 1)) {

@@ -4,7 +4,10 @@ import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { translate } from '@/i18n/i18n'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import { commitRuntimeGit, completeRuntimeGitMerge } from '@/runtime/runtime-git-sync-client'
+import {
+  commitRuntimeGit,
+  completeRuntimeGitMerge
+} from '@/runtime/source-control/git/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'

@@ -54,12 +54,12 @@ describe('preview address-bar convergence E2E routing', () => {
     'src/renderer/src/components/browser-pane/workspace-doc/doc-preview-address-edit.tsx',
     'src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-suggestions.ts',
     'src/renderer/src/lib/workspace-doc-address-input.ts',
-    'src/renderer/src/store/slices/browser/browser-page-conversion-actions.ts'
+    'src/renderer/src/store/slices/browser/pages/browser-page-conversion-actions.ts'
   ])('routes %s', (path) => {
     expect(selectPrE2eSpecs([path])).toContain(spec)
   })
   it.each([
-    'src/renderer/src/store/slices/browser-page-conversion.test.ts',
+    'src/renderer/src/store/slices/browser/pages/browser-page-conversion.test.ts',
     'src/renderer/src/components/browser-pane/assemble-chrome/BrowserAddressBar.tsx'
   ])('does not route %s', (path) => {
     expect(selectPrE2eSpecs([path])).not.toContain(spec)
@@ -101,7 +101,7 @@ describe('PR E2E gate contract', () => {
 describe('GitHub Projects E2E routing', () => {
   it.each([
     'src/renderer/src/components/github-project/columns.ts',
-    'src/renderer/src/store/github/project-field-mutations.ts',
+    'src/renderer/src/store/github/projects/project-field-mutations.ts',
     'src/main/github/project-view/project-field-mutations.ts',
     'src/main/ipc/source-control/github-project-view-handlers.ts'
   ])('routes %s to the board spec', (file) => {
@@ -109,8 +109,8 @@ describe('GitHub Projects E2E routing', () => {
   })
   it('skips the board spec for unit tests and unrelated GitHub stores', () => {
     for (const file of [
-      'src/renderer/src/store/github/project-field-mutations.test.ts',
-      'src/renderer/src/store/github/cache-model.ts'
+      'src/renderer/src/store/github/projects/project-field-mutations.test.ts',
+      'src/renderer/src/store/github/cache/cache-model.ts'
     ]) {
       expect(selectPrE2eSpecs([file]), file).not.toContain('tests/e2e/github-project-board.spec.ts')
     }

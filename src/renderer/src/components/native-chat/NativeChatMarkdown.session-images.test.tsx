@@ -23,7 +23,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClient>()),
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFilePreview: mocks.readRuntimeFilePreview
 }))
 vi.mock(

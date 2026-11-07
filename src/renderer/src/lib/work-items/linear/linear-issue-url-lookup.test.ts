@@ -1,7 +1,7 @@
 import {
   linearIssueReadFixture,
   readLinearIssueForTest
-} from '@/store/slices/linear-slice-test-harness'
+} from '@/store/slices/linear/linear-slice-test-harness'
 import { describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 
