@@ -30,7 +30,10 @@ import {
   resetMobileNativeChatDraftStoreForTests,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
-import { beginMobileNativeChatInFlightSend } from './mobile-native-chat-in-flight-sends'
+import {
+  beginMobileNativeChatInFlightSend,
+  settleMobileNativeChatInFlightSend
+} from './mobile-native-chat-in-flight-sends'
 import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const storage = vi.hoisted(() => new Map<string, string>())
@@ -427,6 +430,32 @@ describe('mobile native-chat draft persistence', () => {
 
       expect(draftText(TAB_A)).toBe('lost')
       expect(onSendError).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not bring back the chips of a sent message after a kill', async () => {
+      vi.useFakeTimers()
+      publishPageDeviceStore(deviceStore)
+      await mount(createElement(TerminalChat, { messages: [] }))
+      addMobileNativeChatDraftImages(mobileNativeChatDraftDestination(TAB_A), [
+        { path: '/tmp/orca/sent.png', previewUri: 'data:image/png;base64,AAAA' }
+      ])
+      act(() => drafts?.setComposerText('look'))
+      const origin = drafts?.captureSendOrigin('look')
+      if (!origin) {
+        throw new Error('the chat has no send origin')
+      }
+      drafts?.clearDraftForSend(origin, 'look')
+      const id = beginMobileNativeChatInFlightSend(origin, 'terminal', 'look', {
+        carried: { images: readMobileNativeChatDraftInputs(TAB_A).images, files: [] }
+      })
+      settleMobileNativeChatInFlightSend(id, 'sent')
+      await settle()
+      act(() => renderer?.unmount())
+
+      await relaunch()
+
+      expect(readMobileNativeChatDraftInputs(TAB_A).images).toEqual([])
+      expect(storedRow()).toBeNull()
     })
 
     it('waits out a disconnect before handing a send back', async () => {

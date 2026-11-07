@@ -105,7 +105,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         })
         return outcome
       }
-      settleMobileNativeChatInFlightSend(inFlightId)
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
       if (outcome === 'rejected') {
         handBack()
       }

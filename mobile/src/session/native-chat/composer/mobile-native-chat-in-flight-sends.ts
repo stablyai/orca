@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from 'react'
 import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
-import { readMobileNativeChatDraftInputs } from './mobile-native-chat-draft-inputs'
+import {
+  readMobileNativeChatDraftInputs,
+  updateMobileNativeChatDraftInputs
+} from './mobile-native-chat-draft-inputs'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
 import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
@@ -12,7 +15,13 @@ import type {
 
 // Sends cleared from the box before their outcome was known. `held` marks one a live hold is waiting on;
 // the rest came back with the page and wait for their chat to open.
-type InFlightEntry = { scope: string; send: MobileNativeChatInFlightSend; held: boolean }
+type InFlightEntry = {
+  scope: string
+  send: MobileNativeChatInFlightSend
+  held: boolean
+  // Chip ids this send took; a sent send drops them in the same write that forgets it.
+  carriedIds?: ReadonlySet<string>
+}
 const inFlightSends = new Map<string, InFlightEntry>()
 // Bumped when saved sends become claimable (a load brought them back or a hold let go).
 let savedInFlightVersion = 0
@@ -58,6 +67,9 @@ export function beginMobileNativeChatInFlightSend(
   inFlightSends.set(id, {
     scope,
     held: true,
+    carriedIds: new Set(
+      [...(extra.carried?.images ?? []), ...(extra.carried?.files ?? [])].map((chip) => chip.id)
+    ),
     send: {
       id,
       kind,
@@ -78,12 +90,25 @@ export function beginMobileNativeChatInFlightSend(
 }
 
 /** The outcome is known (sent, refused, or handed back): the saved copy goes. */
-export function settleMobileNativeChatInFlightSend(id: string | null): void {
+export function settleMobileNativeChatInFlightSend(
+  id: string | null,
+  outcome: 'sent' | 'kept' = 'kept'
+): void {
   const entry = id ? inFlightSends.get(id) : undefined
-  if (entry && id) {
-    inFlightSends.delete(id)
-    saveMobileNativeChatDraft(entry.scope, 'immediate')
+  if (!entry || !id) {
+    return
   }
+  inFlightSends.delete(id)
+  const carried = entry.carriedIds
+  // A sent send's chips leave the box in the same write, so a kill can't bring them back as a draft.
+  if (outcome === 'sent' && carried && carried.size > 0) {
+    updateMobileNativeChatDraftInputs(entry.scope, (inputs) => ({
+      ...inputs,
+      images: inputs.images.filter((image) => !carried.has(image.id)),
+      files: inputs.files.filter((file) => !carried.has(file.id))
+    }))
+  }
+  saveMobileNativeChatDraft(entry.scope, 'immediate')
 }
 
 /** Saved sends nobody is waiting on yet; the caller now holds them until it settles or releases them. */

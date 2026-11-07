@@ -213,12 +213,12 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })
           }
-          settleMobileNativeChatInFlightSend(inFlightId)
+          settleMobileNativeChatInFlightSend(inFlightId, 'sent')
           onSendError(UNCONFIRMED_SEND_MESSAGE)
         }
         return 'unknown'
       }
-      settleMobileNativeChatInFlightSend(inFlightId)
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
       if (outcome === 'rejected') {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
