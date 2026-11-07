@@ -130,6 +130,7 @@ describe('registerOrcaProfileHandlers', () => {
   it('initializes the selected workspace for a newly created local profile', () => {
     const created = { profile: { id: 'local-work', name: 'Work' } }
     createLocalOrcaProfileMock.mockReturnValue(created)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Profile creation uses only the mocked store methods.
     registerOrcaProfileHandlers(makeStoreMock() as never)
 
     expect(handlers.get('orcaProfiles:createLocal')?.(ipcEvent, { name: 'Work' })).toBe(created)
@@ -145,6 +146,7 @@ describe('registerOrcaProfileHandlers', () => {
       profile: { id: 'cloud-1' }
     }
     createCloudLinkedOrcaProfileMock.mockResolvedValue(created)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Profile creation uses only the mocked store methods.
     registerOrcaProfileHandlers(makeStoreMock() as never)
 
     await expect(

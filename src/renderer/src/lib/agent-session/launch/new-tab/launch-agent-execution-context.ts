@@ -2,8 +2,10 @@ import { toast } from 'sonner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
 import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { getConnectionIdForWorktreeCopy } from '@/lib/connection-owner-resolution'
+import {
+  getConnectionIdFromState,
+  getConnectionIdForWorktreeCopy
+} from '@/lib/connection-owner-resolution'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import {
   refineLocalLaunchPlatform,

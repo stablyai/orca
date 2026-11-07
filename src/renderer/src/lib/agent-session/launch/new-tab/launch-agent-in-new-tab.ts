@@ -18,11 +18,13 @@ import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/laun
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
+import {
+  agentTabLaunchStore,
+  resolveAgentLaunchExecutionContext
+} from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
-import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import {
   notifyAgentTabLaunchFailure,
   launchOnceHostAnswered,
