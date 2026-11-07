@@ -24,6 +24,29 @@ function readTabResult(extra: Record<string, unknown> = {}): RpcResponse {
   }
 }
 
+describe('useMobileSessionDocumentReaders markdown outside-workspace errors', () => {
+  it('explains an outside-workspace markdown path refusal instead of a generic failure', async () => {
+    const harness = mountMarkdownReads(new Map(), async () => ({
+      id: 'frame-1',
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message:
+          'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
+      },
+      _meta: META
+    }))
+    try {
+      await harness.read()
+      expect(harness.docs.get('tab-md')).toEqual({
+        status: 'error',
+        message: 'This file is outside the workspace. Open it on desktop to view it.'
+      })
+    } finally {
+      harness.unmount()
+    }
+  })
+})
 function readyMarkdown(
   content: string,
   extra: Partial<Extract<MarkdownDocState, { status: 'ready' }>> = {}

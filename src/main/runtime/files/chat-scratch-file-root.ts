@@ -21,7 +21,10 @@ export function resolveRuntimeAuthorizedPath(
   store: RuntimeStore,
   options: ResolveAuthorizedPathOptions = {}
 ): Promise<string> {
-  return resolveAuthorizedPath(targetPath, store, { ...options, extraRoots: [chatScratchRoot()] })
+  return resolveAuthorizedPath(targetPath, store, {
+    ...options,
+    extraRoots: [...(options.extraRoots ?? []), chatScratchRoot()]
+  })
 }
 
 export function isChatScratchWorktreeId(worktreeId: string): boolean {
