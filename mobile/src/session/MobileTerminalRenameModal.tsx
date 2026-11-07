@@ -11,8 +11,8 @@ import { useHostProfile } from '../transport/use-host-profile'
 import type { Terminal } from './mobile-session-route-types'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
-// error null means the rename is still in flight.
-type RenameAttempt = { error: string | null; phase: HostMutationPhase }
+// error null means the rename is still in flight; token tells this attempt from a later one.
+type RenameAttempt = { token: object; error: string | null; phase: HostMutationPhase }
 
 function renameDraftKey(hostId: string, terminal: Terminal): string {
   return `terminal-rename:${hostId}:${terminal.handle}`
@@ -48,16 +48,12 @@ export function MobileTerminalRenameModal({
       return
     }
     const draftKey = renameDraftKey(hostId, renameTarget)
-    let mine: RenameAttempt = { error: null, phase: 'pending' }
-    setAttempt(mine)
+    const token = {}
+    setAttempt({ token, error: null, phase: 'pending' })
     const onPhase = (phase: HostMutationPhase) =>
-      setAttempt((latest) => {
-        if (latest !== mine || phase === 'idle') {
-          return latest
-        }
-        mine = { error: null, phase }
-        return mine
-      })
+      setAttempt((latest) =>
+        latest?.token === token && phase !== 'idle' ? { ...latest, phase } : latest
+      )
     try {
       await handleRenameTerminal(title, onPhase)
       setHostMutationDraft(draftKey, null)
@@ -69,7 +65,9 @@ export function MobileTerminalRenameModal({
             reason: failure instanceof Error ? failure.message : ''
           }).trim()
       // A late reply must not mark a newer attempt or opening as failed.
-      setAttempt((latest) => (latest === mine ? (error ? { error, phase: 'idle' } : null) : latest))
+      setAttempt((latest) =>
+        latest?.token === token ? (error ? { token, error, phase: 'idle' } : null) : latest
+      )
     }
   }
 
