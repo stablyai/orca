@@ -7,7 +7,7 @@ import { useAppStore } from '../store'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 import { useStartupActions } from './use-app-startup-actions'
 import { waitForNativeChatDraftsAtStartup } from './native-chat-draft-startup'
-import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees'
+import { WORKTREE_REFRESH_CONCURRENCY } from '../store/slices/worktrees/listing/worktree-slice-constants'
 import { sweepRestoredCodexPanesForStaleAccounts } from '../lib/agent-session/accounts/codex/codex-stale-pane-sweep'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '../lib/workspace/persistence/workspace-session-host-hydration'
 import {

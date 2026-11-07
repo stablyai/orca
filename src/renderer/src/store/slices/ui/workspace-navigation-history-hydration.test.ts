@@ -93,9 +93,9 @@ globalThis.window = { api: mockApi }
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import '../../../../../shared/constants'
 import '../../../../../shared/workspace-scope'
-import { createTestStore, seedStore } from '../store-test-helpers'
+import { createTestStore, seedStore } from '../../app-store-test-fixture'
 
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { canGoBackWorktreeHistory } from './workspace-navigation-history'
 
 describe('hydrateWorkspaceSession', () => {

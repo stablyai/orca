@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { buildWorktreePurgeState } from './slices/worktrees/teardown/worktree-purge-state'
-import {
-  createTestStore,
-  makeOpenFile,
-  makeUnifiedTab,
-  makeWorktree
-} from './slices/store-test-helpers'
+import { createTestStore } from './app-store-test-fixture'
+import { makeOpenFile } from './slices/editor/types/open-file.test-fixture'
+import { makeUnifiedTab } from './slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from './slices/worktrees/worktree.test-fixture'
 
 const workspace = 'repo1::/synthetic/workspace'
 

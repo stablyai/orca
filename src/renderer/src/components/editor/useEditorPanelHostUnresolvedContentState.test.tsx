@@ -4,7 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({

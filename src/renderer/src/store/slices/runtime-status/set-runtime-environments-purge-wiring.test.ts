@@ -18,9 +18,10 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeWorktree, TEST_REPO } from '../worktrees-slice-test-fixtures'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
 

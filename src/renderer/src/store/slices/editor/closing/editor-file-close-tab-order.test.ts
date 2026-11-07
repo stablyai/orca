@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../../types'
 import type { BrowserTab } from '../../../../../../shared/browser-workspace-types'
 
-import '../../store-session-test-harness'
+import '../../../../i18n/i18n'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
 import '@/runtime/layout-apply-test-transport.test-fixture'
 import '../../../../../../shared/layout-owner-switch'

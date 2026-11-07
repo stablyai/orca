@@ -8,8 +8,9 @@ import {
   type TabsDrawnFromMain
 } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createTestStore } from '@/store/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (

@@ -11,8 +11,9 @@ import type {
   RetainedAgentEntry
 } from './agent-status-contract'
 
-import { createTestStore } from '../store-test-helpers'
-import { makeTab, makeUnifiedTab } from '../store-session-test-harness'
+import { createTestStore } from '../../app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
 

@@ -2,13 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { flushMicrotasks } from './agent-status-test-harness'
-import { createTestStore } from '../store-test-helpers'
-import {
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab,
-  createStoreSessionMockApi
-} from '../store-session-test-harness'
+import { createTestStore } from '../../app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
+import { createStoreSessionMockApi } from '../../app-store-session-api.test-fixture'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {

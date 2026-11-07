@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as intent from '@/lib/worktree-sleep-intent'
 import '../slices/worktrees/teardown/worktree-purge-state'
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
 import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner-registry'
 
 const { clearWorktreeSleepIntent, hasWorktreeSleepIntent, markWorktreeSleepIntent } = intent

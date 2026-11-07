@@ -3,7 +3,7 @@ import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
 } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
 import * as pending from '@/components/native-chat/native-chat-pending-attachment-cache'
 

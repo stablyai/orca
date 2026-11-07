@@ -34,8 +34,10 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
 const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-test-harness')
 createTabsSliceMockApi()
 
-const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
-  await import('@/store/slices/store-test-helpers')
+const { createTestStore, seedStore } = await import('@/store/app-store-test-fixture'),
+  { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture'),
+  { makeTabGroup, makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+  { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))

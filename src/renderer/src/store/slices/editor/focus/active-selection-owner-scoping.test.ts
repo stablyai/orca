@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { createBrowserMockApi } from '../../browser/browser-slice-test-harness'
 import '../editor-slice-test-harness'
-import { createTestStore as createAppStore, seedStore } from '../../store-test-helpers'
+import { createTestStore as createAppStore, seedStore } from '../../../app-store-test-fixture'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import type { AppState } from '../../../types'
 

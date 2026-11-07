@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { useFileSearchPanel } from './useFileSearchPanel'
 import type { SearchResult } from '../../../../../../shared/code-search-types'
 

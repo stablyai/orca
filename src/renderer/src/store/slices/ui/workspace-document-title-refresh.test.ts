@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../store-test-helpers'
-import { createStoreCascadesMockApi } from '../store-cascades-test-harness'
+import { createTestStore } from '../../app-store-test-fixture'
+import { createStoreCascadesMockApi } from '../../app-store-cascade-api.test-fixture'
 import '../../../../../shared/workspace-session/workspace-doc-history'
 
 createStoreCascadesMockApi()

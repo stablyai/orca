@@ -3,7 +3,7 @@ import {
   flushTerminalInputActivity,
   resetTerminalInputActivityCoalescingForTests
 } from '@/lib/terminal-input-activity-coalescing'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 
 afterEach(resetTerminalInputActivityCoalescingForTests)
 

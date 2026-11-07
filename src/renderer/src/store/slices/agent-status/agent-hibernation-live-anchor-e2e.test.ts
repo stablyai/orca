@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../../types'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore } from '../../app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,
   planAgentHibernationCandidates

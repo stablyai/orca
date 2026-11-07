@@ -24,7 +24,7 @@ import { isEditorTabContentType } from './slices/editor/tabs/editor-tab-content-
 import type { EditorTabView } from '../../../shared/editor-tab-view-types'
 import { migrateHydratedEditorTabsAndGroups } from './slices/editor/file-ids/hydrated-editor-file-ids'
 import { buildHydratedTabState } from './slices/tabs/tabs-hydration'
-import { buildByIdIndex } from './slices/worktree-by-id-index'
+import { buildByIdIndex } from '../../../shared/first-row-by-id-index'
 import { restoreActiveTabIdByWorktree } from './terminals/workspace-terminal-active-tabs'
 import { buildWorkspaceTerminalLayoutPlan } from './terminals/workspace-terminal-layout-plan'
 import { buildWorkspaceTerminalRowPlan } from './terminals/workspace-terminal-row-plan'

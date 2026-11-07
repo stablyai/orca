@@ -3,13 +3,10 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createTestStore } from '../slices/store-test-helpers'
-import {
-  makeTab,
-  makeLayout,
-  createStoreSessionMockApi,
-  makeBrowserTab
-} from '../slices/store-session-test-harness'
+import { createTestStore } from '../app-store-test-fixture'
+import { makeTab, makeLayout } from './terminal-tab.test-fixture'
+import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
+import { makeBrowserTab } from '../slices/browser/browser-tab.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 

@@ -2,7 +2,7 @@ import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/b
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { isBrowserPageMountAdmitted } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

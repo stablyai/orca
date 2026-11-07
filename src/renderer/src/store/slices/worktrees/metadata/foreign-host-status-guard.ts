@@ -1,4 +1,4 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore, createEditorTabsStore } from '../editor-slice-test-harness'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { makeLayout, makeTab } from '../../store-session-test-harness'
+import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
 

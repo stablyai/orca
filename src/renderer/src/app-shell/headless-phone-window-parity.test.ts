@@ -7,8 +7,8 @@ import {
   HEADLESS_PHONE_LAYOUT_CASES,
   type PhoneLayoutView
 } from '../../../shared/workspace-layout/headless-phone-layout.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/app-store-test-fixture'
 import {
   bootWindowFromPartitions,
   projectStartupWindowView

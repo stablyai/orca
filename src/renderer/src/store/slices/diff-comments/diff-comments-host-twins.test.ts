@@ -19,7 +19,7 @@ import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../app-store-test-fixture'
 import { selectWorktreeDiffCommentsOrEmpty } from '../../worktree-diff-comments-selector'
 
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({

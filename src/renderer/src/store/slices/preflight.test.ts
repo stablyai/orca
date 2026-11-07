@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { AppState } from '../types'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore } from '../app-store-test-fixture'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()

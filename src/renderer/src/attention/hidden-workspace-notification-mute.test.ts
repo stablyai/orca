@@ -7,7 +7,9 @@ import { resolveAgentAttention } from '@/attention/agent-attention-policy'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
 import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { isWorkspaceNotificationMutedBySidebarFilters } from './hidden-workspace-notification-mute'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

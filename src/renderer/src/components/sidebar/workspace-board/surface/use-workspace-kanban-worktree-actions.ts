@@ -15,7 +15,7 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktrees/metadata/worktree-meta-update-options'
 import type { WorktreeManualOrderCatalog } from '../../worktree-list/drag/worktree-manual-order-catalog'
 import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'

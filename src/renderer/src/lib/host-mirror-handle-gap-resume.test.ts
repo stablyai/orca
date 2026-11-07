@@ -24,7 +24,7 @@ import {
   hasHostMirrorHandleWaitExpired,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
-import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeTerminalTab } from '../store/terminals/terminal-row.test-fixture'
 
 // Published rows without handles are unverifiable, never exited (ssh-execution-boundary.md). Assert the ORIGINAL deadline: accidental release/re-park looks identical but silently restarts its budget.
 

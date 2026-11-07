@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DiffComment } from '../../../shared/diff-comment-types'
 
 import type { AppState } from './types'
-import { makeWorktree } from './slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from './slices/worktrees/worktree.test-fixture'
 import './worktree-diff-comments-selector'
 import { createDiffCommentViewSelector, sourceParts } from './diff-comment-owner'
 

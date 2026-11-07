@@ -10,14 +10,11 @@ import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layo
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import {
-  createTestStore,
-  makeRuntimeOwnedWorktree,
-  makeWorktree,
-  runtimeOwnedRepoState,
-  seedStore
-} from '@/store/slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createTestStore, seedStore } from '@/store/app-store-test-fixture'
+import { makeRuntimeOwnedWorktree } from '@/store/slices/worktrees/worktree-owner.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { runtimeOwnedRepoState } from '@/store/repos/repo.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,

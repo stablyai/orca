@@ -8,7 +8,7 @@ import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree
 import { useAppStore } from '@/store/index'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -41,7 +41,7 @@ export function resolveHostedReviewForCheckRunDetailsFix(
   worktreeId: string
 ): HostedReviewInfo | null {
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return null
   }
@@ -122,7 +122,7 @@ export function getCheckRunDetailsFixDisabledReason(worktreeId: string | null): 
     )
   }
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return translate(
       'auto.components.editor.check.run.details.fix.with.ai.1a8c4e2b90',
@@ -150,7 +150,7 @@ export function resolveCheckRunDetailsFixRepo(worktreeId: string | null): Repo |
     return null
   }
   const store = useAppStore.getState()
-  const worktree = findWorktreeById(selectWorktreesByRepo(store), worktreeId)
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(store), worktreeId)
   if (!worktree) {
     return null
   }

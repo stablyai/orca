@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRuntimeGitRemoteFileUrl } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { formatPathLineReference } from './line-copy-path'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
@@ -94,7 +94,10 @@ export function MonacoGutterContextMenu({
             if (!activeFile) {
               return
             }
-            const worktree = findWorktreeById(selectWorktreesByRepo(state), activeFile.worktreeId)
+            const worktree = findFirstIndexedWorktree(
+              selectWorktreesByRepo(state),
+              activeFile.worktreeId
+            )
             if (!worktree) {
               return
             }

@@ -2,9 +2,9 @@ import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../app-store-cascade-api.test-fixture'
 
 import {
   drawTabsFromMain,

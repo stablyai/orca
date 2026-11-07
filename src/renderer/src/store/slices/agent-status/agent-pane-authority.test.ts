@@ -6,7 +6,7 @@ import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../app-store-test-fixture'
 
 const SOURCE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
 const TARGET = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')

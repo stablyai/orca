@@ -1,4 +1,4 @@
-import type { ActiveWorktreeStateTransition } from '../../worktree-helpers'
+import type { ActiveWorktreeStateTransition } from '../../worktrees/session/worktree-selection-contract'
 import type { TabGroup } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'

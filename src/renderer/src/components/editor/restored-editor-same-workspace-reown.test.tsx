@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import type { FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelFileContentLoader,

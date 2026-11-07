@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AppState } from '../../types'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
-import { createTestStore, seedStore } from '../store-test-helpers'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 

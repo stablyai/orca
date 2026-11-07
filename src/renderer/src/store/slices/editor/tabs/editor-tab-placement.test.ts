@@ -4,7 +4,7 @@ import { createEditorStore, createEditorTabsStore } from '../editor-slice-test-h
 import type { AppState } from '../../../types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { makeLayout, makeTab } from '../../store-session-test-harness'
+import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

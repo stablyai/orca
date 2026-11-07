@@ -3,9 +3,9 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { buildWorkspaceSessionPayload } from '../../../../lib/workspace/persistence/workspace-session'
-import { createStoreSessionMockApi } from '../../store-session-test-harness'
-import { createTestStore } from '../../store-test-helpers'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { createStoreSessionMockApi } from '../../../app-store-session-api.test-fixture'
+import { createTestStore } from '../../../app-store-test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
