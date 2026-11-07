@@ -33,8 +33,116 @@ function createSessionLog(dataHome: string): string {
   return logPath
 }
 
+const TURN_ID = 'e495d1a5-59aa-47b4-8efb-a1bd75509afc'
+const WORKFLOW_TASK_ID = '01a1afae-f365-7742-9b8b-b55de664b4d3'
+
 describe('AgentHookServer Muse session log polling', () => {
   const dirs: string[] = []
+
+  async function postMuseHook(
+    server: AgentHookServer,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    const env = server.buildPtyEnv()
+    const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/muse`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+      },
+      body: JSON.stringify({
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          session_id: SESSION_ID,
+          turn_id: TURN_ID,
+          cwd: '/tmp/ws',
+          transcript_path: null,
+          model: 'muse-spark-1.3',
+          permission_mode: 'default',
+          model_provider: 'meta',
+          ...payload
+        }
+      })
+    })
+    expect(response.status).toBe(204)
+  }
+
+  // Muse 1.4.14 trace: the workflow launches, the lead stops, and only the session log records its end.
+  it('holds a finished turn open while a background workflow runs, then settles it from the log', async () => {
+    const dataHome = mkdtempSync(join(tmpdir(), 'agent-hook-muse-workflow-'))
+    dirs.push(dataHome)
+    vi.stubEnv('XDG_DATA_HOME', dataHome)
+    const logPath = createSessionLog(dataHome)
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      await postMuseHook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'run workflow' })
+      await postMuseHook(server, {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'workflow',
+        tool_input: { name: 'sleep child' },
+        tool_use_id: 'call_1',
+        tool_response: JSON.stringify({ status: 'launched', taskId: WORKFLOW_TASK_ID })
+      })
+      await postMuseHook(server, {
+        hook_event_name: 'Stop',
+        stop_hook_active: false,
+        last_assistant_message: 'LAUNCHED'
+      })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        workingMode: 'monitoring'
+      })
+
+      appendFileSync(
+        logPath,
+        `${JSON.stringify({
+          payload: {
+            kind: 'task',
+            run_id: TURN_ID,
+            task_id: WORKFLOW_TASK_ID,
+            event: { kind: 'completed', task_id: WORKFLOW_TASK_ID }
+          }
+        })}\n`
+      )
+      await vi.waitFor(
+        () => {
+          expect(server.getStatusSnapshot()[0]?.state).toBe('done')
+        },
+        { timeout: 3_000, interval: 50 }
+      )
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('releases a workflow hold if its session log disappears', async () => {
+    const dataHome = mkdtempSync(join(tmpdir(), 'agent-hook-muse-missing-log-'))
+    dirs.push(dataHome)
+    vi.stubEnv('XDG_DATA_HOME', dataHome)
+    const logPath = createSessionLog(dataHome)
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      await postMuseHook(server, { hook_event_name: 'UserPromptSubmit', prompt: 'run workflow' })
+      await postMuseHook(server, {
+        hook_event_name: 'PostToolUse',
+        tool_name: 'workflow',
+        tool_response: JSON.stringify({ status: 'launched', taskId: WORKFLOW_TASK_ID })
+      })
+      await postMuseHook(server, { hook_event_name: 'Stop' })
+      expect(server.getStatusSnapshot()[0]?.state).toBe('working')
+      rmSync(logPath)
+      await vi.waitFor(() => expect(server.getStatusSnapshot()[0]?.state).toBe('done'), {
+        timeout: 8_000,
+        interval: 50
+      })
+    } finally {
+      server.stop()
+    }
+  })
 
   afterEach(() => {
     vi.unstubAllEnvs()

@@ -19,7 +19,7 @@ export function shouldPollHookTranscript(
     )
   }
   if (source === 'muse') {
-    // Muse question waits/answers exist only in the session log.
+    // Muse question waits/answers and background workflow ends exist only in the session log.
     return event.payload.state !== 'done' && hasMuseSessionLog(state, event.paneKey)
   }
   return false
@@ -47,6 +47,7 @@ export function transcriptPollUpdate<T extends AgentHookEventPayload>(
   if (source === 'muse') {
     const changed =
       polled.payload.state !== original.payload.state ||
+      polled.payload.workingMode !== original.payload.workingMode ||
       polled.payload.interactivePrompt !== original.payload.interactivePrompt
     // Replayed prompt bodies cannot create new prompt or turn boundaries.
     return changed
