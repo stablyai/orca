@@ -1,3 +1,10 @@
+import { RpcDispatcher } from '../../rpc/dispatcher'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
+} from '../records/agent-session-record-store-test-harness'
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
@@ -13,11 +20,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import {
-  createStore,
-  closeTestStores,
-  testState
-} from '../../../persistence/persistence-test-harness'
+import * as persistence from '../../../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../../../orca-profiles/profile-storage-paths'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -25,7 +28,6 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
-import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
@@ -39,13 +41,13 @@ export let root: string
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-tab-authority-'))
-  testState.dir = root
+  persistence.testState.dir = root
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 afterEach(async () => {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
-  await closeTestStores()
+  await persistence.closeTestStores()
   await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
@@ -75,7 +77,7 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 export async function authorityProfile(
   ids: string[] = [B],
   options: { visible?: string[]; records?: string[] } = {},
-  profile = createStore()
+  profile = persistence.createStore()
 ) {
   initOrcaProfilePaths()
   const group = profile.createProjectGroup({
@@ -258,11 +260,51 @@ export async function physicalReload(rig: AuthorityRig) {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
-  await closeTestStores()
+  await persistence.closeTestStores()
   await closeTestJournalHostDatabases()
-  const profile = createStore()
+  const profile = persistence.createStore()
   const fresh = await openAuthorityRuntime({ ...rig, profile }, new AuthorityRuntime(profile))
   await fresh.runtime.restoreStructuredAgentSessionTabs()
   await chatTabCommandsSettled()
   return fresh
+}
+
+export async function reveal(rig: Awaited<ReturnType<typeof openAuthorityRuntime>>, caller = true) {
+  return new RpcDispatcher({
+    runtime: rig.runtime,
+    methods: STRUCTURED_AGENT_SESSION_REVEAL_METHODS
+  }).dispatch(
+    {
+      id: 'retained-history',
+      authToken: 'token',
+      method: 'agentSession.reveal',
+      params: { sessionId: B, ...(caller ? { navigation: 'caller' } : {}) }
+    },
+    {
+      clientKind: 'mobile',
+      pairedDeviceId: 'phone',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    }
+  )
+}
+
+export async function inWorkspace(
+  workspace: string,
+  kind: 'folder' | 'git-worktree' = 'git-worktree',
+  executionHostId: 'local' | 'ssh:offline' = 'local',
+  visible: string[] = []
+) {
+  const input = await authorityProfile([], { records: [B, ...visible], visible })
+  const prior = await readPersistedTestAgentSessionStore(root)
+  await seedTestAgentSessionRecordStore(root, {
+    records: Object.values(prior.records).map((record) => ({
+      ...record,
+      location: { ...record.location, workspaceId: workspace, workspaceKind: kind, executionHostId }
+    })),
+    sessionTabs: visible.map((sessionId) => ({
+      tabId: structuredAgentSessionTabId(sessionId),
+      sessionId
+    }))
+  })
+  return { ...input, workspace }
 }

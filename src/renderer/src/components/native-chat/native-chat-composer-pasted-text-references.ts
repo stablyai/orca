@@ -152,7 +152,11 @@ export function settleNativeChatPastedText(id: string, path?: string): boolean {
     updateNativeChatComposerDraft(
       scopeKey,
       { pastedTextFiles: { ...draft.pastedTextFiles, [id]: path } },
-      'immediate'
+      'immediate',
+      undefined,
+      undefined,
+      undefined,
+      [operation]
     )
   } else {
     notifyScope(scopeKey)

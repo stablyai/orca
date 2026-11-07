@@ -87,7 +87,11 @@ describe('workspace cleanup removal and protection', () => {
       false,
       {
         assertBeforeDispatch: expect.any(Function),
-        suppressPreservedBranchToast: true
+        suppressPreservedBranchToast: true,
+        chatDraftRemovalReceipt: expect.objectContaining({
+          capture: expect.any(Function),
+          finish: expect.any(Function)
+        })
       }
     )
     expect(store.getState().workspaceCleanupScan?.candidates).toEqual([])

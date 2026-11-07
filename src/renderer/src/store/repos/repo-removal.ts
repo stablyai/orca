@@ -1,3 +1,10 @@
+import { worktreeBelongsToHost, getKnownRepoWorktreeIds } from './repo-worktree-catalog'
+export {
+  worktreeBelongsToHost,
+  getKnownRepoWorktreeIds,
+  countOpenRepoTerminalTabs
+} from './repo-worktree-catalog'
+import { createChatDraftRemovalReceipt } from '../slices/worktrees/teardown/chat-draft-removal-receipt'
 import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
@@ -33,58 +40,6 @@ import { toastProjectRemovalFailure } from './repo-removal-failure-toast'
 import { replayPendingRuntimeRepoRemovalsIfReady } from './pending-runtime-repo-removal-replay'
 import { isRuntimeEnvironmentRegistered } from './runtime-environment-registration'
 
-export function worktreeBelongsToHost(worktree: { hostId?: string }, hostId: string): boolean {
-  return (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId
-}
-
-type HostScopedWorktreeRef = { id: string; hostId?: string }
-
-type RepoWorktreeCatalog = {
-  worktreesByRepo: Readonly<Record<string, readonly HostScopedWorktreeRef[] | undefined>>
-  detectedWorktreesByRepo: Readonly<
-    Record<string, { worktrees: readonly HostScopedWorktreeRef[] } | undefined>
-  >
-}
-
-export function getKnownRepoWorktreeIds(
-  state: RepoWorktreeCatalog,
-  projectId: string,
-  hostId?: string
-): string[] {
-  const ids = new Set<string>()
-  for (const worktree of state.worktreesByRepo[projectId] ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  for (const worktree of state.detectedWorktreesByRepo[projectId]?.worktrees ?? []) {
-    if (!hostId || worktreeBelongsToHost(worktree, hostId)) {
-      ids.add(worktree.id)
-    }
-  }
-  return [...ids]
-}
-
-/** Terminal tabs that removing this project's host row will close. */
-export function countOpenRepoTerminalTabs(
-  state: RepoWorktreeCatalog & {
-    tabsByWorktree: Readonly<Record<string, readonly { id: string }[] | undefined>>
-    ptyIdsByTabId: Readonly<Record<string, readonly string[] | undefined>>
-  },
-  projectId: string,
-  hostId: string
-): number {
-  let count = 0
-  for (const worktreeId of getKnownRepoWorktreeIds(state, projectId, hostId)) {
-    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-      if ((state.ptyIdsByTabId[tab.id]?.length ?? 0) > 0) {
-        count += 1
-      }
-    }
-  }
-  return count
-}
-
 export function createRepoRemovalActions(
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
@@ -92,6 +47,7 @@ export function createRepoRemovalActions(
   const actions: Pick<RepoSlice, 'removeProject'> = {
     removeProject: async (projectId, options) => {
       let hostUnreachable = false
+      const draftReceipt = options.chatDraftRemovalReceipt ?? createChatDraftRemovalReceipt(get)
       try {
         // Why: exact host match only; the unique-candidate/focused fallbacks could pick another host's row (#13071).
         const ownerRepo = get().repos.find((repo) =>
@@ -101,6 +57,7 @@ export function createRepoRemovalActions(
           return
         }
         const ownerHostId = getRepoExecutionHostId(ownerRepo)
+        const commitDraftRemoval = draftReceipt.capture({ executionHostId: ownerHostId })
         // Why only awaited for a VM: concurrent removals of one row must reach the host together.
         const vmDestroy = destroyRecipeVmBeforeProjectRemoval(
           get(),
@@ -163,6 +120,7 @@ export function createRepoRemovalActions(
             throw err
           }
         }
+        commitDraftRemoval({ projectId })
         chatDrafts.deleteProjectChatDrafts(projectId, ownerHostId)
         if (removeLocallyOnly && !vmServerDestroyed) {
           // Before the purge: a catalog refresh it triggers must already be fenced.
@@ -316,6 +274,10 @@ export function createRepoRemovalActions(
             removeLocally: () =>
               void get().removeProject(projectId, { ...options, localOnly: true })
           })
+        }
+      } finally {
+        if (!options.chatDraftRemovalReceipt) {
+          await draftReceipt.finish()
         }
       }
     }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const state = {
+    unifiedTabsByWorktree: {},
     worktreeMap: new Map<string, unknown>(),
     worktreeRows: [] as unknown[],
     activeWorkspaceExecutionHostId: null as string | null,
@@ -118,7 +119,11 @@ describe('runWorktreeDeletesInParallel', () => {
       { id: 'child', executionHostId: null },
       false,
       {
-        suppressPreservedBranchToast: true
+        suppressPreservedBranchToast: true,
+        chatDraftRemovalReceipt: expect.objectContaining({
+          capture: expect.any(Function),
+          finish: expect.any(Function)
+        })
       }
     )
     expect(mocks.state.clearWorktreeDeleteState).toHaveBeenCalledWith('parent')
@@ -155,7 +160,13 @@ describe('runWorktreeDeletesInParallel', () => {
     expect(mocks.state.removeWorktree).toHaveBeenCalledWith(
       { id: hostBParent.id, executionHostId: hostBParent.hostId },
       false,
-      { suppressPreservedBranchToast: true }
+      {
+        suppressPreservedBranchToast: true,
+        chatDraftRemovalReceipt: expect.objectContaining({
+          capture: expect.any(Function),
+          finish: expect.any(Function)
+        })
+      }
     )
   })
 })

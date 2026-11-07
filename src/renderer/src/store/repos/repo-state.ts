@@ -1,3 +1,4 @@
+import type { ChatDraftRemovalReceipt } from '../slices/worktrees/teardown/chat-draft-removal-receipt'
 import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/account-binding'
@@ -209,7 +210,8 @@ export type RepoSlice = {
     args: ProjectHostSetupUpdateArgs
   ) => Promise<ProjectHostSetupUpdateResult | null>
   deleteProjectHostSetup: (
-    args: ProjectHostSetupDeleteArgs
+    args: ProjectHostSetupDeleteArgs,
+    chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
   ) => Promise<ProjectHostSetupDeleteResult | null>
   setupProjectClone: (args: ProjectHostSetupCloneArgs) => Promise<ProjectHostSetupResult | null>
   addNonGitFolder: (path: string, options?: AddRepoPathOptions) => Promise<Repo | null>
@@ -288,6 +290,7 @@ export type RepoSlice = {
     projectId: string,
     options: {
       hostId: ExecutionHostId
+      chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
       errorFeedback?: 'toast' | 'silent'
       automaticCleanup?: boolean
       confirmedDiscards?: ConfirmedUnsavedDiscards

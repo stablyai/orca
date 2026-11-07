@@ -1,3 +1,8 @@
+import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
 import { promptTextContent } from './native-chat-prompt-document-text'
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -141,4 +146,28 @@ describe('queued edit draft ownership', () => {
     expect(readNativeChatComposerDraft(edit.scopeKey).text).toBe('')
     expect(readNativeChatComposerDraft('bottom').text).toBe('')
   })
+})
+
+it('keeps returned browser images available after the queued editor closes', () => {
+  const edit = createNativeChatQueuedEditDraft(body, 'bottom')
+  const file = new File(['queued image'], 'queued.png', { type: 'image/png' })
+  const [path] = holdBrowserAttachmentFiles([file])
+  updateNativeChatComposerDraft(
+    edit.scopeKey,
+    {
+      text: 'unsent image',
+      images: [...edit.initial.images, { id: 'queued-browser-image', path: path! }]
+    },
+    'immediate'
+  )
+  stageNativeChatDraftFile(edit.scopeKey, path!)
+  updateNativeChatComposerDraft(edit.scopeKey, { text: 'edited after staging' }, 'immediate')
+  expect(handBackNativeChatQueuedEdit(edit)).toBe(true)
+  discardNativeChatQueuedEdit(edit)
+  expect(readNativeChatComposerDraft('bottom').images).toEqual([
+    { id: 'queued-browser-image', path }
+  ])
+  expect(readBrowserAttachmentFile(path!)).toBe(file)
+  updateNativeChatComposerDraft('bottom', { text: '', images: [] }, 'immediate')
+  expect(readBrowserAttachmentFile(path!)).toBeNull()
 })

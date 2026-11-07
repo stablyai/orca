@@ -1,4 +1,5 @@
-import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import { createChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
+import { getRepoIdFromWorktreeId, composeWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -7,8 +8,6 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
@@ -21,13 +20,12 @@ import {
   refuseUnprovableRemoteHostRouting
 } from './host-qualified-worktree-removal'
 import { resolveSameIdSurvivingHostId } from './host-qualified-worktree-row-removal'
-import {
-  classifyWorktreeForceDeleteReason,
-  getLockedWorktreeRemovalReason,
-  isLockedWorktreeRemovalError
-} from '../../../../../../shared/worktree/removal'
 import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
-import { getWorktreeDeleteStateKey } from './worktree-delete-state'
+import {
+  getWorktreeDeleteStateKey,
+  markWorktreeRemovalStarted,
+  failWorktreeRemoval
+} from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
@@ -73,20 +71,13 @@ export function createRemoveWorktree(
     } = start
     const sameIdSurvivingHostId = catalogSurvivorHostId ?? options?.sameIdSurvivingHostId ?? null
     const deleteStateKey = getWorktreeDeleteStateKey(get(), worktreeId, requiredExecutionHostId)
-    set((s) => ({
-      deleteStateByWorktreeId: {
-        ...s.deleteStateByWorktreeId,
-        [deleteStateKey]: {
-          isDeleting: true,
-          phase: 'deleting',
-          ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
-          error: null,
-          canForceDelete: false,
-          forceDeleteReason: null
-        }
-      }
-    }))
+    markWorktreeRemovalStarted(set, deleteStateKey, requiredExecutionHostId)
 
+    const draftReceipt = options?.chatDraftRemovalReceipt ?? createChatDraftRemovalReceipt(get)
+    const commitDraftRemoval = draftReceipt.capture({
+      executionHostId: hostId ?? null,
+      runtimeEnvironmentId: removalRoute?.runtimeEnvironmentId
+    })
     try {
       // forget-local touches no remote/archive hooks; read current trust so concurrent same-repo deletes share one approval.
       const skipArchive = policy.forgetLocalOnly
@@ -166,6 +157,12 @@ export function createRemoveWorktree(
         }
       }
 
+      commitDraftRemoval({ workspaceId: worktreeId })
+      for (const nested of options?.approvedNestedWorktrees ?? []) {
+        commitDraftRemoval({
+          workspaceId: composeWorktreeId(getRepoIdFromWorktreeId(worktreeId), nested.path)
+        })
+      }
       retireRemovedWorktreeCommitDrafts(worktreeId, requiredExecutionHostId ?? hostId)
       beforeRemoval = retireWorktreeDraftOwners(beforeRemoval)
 
@@ -205,6 +202,7 @@ export function createRemoveWorktree(
               target,
               worktreeBeforeRemoval,
               suppressPreservedBranchToast: options?.suppressPreservedBranchToast === true,
+              chatDraftRemovalReceipt: draftReceipt,
               rowAlreadyDropped: true
             })
           }
@@ -240,6 +238,7 @@ export function createRemoveWorktree(
         hostId,
         requiredExecutionHostId,
         beforeRemoval,
+        chatDraftRemovalReceipt: draftReceipt,
         catalogVersion: removalResult?.catalogVersion,
         confirmedDiscards: options?.confirmedDiscards
       })
@@ -289,33 +288,18 @@ export function createRemoveWorktree(
           }
         : { ok: true as const }
     } catch (err) {
-      // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
-      console.warn('Failed to remove worktree:', err)
-      // Strip IPC/channel wrappers so the user-facing refusal leads the toast.
-      const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
-      const forceDeleteReason = classifyWorktreeForceDeleteReason(
-        error,
+      return failWorktreeRemoval(
+        set,
+        deleteStateKey,
+        requiredExecutionHostId,
+        err,
         policy.force,
         policy.options?.allowUnverifiedPtyStop === true
       )
-      const locked = isLockedWorktreeRemovalError(error)
-      // Only archive-hook refusal can be retried via waiver rather than state repair; expose that toast choice (#19334).
-      const canWaiveArchiveHook = isArchiveHookRemovalError(error)
-      set((s) => ({
-        deleteStateByWorktreeId: {
-          ...s.deleteStateByWorktreeId,
-          [deleteStateKey]: {
-            isDeleting: false,
-            ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
-            error,
-            canForceDelete: forceDeleteReason !== null,
-            forceDeleteReason,
-            ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
-            ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
-          }
-        }
-      }))
-      return { ok: false as const, error }
+    } finally {
+      if (!options?.chatDraftRemovalReceipt) {
+        await draftReceipt.finish()
+      }
     }
   }
 }

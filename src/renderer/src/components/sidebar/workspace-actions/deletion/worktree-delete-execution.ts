@@ -1,3 +1,4 @@
+import { createChatDraftRemovalReceipt } from '@/store/slices/worktrees/teardown/chat-draft-removal-receipt'
 import { useAppStore } from '@/store'
 import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
@@ -44,6 +45,8 @@ export async function runWorktreeDeletesInParallel(
   >[],
   options: WorktreeDeleteWithToastOptions = {}
 ): Promise<WorktreeRemovalTarget[]> {
+  const draftReceipt =
+    options.chatDraftRemovalReceipt ?? createChatDraftRemovalReceipt(useAppStore.getState)
   // A destructive command must run once per identity even if a refresh duplicated rows.
   const uniqueTargets = Array.from(
     new Map(targets.map((target) => [getWorktreeHostIdentity(target), target])).values()
@@ -139,6 +142,7 @@ export async function runWorktreeDeletesInParallel(
               target.displayName,
               {
                 ...options,
+                chatDraftRemovalReceipt: draftReceipt,
                 suppressPreservedBranchToast: aggregatePreservedBranches,
                 ...(snapshotPruneBatch ? { snapshotPruneBatchId: snapshotPruneBatch.batchId } : {}),
                 onPreservedBranch: (branch) => {
@@ -161,6 +165,9 @@ export async function runWorktreeDeletesInParallel(
       })
     )
   } finally {
+    if (!options.chatDraftRemovalReceipt) {
+      await draftReceipt.finish()
+    }
     if (snapshotPruneBatch) {
       try {
         await snapshotPruneBatch.finish()

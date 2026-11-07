@@ -54,6 +54,7 @@ import {
   type AgentSessionRestartProbeArgs
 } from '../ownership/agent-session-restart-reconciliation'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
+import { rebindAgentSessionWorkspace } from './agent-session-record-workspace-rebind'
 import {
   commitAgentSessionReservation,
   type AgentSessionReserveRequest,
@@ -336,6 +337,15 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
+
+  async rebindWorkspace(
+    sessionId: string,
+    original: AgentSessionExecutionLocation,
+    location: AgentSessionExecutionLocation,
+    check: (record: AgentSessionRecord) => void
+  ): Promise<void> {
+    return rebindAgentSessionWorkspace(this.transactions, sessionId, original, location, check)
+  }
 
   /** Evaluate options against the record held by this ordered write. */
   reviseSessionOptions = <A extends { sessionId: string }>(

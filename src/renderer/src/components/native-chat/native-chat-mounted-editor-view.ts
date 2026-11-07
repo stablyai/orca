@@ -1,3 +1,4 @@
+import { promptText } from './native-chat-prompt-document'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
@@ -26,4 +27,23 @@ export function focusMountedNativeChatEditor(editor: Editor): void {
   if (!editor.isEditable) {
     view.dom.focus()
   }
+}
+
+export function isNativeChatEditorCaretOnVisualEdge(
+  editor: Editor,
+  edge: 'start' | 'end'
+): boolean {
+  const { selection, doc } = editor.state
+  if (!selection.empty) {
+    return false
+  }
+  const before = promptText(doc, 0, selection.from)
+  const after = promptText(doc, selection.from)
+  // An empty composer has one line: no layout read on the path every recall starts from.
+  if (before === '' && after === '') {
+    return true
+  }
+  const beyond = edge === 'start' ? before : after
+  // Why both: the text check covers other paragraphs, the view covers soft wraps.
+  return !beyond.includes('\n') && editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
 }

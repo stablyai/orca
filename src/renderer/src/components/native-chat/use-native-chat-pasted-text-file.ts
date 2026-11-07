@@ -99,12 +99,13 @@ export function useNativeChatPastedTextFile(args: {
         })
         .then(
           (path) => {
-            const destinationScope = nativeChatPastedTextOperations.get(id)?.scopeKey
+            const operation = nativeChatPastedTextOperations.get(id)
+            const destinationScope = operation?.scopeKey
             if (nativeChatAttachmentOwnerUnchanged(owner, resolveAttachmentOwner())) {
               const retained = settleNativeChatPastedText(id, path)
               if (owner.kind === 'local' && owner.stagingScope) {
                 if (retained && destinationScope) {
-                  stageNativeChatDraftFile(destinationScope, path)
+                  stageNativeChatDraftFile(destinationScope, path, operation)
                 } else {
                   releaseBrowserAttachmentFiles([path])
                 }

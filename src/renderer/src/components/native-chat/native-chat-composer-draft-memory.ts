@@ -1,3 +1,11 @@
+import { restoredImageChecks } from './native-chat-composer-draft-restored-images'
+export {
+  restoredImageChecks,
+  NO_IMAGE_CHECKS,
+  restoredImageKey,
+  reconcileRestoredImageChecks,
+  type DraftImageCheck
+} from './native-chat-composer-draft-restored-images'
 import type { LoadBookkeeping } from './native-chat-composer-draft-load'
 import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import {
@@ -15,12 +23,14 @@ export {
 } from './native-chat-launch-draft-source'
 import { sameNativeChatComposerDraftDocument } from './native-chat-composer-draft-comparison'
 import type { NativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
-import { reconcileNativeChatStagedDraft } from './native-chat-draft-attachment-staging'
+import {
+  reconcileNativeChatStagedDraft,
+  type NativeChatStagedRemoval
+} from './native-chat-draft-attachment-staging'
 // Memory owns drafts; storage keeps a copy shared by the API and persistence modules.
 
 import type {
   NativeChatComposerDraft,
-  NativeChatComposerDraftImage,
   NativeChatComposerDraftOwner,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
@@ -31,6 +41,8 @@ export type DraftRecord = StoredNativeChatComposerDraft & { readonly unsavedText
 export type UnconfirmedDraftChange = {
   readonly draft: StoredNativeChatComposerDraft | null
   readonly at: number
+  retired?: boolean
+  applied?: { input: unknown; output: StoredNativeChatComposerDraft | null }
 }
 
 export const records = new Map<string, DraftRecord>()
@@ -57,7 +69,8 @@ export function retireNativeChatDraftPosition(
 export function installNativeChatDraftRecord(
   scope: string,
   draft?: DraftRecord,
-  position?: NativeChatDraftPosition
+  position?: NativeChatDraftPosition,
+  stagedRemoval?: NativeChatStagedRemoval
 ): void {
   const previous = records.get(scope)
   if (
@@ -79,7 +92,7 @@ export function installNativeChatDraftRecord(
   } else {
     records.delete(scope)
   }
-  reconcileNativeChatStagedDraft(scope, draft)
+  reconcileNativeChatStagedDraft(scope, draft, stagedRemoval)
 }
 
 // Changed in memory with no write issued yet; a refused write comes back here for the next flush.
@@ -89,45 +102,6 @@ export const unconfirmed = new Map<string, UnconfirmedDraftChange>()
 export const deferredRemovals = new Map<string, { destinationScope: string; savedAt: number }>()
 // Drafts whose last write storage refused; shown so the user knows they are held in memory only.
 export const refusedScopes = new Set<string>()
-export type DraftImageCheck = {
-  image: NativeChatComposerDraftImage
-  /** The object itself is the current attempt token. */
-  attempt?: { authority: string }
-}
-export const restoredImageChecks = new Map<string, readonly DraftImageCheck[]>()
-export const NO_IMAGE_CHECKS: readonly DraftImageCheck[] = []
-
-export function restoredImageKey(image: NativeChatComposerDraftImage): string {
-  return JSON.stringify([image.id, image.path, image.connectionId])
-}
-
-/** Ordinary edits prune work; restore boundaries register only newly introduced tuples. */
-export function reconcileRestoredImageChecks(
-  scopeKey: string,
-  images: readonly NativeChatComposerDraftImage[],
-  previous: readonly NativeChatComposerDraftImage[] = images
-): void {
-  const current = restoredImageChecks.get(scopeKey) ?? NO_IMAGE_CHECKS
-  const held = new Set(
-    images
-      .filter((image) => image.path && image.unavailableName === undefined)
-      .map(restoredImageKey)
-  )
-  const before = new Set(previous.map(restoredImageKey))
-  const next = current.filter((entry) => held.has(restoredImageKey(entry.image)))
-  for (const image of images) {
-    if (held.has(restoredImageKey(image)) && !before.has(restoredImageKey(image))) {
-      next.push({ image })
-    }
-  }
-  if (next.length !== current.length || next.some((entry, index) => entry !== current[index])) {
-    if (next.length) {
-      restoredImageChecks.set(scopeKey, next)
-    } else {
-      restoredImageChecks.delete(scopeKey)
-    }
-  }
-}
 export const scopeListeners = new Map<string, Set<() => void>>()
 
 export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
@@ -137,7 +111,8 @@ export const load: LoadBookkeeping = {
   appendSequence: 0,
   editedBeforeLoad: new Set(),
   appendsBeforeLoad: new Map(),
-  deletionsBeforeLoad: []
+  deletionsBeforeLoad: [],
+  attempt: null
 }
 
 let lastSavedAt = 0
@@ -204,6 +179,7 @@ export function clearDraftMemoryForTests(): void {
   load.editedBeforeLoad.clear()
   load.appendsBeforeLoad.clear()
   load.deletionsBeforeLoad.length = 0
+  load.attempt = null
 }
 
 export type NativeChatDraftAppend =
@@ -241,7 +217,11 @@ export function notifyDraftAppend(
   appendListeners.get(currentDraftScope(scope))?.forEach((listener) => listener(addition, previous))
 }
 
-export type NativeChatEditDraftDestination = { scopeKey: string; active: boolean }
+export type NativeChatEditDraftDestination = {
+  scopeKey: string
+  active: boolean
+  returning?: { destination: string; revoked?: DraftRecord }
+}
 export const ephemeralDrafts = new Map<string, NativeChatEditDraftDestination>()
 
 export function captureNativeChatEditDraftDestination(

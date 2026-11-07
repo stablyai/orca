@@ -1,3 +1,4 @@
+import type { ChatDraftRemovalReceipt } from '@/store/slices/worktrees/teardown/chat-draft-removal-receipt'
 import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { PreservedBranchCleanup } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
@@ -21,6 +22,7 @@ export type WorktreeDeleteOptions = {
 }
 
 export type WorktreeDeleteWithToastOptions = {
+  chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
   force?: boolean
   onForceDeleted?: (target: WorktreeRemovalTarget) => void
   onPreservedBranch?: (branch: PreservedBranchCleanup) => void

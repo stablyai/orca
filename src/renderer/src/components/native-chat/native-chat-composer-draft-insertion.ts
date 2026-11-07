@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { nativeChatComposerScopeDestination } from './native-chat-composer-destination'
 import {
   readNativeChatComposerDraft,
@@ -19,6 +20,7 @@ export function insertNativeChatComposerDraftText(
     paste?: boolean
     owner?: NativeChatComposerDraftOwner
     draftOnly?: boolean
+    sources?: readonly NativeChatDraftReturnSource[]
     dictated?: boolean
   }
 ): void {
@@ -26,7 +28,13 @@ export function insertNativeChatComposerDraftText(
   const insertMounted = options?.paste
     ? (mounted?.insertPastedText ?? mounted?.insertTypedText)
     : mounted?.insertTypedText
-  if (!mounted?.isComposing?.() && insertMounted?.(text, { dictated: options?.dictated })) {
+  if (
+    !mounted?.isComposing?.() &&
+    insertMounted?.(text, {
+      dictated: options?.dictated,
+      ...(options?.sources ? { sources: options.sources } : {})
+    })
+  ) {
     return
   }
   const separator = (draftText: string): string => {
@@ -45,6 +53,14 @@ export function insertNativeChatComposerDraftText(
     }
   }
   const before = readNativeChatComposerDraft(scope)
-  updateNativeChatComposerDraft(scope, insert(before), 'immediate', insert)
+  updateNativeChatComposerDraft(
+    scope,
+    insert(before),
+    'immediate',
+    insert,
+    undefined,
+    undefined,
+    options?.sources
+  )
   notifyDraftAppend(scope, insert, before)
 }

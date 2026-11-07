@@ -73,7 +73,8 @@ it.each([10, 100])(
     const remove = Promise.withResolvers<void>()
     const loaded = Promise.withResolvers<ReadonlyMap<string, unknown>>()
     const storage = createMemoryNativeChatComposerDraftStorage()
-    storage.loadAll = () => loaded.promise
+    const loadAll = storage.loadAll
+    storage.loadAll = vi.fn(loadAll).mockReturnValueOnce(loaded.promise)
     setNativeChatComposerDraftStorageForTests(storage)
     const hydration = drafts.hydrateNativeChatComposerDrafts()
     vi.stubGlobal('window', {
@@ -166,7 +167,7 @@ it.each([10, 100])(
     await removal
     const currentVisits = { ...visits }
     process.stdout.write(
-      `${JSON.stringify({ metric: 'held-project-commit', count, visits: currentVisits })}\n`
+      `${JSON.stringify({ metric: 'held-project-commit', count, visits: currentVisits, unmeasured: ['record', 'listener', 'pending'] })}\n`
     )
     loaded.resolve(
       new Map(

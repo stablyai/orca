@@ -1,3 +1,5 @@
+import { createProjectHostCloneAction } from './project-host-clone-action'
+import { createChatDraftRemovalReceipt } from '../slices/worktrees/teardown/chat-draft-removal-receipt'
 import { deleteProjectChatDrafts } from '../slices/worktrees/teardown/removed-worktree-chat-drafts'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
@@ -8,7 +10,6 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
 import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
 import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
@@ -27,6 +28,10 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 import { toastProjectAddFailure } from './project-add-failure-toast'
+import {
+  captureHostIdentityFence,
+  isHostIdentityContinued
+} from '../../runtime/rpc/environment-revisions/host-identity-fence'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -189,12 +194,14 @@ export function createProjectHostSetupActions(
       }
     },
 
-    deleteProjectHostSetup: async (args) => {
+    deleteProjectHostSetup: async (args, sharedDraftReceipt) => {
+      const draftReceipt = sharedDraftReceipt ?? createChatDraftRemovalReceipt(get, true)
       try {
         const { target, hostArgs } = await prepareProjectHostSetupMutation(
           get().projectHostSetups,
           args
         )
+        const endpointFence = captureHostIdentityFence({ target, at: 'local' })
         const result =
           target.kind === 'local'
             ? await window.api.projects.deleteHostSetup(hostArgs)
@@ -211,6 +218,12 @@ export function createProjectHostSetupActions(
           : undefined
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         if (repo && repoHostId) {
+          if (isHostIdentityContinued(endpointFence)) {
+            draftReceipt.capture({
+              executionHostId: repoHostId,
+              runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
+            })({ projectId: repo.id }, 'submissions')
+          }
           deleteProjectChatDrafts(repo.id, repoHostId)
         }
         const removedSetup = adoptFromEndpoint(target, {
@@ -250,44 +263,13 @@ export function createProjectHostSetupActions(
           }
         )
         return null
+      } finally {
+        if (!sharedDraftReceipt) {
+          await draftReceipt.finish()
+        }
       }
     },
 
-    setupProjectClone: async (args) => {
-      try {
-        assertNotSshProjectHost(get(), args.hostId)
-        const target = getProjectSetupRuntimeTarget(args.hostId)
-        await assertProjectHostSetupMutationRuntimeCapabilities(target)
-        const repo =
-          target.kind === 'local'
-            ? await window.api.repos.clone({
-                url: args.url,
-                destination: args.destination
-              })
-            : (
-                await callRuntimeRpc<{ repo: Repo }>(
-                  target,
-                  'repo.clone',
-                  {
-                    url: args.url,
-                    destination: args.destination
-                  },
-                  { timeoutMs: 10 * 60_000 }
-                )
-              ).repo
-        return await get().setupProjectExistingFolder({
-          projectId: args.projectId,
-          hostId: args.hostId,
-          path: repo.path,
-          kind: 'git',
-          displayName: args.displayName,
-          setupMethod: 'cloned'
-        })
-      } catch (err) {
-        console.error('Failed to clone project on host:', err)
-        toastProjectAddFailure(err)
-        return null
-      }
-    }
+    setupProjectClone: createProjectHostCloneAction(get)
   }
 }

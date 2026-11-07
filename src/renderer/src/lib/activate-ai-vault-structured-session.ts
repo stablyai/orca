@@ -7,14 +7,18 @@ import type {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   openDesktopStructuredSessionInteraction,
+  desktopStructuredSessionOpenDeps,
   type StructuredSessionOpenAdapterDeps
 } from './open-existing-structured-session'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
-import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
-import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
-import { useAppStore } from '@/store'
+import { showStructuredChatWorkspace } from './structured-chat-workspace-navigation'
+import { loadStructuredChatWorkspaceListing } from './structured-chat-workspace-catalog'
+import {
+  structuredAgentSessionTargetForHost,
+  executionHostIdForStructuredTarget
+} from '@/runtime/structured-agent-session-owner'
 export {
   revealStructuredSession,
   type StructuredSessionRevealOutcome
@@ -59,19 +63,29 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
-  session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
+  session: Pick<AiVaultSession, 'structuredSession'> &
+    Partial<Pick<AiVaultSession, 'executionHostId'>> & { agent?: string },
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
     return false
   }
-  await openDesktopStructuredSession(
+  const owner =
+    target ??
+    (session.executionHostId
+      ? structuredAgentSessionTargetForHost(session.executionHostId)
+      : undefined)
+  if (owner === null) {
+    ;(deps ?? structuredSessionOpenFeedback).unavailable(session.agent)
+    return false
+  }
+  const result = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
-    target,
+    owner,
     deps
   )
-  return true
+  return result.kind === 'opened'
 }
 
 export function openDesktopStructuredSession(
@@ -81,16 +95,48 @@ export function openDesktopStructuredSession(
   locate?: StructuredSessionOpenDeps['locate'],
   feedback?: StructuredSessionOpenFeedback
 ): Promise<StructuredSessionOpenResult> {
+  const navigation = { reported: false }
+  // Set when the user navigated while this open waited: it then ends without moving them.
+  let moved = false
+  // Each destination's listing loads at most once per open; a reveal's new one loads its own.
+  const loaded = new Set<string>()
+  // Navigate on every attempt: the opener awaits between them, and the registration can change.
+  const activate: StructuredSessionOpenAdapterDeps['activate'] = async (args) => {
+    const hostId = args.target ? executionHostIdForStructuredTarget(args.target) : undefined
+    if (showStructuredChatWorkspace(args.worktreeId, hostId, navigation)) {
+      return desktopStructuredSessionOpenDeps.activate(args)
+    }
+    const key = `${hostId}\0${args.worktreeId}`
+    if (!args.target || !hostId || navigation.reported || loaded.has(key)) {
+      return false
+    }
+    // A host's chat tab can arrive before this window lists its workspace (cold start, reconnect).
+    loaded.add(key)
+    moved = !(await loadStructuredChatWorkspaceListing(args.worktreeId, hostId))
+    return (
+      !moved &&
+      desktopStructuredSessionOpenDeps.tabs(
+        { sessionId: args.sessionId, worktreeId: args.worktreeId },
+        args.target
+      ).length > 0 &&
+      showStructuredChatWorkspace(args.worktreeId, hostId, navigation) &&
+      desktopStructuredSessionOpenDeps.activate(args)
+    )
+  }
   return openDesktopStructuredSessionInteraction(source, {
     target: host,
-    deps,
+    deps: deps ?? { ...desktopStructuredSessionOpenDeps, activate },
     locate,
-    present: (result) =>
-      presentDesktopStructuredSession(
-        result,
-        source,
-        feedback ?? deps ?? structuredSessionOpenFeedback
-      )
+    current: () => !moved,
+    present: (result) => {
+      if (!navigation.reported) {
+        presentDesktopStructuredSession(
+          result,
+          source,
+          feedback ?? deps ?? structuredSessionOpenFeedback
+        )
+      }
+    }
   })
 }
 
@@ -99,15 +145,7 @@ function presentDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   deps: StructuredSessionOpenFeedback
 ): void {
-  if (result.kind === 'opened') {
-    const workspace = result.target.worktreeId
-    if (
-      useAppStore.getState().activeWorktreeId !== workspace &&
-      !activateWslMovedWorkspace(workspace)
-    ) {
-      activateAndRevealWorktree(workspace)
-    }
-  } else if (result.kind === 'failed') {
+  if (result.kind === 'failed') {
     const agent = source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
     if (result.failure.reason === 'workspace-missing') {
       toast.error(

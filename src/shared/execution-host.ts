@@ -241,9 +241,10 @@ export function getSshTargetIdForExecutionHost(
 }
 
 /** The SSH target this client may dial for a row's files; null for local and `runtime:` rows. */
-export function getRepoDialableSshTargetId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): string | null {
+export function getRepoDialableSshTargetId(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): string | null {
   return getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
 }
 
@@ -262,9 +263,10 @@ export function getRepoSshConnectionId(
 }
 
 /** Resolve both SSH spellings for routing checks; a raw connectionId never reads as local, and ssh:B overrides stale connectionId A. */
-export function getRepoRoutingConnectionId(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): string | null {
+export function getRepoRoutingConnectionId(repo: {
+  connectionId?: string | null
+  executionHostId?: string | null
+}): string | null {
   return getRepoDialableSshTargetId(repo) ?? normalizeHostPart(repo.connectionId)
 }
 

@@ -8,13 +8,12 @@ import type { AppState } from '../../../types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { NativeChatComposerDraftOwner } from '@/components/native-chat/native-chat-composer-draft-storage'
 import {
-  deleteNativeChatComposerDraft,
   deleteNativeChatComposerDraftsForTab,
   deleteNativeChatComposerDraftsOwnedBy,
+  structuredAgentSessionIdOfDraftScope,
   structuredAgentSessionDraftScopeKey
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import {
-  clearNativeChatPendingAttachments,
   dropNativeChatPendingAttachmentsForTab,
   dropNativeChatPendingAttachmentsOwnedBy
 } from '@/components/native-chat/native-chat-pending-attachment-cache'
@@ -64,10 +63,6 @@ export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
     deleteNativeChatComposerDraftsOwnedBy(owner)
     dropNativeChatPendingAttachmentsOwnedBy(owner)
   }
-  for (const key of keys.conversations) {
-    deleteNativeChatComposerDraft(key)
-    clearNativeChatPendingAttachments(key)
-  }
   for (const tabId of keys.terminalTabIds) {
     deleteNativeChatComposerDraftsForTab(tabId)
     dropNativeChatPendingAttachmentsForTab(tabId)
@@ -86,6 +81,7 @@ export function deleteWorkspaceChatDraftOwners(
     const owner =
       launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner
     return (
+      structuredAgentSessionIdOfDraftScope(scope) === null &&
       !!owner &&
       (owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId])) ||
         additionally?.(owner, scope) === true)

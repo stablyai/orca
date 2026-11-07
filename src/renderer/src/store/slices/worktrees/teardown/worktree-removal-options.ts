@@ -1,9 +1,11 @@
+import type { ChatDraftRemovalReceipt } from './chat-draft-removal-receipt'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ConfirmedUnsavedDiscards } from './removed-workspace-unsaved-files'
 
 import type { NestedWorktreeRemovalApproval } from '../../../../../../shared/worktree/nested-removal'
 
 export type RemoveWorktreeOptions = {
+  chatDraftRemovalReceipt?: ChatDraftRemovalReceipt
   /** Renderer-only admission check after hook trust, immediately before destructive dispatch. */
   assertBeforeDispatch?: () => void
   approvedNestedWorktrees?: NestedWorktreeRemovalApproval[]

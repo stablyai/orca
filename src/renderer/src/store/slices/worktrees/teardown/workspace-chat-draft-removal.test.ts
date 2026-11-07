@@ -1,4 +1,4 @@
-/** User deletion clears drafts using pre-RPC keys; host removal announcements may purge listings before reply, while non-user purges must retain drafts. */
+/** Confirmed current conversations clear after user removal; listing purges alone retain drafts. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -20,7 +20,24 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
+let currentConversationWorkspace: string
 const mockApi = {
+  runtime: {
+    call: vi.fn(async ({ method, params }: { method: string; params: { address?: string } }) => ({
+      ok: true,
+      result:
+        method === 'orchestration.partyLocation'
+          ? {
+              location: {
+                kind: 'chat',
+                sessionId: params.address?.slice('orca_session_id:'.length),
+                worktreeId: currentConversationWorkspace
+              }
+            }
+          : {}
+    }))
+  },
+  ephemeralVm: { listRuntimes: vi.fn().mockResolvedValue([]) },
   worktrees: { remove: vi.fn(), updateMeta: vi.fn().mockResolvedValue({}) },
   repos: { removeForHost: vi.fn() },
   folderWorkspaces: { delete: vi.fn() },
@@ -56,10 +73,12 @@ const PANE = 'tab-wt1:leaf-a'
 const OTHER = 'tab-wt2:leaf-a'
 
 function seedWorkspace(store: ReturnType<typeof createTestStore>, workspaceId: string): void {
+  currentConversationWorkspace = workspaceId
   const chat = makeUnifiedTab({
     id: 'chat-tab',
     entityId: 'session-1',
     contentType: 'agent-session',
+    executionHostId: 'local',
     worktreeId: workspaceId,
     groupId: 'group-1'
   })
@@ -200,6 +219,7 @@ describe('workspace chat drafts on removal', () => {
             id: 'closed-tab',
             entityId: 'session-closed',
             contentType: 'agent-session',
+            executionHostId: 'local',
             worktreeId: WT1,
             groupId: 'group-1'
           })
@@ -255,7 +275,7 @@ describe('workspace chat drafts on removal', () => {
     expect(draftImageCount(CHAT)).toBe(0)
   })
 
-  it('deletes a draft an upload wrote after its chat’s tab closed, by the owner it began in', async () => {
+  it('deletes a current member draft an upload wrote after its chat’s tab closed', async () => {
     const store = createTestStore()
     seedWorktree(store)
     trackDraftOwners(store)
@@ -268,6 +288,7 @@ describe('workspace chat drafts on removal', () => {
             id: 'later-tab',
             entityId: 'session-later',
             contentType: 'agent-session',
+            executionHostId: 'local',
             worktreeId: WT1,
             groupId: 'group-1'
           })

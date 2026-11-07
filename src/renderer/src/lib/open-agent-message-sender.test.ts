@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => {
     toast: vi.fn(),
     reveal: vi.fn(),
     activate: vi.fn(),
+    // This window lists wt-chat on the receiving host only.
+    navigate: vi.fn((_worktreeId: string, hostId?: string) => hostId === 'runtime:remote-2'),
     group: vi.fn(),
     type: vi.fn(),
     state: {
@@ -51,6 +53,11 @@ vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => 
 }))
 vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.reveal
+}))
+// The store is mocked without worktree rows; the real listing gate, owner catalog load and wake
+// run against the real store in native-chat-agent-message-sender-host.test.tsx.
+vi.mock('./structured-chat-workspace-navigation', () => ({
+  showStructuredChatWorkspace: mocks.navigate
 }))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
 import { openAgentMessageSender } from './open-agent-message-sender'

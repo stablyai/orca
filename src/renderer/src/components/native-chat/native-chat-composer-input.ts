@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 
@@ -14,12 +15,12 @@ export type NativeChatComposerInput = Pick<
 > & {
   insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
-  insertText?: (text: string) => void
+  insertText?: (text: string, sources?: readonly NativeChatDraftReturnSource[]) => void
   insertSkill?: (from: number, to: number, token: string, path?: string) => void
   /** Deletes every chip of one image, as when its thumbnail goes. */
   removeImageReferences?: (attachmentId: string) => void
   /** Inserts each file at the caret as a pill; its text stays the `@path` reference. */
-  insertFileReferences?: (paths: string[]) => void
+  insertFileReferences?: (paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => void
   /** One user paste transaction; ordinary history retains the replaced rich selection. */
   stagePastedText?: (token: string) => void
   /** True only for collapsed carets at the first/last visual line, including wraps. */

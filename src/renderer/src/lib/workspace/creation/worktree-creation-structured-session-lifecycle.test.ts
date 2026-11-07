@@ -159,13 +159,13 @@ describe('creation chat handoff', () => {
       await nativeChatComposerDraftWritesSettled()
       const committed = Promise.withResolvers<void>()
       const started = Promise.withResolvers<string>()
-      const write = storage.write
-      storage.write = async (scope, draft) => {
+      const update = storage.update
+      storage.update = async (scope, apply) => {
         if (scope.startsWith('agent-session:')) {
           started.resolve(scope)
           await committed.promise
         }
-        await write(scope, draft)
+        await update(scope, apply)
       }
       vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
         throw new DOMException('refused', 'QuotaExceededError')

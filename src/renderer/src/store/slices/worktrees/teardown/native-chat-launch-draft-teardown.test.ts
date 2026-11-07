@@ -36,6 +36,22 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 const mockApi = {
+  runtime: {
+    call: vi.fn(async ({ method, params }: { method: string; params: { address?: string } }) => ({
+      ok: true,
+      result:
+        method === 'orchestration.partyLocation'
+          ? {
+              location: {
+                kind: 'chat',
+                sessionId: params.address?.slice('orca_session_id:'.length),
+                worktreeId: WT1
+              }
+            }
+          : {}
+    }))
+  },
+  ephemeralVm: { listRuntimes: vi.fn().mockResolvedValue([]) },
   worktrees: {
     remove: vi.fn().mockResolvedValue(undefined),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
@@ -123,6 +139,7 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
       id: 'chat-tab',
       entityId: 'session-1',
       contentType: 'agent-session',
+      executionHostId: 'local',
       worktreeId: WT1,
       groupId: 'group-1'
     })

@@ -32,7 +32,8 @@ export function createSetActiveWorktree(
     const stateTransition = options?.stateTransition?.(get())
     const createdTabIds = new Set(options?.createdTabIds)
     // A tab its caller just created is not asleep: its first bind is new work, not a wake.
-    const isWakeable = (tab: { id: string }): boolean => !createdTabIds.has(tab.id)
+    const isWakeable = (tab: { id: string }): boolean =>
+      !options?.selectOnly && !createdTabIds.has(tab.id)
     if (stateTransition && !stateTransition.activate) {
       if (Object.keys(stateTransition.patch).length > 0) {
         set(stateTransition.patch)
@@ -107,9 +108,11 @@ export function createSetActiveWorktree(
         worktreeId && wakeable.length > 0 && shouldTagTabs && !allDead
       )
       shouldTagTerminalTabs = shouldTagTabs
-      const nextEverActivated = isFirstActivation
-        ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
-        : s.everActivatedWorktreeIds
+      // A select-only visit leaves the first real activation its terminal tagging.
+      const nextEverActivated =
+        isFirstActivation && !options?.selectOnly
+          ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
+          : s.everActivatedWorktreeIds
       const nextActiveRepoId =
         workspaceScope?.type === 'folder'
           ? null
@@ -167,7 +170,9 @@ export function createSetActiveWorktree(
     })
 
     // Activation explicitly wakes (null only clears selection for sleep); clear intent after remount-generation update so waiting panes connect once.
-    clearWorktreeSleepIntent(worktreeId)
+    if (!options?.selectOnly) {
+      clearWorktreeSleepIntent(worktreeId)
+    }
 
     if (worktreeId && shouldPrepareTerminalTabs) {
       const prepareTerminalTabs = (): void => {

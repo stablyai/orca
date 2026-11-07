@@ -2,6 +2,10 @@
 
 import type { UnconfirmedDraftChange } from './native-chat-composer-draft-memory'
 import {
+  journalNativeChatDraftReturnOperation,
+  type NativeChatDraftReturnProduct
+} from './native-chat-draft-return-products'
+import {
   withNativeChatComposerDraftAddition,
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
@@ -10,7 +14,7 @@ import {
   type StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
 
-const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
+export const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
 // Cap whole drafts and additions separately to protect localStorage quota; always retain tiny removal entries to prevent sent drafts returning.
 export const MAX_JOURNAL_CHARS = 256_000
 export const MAX_JOURNAL_ADDITIONS_CHARS = 800_000
@@ -70,6 +74,10 @@ function parseEntry(entry: unknown): JournalEntry[] {
         }
       ]
     : []
+}
+
+export function nativeChatComposerDraftJournalReplayKey(entry: unknown): string {
+  return JSON.stringify(parseEntry(entry)[0]) ?? 'undefined'
 }
 
 function readEntries(): JournalEntry[] {
@@ -155,7 +163,7 @@ export function journalNativeChatComposerDraftChanges(
   let used = JSON.stringify(kept.filter((entry) => !isAddition(entry) && entry.draft)).length
   const added: JournalEntry[] = []
   const bySize = [...changes]
-    .map(([scopeKey, change]) => ({ scopeKey, ...change, run: THIS_RUN }))
+    .map(([scopeKey, change]) => ({ scopeKey, draft: change.draft, at: change.at, run: THIS_RUN }))
     .map((entry) => ({ entry, size: JSON.stringify(entry).length + 1 }))
     .sort((left, right) => left.size - right.size)
   for (const { entry, size } of bySize) {
@@ -170,7 +178,14 @@ export function journalNativeChatComposerDraftChanges(
     used += size
   }
   if (added.length > 0) {
-    writeEntries([...kept, ...added])
+    if (writeEntries([...kept, ...added])) {
+      for (const entry of added) {
+        const change = changes.get(entry.scopeKey)
+        if (change) {
+          journalNativeChatDraftReturnOperation(change, entry)
+        }
+      }
+    }
   }
 }
 
@@ -178,11 +193,17 @@ export function journalNativeChatComposerDraftChanges(
 export function journalNativeChatComposerDraftAddition(
   scopeKey: string,
   addition: NativeChatComposerDraftAddition,
-  at: number
+  at: number,
+  product?: NativeChatDraftReturnProduct
 ): boolean {
-  const entries: JournalEntry[] = [...readEntries(), { scopeKey, at, run: THIS_RUN, addition }]
+  const entry = { scopeKey, at, run: THIS_RUN, addition }
+  const entries: JournalEntry[] = [...readEntries(), entry]
   const additions = JSON.stringify(entries.filter(isAddition)).length
-  return additions <= MAX_JOURNAL_ADDITIONS_CHARS && writeEntries(entries)
+  const written = additions <= MAX_JOURNAL_ADDITIONS_CHARS && writeEntries(entries)
+  if (written) {
+    product?.journal.push(entry)
+  }
+  return written
 }
 
 /** Any window’s newer confirmed write prunes older entries so replay cannot resurrect sent or replaced drafts. */
