@@ -13,6 +13,8 @@ import { journalDispatchRowBuilder } from './writing/journal-row-builders'
 import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
 import { journalRewoundReceipt } from './journal-writer-rewind-receipt'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
 const databases: Database.Database[] = []
 afterEach(() => databases.splice(0).forEach((db) => db.close()))
@@ -57,8 +59,12 @@ it.each(['memory', 'sql'] as const)(
     const scope = { turnScope: { kind: 'turn' as const, turnItemId: 'failed' } }
     const limit = (resetsAt: number) => ({
       kind: 'status' as const,
-      text: 'Limited',
-      failure: { kind: 'usageLimitReached' as const, usageLimit: { resetsAt } }
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('usageLimitReached', {
+          usageLimit: { resetsAt }
+        }),
+        { surface: 'row' }
+      )
     })
     state.items.set(
       'child-limit',
