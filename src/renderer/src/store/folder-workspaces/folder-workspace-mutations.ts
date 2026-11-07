@@ -17,7 +17,7 @@ import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
+import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'

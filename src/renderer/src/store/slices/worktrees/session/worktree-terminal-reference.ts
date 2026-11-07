@@ -21,7 +21,7 @@ import {
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'

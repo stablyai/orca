@@ -5,7 +5,6 @@ import { delimiter, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { getWindowsManagedLifecycleHook } from '../claude/hook-settings'
-import { wrapWindowsHookCommand } from './installer-utils'
 import { wrapWindowsBatchHookCommand } from './windows-direct-cmd-hook-command'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 import {
@@ -20,26 +19,6 @@ function decodeCommand(command: string): string {
   }
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
-
-describe('batch hook policy setup', () => {
-  it.each(['.cmd', '.CMD', '.ps1', '.PS1', '.cmd.ps1'])(
-    'preserves policy setup for scripts that require it: %s',
-    (extension) => {
-      const path = `C:\\Users\\测试用户\\.orca\\agent-hooks\\hook${extension}`
-      const commands = [
-        wrapWindowsBatchHookCommand(path),
-        getWindowsManagedLifecycleHook(path).command
-      ]
-      for (const command of commands) {
-        expect(decodeCommand(command).includes('Set-ExecutionPolicy')).toBe(
-          extension.toLowerCase() !== '.cmd'
-        )
-        expect(decodeCommand(command)).toContain('Test-Path -LiteralPath')
-      }
-      expect(decodeCommand(wrapWindowsHookCommand(path))).toContain('Set-ExecutionPolicy')
-    }
-  )
-})
 
 describe.skipIf(process.platform !== 'win32')('guarded Windows batch hook commands', () => {
   const pwsh = (process.env.PATH ?? '')

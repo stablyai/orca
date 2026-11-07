@@ -63,7 +63,7 @@ enum OnDeviceTranscriber {
 
     // Collects results until the analyzer finishes; resolves with every finalized word.
     func collect(
-        onText: @escaping @Sendable (_ revision: Int, _ committed: String, _ tentative: String) -> Void,
+        onText: @escaping @Sendable (_ committed: String, _ tentative: String) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void
     ) -> Task<String, Error> {
         switch self {
@@ -77,21 +77,19 @@ enum OnDeviceTranscriber {
     private static func collect<Results: AsyncSequence & Sendable>(
         _ results: Results,
         text: @escaping @Sendable (Results.Element) -> AttributedString,
-        onText: @escaping @Sendable (Int, String, String) -> Void,
+        onText: @escaping @Sendable (String, String) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void
     ) -> Task<String, Error> where Results.Element: SpeechModuleResult {
         Task {
             var committed = ""
-            var revision = 0
             do {
                 for try await result in results {
                     let words = String(text(result).characters)
-                    revision += 1
                     if result.isFinal {
                         committed += words
-                        onText(revision, committed, "")
+                        onText(committed, "")
                     } else {
-                        onText(revision, committed, words)
+                        onText(committed, words)
                     }
                 }
             } catch {
@@ -171,7 +169,7 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
     init(
         locale identifier: String,
         inputFormat: AVAudioFormat,
-        onText: @escaping @Sendable (_ revision: Int, _ committed: String, _ tentative: String) -> Void,
+        onText: @escaping @Sendable (_ committed: String, _ tentative: String) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void
     ) {
         self.inputFormat = inputFormat
@@ -225,7 +223,7 @@ final class OnDeviceSpeechSession: @unchecked Sendable {
         _ stream: AsyncStream<AVAudioPCMBuffer>,
         locale: Locale,
         inputFormat: AVAudioFormat,
-        onText: @escaping @Sendable (Int, String, String) -> Void,
+        onText: @escaping @Sendable (String, String) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void
     ) async throws -> String {
         try Task.checkCancellation()
