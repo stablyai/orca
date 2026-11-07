@@ -214,7 +214,8 @@ export function commitMobileDictationOnDevice(
       speech,
       (text) => {
         if (run.activeId.current === dictationId) {
-          run.keptTranscript.note(dictationId, text)
+          // Lowest rank: once a fallback replays the audio, the computer's numbered text replaces the phone's.
+          run.keptTranscript.note(dictationId, text, Number.NEGATIVE_INFINITY)
         }
       },
       () => void fallBackMobileDictationToHost(run, dictationId, false)

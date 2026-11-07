@@ -30,7 +30,7 @@ type MobileDictationAudioChunkQueue = {
   transcriptSoFar: MobileDictationTranscriptSoFar
 }
 
-// Holding: the microphone runs from the tap while the host's start reply is pending.
+// Holding: the microphone runs from the tap while the host's start reply is pending, or for a whole on-device dictation.
 export type MobileDictationAudioPhase = 'closed' | 'holding' | 'sending'
 
 // Newer hosts report the text so far: shown while speaking, and handed over by a failure instead of dropped.
