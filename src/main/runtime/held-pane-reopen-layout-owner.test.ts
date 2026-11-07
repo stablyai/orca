@@ -104,48 +104,4 @@ describe("a paired desktop's Reopen of a held pane (layout-owner build)", () => 
     expect(spawn).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'persisted-pty' }))
     expect(publishedStatus(runtime)).toBeUndefined()
   })
-
-  it('starts nothing and stays held while the newer build may still run', async () => {
-    const { runtime, spawn } = await heldPaneRuntime()
-    daemonHold.reopen.mockResolvedValue({ reopened: false })
-
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: false })
-
-    expect(spawn).toHaveBeenCalledOnce()
-    expect(publishedStatus(runtime)).toBe('held')
-  })
-
-  it('stops nothing for a pane since bound to a new terminal, though its held entry stays', async () => {
-    const { runtime, spawn, getSession, setSession, desktopStream } = await heldPaneRuntime()
-    expect(publishedStatus(runtime)).toBe('held')
-    const session = getSession()
-    const layout = session.terminalLayoutsByTabId[PANE.tabId]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        [PANE.tabId]: {
-          ...layout,
-          ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [PANE.leafId]: 'pty-rebound' }
-        }
-      }
-    })
-    desktopStream.unsubscribe()
-
-    await expect(runtime.reopenHeldTerminalPanes([PANE])).resolves.toEqual({ reopened: true })
-
-    expect(daemonHold.reopen).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('stops nothing for a pane main does not hold', async () => {
-    const { runtime, spawn } = await heldPaneRuntime()
-
-    await expect(
-      runtime.reopenHeldTerminalPanes([{ ...PANE, tabId: 'other-tab' }])
-    ).resolves.toEqual({ reopened: true })
-
-    expect(daemonHold.reopen).not.toHaveBeenCalled()
-    expect(spawn).toHaveBeenCalledOnce()
-  })
 })

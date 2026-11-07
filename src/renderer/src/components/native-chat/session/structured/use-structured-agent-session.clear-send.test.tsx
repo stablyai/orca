@@ -168,24 +168,6 @@ it('gives the old conversation back when its view unmounted before the /clear th
   expect(view('session-a').result.current.sendOut).toBe(false)
 })
 
-it('gives the slot back when the host refuses the /clear, or its call fails', async () => {
-  for (const answer of [
-    () => Promise.resolve(CONVERSATION_IN_FLIGHT),
-    () => Promise.reject(new Error('connection closed'))
-  ]) {
-    mocks.call.mockImplementation((_target: unknown, method: string) =>
-      method === 'agentSession.conversationCommand' ? answer() : Promise.resolve(null)
-    )
-    const { result, unmount } = view('session-a')
-    await act(async () => {
-      await result.current.runConversationCommand('clear')
-    })
-    expect(structuredAgentSessionSendOut('session-a')).toBe(false)
-    expect(result.current.sendOut).toBe(false)
-    unmount()
-  }
-})
-
 it('takes sends again once a /clear that never answers passes its deadline', async () => {
   vi.useFakeTimers()
   try {

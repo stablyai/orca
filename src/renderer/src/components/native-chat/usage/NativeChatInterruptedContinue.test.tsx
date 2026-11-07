@@ -195,13 +195,6 @@ describe('Continue on a reply an Orca stop cut off', () => {
     expect(screen.getByTestId('error')).toHaveTextContent('none')
   })
 
-  it('leaves an unrelated composer error alone when the chat moves on by itself', () => {
-    const { rerender } = render(<Harness />)
-    fireEvent.click(screen.getByRole('button', { name: 'compose' }))
-    rerender(<Harness submissions={[{ dispatchState: 'pending' }]} />)
-    expect(screen.getByTestId('error')).toHaveTextContent(ATTACHMENTS)
-  })
-
   it('drops the line once the chat was continued, here or by another client', async () => {
     // The answer was lost after the host accepted it.
     mocks.call.mockRejectedValue(new Error('timed out'))

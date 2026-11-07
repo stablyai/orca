@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 
 import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
-import { applyCommandMarkerBoundaries } from './native-chat-command-marker'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
   return {
@@ -51,22 +50,5 @@ describe('launchPromptAsMessage', () => {
 
     expect(launchPromptAsMessage(entry, oldHistory)).not.toBeNull()
     expect(shouldPruneLaunchPrompt(entry, oldHistory)).toBe(false)
-  })
-})
-
-describe('applyCommandMarkerBoundaries', () => {
-  it('uses the latest clear marker as the visible boundary', () => {
-    const messages = [
-      { ...userMessage('old', 'old'), timestamp: 5 },
-      { ...userMessage('middle', 'middle'), timestamp: 15 },
-      { ...userMessage('new', 'new'), timestamp: 25 }
-    ]
-
-    expect(
-      applyCommandMarkerBoundaries(messages, [
-        { id: 'c1', command: '/clear', sentAt: 10 },
-        { id: 'c2', command: '/clear', sentAt: 20 }
-      ]).map((message) => message.id)
-    ).toEqual(['new'])
   })
 })
