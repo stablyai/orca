@@ -16733,7 +16733,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "語音錯誤：{{value0}}",
-          "7afff43472": "聽寫完成，但沒有聚焦文字欄位。",
           "55127a3706": "聽寫失敗：{{value0}}",
           "bb7f599ee7": "開啟設定",
           "2d5b9fabf9": "麥克風存取被拒絕。在系統設定中授予存取權限，然後重新啟動 Orca。",
@@ -16745,6 +16744,11 @@
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
+          "copiedWithoutTarget": "沒有聚焦的文字欄位，已將聽寫內容複製到剪貼簿。",
+          "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止聽寫",

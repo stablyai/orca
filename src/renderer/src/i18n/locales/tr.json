@@ -16944,7 +16944,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Konuşma hatası: {{value0}}",
-          "7afff43472": "Dikte tamamlandı, ancak odaklanılmış bir metin alanı yoktu.",
           "55127a3706": "Dikte tamamlanamadı: {{value0}}",
           "bb7f599ee7": "Ayarları Aç",
           "2d5b9fabf9": "Mikrofon erişimi reddedildi. Sistem ayarlarından erişim verin, ardından Orca'yı yeniden başlatın.",
@@ -16956,6 +16955,11 @@
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
           "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Dikte eklenemedi, bu yüzden panoya kopyalandı.",
+          "copiedWithoutTarget": "Odaklanmış bir metin alanı yoktu, bu yüzden dikte panoya kopyalandı.",
+          "lost": "Dikte eklenemedi ve kopyalanamadı."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Dikteyi durdur",

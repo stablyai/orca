@@ -16284,7 +16284,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "语音错误：{{value0}}",
-          "7afff43472": "听写完成，但没有聚焦文本字段。",
           "55127a3706": "听写失败：{{value0}}",
           "bb7f599ee7": "打开设置",
           "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
@@ -16296,6 +16295,11 @@
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
           "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。"
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",
+          "copiedWithoutTarget": "没有聚焦的文本框，已将听写内容复制到剪贴板。",
+          "lost": "无法插入或复制听写内容。"
         },
         "DictationIndicator": {
           "335e1bc6cb": "停止听写",

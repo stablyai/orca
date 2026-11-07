@@ -16687,7 +16687,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Error de voz: {{value0}}",
-          "7afff43472": "El dictado finalizó, pero no se centró ningún campo de texto.",
           "55127a3706": "Dictado fallido: {{value0}}",
           "bb7f599ee7": "Abrir configuración",
           "2d5b9fabf9": "Acceso al micrófono denegado. Conceda acceso en la configuración del sistema, luego reinicie Orca.",
@@ -16699,6 +16698,11 @@
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
           "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "No se pudo insertar el dictado, así que se copió al portapapeles.",
+          "copiedWithoutTarget": "No había ningún campo de texto enfocado, así que el dictado se copió al portapapeles.",
+          "lost": "No se pudo insertar ni copiar el dictado."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Detener dictado",

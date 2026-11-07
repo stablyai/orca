@@ -16960,7 +16960,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Spracherkennungsfehler: {{value0}}",
-          "7afff43472": "Diktat beendet, aber kein Textfeld war fokussiert.",
           "55127a3706": "Diktat fehlgeschlagen: {{value0}}",
           "bb7f599ee7": "Einstellungen öffnen",
           "2d5b9fabf9": "Mikrofonzugriff verweigert. Zugriff in den Systemeinstellungen erlauben und anschließend Orca neu starten.",
@@ -16972,6 +16971,11 @@
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
           "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
+          "copiedWithoutTarget": "Kein Textfeld war fokussiert, daher wurde das Diktat in die Zwischenablage kopiert.",
+          "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Diktat stoppen",

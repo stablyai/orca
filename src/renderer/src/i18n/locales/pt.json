@@ -19214,7 +19214,6 @@
       "dictation": {
         "DictationController": {
           "de136f1199": "Erro de fala: {{value0}}",
-          "7afff43472": "O ditado terminou, mas nenhum campo de texto estava em foco.",
           "55127a3706": "Falha no ditado: {{value0}}",
           "bb7f599ee7": "Abrir Configurações",
           "2d5b9fabf9": "Acesso ao microfone negado. Conceda acesso nas configurações do sistema e reinicie o Orca.",
@@ -19226,6 +19225,11 @@
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+        },
+        "dictation-transcript-delivery": {
+          "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
+          "copiedWithoutTarget": "Nenhum campo de texto estava em foco, então o ditado foi copiado para a área de transferência.",
+          "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
           "335e1bc6cb": "Parar ditado",
