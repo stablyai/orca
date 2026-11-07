@@ -290,7 +290,8 @@ describe('hosted-review lookups route on the resolved execution host', () => {
       REPO_PATH,
       'feature',
       null,
-      'ssh-a'
+      'ssh-a',
+      { currentHeadOid: null }
     )
     expect(getProjectSlugMock).not.toHaveBeenCalledWith(REPO_PATH, 'ssh-b')
   })
