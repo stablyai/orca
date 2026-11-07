@@ -1,4 +1,5 @@
 import { resolve } from 'node:path'
+import { PLUGIN_WORKER_REAP_INTERVAL_MS } from '../../shared/plugins/workers/plugin-host-protocol'
 import { PluginDevWatcher } from './plugin-dev-watcher'
 
 type DevRootWatch = {
@@ -27,7 +28,7 @@ export class PluginServiceHousekeeping {
       this.reapTimer = setInterval(() => {
         options.reapIdle()
         this.checkBindings()
-      }, 60_000)
+      }, PLUGIN_WORKER_REAP_INTERVAL_MS)
       this.reapTimer.unref?.()
     }
     const roots = new Set(options.devPaths.map((path) => resolve(path)))
