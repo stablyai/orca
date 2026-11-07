@@ -119,6 +119,8 @@ export type CreateWorktreeArgs = {
   setupDecision?: SetupDecision
   /** SHA-256 of the setup trust content the user approved; hosts run shared setup only if the created worktree's matches. Older clients omit it. */
   approvedSetupHash?: string
+  /** Earlier approvals for the repo that also match; see ApprovedSetupHashes. */
+  approvedSetupHashes?: string[]
   /** Per-create choice; omitted callers use the execution host's saved default. */
   setupOnly?: boolean
   sparseCheckout?: CreateSparseCheckoutRequest

@@ -81,9 +81,11 @@ describe('approved setup hash parity between the trust prompt and the host', () 
     const created = checkout(SETUP_YAML)
     const approved = await promptHash(primary)
 
-    expect(checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', approved)).toBe(
-      undefined
-    )
+    expect(
+      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', {
+        approvedSetupHash: approved
+      })
+    ).toBe(undefined)
   })
 
   it('agrees with the pure-JS digest the plain-HTTP web client uses', async () => {
@@ -105,12 +107,9 @@ describe('approved setup hash parity between the trust prompt and the host', () 
 
     expect(hooks.setupTrust?.contentHash).toBe(await promptHash(primary))
     expect(
-      checkCreatedWorktreeSetupTrust(
-        repo(),
-        loadHooks(created),
-        'run',
-        hooks.setupTrust?.contentHash
-      )
+      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', {
+        approvedSetupHash: hooks.setupTrust?.contentHash
+      })
     ).toBe(undefined)
   })
 
@@ -123,7 +122,9 @@ describe('approved setup hash parity between the trust prompt and the host', () 
     )
 
     expect(
-      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', await promptHash(primary))
+      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', {
+        approvedSetupHash: await promptHash(primary)
+      })
     ).toBe(undefined)
   })
 
@@ -157,7 +158,9 @@ describe('approved setup hash parity between the trust prompt and the host', () 
     const created = checkout(change(SETUP_YAML))
 
     expect(
-      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', await promptHash(primary))
+      checkCreatedWorktreeSetupTrust(repo(), loadHooks(created), 'run', {
+        approvedSetupHash: await promptHash(primary)
+      })
     ).toMatchObject({ scriptContent: expect.any(String) })
   })
 
@@ -173,7 +176,9 @@ describe('approved setup hash parity between the trust prompt and the host', () 
     })
 
     expect(
-      checkCreatedWorktreeSetupTrust(runBoth, loadHooks(created), 'run', await promptHash(primary))
+      checkCreatedWorktreeSetupTrust(runBoth, loadHooks(created), 'run', {
+        approvedSetupHash: await promptHash(primary)
+      })
     ).toBe(undefined)
   })
 
@@ -188,14 +193,16 @@ describe('approved setup hash parity between the trust prompt and the host', () 
     })
 
     expect(
-      checkCreatedWorktreeSetupTrust(localOnly, loadHooks(created), 'run', 'not-the-hash')
+      checkCreatedWorktreeSetupTrust(localOnly, loadHooks(created), 'run', {
+        approvedSetupHash: 'not-the-hash'
+      })
     ).toBe(undefined)
   })
 
   it('leaves creates without an approval hash (older clients, CLI, stored decisions) unchanged', () => {
-    expect(
-      checkCreatedWorktreeSetupTrust(repo(), loadHooks(checkout(SETUP_YAML)), 'run', undefined)
-    ).toBe(undefined)
+    expect(checkCreatedWorktreeSetupTrust(repo(), loadHooks(checkout(SETUP_YAML)), 'run', {})).toBe(
+      undefined
+    )
   })
 })
 

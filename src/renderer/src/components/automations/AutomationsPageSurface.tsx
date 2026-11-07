@@ -247,6 +247,9 @@ export function AutomationsPageSurface({
             )
           }
           onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+          onReviewSetup={(content) =>
+            runSelectedRowAction((row) => managementActions.reviewSkippedSetup(row, content))
+          }
           onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
         />
       ) : pageView === 'run' ? (

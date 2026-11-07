@@ -22814,6 +22814,17 @@
         "effortRepeated": "추가 인수에 추론 수준이 두 번 이상 지정되어 있습니다."
       },
       "hostUpdateRequired": "추가 인수를 사용하려면 이 호스트의 Orca를 업데이트하세요."
+    },
+    "setupTrust": {
+      "reviewTitle": "이 자동화의 새 설정 명령을 승인할까요?",
+      "reviewBody": "브랜치의 <code>orca.yaml</code> 설정 명령이 변경되어 실행에서 설정을 건너뛰었습니다. 승인하면 이후 실행에서 이 명령을 사용합니다. <repo/>을(를) 신뢰하는 경우에만 승인하세요.",
+      "approve": "승인",
+      "approved": "설정을 승인했습니다. 이 자동화의 이후 실행에서 실행됩니다.",
+      "skippedSinceApproved": "브랜치의 orca.yaml 설정 명령이 변경되어 이 실행에서는 설정이 실행되지 않았습니다. 이후 승인되었으므로 이후 실행에서 실행됩니다.",
+      "skippedReview": "설정이 실행되지 않았습니다. 이 실행 브랜치의 orca.yaml 설정 명령이 이 자동화에 승인된 명령과 다릅니다. 이후 실행에서 설정을 실행하려면 검토하세요.",
+      "reviewAction": "설정 검토 및 승인",
+      "listSkipped": "설정 건너뜀",
+      "listSkippedTitle": "브랜치의 orca.yaml 설정 명령이 변경되어 마지막 실행에서 설정을 건너뛰었습니다. 작업 메뉴에서 검토하세요."
     }
   },
   "codeHost": {

@@ -11,6 +11,8 @@ import { automationRunErrorText } from './automation-run-error-copy'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import { useFullAutomationRun } from './use-full-automation-run'
+import { pendingAutomationSetupReview } from './automation-setup-review'
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import {
   AutomationRunErrorNotice,
@@ -31,6 +33,7 @@ export function AutomationRunDetailsPage({
   isRerunPending,
   onRerun,
   onOpenWorkspace,
+  onReviewSetup,
   onBack
 }: {
   automation: Automation | null
@@ -44,12 +47,21 @@ export function AutomationRunDetailsPage({
   isRerunPending: boolean
   onRerun: () => void
   onOpenWorkspace: () => void
+  onReviewSetup: (content: SetupTrustMismatch) => void
   onBack: () => void
 }): React.JSX.Element {
   const full = useFullAutomationRun(listedRun, history)
   const run = full.run
   const content = getAutomationRunContent(run)
   const errorText = automationRunErrorText(run)
+  // Without the automation, the run can't be checked against its approval.
+  const setupReview = automation
+    ? pendingAutomationSetupReview(automation, {
+        skipped: run.setupSkippedReason === 'setup-changed',
+        content: run.setupSkippedContent
+      })
+    : { content: null }
+  const reviewContent = setupReview?.content
   return (
     <section className="flex min-h-0 flex-1 p-5">
       <AutomationRunPageFrame
@@ -96,7 +108,11 @@ export function AutomationRunDetailsPage({
         onBack={onBack}
       >
         {run.setupSkippedReason === 'setup-changed' ? (
-          <AutomationRunSetupSkippedNotice className="mb-4" />
+          <AutomationRunSetupSkippedNotice
+            className="mb-4"
+            review={setupReview}
+            onReview={reviewContent ? () => onReviewSetup(reviewContent) : undefined}
+          />
         ) : null}
         {/* Why: saved terminal output otherwise hides why the run failed. */}
         {run.status === 'dispatch_failed' && errorText && content !== errorText ? (
