@@ -148,7 +148,9 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             let sourceChanged =
               Object.keys(scansByKey).length !== Object.keys(publishedScans).length
             for (const { key, result } of reconciled) {
-              sourceChanged ||= scansByKey[key] !== result
+              if (!sourceChanged) {
+                sourceChanged = scansByKey[key] !== result
+              }
               scansByKey[key] = result
             }
             const merged = mergeWorkspacePortScans(scansByKey)
@@ -290,7 +292,9 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         return
       }
       // Keep the leading scan through the quiet window so sequential events share it too.
-      burstRefresh ??= refresh({ force: true, targets: [LOCAL_TARGET] })
+      if (burstRefresh == null) {
+        burstRefresh = refresh({ force: true, targets: [LOCAL_TARGET] })
+      }
       void burstRefresh.finally(() => {
         if (disposed || sequence !== eventSequence) {
           return
