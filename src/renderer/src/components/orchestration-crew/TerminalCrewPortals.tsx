@@ -9,7 +9,7 @@ import {
   captureTerminalDropTarget,
   getCurrentTerminalDropTransport
 } from '../terminal-pane/input/file-drop/terminal-drop-target'
-import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
+import { insertTerminalCrewMention } from '../terminal-pane/input/paste/terminal-crew-mention'
 import { useTerminalCrewIdentity } from './use-terminal-crew-identity'
 import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'

@@ -46,10 +46,10 @@ type MockStoreState = {
 let mockStoreState: MockStoreState
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
-vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
+vi.mock('@/components/terminal-pane/notifications/use-notification-dispatch', () => ({
   dispatchTerminalNotification
 }))
-vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
+vi.mock('@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle
 }))
 

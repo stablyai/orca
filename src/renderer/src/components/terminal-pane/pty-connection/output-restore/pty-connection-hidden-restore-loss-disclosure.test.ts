@@ -81,7 +81,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
 }))
 
@@ -726,7 +726,7 @@ describe('hidden-output restore loss disclosure (STA-4869)', () => {
       }
       const transport: MockTransport = paneTransport
       const { resetTerminalFreezeBreadcrumbsForTesting, getTerminalFreezeBreadcrumbs } =
-        await import('../../terminal-freeze-breadcrumbs')
+        await import('../../render-health/diagnostics/terminal-freeze-breadcrumbs')
       vi.useFakeTimers()
       floodWhileHiddenThenReveal(drive)
       await flushAsyncTicks(20)

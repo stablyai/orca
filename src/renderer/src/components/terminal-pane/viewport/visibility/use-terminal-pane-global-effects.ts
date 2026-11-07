@@ -17,7 +17,7 @@ import {
   type TerminalHiddenReason
 } from './terminal-visibility-resume'
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
-import { activePaneIsCoveredByNativeChat } from '../../native-chat-covered-pane'
+import { activePaneIsCoveredByNativeChat } from '../../chat/native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string

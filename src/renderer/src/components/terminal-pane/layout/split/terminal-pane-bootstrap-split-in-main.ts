@@ -2,7 +2,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { TerminalPaneIssueCommandSplit } from '../../mounting/terminal-pane-lifecycle-types'
 import { splitPaneFirstSize, splitPaneInMain } from './terminal-pane-split-in-main'
 import { runTerminalPaneBootstrapSplits } from '../../mounting/terminal-pane-mount-bootstrap'
-import type { PtyConnectionDeps } from '../../pty-connection-types'
+import type { PtyConnectionDeps } from '../../pty-connection/pty-connection-deps'
 
 /** Main writes/starts startup splits and frames draw them; paired tabs retain window-side splitting. */
 export function runBootstrapSplitInMain(args: {

@@ -7,7 +7,7 @@ import type * as I18nModule from '@/i18n/i18n'
 
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { NativeChatComposerHandle } from './native-chat-composer-types'
-import { NativeChatPaneCover } from '../terminal-pane/NativeChatPaneCover'
+import { NativeChatPaneCover } from '../terminal-pane/chat/NativeChatPaneCover'
 
 import { registerTerminalPanePasteListeners } from '../terminal-pane/input/paste/terminal-pane-paste-listeners'
 import type { TerminalPaneCloseController } from '../terminal-pane/layout/close/use-terminal-pane-close-actions'

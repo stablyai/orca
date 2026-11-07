@@ -1,4 +1,4 @@
-import { resolvePaneAgentSessionId } from '@/components/terminal-pane/pane-agent-session-id'
+import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import type { AppState } from '@/store'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
