@@ -7,7 +7,6 @@ import { automationRunRecency } from '../../shared/automation-session-reuse'
 
 export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
 export const RUN_TERMINALS_KEPT_PER_AUTOMATION = 3
-const SWEEP_INTERVAL_MS = 60_000
 
 export type RunTerminalRetentionDeps = {
   listRuns: () => readonly AutomationRun[]
@@ -31,17 +30,16 @@ export type RunTerminalRetentionDeps = {
 
 const STARTING: ReadonlySet<AutomationRunStatus> = new Set(['pending', 'dispatching'])
 
-export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): {
+export type RunTerminalRetention = {
   sweep: () => Promise<void>
   /** Release terminals before an update, bypassing grace and newest-run retention. */
   drain: () => Promise<number>
-  start: () => void
-  stop: () => void
-} {
+}
+
+export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): RunTerminalRetention {
   const now = deps.now ?? Date.now
   // Grace starts when the terminal first becomes a candidate.
   const firstSeenAt = new Map<string, number>()
-  let timer: ReturnType<typeof setInterval> | null = null
   let sweeping: Promise<void> | null = null
 
   const forget = async (run: AutomationRun): Promise<void> => {
@@ -147,20 +145,7 @@ export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): {
     return sweepOnce({ keep: 0, graceMs: 0 })
   }
 
-  return {
-    sweep,
-    drain,
-    start: () => {
-      timer ??= setInterval(() => void sweep(), SWEEP_INTERVAL_MS)
-      timer.unref?.()
-    },
-    stop: () => {
-      if (timer) {
-        clearInterval(timer)
-        timer = null
-      }
-    }
-  }
+  return { sweep, drain }
 }
 
 type PanedRun = AutomationRun & { terminalPaneKey: string }

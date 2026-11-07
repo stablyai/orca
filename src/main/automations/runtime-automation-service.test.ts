@@ -142,10 +142,35 @@ describe('runtime automation service', () => {
       allowRemoteHostScheduling: false
     })
 
-    await expect(service.releaseFinishedRunTerminals?.()).resolves.toBe(1)
+    await expect(service.runTerminalRetention?.drain()).resolves.toBe(1)
 
     expect(runtime.closeTerminal.mock.calls).toEqual([[`handle:${PANE('unseen')}`]])
     expect(readRun(store, focused)?.terminalPtyId).toBe('pty-seen')
     expect(readRun(store, untouched)?.terminalPtyId).toBeNull()
+  })
+
+  it('closes an untouched run terminal beyond the newest three on the scheduler tick, until stopped', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const runs = ['a', 'b', 'c', 'd'].map((name) => {
+      vi.advanceTimersByTime(1000)
+      return retainRun(store, automation, name, 'completed')
+    })
+    const { runtime, service: host } = fakeRuntime()
+    const service = createRuntimeAutomationService({
+      store,
+      runtime: host,
+      allowRemoteHostScheduling: false
+    })
+
+    service.start()
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+
+    expect(runtime.closeTerminal.mock.calls).toEqual([[`handle:${PANE('a')}`]])
+    service.stop()
+    retainRun(store, automation, 'e', 'completed')
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
+    expect(readRun(store, runs[1])?.terminalPtyId).toBe('pty-b')
   })
 })

@@ -35,6 +35,12 @@ export type AutomationLauncher = (request: {
   target: Extract<AutomationRunTargetResult, { ok: true }>
 }) => Promise<AutomationLaunch>
 
+/** Main's terminal launcher; `available` is false while no window graph can hold run terminals. */
+export type AutomationTerminalLauncher = {
+  launch: AutomationLauncher
+  available(): boolean
+}
+
 export class AutomationRunLaunchError extends Error {
   constructor(
     message: string,

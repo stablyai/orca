@@ -154,19 +154,6 @@ describe('headless run terminal retention', () => {
     expect(h.closed).toEqual([])
   })
 
-  it('sweeps on its own once started, and stops with the service', async () => {
-    const runs = [0, 1, 2, 3].map((n) => makeRun(`r${n}`, n))
-    const h = harness(runs)
-    h.retention.start()
-    await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS + 2 * 60_000)
-    expect(h.closed).toEqual(['tab-r0:1'])
-
-    h.retention.stop()
-    runs.push(makeRun('r4', 4), makeRun('r5', 5))
-    await vi.advanceTimersByTimeAsync(RUN_TERMINAL_GRACE_MS * 2)
-    expect(h.closed).toEqual(['tab-r0:1'])
-  })
-
   it('drains every completed, unused run terminal for an update, ignoring keep and grace', async () => {
     const runs = [
       ...[0, 1, 2, 3, 4].map((n) => makeRun(`r${n}`, n)),

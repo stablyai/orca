@@ -324,17 +324,14 @@ describe('AutomationService', () => {
     store.addRepo(makeRepo())
     const slow = store.createAutomation(dailyAt9('A slow'))
     const fast = store.createAutomation(dailyAt9('B fast'))
-    const launched: string[] = []
-    const launch = vi.fn(({ automation }: { automation: { id: string } }) => {
-      launched.push(automation.id)
-      return automation.id === slow.id
-        ? new Promise<typeof LAUNCHED>(() => {})
-        : Promise.resolve(LAUNCHED)
-    })
+    const launch = vi.fn(({ automation }: { automation: { id: string } }) =>
+      automation.id === slow.id ? new Promise<typeof LAUNCHED>(() => {}) : Promise.resolve(LAUNCHED)
+    )
     const service = startedAutomationService(store, launch)
 
     await tickAt('2026-05-13T09:01:00')
-    await vi.waitFor(() => expect(launched).toEqual([slow.id, fast.id]))
+    await vi.waitFor(() => expect(store.listAutomationRuns(fast.id)[0]?.status).toBe('dispatched'))
+    expect(store.listAutomationRuns(slow.id)[0]?.status).toBe('dispatching')
     service.stop()
   })
 

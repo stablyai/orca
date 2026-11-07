@@ -9,7 +9,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
-import { createRunTerminalRetention } from './run-terminal-retention'
+import { createRunTerminalRetention, type RunTerminalRetention } from './run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
@@ -201,10 +201,10 @@ export function createRuntimeAutomationService(input: {
         return launch
       },
       available: () => runtime.canOpenRunTerminals()
-    }
+    },
+    runTerminalRetention: (owner) => createRuntimeRunTerminalRetention(owner, store, runtime)
   })
   runtime.setAutomationService(service)
-  bindRunTerminalRetention(service, store, runtime)
   return service
 }
 
@@ -218,12 +218,12 @@ function runTabWasFocused(runtime: OrcaRuntimeService, run: AutomationRun): bool
   )
 }
 
-function bindRunTerminalRetention(
+function createRuntimeRunTerminalRetention(
   service: AutomationService,
   store: Store,
   runtime: OrcaRuntimeService
-): void {
-  const retention = createRunTerminalRetention({
+): RunTerminalRetention {
+  return createRunTerminalRetention({
     listRuns: () => store.listAutomationRuns(),
     terminalClientUse: (run) => {
       if (runTabWasFocused(runtime, run)) {
@@ -295,17 +295,6 @@ function bindRunTerminalRetention(
       })
     }
   })
-  service.releaseFinishedRunTerminals = () => retention.drain()
-  const start = service.start.bind(service)
-  const stop = service.stop.bind(service)
-  service.start = () => {
-    start()
-    retention.start()
-  }
-  service.stop = () => {
-    retention.stop()
-    stop()
-  }
 }
 
 function automationAgentCommands(agentId: string | undefined): string[] {

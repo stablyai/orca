@@ -19,7 +19,7 @@ import {
   type AutomationRunTargetResult
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
-import type { AutomationLauncher } from './automation-launch'
+import type { AutomationLauncher, AutomationTerminalLauncher } from './automation-launch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
@@ -35,16 +35,11 @@ import {
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
 } from './dispatch-refusal'
+import type { RunTerminalRetention } from './run-terminal-retention'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
 } from '../../shared/runtime-client-events'
-
-/** Main's terminal launcher; `available` is false while no window graph can hold run terminals. */
-export type AutomationTerminalLauncher = {
-  launch: AutomationLauncher
-  available(): boolean
-}
 
 const DEFAULT_TICK_MS = 60 * 1000
 
@@ -61,8 +56,8 @@ export class AutomationService {
   private readonly terminalLauncher: AutomationTerminalLauncher | null
   private readonly chatDispatcher: AutomationLauncher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
-  /** Close unused completed run terminals; return the count. */
-  releaseFinishedRunTerminals: (() => Promise<number>) | null = null
+  /** Shares this service's lanes and tick; `drain` closes unused completed run terminals. */
+  readonly runTerminalRetention: RunTerminalRetention | null
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
@@ -80,6 +75,7 @@ export class AutomationService {
       chatDispatcher?: AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      runTerminalRetention?: (service: AutomationService) => RunTerminalRetention
     } = {}
   ) {
     this.store = store
@@ -99,6 +95,7 @@ export class AutomationService {
           markDispatchResult: (result) => this.markDispatchResult(result)
         })
       : null
+    this.runTerminalRetention = opts.runTerminalRetention?.(this) ?? null
   }
 
   publishAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
@@ -112,6 +109,7 @@ export class AutomationService {
     this.stopped = false
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
+      void this.runTerminalRetention?.sweep()
     }, this.tickMs)
     // Settles unclaimed pending rows before catch-up could claim one again.
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
