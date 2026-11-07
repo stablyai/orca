@@ -8,7 +8,7 @@ import {
 } from '@/lib/workspace-switch-user-act'
 
 const getRuntimeGitHistoryMock = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-git-status-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
   getRuntimeGitHistory: getRuntimeGitHistoryMock
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))

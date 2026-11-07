@@ -27,7 +27,7 @@ vi.mock('@/lib/pane-manager/pane-viewport-present', () => ({
 }))
 
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
-import { resetTerminalFreezeBreadcrumbsForTesting } from '../../terminal-freeze-breadcrumbs'
+import { resetTerminalFreezeBreadcrumbsForTesting } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 
 describe('useTerminalWindowWakeRecovery', () => {
   const manager = {} as PaneManager

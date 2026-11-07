@@ -1,7 +1,7 @@
 import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useAppStore } from '@/store'
 import { useCallback, useEffect } from 'react'
-import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
+import { shouldHydratePullRequestGenerationResult } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
 import { useCreatePullRequestDialogFields } from '../../hosted-review/creation/useCreatePullRequestDialogFields'

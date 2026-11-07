@@ -16,7 +16,7 @@ import { PREFLIGHT_METHODS } from './preflight'
 import type { Repo } from '../../../../../shared/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from '../../../../../shared/preflight-runtime-capabilities'
-import { launchHeadlessAutomationAgent } from '../../../../automations/headless-automation-agent-launch'
+import { launchAutomationTerminalAgent } from '../../../../automations/automation-terminal-launch'
 import type { Automation, AutomationRun } from '../../../../../shared/automations-types'
 import type * as WorkspaceAgentDetection from '../../../../preflight/workspace-agent-detection'
 
@@ -128,15 +128,15 @@ describe('qualified discovery at the runtime RPC boundary', () => {
     await expect(
       runtime.showManagedTerminalWorkspace('id:folder:dup', 'ssh:a%2Fb')
     ).rejects.toThrow('folder_workspace_path_unavailable')
-    await expect(launchHeadlessAutomationAgent(runtime, request)).resolves.toMatchObject({
+    await expect(launchAutomationTerminalAgent(runtime, request)).resolves.toMatchObject({
       terminalHandle: 'live-handle',
       workspaceId: 'folder:dup'
     })
     expect(deliver).toHaveBeenCalledTimes(1)
     folders.splice(folders.indexOf(folder), 1)
-    await expect(launchHeadlessAutomationAgent(runtime, request)).rejects.toThrow(
-      'selector_not_found'
-    )
+    await expect(launchAutomationTerminalAgent(runtime, request)).rejects.toMatchObject({
+      failure: { errorCode: 'targetUnavailable' }
+    })
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 

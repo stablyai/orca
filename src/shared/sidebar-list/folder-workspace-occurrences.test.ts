@@ -7,7 +7,10 @@ import type { Worktree } from '../worktree/types'
 import type { WorktreeWithInlineLineage } from '../worktree/workspace-lineage-graph'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { cloneDefaultWorkspaceStatuses } from '../workspace-statuses'
-import { getFolderWorkspaceWorktree } from '../folder-workspaces/folder-workspace-worktree'
+import {
+  folderWorkspaceToWorktree,
+  getFolderWorkspaceWorktree
+} from '../folder-workspaces/folder-workspace-worktree'
 import { planSidebarRows } from './sidebar-row-plan'
 import { resolveSidebarLineageParentIdentities } from './worktree-lineage-projection'
 import type { Row, WorktreeGroupBy } from './row-types'
@@ -84,13 +87,14 @@ function plan(
   record: WorkspaceLineage | undefined,
   worktrees: Worktree[] = [nested, other],
   hidden: Worktree[] = [],
-  repos: Repo[] = [repo]
+  repos: Repo[] = [repo],
+  folders: FolderWorkspace[] = [folder],
+  groups: ProjectGroup[] = [group]
 ): Row[] {
   const rows = new Map(
-    [...worktrees, ...hidden, getFolderWorkspaceWorktree(folder)].map((entry) => [
-      getWorktreeHostIdentity(entry),
-      entry
-    ])
+    [...worktrees, ...hidden, ...folders.map((entry) => getFolderWorkspaceWorktree(entry))].map(
+      (entry) => [getWorktreeHostIdentity(entry), entry]
+    )
   )
   return planSidebarRows({
     groupBy,
@@ -106,13 +110,17 @@ function plan(
     ),
     worktreeMap: new Map([...worktrees, ...hidden].map((entry) => [entry.id, entry])),
     nestLineage: true,
-    projectGroups: [group],
+    projectGroups: groups,
     placeholderRepoIds: new Set(),
     importedWorktreesByRepo: new Map(),
     newExternalWorktreesInboxByRepo: new Map(),
     pendingCreations: [],
-    folderWorkspaces: [folder],
+    folderWorkspaces: folders,
     defaultHostId: 'local',
+    hostLabelById: new Map([
+      ['local', 'Local Mac'],
+      ['runtime:env-1', 'windows 2']
+    ]),
     pinnedDisplayPolicy: 'single-location',
     filterRepoIds: []
   }).render(new Set())
@@ -215,5 +223,25 @@ describe('folder workspaces as sidebar parents', () => {
       'other',
       'folder Release children=0'
     ])
+  })
+
+  it('names the machine on a folder card when workspaces span machines', () => {
+    const remoteFolder = { ...folder, executionHostId: 'runtime:env-1' as const }
+    const folderRow = plan('none', undefined, [other], [], [repo], [remoteFolder]).find(
+      (entry) => entry.type === 'folder-workspace'
+    )
+    expect(folderRow?.type === 'folder-workspace' && folderRow.hostContextLabel).toBe('windows 2')
+  })
+
+  it('puts an unstamped folder card on its group machine, matching its label', () => {
+    const remoteGroup = { ...group, executionHostId: 'runtime:env-1' }
+    const folderRow = plan('none', undefined, [other], [], [repo], [folder], [remoteGroup]).find(
+      (entry) => entry.type === 'folder-workspace'
+    )
+    expect(folderRow?.type === 'folder-workspace' && folderRow.hostContextLabel).toBe('windows 2')
+    expect(
+      folderRow?.type === 'folder-workspace' &&
+        folderWorkspaceToWorktree(folderRow.folderWorkspace).hostId
+    ).toBe('runtime:env-1')
   })
 })

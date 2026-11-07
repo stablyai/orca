@@ -15,7 +15,7 @@ const { storeState, runtimeEnvironmentCallMock } = doubles
 const bridged = vi.hoisted(() => ({ ptyIds: new Set<string>() }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: vi.fn(() => null) }))
-vi.mock('../legacy-relay-bridge-panes', () => ({
+vi.mock('../pty-transport/legacy-relay/legacy-relay-bridge-panes', () => ({
   legacyRelayBridgedPane: (ptyId: string) =>
     bridged.ptyIds.has(ptyId) ? { ptyId, targetId: 'box', tabId: 't', state: 'live' } : undefined
 }))

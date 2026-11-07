@@ -1,10 +1,10 @@
 import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
+import { createLiveAgentWorktreeIdsSelector } from '@/lib/worktree-activity-state'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -101,18 +101,13 @@ export function useVisibleSidebarWorktrees(args: {
     )
   )
 
-  // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
-  const worktreeIdsWithLiveAgent = useMemo(() => {
-    // Epochs can share a millisecond sample; key on the epoch itself so membership still refreshes.
-    void agentStatusEpoch
-    return showSleepingWorkspaces
+  // Recompute on epoch, not every hook ping; key on the epoch too since ticks can share a millisecond sample.
+  const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
+  const worktreeIdsWithLiveAgent = useAppStore((s) =>
+    showSleepingWorkspaces
       ? EMPTY_WORKTREE_ID_SET
-      : getWorktreeIdsWithLiveAgent(
-          useAppStore.getState().agentStatusByPaneKey,
-          tabsByWorktree,
-          agentStatusNow
-        )
-  }, [agentStatusEpoch, agentStatusNow, showSleepingWorkspaces, tabsByWorktree])
+      : selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)
+  )
   const sleepingSweepExemptWorktreeIds = useSleepingSweepRetention({
     enabled: !showSleepingWorkspaces,
     worktreesByRepo,

@@ -14,7 +14,7 @@ import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-ve
 import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged
-} from '../../legacy-relay-bridge-panes'
+} from './legacy-relay-bridge-panes'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 

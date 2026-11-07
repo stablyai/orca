@@ -5,7 +5,7 @@ import { detachTerminalPaneToTab, type TerminalPaneNewTabTarget } from './termin
 import {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
-} from '../../terminal-tab-strip-drop-target'
+} from './terminal-tab-strip-drop-target'
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
 
 /** Moving a pane out to a new tab: by dragging it onto a tab strip, or for another client. */

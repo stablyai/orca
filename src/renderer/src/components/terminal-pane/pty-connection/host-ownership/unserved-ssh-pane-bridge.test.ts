@@ -43,7 +43,8 @@ vi.mock('@/ssh/ssh-connect-in-flight', () => ({
 }))
 
 const { createUnservedSshRowTransport } = await import('./unserved-ssh-pane-connect')
-const { legacyRelayBridgePtyIdForPane } = await import('../../legacy-relay-bridge-panes')
+const { legacyRelayBridgePtyIdForPane } =
+  await import('../../pty-transport/legacy-relay/legacy-relay-bridge-panes')
 
 function publishPanes(panes: LegacyRelayBridgedPane[]): void {
   mocks.panes.forEach((listener) => listener(panes))

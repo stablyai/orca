@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import { resolveTerminalTabStripDropTarget } from '../../terminal-tab-strip-drop-target'
+import { resolveTerminalTabStripDropTarget } from './terminal-tab-strip-drop-target'
 import {
   EXISTING_TAB_1,
   EXISTING_TAB_2,

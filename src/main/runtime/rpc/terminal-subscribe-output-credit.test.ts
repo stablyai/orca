@@ -5,6 +5,7 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TerminalPublishedOutputRings } from '../terminal/output/terminal-published-output-ring'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -34,6 +35,12 @@ async function startCreditedSubscription() {
       dataListener = listener
       return vi.fn()
     }),
+    retainPublishedTerminalOutput: (ptyId: string) =>
+      new TerminalPublishedOutputRings().retain(ptyId, {
+        seq: 0,
+        size: () => null,
+        subscribe: () => () => {}
+      }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: vi.fn(async () => ({
       data: 'screen',

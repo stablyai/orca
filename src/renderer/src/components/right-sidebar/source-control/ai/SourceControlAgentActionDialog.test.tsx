@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type * as RuntimeGitStatusClientModule from '@/runtime/runtime-git-status-client'
+import type * as RuntimeGitStatusClientModule from '@/runtime/source-control/git/runtime-git-status-client'
 import path from 'node:path'
 import React, { type ReactNode, useState, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   mutationInFlight: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-status-client', async (importOriginal) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeGitStatusClientModule>()),
   getRuntimeGitMutationInFlight: mocks.mutationInFlight
 }))

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { readRuntimeFileContent } from './runtime-file-read-client'
-import { readRuntimeFileBytes } from './runtime-paged-file-read'
+import { readRuntimeFileContent } from './files/reads/runtime-file-read-client'
+import { readRuntimeFileBytes } from './files/reads/runtime-paged-file-read'
 import {
   runtimeEnvironmentCall,
   fsGrantRuntimeFilePreview,
   installRuntimeFileClientEnvironment
-} from './runtime-file-client-test-harness'
+} from './files/runtime-file-client-test-harness'
 
 installRuntimeFileClientEnvironment()
 

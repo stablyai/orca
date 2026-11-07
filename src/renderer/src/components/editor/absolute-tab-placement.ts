@@ -1,5 +1,5 @@
 import type { AppState } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   findWorkspaceFileRoute,

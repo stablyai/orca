@@ -1,11 +1,11 @@
 import { useTerminalPaneErrorCallbacks } from '../errors/use-terminal-pane-error-callbacks'
 import { useTerminalPaneRecoveryCallback } from '../pty-transport/recovery/use-terminal-pane-recovery-callback'
 import { useCallback, useRef, useState } from 'react'
-import type { PaneTitleOverlayRect } from '../TerminalPaneHeaderOverlay'
+import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import {
   createRemotePaneLayoutPusher,
   type RemotePaneLayoutPusher
-} from '../remote-pane-layout-push'
+} from '../layout/persistence/remote-pane-layout-push'
 import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-foundation'
 
 export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {

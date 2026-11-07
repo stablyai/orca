@@ -22,7 +22,7 @@ const appStore = vi.hoisted(() => ({
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 // Why: the recovery portals read a pairing-refusal hook this pane-binding test doesn't exercise.
-vi.mock('../../use-managed-pairing-refused', () => ({
+vi.mock('./recovery/use-managed-pairing-refused', () => ({
   useManagedPairingRefusedEnvironmentId: () => null
 }))
 
@@ -333,7 +333,8 @@ describe('remote runtime pane binding ownership', () => {
           expect(await connecting).toBeUndefined()
           await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 1)
           expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-          const { createPaneRecoveryReconnect } = await import('../../TerminalPaneRecoveryPortals')
+          const { createPaneRecoveryReconnect } =
+            await import('./recovery/TerminalPaneRecoveryPortals')
           reachable = true
           const retryRecovery = transport.retryRecovery
           let accepted: boolean | undefined

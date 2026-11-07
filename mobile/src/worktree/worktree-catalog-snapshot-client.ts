@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'

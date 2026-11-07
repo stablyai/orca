@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import type { WorktreeStartupPayload } from './workspace/creation/worktree-startup-payload'
 import type { WorktreeActivationSurfaceSelection } from './workspace/activation/worktree-activation-surface-selection'
-import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/agent-launch-pane-notice-text'
+import { agentLaunchPaneNoticeText } from '@/components/terminal-pane/launch-outcome/agent-launch-pane-notice-text'
 
 export type ActivateAndRevealResult = { primaryTabId: string | null }
 

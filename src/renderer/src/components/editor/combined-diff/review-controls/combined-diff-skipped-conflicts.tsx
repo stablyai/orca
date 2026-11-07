@@ -1,7 +1,7 @@
 import type React from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
 type SkippedConflicts = NonNullable<OpenFile['skippedConflicts']>
 

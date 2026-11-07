@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 

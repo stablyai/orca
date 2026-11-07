@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { AutomationDraftValidationError } from './automation-error'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
@@ -57,8 +57,17 @@ export async function loadAutomationTargets(client: RpcClient, limit = 200) {
   })
   const repoLookup = createRepoRowExecutionHostLookup(repoRows)
   const projectRows = automationProjectsRead.interpret(projects).projects
+  const sshTargets = automationSshTargetsRead.interpret(ssh).targets
   return {
     setups: automationSetupsRead.interpret(setups).setups.flatMap((setup) => {
+      // A managed SSH host's automations live on its Orca server; pick that host instead.
+      const host = parseExecutionHostId(setup.hostId)
+      if (
+        host?.kind === 'ssh' &&
+        sshTargets.some((target) => target.id === host.targetId && target.managedServer)
+      ) {
+        return []
+      }
       const repo = repoRows.find(
         (repo) =>
           repo.id === setup.repoId &&
@@ -94,7 +103,7 @@ export async function loadAutomationTargets(client: RpcClient, limit = 200) {
       truncated: workspaceReply.truncated,
       hostScope: workspaceReply.hostScope
     },
-    sshTargets: automationSshTargetsRead.interpret(ssh).targets
+    sshTargets
   }
 }
 export type AutomationTargets = Awaited<ReturnType<typeof loadAutomationTargets>>

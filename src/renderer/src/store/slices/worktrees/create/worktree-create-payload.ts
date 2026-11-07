@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
@@ -11,19 +12,13 @@ import type {
   CrossStoreParentRef
 } from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
-import type {
-  ClientAutomationWorkspaceProvenance,
-  WorkspaceLinkedItem
-} from '../../../../../../shared/worktree/types'
+import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
   branchIntent?: CreateWorktreeArgs['branchIntent']
   /** Captured before background preparation so navigation cannot retarget creation. */
   executionHostId?: ExecutionHostId
-  automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
-  /** This desktop's own run, offered to a runtime host that records it as a label. */
-  clientAutomationProvenance?: ClientAutomationWorkspaceProvenance
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
@@ -33,6 +28,7 @@ export type CreateWorktreeCallOptions = {
   setupOnly?: boolean
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
@@ -88,9 +84,7 @@ function sharedCreateFields(
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
-    ...(options?.approvedSetupHash !== undefined
-      ? { approvedSetupHash: options.approvedSetupHash }
-      : {}),
+    ...(options ? pickApprovedSetupHashes(options) : {}),
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),
@@ -147,11 +141,7 @@ export function buildLocalWorktreeCreateArgs(
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
-    ...(request.creationId ? { creationId: request.creationId } : {}),
-    // Why local only: this desktop's main minted the dispatch token, so a runtime host must reject it.
-    ...(request.options?.automationProvenanceRequest
-      ? { automationProvenanceRequest: request.options.automationProvenanceRequest }
-      : {})
+    ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }
 

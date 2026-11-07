@@ -55,7 +55,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/pi/rpc-session-adapter.test.ts',
   'src/main/pi/rpc-session-startup.test.ts',
   'src/main/acp/acp-structured-omp-recordings.test.ts',
-  'src/main/acp/acp-text-stream-identity.test.ts',
   'src/main/acp/acp-text-message-ownership.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
   'src/main/acp/acp-structured-sign-in.test.ts',

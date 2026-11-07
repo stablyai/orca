@@ -1,5 +1,5 @@
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
-import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-watch-client'
+import { subscribeRuntimeFileChanges } from '@/runtime/files/watching/runtime-file-watch-client'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/runtime-host-contact-regained'
 import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'

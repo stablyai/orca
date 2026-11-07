@@ -8,7 +8,7 @@ import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-h
 import { buildPaneTransportOptions } from '../pane-transport-options'
 import { createUnservedSshRowTransport } from './unserved-ssh-pane-connect'
 import { createLegacyRelayBridgeTransport } from '../../pty-transport/legacy-relay/legacy-relay-bridge-transport'
-import { legacyRelayBridgePtyIdForPane } from '../../legacy-relay-bridge-panes'
+import { legacyRelayBridgePtyIdForPane } from '../../pty-transport/legacy-relay/legacy-relay-bridge-panes'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 

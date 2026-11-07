@@ -87,7 +87,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
-vi.mock('../../cache-timer-seeding', () => ({
+vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
 }))
 
@@ -287,7 +287,7 @@ describe('connectPanePty', () => {
 
   it('defers inactive split-pane plain hidden output restore until the pane returns', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
-      await import('../../hidden-output-restore-scheduler')
+      await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
     try {
       const { connectPanePty } = await import('../connect-pane-pty')
@@ -356,7 +356,7 @@ describe('connectPanePty', () => {
 
   it('drops a deferred inactive hidden restore when the pane is hidden again', async () => {
     const { resetHiddenOutputRestoreSchedulerForTests } =
-      await import('../../hidden-output-restore-scheduler')
+      await import('./hidden-output-restore-scheduler')
     let disposable: { dispose: () => void } | null = null
     try {
       const { connectPanePty } = await import('../connect-pane-pty')

@@ -1,5 +1,6 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentHistoryHostStatusSchema,
   agentHistorySessionScanSchema,
@@ -10,14 +11,18 @@ import {
 // History capability/scan reads run on open; resume workspace metadata waits for explicit user intent.
 
 // Keep status capability family separate from Tasks hydration: both raise host message via same reader, but fail different screen/barrier states.
-export const agentHistoryHostStatusRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'status.agent-history',
-    method: 'status.get',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
-  })
+// Live: resume quotes for the desktop's Windows shell setting, which can change while connected.
+export const agentHistoryHostStatusRead = connectionHostStatusRead(
+  bindDeferredRpcOperation(
+    defineRpcOperation({
+      name: 'status.agent-history',
+      method: 'status.get',
+      acceptance: 'require-result-or-throw-message',
+      barrier: 'after-caller-barrier',
+      read: rpcResultVariant('host-status', agentHistoryHostStatusSchema)
+    })
+  ),
+  'live'
 )
 
 export const agentHistorySessionScan = bindDeferredRpcOperation(

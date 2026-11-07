@@ -16,12 +16,15 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type ScriptKind = OrcaHookScriptKind
 
-/** Copy for a created workspace whose branch has different setup commands than the ones approved. */
-function getCreatedBranchCopy(): {
+type SkippedSetupReviewCopy = {
   title: string
   description: string
   heading: string
-} {
+  confirmLabel?: string
+}
+
+/** Copy for a created workspace whose branch has different setup commands than the ones approved. */
+function getCreatedBranchCopy(): SkippedSetupReviewCopy {
   return {
     title: translate(
       'worktree.setupTrust.branchDiffersTitle',
@@ -32,6 +35,22 @@ function getCreatedBranchCopy(): {
       "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>."
     ),
     heading: translate('worktree.setupTrust.branchSetupScript', "Branch's setup script")
+  }
+}
+
+/** Copy for an automation whose run skipped setup because its branch's commands changed. */
+function getAutomationReviewCopy(): SkippedSetupReviewCopy {
+  return {
+    title: translate(
+      'automations.setupTrust.reviewTitle',
+      'Approve the new setup commands for this automation?'
+    ),
+    description: translate(
+      'automations.setupTrust.reviewBody',
+      "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>."
+    ),
+    heading: translate('worktree.setupTrust.branchSetupScript', "Branch's setup script"),
+    confirmLabel: translate('automations.setupTrust.approve', 'Approve')
   }
 }
 
@@ -212,8 +231,12 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const previouslyApproved = modalData.previouslyApproved === true
-  const isCreatedBranchReview = modalData.createdBranchReview === true
-  const createdBranchCopy = isCreatedBranchReview ? getCreatedBranchCopy() : null
+  const reviewCopy =
+    modalData.skippedSetupReview === 'created-branch'
+      ? getCreatedBranchCopy()
+      : modalData.skippedSetupReview === 'automation'
+        ? getAutomationReviewCopy()
+        : null
   const onResolve =
     typeof modalData.onResolve === 'function'
       ? (modalData.onResolve as (decision: 'run' | 'skip') => void)
@@ -223,8 +246,8 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
     (decision: 'run' | 'skip') => {
       if (decision === 'run' && repoId) {
         // Repo-wide trust is ignored when the repo id is on two hosts, so keep this script's approval too.
-        // A created branch's content runs once; recording it would replace the primary's approval.
-        if (contentHash && !isCreatedBranchReview) {
+        // Earlier approvals stay in the repo's bounded history, so a branch's script joins them.
+        if (contentHash) {
           markOrcaHookScriptConfirmed(repoId, scriptKind, contentHash)
         }
         if (alwaysTrust) {
@@ -238,7 +261,6 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       alwaysTrust,
       closeModal,
       contentHash,
-      isCreatedBranchReview,
       markOrcaHookRepoAlwaysTrusted,
       markOrcaHookScriptConfirmed,
       onResolve,
@@ -261,14 +283,12 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
       <DialogContent surface="security" className="max-w-md sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {createdBranchCopy?.title ?? getTitle(scriptKind, repoName, previouslyApproved)}
+            {reviewCopy?.title ?? getTitle(scriptKind, repoName, previouslyApproved)}
           </DialogTitle>
           <DialogDescription className="text-xs">
             <Trans
               i18n={i18n}
-              defaults={
-                createdBranchCopy?.description ?? getDescription(scriptKind, previouslyApproved)
-              }
+              defaults={reviewCopy?.description ?? getDescription(scriptKind, previouslyApproved)}
               components={{ code: <code />, repo: <>{repoName}</> }}
             />
           </DialogDescription>
@@ -277,7 +297,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
         {scriptContent && (
           <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2">
             <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              {createdBranchCopy?.heading ?? getScriptHeading(scriptKind, previouslyApproved)}
+              {reviewCopy?.heading ?? getScriptHeading(scriptKind, previouslyApproved)}
             </div>
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-foreground scrollbar-sleek">
               {scriptContent}
@@ -315,7 +335,8 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
             {translate('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}
           </Button>
           <Button onClick={() => resolveAndClose('run')}>
-            {translate('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
+            {reviewCopy?.confirmLabel ??
+              translate('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
           </Button>
         </DialogFooter>
       </DialogContent>

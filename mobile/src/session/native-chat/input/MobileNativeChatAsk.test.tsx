@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -70,7 +71,7 @@ function render(
 ): typeof onAnswer {
   vi.useFakeTimers()
   act(() => {
-    tree = create(createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel }))
+    tree = createWithQueryClient(createElement(MobileNativeChatAsk, { prompt, onAnswer, onCancel }))
   })
   return onAnswer
 }
@@ -176,7 +177,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         )
       }
       await act(async () => {
-        tree = create(createElement(Chat))
+        tree = createWithQueryClient(createElement(Chat))
       })
       const asked = {
         itemId: 'ask',
@@ -309,7 +310,7 @@ describe('MobileNativeChatAsk single-select auto-advance', () => {
         )
       )
     act(() => {
-      tree = create(
+      tree = createWithQueryClient(
         createElement(MobileNativeChatAsk, { prompt, onAnswer, answerSendSource: source })
       )
     })

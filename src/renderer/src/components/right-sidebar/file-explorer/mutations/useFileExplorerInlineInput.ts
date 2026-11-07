@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { dirname, joinPath } from '@/lib/path'
 import { extractIpcErrorMessage, renameFileOnDisk } from '@/lib/rename-file'
 import type { InlineInput } from './file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { createRuntimePath, deleteRuntimePath } from '@/runtime/runtime-file-mutation-client'
+import {
+  createRuntimePath,
+  deleteRuntimePath
+} from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner

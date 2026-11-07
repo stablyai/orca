@@ -54,11 +54,10 @@ export default function ArtifactsPage(): React.JSX.Element {
       ? null
       : (artifacts.find(({ artifact }) => artifact.slug === selectedSlug) ?? null)
 
-  useEffect(() => {
-    if (selectedSlug && !artifacts.some(({ artifact }) => artifact.slug === selectedSlug)) {
-      setSelectedSlug(null)
-    }
-  }, [selectedSlug, artifacts])
+  if (selectedSlug !== null && selectedArtifact === null) {
+    // Drop a vanished selection during render so a later reload cannot reopen it.
+    setSelectedSlug(null)
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent): void {

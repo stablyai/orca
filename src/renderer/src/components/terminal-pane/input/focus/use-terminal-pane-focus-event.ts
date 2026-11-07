@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
-import { surfaceStaleAgentRow } from '../../stale-agent-row'
+import { surfaceStaleAgentRow } from '../../agent-status/stale-agent-row'
 import { useAppStore } from '@/store'
 
 export function useTerminalPaneFocusEvent({

@@ -41,11 +41,11 @@ function webRuntimeAuthFailureMessage(reason: WebRuntimeAuthFailureReason): stri
         'auto.web.runtimeAuth.unauthorized',
         'Unauthorized. Pair this web client again.'
       )
-    // A pairing link that expired or was replaced lands here too.
+    // A pairing link that expired, was replaced or was already used (single use) lands here too.
     case 'unauthorized':
       return translate(
-        'auto.web.runtimeAuth.unauthorizedNewLink',
-        'Unauthorized. Ask for a new pairing link.'
+        'auto.web.runtimeAuth.unauthorizedLinkUsedOrExpired',
+        'Unauthorized. This pairing link may have expired or already been used. Create a new pairing link in Orca and open it.'
       )
   }
 }
