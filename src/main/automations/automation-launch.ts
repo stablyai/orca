@@ -8,7 +8,7 @@ import type { AutomationRunFailureCodeFields } from '../../shared/automation-run
 
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
-export type HeadlessAutomationDispatchLaunch = {
+export type AutomationLaunch = {
   sessionKind?: 'terminal' | 'chat'
   chatSessionId?: string | null
   workspaceId: string
@@ -27,22 +27,22 @@ export type HeadlessAutomationDispatchLaunch = {
   >
 }
 
-export type HeadlessAutomationDispatcher = (request: {
+export type AutomationLauncher = (request: {
   automation: Automation
   run: AutomationRun
   target: Extract<AutomationRunTargetResult, { ok: true }>
-}) => Promise<HeadlessAutomationDispatchLaunch>
+}) => Promise<AutomationLaunch>
 
 export class AutomationRunLaunchError extends Error {
   constructor(
     message: string,
-    readonly target?: HeadlessAutomationDispatchLaunch
+    readonly target?: AutomationLaunch
   ) {
     super(message)
   }
 }
 
-export function createHeadlessAutomationOutputSnapshotBuffer(): {
+export function createAutomationOutputSnapshotBuffer(): {
   append: (chunk: string) => void
   snapshot: () => AutomationRunOutputSnapshot | null
 } {

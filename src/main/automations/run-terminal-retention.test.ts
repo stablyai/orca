@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import {
-  createHeadlessRunTerminalRetention,
+  createRunTerminalRetention,
   RUN_TERMINAL_GRACE_MS,
   RUN_TERMINALS_KEPT_PER_AUTOMATION
-} from './headless-run-terminal-retention'
+} from './run-terminal-retention'
 
 function makeRun(
   id: string,
@@ -38,7 +38,7 @@ function harness(runs: AutomationRun[]) {
   const sleepAttempts: string[] = []
   const slept: string[] = []
   const lanes = new Map<string, Promise<void>>()
-  const retention = createHeadlessRunTerminalRetention({
+  const retention = createRunTerminalRetention({
     inAutomationLane: (automationId, operation) =>
       runKeyedSerializedOperation(lanes, automationId, operation),
     listRuns: () => runs.filter((run) => !forgotten.some((gone) => gone.id === run.id)),
@@ -297,7 +297,7 @@ describe('headless run terminal retention', () => {
     const closeRunTerminal = vi.fn(
       () => new Promise<boolean>((resolve) => (finishClose = () => resolve(true)))
     )
-    const slow = createHeadlessRunTerminalRetention({
+    const slow = createRunTerminalRetention({
       listRuns: () => runs.filter((run) => !h.forgotten.some((gone) => gone.id === run.id)),
       terminalClientUse: () => 'unused',
       runTerminalAlive: () => true,

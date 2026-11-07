@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
-import { launchHeadlessAutomationAgent } from './headless-automation-agent-launch'
-import { AutomationDispatchRefusedError } from './headless-dispatch-runner'
+import { launchAutomationTerminalAgent } from './automation-terminal-launch'
+import { AutomationDispatchRefusedError } from './automation-launch-runner'
 
 function fakeRuntime(deliverStartupFollowup: () => Promise<boolean>) {
   return {
@@ -24,7 +24,7 @@ function fakeRuntime(deliverStartupFollowup: () => Promise<boolean>) {
 }
 
 function launch(runtime: ReturnType<typeof fakeRuntime>, reuseSession = false) {
-  return launchHeadlessAutomationAgent(
+  return launchAutomationTerminalAgent(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing-workspace launch reads only these runtime members.
     runtime as never,
     {

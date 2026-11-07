@@ -8,12 +8,9 @@ import type {
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
-import type { HeadlessAutomationDispatchContext } from './headless-dispatch-runner'
-import {
-  AutomationDispatchRefusedError,
-  runHeadlessAutomationDispatch
-} from './headless-dispatch-runner'
+import type { AutomationLauncher } from './automation-launch'
+import type { AutomationLaunchContext } from './automation-launch-runner'
+import { AutomationDispatchRefusedError, runAutomationLaunch } from './automation-launch-runner'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 import { describeScheduledRefusal, describeStoppedWslDistroRefusal } from './dispatch-refusal'
 import {
@@ -26,15 +23,15 @@ import { AutomationDispatchCancelledError } from './automation-dispatch-cancelle
 export { AutomationDispatchCancelledError }
 
 type DispatchContext = Pick<
-  HeadlessAutomationDispatchContext,
+  AutomationLaunchContext,
   'runPrecheck' | 'markDispatchResult' | 'watchRun'
 > & {
   store: Store
   runs: AutomationRunWriter
   isActive(): boolean
   /** Read at each check: a window graph can close while the claim is acknowledged. */
-  launcher(): HeadlessAutomationDispatcher | null
-  chatDispatcher?: HeadlessAutomationDispatcher | null
+  launcher(): AutomationLauncher | null
+  chatDispatcher?: AutomationLauncher | null
   resolveTarget(automation: Automation): AutomationRunTargetResult
 }
 
@@ -147,7 +144,7 @@ export async function requestAutomationDispatch(
   if (!dispatcher) {
     return refuse(automationRunFailure('noDispatchHost'))
   }
-  return runHeadlessAutomationDispatch({
+  return runAutomationLaunch({
     ...ctx,
     automation,
     run,

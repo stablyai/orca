@@ -12,12 +12,9 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { findReusableAutomationRun } from '../../shared/automation-session-reuse'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
-import {
-  AutomationRunLaunchError,
-  type HeadlessAutomationDispatchLaunch
-} from './headless-dispatch'
-import { AutomationDispatchRefusedError } from './headless-dispatch-runner'
-import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+import { AutomationRunLaunchError, type AutomationLaunch } from './automation-launch'
+import { AutomationDispatchRefusedError } from './automation-launch-runner'
+import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 import type { AutomationRunTargetResult } from './run-target-resolution'
 
 const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
@@ -29,11 +26,11 @@ type LaunchedTerminal = {
   ptyId?: string | null
 }
 
-export type HeadlessAutomationAgentLaunch = Omit<HeadlessAutomationDispatchLaunch, 'completion'> & {
+export type AutomationTerminalAgentLaunch = Omit<AutomationLaunch, 'completion'> & {
   terminalHandle: string
 }
 
-export async function launchHeadlessAutomationAgent(
+export async function launchAutomationTerminalAgent(
   runtime: OrcaRuntimeService,
   request: {
     automation: Automation
@@ -41,7 +38,7 @@ export async function launchHeadlessAutomationAgent(
     target: Extract<AutomationRunTargetResult, { ok: true }>
     runs: readonly AutomationRun[]
   }
-): Promise<HeadlessAutomationAgentLaunch> {
+): Promise<AutomationTerminalAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
   const selectedTarget =
@@ -79,7 +76,7 @@ export async function launchHeadlessAutomationAgent(
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
-        const { startupPrompt: _prompt, ...create } = buildHeadlessAutomationWorktreeCreateArgs({
+        const { startupPrompt: _prompt, ...create } = buildAutomationWorktreeCreateArgs({
           automation,
           run,
           repo: target.repo
@@ -186,7 +183,7 @@ function runTargetOf(
   terminal: LaunchedTerminal,
   workspaceId: string,
   workspaceDisplayName: string | null
-): HeadlessAutomationAgentLaunch {
+): AutomationTerminalAgentLaunch {
   return {
     workspaceId,
     workspaceDisplayName,
@@ -208,7 +205,7 @@ async function sendToReusableSession(
   },
   workspaceDisplayName: string | null,
   physicalHostId: string
-): Promise<HeadlessAutomationAgentLaunch | null> {
+): Promise<AutomationTerminalAgentLaunch | null> {
   const { automation, text } = request
   const worktreeId = requireWorkspaceId(automation)
   const session = findReusableAutomationRun({

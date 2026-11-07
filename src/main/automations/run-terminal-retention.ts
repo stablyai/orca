@@ -9,7 +9,7 @@ export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
 export const RUN_TERMINALS_KEPT_PER_AUTOMATION = 3
 const SWEEP_INTERVAL_MS = 60_000
 
-export type HeadlessRunTerminalRetentionDeps = {
+export type RunTerminalRetentionDeps = {
   listRuns: () => readonly AutomationRun[]
   /** Used, viewed, or unknown-use terminals belong to the user and must stay open. */
   terminalClientUse: (run: AutomationRun) => 'used' | 'unused' | 'unknown'
@@ -31,7 +31,7 @@ export type HeadlessRunTerminalRetentionDeps = {
 
 const STARTING: ReadonlySet<AutomationRunStatus> = new Set(['pending', 'dispatching'])
 
-export function createHeadlessRunTerminalRetention(deps: HeadlessRunTerminalRetentionDeps): {
+export function createRunTerminalRetention(deps: RunTerminalRetentionDeps): {
   sweep: () => Promise<void>
   /** Release terminals before an update, bypassing grace and newest-run retention. */
   drain: () => Promise<number>

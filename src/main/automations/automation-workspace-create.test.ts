@@ -2,7 +2,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
-import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
 
 const repoPath = path.join('tmp', 'orca')
 
@@ -58,7 +58,7 @@ const automation: Automation = {
 
 describe('headless automation workspace create args', () => {
   it('stamps automation provenance for serve-mode new-per-run workspaces', () => {
-    const args = buildHeadlessAutomationWorktreeCreateArgs({
+    const args = buildAutomationWorktreeCreateArgs({
       automation,
       run: {
         id: 'run-1',

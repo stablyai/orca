@@ -12,7 +12,7 @@ import {
 import { getDefaultPersistedState } from '../../src/shared/constants'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { resolveAutomationRunTarget } from '../../src/main/automations/run-target-resolution'
-import { buildHeadlessAutomationWorktreeCreateArgs } from '../../src/main/automations/headless-workspace-create'
+import { buildAutomationWorktreeCreateArgs } from '../../src/main/automations/automation-workspace-create'
 
 vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
@@ -109,7 +109,7 @@ describe('persisted automation target dispatch', () => {
         expect(resolvedTarget.repo.executionHostId).toBe(hostId)
         const run = reloaded.createAutomationRun(saved, 1, 'manual')
         expect(
-          buildHeadlessAutomationWorktreeCreateArgs({
+          buildAutomationWorktreeCreateArgs({
             automation: saved,
             repo: resolvedTarget.repo,
             run

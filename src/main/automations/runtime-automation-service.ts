@@ -9,13 +9,13 @@ import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { AutomationService } from './service'
-import { createHeadlessRunTerminalRetention } from './headless-run-terminal-retention'
+import { createRunTerminalRetention } from './run-terminal-retention'
 import {
   getTuiAgentDetectCommands,
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchHeadlessAutomationAgent, runOwnHandle } from './headless-automation-agent-launch'
+import { launchAutomationTerminalAgent, runOwnHandle } from './automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver
@@ -168,7 +168,7 @@ export function createRuntimeAutomationService(input: {
     },
     terminalLauncher: {
       launch: async (request) => {
-        const { terminalHandle, ...launch } = await launchHeadlessAutomationAgent(runtime, {
+        const { terminalHandle, ...launch } = await launchAutomationTerminalAgent(runtime, {
           ...request,
           runs: store.listAutomationRuns(request.automation.id)
         })
@@ -204,7 +204,7 @@ function bindRunTerminalRetention(
   store: Store,
   runtime: OrcaRuntimeService
 ): void {
-  const retention = createHeadlessRunTerminalRetention({
+  const retention = createRunTerminalRetention({
     listRuns: () => store.listAutomationRuns(),
     terminalClientUse: (run) => {
       if (runTabWasFocused(runtime, run)) {

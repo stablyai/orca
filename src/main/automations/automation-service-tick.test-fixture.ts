@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import type { AutomationLauncher } from './automation-launch'
 import { AutomationService } from './service'
 
 export const TICK_MS = 60_000
@@ -8,7 +8,7 @@ export const TICK_MS = 60_000
 /** A started service whose terminal launcher is available, as on serve or a desktop with its window open. */
 export function startedAutomationService(
   store: Store,
-  launch: HeadlessAutomationDispatcher = vi.fn(async () => ({
+  launch: AutomationLauncher = vi.fn(async () => ({
     workspaceId: 'wt-1',
     terminalSessionId: 'tab-1'
   }))

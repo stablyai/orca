@@ -19,7 +19,7 @@ import {
   type AutomationRunTargetResult
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
-import type { HeadlessAutomationDispatcher } from './headless-dispatch'
+import type { AutomationLauncher } from './automation-launch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
 import {
@@ -42,7 +42,7 @@ import type {
 
 /** Main's terminal launcher; `available` is false while no window graph can hold run terminals. */
 export type AutomationTerminalLauncher = {
-  launch: HeadlessAutomationDispatcher
+  launch: AutomationLauncher
   available(): boolean
 }
 
@@ -59,7 +59,7 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly terminalLauncher: AutomationTerminalLauncher | null
-  private readonly chatDispatcher: HeadlessAutomationDispatcher | null
+  private readonly chatDispatcher: AutomationLauncher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
   /** Close unused completed run terminals; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
@@ -77,7 +77,7 @@ export class AutomationService {
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
       terminalLauncher?: AutomationTerminalLauncher
-      chatDispatcher?: HeadlessAutomationDispatcher
+      chatDispatcher?: AutomationLauncher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
@@ -295,7 +295,7 @@ export class AutomationService {
   }
 
   /** The terminal launcher, while a window graph can hold run terminals. */
-  private availableLauncher(): HeadlessAutomationDispatcher | null {
+  private availableLauncher(): AutomationLauncher | null {
     return this.terminalLauncher?.available() ? this.terminalLauncher.launch : null
   }
 

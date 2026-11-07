@@ -1,4 +1,4 @@
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
@@ -54,7 +54,7 @@ async function readTail(runtime: AutomationRunTerminalHost, handle: string): Pro
 }
 
 function snapshotOf(tail: readonly string[]): AutomationRunOutputSnapshot | null {
-  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const snapshotBuffer = createAutomationOutputSnapshotBuffer()
   snapshotBuffer.append(tail.join('\n'))
   return snapshotBuffer.snapshot()
 }
@@ -192,7 +192,7 @@ async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
 ): Promise<AutomationRunOutputSnapshot | null> {
-  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const snapshotBuffer = createAutomationOutputSnapshotBuffer()
   try {
     const read = await runtime.readTerminal(handle, { limit: TERMINAL_SNAPSHOT_LIMIT })
     snapshotBuffer.append(read.tail.join('\n'))

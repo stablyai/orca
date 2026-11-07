@@ -23,7 +23,7 @@ export function buildHeadlessAutomationWorkspaceName(
   return `auto-${slug || 'run'}-${stamp}`
 }
 
-export function buildHeadlessAutomationWorktreeCreateArgs({
+export function buildAutomationWorktreeCreateArgs({
   automation,
   run,
   repo,
