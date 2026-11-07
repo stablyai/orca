@@ -10,6 +10,7 @@ import {
   refreshAgentsOnHost,
   type AgentDetectionHost
 } from '../preflight/workspace-agent-detection'
+import { detectSystemMonitorsOnHost } from '../preflight/system-monitor-detection'
 import type {
   PreflightRuntimeContext,
   PreflightStatus,
@@ -69,6 +70,16 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
         const host: AgentDetectionHost = { kind: 'local', context: args }
         await assertAgentDetectionHostRunning(host)
         return detectAgentsOnHost(host, detectionOptions(args))
+      })
+  )
+
+  ipcMain.handle(
+    'preflight:detectMonitors',
+    async (_event, args?: PreflightRuntimeContext & PreflightWake) =>
+      runPreflightAct(args, async () => {
+        const host: AgentDetectionHost = { kind: 'local', context: args }
+        await assertAgentDetectionHostRunning(host)
+        return detectSystemMonitorsOnHost(host)
       })
   )
 

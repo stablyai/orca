@@ -13,6 +13,7 @@ import {
   detectAgentsOnHost,
   refreshAgentsOnHost
 } from '../../../../preflight/workspace-agent-detection'
+import { detectSystemMonitorsOnHost } from '../../../../preflight/system-monitor-detection'
 import {
   PreflightAgentDetection,
   PreflightProjectAgentDetection,
@@ -79,6 +80,16 @@ export const PREFLIGHT_METHODS = [
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)
       await assertAgentDetectionHostRunning(host)
       return refreshAgentsOnHost(host, hostDetectionOptions(runtime))
+    }
+  }),
+  defineMethod({
+    name: 'preflight.detectMonitors',
+    permission: 'workspace',
+    params: PreflightAgentDetection,
+    handler: async (params, { runtime }) => {
+      const host = await resolveQualifiedAgentDetectionHost(runtime, params)
+      await assertAgentDetectionHostRunning(host)
+      return detectSystemMonitorsOnHost(host)
     }
   })
 ]

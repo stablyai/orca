@@ -9,12 +9,16 @@ import { useAppStore } from '@/store'
 import { usePluginNewFiles } from '@/store/plugin-new-files'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
+import type { SystemMonitorDescriptor } from '../../../../shared/system-monitors'
+import { TabBarSystemMonitorsSubmenu } from './TabBarSystemMonitorsSubmenu'
 import {
   isMacOs,
   type resolveWindowsPowerShellImplementationSetting
 } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+
+const EMPTY_SYSTEM_MONITORS: readonly SystemMonitorDescriptor[] = []
 
 export function TabBarStaticCreateMenu({
   groupId,
@@ -26,6 +30,8 @@ export function TabBarStaticCreateMenu({
   showMobileEmulatorIntroCallout,
   props,
   windowsShellEntries,
+  systemMonitors = EMPTY_SYSTEM_MONITORS,
+  onLaunchSystemMonitor,
   defaultWindowsPowerShellImplementation,
   pwshAvailable,
   newTerminalShortcut,
@@ -44,6 +50,8 @@ export function TabBarStaticCreateMenu({
   workspaceHasSimulatorTab: boolean
   showMobileEmulatorIntroCallout: boolean
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
+  systemMonitors?: readonly SystemMonitorDescriptor[]
+  onLaunchSystemMonitor?: (monitor: SystemMonitorDescriptor) => void
   defaultWindowsPowerShellImplementation: ReturnType<
     typeof resolveWindowsPowerShellImplementationSetting
   >
@@ -203,12 +211,21 @@ export function TabBarStaticCreateMenu({
       <MobileEmulatorTabIntroCallout />
     ) : null
 
+  const systemMonitorsSubmenu =
+    onLaunchSystemMonitor && systemMonitors.length > 0 ? (
+      <TabBarSystemMonitorsSubmenu
+        monitors={systemMonitors}
+        onLaunchMonitor={onLaunchSystemMonitor}
+      />
+    ) : null
+
   return newTabMenuOrder === 'markdown-first' ? (
     <>
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
+      {systemMonitorsSubmenu}
       {newBrowserMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
@@ -216,6 +233,7 @@ export function TabBarStaticCreateMenu({
   ) : (
     <>
       {defaultTerminalMenuItems}
+      {systemMonitorsSubmenu}
       {newBrowserMenuItem}
       {newMarkdownMenuItem}
       {pluginNewFileMenuItems}

@@ -84,6 +84,8 @@ export function renderTabBarSurface({
     setCreateMenuQuery,
     createMenuOptions,
     windowsShellEntries,
+    systemMonitors,
+    handleLaunchSystemMonitor,
     handleSelectCreateMenuOption,
     launchAgentFromNewTabEntry,
     runPendingNewTabMenuFocusAfterClose,
@@ -270,6 +272,8 @@ export function renderTabBarSurface({
               workspaceHasSimulatorTab={workspaceHasSimulatorTab}
               showMobileEmulatorIntroCallout={showMobileEmulatorIntroCallout}
               windowsShellEntries={windowsShellEntries}
+              systemMonitors={systemMonitors}
+              onLaunchSystemMonitor={handleLaunchSystemMonitor}
               defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
               pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
               newTerminalShortcut={newTerminalShortcut}

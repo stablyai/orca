@@ -50,6 +50,8 @@ export type PreflightApi = {
   detectAgents: (
     args?: PreflightRuntimeContext & { enabledOnly?: boolean; wakeWslDistro?: boolean }
   ) => Promise<string[]>
+  /**Installed system, GPU, disk, network, and container monitor TUIs on the target runtime. */
+  detectMonitors?: (args?: PreflightRuntimeContext & { wakeWslDistro?: boolean }) => Promise<string[]>
   /** A WSL distro a background check was refused for is running now; re-ask. Desktop only. */
   onWslDistroRunning?: (callback: (distro: string) => void) => () => void
   /** Cached in main for the process lifetime. */
