@@ -53,17 +53,24 @@ export function selectHostModelCatalogSnapshot(
 }
 
 /** The snapshot after a host answer for `worktree` (null for a session-less read); undefined means keep none.
- *  An unknown or empty answer proves absence and retires what it answered for; one whose listing is
- *  still running proves nothing yet, so it never replaces or retires a held list. */
+ *  An unknown or empty answer proves absence and retires what it answered for. One whose listing is
+ *  still running proves nothing yet: it never replaces or retires a held list, but may fill an empty scope. */
 export function withHostModelCatalogAnswer(
   snapshot: HostModelCatalogSnapshot | undefined,
   worktree: string | null,
   catalog: AgentSessionModelCatalogResult
 ): HostModelCatalogSnapshot | undefined {
-  if (catalog.listingInProgress && snapshot) {
-    return snapshot
+  const listed = catalog.origin !== 'unknown' && catalog.models.length > 0
+  if (catalog.listingInProgress) {
+    const held =
+      worktree === null
+        ? !!snapshot && (snapshot.account !== null || snapshot.byWorktree.size > 0)
+        : snapshot?.byWorktree.has(worktree) === true
+    if (held || !listed) {
+      return snapshot
+    }
   }
-  if (catalog.origin === 'unknown' || catalog.models.length === 0) {
+  if (!listed) {
     if (worktree === null || !snapshot) {
       return undefined
     }
