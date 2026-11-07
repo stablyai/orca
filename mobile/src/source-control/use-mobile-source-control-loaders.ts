@@ -148,7 +148,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
   const loadBranchCompare = useCallback(
     // The compare base can be the branch's upstream, so it follows the status read that triggered it.
-    // Resolves true once a reply that a retry would not change has published.
+    // Resolves true when this attempt should run again: it published a failure or could not start.
     async (upstreamName: string | undefined): Promise<boolean> => {
       // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
@@ -156,7 +156,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         if (mountedRef.current) {
           setBranchCompareState({ kind: 'idle' })
         }
-        return false
+        return true
       }
       // Scope by host and route identity as well as render-time retirement to fence loads that reach the owner first.
       const scope: RequestScope = [client, statusIdentityKey]
@@ -178,7 +178,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const outcome = loaded.value
       setRebaseBaseRef(outcome.effectiveBaseRef)
       setBranchCompareState((prev) => nextBranchCompareState(outcome, prev))
-      return outcome.kind !== 'failed'
+      return outcome.kind === 'failed'
     },
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
@@ -196,9 +196,10 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       statusQuery.status === 'success'
     ) {
       comparedReadRef.current = read
-      void loadBranchCompare(statusRead.status.upstreamStatus?.upstreamName).then((landed) => {
+      void loadBranchCompare(statusRead.status.upstreamStatus?.upstreamName).then((retry) => {
         // Forget a compare that didn't land so coming back to Changes retries it before status is stale.
-        if (!landed && comparedReadRef.current === read) {
+        // A superseded attempt leaves the marker alone: the same read may already have a newer compare out.
+        if (retry && comparedReadRef.current === read) {
           comparedReadRef.current = null
         }
       })
