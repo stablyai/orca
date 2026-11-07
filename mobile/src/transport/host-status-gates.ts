@@ -99,7 +99,14 @@ function readProbedGates(
   }
   let gates = gatesByProbedStatus.get(status)
   if (!gates) {
-    gates = { ...hostStatusGatesFromStatus(status), statusPending: false }
+    const exact = status.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY) === true
+    gates = {
+      ...hostStatusGatesFromStatus(status),
+      statusGeneration: client?.getGeneration?.(),
+      exactProjectRepoFilters: exact,
+      projectRepoFilterSupport: exact ? 'exact' : 'legacy',
+      statusPending: false
+    }
     gatesByProbedStatus.set(status, gates)
   }
   return gates

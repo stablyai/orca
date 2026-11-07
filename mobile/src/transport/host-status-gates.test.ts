@@ -385,13 +385,16 @@ describe('useHostStatusGates', () => {
     }
   })
 
-  it('is not pending on its first render when the connection probe already landed', async () => {
+  it('preserves exact project filtering on its first render when the connection probe already landed', async () => {
     const client = createFakeRpcClient({ getGeneration: () => 1, getLastConnectedAt: () => 1_000 })
     const stopConnectionProbe = startRuntimeStatusProbe(client, () => {})
     client.requests[0]!.resolve({
       ok: true,
       id: '1',
-      result: { appVersion: '1.4.191', capabilities: ['browser.screencast.v1'] },
+      result: {
+        appVersion: '1.4.191',
+        capabilities: ['browser.screencast.v1', 'ui.project-repo-filter-exact.v1']
+      },
       _meta: { runtimeId: 'r1' }
     })
     await Promise.resolve()
@@ -413,7 +416,10 @@ describe('useHostStatusGates', () => {
         statusPending: false,
         statusReadable: true,
         desktopAppVersion: '1.4.191',
-        hostCapabilities: ['browser.screencast.v1']
+        hostCapabilities: ['browser.screencast.v1', 'ui.project-repo-filter-exact.v1'],
+        statusGeneration: 1,
+        exactProjectRepoFilters: true,
+        projectRepoFilterSupport: 'exact'
       })
     } finally {
       renderer?.unmount()
