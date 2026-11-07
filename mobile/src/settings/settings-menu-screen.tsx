@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
+import { useRouter } from 'expo-router'
 import { Shield, LifeBuoy } from 'lucide-react-native'
-import { MobileSettingsFrame, MobileSettingsSection } from './mobile-settings-menu'
+import { MobileSettingsSection } from './mobile-settings-menu'
 import { mobileSettingsMenuItems } from './mobile-settings-menu-items'
+import { SettingsScreen } from './settings-screen-frame'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export default function SettingsMenuScreen({
@@ -16,14 +18,37 @@ export default function SettingsMenuScreen({
   children?: ReactNode
 }) {
   const t = useMobileTranslation()
+  const router = useRouter()
   return (
-    <MobileSettingsFrame onBack={onBack}>
-      <MobileSettingsSection items={mobileSettingsMenuItems(push)} />
+    <SettingsScreen
+      title={t('common.settings', 'Settings')}
+      onBack={onBack ?? (() => router.back())}
+    >
+      <SettingsMenuSections push={push} openExternal={openExternal}>
+        {children}
+      </SettingsMenuSections>
+    </SettingsScreen>
+  )
+}
+
+/** The menu's groups without a screen around them, so Home's Settings tab can host them. */
+export function SettingsMenuSections({
+  push,
+  openExternal,
+  children
+}: {
+  push: (route: string) => void
+  openExternal: (url: string) => Promise<unknown>
+  children?: ReactNode
+}) {
+  const t = useMobileTranslation()
+  return (
+    <>
+      <MobileSettingsSection first items={mobileSettingsMenuItems(push)} />
 
       {children}
 
       <MobileSettingsSection
-        spaced
         items={[
           {
             id: 'privacyPolicy',
@@ -41,6 +66,6 @@ export default function SettingsMenuScreen({
           }
         ]}
       />
-    </MobileSettingsFrame>
+    </>
   )
 }

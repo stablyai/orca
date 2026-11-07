@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Download } from 'lucide-react-native'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { MobileSwitch } from './MobileSwitch'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -103,11 +103,13 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
     intervalMs: POLL_INTERVAL_MS
   })
 
-  useEffect(() => {
+  const [wasVisible, setWasVisible] = useState(visible)
+  if (wasVisible !== visible) {
+    setWasVisible(visible)
     if (visible) {
       setError(null)
     }
-  }, [visible])
+  }
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {
@@ -332,8 +334,8 @@ const styles = themedStyleSheet(() => ({
     gap: 5,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
+    borderRadius: radii.control,
+    backgroundColor: colors.sheetGroup
   },
   actionPressed: { opacity: 0.7 },
   actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },

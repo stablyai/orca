@@ -4,7 +4,7 @@ import {
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
 import type { Worktree } from '../worktree/types'
-import { folderWorkspaceToWorktree } from '../folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../folder-workspaces/folder-workspace-worktree'
 import type { HostSectionRow } from './host-section-rows'
 
 /** The desktop's open workspace, as its session saves it; both null when nothing is open. */

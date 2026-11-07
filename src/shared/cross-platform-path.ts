@@ -11,6 +11,17 @@ export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
   return isWindowsAbsolutePathLike(rootPath) && !isWslUncPath(rootPath)
 }
 
+export function normalizeRelativePath(path: string, rootPath?: string | null): string {
+  if (rootPath && !isWindowsAbsolutePathLike(rootPath)) {
+    return path.replace(/^\/+/, '').replace(/\/+/g, '/')
+  }
+  return path.replace(/^[\\/]+/, '').replace(/[\\/]+/g, '/')
+}
+
+export function splitPathSegments(path: string, rootPath?: string | null): string[] {
+  return normalizeRelativePath(path, rootPath).split('/').filter(Boolean)
+}
+
 export function normalizeRuntimePathSeparators(value: string): string {
   const normalized = collapseRuntimePathSlashes(
     value.includes('\\') ? value.replace(/\\/g, '/') : value

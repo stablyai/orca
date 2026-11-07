@@ -2,9 +2,9 @@ import { statSync, watch, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
-import { startShallowFileWatcher } from '../../parcel-watcher-shallow-file-subscription'
-import { closeFileSystemWatcher } from '../../rebinding-file-watch'
-import { watcherDirectoryIdentity } from '../../watcher-directory-identity'
+import { startShallowFileWatcher } from './parcel-watcher-shallow-file-subscription'
+import { closeFileSystemWatcher } from './rebinding-file-watch'
+import { watcherDirectoryIdentity } from './watcher-directory-identity'
 
 export type ShallowWatcherSubscription = {
   unsubscribe: () => Promise<void>

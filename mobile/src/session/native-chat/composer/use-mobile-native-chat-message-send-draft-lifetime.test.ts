@@ -1,12 +1,14 @@
+import type * as MobileNativeChatSendModule from '../mobile-native-chat-send'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc-client'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 
 const transport = vi.hoisted(() => ({
   heal: vi.fn<() => Promise<boolean>>(),
   clearInput: vi.fn<() => Promise<boolean>>(),
-  send: vi.fn<() => Promise<'accepted' | 'rejected'>>(),
+  send: vi.fn<() => Promise<'accepted' | 'rejected' | 'unknown'>>(),
   command: vi.fn(),
   error: vi.fn()
 }))
@@ -14,7 +16,8 @@ const transport = vi.hoisted(() => ({
 vi.mock('../mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: transport.heal
 }))
-vi.mock('../mobile-native-chat-send', () => ({
+vi.mock('../mobile-native-chat-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof MobileNativeChatSendModule>()),
   healMobileNativeChatStaleInput: transport.heal,
   clearMobileNativeChatInput: transport.clearInput,
   sendMobileNativeChatMessageWithOutcome: transport.send,
@@ -61,23 +64,27 @@ const client: RpcClient = {
 describe('mobile native-chat send across screen lifetimes', () => {
   let renderer: ReactTestRenderer | null = null
   let latest: HookState | null = null
+  let transcript: NativeChatMessage[] = []
+  let rerender = () => {}
 
   afterEach(async () => {
     await act(async () => renderer?.unmount())
     renderer = null
     latest = null
+    transcript = []
+    vi.useRealTimers()
     resetMobileNativeChatDraftStoreForTests()
     vi.clearAllMocks()
   })
 
-  async function mount(scope: string) {
+  async function mount(scope: string, workingEpoch?: number) {
     function SessionScreen() {
       const drafts = useMobileNativeChatDrafts({
         hostId: 'r1-host',
         worktreeId: 'r1-workspace',
         tabId: scope,
         sessionId: 'r1-session',
-        messages: [],
+        messages: transcript,
         chatActive: true,
         transcriptLoading: false,
         transcriptSettled: true
@@ -89,7 +96,12 @@ describe('mobile native-chat send across screen lifetimes', () => {
         deviceTokenRef: { current: 'r1-device' },
         agentRef: { current: 'claude' },
         commandSendRef: { current: () => {} },
-        captureSendOrigin: drafts.captureSendOrigin,
+        captureSendOrigin: (text: string, sentAt?: number) => {
+          const origin = drafts.captureSendOrigin(text, sentAt)
+          return origin && workingEpoch !== undefined
+            ? { ...origin, queuedDuringWorkingEpoch: workingEpoch }
+            : origin
+        },
         readSeededLaunchDraftSeed: drafts.readSeededLaunchDraftSeed,
         clearDraftForSend: drafts.clearDraftForSend,
         restoreRejectedDraft: drafts.restoreRejectedDraft,
@@ -104,6 +116,7 @@ describe('mobile native-chat send across screen lifetimes', () => {
     await act(async () => {
       renderer = create(createElement(SessionScreen))
     })
+    rerender = () => renderer?.update(createElement(SessionScreen))
   }
 
   function current(): HookState {
@@ -178,57 +191,6 @@ describe('mobile native-chat send across screen lifetimes', () => {
     await scenario('remount-same-text', true, 'ping')
   })
 
-  it('preserves deliberately retyped same text when the original screen stays mounted', async () => {
-    await scenario('same-mount-same-text', false, 'ping')
-  })
-
-  it('preserves different new text after Back/unmount and same-scope remount', async () => {
-    await scenario('remount-different-text', true, 'new draft')
-  })
-
-  it('times the echo at the press it is given, not when the host took the send', async () => {
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockResolvedValue(true)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('press-time')
-    const pressedAt = Date.now() - 10_000
-    let sending: Promise<unknown> | undefined
-    await act(async () => {
-      sending = current().sender.sendWithOutcome('ping', undefined, undefined, undefined, pressedAt)
-    })
-    await act(async () => {
-      delivery.resolve('accepted')
-      await sending
-    })
-    expect(current().drafts.pending.map((item) => item.sentAt)).toEqual([pressedAt])
-  })
-
-  it('clears an unchanged remounted draft when the original send finishes healing', async () => {
-    const heal = deferred<boolean>()
-    const delivery = deferred<'accepted'>()
-    transport.heal.mockImplementation(() => heal.promise)
-    transport.clearInput.mockResolvedValue(true)
-    transport.send.mockImplementation(() => delivery.promise)
-    await mount('unchanged')
-    await edit('ping')
-    let sending: Promise<boolean> | undefined
-    await act(async () => {
-      sending = current().sender.send('ping')
-    })
-    await remount('unchanged')
-    expect(current().drafts.composerText).toBe('ping')
-
-    await act(async () => heal.resolve(true))
-    expect(current().drafts.composerText).toBe('')
-    expect(current().drafts.getComposerEditGeneration()).toBe(0)
-    await act(async () => {
-      delivery.resolve('accepted')
-      expect(await sending).toBe(true)
-    })
-    expect(current().drafts.composerText).toBe('')
-  })
-
   it('restores a definitely rejected send after newer typing on a remounted screen', async () => {
     const delivery = deferred<'rejected'>()
     transport.heal.mockResolvedValue(true)
@@ -250,5 +212,87 @@ describe('mobile native-chat send across screen lifetimes', () => {
     })
     expect(current().drafts.composerText).toBe('new draft\n\nping')
     expect(transport.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps an unknown command at its original destination beside later edits without replay', async () => {
+    const delivery = deferred<'unknown'>()
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockImplementation(() => delivery.promise)
+    await mount('unknown-command')
+    const command = '/clear  \n'
+    await edit(command)
+    let sending: Promise<unknown> | undefined
+    await act(async () => {
+      sending = current().sender.sendWithOutcome(command)
+    })
+    expect(current().drafts.composerText).toBe('')
+    await edit('/compact')
+    await remount('different-tab')
+    await edit('other tab draft')
+    await act(async () => {
+      delivery.resolve('unknown')
+      expect(await sending).toBe('unknown')
+    })
+    expect(current().drafts.composerText).toBe('other tab draft')
+    await remount('unknown-command')
+    expect(current().drafts.composerText).toBe(`/compact\n\n${command}`)
+    expect(current().drafts.pending).toEqual([])
+    expect(transport.send).toHaveBeenCalledTimes(1)
+    expect(transport.error).toHaveBeenCalledWith(
+      'Delivery unconfirmed — check chat before retrying'
+    )
+  })
+
+  async function sendLost(text: string) {
+    await edit(text)
+    await act(async () => {
+      expect(await current().sender.sendWithOutcome(text)).toBe('unknown')
+    })
+    expect(current().drafts.composerText).toBe('')
+  }
+
+  it('hands back only the lost-ack sends the transcript never showed', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockResolvedValue('unknown')
+    await mount('lost-ack')
+    await sendLost('landed message')
+    await sendLost('lost message\n')
+    transcript = [
+      {
+        id: 'u1',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'landed message' }],
+        timestamp: 1,
+        source: 'transcript'
+      }
+    ]
+    await act(async () => rerender())
+    await edit('typed meanwhile')
+    await act(async () => {
+      vi.advanceTimersByTime(20_000)
+    })
+    expect(current().drafts.composerText).toBe('typed meanwhile\n\nlost message\n')
+    expect(transport.error).toHaveBeenCalledTimes(1)
+    expect(transport.error).toHaveBeenCalledWith('Not confirmed. Restored to the box.')
+    expect(transport.send).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves a lost-ack send made mid-turn out of the composer, since the agent may hold it queued', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    transport.heal.mockResolvedValue(true)
+    transport.clearInput.mockResolvedValue(true)
+    transport.send.mockResolvedValue('unknown')
+    await mount('mid-turn', 7)
+    await sendLost('follow-up')
+    await act(async () => {
+      vi.advanceTimersByTime(20_000)
+    })
+    expect(current().drafts.composerText).toBe('')
+    expect(transport.error).toHaveBeenCalledWith(
+      'Delivery unconfirmed — check chat before retrying'
+    )
   })
 })

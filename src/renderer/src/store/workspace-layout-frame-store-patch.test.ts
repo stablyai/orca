@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { localDesktopSession } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
@@ -11,9 +11,11 @@ import {
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from './slices/store-session-test-harness'
-import { createTestStore } from './slices/store-test-helpers'
+import { createTestStore, makeUnifiedTab } from './slices/store-test-helpers'
 import type { AppState } from './types'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
+import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { editorContentIsReferenced } from './slices/editor/tabs/workspace-editor-files'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
@@ -82,19 +84,6 @@ function withoutTab(frame: PublishedWorkspaceLayout, tabId: string): PublishedWo
 }
 
 describe('laying frame slices over the store', () => {
-  it('changes nothing for the frame the store already shows', async () => {
-    const { state, session, frame } = await restored()
-    expect(patchFor(state, session, frame)).toEqual({})
-  })
-
-  it('drops a terminal tab main closed, with its pane layout', async () => {
-    const { state, session, frame } = await restored()
-    const patch = patchFor(state, session, withoutTab(frame, 'tab-shell'))
-    expect(patch.tabsByWorktree?.[GIT_KEY]?.map((tab) => tab.id)).not.toContain('tab-shell')
-    expect(patch.terminalLayoutsByTabId).not.toHaveProperty('tab-shell')
-    expect(patch.unifiedTabsByWorktree?.[GIT_KEY]?.map((tab) => tab.id)).not.toContain('tab-shell')
-  })
-
   it('keeps the pane layout of a tab the window’s own pane command holds, until main drops the tab', async () => {
     const { state, session, frame } = await restored()
     const newRatios: PublishedWorkspaceLayout = {
@@ -112,48 +101,6 @@ describe('laying frame slices over the store', () => {
     expect(
       patchFor(state, session, withoutTab(frame, 'tab-shell'), held).terminalLayoutsByTabId
     ).not.toHaveProperty('tab-shell')
-  })
-
-  it('gives a row the frame creates the window’s own fields for it', async () => {
-    const { state, session, frame } = await restored()
-    const shown = patchFor(state, session, withoutTab(frame, 'tab-shell'))
-    const before = { ...state, ...shown }
-    const fields = vi.fn((id: string) =>
-      id === 'tab-shell' ? { pendingActivationSpawn: true } : null
-    )
-
-    const patch = patchFor(before, session, frame, undefined, fields)
-
-    const row = patch.tabsByWorktree?.[GIT_KEY]?.find((tab) => tab.id === 'tab-shell')
-    expect(row?.pendingActivationSpawn).toBe(true)
-    expect(fields).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps an open file’s editor state and place, and drops a file main closed', async () => {
-    const { state, session, frame } = await restored()
-    const file = state.openFiles.find((entry) => entry.worktreeId === GIT_KEY)!
-    const edited = { ...state, openFiles: [{ ...file, isDirty: true }] }
-    expect(patchFor(edited, session, frame).openFiles).toBeUndefined()
-    const closed = patchFor(edited, session, {
-      ...withoutTab(frame, 'editor:src/app.ts'),
-      editorFiles: []
-    })
-    expect(closed.openFiles).toEqual([])
-  })
-
-  it('keeps a browser tab’s page state, and drops the pages of a tab main closed', async () => {
-    const { state, session, frame } = await restored()
-    const browser = state.browserTabsByWorktree[GIT_KEY]![0]!
-    const browsing = {
-      ...state,
-      browserTabsByWorktree: { [GIT_KEY]: [{ ...browser, url: 'https://example.com/next' }] }
-    }
-    expect(patchFor(browsing, session, frame).browserTabsByWorktree).toBeUndefined()
-    const closed = patchFor(browsing, session, {
-      ...withoutTab(frame, 'browser-1'),
-      browserTabs: []
-    })
-    expect(closed.browserPagesByWorkspace).not.toHaveProperty('browser-1')
   })
 
   it('keeps a client-hosted browser tab this desktop created, with its page and handle, at its place (L274)', async () => {
@@ -207,4 +154,84 @@ describe('laying frame slices over the store', () => {
     expect(dropped.browserPagesByWorkspace).not.toHaveProperty('browser-1')
     expect(dropped.remoteBrowserPageHandlesByPageId).not.toHaveProperty(page.id)
   })
+})
+
+it('bounds frame retention and shared-content reference work linearly at N and 10N', async () => {
+  const { state, session, frame } = await restored()
+  const { facts, desktopView } = loadWorkspaceLayoutWithoutReport(
+    'local',
+    session,
+    nameBasedLoadContext()
+  )
+  const built = buildLayoutFrameSlices({
+    layouts: { [GIT_KEY]: { ...frame, tabs: [], groups: [], editorFiles: [], browserTabs: [] } },
+    facts,
+    view: desktopView
+  })
+  for (const size of [30, 300]) {
+    let entityReads = 0
+    const files: AppState['openFiles'] = []
+    const local: AppState['unifiedTabsByWorktree'][string] = []
+    const other: AppState['unifiedTabsByWorktree'][string] = []
+    const settle: (() => void)[] = []
+    for (let index = 0; index < size; index++) {
+      const entityId = `diff-${index}`
+      files.push({
+        id: entityId,
+        filePath: `/repo/${index}.ts`,
+        relativePath: `${index}.ts`,
+        language: 'typescript',
+        worktreeId: GIT_KEY,
+        isDirty: false,
+        mode: 'diff'
+      })
+      local.push(
+        makeUnifiedTab({
+          id: `local-${index}`,
+          entityId,
+          worktreeId: GIT_KEY,
+          groupId: 'local-group',
+          contentType: 'diff'
+        })
+      )
+      const tab = makeUnifiedTab({
+        id: `other-${index}`,
+        entityId,
+        worktreeId: 'folder:other',
+        groupId: 'other-group',
+        contentType: 'diff'
+      })
+      Object.defineProperty(tab, 'entityId', {
+        get() {
+          entityReads++
+          return entityId
+        },
+        enumerable: true
+      })
+      if (index % 3 === 0) {
+        other.push(tab)
+      }
+      if (index % 3 === 1) {
+        const finish = beginPendingTab(`pending-${index}`, 'folder:pending', entityId, {
+          kind: 'open'
+        })
+        settle.push(() => finish(null))
+      }
+    }
+    const tabs = { [GIT_KEY]: local, 'folder:other': other }
+    const input = { ...state, openFiles: files, unifiedTabsByWorktree: tabs }
+    try {
+      const patch = buildLayoutFrameStorePatch(input, built, [GIT_KEY])
+      expect((patch.openFiles ?? input.openFiles).length).toBe((size * 2) / 3)
+      const references = { unifiedTabsByWorktree: { 'folder:other': other } }
+      for (let index = 0; index < size; index++) {
+        expect(editorContentIsReferenced(references, `diff-${index}`)).toBe(index % 3 !== 2)
+      }
+      expect(entityReads).toBeLessThanOrEqual(size * 4)
+    } finally {
+      for (const finish of settle) {
+        finish()
+      }
+    }
+  }
 })

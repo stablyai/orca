@@ -3,7 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
@@ -11,23 +12,27 @@ const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
   getRuntimeFileReadScope: vi.fn(
     (settings: { activeRuntimeEnvironmentId?: string | null } | null | undefined) =>
       settings?.activeRuntimeEnvironmentId ?? null
   )
 }))
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 
-vi.mock('@/runtime/runtime-git-diff-client', () => ({
+vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchDiff: vi.fn(),
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: vi.fn()
 }))
-vi.mock('@/runtime/runtime-git-client-context', () => ({ getRuntimeGitScope: vi.fn(() => null) }))
+vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
+  getRuntimeGitScope: vi.fn(() => null)
+}))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(),
@@ -35,7 +40,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: vi.fn(() => true)
 }))
 
-vi.mock('@/lib/worktree-host-connection-phase', () => import('./local-host-test-fixture'))
+vi.mock(
+  '@/lib/workspace/ownership/worktree-host-connection-phase',
+  () => import('./local-host-test-fixture')
+)
 
 vi.mock('@/lib/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: vi.fn(() => null)
@@ -48,7 +56,7 @@ vi.mock('@/store', () => ({
   )
 }))
 
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   WORKTREE_HOST_UNRESOLVED_CODE,
   WORKTREE_HOST_UNRESOLVED_ERROR
@@ -126,13 +134,24 @@ describe('useEditorPanelContentState — host cannot resolve a mirrored file (#2
     const openFiles = [activeFile]
     const closeFile = vi.fn()
     const editorDrafts = { [activeFile.id]: '# unsaved edits' }
-    mocks.getState.mockReturnValue({
-      settings: { activeRuntimeEnvironmentId: 'env-1' },
+    const store = createTestStore()
+    store.setState({
       openFiles,
       editorDrafts,
       closeFile,
+      worktreesByRepo: {
+        project: [
+          makeWorktree({
+            id: activeFile.worktreeId,
+            repoId: 'project',
+            path: '/home/user/project',
+            hostId: 'runtime:env-1'
+          })
+        ]
+      },
       setLastKnownDiskSignature: vi.fn()
     })
+    mocks.getState.mockImplementation(store.getState)
     // Delay rejection like real host I/O so retry state commits separately; return machine code with prose to exercise code-based classification.
     const hostError = new RuntimeRpcCallError({
       id: 'rpc-1',

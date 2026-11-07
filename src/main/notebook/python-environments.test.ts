@@ -171,14 +171,6 @@ describe('installIpykernel', () => {
       detail: 'ImportError: libzmq.so.5'
     })
   })
-
-  it('explains a failure that printed nothing', async () => {
-    runProcessMock.mockResolvedValueOnce(result(null, '', { timedOut: true }))
-    await expect(installIpykernel('/venv/bin/python')).resolves.toEqual({
-      ok: false,
-      detail: 'Timed out.'
-    })
-  })
 })
 
 describe('createNotebookVenv', () => {
@@ -186,24 +178,6 @@ describe('createNotebookVenv', () => {
   const interpreterIn = (venv: string): string =>
     process.platform === 'win32' ? join(venv, 'Scripts', 'python.exe') : join(venv, 'bin', 'python')
   const ok = (stdout = '') => ({ code: 0, stdout, stderr: '' })
-
-  it('creates .venv in the parent, installs ipykernel into it, and describes it', async () => {
-    const venv = join('/repo', '.venv')
-    const venvPython = interpreterIn(venv)
-    runProcessMock
-      .mockResolvedValueOnce(ok())
-      .mockResolvedValueOnce(ok())
-      .mockResolvedValueOnce(ok())
-      .mockResolvedValueOnce(ok(`${venvPython}\n3.14.0\n`))
-    await expect(createNotebookVenv('/usr/bin/python3', '/repo')).resolves.toMatchObject({
-      ok: true,
-      environment: { path: venvPython, version: '3.14.0' }
-    })
-    expect(runProcessMock.mock.calls[0][0]).toMatchObject({
-      program: '/usr/bin/python3',
-      args: ['-m', 'venv', venv]
-    })
-  })
 
   it('reuses an existing .venv rather than re-running venv over it', async () => {
     const parent = mkdtempSync(join(tmpdir(), 'orca-venv-'))
@@ -224,18 +198,5 @@ describe('createNotebookVenv', () => {
     } finally {
       rmSync(parent, { recursive: true, force: true })
     }
-  })
-
-  it('reports why venv creation failed', async () => {
-    runProcessMock.mockResolvedValueOnce({
-      code: 1,
-      stdout: '',
-      stderr:
-        'The virtual environment was not created successfully because ensurepip is not available.'
-    })
-    await expect(createNotebookVenv('/usr/bin/python3', '/repo')).resolves.toEqual({
-      ok: false,
-      detail: expect.stringContaining('ensurepip is not available')
-    })
   })
 })

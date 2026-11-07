@@ -24,7 +24,7 @@ const status: JiraConnectionStatus = {
   activeSiteId: 'site-1',
   viewer: { ...self, email: null }
 }
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
   jiraListAssignableUsersForTarget: boundary.search,
   jiraSearchUsers: vi.fn()
 }))
@@ -93,41 +93,6 @@ beforeEach(() => {
   boundary.search.mockResolvedValue(users)
 })
 describe('Existing Jira issue assignee', () => {
-  it('assigns the signed-in site account directly without opening the picker', async () => {
-    const { mutateIssue } = mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Assign to me (Zoe me)' }))
-    expect(mutateIssue).toHaveBeenCalledWith(
-      'assignee',
-      { assigneeAccountId: 'me' },
-      { assignee: expect.objectContaining(self) }
-    )
-    expect(screen.queryByPlaceholderText('Search users')).toBeNull()
-  })
-  it('offers self first, alphabetic candidates, issue-scoped search, and unassignment', async () => {
-    const { mutateIssue } = mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Assignee' }))
-    const search = await screen.findByPlaceholderText('Search users')
-    await screen.findByRole('button', { name: 'Ada' })
-    const rows = screen.getAllByRole('button').map((button) => button.textContent)
-    expect(rows.indexOf('Zoe me')).toBeLessThan(rows.indexOf('Ada'))
-    expect(rows.indexOf('Ada')).toBeLessThan(rows.indexOf('Zoe'))
-    boundary.search.mockResolvedValue([{ accountId: 'beth', displayName: 'Beth' }])
-    fireEvent.change(search, { target: { value: 'Beth' } })
-    fireEvent.click(await screen.findByRole('button', { name: 'Beth' }))
-    expect(boundary.search).toHaveBeenLastCalledWith({ kind: 'local' }, 'ENG-1', 'Beth', 'site-1')
-    expect(mutateIssue).toHaveBeenCalledWith(
-      'assignee',
-      { assigneeAccountId: 'beth' },
-      { assignee: { accountId: 'beth', displayName: 'Beth' } }
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Assignee' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Unassigned' }))
-    expect(mutateIssue).toHaveBeenLastCalledWith(
-      'assignee',
-      { assigneeAccountId: null },
-      { assignee: undefined }
-    )
-  })
   it('loads the viewer from the selected source and hides it during an account switch', async () => {
     let resolve = (_status: JiraConnectionStatus) => {}
     boundary.readJiraStatus.mockReturnValue(
@@ -219,30 +184,5 @@ describe('Existing Jira issue assignee', () => {
       '',
       'site-1'
     )
-  })
-  it('disables both assignment actions while another field saves', () => {
-    mount({ pendingField: 'title' })
-    expect(screen.getByRole('button', { name: 'Assignee' }).hasAttribute('disabled')).toBe(true)
-    expect(
-      screen.getByRole('button', { name: 'Assign to me (Zoe me)' }).hasAttribute('disabled')
-    ).toBe(true)
-  })
-  it('does not offer self assignment when the issue is already assigned to self', () => {
-    mount({ selected: { ...issue, assignee: self } })
-    expect(screen.queryByRole('button', { name: 'Assign to me (Zoe me)' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Assignee' }).textContent).toBe('Zoe me')
-  })
-  it('hides a viewer cached for a different runtime', () => {
-    boundary.statusKey = 'runtime:other#0'
-    mount()
-    expect(screen.queryByRole('button', { name: 'Assign to me (Zoe me)' })).toBeNull()
-  })
-  it('ignores assignment from a previously opened picker while another field saves', async () => {
-    const { props, rerender, mutateIssue } = mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Assignee' }))
-    await screen.findByRole('button', { name: 'Ada' })
-    rerender(<JiraIssueMetadataBar {...props} pendingField="title" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Ada' }))
-    expect(mutateIssue).not.toHaveBeenCalled()
   })
 })

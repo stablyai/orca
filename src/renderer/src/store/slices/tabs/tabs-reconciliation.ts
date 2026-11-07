@@ -10,7 +10,6 @@ import {
   terminalTabHasReconnectablePty
 } from '../terminal-orphan-helpers'
 import {
-  EMPTY_LIVE_EDITOR_IDS,
   writeBatchedWorkspaceRecordEntry,
   type WorktreeTabModelReconciliationBatch
 } from './tabs-reconciliation-batch'
@@ -100,11 +99,7 @@ export function projectWorktreeTabModelReconciliation(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
   // Batch index avoids O(workspaces × openFiles) rescanning.
-  const liveEditorIds: ReadonlySet<string> = batch
-    ? (batch.liveEditorIdsByWorktree.get(worktreeId) ?? EMPTY_LIVE_EDITOR_IDS)
-    : new Set(
-        state.openFiles.filter((file) => file.worktreeId === worktreeId).map((file) => file.id)
-      )
+  const liveEditorIds = batch?.liveEditorIds ?? new Set(state.openFiles.map((file) => file.id))
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )

@@ -6,7 +6,7 @@ import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../src/shared/mobile-web-bundle/mobile-web-bundle-capability'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
-import type { MobileWebBundleManifestRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { createGenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
@@ -23,6 +23,7 @@ vi.mock('expo-crypto', async () => {
   }
 })
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
@@ -180,7 +181,7 @@ it.each([8, 80])(
       createStore: () => store,
       mintSessionId: () => 'flow-session',
       now: () => 0,
-      setTimer: () => () => {}
+      setForegroundTimer: () => () => {}
     }
     function Probe() {
       latest = useMobileWebShellSession({

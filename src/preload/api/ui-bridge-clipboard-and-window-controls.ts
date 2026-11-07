@@ -1,4 +1,4 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import { ipcRenderer, webFrame } from 'electron'
 import {
   richMarkdownContextMenuCommandChannel,
@@ -8,7 +8,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type { PreloadApi } from '../api-types'
@@ -20,6 +20,7 @@ export const uiClipboardAndWindowControlsApi = {
       filePath: string
       relativePath: string
       staged: boolean
+      oldPath?: string
       runtimeEnvironmentId?: string | null
       navigation?: RuntimeNavigationTarget
     }) => void
@@ -31,6 +32,7 @@ export const uiClipboardAndWindowControlsApi = {
         filePath: string
         relativePath: string
         staged: boolean
+        oldPath?: string
         runtimeEnvironmentId?: string | null
         navigation?: RuntimeNavigationTarget
       }
@@ -52,6 +54,15 @@ export const uiClipboardAndWindowControlsApi = {
   },
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
+  },
+  onTerminalPaneMoveToNewTabRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:terminalPaneMoveToNewTabRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalPaneMoveToNewTabRequest', listener)
+  },
+  replyTerminalPaneMoveToNewTab: (reply) => {
+    ipcRenderer.send('ui:terminalPaneMoveToNewTabReply', reply)
   },
   onWorkspaceSleep: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>
@@ -189,6 +200,12 @@ export const uiClipboardAndWindowControlsApi = {
       callback(isMaximized)
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
+  },
+  isWindowActive: (): Promise<boolean> => ipcRenderer.invoke('window:isActive'),
+  onWindowActiveChanged: (callback: (active: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, active: boolean) => callback(active)
+    ipcRenderer.on('window:active-changed', listener)
+    return () => ipcRenderer.removeListener('window:active-changed', listener)
   },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')

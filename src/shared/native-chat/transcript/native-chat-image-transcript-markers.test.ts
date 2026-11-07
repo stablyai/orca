@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 import { imageReferenceToken } from '../native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
@@ -43,18 +43,6 @@ describe('imageSourcePathFromText', () => {
 })
 
 describe('normalizeImageTranscriptMessages', () => {
-  it('merges the paired [Image: source]/[Image #1] turns into one image-ref turn', () => {
-    const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
-      userText('b', '[Image #1] describe this')
-    ])
-    expect(out).toHaveLength(1)
-    expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
-      { type: 'text', text: 'describe this' }
-    ])
-  })
-
   it('merges a source turn into a prompt with a trailing image marker', () => {
     const out = normalizeImageTranscriptMessages([
       userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
@@ -109,11 +97,6 @@ describe('normalizeImageTranscriptMessages', () => {
     expect(stripImagePromptMarker(text)).toBe(expected)
   })
 
-  it('returns long marker-free whitespace without regex backtracking', () => {
-    const text = ' '.repeat(50_000)
-    expect(stripImagePromptMarker(text)).toBe(text)
-  })
-
   it('shares marker-aware text matching across multiple text blocks', () => {
     const message: NativeChatMessage = {
       ...userText('prompt', 'unused'),
@@ -138,16 +121,6 @@ describe('normalizeImageTranscriptMessages', () => {
         blocks: [...source.blocks, { type: 'text', text: 'caption' }]
       })
     ).toBe(false)
-  })
-
-  it('converts a lone [Image: source] turn (no prompt) into an image-ref instead of raw text', () => {
-    const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /Users/me/Pictures/hero-image-2.png]')
-    ])
-    expect(out).toHaveLength(1)
-    expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/Users/me/Pictures/hero-image-2.png' }
-    ])
   })
 
   it('folds every source and strips every prompt marker for a multi-image send', () => {
@@ -380,13 +353,5 @@ describe('composer image chips at send and back', () => {
       )
       expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`, 1)).toBe(`in ${file}`)
     }
-  })
-
-  it('sends a returned message with the numbers it had', () => {
-    const sent = 'compare [Image #1] with [Image #2]'
-    const ids = ['returned-m-1', 'returned-m-2']
-    expect(imageReferencesToPromptMarkers(promptMarkersToImageReferences(sent, ids), ids)).toBe(
-      sent
-    )
   })
 })

@@ -1,25 +1,37 @@
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
-import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
-import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../shared/agent-session-refusal-notice'
+import { structuredAgentSessionSendBody } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
-import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,
   draftText: string,
   attachments: readonly NativeChatComposerImageAttachment[] = [],
-  skills: readonly AgentJournalSkillRef[] = []
+  skills: readonly AgentJournalSkillRef[] = [],
+  intent: Pick<
+    StructuredAgentSessionSendRequest,
+    'alternate' | 'prepareAttachments' | 'onSettled'
+  > = {},
+  onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
     draftText,
     attachments.map((attachment) => attachment.id)
   )
-  const { handled, ...command } = await transport.dispatchCommand(prompt)
+  const pickedModeSkill =
+    agentSessionInteractionCommand('codex', prompt) !== null &&
+    skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)
+  const { handled, ...command } = pickedModeSkill
+    ? { handled: false, accepted: false, error: null }
+    : await transport.dispatchCommand(prompt)
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
     return { ...command, revealsTranscript: false }
@@ -36,9 +48,14 @@ export async function dispatchNativeChatStructuredComposerText(
       revealsTranscript: false
     }
   }
+  const request = { ...(skills.length > 0 ? { skills } : {}), ...intent }
   const admission =
-    skills.length > 0
-      ? transport.send(prompt, attachments, { skills })
+    Object.keys(request).length > 0
+      ? transport.send(prompt, attachments, request)
       : transport.send(prompt, attachments)
-  return { accepted: admission !== false, error: null, revealsTranscript: admission === true }
+  if (admission instanceof Promise) {
+    onPending?.()
+  }
+  const accepted = await admission
+  return { accepted: accepted !== false, error: null, revealsTranscript: accepted === true }
 }

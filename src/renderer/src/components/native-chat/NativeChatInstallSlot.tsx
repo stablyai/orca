@@ -6,9 +6,10 @@ import {
 import {
   useManagedRuntimeInstall,
   type ManagedRuntimeInstallObservation
-} from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
 import { NativeChatInstallStrip } from './NativeChatInstallStrip'
+import { useStructuredAgentSessionHostProgram } from './structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 export type NativeChatInstallSlotState =
@@ -29,7 +30,7 @@ const RESERVED: NativeChatInstallSlotState = { kind: 'reserved' }
 
 /** Reserve unknown readiness with an editable composer and held sends; missing runtimes show installation, while read failures leave it alone. */
 export function useNativeChatInstallSlot(
-  props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'isVisible'>,
+  props: Pick<NativeChatStructuredViewProps, 'target' | 'agent' | 'isVisible' | 'sessionId'>,
   agentLabel: string,
   layout: ManagedRuntimeInstallLayout
 ): {
@@ -37,9 +38,11 @@ export function useNativeChatInstallSlot(
   sendBlockedReason: string | null
   unavailableHint: string | undefined
 } {
-  const slot = installSlotState(
-    useManagedRuntimeInstall(props.target, props.agent, props.isVisible),
-    layout
+  const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
+  const slot = nativeChatInstallSlotState(
+    useManagedRuntimeInstall(props.target, props.agent, props.isVisible && !hostProgram),
+    layout,
+    hostProgram
   )
   const unavailableHint =
     slot.kind === 'install'
@@ -52,11 +55,13 @@ export function useNativeChatInstallSlot(
   }
 }
 
-function installSlotState(
+/** A chat running the host's own program needs no managed install, whatever its state. */
+export function nativeChatInstallSlotState(
   observation: ManagedRuntimeInstallObservation,
-  layout: ManagedRuntimeInstallLayout
+  layout: ManagedRuntimeInstallLayout,
+  hostProgram: boolean
 ): NativeChatInstallSlotState {
-  if (observation.kind === 'inactive') {
+  if (hostProgram || observation.kind === 'inactive') {
     return NONE
   }
   if (observation.kind === 'pending') {
@@ -98,7 +103,7 @@ export function NativeChatInstallSlot(props: {
     return null
   }
   return (
-    <div className="min-h-0 shrink overflow-hidden bg-chat-canvas">
+    <div className="min-h-0 shrink overflow-hidden bg-chat-pane">
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4">
         <NativeChatInstallStrip slot={slot} agentLabel={props.agentLabel} />
       </div>

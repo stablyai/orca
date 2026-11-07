@@ -2,24 +2,31 @@ import { StyleSheet, type TextStyle } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
 
+/** Lifts the 13pt base to 14pt body text for documents (file preview, PR bodies); headings scale with it. */
+export const MOBILE_MARKDOWN_DOCUMENT_SCALE = 14 / 13
+
 export const styles = themedStyleSheet(() => ({
   root: {
     gap: spacing.md
   },
   paragraph: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   heading: {
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
     fontWeight: '700',
     color: colors.textPrimary
   },
   headingLarge: {
-    fontSize: 15,
-    lineHeight: 21
+    fontSize: 16,
+    lineHeight: 23
+  },
+  headingTitle: {
+    fontSize: 18,
+    lineHeight: 25
   },
   bold: {
     fontWeight: '700',
@@ -40,18 +47,36 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 12,
     color: colors.textPrimary,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.mark,
     paddingHorizontal: 4
   },
+  // GitHub's inline tags: raised and lowered small text, a key cap, an insertion.
+  sup: { fontSize: 10, position: 'relative', top: -5 },
+  sub: { fontSize: 10, position: 'relative', top: 3 },
+  kbd: { borderWidth: 1, borderColor: colors.borderSubtle },
+  ins: { textDecorationLine: 'underline' },
   inlineCodeLink: {
     color: colors.accentBlue,
     textDecorationLine: 'underline'
   },
+  callout: {
+    borderLeftWidth: 2,
+    borderTopRightRadius: radii.surface,
+    borderBottomRightRadius: radii.surface,
+    backgroundColor: colors.bgPanel,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm
+  },
+  calloutTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  calloutTitleText: { fontSize: 13, fontWeight: '600' },
   quote: {
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle,
-    borderTopRightRadius: radii.row,
-    borderBottomRightRadius: radii.row,
+    borderTopRightRadius: radii.surface,
+    borderBottomRightRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -59,14 +84,14 @@ export const styles = themedStyleSheet(() => ({
   },
   quoteText: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textSecondary
   },
   codeBlock: {
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   codeHeader: {
@@ -98,16 +123,55 @@ export const styles = themedStyleSheet(() => ({
   codeLines: {
     paddingRight: spacing.md
   },
+  codeLinesWrapped: {
+    flex: 1,
+    paddingLeft: spacing.md
+  },
+  codeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  codeWrapButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.control
+  },
+  codeWrapButtonOn: {
+    backgroundColor: colors.translucentFill
+  },
+
   codeText: {
     fontFamily: typography.monoFamily,
     fontSize: 12,
     lineHeight: 17,
     color: colors.textPrimary
   },
+  imageParagraph: {
+    gap: spacing.sm
+  },
+  details: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.surface,
+    overflow: 'hidden'
+  },
+  detailsSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.bgRaised
+  },
+  detailsSummaryText: { fontWeight: '600', flexShrink: 1 },
+  detailsBody: { padding: spacing.sm, gap: spacing.md },
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     overflow: 'hidden',
     padding: spacing.sm
@@ -126,7 +190,7 @@ export const styles = themedStyleSheet(() => ({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     backgroundColor: colors.bgPanel
   },
@@ -137,8 +201,8 @@ export const styles = themedStyleSheet(() => ({
     borderRightWidth: 1,
     borderBottomWidth: 1,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     fontSize: 12,
     lineHeight: 17,
     color: colors.textPrimary,
@@ -151,7 +215,7 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised
   },
   list: {
-    gap: spacing.xs
+    gap: spacing.sm
   },
   listItem: {
     flexDirection: 'row',
@@ -162,7 +226,7 @@ export const styles = themedStyleSheet(() => ({
     // A floor, not a width: "10." would wrap inside a fixed 22.
     minWidth: 22,
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textSecondary,
     fontFamily: typography.monoFamily
   },
@@ -171,13 +235,14 @@ export const styles = themedStyleSheet(() => ({
     minWidth: 0,
     gap: spacing.xs
   },
+  taskMarker: { minWidth: 22, justifyContent: 'center' },
   listText: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   footnoteReference: {
-    color: colors.textSecondary
+    color: colors.accentBlue
   },
   rule: {
     marginVertical: spacing.xs,
@@ -203,14 +268,24 @@ export type MarkdownTone = {
   inlineCode: TextStyle | null
 }
 
-/** Colours over the styles above, for one surface. The default tone overrides nothing. */
-export const MARKDOWN_TONES: Record<'default' | 'userMessage', MarkdownTone> = {
-  default: { text: null, secondary: null, link: null, inlineCode: null },
-  // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
-  userMessage: themedStyles(() => ({
-    text: { color: colors.chatForegroundStrong },
-    secondary: null,
-    link: null,
-    inlineCode: null
-  }))
-}
+/** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
+export const MARKDOWN_TONES: Record<'default' | 'userMessage' | 'strong' | 'muted', MarkdownTone> =
+  {
+    default: { text: null, secondary: null, link: null, inlineCode: null },
+    // A card's title: the question an agent asks.
+    strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
+    // Settled text beside a receipt's muted answer.
+    muted: themedStyles(() => ({
+      text: { color: colors.textMuted },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    })),
+    // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
+    userMessage: themedStyles(() => ({
+      text: { color: colors.chatForegroundStrong },
+      secondary: null,
+      link: null,
+      inlineCode: null
+    }))
+  }

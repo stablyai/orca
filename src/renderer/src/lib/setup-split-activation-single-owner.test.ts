@@ -1,18 +1,18 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
-import { useAppStore } from '@/store'
+
+import { type AppState, useAppStore } from '@/store'
 import { registerTerminalPresentationIpcBridge } from '@/hooks/ipc-events/terminal-presentation-ipc-bridge'
 import { getDefaultSettings } from '../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
-import { activateAndRevealWorktree } from './worktree-activation'
-import { gateWorktreeAgentActivation } from './worktree-agent-activation-gate'
-import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent.test-fixture'
+import type { TerminalPaneLayoutNode } from '../../../shared/workspace-layout/terminal-tab-types'
+import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
+import { gateWorktreeAgentActivation } from './workspace/activation/worktree-agent-activation-gate'
+import { makeCreatedAgentWorktree as makeWorktree } from './workspace/activation/worktree-activation-created-agent.test-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

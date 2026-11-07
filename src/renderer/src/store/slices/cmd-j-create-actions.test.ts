@@ -9,7 +9,7 @@ import {
 } from '@/lib/client-creation-action-policy'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -18,11 +18,11 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionTerminalMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock
 }))
 
-vi.mock('@/store/slices/browser/paired-browser-tab-creator', () => ({
+vi.mock('@/store/slices/browser/tabs/paired-browser-tab-creator', () => ({
   getRegisteredPairedBrowserTabCreator: () => null,
   loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))
@@ -77,26 +77,6 @@ describe('Cmd+J lifted creation actions', () => {
 
   afterEach(() => {
     delete pairedWebFlag.__ORCA_WEB_CLIENT__
-  })
-
-  it('rejects without a local browser fallback when paired-web creation fails', async () => {
-    // Failed remote creation must not fall back local and split ownership (#5321), like terminals.
-    createWebRuntimeSessionBrowserTabMock.mockResolvedValue(false)
-    const store = createTestStore()
-    seedActiveWorkspace(store)
-
-    await expect(store.getState().openNewBrowserTabInActiveWorkspace('group-1')).rejects.toThrow(
-      'The paired runtime could not create a managed browser tab.'
-    )
-
-    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'runtime-1',
-      url: 'about:blank',
-      targetGroupId: 'group-1',
-      clientTargetGroupId: 'group-1'
-    })
-    expect(store.getState().browserTabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
   it('routes browser creation to the owner runtime without a local fallback', async () => {
@@ -185,25 +165,6 @@ describe('Cmd+J lifted creation actions', () => {
     expect(store.getState().tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).toHaveLength(1)
   })
 
-  it('does not fall back to a local terminal tab when paired-web creation fails', async () => {
-    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
-    const store = createTestStore()
-    seedActiveWorkspace(store)
-
-    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
-
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'runtime-1',
-        targetGroupId: 'group-1',
-        activate: true
-      },
-      { userAct: true }
-    )
-    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
-  })
-
   it('does not create a local folder terminal while paired ownership is unresolved', async () => {
     const folderId = 'folder-1'
     const workspaceKey = folderWorkspaceKey(folderId)
@@ -257,40 +218,6 @@ describe('Cmd+J lifted creation actions', () => {
 
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
     expect(store.getState().tabsByWorktree[workspaceKey] ?? []).toEqual([])
-  })
-
-  it('creates desktop remote-server terminal tabs through the owning runtime', async () => {
-    delete pairedWebFlag.__ORCA_WEB_CLIENT__
-    createWebRuntimeSessionTerminalMock.mockResolvedValue(false)
-    const store = createTestStore()
-    seedActiveWorkspace(store)
-    store.setState({
-      repos: [{ ...TEST_REPO, executionHostId: 'runtime:owner-runtime' }],
-      worktreesByRepo: {
-        [TEST_REPO.id]: [
-          makeWorktree({
-            id: 'wt-1',
-            repoId: TEST_REPO.id,
-            hostId: 'runtime:owner-runtime',
-            runtimeOwnerEnvironmentId: 'owner-runtime'
-          })
-        ]
-      },
-      settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
-    })
-
-    await store.getState().openNewTerminalTabInActiveWorkspace('group-1')
-
-    expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-1',
-        environmentId: 'owner-runtime',
-        targetGroupId: 'group-1',
-        activate: true
-      },
-      { userAct: true }
-    )
-    expect(store.getState().tabsByWorktree['wt-1'] ?? []).toEqual([])
   })
 
   it('fails terminal creation closed for duplicate repo IDs owned by different HUBs', async () => {

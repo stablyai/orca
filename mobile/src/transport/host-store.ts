@@ -1,6 +1,7 @@
-import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
+
 import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
@@ -49,6 +50,9 @@ async function commitDeviceToken(hostId: string, token: string): Promise<void> {
 const tokenCache = new Map<string, string>()
 
 export const loadHosts = async (): Promise<HostProfile[]> => (await loadHostListSnapshot()).profiles
+/** The last host list read this launch, or null before the first; for first-frame titles only. */
+export const peekHosts = (): HostProfile[] | null =>
+  hostListLoads.peekSettledHostList()?.profiles ?? null
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 

@@ -1,31 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AgentSessionProviderHandle } from '../../shared/agent-session-provider-handle'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
   buildAiVaultResumeShellCommand
-} from '../../shared/ai-vault-resume-command'
-import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-resume-startup'
-import { agentForksConversations, agentForksThroughChat } from '../../shared/agent-resume-argv'
-import { isResumableTuiAgent } from '../../shared/agent-session-resume'
-import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
+} from '../../shared/ai-vault/resume/ai-vault-resume-command'
+import { buildAgentResumeStartupPlan } from '../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { isResumableTuiAgent } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentStartupShell } from '../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../shared/agent-session-provider-handle-encoding'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
-import {
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../shared/protocol-version'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { clientOpensStructuredChatFromHistory } from '../runtime/rpc/methods/structured-agent-session-policy'
-import {
-  assertLegacyAiVaultResumeCommandAllowed,
-  projectStructuredAiVaultSessions
-} from './structured-session-ownership'
-import { installOwnership, listResult } from './structured-session-ownership.test-support'
+} from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { assertLegacyAiVaultResumeCommandAllowed } from './structured-session-ownership'
+import { installOwnership } from './structured-session-ownership.test-support'
 
 const UUID = '019fd622-3c4d-7e5f-a061-7c8d9e0f1a2b'
 const OPENCODE_ID = 'ses_2f9aB3cD4eF5gH6iJ7kL8mN9oP'
@@ -76,62 +65,7 @@ const CONVERSATIONS: OwnedConversation[] = [
   }
 ]
 
-const OLD_MOBILE: RuntimeCapability[] = [
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-]
-const NO_STRUCTURED_SESSIONS: RuntimeCapability[] = []
-const CLIENTS = {
-  'a client that renders only Claude and Codex chats (current mobile)': OLD_MOBILE,
-  'a desktop paired to this host': [...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES],
-  'a client that reads no structured sessions': NO_STRUCTURED_SESSIONS
-}
-
-function projectFor(conversation: OwnedConversation, clientCapabilities: RuntimeCapability[]) {
-  const result = listResult()
-  result.sessions = [
-    { ...result.sessions[0]!, agent: conversation.rowAgent, ...conversation },
-    { ...result.sessions[0]!, sessionId: 'unowned' }
-  ]
-  return projectStructuredAiVaultSessions(result, (agent) =>
-    clientOpensStructuredChatFromHistory({ clientKind: 'mobile', clientCapabilities }, agent)
-  ).sessions.map((row) => row.sessionId)
-}
-
 afterEach(() => setStructuredAgentSessionHost(null))
-
-describe('Session History rows a paired client cannot open as a chat', () => {
-  it.each(CONVERSATIONS)(
-    'shows the $rowAgent row only to a client that renders its chat',
-    (conversation) => {
-      installOwnership({ handle: conversation.handle })
-      const [oldMobile, desktop, legacy] = Object.values(CLIENTS)
-      expect(projectFor(conversation, oldMobile!)).toEqual(['unowned'])
-      expect(projectFor(conversation, desktop!)).toEqual([conversation.sessionId, 'unowned'])
-      expect(projectFor(conversation, legacy!)).toEqual(['unowned'])
-    }
-  )
-
-  it.each(Object.entries(CLIENTS))('keeps the Claude and Codex rule for %s', (_client, caps) => {
-    for (const provider of ['claude', 'codex'] as const) {
-      installOwnership({ provider })
-      const result = listResult()
-      result.sessions = result.sessions.map((row) => ({
-        ...row,
-        agent: provider
-      }))
-      const owned = projectStructuredAiVaultSessions(result, (agent) =>
-        clientOpensStructuredChatFromHistory(
-          { clientKind: 'mobile', clientCapabilities: caps },
-          agent
-        )
-      )
-      expect(owned.sessions.map((row) => row.structuredSession?.sessionId)).toEqual(
-        caps.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) ? ['session-alpha'] : []
-      )
-    }
-  })
-})
 
 // Shared desktop/mobile resume builders must produce commands the ownership guard recognizes.
 describe('resume commands Orca builds for an owned row', () => {
@@ -214,22 +148,6 @@ describe('resume commands Orca builds for an owned row', () => {
         assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
         command
       ).rejects.toThrow('agent_session_conflict')
-    }
-  })
-
-  it.each(
-    everyAgent.filter(
-      ({ rowAgent }) => agentForksConversations(rowAgent) && !agentForksThroughChat(rowAgent)
-    )
-  )('allows each copy it opens for the $rowAgent row', async (conversation) => {
-    installOwnership({ handle: conversation.handle })
-    const commands = builtCommands(conversation, true)
-    expect(commands.length).toBe(7)
-    for (const command of commands) {
-      await expect(
-        assertLegacyAiVaultResumeCommandAllowed(command, async () => undefined),
-        command
-      ).resolves.toBeUndefined()
     }
   })
 })

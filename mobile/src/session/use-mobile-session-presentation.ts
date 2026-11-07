@@ -1,16 +1,22 @@
+import { useMemo } from 'react'
 import {
   classifyConnection,
   isConnectionOutage,
   verdictDisplayLabel
 } from '../transport/connection-health'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
-import { hostOs } from '../platform/host-os'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 
+// The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
+const TOAST_RISE_PX = 8
+
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
+  const t = useMobileTranslation()
   const {
     created,
     worktreeId,
@@ -25,12 +31,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creating,
     creatingBrowser,
     creatingMarkdown,
-    keyboardHeight,
-    terminalKeyboardMetrics,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameRef,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
@@ -65,45 +68,54 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
+  // A cold session with nothing to draw says it is offline instead of showing an empty frame.
+  const showOfflineState = presentedConnState !== 'connected' && visibleTabs.length === 0
   const terminalSummary =
     presentedConnState === 'connected'
       ? showLoadingState
-        ? 'Loading tabs'
+        ? t('session.presentation.loadingTabs', 'Loading tabs')
         : visibleTabs.length === 1
-          ? '1 tab'
-          : `${visibleTabs.length} tabs`
+          ? t('session.presentation.oneTab', '1 tab')
+          : t('session.presentation.tabCount', '{{tabCount}} tabs', {
+              tabCount: visibleTabs.length
+            })
       : showConnectionRetry
-        ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
+        ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
+            status: verdictDisplayLabel(connectionVerdict)
+          })
         : connectionEscalated
           ? verdictDisplayLabel(connectionVerdict)
           : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
 
-  // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - insets.bottom)
-        : keyboardHeight
-      : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
-  })
-  const toastAnimatedStyle = {
-    opacity: toastOpacityRef.current,
-    transform: [{ translateY: -keyboardLift }]
-  }
+  const [sideRail, padAvailable] = [useShellSideRail(), useDirectionPadAvailable()]
+  const dockShown =
+    !scope.showNativeChat &&
+    !scope.activeMarkdownTab &&
+    !scope.activeFileTab &&
+    !scope.activeBrowserTab
+  const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
+  const reducedMotion = useReducedMotionEnabled()
+  const toastRise = useMemo(
+    () =>
+      reducedMotion === false
+        ? toastOpacityRef.current.interpolate({
+            inputRange: [0, 1],
+            outputRange: [TOAST_RISE_PX, 0]
+          })
+        : 0,
+    [reducedMotion, toastOpacityRef]
+  )
   return {
     presentedConnState,
     showLoadingState,
     showEmptyState,
+    showOfflineState,
     connectionVerdict,
     showConnectionRetry,
+    connectionEscalated,
     terminalSummary,
-    keyboardLift,
-    activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    dockBottomInset,
+    toastRise
   }
 }
 

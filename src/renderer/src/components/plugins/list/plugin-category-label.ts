@@ -19,10 +19,28 @@ function kindLabel(kind: PluginFilterKind): string {
   }
 }
 
+// Why: catalog categories that stand alone as chips but have a known name.
+function standaloneCategoryLabel(category: string): string | null {
+  switch (category) {
+    case 'games':
+      return translate('auto.components.settings.PluginFilterPopover.games', 'Games')
+    case 'agents':
+      return translate('auto.components.settings.PluginFilterPopover.agents', 'Agents')
+    case 'integrations':
+      return translate('auto.components.settings.PluginFilterPopover.integrations', 'Integrations')
+    default:
+      return null
+  }
+}
+
 // Why: unknown catalog categories are slugs ("music-tools"); show them as words.
 export function pluginCategoryLabel(category: string): string {
   if (isPluginFilterKind(category)) {
     return kindLabel(category)
+  }
+  const standalone = standaloneCategoryLabel(category)
+  if (standalone) {
+    return standalone
   }
   const kinds = pluginFilterKinds({ categories: [category] })
   const [kind] = kinds

@@ -8,6 +8,8 @@ import type { TerminalRecord } from '../../../session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as MobileNativeChatReadability from '../../../session/native-chat/transcript/use-mobile-native-chat-readability'
+import type * as MobileNativeChatStopModule from '../../../session/native-chat/use-mobile-native-chat-stop'
 
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
@@ -100,11 +102,6 @@ export function sessionScreenReadMountAdapters(
             },
             terminalsRef,
             sessionTabsRef,
-            pruneTerminalHandlesFromLiveInput: (handles) =>
-              effect('prune-live-input', [...handles]),
-            defaultTerminalHandlesToLiveInput: (handles) =>
-              effect('default-live-input', [...handles]),
-            clearTerminalLiveInputDefault: (handle) => effect('clear-live-input', { handle }),
             setTerminalKeyboardMetrics: () => {},
             setTerminalModes: () => {},
             ptyModesRef: { current: new Map() },
@@ -124,8 +121,7 @@ export function sessionScreenReadMountAdapters(
             activeHandleRef: { current: HANDLE },
             showNativeChatRef: { current: false },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            nativeChatStream: { notifyListedHandles: () => {} },
-            bufferedTerminalDraftState: { pruneDrafts: () => {} }
+            nativeChatStream: { notifyListedHandles: () => {} }
           })
         )
       })
@@ -140,9 +136,9 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.native-chat-readability': ({ client }) => {
-      const useReadability = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-readability')
-      >('mobile/src/session/use-mobile-native-chat-readability.ts').useMobileNativeChatReadability
+      const useReadability = modules.load<typeof MobileNativeChatReadability>(
+        'mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts'
+      ).useMobileNativeChatReadability
       let readable = false
       let worktreeId = `repo-1::/w`
       const hook = hookMount(() => {
@@ -164,8 +160,8 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.native-chat-stop': ({ client, effect }) => {
-      const useStop = modules.load<typeof import('../../../session/use-mobile-native-chat-stop')>(
-        'mobile/src/session/use-mobile-native-chat-stop.ts'
+      const useStop = modules.load<typeof MobileNativeChatStopModule>(
+        'mobile/src/session/native-chat/use-mobile-native-chat-stop.ts'
       ).useMobileNativeChatStop
       const errors: string[] = []
       let stop: () => void

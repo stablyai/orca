@@ -1,5 +1,5 @@
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { batchAgentPaneKeysForTabs } from './agent-status-primitives'
 import { hostSessionTabIdsByLocalTabForWorktree } from './tracking-mappings'

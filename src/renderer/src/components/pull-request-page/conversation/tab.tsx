@@ -1,9 +1,12 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
-import { useRepoAssignees } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
@@ -13,8 +16,8 @@ import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   type PRCommentAudienceFilter
-} from '../../../../../shared/pr-comment-audience'
-import { groupPRComments } from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-audience'
+import { groupPRComments } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { runWorkItemBodyUpdate } from '@/components/github/github-work-item-edit-mutations'
 import {
@@ -258,6 +261,7 @@ export function ConversationTab({
           sourceContext={sourceContext}
           projectOrigin={projectOrigin}
           onReviewersRequested={onReviewersRequested}
+          onMutated={onMutated}
         />
         <aside className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
           <ChecksTab
@@ -284,6 +288,24 @@ export function ConversationTab({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationDescription
+          imageUploadAddress={() => {
+            const slug = item.type === 'pr' ? (prRepo ?? bodySlug) : markdownGitHubRepo
+            return (item.type === 'pr' || projectOrigin) && slug
+              ? {
+                  runtime:
+                    sourceContext?.provider === 'github'
+                      ? taskSourceRuntimeTarget(sourceContext)
+                      : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  target: { kind: 'slug', ...slug, wakeWslDistro: true }
+                }
+              : githubCommentImageUploadAddress({
+                  repoPath: repoPath ?? '',
+                  repoId: item.repoId,
+                  sourceContext,
+                  type: item.type,
+                  prRepo: bodySlug
+                })
+          }}
           authorLabel={authorLabel}
           updatedAt={item.updatedAt}
           canEditBody={canEditBody}
@@ -348,6 +370,7 @@ export function ConversationTab({
             itemType={item.type}
             prRepo={prRepo}
             mentionOptions={mentionOptions}
+            mentionError={repoAssignees.error}
             onCommentAdded={onCommentAdded}
           />
         )}

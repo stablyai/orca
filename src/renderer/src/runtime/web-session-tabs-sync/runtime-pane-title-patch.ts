@@ -5,10 +5,10 @@ import {
   resolveRuntimePaneTitleLeafIdFromSparseSlots
 } from '../../../../shared/runtime-pane-title-leaf-id'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
-import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
-import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
-import { findRegisteredTerminalTab } from '../mounted-terminal-tab-registry'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
+import { findRegisteredTerminalTab } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { clientAgentStatusFencesHost } from './agent-status-primitives'
 import { writableWebSessionTabsRecord } from './state-equality-core'
 import type {

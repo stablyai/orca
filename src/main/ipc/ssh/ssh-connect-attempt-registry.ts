@@ -1,6 +1,7 @@
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
+  getSshProviderAuthority,
   isCurrentSshProviderAuthority,
   rotateSshProviderAuthority
 } from '../../ssh/ssh-provider-authority'
@@ -31,6 +32,39 @@ export function invalidateConnectAttempt(targetId: string): void {
 
 export function isCurrentConnectAttempt(targetId: string, authority: DirectSshAuthority): boolean {
   return authority.targetId === targetId && isCurrentSshProviderAuthority(authority)
+}
+
+// Connects admitted under the authority an unlink fenced, valid only while its successor is current.
+const carriedAdmissions = new Map<string, { from: DirectSshAuthority; to: DirectSshAuthority }>()
+
+/**
+ * Fences the connect already running, unlike a Disconnect, which also cancels Connects queued
+ * behind it: a Connect the user asks for while a server is unlinked must still run afterwards.
+ */
+export function fenceRunningConnectAttempt(targetId: string): void {
+  const from = getSshProviderAuthority(targetId)
+  invalidateConnectAttempt(targetId)
+  carriedAdmissions.set(targetId, { from, to: getSshProviderAuthority(targetId) })
+}
+
+/** The authority a queued connect may proceed under, or null when a disconnect or reset fenced it. */
+export function admittedConnectAuthority(
+  targetId: string,
+  admission: DirectSshAuthority
+): DirectSshAuthority | null {
+  if (isCurrentConnectAttempt(targetId, admission)) {
+    return admission
+  }
+  const carried = carriedAdmissions.get(targetId)
+  if (
+    carried &&
+    carried.from.providerEpoch === admission.providerEpoch &&
+    carried.from.connectionGeneration === admission.connectionGeneration &&
+    isCurrentConnectAttempt(targetId, carried.to)
+  ) {
+    return carried.to
+  }
+  return null
 }
 
 // Test probes must not flash worktree cards through connected/disconnected broadcasts.

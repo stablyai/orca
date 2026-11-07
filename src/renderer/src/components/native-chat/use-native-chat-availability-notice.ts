@@ -1,22 +1,23 @@
-import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
+import { nativeChatSignInLabel, type NativeChatSignIn } from './native-chat-sign-in'
+import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
-import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
-import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
+import type { AgentSessionUnavailable } from '../../../../shared/agent-session/agent-session-availability'
+import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
-} from '../../../../shared/agent-session-journal-types'
-import type { AgentType } from '../../../../shared/agent-status-types'
-import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { inSendOrder } from '../../../../shared/native-chat/native-chat-send-order'
-import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session-refusal-reason-words'
-import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
-import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
+import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
+import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session/failures/agent-session-write-failure'
+import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
   cliMissingSentence,
   notSignedInSentence
-} from '../../../../shared/agent-session-availability-sentences'
+} from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
@@ -59,6 +60,7 @@ function shownRejectionReason(
 
 /** Advisory host verdicts never block Send; dismiss per verdict and omit reasons already explained by a failed start or newest send. */
 export function useNativeChatAvailabilityNotice(input: {
+  signIn?: NativeChatSignIn | null
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType
   /** The WSL distro the chat's host runs in, to say where the agent is missing. */
@@ -104,6 +106,15 @@ export function useNativeChatAvailabilityNotice(input: {
   const agentName = structuredAgentLabel(input.agent)
   return {
     key: 'availability',
+    action:
+      unavailable.reason === 'notSignedIn' && input.signIn
+        ? {
+            label: nativeChatSignInLabel(input.signIn),
+            primary: true,
+            onClick: input.signIn.signIn,
+            disabled: input.signIn.signingIn
+          }
+        : undefined,
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'
@@ -119,7 +130,11 @@ export function useNativeChatAvailabilityNotice(input: {
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),
-    content: nativeChatAntigravitySignInContent(unavailable.reason, input.agent),
+    content: nativeChatAntigravitySignInContent(
+      unavailable.reason,
+      input.agent,
+      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined
+    ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

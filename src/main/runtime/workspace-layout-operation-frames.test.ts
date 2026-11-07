@@ -16,7 +16,7 @@ import {
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
 } from '../persistence/terminal-topology/terminal-topology-profile-fixture'
-import { applyWindowLayoutCommand } from './runtime-layout-apply'
+import { applyWindowLayoutCommand } from './terminal/layout/runtime-layout-apply'
 import {
   layoutFrameModelErrors,
   logLayoutFrameModelErrors
@@ -26,7 +26,10 @@ import {
   observeWorkspaceLayoutFrames,
   type LayoutFrameObservation
 } from './workspace-layout-frame-observer'
-import { WorkspaceLayoutStream, type LayoutOperationCommit } from './workspace-layout-stream'
+import {
+  WorkspaceLayoutStream,
+  type LayoutOperationCommit
+} from './terminal/surface/workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({

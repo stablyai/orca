@@ -117,7 +117,14 @@ export type SanitizedPluginIcon = {
 /** Parses an SVG with the browser's XML parser and keeps only allowlisted elements and
  *  un-namespaced attributes; returns null when the document is not a single SVG. */
 export function sanitizePluginIconSvg(source: string): SanitizedPluginIcon | null {
-  const document = new DOMParser().parseFromString(source, 'image/svg+xml')
+  let document = new DOMParser().parseFromString(source, 'image/svg+xml')
+  // Why: inline-style SVGs often omit xmlns, which HTML tolerates but the XML parser does not.
+  if (document.documentElement.namespaceURI === null) {
+    document = new DOMParser().parseFromString(
+      source.replace(/<svg(?=[\s>/])/, `<svg xmlns="${SVG_NS}"`),
+      'image/svg+xml'
+    )
+  }
   const root = document.documentElement
   if (
     document.getElementsByTagName('parsererror').length > 0 ||

@@ -35,3 +35,15 @@ export type PluginAutoUpdateState = {
   /** Held back because the update asks for more access or moved repository. */
   needsReview: Record<string, string>
 }
+
+/** An automatic update left uninstalled for the user's review: it asks for more access, or its
+ *  source repository moved. */
+export type PluginUpdateHold = { version: string; reason: 'access' | 'repository' }
+
+/** A held update the user has not been told about yet. `publisher` is the catalog-derived owner
+ *  in the plugin key, never the manifest's own claim. */
+export type PluginUpdateReviewNotice = PluginUpdateHold & {
+  pluginKey: string
+  name: string
+  publisher: string
+}

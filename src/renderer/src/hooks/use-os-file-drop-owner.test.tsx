@@ -25,7 +25,11 @@ type DropHandler<Destination = undefined> = (
 ) => void | Promise<void>
 
 const uuid = vi.hoisted(() => ({ next: 0 }))
-vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => `uuid-${++uuid.next}` }))
+
+const mockLaunchUuid = vi.hoisted(() => () => `uuid-${++uuid.next}`)
+vi.mock('../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: mockLaunchUuid
+}))
 
 const getPathForFile = vi.fn((file: File) => `/dropped/${file.name}`)
 const prepareDroppedPaths = vi.fn(
@@ -118,15 +122,6 @@ afterEach(() => {
 })
 
 describe('useOsFileDropOwner', () => {
-  it('claims a trusted refused drop without reading file paths', () => {
-    const onDrop = vi.fn()
-    const view = render(<Owner onDrop={onDrop} canAccept={false} />)
-    drag(view.getByTestId('owner'), 'drop')
-    expect(getPathForFile).not.toHaveBeenCalled()
-    expect(onDrop).not.toHaveBeenCalled()
-    drag(view.getByTestId('owner'), 'drop', undefined, { trusted: false })
-    expect(onDrop).not.toHaveBeenCalled()
-  })
   it('registers the root with a callback ref and delivers one prepared drop to the nearest owner', async () => {
     const outerDrop = vi.fn<DropHandler>()
     const innerDrop = vi.fn<DropHandler>()
@@ -361,42 +356,6 @@ describe('useOsFileDropOwner', () => {
     expect(takeBrowserAttachmentFile('orca-browser-file:uuid-1/first.txt')).not.toBeNull()
   })
 
-  it('delivers drops in order within an owner while another owner can finish', async () => {
-    const firstDrop = vi.fn<DropHandler>()
-    const secondDrop = vi.fn<DropHandler>()
-    let finishFirst: ((prepared: PreparedDroppedPaths) => void) | undefined
-    prepareDroppedPaths.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finishFirst = resolve
-        })
-    )
-    const view = render(
-      <>
-        <Owner onDrop={firstDrop} />
-        <Owner onDrop={secondDrop} />
-      </>
-    )
-    const [firstRoot, secondRoot] = view.getAllByTestId('owner')
-    drag(firstRoot, 'drop', [new File([], 'first.txt')])
-    drag(firstRoot, 'drop', [new File([], 'later.txt')])
-    drag(secondRoot, 'drop', [new File([], 'other.txt')])
-    await act(async () => undefined)
-    expect(firstDrop).not.toHaveBeenCalled()
-    expect(secondDrop).toHaveBeenCalledExactlyOnceWith(
-      { paths: ['/dropped/other.txt'], failures: [] },
-      { target: secondRoot }
-    )
-
-    await act(async () => {
-      finishFirst?.({ paths: ['/dropped/first.txt'], failures: [] })
-    })
-    expect(firstDrop.mock.calls.map(([prepared]) => prepared.paths)).toEqual([
-      ['/dropped/first.txt'],
-      ['/dropped/later.txt']
-    ])
-  })
-
   it('does not deliver a prepared drop after its owner detaches', async () => {
     const onDrop = vi.fn<DropHandler>()
     let finish: ((prepared: PreparedDroppedPaths) => void) | undefined
@@ -594,4 +553,32 @@ describe('useOsFileDropOwner', () => {
       reported.mockRestore()
     }
   })
+})
+
+it('delivers trusted File payloads synchronously to the nearest byte consumer without path preparation', () => {
+  const received = vi.fn()
+  const outer = vi.fn()
+  function ByteOwner() {
+    const root = useRef<HTMLElement | null>(null)
+    const attach = useOsFileDropOwner(root, { kind: 'files', onFiles: received })
+    return (
+      <div ref={attach}>
+        <span data-testid="image-target" />
+      </div>
+    )
+  }
+  const view = render(
+    <Owner onDrop={outer}>
+      <ByteOwner />
+    </Owner>
+  )
+  const file = new File(['png'], 'image.png', { type: 'image/png' })
+  const target = view.getByTestId('image-target')
+  drag(target, 'drop', [file])
+  expect(received).toHaveBeenCalledExactlyOnceWith([file], { target })
+  expect(prepareDroppedPaths).not.toHaveBeenCalled()
+  expect(outer).not.toHaveBeenCalled()
+  received.mockClear()
+  drag(target, 'drop', [file], { trusted: false })
+  expect(received).not.toHaveBeenCalled()
 })

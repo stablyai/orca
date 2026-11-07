@@ -6,10 +6,14 @@ import {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
@@ -194,7 +198,8 @@ describe('orchestration migration behavior', () => {
         },
         runtime,
         db,
-        runId: run.id,
+        bindRunId: () => run.id,
+        taskDeps: undefined,
         task,
         orchestrationMutation: {
           callerFingerprint: 'caller',
@@ -241,7 +246,8 @@ describe('orchestration migration behavior', () => {
         },
         runtime,
         db,
-        runId: run.id,
+        bindRunId: () => run.id,
+        taskDeps: undefined,
         task,
         orchestrationMutation: {
           callerFingerprint: 'caller',
@@ -316,7 +322,8 @@ describe('orchestration migration behavior', () => {
       },
       runtime,
       db,
-      runId: run.id,
+      bindRunId: () => run.id,
+      taskDeps: undefined,
       task,
       orchestrationMutation: {
         callerFingerprint: 'caller',

@@ -1,3 +1,7 @@
+import {
+  getCachedWindowsTerminalCapabilities,
+  hasCachedWindowsTerminalCapabilities
+} from './windows-terminal-capabilities'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 
 export type LocalPreflightContext =
@@ -98,5 +102,23 @@ function storeCacheEntry<T>(
     if (!oldest.done) {
       cache.delete(oldest.value)
     }
+  }
+}
+
+export type LocalProjectRuntimeWslContext = {
+  wslAvailable?: boolean
+  availableWslDistros?: readonly string[] | null
+}
+
+export function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
+  // Why: preflight selectors are synchronous. Reuse an existing capability
+  // answer when available without spawning WSL probes from store reads.
+  if (!hasCachedWindowsTerminalCapabilities()) {
+    return {}
+  }
+  const capabilities = getCachedWindowsTerminalCapabilities()
+  return {
+    wslAvailable: capabilities.wslAvailable,
+    availableWslDistros: capabilities.wslDistros
   }
 }

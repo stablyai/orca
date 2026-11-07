@@ -6,14 +6,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   checkBoundMailbox,
   createBoundRun,
-  createDatabase,
   createRuntime,
   driveToLiveIdle,
   insertDirectRunMessage,
   pointerCount,
   temporaryDirectories
 } from './orchestration-mailbox-notification-test-harness'
-import { OrchestrationDb } from './orchestration/db'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
 import { MAILBOX_POINTER_ENTER_ATTEMPTED } from './orchestration/db/messages/mailbox-pointer-enter-state'
 
 describe('orchestration mailbox crash recovery', () => {
@@ -68,43 +71,5 @@ describe('orchestration mailbox crash recovery', () => {
     expect(restarted.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     restartedDb.close()
-  })
-  it('rescans mailboxes a crash left mid-pointer, including dispatch mailboxes', async () => {
-    vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-restart-scan-')
-    const run = createBoundRun(db, 'restart scan')
-    const parked = db.insertMessage({
-      from: 'term_worker',
-      to: `run:${run.id}`,
-      subject: 'parked mid-pointer',
-      runId: run.id,
-      deliveryContract: 'current_delivery'
-    })
-    // The crash left the reservation durable, which hides the row from the undelivered scan.
-    expect(
-      db.stageMailboxPointerEnter([parked.id], { ptyId: 'pty-gone', processIncarnation: 'gone:1' })
-    ).toBe(true)
-    db.insertMessage({
-      from: 'term_coordinator',
-      to: 'dispatch:dispatch_restart_scan',
-      subject: 'dispatch mail',
-      runId: run.id,
-      deliveryContract: 'current_delivery'
-    })
-
-    const { runtime } = createRuntime(db)
-    const repointed: string[] = []
-    vi.spyOn(
-      runtime as unknown as { repointPendingMessagesForHandle: (handle: string) => void },
-      'repointPendingMessagesForHandle'
-    ).mockImplementation((handle: string) => {
-      repointed.push(handle)
-    })
-    runtime.setOrchestrationDb(db)
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(repointed).toContain(`run:${run.id}`)
-    expect(repointed).toContain('dispatch:dispatch_restart_scan')
-    db.close()
   })
 })

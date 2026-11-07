@@ -171,6 +171,18 @@ describe('a verb the shell refuses', () => {
     expect(error.message).not.toContain('image')
   })
 
+  it('preserves image permission refusal after extracting the checked reason list', async () => {
+    const error = await rejectionFrom(() =>
+      Promise.reject(
+        Object.assign(new Error('device-private detail'), {
+          code: 'native_image_permission_denied'
+        })
+      )
+    )
+    expect(error.reason).toBe('native_image_permission_denied')
+    expect(error.message).not.toContain('device-private detail')
+  })
+
   it('separates a device failure from an out-of-scope one, which is the point of the codes', async () => {
     const error = await rejectionFrom(() => Promise.reject(new Error('the pasteboard is gone')))
     expect(error.reason).toBe('native_verb_failed')

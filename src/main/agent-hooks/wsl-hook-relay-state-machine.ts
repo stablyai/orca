@@ -3,7 +3,7 @@ import type { WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import type { WslRelayDistroState, WslRelayRestartSetup } from './wsl-hook-relay-state'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { FAILURE_COOLDOWN_MAX_MS } from './wsl-hook-relay-deps'
-import { noteWslDistroMayHaveStopped } from '../wsl/wsl-unc-access-gate'
+import { noteWslDistroMayHaveStopped } from '../wsl/discovery/wsl-background-distro-gate'
 
 type RelayFailureState = {
   distro: string

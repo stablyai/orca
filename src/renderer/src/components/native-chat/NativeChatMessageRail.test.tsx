@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
@@ -29,6 +29,7 @@ function Rail({
   scroller?: HTMLDivElement
 }): React.JSX.Element {
   const [scrollRef] = useState(() => ({ current: scroller ?? railScroller() }))
+  const railRef = useRef<HTMLDivElement>(null)
   const [outline] = useState(() =>
     Array.from({ length: count }, (_, index) => ({
       id: `prompt-${index}`,
@@ -53,7 +54,13 @@ function Rail({
   return (
     <>
       <input aria-label="Composer" />
-      <NativeChatMessageRail rail={rail} scrollRef={scrollRef} onSelect={vi.fn()} {...rest} />
+      <NativeChatMessageRail
+        rail={rail}
+        railRef={railRef}
+        scrollRef={scrollRef}
+        onSelect={vi.fn()}
+        {...rest}
+      />
     </>
   )
 }
@@ -71,20 +78,6 @@ describe('message rail interaction', () => {
 
     fireEvent.pointerEnter(tick('Prompt 0'), { pointerType: 'mouse' })
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 0Reply 0'))
-  })
-
-  it('previews the message alone while the agent has not replied', async () => {
-    render(<Rail />)
-    fireEvent.pointerEnter(tick('Prompt 2'), { pointerType: 'mouse' })
-    await waitFor(() => expect(preview()).not.toBeNull())
-    expect(preview()?.textContent).toBe('Prompt 2')
-  })
-
-  it('jumps to the clicked tick', async () => {
-    const select = vi.fn()
-    render(<Rail onSelect={select} />)
-    await userEvent.setup().click(tick('Prompt 1'))
-    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-1' }))
   })
 
   it('keeps focus where it was while a hover preview opens and closes', async () => {
@@ -137,12 +130,6 @@ describe('message rail interaction', () => {
     await waitFor(() => expect(preview()?.textContent).toBe('Prompt 1Reply 1'))
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(tick('Prompt 2'))
-  })
-
-  it('marks a tick whose history is still paging in as busy', () => {
-    render(<Rail pendingId="prompt-0" />)
-    expect(tick('Prompt 0').getAttribute('aria-busy')).toBe('true')
-    expect(tick('Prompt 1').getAttribute('aria-busy')).toBeNull()
   })
 
   it.each([

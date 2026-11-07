@@ -46,11 +46,13 @@ function jpegHeader(width = 10, height = 10): Buffer {
 }
 
 function image(png = Buffer.from([4, 3, 2, 1])) {
-  return {
+  const decoded = {
     getSize: () => ({ height: 10, width: 10 }),
     isEmpty: () => false,
+    resize: () => decoded,
     toPNG: () => png
   }
+  return decoded
 }
 
 function fileHandle(

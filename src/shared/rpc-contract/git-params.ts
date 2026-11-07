@@ -1,7 +1,9 @@
-import { normalizeSourceControlAiActionDefaults } from '../source-control-ai-actions'
+import { isGitHistoryRefName } from '../git/history/git-history-revisions'
+import { normalizeSourceControlAiActionDefaults } from '../source-control/ai/recipes/source-control-ai-actions'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
 import { OptionalTuiAgent } from './worktree-params'
+import { CONFLICT_RESOLUTIONS } from '../source-control/listing/source-control-entry-actions'
 
 export const WorktreeSelector = z.object({
   worktree: z
@@ -46,9 +48,14 @@ export const GitFilePath = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing file path'))
 })
 
+export const GitResolveConflict = GitFilePath.extend({
+  resolution: z.enum(CONFLICT_RESOLUTIONS)
+})
+
 export const GitDiff = GitFilePath.extend({
   staged: z.boolean(),
-  compareAgainstHead: z.boolean().optional()
+  compareAgainstHead: z.boolean().optional(),
+  oldPath: z.string().optional()
 })
 
 export const GitBranchCompare = WorktreeSelector.extend({
@@ -75,9 +82,20 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitHistoryRefName = z
+  .string()
+  .refine(isGitHistoryRefName, 'Expected full branch or tag ref names')
+export const GitRefs = WorktreeSelector.extend({ query: z.string().max(1000).optional() })
+
 export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
+  baseRef: z.string().nullable().optional(),
+  branchOnly: z.boolean().optional(),
+  refs: z
+    .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+    .optional(),
+  historyToken: z.string().max(100).optional(),
+  skip: z.number().int().min(0).optional()
 })
 
 export const GitBranchDiff = GitFilePath.extend({

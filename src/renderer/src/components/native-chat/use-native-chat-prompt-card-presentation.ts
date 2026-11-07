@@ -5,12 +5,12 @@ import {
   nativeChatPromptDismissalMatches,
   nativeChatPromptOccurrenceKey,
   nativeChatPromptWaitStartedAt
-} from '../../../../shared/native-chat-prompt-dismiss-key'
+} from '../../../../shared/native-chat/input/native-chat-prompt-dismiss-key'
 import {
   nativeChatPromptDismissals as dismissals,
   type NativeChatPromptDismissal
 } from './native-chat-prompt-dismissals'
-import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
+import type { InteractivePromptCard } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
 
 export type NativeChatPromptCardPresentation = {
   /** The card that owns the input region now; null leaves it to the composer. */
@@ -31,7 +31,8 @@ export function useNativeChatPromptCardPresentation({
   targetPtyId = null,
   card,
   canSend,
-  transcriptSettled = true
+  transcriptSettled = true,
+  dismissAsync
 }: {
   paneKey: string
   targetPtyId?: string | null
@@ -40,6 +41,7 @@ export function useNativeChatPromptCardPresentation({
   canSend: boolean
   /** While the transcript loads, an absent transcript card is unknown, not cleared. */
   transcriptSettled?: boolean
+  dismissAsync?: () => void
 }): NativeChatPromptCardPresentation {
   const startedAt = useAppStore((s) =>
     nativeChatPromptWaitStartedAt(card, s.agentStatusByPaneKey[paneKey])
@@ -57,7 +59,10 @@ export function useNativeChatPromptCardPresentation({
     }
   }, [occurrence])
   const dismissal = useSyncExternalStore(dismissals.subscribe, () => dismissals.read(paneKey))
-  const matches = nativeChatPromptDismissalMatches(dismissal, content, startedAt)
+  const isAsync = card?.kind === 'question' && card.prompt.replyAsMessage === true
+  const matches =
+    (!isAsync || dismissal?.state === 'collapsed') &&
+    nativeChatPromptDismissalMatches(dismissal, content, startedAt)
   // Retire cleared/changed dismissals so later identical prompts can appear.
   useLayoutEffect(() => {
     if (dismissal !== undefined && !matches && (content !== null || transcriptSettled)) {
@@ -81,7 +86,13 @@ export function useNativeChatPromptCardPresentation({
     },
     [occurrence, canSend, content, startedAt, paneKey]
   )
-  const dismiss = useCallback(() => record('answered'), [record])
+  const dismiss = useCallback(() => {
+    if (isAsync && dismissAsync) {
+      dismissAsync()
+    } else {
+      record('answered')
+    }
+  }, [isAsync, dismissAsync, record])
   const collapse = useCallback(() => record('collapsed'), [record])
   const expand = useCallback(() => dismissals.forget(paneKey), [paneKey])
   const shown = card !== null && canSend

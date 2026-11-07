@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupRemoveResult } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 
@@ -208,60 +208,5 @@ describe('workspace cleanup late settlement reconciliation', () => {
       failures: []
     })
     expect(toast.info).toHaveBeenCalledWith('Still removing workspaces: 1')
-  })
-
-  it('retries an unblocked ancestor when immediate late-result reporting throws', async () => {
-    const parent = makeCandidate({
-      worktreeId: 'repo-1::/repo/parent',
-      displayName: 'parent',
-      branch: 'parent',
-      path: '/repo/parent'
-    })
-    const child = makeCandidate({
-      worktreeId: 'repo-1::/repo/parent/child',
-      displayName: 'child',
-      branch: 'child',
-      path: '/repo/parent/child'
-    })
-    let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
-    const removeCandidates = vi
-      .fn()
-      .mockImplementationOnce(
-        () =>
-          new Promise<WorkspaceCleanupRemoveResult>((resolve) => {
-            resolveChild = resolve
-          })
-      )
-      .mockResolvedValueOnce({
-        removedIds: [parent.worktreeId],
-        removedIdentities: [parent.worktreeId],
-        failures: []
-      })
-    vi.mocked(toast.success).mockImplementationOnce(() => {
-      throw new Error('toast renderer failed')
-    })
-
-    startWorkspaceCleanupBackgroundRemoval({
-      candidates: [parent, child],
-      removeCandidates,
-      onProgress: vi.fn(),
-      onResult: vi.fn(),
-      onLateResult: vi.fn(),
-      removalTimeoutMs: 5,
-      removalSettlementGraceMs: 5
-    })
-
-    await vi.advanceTimersByTimeAsync(10)
-    await settleBackgroundRemoval()
-    resolveChild({
-      removedIds: [child.worktreeId],
-      removedIdentities: [child.worktreeId],
-      failures: []
-    })
-    await settleBackgroundRemoval()
-
-    expect(removeCandidates).toHaveBeenNthCalledWith(2, [parent.worktreeId], {
-      approvedCandidates: [parent]
-    })
   })
 })

@@ -9,10 +9,10 @@ import {
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
-import type { Store } from '../persistence'
-import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/filesystem-auth'
-import { resolveDesktopAuthorizedPath } from '../ipc/local-file-access-resolution'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import type { Store } from '../persistence/loading-store/store'
+import { PATH_ACCESS_DENIED_MESSAGE } from '../ipc/filesystem/access/filesystem-auth'
+import { resolveDesktopAuthorizedPath } from '../ipc/filesystem/access/local-file-access-resolution'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 import { isTrustedMainRendererSender } from '../ipc/main-renderer-sender-trust'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
@@ -46,6 +46,7 @@ import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
+import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -54,7 +55,7 @@ import {
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 import { restoreNativeChatPastes } from './native-chat-paste-files'
 import { savePastedTextAsFile, type SavePastedTextAsFileArgs } from './native-chat-pasted-text-file'
-import { agentSessionPastedImageName } from '../../shared/agent-session-attachments'
+import { agentSessionPastedImageName } from '../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
 
 let trustedClipboardRendererWebContentsId: number | null = null
@@ -173,20 +174,16 @@ export function registerClipboardHandlers(
         return null
       }
       const image = readClipboardNativeImage()
-      if (image.isEmpty()) {
-        if (!source.windowsFileFormats) {
-          return null
-        }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+      let png: Buffer | null = null
+      if (!image.isEmpty()) {
+        png = await encodeClipboardNativeImagePng(image)
+      } else if (source.windowsFileFormats) {
+        png = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
           createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
           openFile: (filePath) => open(filePath, 'r')
         })
-        return copiedFilePng
-          ? saveClipboardImageBufferForTarget(copiedFilePng, args, handlerOptions)
-          : null
       }
-      assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
+      return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
     }
   )
   ipcMain.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {

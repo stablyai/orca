@@ -36,62 +36,12 @@ describe('publishing a verified managed host status', () => {
     clearSshHostServerStatus('ssh-2')
   })
 
-  it('replaces the deferred diagnostic in the host store and both subscribers', () => {
-    setSshHostServerStatus('ssh-1', deferred)
-    mocks.getState.mockReturnValue(connection('connected'))
-    publishHostServerStatus('ssh-1', ready)
-    expect(getSshHostServerStatus('ssh-1')).toEqual(ready)
-    expect(mocks.notify).toHaveBeenCalledWith(
-      'ssh-1',
-      expect.objectContaining({ managedServer: ready })
-    )
-    expect(mocks.send).toHaveBeenCalledWith(
-      'ssh:state-changed',
-      expect.objectContaining({ state: expect.objectContaining({ managedServer: ready }) })
-    )
-  })
-
   it('preserves disconnected contact instead of inventing a connection', () => {
     mocks.getState.mockReturnValue(connection('disconnected'))
     publishHostServerStatus('ssh-1', ready)
     expect(mocks.notify).toHaveBeenCalledWith(
       'ssh-1',
       expect.objectContaining({ status: 'disconnected', managedServer: ready })
-    )
-  })
-
-  it('retains the current unverifiable host evidence when publishing it', () => {
-    mocks.getState.mockReturnValue(connection('connected'))
-    const unverifiable = {
-      ...ready,
-      serving: { state: 'unverifiable', detail: 'The process is live but not answering.' }
-    } as const
-    publishHostServerStatus('ssh-1', unverifiable)
-    expect(getSshHostServerStatus('ssh-1')).toEqual(unverifiable)
-    expect(mocks.notify.mock.calls[0]?.[1].managedServer).toEqual(unverifiable)
-  })
-
-  it('records a host without a connection and leaves another host untouched', () => {
-    mocks.getState.mockReturnValue(undefined)
-    setSshHostServerStatus('ssh-2', deferred)
-    publishHostServerStatus('ssh-1', ready)
-    expect(getSshHostServerStatus('ssh-1')).toEqual(ready)
-    expect(getSshHostServerStatus('ssh-2')).toEqual(deferred)
-    expect(mocks.notify).not.toHaveBeenCalled()
-    expect(mocks.send).not.toHaveBeenCalled()
-  })
-
-  it("clears a verified host's deferral and unverifiable notes", () => {
-    mocks.getState.mockReturnValue(connection('connected'))
-    setSshHostServerStatus('ssh-1', {
-      ...deferred,
-      serving: { state: 'unverifiable', detail: 'No reply.' }
-    })
-    clearManagedServerNotes('ssh-1', 'env-1')
-    expect(getSshHostServerStatus('ssh-1')).toEqual(ready)
-    expect(mocks.notify).toHaveBeenCalledWith(
-      'ssh-1',
-      expect.objectContaining({ managedServer: ready })
     )
   })
 

@@ -5,7 +5,7 @@ import {
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   ADDRESS_X,
   ADDRESS_Y,
@@ -22,7 +22,7 @@ import {
 } from './orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -216,7 +216,7 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
     expect(response).toMatchObject({ ok: false, error: { message: 'placement reached' } })
   })
 
-  it("never lets one chat's run-create unbind another chat's Run", async () => {
+  it("keeps each chat's Runs when another chat or the same chat creates one", async () => {
     const xFirst = await runCreate(SESSION_X, 'x first')
     const yRun = await runCreate(SESSION_Y, 'y')
     const xSecond = await runCreate(SESSION_X, 'x second')
@@ -227,7 +227,7 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
     expect(await as(SESSION_X, 'orchestration.runCurrent', {})).toMatchObject({
       run: { id: xSecond }
     })
-    expect(h.db.getRunRaw(xFirst)?.coordinator_orca_session_id).toBeNull()
+    expect(h.db.getRunRaw(xFirst)?.coordinator_orca_session_id).toBe(SESSION_X)
   })
 
   it('takes over a bound Run like a terminal does, and fences the previous coordinator', async () => {
@@ -311,11 +311,9 @@ describe('a structured chat coordinates through the same verbs as a terminal', (
       )
     ).toMatchObject({ ok: false, error: { code: 'consumer_fenced' } })
     expect(acknowledge).not.toHaveBeenCalled()
-    expect(h.db.getDeliveryRaw(ack)?.acknowledged_at).toBeNull()
     expect(await as(SESSION_Y, 'orchestration.check', {})).toMatchObject({
-      deliveryId: ack,
-      replayed: true,
-      messages: [{ id: idOf(message) }]
+      deliveryId: null,
+      count: 0
     })
     expect(await as(SESSION_Y, 'orchestration.check', { ack })).toMatchObject({
       acknowledged: ack,

@@ -3,7 +3,7 @@
 import {
   getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile
-} from '../../../../src/shared/native-chat-agent-profiles'
+} from '../../../../src/shared/native-chat/native-chat-agent-profiles'
 import {
   classifyNativeChatSend,
   type NativeChatSendClassification,

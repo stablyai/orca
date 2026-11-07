@@ -4,15 +4,18 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged
-} from '@/runtime/runtime-environment-revision'
-import type { FileLinkExists } from '@/components/sidebar/comment-markdown-native-chat-file-links'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { FileLinkExists } from '../../../../shared/native-chat/native-chat-file-link-tree'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import {
   createNativeChatFileLinkExistence,
-  NativeChatFileLinkExistenceContext,
-  type NativeChatFileLinkExistence,
-  type NativeChatFileLinkSnapshot
+  NativeChatFileLinkExistenceContext
 } from './native-chat-file-link-existence'
+import type { NativeChatFileLinkExistence } from '../../../../shared/native-chat/native-chat-file-link-existence'
+import { createNativeChatFileLinkHooks } from '../../../../shared/native-chat/native-chat-file-link-hooks'
+
+const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
+  createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
 
 const subscribeToPairings = (onChange: () => void): (() => void) =>
   onRuntimeEnvironmentRevisionsChanged(onChange)
@@ -69,17 +72,10 @@ function useRecheckWhenHostReturns(
 }
 
 export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): void {
-  const existence = useContext(NativeChatFileLinkExistenceContext)
-  const seen = useRef<{ existence: NativeChatFileLinkExistence | null; isWorking: boolean } | null>(
-    null
+  useRecheckNativeChatFileLinksWhenSettled(
+    useContext(NativeChatFileLinkExistenceContext),
+    isWorking
   )
-  useEffect(() => {
-    const previous = seen.current
-    seen.current = { existence, isWorking }
-    if (existence && previous?.existence === existence && previous.isWorking && !isWorking) {
-      existence.recheck()
-    }
-  }, [existence, isWorking])
 }
 
 /** One per chat view: paths in its transcript are checked on the workspace's host. */
@@ -118,25 +114,14 @@ export function NativeChatFileLinkExistenceProvider({
   )
 }
 
-const subscribeToNothing = (): (() => void) => () => {}
-const getNoSnapshot = (): null => null
-
 /** Undefined when this chat cannot open files, so nothing is underlined. */
 export function useNativeChatFileLinkExists(
   enabled: boolean,
   streaming: boolean
 ): FileLinkExists | undefined {
-  const existence = useContext(NativeChatFileLinkExistenceContext)
-  const watcher = useMemo(
-    () => (enabled && existence ? existence.watch() : null),
-    [enabled, existence]
+  return useNativeChatFileLinkExistsFrom(
+    useContext(NativeChatFileLinkExistenceContext),
+    enabled,
+    streaming
   )
-  const getSnapshot = watcher?.getSnapshot ?? getNoSnapshot
-  const snapshot: NativeChatFileLinkSnapshot | null = useSyncExternalStore(
-    watcher?.subscribe ?? subscribeToNothing,
-    getSnapshot,
-    getSnapshot
-  )
-  // Why: text still streaming in ends mid-path; ask the host once the reply settles.
-  return snapshot ? (streaming ? snapshot.peek : snapshot.check) : undefined
 }

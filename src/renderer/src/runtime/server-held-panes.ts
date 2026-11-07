@@ -1,11 +1,11 @@
 // Show server frame status=held in the existing newer-build banner. Reopen asks server main; desktop starts nothing and subsequent cleared/bound frames show recovery.
 
 import type { NewerDaemonReopenResult } from '../../../shared/newer-daemon-hold'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import { showServerHeldPanes } from '@/components/terminal-pane/newer-daemon-hold-state'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { showServerHeldPanes } from '@/components/terminal-pane/session-restore/newer-daemon/newer-daemon-hold-state'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 
 /** A held pane under the server's own ids. */
 export type ServerHeldPane = { worktreeId: string; tabId: string; leafId: string }

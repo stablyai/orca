@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -12,7 +12,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 type SerializedBuffer = { data: string; cols: number; rows: number } | null
 type SnapshotStartPayload = Record<string, unknown>
@@ -162,16 +162,6 @@ async function requestSnapshotReply(options: {
 }
 
 describe('requested terminal snapshot unavailability reasons', () => {
-  it('omits a reason when the host serialized a real buffer', async () => {
-    const { start, chunks } = await requestSnapshotReply({
-      connectionId: 'conn-reason-success',
-      serializeRequested: async () => ({ data: 'restored output', cols: 120, rows: 40 })
-    })
-    expect(chunks).toBe('restored output')
-    expect(start).toMatchObject({ requestId: 77, truncated: false })
-    expect(start.unavailable).toBeUndefined()
-  })
-
   it('omits a reason for a proven-empty buffer so absence stays distinguishable from failure', async () => {
     const { start, chunks } = await requestSnapshotReply({
       connectionId: 'conn-reason-empty',

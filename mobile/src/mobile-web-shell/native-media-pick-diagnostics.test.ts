@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BRIDGE_NATIVE_VERB_NAMES, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
+import { CACHED } from './mobile-web-shell-session-test-fixtures'
 import {
   useMobileWebShellBridge,
   type MobileWebShellBridgeView
@@ -28,12 +29,17 @@ function Screen(): null {
       sessionId: 'session-a',
       buildId: 'build-a',
       totalBytes: 4096,
-      elapsedMs: 1
+      elapsedMs: 1,
+      compat: CACHED.compat
     },
     sessionEstablished: true,
     route: { pathname: '/h/host-1' },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     keyboardInset: 0,
+    foldDivision: null,
+    terminalKeyRail: [],
+    colorScheme: 'dark',
+    uiLocale: 'en',
     pageRoutes: ['/h/[hostId]'],
     pageRouteGrants: [],
     routeGrants: [...BRIDGE_NATIVE_VERB_NAMES],
@@ -49,6 +55,8 @@ function Screen(): null {
     onPageReady: () => {},
     onPagePainted: () => {},
     onPageBackClaim: () => {},
+    onPageLocation: () => {},
+    onTerminalKeyRailClaim: () => {},
     onRouteParamClear: () => {},
     onRouteRefused: () => {},
     onBinaryFramesDropped: () => {}

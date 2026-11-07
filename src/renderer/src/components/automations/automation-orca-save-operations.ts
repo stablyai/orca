@@ -33,7 +33,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext
@@ -57,6 +57,7 @@ export type AutomationEditDestinationInput = {
     projectId: string
     workspaceId: string
   }
+  targetEdited?: boolean
   rowKey: string | null
   automationDialogTarget: AutomationHostTarget
   editHostEntries: Parameters<typeof revalidateAutomationCreateDestination>[1]
@@ -80,11 +81,12 @@ export function resolveAutomationEditDestination(
     input.editingDestination.destination.entry.stableKey !==
       input.rowRecoveryHost(input.rowKey)?.stableKey
   const destinationChanged =
-    input.currentAutomation !== null &&
-    (destinationHostChanged ||
-      input.currentAutomation.projectId !== input.draft.projectId ||
-      input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
-      input.currentAutomation.workspaceMode !== input.draft.workspaceMode)
+    input.targetEdited ??
+    (input.currentAutomation !== null &&
+      (destinationHostChanged ||
+        input.currentAutomation.projectId !== input.draft.projectId ||
+        input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
+        input.currentAutomation.workspaceMode !== input.draft.workspaceMode))
   if (!input.editingAutomationId || !input.currentAutomation || !destinationChanged) {
     return { ok: true, editDestination: undefined, moveTarget: null }
   }
@@ -261,5 +263,21 @@ export async function saveExistingAutomation(
     },
     'save',
     destination
+  )
+}
+
+export function showAutomationSavedToast(
+  moveTarget: AutomationCreateDestination | null,
+  editingAutomationId: string | null
+): void {
+  toast.success(
+    moveTarget
+      ? translate(
+          'auto.components.automations.AutomationsPage.moved',
+          'Automation moved to {host}.'
+        ).replace('{host}', () => moveTarget.entry.authorityLabel)
+      : editingAutomationId !== null
+        ? translate('auto.components.automations.AutomationsPage.244727e655', 'Automation updated.')
+        : translate('auto.components.automations.AutomationsPage.2a20596d6b', 'Automation saved.')
   )
 }

@@ -259,8 +259,12 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
             if (!repo) {
               return false
             }
-            // Show the fixture’s external Git worktrees, which newly added repos hide by default.
-            await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+            // Show external worktrees (hidden by default); pre-answer the first-launch trust prompt.
+            const show = {
+              externalWorktreeVisibility: 'show',
+              agentWorkspaceTrust: 'pre-trust'
+            } as const
+            await store.getState().updateRepo(repo.id, show)
             return true
           }, seededRepoId),
         {

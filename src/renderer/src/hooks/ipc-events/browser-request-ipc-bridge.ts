@@ -8,6 +8,11 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import {
+  browserTabSplitTarget,
+  existingBrowserPaneGroupId,
+  splitCallerWorktreeId
+} from './browser-tab-split-placement'
+import {
   findBrowserTabWorktreeId,
   isBrowserWorkspaceOwnedByPairedServer,
   isDesktopRenderedBrowserTab,
@@ -61,7 +66,11 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           data.fallbackWorktreeId && store.getKnownWorktreeById(data.fallbackWorktreeId)
             ? data.fallbackWorktreeId
             : null
-        const worktreeId = data.worktreeId ?? store.activeWorktreeId ?? fallbackWorktreeId
+        const worktreeId =
+          data.worktreeId ??
+          (data.split ? splitCallerWorktreeId(store, data.splitFromTabId) : undefined) ??
+          store.activeWorktreeId ??
+          fallbackWorktreeId
         if (!worktreeId) {
           window.api.ui.replyTabCreate({
             requestId: data.requestId,
@@ -85,11 +94,28 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
             )
           : undefined
 
+        const browserPaneGroupId = data.split
+          ? existingBrowserPaneGroupId(
+              store,
+              worktreeId,
+              data.splitFromTabId,
+              activeBrowserUnifiedTab?.groupId
+            )
+          : undefined
+
         // Foreground explicit user opens; agent/automation/paired-device background opens stay in the browser group without moving this host’s view.
         const workspace = store.createBrowserTab(worktreeId, data.url, {
           title: data.url,
           browserPageId: data.browserPageId,
-          targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
+          ...(data.split && !browserPaneGroupId
+            ? { split: browserTabSplitTarget(store, worktreeId, data.split, data.splitFromTabId) }
+            : {
+                targetGroupId:
+                  browserPaneGroupId ??
+                  (data.activate ? undefined : activeBrowserUnifiedTab?.groupId)
+              }),
+          // A split open asked to see the page beside the caller: show it there, keeping focus.
+          ...(browserPaneGroupId ? { showInGroup: true } : {}),
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
           // This runtime asks for desktop-rendered pages, including managed-SSH workspaces; explicit null prevents streaming another host’s page.

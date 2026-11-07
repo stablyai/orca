@@ -77,7 +77,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.input,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
   title: {

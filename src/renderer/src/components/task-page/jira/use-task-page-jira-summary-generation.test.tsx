@@ -10,7 +10,7 @@ import {
 import { useTaskPageJiraSummaryGeneration } from './use-task-page-jira-summary-generation'
 
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), cancel: vi.fn(), error: vi.fn() }))
-vi.mock('@/runtime/runtime-jira-summary-generation-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-summary-generation-client', () => ({
   generateRuntimeJiraIssueSummary: mocks.generate,
   cancelRuntimeJiraIssueSummary: mocks.cancel
 }))

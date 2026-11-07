@@ -2,8 +2,8 @@ import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../src/shared/native-chat-types'
-import { projectNativeChatTranscriptMessages } from '../../src/shared/native-chat-transcript-projection'
+import type { NativeChatMessage } from '../../src/shared/native-chat/native-chat-types'
+import { projectNativeChatTranscriptMessages } from '../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 import { createNativeChatMerger, replaceList } from '../../src/shared/native-chat/native-chat-merge'
 import { readNativeChatTranscript } from '../../src/main/native-chat/transcript-reader'
 import {
@@ -172,7 +172,7 @@ describe('canonical source positions', () => {
     const { applyMobileNativeChatStreamFrame } =
       await import('../../mobile/src/session/native-chat/mobile-native-chat-stream-frame')
     const { foldMobileNativeChatMessages } =
-      await import('../../mobile/src/session/mobile-native-chat-render-data')
+      await import('../../mobile/src/session/native-chat/mobile-native-chat-render-data')
     const filePath = await transcriptFile(
       lines(
         ...[
@@ -400,9 +400,9 @@ describe('canonical source positions', () => {
       marker.id,
       'later',
       'after',
-      NATIVE_CHAT_STREAMING_ID,
-      'launch-pending:1',
       'pending:1',
+      'launch-pending:1',
+      NATIVE_CHAT_STREAMING_ID,
       'queued'
     ])
     // Contradictory clocks preserve the canonical subsequence, with one explicit supplemental placement.

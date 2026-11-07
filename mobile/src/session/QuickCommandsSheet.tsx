@@ -1,13 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View, Text, Pressable } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { BottomDrawer } from '../components/BottomDrawer'
+import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import type { RpcClient } from '../transport/rpc-client'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
-import { getQuickCommandPreview, quickCommandMatchesRepo } from '../terminal/quick-commands'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
+import { getQuickCommandPreview } from '../terminal/quick-commands'
+import { terminalQuickCommandMatchesRepo as quickCommandMatchesRepo } from '../../../src/shared/terminal/quick-commands/terminal-quick-commands'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -270,7 +271,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -282,7 +283,7 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     textAlign: 'center'
   },
-  pressed: { backgroundColor: colors.bgRaised },
+  pressed: { backgroundColor: colors.borderSubtle },
   editorDesc: { paddingHorizontal: spacing.xs, paddingBottom: spacing.sm },
   descText: { fontSize: 12, color: colors.textMuted }
 }))

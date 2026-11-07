@@ -1,4 +1,4 @@
-import { createTerminalEscapeScanner } from './terminal-escape-scanner'
+import { createTerminalEscapeScanner } from './terminal/protocol/escape/terminal-escape-scanner'
 
 export const CODEX_CAPACITY_MESSAGE = 'Selected model is at capacity. Please try a different model.'
 

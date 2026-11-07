@@ -1,4 +1,7 @@
-import { hostDictationErrorMessage } from '../../../src/shared/host-dictation-error-messages'
+import {
+  DICTATION_SESSION_LOST_MESSAGE,
+  hostDictationErrorMessage
+} from '../../../src/shared/host-dictation-error-messages'
 import { translate } from '../i18n/mobile-i18n'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcResponse } from '../transport/types'
@@ -55,19 +58,33 @@ export function dictationFailureMessage(message: string): string {
   switch (message) {
     case 'dictation_already_active':
       return translate('dictation.setup.alreadyActive', fallback)
+    case 'dictation_session_limit':
+      return translate('dictation.setup.sessionLimit', fallback)
+    case 'dictation_model_busy':
+      return translate('dictation.setup.modelBusy', fallback)
     case 'dictation_requires_mobile_client':
       return translate('dictation.setup.repairRequired', fallback)
     case 'dictation_owner_mismatch':
     case 'dictation_stream_not_started':
     case 'dictation_stream_closing':
-      return translate('dictation.setup.sessionLost', fallback)
+      return dictationSessionLostMessage()
     default:
       return fallback
   }
 }
 
+export function dictationSessionLostMessage(): string {
+  return translate('dictation.setup.sessionLost', DICTATION_SESSION_LOST_MESSAGE)
+}
+
 export function dictationSessionErrorMessage(
-  kind: 'permission-denied' | 'unavailable' | 'no-speech' | 'interrupted' | 'input-closed'
+  kind:
+    | 'permission-denied'
+    | 'unavailable'
+    | 'recording-failed'
+    | 'no-speech'
+    | 'interrupted'
+    | 'input-closed'
 ): string {
   switch (kind) {
     case 'permission-denied':
@@ -79,6 +96,11 @@ export function dictationSessionErrorMessage(
       return translate(
         'hooks.useMobileDictation.microphoneInitFailed',
         'Failed to initialize microphone'
+      )
+    case 'recording-failed':
+      return translate(
+        'hooks.dictationDesktopStart.recordingFailed',
+        'Failed to start microphone recording'
       )
     case 'no-speech':
       return translate('hooks.useMobileDictation.noSpeech', 'No speech detected.')

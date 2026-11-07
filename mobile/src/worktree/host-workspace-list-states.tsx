@@ -1,4 +1,6 @@
-import { ActivityIndicator, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
+import { CircleAlert, FolderTree, WifiOff } from 'lucide-react-native'
+import { MobileNoMatchState, MobileStateView } from '../components/MobileStateView'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -13,63 +15,79 @@ export function HostWorkspaceListStates(
   props: HostWorkspaceListStateInput & {
     search: string
     activeFilterCount: number
+    bottomInset: number
+    onClearSearch: () => void
+    onReconnect: (() => void) | null
   }
 ) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const { bottomInset } = props
   const state = selectHostWorkspaceListState(props)
   if (state === 'loading') {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
+      <MobileStateView
+        loading
+        title={t('worktree.hostWorkspaceListStates.loading', 'Loading workspaces…')}
+        bottomInset={bottomInset}
+      />
     )
   }
   if (state === 'unreachable') {
     const { connectionVerdict } = props
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>{verdictDisplayLabel(connectionVerdict)}</Text>
-        <Text style={styles.catalogErrorDetail}>
-          {(isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
-            t(
-              'worktree.hostWorkspaceListStates.checkHost',
-              'Check that your computer is awake and Orca is running'
-            )}
-        </Text>
-      </View>
+      <MobileStateView
+        icon={WifiOff}
+        title={verdictDisplayLabel(connectionVerdict)}
+        message={
+          (isConnectionOutage(connectionVerdict) ? connectionVerdict.detail : undefined) ??
+          t(
+            'worktree.hostWorkspaceListStates.checkHost',
+            'Check that your computer is awake and Orca is running'
+          )
+        }
+        action={
+          props.onReconnect
+            ? { label: t('common.offline.reconnect', 'Reconnect'), onPress: props.onReconnect }
+            : null
+        }
+        bottomInset={bottomInset}
+      />
     )
   }
   if (state === 'catalog-error') {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>
-          {t(
-            'worktree.hostWorkspaceListStates.loadFailed',
-            'Could not load workspaces from this host'
-          )}
-        </Text>
-        <Text style={styles.catalogErrorDetail}>
-          {t(
-            'worktree.hostWorkspaceListStates.retrying',
-            'worktree.ps failed ({{error}}) — retrying automatically',
-            { error: props.catalogError }
-          )}
-        </Text>
-      </View>
+      <MobileStateView
+        icon={CircleAlert}
+        title={t(
+          'worktree.hostWorkspaceListStates.loadFailed',
+          'Could not load workspaces from this host'
+        )}
+        message={t(
+          'worktree.hostWorkspaceListStates.retryingAutomatically',
+          'Retrying automatically.'
+        )}
+        details={props.catalogError}
+        bottomInset={bottomInset}
+      />
     )
   }
   if (state === 'empty') {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyText}>
-          {props.search
-            ? t('worktree.hostWorkspaceListStates.noMatches', 'No matching workspaces')
-            : props.activeFilterCount > 0
-              ? t('worktree.hostWorkspaceListStates.noFilterMatches', 'No workspaces match filters')
-              : t('worktree.hostWorkspaceListStates.empty', 'No workspaces')}
-        </Text>
-      </View>
+    return props.search ? (
+      <MobileNoMatchState
+        message={t('worktree.hostWorkspaceListStates.noMatches', 'No matching workspaces')}
+        onClear={props.onClearSearch}
+        bottomInset={bottomInset}
+      />
+    ) : (
+      <MobileStateView
+        icon={FolderTree}
+        title={
+          props.activeFilterCount > 0
+            ? t('worktree.hostWorkspaceListStates.noFilterMatches', 'No workspaces match filters')
+            : t('worktree.hostWorkspaceListStates.empty', 'No workspaces')
+        }
+        bottomInset={bottomInset}
+      />
     )
   }
   return null

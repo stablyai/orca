@@ -1,19 +1,19 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RemoteServerUpdaterSnapshot } from '../../../../shared/remote-server-update'
-import { isListedRemoteServer } from '../../../../shared/runtime-environments'
+import { isListedRemoteServer } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   checkingRemoteServerUpdateEntry,
   inspectRemoteServerUpdate,
   runRemoteServerUpdate,
   type RemoteServerUpdateEntry,
   type RemoteServerUpdateTransport
-} from '@/runtime/remote-server-update-coordinator'
-import { runRemoteServerUpdateBatch } from '@/runtime/remote-server-update-batch'
+} from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import { runRemoteServerUpdateBatch } from '@/runtime/hosts/updates/remote-server-update-batch'
 
 const MAX_CONCURRENT_REMOTE_SERVER_UPDATES = 2
 

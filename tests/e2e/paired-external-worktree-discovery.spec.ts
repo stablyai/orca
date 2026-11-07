@@ -2,8 +2,8 @@ import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { gitExecFileAsync } from '../../src/main/git/runner'
-import { listWorktreesStrict } from '../../src/main/git/worktree'
-import { areWorktreePathsEqual } from '../../src/main/git/worktree-path-comparison'
+import { listWorktreesStrict } from '../../src/main/git/worktrees/catalog/worktree-listing'
+import { areWorktreePathsEqual } from '../../src/main/git/worktrees/catalog/worktree-path-comparison'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,

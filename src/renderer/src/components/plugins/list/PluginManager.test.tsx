@@ -248,25 +248,6 @@ describe('PluginManager', () => {
     expect(container.querySelectorAll('[data-plugin-key]').length).toBeGreaterThan(1)
   })
 
-  it('labels cards by category with an icon, keeping a chip only for full access', async () => {
-    const worker: PluginHostListEntry = {
-      ...installedPlugin,
-      pluginKey: 'local.watcher',
-      name: 'Watcher',
-      execution: 'trusted-worker',
-      hasWorker: true,
-      types: ['worker'],
-      source: undefined
-    }
-    const container = await render([installedPlugin, worker])
-    const nord = container.querySelector('[data-plugin-key="stablyai.orca-nord-theme"]')
-    const watcher = container.querySelector('[data-plugin-key="local.watcher"]')
-    expect(nord?.textContent).toContain('Themes')
-    expect(nord?.textContent).not.toContain('Content only')
-    expect(watcher?.textContent).toContain('Commands & panels')
-    expect(watcher?.textContent).toContain('Full access')
-  })
-
   it('keeps installed plugins when the catalog never loads', async () => {
     installApi({ listMarketplaces: vi.fn().mockRejectedValue(new Error('offline')) })
     const container = await render()

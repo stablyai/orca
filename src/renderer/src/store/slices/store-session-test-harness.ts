@@ -2,8 +2,11 @@ import type { admitStructuredAgentSession } from '@/lib/agent-session/structured
 import { vi, type Mock } from 'vitest'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from './editor'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from './editor/types/open-file'
 import { translate } from '@/i18n/i18n'
 
 /** Shape shared by the Claude/Codex/OpenCode usage-scanner namespaces. */

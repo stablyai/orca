@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { buildInjectRejectionMessage } from '../../../../../../shared/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { dispatchPreambleSendOptions } from '../../../../orchestration/preamble'
+import { dispatchPreambleSendOptions } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -393,7 +393,7 @@ describe('orchestration RPC methods', () => {
       )
       const preamble = agentPrompt.mock.calls[0]![1]
       expect(preamble).toContain('The coordinator cannot see this terminal')
-      expect(preamble).toContain('Do not exit the shell. Your terminal stays available')
+      expect(preamble).toContain('Do not exit the shell. More supervised work arrives here')
       expect(preamble).not.toContain('this chat')
       expect(rawSend).not.toHaveBeenCalled()
     })

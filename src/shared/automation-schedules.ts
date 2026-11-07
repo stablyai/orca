@@ -5,7 +5,7 @@ import {
   type ParsedCron
 } from './automation-schedule-parsing'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
-import { escapeTerminalControlCharacters } from './terminal-control-character-escape'
+import { escapeTerminalControlCharacters } from './terminal/output/terminal-control-character-escape'
 
 export type AutomationCronScheduleClassification =
   | { kind: 'hourly'; minute: number; label: string }

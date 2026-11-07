@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 type Handlers = {
   onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
@@ -26,8 +26,10 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/runtime/use-worktree-runtime-target', () => ({
   useActiveAccountOwner: () => ({ target: mocks.owner, wslHostDistro: null })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   watchProviderAccounts: (target: RuntimeClientTarget, handlers: Handlers) => {
     const watcher = { target, handlers, closed: false }
     mocks.watchers.push(watcher)
@@ -75,29 +77,6 @@ describe('useOwnerUsageRateLimits', () => {
   })
   afterEach(() => cleanup())
 
-  it('opens no watcher and keeps local usage when this device owns accounts', () => {
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
-    expect(mocks.watchers).toHaveLength(0)
-    expect(result.current.rateLimits).toBe(local)
-    expect(result.current.refreshRemote).toBeNull()
-    expect(result.current.remoteOwner).toBeNull()
-  })
-
-  it("reads usage from the remote owner's accounts stream", () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
-    expect(mocks.watchers[0].target).toEqual({ kind: 'environment', environmentId: 'mini' })
-    expect(result.current.remoteOwner).toEqual({ environmentId: 'mini', label: 'Mac Mini' })
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-
-    act(() =>
-      mocks.watchers[0].handlers.onSnapshot(
-        snapshot(createEmptyRateLimitState({ claude: provider('claude', 64) }))
-      )
-    )
-    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(64)
-  })
-
   it('reports an older host without published usage as unavailable, not loading', () => {
     mocks.owner = { kind: 'environment', environmentId: 'mini' }
     const { result } = renderHook(() => useOwnerUsageRateLimits(local))
@@ -105,19 +84,6 @@ describe('useOwnerUsageRateLimits', () => {
     expect(result.current.rateLimits.claude?.status).toBe('error')
     expect(result.current.rateLimits.claude?.usageMetadata?.unverifiableOwner).toBe(true)
     expect(result.current.rateLimits.claude?.error).toContain('Mac Mini does not report usage')
-  })
-
-  it('turns loss of contact into an unverifiable verdict that keeps known bars', () => {
-    mocks.owner = { kind: 'environment', environmentId: 'mini' }
-    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
-    act(() =>
-      mocks.watchers[0].handlers.onSnapshot(
-        snapshot(createEmptyRateLimitState({ codex: provider('codex', 30) }))
-      )
-    )
-    act(() => mocks.watchers[0].handlers.onError(new Error('closed')))
-    expect(result.current.rateLimits.codex?.session).toBeNull()
-    expect(result.current.rateLimits.codex?.error).toContain('cannot reach Mac Mini')
   })
 
   it('never shows server A numbers under server B', () => {

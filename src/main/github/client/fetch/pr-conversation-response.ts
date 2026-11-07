@@ -1,6 +1,10 @@
+import type { Nodes } from 'mdast'
 import { z } from 'zod'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { mapGraphQLReactionGroups } from '../../comment-reactions'
+import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
 
 const commentSchema = z.object({
   id: z.string(),
@@ -12,6 +16,7 @@ const commentSchema = z.object({
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
   url: z.string(),
+  viewerDidAuthor: z.boolean().nullish().catch(undefined),
   reactionGroups: z
     .array(
       z.object({
@@ -33,6 +38,12 @@ const threadConnection = z.object({
         startLine: z.number().nullable(),
         originalLine: z.number().nullable(),
         originalStartLine: z.number().nullable(),
+        diffSide: z.string().nullish().catch(undefined),
+        // Optional so a failed or trimmed field never drops the thread.
+        rootHunk: z
+          .object({ nodes: z.array(z.object({ diffHunk: z.string().nullish() }).nullable()) })
+          .nullish()
+          .catch(undefined),
         comments: z.object({
           nodes: z.array(commentSchema.extend({ path: z.string() }).nullable())
         })
@@ -78,9 +89,31 @@ function mapGraphQLComment(
     createdAt: comment.submittedAt ?? comment.createdAt,
     url: comment.url,
     isBot: comment.author?.__typename === 'Bot',
+    ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {}),
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
+}
+
+const reviewMarkdown = unified().use(remarkParse)
+
+function hasVisibleReviewBody(body: string | null | undefined): boolean {
+  if (!body?.trim()) {
+    return false
+  }
+  if (!body.includes('<!--')) {
+    return true
+  }
+  const hasVisibleNode = (node: Nodes): boolean => {
+    if ('children' in node) {
+      return node.children.some(hasVisibleNode)
+    }
+    if (node.type === 'html') {
+      return Boolean(node.value.replace(/<!--[\s\S]*?-->/g, '').trim())
+    }
+    return node.type !== 'text' || Boolean(node.value.trim())
+  }
+  return reviewMarkdown.parse(body).children.some(hasVisibleNode)
 }
 
 export function parsePRConversationResponse(stdout: string): {
@@ -109,7 +142,7 @@ export function parsePRConversationResponse(stdout: string): {
       reviews.success && !failed('reviews')
         ? reviews.data.nodes
             .filter(hasDatabaseId)
-            .filter((c) => c.body?.trim())
+            .filter((c) => hasVisibleReviewBody(c.body))
             .map(mapGraphQLComment)
         : undefined,
     reviewComments: threads.success
@@ -117,6 +150,10 @@ export function parsePRConversationResponse(stdout: string): {
           thread
             ? thread.comments.nodes.filter(hasDatabaseId).map((c) => ({
                 ...mapGraphQLComment(c),
+                // Left-side threads count old-file lines, which the shared tail numbering cannot place.
+                ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
+                  ? rootDiffHunk(thread.rootHunk)
+                  : {}),
                 path: c.path,
                 threadId: thread.id,
                 isResolved: thread.isResolved,
@@ -128,6 +165,13 @@ export function parsePRConversationResponse(stdout: string): {
         )
       : []
   }
+}
+
+function rootDiffHunk(
+  rootHunk: { nodes: ({ diffHunk?: string | null } | null)[] } | null | undefined
+): { diffHunk?: string } {
+  const diffHunk = tailDiffHunk(rootHunk?.nodes[0]?.diffHunk)
+  return diffHunk ? { diffHunk } : {}
 }
 
 const restCommentSchema = z.object({
@@ -145,7 +189,7 @@ export function parseRestPRComments(stdout: string, reviews: boolean): PRComment
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
-    .filter((c) => !reviews || c.body?.trim())
+    .filter((c) => !reviews || hasVisibleReviewBody(c.body))
     .map((c) => ({
       id: c.id,
       author: c.user?.login ?? 'ghost',

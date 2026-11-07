@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
-import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
   AutomationRunTerminalObserver
 } from './run-completion-watcher'
+import { runNowSettled } from './automation-run-now-settled.test-fixture'
 
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
@@ -93,62 +93,6 @@ describe('authority-owned automation run completion', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('brings a headless dispatched run to a terminal state with no renderer attached', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      terminalObserver: createObserver(async () => ({ status: 'completed', error: null }))
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(run.status).toBe('dispatched')
-    await vi.waitFor(() => {
-      expect(readRun(store, automation.id, run.id).status).toBe('completed')
-    })
-    service.stop()
-  })
-
-  it('leaves a headless dispatched run alone when the authority cannot observe it', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      terminalObserver: createObserver(
-        async () => ({ status: 'completed' }),
-        () => null
-      )
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
-    service.stop()
-  })
-
-  it('reports a failed observation in the same fixed sentence every other refusal uses', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      terminalObserver: createObserver(async () => {
-        throw new Error('terminal_handle_stale')
-      })
-    })
-
-    const run = await service.runNow(automation.id)
-    await vi.waitFor(() => {
-      expect(readRun(store, automation.id, run.id).status).toBe('dispatch_failed')
-    })
-
-    expect(readRun(store, automation.id, run.id).error).toBe(
-      'Orca stopped watching this run before it reported completion.'
-    )
-    expect(logged.mock.calls.flat().map(String).join(' ')).toContain('terminal_handle_stale')
-    logged.mockRestore()
-    service.stop()
-  })
-
   it('reconciles stranded runs on startup without claiming completion', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
@@ -174,63 +118,34 @@ describe('authority-owned automation run completion', () => {
       terminalObserver: createObserver(
         async () => ({ status: 'completed' }),
         () => null
-      )
+      ),
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true }
     })
     vi.useFakeTimers()
     service.start()
-    service.setRendererReady()
     await vi.advanceTimersByTimeAsync(10 * 60 * 1000)
 
     expect(readRun(store, automation.id, dispatched.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatching.id).status).toBe('dispatch_failed')
     expect(readRun(store, automation.id, dispatched.id).error).toContain('terminal')
     expect(readRun(store, automation.id, dispatching.id).error).toContain('agent started')
-    expect(readRun(store, automation.id, pendingManual.id)).toMatchObject({
-      status: 'dispatch_failed',
-      error: 'Orca stopped before this manual run could launch.'
-    })
-    expect(readRun(store, automation.id, pendingScheduled.id).status).toBe('pending')
+    for (const pending of [pendingManual, pendingScheduled]) {
+      expect(readRun(store, automation.id, pending.id)).toMatchObject({
+        status: 'dispatch_failed',
+        error: 'Orca stopped before this run could launch.'
+      })
+    }
     service.stop()
     vi.useRealTimers()
   })
 
-  it('re-attaches a watcher on startup when the session survived', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const run = store.createAutomationRun(automation, 1_000, 'manual')
-    store.updateAutomationRun({
-      runId: run.id,
-      status: 'dispatched',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-
-    let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
-    const service = new AutomationService(store, {
-      terminalObserver: createObserver(
-        () =>
-          new Promise<AutomationRunCompletionObservation>((resolve) => {
-            resolveObservation = resolve
-          })
-      )
-    })
-    service.start()
-
-    await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
-    resolveObservation!({ status: 'completed', error: null })
-    await vi.waitFor(() => {
-      expect(readRun(store, automation.id, run.id).status).toBe('completed')
-    })
-    service.stop()
-  })
-
-  it('persists the terminal status once when the renderer wins the race', async () => {
+  it('persists the terminal status once when another writer wins the race', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      allowRemoteHostScheduling: true,
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true },
       terminalObserver: createObserver(
         () =>
           new Promise<AutomationRunCompletionObservation>((resolve) => {
@@ -239,7 +154,7 @@ describe('authority-owned automation run completion', () => {
       )
     })
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
     await vi.waitFor(() => expect(resolveObservation).not.toBeNull())
 
     await service.markDispatchResult({
@@ -248,7 +163,7 @@ describe('authority-owned automation run completion', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    const afterRenderer = readRun(store, automation.id, run.id)
+    const afterFirst = readRun(store, automation.id, run.id)
     const writeSpy = vi.spyOn(store, 'updateAutomationRun')
 
     resolveObservation!({ status: 'dispatch_failed', error: 'watcher lost the terminal' })
@@ -258,7 +173,7 @@ describe('authority-owned automation run completion', () => {
     const afterWatcher = readRun(store, automation.id, run.id)
     expect(afterWatcher.status).toBe('completed')
     expect(afterWatcher.error).toBeNull()
-    expect(afterWatcher.usage).toEqual(afterRenderer.usage)
+    expect(afterWatcher.usage).toEqual(afterFirst.usage)
     writeSpy.mockRestore()
     service.stop()
   })
@@ -268,7 +183,8 @@ describe('authority-owned automation run completion', () => {
     const automation = createAutomation(store)
     const aborted: boolean[] = []
     const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
+      allowRemoteHostScheduling: true,
+      terminalLauncher: { launch: async () => ({ ...LAUNCH_TARGET }), available: () => true },
       terminalObserver: createObserver(
         (signal) =>
           new Promise<AutomationRunCompletionObservation>((_resolve, reject) => {
@@ -280,68 +196,9 @@ describe('authority-owned automation run completion', () => {
       )
     })
 
-    const run = await service.runNow(automation.id)
+    const run = await runNowSettled(service, store, automation.id)
     service.stop()
     await vi.waitFor(() => expect(aborted).toEqual([true]))
     expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
-  })
-
-  it('keeps a run dispatched against an authority with no completion watching', async () => {
-    // Older authorities without completion watching leave the run dispatched.
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const publish = vi.fn()
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      onAutomationsChanged: publish
-    })
-
-    const run = await service.runNow(automation.id)
-    service.start()
-    await Promise.resolve()
-    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
-    service.stop()
-  })
-})
-
-describe('automationsChanged publication', () => {
-  beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-automation-events-'))
-    ipcHandlers.clear()
-  })
-
-  afterEach(async () => {
-    await closeTestStores()
-    rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('publishes run and usage changes after the write is persisted', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const seen: { payload: AutomationsChangedPayload; status: string | undefined }[] = []
-    const service = new AutomationService(store, {
-      headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
-      onAutomationsChanged: (payload) => {
-        seen.push({
-          payload,
-          status: store.listAutomationRuns(automation.id)[0]?.status
-        })
-      }
-    })
-
-    const run = await service.runNow(automation.id)
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run'])
-    expect(seen.at(-1)?.status).toBe('dispatched')
-
-    await service.markDispatchResult({
-      runId: run.id,
-      status: 'completed',
-      ...LAUNCH_TARGET,
-      error: null
-    })
-    expect(seen.map((entry) => entry.payload.reason)).toEqual(['run', 'run', 'run', 'run', 'usage'])
-    expect(seen.at(-1)?.status).toBe('completed')
-    expect(seen.every((entry) => entry.payload.selector?.kind === 'self')).toBe(true)
-    service.stop()
   })
 })

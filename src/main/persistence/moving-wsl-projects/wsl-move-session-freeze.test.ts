@@ -1,19 +1,17 @@
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { Tab, TabGroup } from '../../../shared/tab-types'
-import type { Store } from '../../persistence'
+import type { Store } from '../loading-store/store'
 import { closeTestStores, createStore, testState } from '../persistence-test-harness'
 import { makeTerminalTab } from '../persistence-session-fixtures'
 import { wslMoveCutoverFixture as cutover } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
-import { pruneWorktreeStateForRepo } from '../tracking-repos/repo-worktree-pruning'
-import { wslMoveJournalDirectory } from './wsl-move-cutover-journal'
 import { loadWslMoveFence, resetWslMoveFenceForTests } from './wsl-move-scope-guard'
 
 vi.mock('electron', () => ({
@@ -62,12 +60,6 @@ afterEach(async () => {
 })
 
 describe('WSL move session freeze', () => {
-  it("lets the quiesce's own Sleep write while the move is only fenced", () => {
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    store.setWorkspaceSession(session('after-sleep', 'terminal'))
-    expect(titles(store)).toEqual({ moving: ['after-sleep'], staying: ['after-sleep'] })
-  })
-
   describe('once quiesced', () => {
     beforeEach(() => {
       seedWslMoveCutover(testState.dir, cutover('move-1', 'quiesced'))
@@ -100,12 +92,6 @@ describe('WSL move session freeze', () => {
       store.stageWorkspaceSessionBeforeUnload(session('quit', 'editor'))
       expect(titles(store)).toEqual({ moving: ['slept'], staying: ['quit'] })
     })
-  })
-
-  it('keeps freezing through commit, so the retained rows survive for a downgrade', () => {
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    store.setWorkspaceSession(session('edited', 'editor'))
-    expect(titles(store)).toEqual({ moving: ['slept'], staying: ['edited'] })
   })
 
   describe('once the host owns the project', () => {
@@ -179,25 +165,6 @@ describe('WSL move session freeze', () => {
         active: 'agent-session:new'
       })
     })
-
-    it('still refuses chat tab writes while the move is only quiesced', () => {
-      seedWslMoveCutover(testState.dir, cutover('move-1', 'quiesced'))
-      store.setWorkspaceSession(
-        withTabs(session('edited', 'editor'), [tab('agent-session:new', 'agent-session')], null)
-      )
-      expect(movingTabs(store).tabs).toBeUndefined()
-    })
-  })
-
-  it('freezes nothing, with one warning, when the journal cannot be read', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const directory = wslMoveJournalDirectory(testState.dir)
-    mkdirSync(directory, { recursive: true })
-    writeFileSync(join(directory, 'move-1.json'), '{not json')
-    loadWslMoveFence(testState.dir)
-    store.setWorkspaceSession(session('edited', 'editor'))
-    expect(titles(store)).toEqual({ moving: ['edited'], staying: ['edited'] })
-    expect(warn).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -225,17 +192,6 @@ describe('WSL move session freeze: other session writers', () => {
       })
     ).rejects.toThrow('disk refused')
     expect(titles(store)).toEqual({ moving: ['slept'], staying: ['rolled-back'] })
-  })
-
-  it('keeps the frozen rows when the repo is pruned', () => {
-    const state = getDefaultPersistedState(testState.dir)
-    state.workspaceSession = {
-      ...store.getWorkspaceSession(),
-      lastVisitedAtByWorktreeId: { [MOVING]: 1, [STAYING]: 1 }
-    }
-    pruneWorktreeStateForRepo(state, 'repo-1', null, () => undefined)
-    pruneWorktreeStateForRepo(state, 'repo-2', null, () => undefined)
-    expect(Object.keys(state.workspaceSession.tabsByWorktree)).toEqual([MOVING])
   })
 
   it('keeps the frozen rows when the workspace owner is removed', () => {

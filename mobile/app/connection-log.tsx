@@ -22,6 +22,7 @@ import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { NATIVE_APP_LOG_ID } from '../src/diagnostics/native-render-log'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
+import { pressedStyle } from '../src/theme/mobile-theme'
 
 // Keep empty snapshot identity stable or useSyncExternalStore rerenders forever.
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
@@ -111,7 +112,11 @@ export default function NativeConnectionLogRoute() {
             {hosts.map((host) => (
               <Pressable
                 key={host.id}
-                style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
+                style={({ pressed }) => [
+                  styles.hostChip,
+                  host.id === selectedId && styles.hostChipActive,
+                  pressed && pressedStyle
+                ]}
                 onPress={() =>
                   setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
                 }

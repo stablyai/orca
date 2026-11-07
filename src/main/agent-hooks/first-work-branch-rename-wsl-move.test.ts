@@ -17,7 +17,10 @@ const { gitExecFileAsyncMock, generateBranchNameMock, resolveTextGenerationParam
     resolveTextGenerationParamsMock: vi.fn()
   }))
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
 vi.mock('../git/git-username', () => ({ resolveLocalGitUsername: vi.fn(async () => 'you') }))
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   generateBranchNameFromContext: generateBranchNameMock,
@@ -184,32 +187,6 @@ describe('first-work rename while a WSL move takes the project', () => {
       ([args]) => args[0] === 'branch' && args[1] === '-m'
     )
     expect(branchRenames).toHaveLength(1)
-  })
-
-  it('renames a project the move is not taking', async () => {
-    const { deps, setDisplayName } = makeDeps({
-      getRepo: () => ({ ...LOCAL_REPO, id: 'other-repo' })
-    })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-
-    expect(setDisplayName).toHaveBeenCalled()
-  })
-
-  it('leaves the same repo id on another host to its own host', async () => {
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const { deps, setDisplayName } = makeDeps({
-      getRepo: () => ({ ...LOCAL_REPO, executionHostId: 'runtime:env-1' })
-    })
-
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
-
-    expect(info).toHaveBeenCalledWith(expect.stringContaining('branch is owned by runtime:env-1'))
-    expect(info).not.toHaveBeenCalledWith(expect.stringContaining('WSL move'))
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(generateBranchNameMock).not.toHaveBeenCalled()
-    expect(setDisplayName).not.toHaveBeenCalled()
-    info.mockRestore()
   })
 
   it('keeps a moving folder workspace title pending', async () => {

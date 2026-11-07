@@ -19,6 +19,7 @@ import {
   type ScrcpyVideoFrame,
   type ScrcpyVideoMeta
 } from './scrcpy-video-frame-parser'
+import { parseH264SpsPictureSize, type H264PictureSize } from './h264-sps-picture-size'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
 // Handshake and server options must match the pinned scrcpy protocol version.
@@ -43,17 +44,24 @@ export type ScrcpyStreamOptions = {
   maxSize?: number
 }
 
+export type ScrcpyControlTarget = {
+  // Touch positions must carry this size; the server drops events sized for another frame.
+  videoSize(): H264PictureSize | null
+  sendControl(message: Buffer): boolean
+}
+
 function newScid(): string {
   // scrcpy expects a signed 32-bit scid formatted as eight hex digits.
   return (randomBytes(4).readUInt32BE(0) & 0x7fffffff).toString(16).padStart(8, '0')
 }
 
-export class ScrcpyStreamSession {
+export class ScrcpyStreamSession implements ScrcpyControlTarget {
   private server: ChildProcess | null = null
   private videoSocket: Socket | null = null
   private controlSocket: Socket | null = null
   private readonly pendingVideo = new RelayFrameBuffer()
   private metaSeen = false
+  private currentVideoSize: H264PictureSize | null = null
   private headerStripped = false
   private closed = false
   private readonly ready: Promise<void>
@@ -186,6 +194,8 @@ export class ScrcpyStreamSession {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
+    // Touch messages are tiny; Nagle would hold them back behind unacknowledged writes.
+    socket.setNoDelay(true)
     socket.on('error', (error) =>
       emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
     )
@@ -219,6 +229,7 @@ export class ScrcpyStreamSession {
       }
       const meta = parseScrcpyVideoMeta(buffer.peek(12))!
       this.metaSeen = true
+      this.currentVideoSize = { width: meta.width, height: meta.height }
       emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
       shouldResolveReady = true
@@ -238,8 +249,36 @@ export class ScrcpyStreamSession {
       this.rejectReady = null
     }
     for (const frame of frames) {
+      if (frame.config) {
+        this.updateVideoSize(frame.data)
+      }
       this.callbacks.onFrame(frame)
     }
+  }
+
+  // The encoder restarts with a new SPS when the device rotates.
+  private updateVideoSize(config: Buffer): void {
+    const size = parseH264SpsPictureSize(config)
+    const current = this.currentVideoSize
+    if (!size || (size.width === current?.width && size.height === current.height)) {
+      return
+    }
+    this.currentVideoSize = size
+    emulatorProbe('scrcpy.video.size', { serial: this.options.serial, ...size })
+  }
+
+  videoSize(): H264PictureSize | null {
+    return this.currentVideoSize
+  }
+
+  // Returns false once the control socket is gone so callers can fall back to adb.
+  sendControl(message: Buffer): boolean {
+    const socket = this.controlSocket
+    if (this.closed || !socket || socket.destroyed) {
+      return false
+    }
+    socket.write(message)
+    return true
   }
 
   private fail(message: string): void {

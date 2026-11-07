@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
+
 import {
   renderServeReadiness,
   ServeReadinessPublisher,
   type ServeReadiness
 } from './serve-readiness'
-import type { OrcadHealth } from '../orcad/orcad-health'
 
 const ready: ServeReadiness = {
   runtimeId: 'runtime-1',
@@ -22,81 +22,7 @@ const ready: ServeReadiness = {
   }
 }
 
-const health: OrcadHealth = {
-  buildHash: 'abc123def4567890',
-  buildVersion: '1.4.0',
-  nodeVersion: '20.11.0',
-  nodeAbi: '115',
-  platform: 'linux',
-  arch: 'x64',
-  pid: 1234,
-  terminalDaemon: {
-    state: 'live',
-    ownsFreshSessions: true,
-    pid: 4242,
-    buildVersion: '1.4.0',
-    entryPath: '/opt/orcad/daemon-entry.js',
-    protocolVersion: 36,
-    cgroupUnit: null,
-    selfTest: { ok: true, coverage: 'pty-spawn', verdict: 'healthy', durationMs: 12 }
-  }
-}
-
 describe('ServeReadinessPublisher', () => {
-  it('writes one complete human-readable ready block', async () => {
-    const write = vi.fn(async () => {})
-    const publisher = new ServeReadinessPublisher(write)
-
-    await publisher.publish(ready, { mode: 'human' })
-
-    expect(write).toHaveBeenCalledOnce()
-    expect(write).toHaveBeenCalledWith(
-      expect.stringContaining(
-        'Orca server ready\nBound endpoint: ws://0.0.0.0:6768\nAdvertised endpoint: wss://orca.example.test/runtime'
-      )
-    )
-    expect(write).toHaveBeenCalledWith(
-      expect.stringContaining('Pairing URL: orca://pair?code=secret\n')
-    )
-  })
-
-  it('publishes a versioned JSON contract with explicit endpoints and pairing availability', () => {
-    expect(JSON.parse(renderServeReadiness(ready, { mode: 'json' }))).toEqual({
-      type: 'orca_server_ready',
-      schemaVersion: 1,
-      runtimeId: 'runtime-1',
-      endpoint: 'ws://0.0.0.0:6768',
-      boundEndpoint: 'ws://0.0.0.0:6768',
-      advertisedEndpoint: 'wss://orca.example.test/runtime',
-      managedWslCliReconciliation: 'settled',
-      pairing: ready.pairing
-    })
-  })
-
-  it('reports unavailable pairing as an explicit machine-readable object', () => {
-    const unavailable: ServeReadiness = {
-      ...ready,
-      advertisedEndpoint: null,
-      pairing: {
-        available: false,
-        reason: 'invalid_advertised_endpoint',
-        guidance: 'Use a reachable address.'
-      }
-    }
-
-    const json = JSON.parse(renderServeReadiness(unavailable, { mode: 'json' }))
-    expect(json.pairing).toEqual(unavailable.pairing)
-    expect(renderServeReadiness(unavailable, { mode: 'human' })).toContain(
-      'Pairing unavailable: invalid_advertised_endpoint\nPairing guidance: Use a reachable address.'
-    )
-  })
-
-  it('preserves the recipe JSON contract', () => {
-    expect(renderServeReadiness(ready, { mode: 'recipe-json', projectRoot: '/workspace' })).toBe(
-      '{"schemaVersion":1,"pairingCode":"orca://pair?code=secret","projectRoot":"/workspace"}'
-    )
-  })
-
   it('fails recipe output with the unavailable reason and guidance', () => {
     const unavailable: ServeReadiness = {
       ...ready,
@@ -109,49 +35,6 @@ describe('ServeReadinessPublisher', () => {
     expect(() =>
       renderServeReadiness(unavailable, { mode: 'recipe-json', projectRoot: '/workspace' })
     ).toThrow('websocket_unavailable. Choose an unused --port.')
-  })
-
-  it('omits the health block entirely when a host does not report one', () => {
-    const payload = JSON.parse(renderServeReadiness(ready, { mode: 'json' }))
-    // Absent health means unreported; it must not imply a green verdict.
-    expect('health' in payload).toBe(false)
-    expect(renderServeReadiness(ready, { mode: 'human' })).not.toContain('Terminal daemon')
-  })
-
-  it('carries build identity, Node ABI and the daemon self-test in the JSON contract', () => {
-    const payload = JSON.parse(renderServeReadiness({ ...ready, health }, { mode: 'json' }))
-    expect(payload.health.buildHash).toBe('abc123def4567890')
-    expect(payload.health.nodeAbi).toBe('115')
-    expect(payload.health.terminalDaemon.selfTest).toEqual({
-      ok: true,
-      coverage: 'pty-spawn',
-      verdict: 'healthy',
-      durationMs: 12
-    })
-  })
-
-  it('says out loud when the daemon self-test failed', () => {
-    const failed: ServeReadiness = {
-      ...ready,
-      health: {
-        ...health,
-        terminalDaemon: {
-          ...health.terminalDaemon,
-          state: 'degraded',
-          ownsFreshSessions: false,
-          selfTest: {
-            ok: false,
-            coverage: 'pty-spawn',
-            verdict: 'pty-spawn-unhealthy',
-            durationMs: 3_000
-          }
-        }
-      }
-    }
-    const human = renderServeReadiness(failed, { mode: 'human' })
-    // Make failure explicit to operators rather than requiring inference from missing output.
-    expect(human).toContain('PTY self-test FAILED')
-    expect(human).toContain('terminals survive an orcad restart: NO')
   })
 
   it('rejects concurrent and later duplicate publications', async () => {

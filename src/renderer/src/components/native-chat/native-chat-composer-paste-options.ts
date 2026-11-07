@@ -1,4 +1,4 @@
-import type { AgentType } from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 import type { NativeChatReservedAttachment } from './native-chat-session-attachment-drop'
 

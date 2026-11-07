@@ -1,9 +1,9 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiffSection } from '../../diff-section-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { buildCombinedGitStatusSignature } from '../resolve-changes/combined-diff-git-status-signature'
 import { combinedDiffSectionsMatchEntryMetadata } from '../resolve-changes/combined-diff-section-cache-match'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
@@ -12,7 +12,7 @@ import {
   collectCountedCombinedDiffPasses,
   getCombinedDiffCountingPassKey,
   shouldLoadCombinedDiffOnDemand
-} from '../../combined-diff-on-demand-load'
+} from '../load-sections/combined-diff-on-demand-load'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import type { CombinedDiffSectionLoadRegistry } from '../load-sections/combined-diff-section-load-registry'
 import { clearPendingSectionReloadTimers } from '../load-sections/combined-diff-section-load-registry'

@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
@@ -10,7 +10,7 @@ import {
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
-} from './runtime-host-connection-state'
+} from './hosts/connections/runtime-host-connection-state'
 import { createServerLayoutFrameTranslator } from './server-layout-frame-ids'
 import { routingInputs, sameValues } from './server-layout-frame-routing-inputs'
 import {

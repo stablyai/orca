@@ -4,7 +4,8 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
-import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
+import { withQuoteAppended } from './native-chat-selection-quote-draft'
+import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 
 /** Insert/focus through the composer input for paste and imperative callers. */
 export function useNativeChatTypedInsertion(args: {
@@ -14,7 +15,7 @@ export function useNativeChatTypedInsertion(args: {
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
 }): {
-  insertTypedText: (text: string) => boolean
+  insertTypedText: (text: string, options?: { dictated?: boolean }) => boolean
   appendText: (text: string) => void
   acceptsText: () => boolean
   insertPastedText: (text: string) => boolean
@@ -43,7 +44,7 @@ export function useNativeChatTypedInsertion(args: {
   )
 
   const insertTypedText = useCallback(
-    (text: string): boolean => {
+    (text: string, options?: { dictated?: boolean }): boolean => {
       const textarea = usableInput()
       if (!textarea) {
         return false
@@ -51,10 +52,15 @@ export function useNativeChatTypedInsertion(args: {
       const { value } = textarea
       const selectionStart = textarea.selectionStart ?? value.length
       const selectionEnd = textarea.selectionEnd ?? selectionStart
+      const before = value.slice(0, selectionStart)
+      const after = value.slice(selectionEnd)
+      const { leading, trailing } = options?.dictated
+        ? dictationSeparators(before, text, after)
+        : { leading: '', trailing: '' }
       showDraft(
         textarea,
-        `${value.slice(0, selectionStart)}${text}${value.slice(selectionEnd)}`,
-        selectionStart + text.length
+        `${before}${leading}${text}${trailing}${after}`,
+        before.length + leading.length + text.length
       )
       return true
     },
@@ -65,7 +71,8 @@ export function useNativeChatTypedInsertion(args: {
     (text: string): void => {
       const textarea = usableInput()
       if (textarea) {
-        const next = appendReturnedDraftText(textarea.value, text)
+        // A quote the user adds lands after what they typed, as typing it would.
+        const next = withQuoteAppended({ text: textarea.value }, text).text
         showDraft(textarea, next, next.length)
       }
     },

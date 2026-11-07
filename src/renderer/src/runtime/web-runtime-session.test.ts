@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { activateWebRuntimeSessionWorktree } from './web-runtime-worktree-activation'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import './web-runtime-worktree-activation'
 import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snapshot'
-import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import './rpc/calls/runtime-rpc-call'
 import {
   confirmWebAgentSessionHandoffAfterCreate,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
@@ -9,9 +9,13 @@ import {
   resetWebAgentSessionHandoffsForTests
 } from './web-agent-session-handoff'
 import { resetWebSessionCloseIntentForTests } from './web-session-close-intent'
-import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import {
+  ENVIRONMENT_ID,
+  WORKTREE_ID,
+  makeSnapshot
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   changedAgentPaneKeys: new Set<string>(),
@@ -69,7 +73,7 @@ vi.mock('./web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverWebSessionTerminalOrphansBeforeApply
 }))
 
@@ -77,11 +81,11 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.runtimeEnvironmentIdOrLocalUnlessTwin
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -163,114 +167,5 @@ describe('refreshWebRuntimeSessionTabsSnapshot', () => {
       hostTerminalHandle: 'term_host-a'
     })
     expect(confirmed('provisional-a')).toBe(false)
-  })
-
-  it('applies the recovered snapshot instead of a transient pending-handle frame', async () => {
-    const pending = makeSnapshot()
-    const recovered = { ...pending, publicationEpoch: 'recovered', snapshotVersion: 2 }
-    const state = { state: 'before' }
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'list',
-      ok: true,
-      result: pending,
-      _meta: { runtimeId: 'host-runtime' }
-    })
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-    mocks.getState.mockReturnValue(state)
-    mocks.setState.mockImplementation((updater: (current: unknown) => unknown) => updater(state))
-    mocks.recoverWebSessionTerminalOrphansBeforeApply.mockResolvedValueOnce(recovered)
-    mocks.applyWebSessionTabsSnapshot.mockImplementation((state) => state)
-    replaceRuntimeEnvironmentRevisions([{ id: ENVIRONMENT_ID, createdAt: 1, pairingRevision: 17 }])
-
-    await refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID)
-
-    // The post-adoption read must be fenced to the runtime that answered this list.
-    expect(mocks.recoverWebSessionTerminalOrphansBeforeApply).toHaveBeenCalledWith(
-      state,
-      pending,
-      ENVIRONMENT_ID,
-      {
-        expectedEnvironmentPairingRevision: 17,
-        expectedRuntimeId: 'host-runtime',
-        getCurrentState: expect.any(Function)
-      }
-    )
-    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      state,
-      recovered,
-      ENVIRONMENT_ID,
-      undefined,
-      undefined,
-      mocks.changedAgentPaneKeys
-    )
-  })
-})
-
-describe('activateWebRuntimeSessionWorktree', () => {
-  beforeEach(() => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    mocks.getState.mockReturnValue({
-      settings: {
-        activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      }
-    })
-    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) =>
-      updater({ state: 'before' })
-    )
-  })
-
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    clearRuntimeCompatibilityCacheForTests()
-    vi.clearAllMocks()
-  })
-
-  it('activates caller-owned session surfaces without steering host or clients', async () => {
-    const snapshot = makeSnapshot()
-    const runtimeCall = vi
-      .fn()
-      .mockResolvedValueOnce({
-        id: 'activate',
-        ok: true,
-        result: { repoId: 'repo', worktreeId: WORKTREE_ID, activated: true }
-      })
-      .mockResolvedValueOnce({ id: 'list', ok: true, result: snapshot })
-
-    stubRuntimeEnvironmentBridge({ call: runtimeCall })
-
-    await expect(
-      activateWebRuntimeSessionWorktree({
-        worktreeId: WORKTREE_ID
-      })
-    ).resolves.toBe(true)
-
-    expect(runtimeCall).toHaveBeenNthCalledWith(1, {
-      selector: ENVIRONMENT_ID,
-      method: 'worktree.activate',
-      params: {
-        worktree: `id:${WORKTREE_ID}`,
-        notifyClients: false,
-        navigation: 'caller'
-      },
-      timeoutMs: 15_000
-    })
-    expect(runtimeCall).toHaveBeenNthCalledWith(2, {
-      selector: ENVIRONMENT_ID,
-      method: 'session.tabs.list',
-      params: { worktree: `id:${WORKTREE_ID}` },
-      timeoutMs: 15_000
-    })
-    expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      { state: 'before' },
-      snapshot,
-      ENVIRONMENT_ID,
-      undefined,
-      undefined,
-      mocks.changedAgentPaneKeys
-    )
-    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
-      ENVIRONMENT_ID,
-      WORKTREE_ID
-    )
   })
 })

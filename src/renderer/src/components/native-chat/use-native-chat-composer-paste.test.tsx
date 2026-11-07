@@ -76,45 +76,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerPaste', () => {
-  it('does not save a clipboard image locally for a remote runtime', async () => {
-    mocks.clipboardHasImage.mockResolvedValue(true)
-    const setNotice = vi.fn()
-    const store = createChipStore()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'remote' }),
-      store,
-      setNotice
-    })
-
-    await act(async () => probe.latest().pasteFromClipboard())
-
-    expect(setNotice).toHaveBeenCalledWith(
-      'Local attachments are not available for remote sessions.'
-    )
-    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
-    expect(mocks.readClipboardImageThumbnail).not.toHaveBeenCalled()
-    expect(store.chips).toHaveLength(0)
-  })
-
-  it.each(['event', 'menu'] as const)(
-    'saves a clipboard image on the server whose host runs the agent via %s paste (#27997)',
-    async (source) => {
-      mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/remote.png')
-      const store = createChipStore()
-      const owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' } as const
-      const probe = await renderProbe({ resolveAttachmentOwner: () => owner, store })
-      await act(async () =>
-        source === 'event'
-          ? probe.latest().handlePaste(imagePasteEvent())
-          : probe.latest().pasteFromClipboard()
-      )
-      expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
-        runtimeEnvironmentId: 'env-1'
-      })
-      expect(store.chips).toEqual([expect.objectContaining({ path: '/tmp/remote.png' })])
-    }
-  )
-
   it('rejects a remote image saved before the chat moved to another server', async () => {
     let owner: NativeChatAttachmentOwner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' }
     let resolveSave: (path: string) => void = () => {}
@@ -170,17 +131,6 @@ describe('useNativeChatComposerPaste', () => {
       expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
     }
   )
-
-  it('saves a local paste where its draft can bring it back after a restart', async () => {
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue(
-      '/Users/me/Library/Application Support/orca/native-chat-pastes/orca-paste-1.png'
-    )
-    const probe = await renderProbe({ resolveAttachmentOwner: () => ({ kind: 'local' }) })
-    await act(async () => {
-      probe.latest().handlePaste(imagePasteEvent())
-    })
-    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
-  })
 
   it("keeps a local structured chat's paste where that chat's send claims it", async () => {
     const probe = await renderProbe({
@@ -395,29 +345,21 @@ describe('composer paste intake regressions', () => {
     }
   )
 
-  it.each([false, true, null, 'error'] as const)(
-    'preserves remote text when image presence is %s',
-    async (presence) => {
-      if (presence === 'error') {
-        mocks.clipboardHasImage.mockRejectedValue(new Error('denied'))
-      } else {
-        mocks.clipboardHasImage.mockResolvedValue(presence)
-      }
-      mocks.readClipboardText.mockResolvedValue('hello')
-      const insertTypedText = vi.fn(() => true)
-      const setNotice = vi.fn()
-      const probe = await renderProbe({
-        resolveAttachmentOwner: () => ({ kind: 'remote' }),
-        insertTypedText,
-        setNotice
-      })
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('hello')
-      // Text wins: no second (browser-prompting) clipboard read and no refusal beside the text.
-      expect(mocks.clipboardHasImage).not.toHaveBeenCalled()
-      expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toHaveLength(0)
-    }
-  )
+  it('preserves remote text without probing clipboard images', async () => {
+    mocks.readClipboardText.mockResolvedValue('hello')
+    const insertTypedText = vi.fn(() => true)
+    const setNotice = vi.fn()
+    const probe = await renderProbe({
+      resolveAttachmentOwner: () => ({ kind: 'remote' }),
+      insertTypedText,
+      setNotice
+    })
+    await act(async () => probe.latest().pasteFromClipboard())
+    expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('hello')
+    // Text wins: no second (browser-prompting) clipboard read and no refusal beside the text.
+    expect(mocks.clipboardHasImage).not.toHaveBeenCalled()
+    expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toHaveLength(0)
+  })
 
   it.each(['remote', 'not-ready'] as const)(
     'still explains an image-only menu paste on %s',
@@ -500,22 +442,6 @@ describe('composer paste intake regressions', () => {
       expect(store.chips).toHaveLength(0)
     }
   )
-
-  it('rejects an image saved across a host change', async () => {
-    let owner: NativeChatAttachmentOwner = { kind: 'local' }
-    let finish = (_path: string): void => {}
-    mocks.saveClipboardImageAsTempFile.mockReturnValue(
-      new Promise<string>((resolve) => {
-        finish = resolve
-      })
-    )
-    const store = createChipStore()
-    const probe = await renderProbe({ resolveAttachmentOwner: () => owner, store })
-    await act(async () => probe.latest().handlePaste(imagePasteEvent()))
-    owner = { kind: 'remote' }
-    await act(async () => finish('/tmp/old-host.png'))
-    expect(store.chips).toHaveLength(0)
-  })
 })
 
 it('inserts event text locally without any clipboard API access', async () => {

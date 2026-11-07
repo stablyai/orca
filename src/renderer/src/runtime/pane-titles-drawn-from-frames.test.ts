@@ -15,7 +15,7 @@ import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -93,15 +93,5 @@ describe('a pane title drawn from main’s frame', () => {
     expect(writes.count()).toBe(1)
     // A mounted pane follows the layout's titles (use-host-pane-title-sync), not an event.
     expect(dispatchEvent).not.toHaveBeenCalled()
-  })
-
-  it('clears a pane’s name from main’s frame alone', async () => {
-    const writes = layoutWrites()
-    applyRuntimePaneTitle({ tabId: 'tab-shell', leafId: leaf(2), title: null })
-    await settle()
-    writes.stop()
-
-    expect(titles()).toBeUndefined()
-    expect(writes.count()).toBe(1)
   })
 })

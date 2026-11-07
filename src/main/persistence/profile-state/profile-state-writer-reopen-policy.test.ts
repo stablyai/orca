@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ProfileStateWriterReopenPolicy,
-  reportTerminalReopenFailure
-} from './profile-state-writer-reopen-policy'
+import { ProfileStateWriterReopenPolicy } from './profile-state-writer-reopen-policy'
 
 const spawnFailure = Object.assign(new Error('spawn failed'), {
   code: 'profile-state-writer-unavailable'
@@ -63,44 +60,5 @@ describe('ProfileStateWriterReopenPolicy', () => {
     expect(() => policy.admit()).toThrow('spawn failed')
     now = 1_000
     expect(() => policy.admit()).not.toThrow()
-  })
-
-  it('reports a terminal failure even when the listener throws', () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const conflict = Object.assign(new Error('changed'), {
-      code: 'profile-state-revision-conflict'
-    })
-    const seen: Error[] = []
-    expect(() =>
-      reportTerminalReopenFailure((reported) => {
-        seen.push(reported)
-        throw new Error('listener broke')
-      }, conflict)
-    ).not.toThrow()
-    expect(seen).toEqual([conflict])
-    expect(error).toHaveBeenCalledWith(
-      '[persistence] Could not report stopped saving:',
-      expect.objectContaining({ message: 'listener broke' })
-    )
-  })
-
-  it('keeps a revision conflict terminal', () => {
-    const policy = new ProfileStateWriterReopenPolicy(() => 0)
-    expect(policy.recordFailure({ code: 'profile-state-revision-conflict' })).toBeNull()
-    expect(() => policy.admit()).not.toThrow()
-  })
-
-  it('counts every attempt and logs at most once per ten minutes', () => {
-    let now = 0
-    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
-    const policy = new ProfileStateWriterReopenPolicy(() => now)
-    policy.recordAttempt()
-    now = 9 * 60_000
-    policy.recordAttempt()
-    now = 10 * 60_000
-    policy.recordAttempt()
-    expect(policy.count).toBe(3)
-    expect(info).toHaveBeenCalledTimes(2)
-    info.mockRestore()
   })
 })

@@ -1,3 +1,4 @@
+import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { translate } from '@/i18n/i18n'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
@@ -5,9 +6,10 @@ import {
   NATIVE_CHAT_RECEIPT_COPY,
   nativeChatReceiptAnswerHeading,
   nativeChatReceiptAnswers,
+  nativeChatReceiptDevice,
   nativeChatReceiptSubject,
   type NativeChatResolvedPrompt
-} from '../../../../shared/native-chat-resolution-receipt'
+} from '../../../../shared/native-chat/native-chat-resolution-receipt'
 
 export function NativeChatResolutionReceipt({
   body,
@@ -32,6 +34,11 @@ export function NativeChatResolutionReceipt({
     ) : null
   }
   const { resolution } = body
+  const device = nativeChatReceiptDevice(resolution, {
+    current: translate('components.native-chat.receipt.thisComputer', 'this computer'),
+    computer: translate('components.native-chat.receipt.computer', 'the computer'),
+    unknown: translate('components.native-chat.receipt.otherDevice', 'another device')
+  })
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
   const answers = nativeChatReceiptAnswers(body)
@@ -59,7 +66,7 @@ export function NativeChatResolutionReceipt({
           <div
             key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
           >
-            {heading ? <p>{heading}</p> : null}
+            {heading ? <NativeChatQuestionText content={heading} /> : null}
             <p className="line-clamp-3 whitespace-pre-wrap break-words">
               {answer.answer === ''
                 ? translate(
@@ -93,12 +100,12 @@ export function NativeChatResolutionReceipt({
               ? translate(
                   'components.native-chat.receipt.cancelledBy',
                   NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
-                  { device: resolution.resolvedBy }
+                  { device }
                 )
               : translate(
                   'components.native-chat.receipt.resolver',
                   NATIVE_CHAT_RECEIPT_COPY.resolver,
-                  { device: resolution.resolvedBy }
+                  { device }
                 )}
           </span>
         ) : null}

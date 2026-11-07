@@ -1,9 +1,9 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   agentSessionAttachmentAppends,
   base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult
-} from '../../../src/shared/agent-session-attachments'
+} from '../../../src/shared/agent-session/agent-session-attachments'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 

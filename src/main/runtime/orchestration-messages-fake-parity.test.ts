@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { InMemoryOrchestrationMessages } from './orca-runtime-test-orchestration-messages.spec'
-import { OrchestrationDb } from './orchestration/db'
-import type { MessageType } from './orchestration/types'
+import { OrchestrationDb } from './orchestration/db/orchestration-db'
+import './orchestration/db/contract-constants'
+import './orchestration/db/messages/mailbox-routing-page'
+import './orchestration/db/dispatch-row-writer'
+import './orchestration/db/attempt-outcome-projection'
+import type { MessageType } from './orchestration/db/orchestration-records'
 
 type PointerTarget = { ptyId: string; processIncarnation: string }
 
@@ -65,29 +69,5 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
     expect(store.stageMailboxPointerEnter([free.id, taken.id], mine)).toBe(false)
     // A failed partial claim must leave the free row available to another flight.
     expect(store.stageMailboxPointerEnter([free.id], mine)).toBe(true)
-  })
-
-  it('applies the exclusion and limit the pointer batch selector relies on', () => {
-    const store = createStore()
-    store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'reserved',
-      type: 'escalation'
-    })
-    const kept = store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'kept'
-    })
-
-    expect(
-      store
-        .getUndeliveredUnreadMessages('run:run-1', undefined, { excludeTypes: ['escalation'] })
-        .map((message) => message.id)
-    ).toEqual([kept.id])
-    expect(store.getUndeliveredUnreadMessages('run:run-1', undefined, { limit: 1 })).toHaveLength(1)
   })
 })

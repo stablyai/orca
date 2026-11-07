@@ -3,10 +3,15 @@ import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
-import { FILE_REFERENCE_NODE, IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
+import {
+  FILE_REFERENCE_NODE,
+  IMAGE_REFERENCE_NODE,
+  promptLeafString
+} from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
+import type { AgentJournalSkillRef } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionInteractionCommand } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
 export { promptTextContent } from './native-chat-prompt-document-text'
 
 export const NativeChatSkill = Node.create({
@@ -77,6 +82,17 @@ export function promptSkillRefs(document: JSONContent | undefined): AgentJournal
   return [...own, ...(document.content ?? []).flatMap((child) => promptSkillRefs(child))]
 }
 
+export function promptHasInteractionModeSkill(
+  agent: string,
+  text: string,
+  document: JSONContent | undefined
+): boolean {
+  return (
+    agentSessionInteractionCommand(agent, text) !== null &&
+    promptSkillRefs(document).some((skill) => text.trimEnd() === `/${skill.name}`)
+  )
+}
+
 export function fileReferenceContent(path: string): JSONContent {
   return {
     type: NativeChatFileReference.name,
@@ -86,10 +102,7 @@ export function fileReferenceContent(path: string): JSONContent {
 
 /** A pill reads as its token and a hard break as a newline, so the text is what the agent receives. */
 export function promptLeafText(node: ProseMirrorNode): string {
-  if (node.type.name === IMAGE_REFERENCE_NODE) {
-    return imageReferenceToken(String(node.attrs.attachmentId))
-  }
-  return node.type.name === 'hardBreak' ? '\n' : String(node.attrs.token ?? '')
+  return promptLeafString(node.type.name, node.attrs, node.text)
 }
 
 export function promptText(doc: ProseMirrorNode, from = 0, to = doc.content.size): string {

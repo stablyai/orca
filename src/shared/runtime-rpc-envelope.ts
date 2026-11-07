@@ -81,6 +81,11 @@ export type RuntimeOrchestrationEnvelope = {
 }
 
 /** Which runtime a request is meant for; a host that is not that runtime refuses it before any handler. */
+export const ExpectedRuntimeSourceSchema = z.object({
+  sourceId: z.string().min(1).max(4_096),
+  runtimeId: z.string().min(1).max(4_096)
+})
+
 export type ExpectedRuntimeSource = {
   /** The launching profile's installation id. */
   sourceId: string
@@ -105,3 +110,16 @@ export type RuntimeRpcDispatchObservation = {
   responseTimeoutMs: number
   responseExpiresAt?: number
 }
+
+/** Select request params from the status of the socket that will send them. */
+export type RuntimeRequestSelection = {
+  paramsForStatus: (status: unknown) => unknown
+  onDispatch?: () => void
+}
+
+/** Internal preparation on the exact sending socket; never serialized or given credentials. */
+export type RuntimeRequestPreparation = (request: {
+  params: unknown
+  envelope: RuntimeOrchestrationEnvelope | undefined
+  measure: (params: unknown, envelope: RuntimeOrchestrationEnvelope | undefined) => number
+}) => { params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }

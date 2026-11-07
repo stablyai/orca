@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DESKTOP_BROWSER_BRIDGE_METHODS } from '../../../shared/desktop-browser-bridge-protocol'
-import { ALL_RPC_METHODS } from '../rpc/methods'
+import { ALL_RPC_METHODS } from '../rpc/methods/rpc-method-registry'
 
 describe('desktop browser bridge allowlist', () => {
   const registered = new Map<string, (typeof ALL_RPC_METHODS)[number]>(

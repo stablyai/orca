@@ -11,6 +11,12 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           startLine
           originalLine
           originalStartLine
+          diffSide
+          rootHunk: comments(first: 1) {
+            nodes {
+              diffHunk
+            }
+          }
           comments(first: 100) {
             nodes {
               id
@@ -19,6 +25,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               body
               createdAt
               url
+              viewerDidAuthor
               path
               reactionGroups {
                 content
@@ -39,6 +46,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           body
           createdAt
           url
+          viewerDidAuthor
           reactionGroups {
             content
             viewerHasReacted

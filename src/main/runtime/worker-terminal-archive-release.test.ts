@@ -259,56 +259,43 @@ describe('released worker archives preserve the host screen', () => {
     }
   )
 
-  it.each(['takeover', 'identity change'] as const)(
-    'keeps the pane when %s wins during the screen capture',
-    async (race) => {
-      const task = prepareFailedStart()
-      const fixture = await createTerminalArchiveFixture()
-      fixture.runtime.onPtyData('pty-1', '\r\n'.repeat(7), Date.now())
-      const failed = await h.call('orchestration.workerStart', {
-        task: task.id,
-        from: 'term_coord',
-        agent: 'codex'
-      })
-      const dispatchId = dispatchIdOf(failed)
-      const pending = h.deferred<void>()
-      let screenStarted = false
-      vi.mocked(h.runtime.readTerminal).mockImplementation(async (_handle, opts) => {
-        if (opts?.screen) {
-          screenStarted = true
-          await pending.promise
-        }
-        return fixture.runtime.readTerminal(fixture.handle, opts)
-      })
-      const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      await vi.waitFor(() => expect(screenStarted).toBe(true))
-      if (race === 'takeover') {
-        await h.call('orchestration.workerTerminalUserInput', { paneKey: h.workerPaneKey })
-      } else {
-        vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue(
-          'runtime_test:term_worker:2'
-        )
-        vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
-          runtimeId: 'runtime_test',
-          terminalHandle: 'term_worker',
-          ptyId: 'pty_term_worker',
-          worktreeId: 'repo::worktree',
-          paneKey: h.workerPaneKey,
-          processIncarnation: 'runtime_test:term_worker:2',
-          launchTokenHash: null,
-          hostScope: { kind: 'local', hostId: 'local' }
-        })
+  it('keeps the pane when an identity change wins during the screen capture', async () => {
+    const task = prepareFailedStart()
+    const fixture = await createTerminalArchiveFixture()
+    fixture.runtime.onPtyData('pty-1', '\r\n'.repeat(7), Date.now())
+    const failed = await h.call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      agent: 'codex'
+    })
+    const dispatchId = dispatchIdOf(failed)
+    const pending = h.deferred<void>()
+    let screenStarted = false
+    vi.mocked(h.runtime.readTerminal).mockImplementation(async (_handle, opts) => {
+      if (opts?.screen) {
+        screenStarted = true
+        await pending.promise
       }
-      pending.resolve()
-      await expect(release).resolves.toMatchObject({ state: 'retained' })
-      expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-      if (race === 'takeover') {
-        expect(h.db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
-      } else {
-        expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe(
-          'identity_unproven'
-        )
-      }
-    }
-  )
+      return fixture.runtime.readTerminal(fixture.handle, opts)
+    })
+    const release = h.call('orchestration.workerRelease', { dispatch: dispatchId })
+    await vi.waitFor(() => expect(screenStarted).toBe(true))
+    vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+    vi.mocked(h.runtime.getOrchestrationDispatchAuthority).mockReturnValue({
+      runtimeId: 'runtime_test',
+      terminalHandle: 'term_worker',
+      ptyId: 'pty_term_worker',
+      worktreeId: 'repo::worktree',
+      paneKey: h.workerPaneKey,
+      processIncarnation: 'runtime_test:term_worker:2',
+      launchTokenHash: null,
+      hostScope: { kind: 'local', hostId: 'local' }
+    })
+    pending.resolve()
+    await expect(release).resolves.toMatchObject({ state: 'retained' })
+    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.retained_reason).toBe(
+      'identity_unproven'
+    )
+  })
 })

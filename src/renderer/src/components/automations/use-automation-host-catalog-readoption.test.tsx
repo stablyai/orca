@@ -21,12 +21,13 @@ vi.mock('@/store', () => {
 })
 
 // Route desktop scoped lists directly into the generation-aware local fake.
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: unknown) =>
-    listScoped(params as { selector: AutomationListScopeSelector }),
+    listScoped(params as { selector: AutomationListScopeSelector })
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 

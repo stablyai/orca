@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '../skills/setup/AgentSkillSetupPanel'
 import type { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-setup-state'
 import { translate } from '@/i18n/i18n'
 

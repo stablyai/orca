@@ -1,14 +1,14 @@
 import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import type { RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   sendDesktopMultiplexSubscribe,
   startDesktopMultiplexSubscribe
@@ -16,7 +16,7 @@ import {
 import {
   TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
-} from '../../../shared/terminal-multiplex-flow-control'
+} from '../../../shared/terminal/stream/terminal-multiplex-flow-control'
 
 afterEach(() => vi.useRealTimers())
 
