@@ -131,7 +131,7 @@ vi.mock('@/lib/pane-spawn-deferral-drain', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-pane-recovery', async (importOriginal) => ({
+vi.mock('../../render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery: vi.fn(async () => {})
 }))

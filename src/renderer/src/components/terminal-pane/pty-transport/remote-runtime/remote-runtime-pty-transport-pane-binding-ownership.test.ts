@@ -1,4 +1,8 @@
-import { LEAF_1, LEAF_2, unboundSplitLayout } from '../../terminal-pane-tab-detach-fixture'
+import {
+  LEAF_1,
+  LEAF_2,
+  unboundSplitLayout
+} from '../../layout/detach/terminal-pane-tab-detach-fixture'
 import type { AppState } from '@/store/types'
 import type { ConnectPanePtySession } from '../../pty-connection/connect-pane-pty-session'
 import './recovery/remote-runtime-pty-recovery-state'
@@ -7,8 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn<() => AppState>(() => {

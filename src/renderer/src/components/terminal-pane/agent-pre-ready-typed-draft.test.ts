@@ -66,7 +66,7 @@ const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
 }))
 
-vi.mock('./terminal-pane-recovery', async (importOriginal) => ({
+vi.mock('./render-health/recovery/terminal-pane-recovery', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   requestTerminalPaneRecovery
 }))

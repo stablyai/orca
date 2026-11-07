@@ -1,5 +1,5 @@
 import { warnTerminalLifecycleAnomaly } from '../../terminal-lifecycle-diagnostics'
-import { requestTerminalPaneRecovery } from '../../terminal-pane-recovery'
+import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 /** Recover unbound successful connects by remount: no handler or visibility reconcile can rebind them while main ACKs buffered bytes. Respect transport-owned retries so recovery cannot race them. */

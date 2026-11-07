@@ -3,8 +3,9 @@
 // Tracking TUIs paste from mouse reports; also suppress Chromium PRIMARY paste so xterm cannot insert a second copy.
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { TerminalPaneContextController } from './use-terminal-pane-context-actions'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { TerminalPaneContextController } from './controller/use-terminal-pane-context-actions'
 
 const { armPrimarySelectionNativePasteSuppressionMock, isPrimarySelectionEnabledMock } = vi.hoisted(
   () => ({
@@ -28,7 +29,7 @@ vi.mock('./viewport/terminal-fit-restore', () => ({
   restoreTerminalFitToDesktop: vi.fn(),
   restoreTerminalFitsToDesktop: vi.fn()
 }))
-vi.mock('./terminal-pane-split-with-inherited-cwd', () => ({
+vi.mock('./layout/split/terminal-pane-split-with-inherited-cwd', () => ({
   splitTerminalPaneWithInheritedCwd: vi.fn()
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
@@ -40,9 +41,9 @@ vi.mock('./input/paste/terminal-pty-paste-writer', () => ({ writeTerminalPastePt
 vi.mock('./input/paste/terminal-paste-errors', () => ({
   formatTerminalPasteExecutionError: vi.fn()
 }))
-vi.mock('./terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
+vi.mock('./input/terminal-input-activity', () => ({ recordTerminalUserInputForLeaf: vi.fn() }))
 
-import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
+import { useTerminalPaneMobileActions } from './controller/use-terminal-pane-mobile-actions'
 
 function buildTrackedPane(mouseTrackingMode: 'none' | 'sgr'): ManagedPane {
   const container = document.createElement('div')

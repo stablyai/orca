@@ -2,7 +2,7 @@
 
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalPaneController } from './use-terminal-pane-controller'
+import type { TerminalPaneController } from './controller/use-terminal-pane-controller'
 
 type NativeChatPortalMenuActions = {
   onClosePane: () => void

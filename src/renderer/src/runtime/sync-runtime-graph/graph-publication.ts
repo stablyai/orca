@@ -4,12 +4,12 @@ import {
   collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherPaneIdsByPtyId
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { applyNativeChatLaunchDraftResolved } from '../native-chat-launch-draft-runtime-resolution'

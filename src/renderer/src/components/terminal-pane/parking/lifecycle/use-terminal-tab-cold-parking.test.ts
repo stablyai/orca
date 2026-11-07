@@ -89,7 +89,7 @@ import {
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 } from '../verdict/terminal-park-verdict-flip-telemetry'
 import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../../../terminal/background-terminal-worktree-visibility'
-import { queueTerminalPaneSplitRequest } from '../../terminal-pane-split-request-routing'
+import { queueTerminalPaneSplitRequest } from '../../layout/split/terminal-pane-split-request-routing'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const WORKTREE_ID = 'wt-1'

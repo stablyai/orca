@@ -36,7 +36,7 @@ import {
   type WindowLaunchCase
 } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
-import { createPaneManagerOptionsTestContext } from './terminal-pane-manager-options-test-context'
+import { createPaneManagerOptionsTestContext } from './mounting/terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
@@ -90,9 +90,9 @@ const load = perClientLoader(async () => ({
   vault: await import('@/lib/launch-ai-vault-session'),
   resume: await import('@/lib/agent-session/resume/history/ai-vault-resume-command'),
   pane: await import('./pty-connection/connect-pane-pty'),
-  paneOptions: await import('./terminal-pane-manager-options'),
+  paneOptions: await import('./mounting/terminal-pane-manager-options'),
   defaults: await import('@/lib/pane-manager/pane-terminal-options'),
-  lifecycle: await import('./terminal-pane-lifecycle-primitives'),
+  lifecycle: await import('./mounting/queued-initial-cwd'),
   workspaceStart: await loadWorkspaceStartModules()
 }))
 

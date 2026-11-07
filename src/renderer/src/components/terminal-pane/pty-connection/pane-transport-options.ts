@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
-import { notifyTerminalTypingDiscardedBeforeBind } from '../terminal-input-not-sent-notice'
+import { notifyTerminalTypingDiscardedBeforeBind } from '../input/terminal-input-not-sent-notice'
 import { terminalShowsReplayedHistory } from '../replayed-history-terminals'
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { shouldRetainDisposedPaneSpawn } from './spawn/disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './startup/cold-restore-resume-startup'
 import { mainStartsPane } from './spawn/main-starts-pane'
-import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
+import { requestTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
 import type { IpcPtyTransportOptions } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
