@@ -20640,7 +20640,7 @@
         },
         "modelUnload": {
           "title": "Konuşma modelini bellekten kaldır",
-          "description": "Ses açıkken Orca yerel modeli yüklü tutar, böylece dikte hemen başlar. Dikteyi bitirdikten sonra belleğin ne zaman boşaltılacağını seçin.",
+          "description": "Dikteyi bitirdikten sonra yerel modelin bellekte ne kadar kalacağı. Yüklü olduğu sürece dikte hemen başlar; \"Hemen\" belleği boşaltır, bu yüzden her dikte modelin yüklenmesini bekler.",
           "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
           "never": "Asla",
           "immediately": "Hemen"

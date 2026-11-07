@@ -21242,7 +21242,7 @@
         },
         "modelUnload": {
           "title": "Unload Speech Model",
-          "description": "Orca loads the on-device model while voice is on, so dictation starts at once. Choose when to free its memory after you stop dictating.",
+          "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
