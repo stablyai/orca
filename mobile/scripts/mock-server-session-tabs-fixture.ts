@@ -1,3 +1,4 @@
+import { MOCK_ACTIVITY_VIEW, activityScenarioTabs } from './mock-server-activity-scenario'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 import type { RpcRequest, RpcResponse } from './mock-server-rpc-handlers'
@@ -13,6 +14,9 @@ const SURFACE_TAB_ID = `${PARENT_TAB_ID}::${LEAF_ID}`
 
 // Complete session.tabs.list fixture for term-1 so tab/split/pane repros do not pass against incomplete contract shapes.
 function createMockSessionTabs(worktreeId: string): RuntimeMobileSessionTabsResult {
+  if (MOCK_ACTIVITY_VIEW) {
+    return activityScenarioTabs(worktreeId, PUBLICATION_EPOCH)
+  }
   return {
     worktree: worktreeId,
     publicationEpoch: PUBLICATION_EPOCH,

@@ -30,12 +30,17 @@ wss.on('connection', (ws) => {
     const e2ee = connectionState.get(ws)
 
     if (!e2ee) {
-      let hello: { type?: string; publicKeyB64?: string }
+      let hello: { type?: string; v?: number; publicKeyB64?: string }
       try {
         hello = JSON.parse(msg)
       } catch {
         ws.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid JSON' }))
         ws.close()
+        return
+      }
+
+      if (hello.type === 'e2ee_hello' && hello.v === 2) {
+        ws.close(4001, 'Mock server supports legacy framing')
         return
       }
 

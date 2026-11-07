@@ -7,6 +7,7 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { HostBottomBar } from './host-bottom-bar'
 import { HostConnectionStatus, HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
+import { HostActivityList } from './host-activity-list'
 import { HostWorkspaceList } from './host-workspace-list'
 import type { HostScreenController } from './use-host-screen-controller'
 
@@ -31,22 +32,29 @@ export function HostScreenView({ controller }: { controller: HostScreenControlle
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.topChromeSafeArea} edges={['top']}>
-        <HostScreenHeader controller={controller} collapsingTitle={collapsingTitle} />
+        <HostScreenHeader
+          controller={controller}
+          collapsingTitle={controller.activityView.active ? undefined : collapsingTitle}
+        />
       </SafeAreaView>
-      <HostWorkspaceList
-        controller={controller}
-        bottomBarHeight={bottomBarHeight}
-        pageTitle={{
-          element: (
-            <PageTitle
-              title={controller.hostDisplay.title}
-              subtitle={<HostConnectionStatus controller={controller} />}
-              onLayout={collapsingTitle.onTitleLayout}
-            />
-          ),
-          collapsing: collapsingTitle
-        }}
-      />
+      {controller.activityView.active ? (
+        <HostActivityList controller={controller} bottomBarHeight={bottomBarHeight} />
+      ) : (
+        <HostWorkspaceList
+          controller={controller}
+          bottomBarHeight={bottomBarHeight}
+          pageTitle={{
+            element: (
+              <PageTitle
+                title={controller.hostDisplay.title}
+                subtitle={<HostConnectionStatus controller={controller} />}
+                onLayout={collapsingTitle.onTitleLayout}
+              />
+            ),
+            collapsing: collapsingTitle
+          }}
+        />
+      )}
       <HostBottomBar controller={controller} onCoveredHeightChange={setBottomBarHeight} />
       <HostScreenOverlays controller={controller} />
     </View>

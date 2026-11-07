@@ -30,6 +30,7 @@ import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
+import { useHostActivityView } from './use-host-activity-view'
 import { classifyConnection } from '../transport/connection-health'
 
 export type HostScreenProps = {
@@ -47,6 +48,7 @@ export function useHostScreenController({
   useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
+  const activityView = useHostActivityView(hostId)
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
@@ -159,6 +161,8 @@ export function useHostScreenController({
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
 
   return {
+    activityView,
+    hostContextOf,
     actions,
     activeFilterCount,
     activeWorktreeScroll,

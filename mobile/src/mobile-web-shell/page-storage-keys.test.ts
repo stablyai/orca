@@ -5,6 +5,7 @@ import {
   pageRouteWorkspace,
   pageStorageEntriesForInit,
   pageStorageKeysForRoute,
+  pageStorageForReader,
   PAGE_STORAGE_EXACT_KEYS,
   PAGE_STORAGE_MAX_ENTRIES,
   PAGE_STORAGE_MAX_KEY_CHARS,
@@ -15,6 +16,14 @@ const HOST_ROUTE = '/h/host-1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
 
 describe('the keys a page may read and write', () => {
+  it('withholds Activity View preferences from older pages and restores them to supporting pages', () => {
+    const held = { storage: { 'orca:activityView:host-1': 'activity' }, storageOversize: [] }
+    expect(pageStorageForReader(held, null).storage).toEqual({})
+    expect(pageStorageForReader(held, ['orca:terminalSplitLayout']).storage).toEqual({})
+    expect(pageStorageForReader(held, ['orca:activityView:']).storage).toEqual({
+      'orca:activityView:host-1': 'activity'
+    })
+  })
   it('takes the ones the list keeps', () => {
     expect(isPageStorageKey('orca:last-visited-worktree')).toBe(true)
     expect(isPageStorageKey('orca:pins:host-1')).toBe(true)
@@ -50,7 +59,12 @@ describe('the keys a page may read and write', () => {
 
   it('names what the shell reads out of the app store for a route with no workspace', () => {
     const keys = pageStorageKeysForRoute('host-1', HOST_ROUTE)
-    expect(keys).toEqual([...PAGE_STORAGE_EXACT_KEYS, 'orca:pins:host-1'])
+    expect(keys).toEqual([
+      ...PAGE_STORAGE_EXACT_KEYS,
+      'orca:pins:host-1',
+      'orca:activityView:host-1'
+    ])
+    expect(isPageStorageKeyForRoute('orca:activityView:host-2', 'host-1', HOST_ROUTE)).toBe(false)
     for (const key of keys) {
       expect(isPageStorageKey(key), key).toBe(true)
     }

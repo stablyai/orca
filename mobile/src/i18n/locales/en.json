@@ -741,6 +741,23 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "activity": {
+      "waiting": "Waiting",
+      "working": "Working",
+      "monitoring": "Monitoring",
+      "done": "Done",
+      "other": "Other sessions",
+      "title": "Activity View",
+      "sessions": "sessions",
+      "offline": "Offline · showing last known activity",
+      "noMatches": "No matching sessions",
+      "loading": "Loading sessions…",
+      "empty": "No agent sessions on this host",
+      "search": "Search sessions",
+      "showWorkspaces": "Show workspaces",
+      "showActivity": "View activity",
+      "session": "session"
     }
   },
   "webShell": {
