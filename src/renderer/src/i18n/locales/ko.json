@@ -18529,18 +18529,6 @@
           "reviewStatus": "모든 워크트리에서 이슈 상태, 리뷰 상태 및 CI 체크를 확인합니다",
           "managePullRequests": "Orca를 떠나지 않고 PR을 읽고, 댓글을 달고, 병합합니다"
         }
-      },
-      "agyInstall": {
-        "open": "설치",
-        "title": "Antigravity 설치",
-        "description": "터미널에서 Enter를 눌러 공식 설치 프로그램을 실행하세요. 이 터미널을 닫으면 실행 중인 명령이 중지됩니다.",
-        "target": "설치 위치: {{location}}",
-        "thisDevice": "이 기기",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity 설치 프로그램",
-        "detected": "PATH에서 Antigravity가 감지되었습니다. 설치가 끝나면 터미널을 닫으세요.",
-        "close": "터미널 닫기",
-        "recheck": "Agent 다시 확인"
       }
     },
     "native-chat": {

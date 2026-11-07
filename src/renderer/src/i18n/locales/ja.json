@@ -18529,18 +18529,6 @@
           "reviewStatus": "すべてのワークツリーで Issue の状態、レビュー状況、CI チェックを確認",
           "managePullRequests": "Orca から離れずに、PR の閲覧、コメント、マージ"
         }
-      },
-      "agyInstall": {
-        "open": "インストール",
-        "title": "Antigravity をインストール",
-        "description": "ターミナルで Enter キーを押すと公式インストーラーが実行されます。このターミナルを閉じると、実行中のコマンドは停止します。",
-        "target": "インストール先：{{location}}",
-        "thisDevice": "このデバイス",
-        "wslLocation": "WSL {{distro}}",
-        "terminal": "Antigravity インストーラー",
-        "detected": "PATH 上に Antigravity が検出されました。インストールが完了したらターミナルを閉じてください。",
-        "close": "ターミナルを閉じる",
-        "recheck": "Agent を再確認"
       }
     },
     "native-chat": {
