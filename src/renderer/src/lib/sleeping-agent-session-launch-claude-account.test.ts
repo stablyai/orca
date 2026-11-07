@@ -23,6 +23,7 @@ const store = {
     store.worktreesByRepo['repo-1'].find((worktree) => worktree.id === id),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
   openFiles: [],
+  unifiedTabsByWorktree: {},
   browserTabsByWorktree: {},
   tabBarOrderByWorktree: {},
   agentStatusByPaneKey: {},
