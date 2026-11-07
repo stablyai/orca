@@ -36,6 +36,9 @@ export type NativeChatDraftJournalBatch = {
     }
   >
   readonly additions?: readonly NativeChatDraftJournalAddition[]
+  /** Scopes whose plain additions from this run one new addition of their whole unread-base input
+   *  replaces, only if the write lands. */
+  readonly superseded?: ReadonlySet<string>
   /** Identified additions to remove on their own, once a committed record carries them: [scopeKey, receipt key]. */
   readonly discharge?: readonly (readonly [string, string])[]
 }
@@ -69,7 +72,7 @@ export function writeNativeChatComposerDraftJournalBatch(
 ): NativeChatDraftJournalWitness {
   const snapshots = batch.snapshots ?? new Map()
   const additions = batch.additions ?? []
-  if (!snapshots.size && !additions.length && !batch.discharge?.length) {
+  if (!snapshots.size && !additions.length && !batch.discharge?.length && !batch.superseded?.size) {
     return NONE
   }
   const { raw, entries, read } = readNativeChatComposerDraftJournal()
@@ -77,6 +80,8 @@ export function writeNativeChatComposerDraftJournalBatch(
   // Each identified addition's current copies, and the whole copies a scope's admitted snapshot
   // replaces that are charged now (kept if it is omitted), indexed once.
   const copies = new Map<string, Encoded[]>()
+  // This run's plain additions of a scope whose whole unread-base input arrives as one addition.
+  const earlier = new Map<string, Encoded[]>()
   const charged = new Map<string, number>()
   let used = 0
   for (const encoded of existing) {
@@ -86,6 +91,14 @@ export function writeNativeChatComposerDraftJournalBatch(
       const list = copies.get(id) ?? []
       list.push(encoded)
       copies.set(id, list)
+    } else if (
+      isAddition(entry) &&
+      entry.run === THIS_RUN &&
+      batch.superseded?.has(entry.scopeKey)
+    ) {
+      const list = earlier.get(entry.scopeKey) ?? []
+      list.push(encoded)
+      earlier.set(entry.scopeKey, list)
     }
     if (isAddition(entry) || !entry.draft) {
       continue
@@ -140,12 +153,28 @@ export function writeNativeChatComposerDraftJournalBatch(
       additionChars += text.length + 1
     }
   }
-  // An identified replacement is charged its net size and admitted before its old copy goes.
+  // A replacement is charged its net size and admitted before its old copies go.
   const keptAdditions: Encoded[] = []
   const written = new Set<string>()
+  // A superseded scope's earlier additions go with the first new addition of that scope, which
+  // carries its whole input, only if that one is admitted; with none (its input is now empty),
+  // they simply go.
+  const dropped = new Set(batch.superseded)
+  const carried = new Set<string>()
+  if (dropped.size) {
+    for (const { entry } of incoming) {
+      dropped.delete(entry.scopeKey)
+    }
+  }
   incoming.forEach((candidate, index) => {
     const id = journalEntryId(candidate.entry)
-    const old = id && !removedIds.has(id) ? (copies.get(id) ?? []) : []
+    const scopeKey = candidate.entry.scopeKey
+    const carries = Boolean(batch.superseded?.has(scopeKey)) && !carried.has(scopeKey)
+    carried.add(scopeKey)
+    const old = [
+      ...(id && !removedIds.has(id) ? (copies.get(id) ?? []) : []),
+      ...(carries ? (earlier.get(scopeKey) ?? []) : [])
+    ]
     const oldChars = old.reduce((sum, { text }) => sum + text.length + 1, 0)
     if (additionChars - oldChars + candidate.text.length + 1 > MAX_JOURNAL_ADDITIONS_CHARS) {
       return
@@ -155,6 +184,9 @@ export function writeNativeChatComposerDraftJournalBatch(
     if (id) {
       removedIds.add(id)
     }
+    if (carries) {
+      dropped.add(scopeKey)
+    }
     written.add(id ?? `plain:${index}`)
   })
   // A capped-out snapshot leaves its scope's last receipt-bearing copy: it may be the only proof.
@@ -163,8 +195,10 @@ export function writeNativeChatComposerDraftJournalBatch(
     if (id) {
       return !removedIds.has(id)
     }
+    if (isAddition(entry)) {
+      return !(entry.run === THIS_RUN && dropped.has(entry.scopeKey))
+    }
     return (
-      isAddition(entry) ||
       !snapshots.has(entry.scopeKey) ||
       (!replaced.has(entry.scopeKey) && Boolean(entry.draft?.handbacks?.length))
     )

@@ -25,6 +25,7 @@ import {
   moveNativeChatPendingAttachments,
   moveLaunchPendingAttachmentListeners
 } from './native-chat-pending-attachment-cache'
+import { noteNativeChatDraftInput } from './native-chat-composer-draft-input'
 /** One accepted application rebinds references directly and joins complete current memory. */
 export function transitionLaunchDrafts(
   destination: (source: LaunchDraftSource) => NativeChatComposerDraftOwner | undefined
@@ -68,6 +69,8 @@ export function transitionLaunchDrafts(
     installNativeChatDraftRecord(from)
     if (placed) {
       const merged = withIndependentNativeChatComposerDraft(before, placed)
+      // Joined to a destination whose saved base is unread, it is input to resolve there.
+      noteNativeChatDraftInput(to)
       installNativeChatDraftRecord(to, {
         ...before,
         ...merged,

@@ -1,3 +1,4 @@
+import type { NativeChatDraftWriteOptions } from './native-chat-draft-cache'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../shared/orchestration-agent-reference'
 import { useCallback, useMemo, useState } from 'react'
@@ -10,10 +11,8 @@ import type {
 import type { NativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatImagesHoldSend } from './native-chat-image-reattach'
-import {
-  clearNativeChatComposerDraftIfUnchanged,
-  readNativeChatComposerDraft
-} from './native-chat-composer-draft-store'
+import { readNativeChatComposerDraft } from './native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftIfUnchanged } from './native-chat-draft-cache'
 import {
   isBareStructuredAgentSessionGoalCommand,
   isStructuredAgentSessionHostCommand,
@@ -54,7 +53,7 @@ export function useNativeChatComposerSubmit(args: {
   /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
   consumeOrcaCommand?: (draft: string) => boolean
   matchesOrcaCommand?: (draft: string) => boolean
-  setDraft: (value: string) => void
+  setDraft: (value: string, options?: NativeChatDraftWriteOptions) => void
   setCaret: (caret: number) => void
 }): {
   send: (intent?: NativeChatComposerSendIntent) => void
@@ -165,7 +164,7 @@ export function useNativeChatComposerSubmit(args: {
       }
       if (threadGoal && structuredTransport && isBareStructuredAgentSessionGoalCommand(draft)) {
         // Bare /goal always enters goal mode; even there it must not become an objective.
-        setDraft('')
+        setDraft('', { consumed: 'text' })
         setCaret(0)
         setEntered(true)
       } else if (active) {

@@ -5,6 +5,7 @@ import {
   deferredRemovals,
   dirtyScopes,
   isNativeChatSetupDraft,
+  load,
   nextSavedAt,
   notifyScope,
   records,
@@ -165,6 +166,8 @@ function retireStoredNativeChatDraftReceipt(
     .then(
       () => {
         confirmNativeChatDraftCustody(scopeKey, written)
+        // The load reading now read the older metadata: it must not bring it back.
+        load.attempt?.excluded.add(scopeKey)
         broadcastNativeChatComposerDraft(scopeKey)
         wakeNativeChatDraftRetirements(scopeKey)
         return true

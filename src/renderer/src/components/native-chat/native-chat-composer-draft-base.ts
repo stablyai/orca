@@ -19,7 +19,9 @@ import {
 import {
   isNativeChatSetupDraft,
   load,
+  nativeChatDraftPositions,
   nextSavedAt,
+  type NativeChatDraftPosition,
   notifyScope,
   records
 } from './native-chat-composer-draft-memory'
@@ -27,30 +29,18 @@ import { noticeNativeChatDraftReceipts } from './native-chat-composer-draft-rece
 import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 import { currentStoredNativeChatComposerDraft } from './native-chat-composer-draft-saved-form'
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
+import { scopeInputs } from './native-chat-composer-draft-input'
+export { nativeChatDraftBaseKnown } from './native-chat-composer-draft-input'
 
-/** Whether memory holds the scope's resolved base: never while contributions wait for its read;
- *  always once every draft was loaded; while a load can still publish, when the scope's own read
- *  or write resolved it; once the load gave up, its own live draft is all there is. */
-export function nativeChatDraftBaseKnown(scopeKey: string): boolean {
-  if (draftCustody.get(scopeKey)?.pending.length) {
-    return false
-  }
-  if (load.complete) {
-    return true
-  }
-  return load.hydrated ? records.has(scopeKey) : load.fenced.has(scopeKey)
+/** The scope's own read or write came after the load reading now began: that load's older value
+ *  of it must not replace it. Ends with that load. */
+function excludeFromNativeChatDraftLoad(scopeKey: string): void {
+  load.attempt?.excluded.add(scopeKey)
 }
 
-/** The scope's own read or write resolved its base: a load still able to publish an older read of
- *  it must not replace it. */
-function fenceNativeChatDraftFromLoad(scopeKey: string): void {
-  if (!load.hydrated) {
-    load.fenced.add(scopeKey)
-  }
-}
-
-/** Composes the scope's pending hand-backs, and what was typed into its partial view, onto its
- *  actual base, then shows that complete draft; later edits are ordinary complete edits. */
+/** Resolves the scope's unresolved input and pending hand-backs at its actual base, once: additions
+ *  replay onto it, an edited partial view joins it as independent input, a replacement keeps its
+ *  content with the base's receipts. Then shows that complete draft; later edits are complete. */
 export function establishNativeChatDraftBase(
   scopeKey: string,
   base: StoredNativeChatComposerDraft | null,
@@ -59,17 +49,39 @@ export function establishNativeChatDraftBase(
   committed: StoredNativeChatComposerDraft | null | undefined = base
 ): void {
   const custody = draftCustody.get(scopeKey)
-  const partial = records.get(scopeKey)
+  const input = scopeInputs.get(scopeKey)
+  const view = records.get(scopeKey)
+  const owner = base?.owner ?? view?.owner ?? custody?.owner
+  let position: NativeChatDraftPosition | undefined
   let draft: StoredNativeChatComposerDraft = base ?? {
     text: '',
     images: [],
     savedAt: 0,
-    ...(custody?.owner ? { owner: custody.owner } : {})
+    ...(owner ? { owner } : {})
   }
-  // What was typed before the base was known is independent of it, never a replacement.
-  if (partial && (partial.text !== '' || partial.images.length > 0)) {
-    draft = { ...draft, ...withIndependentNativeChatComposerDraft(draft, partial) }
+  if (input?.kind === 'replaced') {
+    const { text = '', images = [], document, pastedTextFiles } = view ?? {}
+    const { document: _document, pastedTextFiles: _pasted, ...metadata } = draft
+    const held = new Set(draft.images.map((image) => image.id))
+    draft = {
+      ...metadata,
+      text,
+      // A text-only consumption leaves the base's attachments where they were.
+      images: input.images
+        ? images
+        : [...draft.images, ...images.filter((image) => !held.has(image.id))],
+      ...(document ? { document } : {}),
+      ...(pastedTextFiles ? { pastedTextFiles } : {})
+    }
+  } else if (input?.appends) {
+    draft = input.appends.reduce((value, append) => append(value), draft)
+    // An addition's own placement in the result it produced.
+    position = nativeChatDraftPositions.get(draft)
+  } else if (view && (view.text !== '' || view.images.length > 0)) {
+    // What was typed before the base was known is independent of it, never a replacement.
+    draft = { ...draft, ...withIndependentNativeChatComposerDraft(draft, view) }
   }
+  scopeInputs.delete(scopeKey)
   for (const handback of custody?.pending ?? []) {
     const key = handbackReceiptKey(handback.receipt)
     draft = withIdentifiedHandback(draft, handback, custody?.retired.has(key))
@@ -78,11 +90,12 @@ export function establishNativeChatDraftBase(
   if (custody) {
     custody.pending = []
   }
-  fenceNativeChatDraftFromLoad(scopeKey)
+  excludeFromNativeChatDraftLoad(scopeKey)
   installStoredNativeChatComposerDraft(
     scopeKey,
     { ...draft, savedAt: nextSavedAt() },
-    base?.handbacks ?? []
+    base?.handbacks ?? [],
+    position
   )
   materialized.forEach((key) => draftCustody.get(scopeKey)?.journaled.add(key))
   claimUncommittedNativeChatDraftHandbacks(scopeKey, committed)
@@ -101,7 +114,7 @@ export function nativeChatDraftAtBase(
     return null
   }
   const custody = draftCustody.get(scopeKey)
-  if (custody?.pending.length) {
+  if (custody?.pending.length || scopeInputs.has(scopeKey)) {
     const drafts = new Map([[scopeKey, stored]])
     const materialized = new Map<string, Set<string>>()
     if (!load.complete) {
@@ -127,10 +140,8 @@ export function nativeChatDraftAtBase(
     if (learned.length) {
       noticeNativeChatDraftReceipts(scopeKey, learned)
     }
-    if (!load.appendsBeforeLoad.has(scopeKey)) {
-      // Storage now holds exactly this memory: a load that read the older record must not replace it.
-      fenceNativeChatDraftFromLoad(scopeKey)
-    }
+    // Storage now holds exactly this memory: a load that read the older record must not replace it.
+    excludeFromNativeChatDraftLoad(scopeKey)
   }
   const result = currentStoredNativeChatComposerDraft(scopeKey)
   // Provenance the stored record holds for paths this content still names is kept too.

@@ -1,3 +1,4 @@
+import type { NativeChatDraftWriteOptions } from './native-chat-draft-cache'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
@@ -28,7 +29,7 @@ export function useNativeChatPickerCommandDispatch(args: {
   onSubmitted?: () => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
-  setDraft: (value: string) => void
+  setDraft: (value: string, options?: NativeChatDraftWriteOptions) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
@@ -92,7 +93,7 @@ export function useNativeChatPickerCommandDispatch(args: {
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
       onSubmitted?.()
-      setDraft('')
+      setDraft('', { consumed: 'all' })
       setCaret(0)
       setActiveSuggestion(0)
       clearSkillOrigin()

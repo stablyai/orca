@@ -13,6 +13,7 @@ import {
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
 import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import { draftCustody, withNativeChatDraftCustody } from './native-chat-composer-draft-custody'
+import { scopeInputs } from './native-chat-composer-draft-input'
 
 export function deleteNativeChatComposerDraftsWhere(
   matches: (scope: string, draft: StoredNativeChatComposerDraft | undefined) => boolean
@@ -29,6 +30,7 @@ export function deleteNativeChatComposerDraftsWhere(
     if (matches(scope, draft)) {
       releaseNativeChatStagedFiles(scope)
       draftCustody.delete(scope)
+      scopeInputs.delete(scope)
       installNativeChatDraftRecord(scope)
       reconcileRestoredImageChecks(scope, [])
       notifyScope(scope)

@@ -107,16 +107,12 @@ export {
 } from './native-chat-composer-draft-restored-images'
 export const scopeListeners = new Map<string, Set<() => void>>()
 
-export type { DraftAppend, AppendBeforeLoad } from './native-chat-composer-draft-load'
+export type { DraftAppend } from './native-chat-composer-draft-load'
 
 export const load: LoadBookkeeping = {
   hydrated: false,
   complete: false,
-  appendSequence: 0,
-  editedBeforeLoad: new Set(),
-  appendsBeforeLoad: new Map(),
-  deletionsBeforeLoad: [],
-  fenced: new Set()
+  attempt: null
 }
 
 let lastSavedAt = 0
@@ -180,11 +176,7 @@ export function clearDraftMemoryForTests(): void {
   lastSavedAt = 0
   load.hydrated = false
   load.complete = false
-  load.appendSequence = 0
-  load.editedBeforeLoad.clear()
-  load.appendsBeforeLoad.clear()
-  load.deletionsBeforeLoad.length = 0
-  load.fenced.clear()
+  load.attempt = null
 }
 
 export type NativeChatDraftAppend =

@@ -183,6 +183,16 @@ describe('/usage in a structured chat', () => {
     expect(open).toHaveBeenCalledTimes(2)
   })
 
+  it('consumes only the command text when /resume opens the history, keeping attachments', () => {
+    mocks.draft = '/resume'
+    mocks.imageAttachments = [{ id: 'img-1', path: '/tmp/a.png' }]
+    renderStructuredChat()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(mocks.openHistory).toHaveBeenCalledOnce()
+    expect(mocks.setDraft).toHaveBeenLastCalledWith('', { consumed: 'text' })
+    expect(mocks.clearImageAttachments).not.toHaveBeenCalled()
+  })
+
   it('keeps a picked skill named usage as a skill', () => {
     mocks.draft = '/usa'
     const { transport, rerender } = renderStructuredChat()
@@ -206,6 +216,24 @@ describe('/usage in a structured chat', () => {
     expect(transport.dispatchCommand).toHaveBeenCalledWith('/usage')
     act(() => mocks.keyDownArgs?.dispatchPickerCommand(USAGE))
     expect(open).toHaveBeenCalledOnce()
+  })
+})
+
+describe('a bare /goal sent in a structured chat with host goals', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.fieldProps = null
+  })
+  afterEach(() => cleanup())
+
+  it('enters goal entry and consumes only the command text', () => {
+    mocks.draft = '/goal'
+    const { transport, rerender } = renderStructuredChat()
+    transport.threadGoal = { setObjective: vi.fn(async () => true) }
+    rerender()
+    act(() => mocks.fieldProps?.onSend?.())
+    expect(mocks.setDraft).toHaveBeenLastCalledWith('', { consumed: 'text' })
+    expect(transport.send).not.toHaveBeenCalled()
   })
 })
 

@@ -6,6 +6,7 @@ import type * as DraftCache from './native-chat-draft-cache'
 import type * as DraftMove from './native-chat-composer-draft-move'
 import type * as Staging from './native-chat-draft-attachment-staging'
 import type * as DraftMemory from './native-chat-composer-draft-memory'
+import type * as DraftInput from './native-chat-composer-draft-input'
 import {
   createMemoryNativeChatComposerDraftStorage,
   type NativeChatComposerDraftStorage
@@ -18,6 +19,7 @@ type Renderer = {
   move: typeof DraftMove
   staging: typeof Staging
   memory: typeof DraftMemory
+  input: typeof DraftInput
 }
 
 const JOURNAL_KEY = 'orca:nativeChatComposerDraftJournal:v1'
@@ -61,7 +63,8 @@ async function reload(
     drafts: await import('./native-chat-draft-cache'),
     move: await import('./native-chat-composer-draft-move'),
     staging: await import('./native-chat-draft-attachment-staging'),
-    memory: await import('./native-chat-composer-draft-memory')
+    memory: await import('./native-chat-composer-draft-memory'),
+    input: await import('./native-chat-composer-draft-input')
   }
   loaded.push(instance)
   if (options.hydrate !== false) {
@@ -365,7 +368,7 @@ describe('an identified hand-back before its draft’s saved base is known', () 
     }
   )
 
-  it('composes what was typed before its base read beside unseen A, live and after a crash', async () => {
+  it('keeps what was typed before its base read, with the return beside it, live and after a crash', async () => {
     for (const crash of [false, true]) {
       storage.drafts.set(SCOPE, { text: A, images: [], savedAt: 1 })
       let read: () => void = () => {}
@@ -376,26 +379,27 @@ describe('an identified hand-back before its draft’s saved base is known', () 
       storage.update = async (...args) => (await held, update(...args))
       tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
       expect(text(tab)).toBe('')
+      // Ordinary typing replaces the unseen saved draft; the identified return still joins it.
       tab.drafts.writeNativeChatDraftCache(SCOPE, 'typed meanwhile')
       if (crash) {
         window.dispatchEvent(new Event('pagehide'))
         tab.store.clearNativeChatComposerDraftsForTests()
         storage.update = update
-        expect(text(await reload())).toBe(`${A}\n\ntyped meanwhile\n\n${B}`)
+        expect(text(await reload())).toBe(`typed meanwhile\n\n${B}`)
       } else {
         read()
-        await vi.waitFor(() => expect(text(tab)).toBe(`${A}\n\ntyped meanwhile\n\n${B}`))
+        await vi.waitFor(() => expect(text(tab)).toBe(`typed meanwhile\n\n${B}`))
         await land()
         await tab.store.nativeChatComposerDraftWritesSettled()
         storage.update = update
-        expect(text(tab)).toBe(`${A}\n\ntyped meanwhile\n\n${B}`)
-        expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\ntyped meanwhile\n\n${B}`)
+        expect(text(tab)).toBe(`typed meanwhile\n\n${B}`)
+        expect(storage.drafts.get(SCOPE)?.text).toBe(`typed meanwhile\n\n${B}`)
       }
       localStorage.clear()
     }
   })
 
-  it('keeps a base its own read resolved through failed loads, and nothing of it once loading gives up', async () => {
+  it('keeps a base its own read resolved through failed loads without any fence, and joins a later return once', async () => {
     vi.useFakeTimers()
     try {
       const tab = await reload({
@@ -404,15 +408,14 @@ describe('an identified hand-back before its draft’s saved base is known', () 
       })
       tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
       await tab.store.nativeChatComposerDraftWritesSettled()
-      // Its own read put B beside stored A while the load fails: a later attempt must not replace it.
+      // Its own read put B beside stored A while the load fails: the draft is complete, and no
+      // failed load owns anything of it.
       expect(text(tab)).toBe(`${A}\n\n${B}`)
-      expect(tab.memory.load.fenced.has(SCOPE)).toBe(true)
-      await vi.advanceTimersByTimeAsync(1_000)
-      expect(tab.memory.load.fenced.has(SCOPE)).toBe(true)
-      // The last attempts fail too: no load can publish any more, so nothing fences the scope.
-      await vi.advanceTimersByTimeAsync(35_000)
-      expect(tab.memory.load).toMatchObject({ hydrated: true, complete: false })
-      expect(tab.memory.load.fenced.size).toBe(0)
+      expect(tab.input.scopeInputs.has(SCOPE)).toBe(false)
+      expect(tab.memory.load.attempt).toBeNull()
+      // The retries fail too, and loading gives up: still nothing owned, nothing lost.
+      await vi.advanceTimersByTimeAsync(36_000)
+      expect(tab.memory.load).toMatchObject({ hydrated: true, complete: false, attempt: null })
       // Its live draft is its resolved base: another return joins it once.
       const next = 'Then run the build'
       tab.handback.adoptIdentifiedNativeChatDraftInput(
@@ -427,6 +430,208 @@ describe('an identified hand-back before its draft’s saved base is known', () 
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  const N = 'Note from the file mention'
+
+  it('resolves an addition before a failing load at its own read, once, and a later return joins it', async () => {
+    vi.useFakeTimers()
+    try {
+      const tab = await reload({
+        hydrate: false,
+        storage: { loadAll: () => Promise.reject(new Error('database busy')) }
+      })
+      tab.store.appendToNativeChatComposerDraft(SCOPE, { text: N })
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      // Its own write read stored A: the complete result is what the composer shows and saves.
+      expect(text(tab)).toBe(`${A}\n\n${N}`)
+      expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\n${N}`)
+      expect(tab.input.scopeInputs.has(SCOPE)).toBe(false)
+      await vi.advanceTimersByTimeAsync(36_000)
+      expect(tab.memory.load).toMatchObject({ hydrated: true, complete: false, attempt: null })
+      tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+      expect(text(tab)).toBe(`${A}\n\n${N}\n\n${B}`)
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\n${N}\n\n${B}`)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(text(await reload())).toBe(`${A}\n\n${N}\n\n${B}`)
+  })
+
+  it('publishes a rich addition over a slow first load once, and the late load replaces none of it', async () => {
+    const { tab, land } = await loading()
+    const paste = '0b9e7b62-1b0c-4a7a-9c3e-2f6a1d2c3b4a'
+    const added = `${N} [Pasted text](orca-paste:${paste}) [Image #1]`
+    const skill = {
+      type: 'nativeChatSkill',
+      attrs: { token: '$review', path: '/skills/review/SKILL.md' }
+    }
+    tab.store.appendToNativeChatComposerDraft(SCOPE, {
+      text: added,
+      document: {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: `${added} ` }, skill] }]
+      },
+      pastedTextFiles: { [paste]: '/client/paste.txt' },
+      images: [IMAGE]
+    })
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    const once = `${A}\n\n${added}\n\n${B}`
+    expect(text(tab)).toBe(once)
+    // The load began reading before both writes: it lands and replaces neither.
+    await land()
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    expect(text(tab)).toBe(once)
+    const cold = await reload()
+    const restored = cold.store.readNativeChatComposerDraft(SCOPE)
+    expect(restored).toMatchObject({
+      text: once,
+      images: [IMAGE],
+      pastedTextFiles: { [paste]: '/client/paste.txt' }
+    })
+    expect(JSON.stringify(restored.document).split('/skills/review/SKILL.md')).toHaveLength(2)
+    expect(storage.drafts.get(SCOPE)?.text).toBe(once)
+  })
+
+  it.each(['an edit of what it showed', 'a Send of it', 'a Send another edit beat'] as const)(
+    'resolves an addition whose read is held with %s, once and without bringing back what it replaced',
+    async (change) => {
+      const { tab, land } = await loading()
+      let read: () => void = () => {}
+      const held = new Promise<void>((resolve) => (read = resolve))
+      const update = storage.update
+      storage.update = async (...args) => (await held, update(...args))
+      tab.store.appendToNativeChatComposerDraft(SCOPE, { text: N })
+      expect(text(tab)).toBe(N)
+      let submitted: string | undefined
+      if (change === 'an edit of what it showed') {
+        tab.drafts.writeNativeChatDraftCache(SCOPE, `${N} typed`)
+      } else if (change === 'a Send another edit beat') {
+        // The Send's clear finds newer input: nothing is consumed, nothing changes authority.
+        tab.drafts.writeNativeChatDraftCache(SCOPE, `${N} typed`)
+        expect(
+          tab.drafts.clearNativeChatComposerDraftIfUnchanged(SCOPE, { text: N, images: [] })
+        ).toBe(false)
+      } else {
+        const submission = tab.store.captureNativeChatComposerSubmission(SCOPE)
+        expect(
+          tab.drafts.clearNativeChatComposerDraftIfUnchanged(SCOPE, { text: N, images: [] })
+        ).toBe(true)
+        submitted = submission?.draft?.text
+      }
+      read()
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      storage.update = update
+      // The edit resolves A plus what it shows now; the Send replaced what was there, A included.
+      const expected = change === 'a Send of it' ? '' : `${A}\n\n${N} typed`
+      expect(text(tab)).toBe(expected)
+      expect(storage.drafts.get(SCOPE)?.text ?? '').toBe(expected)
+      expect(tab.input.scopeInputs.has(SCOPE)).toBe(false)
+      if (submitted !== undefined) {
+        expect(submitted).toBe(N)
+      }
+      // The load that read A before either lands late and brings nothing back.
+      await land()
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      expect(text(tab)).toBe(expected)
+      expect(text(await reload())).toBe(expected)
+    }
+  )
+
+  it('keeps a value its own read resolved but storage refused through a failed load and the next', async () => {
+    let failFirst: (error: Error) => void = () => {}
+    let loads = 0
+    let commitFails = true
+    vi.useFakeTimers()
+    try {
+      const tab = await reload({
+        hydrate: false,
+        storage: {
+          loadAll: () =>
+            ++loads === 1
+              ? new Promise((_resolve, reject) => (failFirst = reject))
+              : Promise.resolve(new Map(storage.drafts)),
+          // The transaction reads and runs, then its commit fails: nothing is stored.
+          update: (scopeKey, apply) => {
+            const next = apply(storage.drafts.get(scopeKey))
+            if (commitFails) {
+              return Promise.reject(new DOMException('refused', 'QuotaExceededError'))
+            }
+            if (next) {
+              storage.drafts.set(scopeKey, next)
+            } else {
+              storage.drafts.delete(scopeKey)
+            }
+            return Promise.resolve()
+          }
+        }
+      })
+      tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+      await vi.advanceTimersByTimeAsync(10)
+      expect(text(tab)).toBe(`${A}\n\n${B}`)
+      failFirst(new Error('database busy'))
+      await vi.advanceTimersByTimeAsync(1_000)
+      // The next load read stored A; the refused value is still current work, so it stays.
+      expect(tab.memory.load.complete).toBe(true)
+      expect(text(tab)).toBe(`${A}\n\n${B}`)
+      expect(tab.handback.nativeChatDraftHasReceipt(SCOPE, RECEIPT)).toBe(true)
+      expect(storage.drafts.get(SCOPE)?.text).toBe(A)
+      // Its existing wake saves it once storage accepts.
+      commitFails = false
+      tab.handback.requestNativeChatDraftReceiptCommit(SCOPE, RECEIPT)
+      await tab.store.nativeChatComposerDraftWritesSettled()
+      expect(storage.drafts.get(SCOPE)?.text).toBe(`${A}\n\n${B}`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("lets a replaced load's late result or failure publish nothing, and keeps the current one's", async () => {
+    const reads: {
+      resolve: (drafts: Map<string, unknown>) => void
+      reject: (error: Error) => void
+    }[] = []
+    const tab = await reload({
+      hydrate: false,
+      storage: {
+        loadAll: () =>
+          new Promise((resolve, reject) => {
+            const snapshot = new Map<string, unknown>(storage.drafts)
+            reads.push({ resolve: () => resolve(snapshot), reject })
+          })
+      }
+    })
+    const storageModule = await import('./native-chat-composer-draft-storage')
+    const backend = storageModule.nativeChatComposerDraftStorage()
+    const restart = () => {
+      tab.store.clearNativeChatComposerDraftsForTests()
+      storageModule.setNativeChatComposerDraftStorageForTests(backend)
+      void tab.store.hydrateNativeChatComposerDrafts()
+    }
+    void tab.store.hydrateNativeChatComposerDrafts()
+    restart()
+    restart()
+    const current = tab.memory.load.attempt
+    tab.handback.adoptIdentifiedNativeChatDraftInput(SCOPE, RECEIPT, { text: B, images: [] }, [])
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    expect(text(tab)).toBe(`${A}\n\n${B}`)
+    // The two superseded loads finish late: one with what it read before B, one failing.
+    reads[0].resolve(new Map())
+    reads[1].reject(new Error('database busy'))
+    await Promise.resolve()
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    expect(tab.memory.load.attempt).toBe(current)
+    expect(current?.excluded.has(SCOPE)).toBe(true)
+    expect(text(tab)).toBe(`${A}\n\n${B}`)
+    // The current load read before B too; it lands and replaces nothing its scope's read resolved.
+    reads[2].resolve(new Map())
+    await tab.store.hydrateNativeChatComposerDrafts()
+    await tab.store.nativeChatComposerDraftWritesSettled()
+    expect(tab.memory.load).toMatchObject({ complete: true, attempt: null })
+    expect(text(tab)).toBe(`${A}\n\n${B}`)
   })
 
   it('never brings back B the user removed, nor loses A, when the late load or replay lands', async () => {

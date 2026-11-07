@@ -107,14 +107,22 @@ it.each([3, 30])(
     const unload = { ...work }
     const journal = localStorage.getItem(JOURNAL_KEY) ?? ''
     const entries = JSON.parse(journal)
-    // Output: the unrelated corpus plus one identified addition per chat, holding what was typed.
-    expect(entries).toHaveLength(2 * count)
+    // Output: the unrelated corpus, and per chat what was typed (which replaces its unseen saved
+    // draft) as its whole draft, without the receipt it does not hold yet, plus its identified
+    // return.
+    expect(entries).toHaveLength(3 * count)
     for (let index = 0; index < count; index++) {
+      const whole = entries.find(
+        (entry: { scopeKey: string; draft?: unknown }) =>
+          entry.scopeKey === scopeOf(index) && 'draft' in entry
+      )?.draft
+      expect(whole).toMatchObject({ text: `typed ${index}` })
+      expect(whole).not.toHaveProperty('handbacks')
       expect(entries).toContainEqual(
         expect.objectContaining({
           scopeKey: scopeOf(index),
           custody: { handback: receiptOf(index), sourcePaths: [] },
-          addition: expect.objectContaining({ text: `typed ${index}\n\n${B}` })
+          addition: expect.objectContaining({ text: B })
         })
       )
     }
@@ -139,18 +147,14 @@ it.each([3, 30])(
     await store.nativeChatComposerDraftWritesSettled()
     expect(work.reads).toBeLessThanOrEqual(2 * count)
     for (let index = 0; index < count; index++) {
-      expect(store.readNativeChatComposerDraft(scopeOf(index)).text).toBe(
-        `${A}\n\ntyped ${index}\n\n${B}`
-      )
+      expect(store.readNativeChatComposerDraft(scopeOf(index)).text).toBe(`typed ${index}\n\n${B}`)
     }
     land()
     await loading
     await store.nativeChatComposerDraftWritesSettled()
     for (let index = 0; index < count; index++) {
-      expect(store.readNativeChatComposerDraft(scopeOf(index)).text).toBe(
-        `${A}\n\ntyped ${index}\n\n${B}`
-      )
-      expect(storage.drafts.get(scopeOf(index))?.text).toBe(`${A}\n\ntyped ${index}\n\n${B}`)
+      expect(store.readNativeChatComposerDraft(scopeOf(index)).text).toBe(`typed ${index}\n\n${B}`)
+      expect(storage.drafts.get(scopeOf(index))?.text).toBe(`typed ${index}\n\n${B}`)
     }
   }
 )

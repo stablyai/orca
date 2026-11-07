@@ -1,3 +1,4 @@
+import type { NativeChatDraftWriteOptions } from './native-chat-draft-cache'
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { getNativeChatCommandReply } from '../../../../shared/native-chat/native-chat-agent-profiles'
@@ -72,7 +73,7 @@ export function answerNativeChatCommandInComposer(args: {
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   onSlashCommand?: (command: string, output?: string) => void
   onSubmitted?: () => void
-  setDraft: (value: string) => void
+  setDraft: (value: string, options?: NativeChatDraftWriteOptions) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
   setNotice: (notice: string | null) => void
@@ -88,7 +89,7 @@ export function answerNativeChatCommandInComposer(args: {
   }
   args.onSlashCommand?.(command, answer)
   args.onSubmitted?.()
-  args.setDraft('')
+  args.setDraft('', { consumed: 'text' })
   args.setCaret(0)
   args.clearSkillOrigin()
   args.setNotice(null)

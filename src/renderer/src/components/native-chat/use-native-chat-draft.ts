@@ -8,7 +8,12 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { readNativeChatDraftCache, writeNativeChatDraftCache } from './native-chat-draft-cache'
+import {
+  readNativeChatDraftCache,
+  writeNativeChatDraftCache,
+  type NativeChatDraftWriteOptions
+} from './native-chat-draft-cache'
+import { replaceNativeChatDraftInput } from './native-chat-composer-draft-input'
 
 /** Text appended mid-IME-composition: saved at once, shown once the composition settles. */
 type CompositionHold = {
@@ -24,7 +29,10 @@ export function useNativeChatDraft(
   isComposing: () => boolean
 ): {
   draft: string
-  setDraft: (next: string | ((previous: string) => string), options?: { unsaved?: boolean }) => void
+  setDraft: (
+    next: string | ((previous: string) => string),
+    options?: NativeChatDraftWriteOptions
+  ) => void
   /** Shows text appended during an IME composition, which owns the field until it settles. */
   flushDraftAppends: () => void
 } {
@@ -65,7 +73,7 @@ export function useNativeChatDraft(
   )
 
   const setDraft = useCallback(
-    (next: string | ((previous: string) => string), options?: { unsaved?: boolean }) => {
+    (next: string | ((previous: string) => string), options?: NativeChatDraftWriteOptions) => {
       const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null
       const previous = held ? held.shown : readNativeChatDraftCache(scopeKey)
       const resolved = typeof next === 'function' ? next(previous) : next
@@ -78,6 +86,9 @@ export function useNativeChatDraft(
           current.text === resolved
             ? current
             : { ...held.base, text: resolved, document: undefined }
+        if (options?.consumed) {
+          replaceNativeChatDraftInput(scopeKey, options.consumed)
+        }
         const merged = held.additions.reduce<NativeChatComposerDraft>(
           (draft, addition) => ({
             ...draft,

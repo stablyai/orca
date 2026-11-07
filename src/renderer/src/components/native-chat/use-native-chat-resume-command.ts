@@ -1,3 +1,4 @@
+import type { NativeChatDraftWriteOptions } from './native-chat-draft-cache'
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -80,7 +81,7 @@ export function useNativeChatResumeCommand(args: {
   picker: Pick<NativeChatPickerState, 'autocomplete' | 'isPickedSkill' | 'clearSkillOrigin'>
   editor: {
     textareaRef: RefObject<NativeChatComposerInput | null>
-    setDraft: (value: string) => void
+    setDraft: (value: string, options?: NativeChatDraftWriteOptions) => void
     setCaret: Dispatch<SetStateAction<number>>
     setActiveSuggestion: Dispatch<SetStateAction<number>>
   }
@@ -144,7 +145,7 @@ export function useNativeChatResumeCommand(args: {
         ...(isAiVaultAgent(agent) ? { agent } : {})
       })
       // Attachments stay armed for the next real prompt.
-      setDraft('')
+      setDraft('', { consumed: 'text' })
       setCaret(0)
       setActiveSuggestion(0)
       setNotice(null)

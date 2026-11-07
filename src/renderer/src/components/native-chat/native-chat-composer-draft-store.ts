@@ -15,6 +15,7 @@ import {
   type NativeChatComposerDraftAddition
 } from './native-chat-composer-draft-addition'
 import { journalNativeChatComposerDraftAddition } from './native-chat-composer-draft-journal-batch'
+import { noteNativeChatDraftInput } from './native-chat-composer-draft-input'
 import {
   clearDraftMemoryForTests,
   resolveNativeChatComposerDraftOwner,
@@ -162,12 +163,14 @@ export function updateNativeChatComposerDraft(
     }
     return
   }
+  // Over a still unread base, this change is input to resolve there, not its complete value.
+  noteNativeChatDraftInput(scopeKey, append)
   if (text === '' && images.length === 0) {
     installNativeChatDraftRecord(scopeKey)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
     if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
-      persistNativeChatComposerDraft(scopeKey, 'immediate', append)
+      persistNativeChatComposerDraft(scopeKey, 'immediate')
     }
     return
   }
@@ -197,7 +200,7 @@ export function updateNativeChatComposerDraft(
     // Why first: a window whose startup never started the load still reads its saved drafts (and their receipts) before this write.
     void hydrateNativeChatComposerDrafts()
   }
-  persistNativeChatComposerDraft(scopeKey, persist, append)
+  persistNativeChatComposerDraft(scopeKey, persist)
 }
 
 /** Replay additions over late hydration without duplicates; true means durable hand-back, allowing deletion of its source copy. */
@@ -251,22 +254,6 @@ export function appendToNativeChatComposerDraft(
     isNativeChatMemoryOnlyDraft(scopeKey) ||
     journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt)
   )
-}
-
-/** Clear only the sent draft’s unchanged portion so late acceptance cannot erase newer typing or attachments. */
-export function clearNativeChatComposerDraftIfUnchanged(
-  scopeKey: string,
-  sent: NativeChatComposerDraft
-): boolean {
-  const current = readNativeChatComposerDraft(scopeKey)
-  if (
-    current.text !== sent.text ||
-    !sameNativeChatComposerDraftImages(current.images, sent.images)
-  ) {
-    return false
-  }
-  updateNativeChatComposerDraft(scopeKey, { text: '', images: [] }, 'immediate')
-  return true
 }
 
 const STRUCTURED_AGENT_SESSION_DRAFT_SCOPE_PREFIX = 'agent-session:'

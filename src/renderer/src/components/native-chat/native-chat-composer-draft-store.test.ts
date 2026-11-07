@@ -413,6 +413,37 @@ describe('native-chat composer draft store', () => {
     await reloaded.store.hydrateNativeChatComposerDrafts()
     expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('typed before the load')
     expect(reloaded.drafts.readNativeChatDraftCache('tab-2:pane')).toBe('other chat')
+    // Saved that way too, through its own write, and after a restart.
+    reloaded.store.flushNativeChatComposerDrafts()
+    await reloaded.store.nativeChatComposerDraftWritesSettled()
+    expect(storedDraft('tab-1:pane')).toMatchObject({ text: 'typed before the load' })
+    expect(storedDraft('tab-2:pane')).toMatchObject({ text: 'other chat' })
+    const cold = await reload()
+    expect(cold.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('typed before the load')
+    expect(cold.drafts.readNativeChatDraftCache('tab-2:pane')).toBe('other chat')
+  })
+
+  it('keeps a draft emptied before a slow load lands empty, as typed', async () => {
+    storage.drafts.set('tab-1:pane', { text: 'saved earlier', images: [], savedAt: 1 })
+    let land: () => void = () => {}
+    const slow = {
+      ...storage,
+      loadAll: () =>
+        new Promise<ReadonlyMap<string, unknown>>((resolve) => {
+          const snapshot = new Map(storage.drafts)
+          land = () => resolve(snapshot)
+        })
+    }
+    const reloaded = await reload({ using: slow, hydrate: false })
+    await reloaded.store.waitForNativeChatComposerDrafts(1)
+    reloaded.drafts.writeNativeChatDraftCache('tab-1:pane', 'x')
+    reloaded.drafts.writeNativeChatDraftCache('tab-1:pane', '')
+    land()
+    await reloaded.store.hydrateNativeChatComposerDrafts()
+    await reloaded.store.nativeChatComposerDraftWritesSettled()
+    expect(reloaded.drafts.readNativeChatDraftCache('tab-1:pane')).toBe('')
+    expect(storedDraft('tab-1:pane')).toBeNull()
+    expect((await reload()).drafts.readNativeChatDraftCache('tab-1:pane')).toBe('')
   })
 
   it('adds what is given back before a slow load lands to the saved draft, instead of replacing it', async () => {
@@ -569,7 +600,7 @@ describe('native-chat composer draft store', () => {
     tabA.store.clearNativeChatComposerDraftsForTests()
 
     tabB.drafts.writeNativeChatDraftCache('agent-session:s1', 'written in B')
-    tabB.store.clearNativeChatComposerDraftIfUnchanged('agent-session:s1', {
+    tabB.drafts.clearNativeChatComposerDraftIfUnchanged('agent-session:s1', {
       text: 'written in B',
       images: []
     })

@@ -6,37 +6,29 @@ import {
   isNativeChatSetupDraft,
   hasLocalChange,
   load,
-  nextSavedAt,
   notifyScope,
   records,
   installNativeChatDraftRecord,
-  refusedScopes,
   unconfirmed,
-  reconcileRestoredImageChecks,
-  type AppendBeforeLoad,
-  type DraftAppend
+  reconcileRestoredImageChecks
 } from './native-chat-composer-draft-memory'
+import { scopeInputs } from './native-chat-composer-draft-input'
 import { withIndependentNativeChatComposerDraft } from './native-chat-composer-draft-addition'
-import { pruneNativeChatComposerDraftJournal } from './native-chat-composer-draft-journal'
 import {
   writeNativeChatComposerDraftJournalBatch,
   type NativeChatDraftJournalAddition
 } from './native-chat-composer-draft-journal-batch'
-import { draftCustody, handbacksAtBase } from './native-chat-composer-draft-custody'
+import { draftCustody, handbackReceiptKey } from './native-chat-composer-draft-custody'
 import {
-  confirmNativeChatDraftCustody,
   markNativeChatDraftHandbacksDurable,
   projectStoredNativeChatDraftCustody
 } from './native-chat-composer-draft-receipt-proof'
 import {
   authorizedRemovals,
-  broadcastNativeChatComposerDraft,
-  completeDeferredRemovals,
   flushNativeChatComposerDrafts,
   resetNativeChatComposerDraftCommitsForTests,
   scheduleNativeChatComposerDraftFlush,
-  setNativeChatComposerDraftChannel,
-  track
+  setNativeChatComposerDraftChannel
 } from './native-chat-composer-draft-commit'
 export {
   flushNativeChatComposerDrafts,
@@ -46,7 +38,6 @@ export {
 import { noticeNativeChatDraftReceipts } from './native-chat-composer-draft-receipt-events'
 import { installStoredNativeChatComposerDraft } from './native-chat-composer-draft-restore'
 export { unavailableNativeChatComposerDraftImage } from './native-chat-composer-draft-restore'
-import { savedForm } from './native-chat-composer-draft-saved-form'
 export {
   currentStoredNativeChatComposerDraft,
   isKeptLocalPaste
@@ -64,33 +55,69 @@ let flushOnHideInstalled = false
 let channelInstalled = false
 
 /** Storage settles asynchronously; before the window leaves, every unconfirmed change goes into
- *  the shared journal in one write: whole snapshots for drafts whose base is known, and for a
- *  draft still waiting for its base, its pending hand-backs as coalesced identified additions. */
+ *  the shared journal in one write: whole snapshots for drafts whose value is complete. Input over
+ *  a still unread base is never a whole snapshot: its pending hand-backs go as identified
+ *  additions, an edited partial view as one addition replacing this run's earlier ones, and its
+ *  own additions are already journaled. */
 function journalUnconfirmed(): void {
   flushNativeChatComposerDrafts()
   const snapshots = new Map<string, { draft: StoredNativeChatComposerDraft | null; at: number }>()
   const additions: NativeChatDraftJournalAddition[] = []
+  const superseded = new Set<string>()
   for (const [scopeKey, change] of unconfirmed) {
     const pending = draftCustody.get(scopeKey)?.pending ?? []
-    if (!pending.length) {
-      snapshots.set(scopeKey, change)
-      continue
+    const input = scopeInputs.get(scopeKey)
+    if (!input || input.kind === 'replaced') {
+      if (!pending.length) {
+        snapshots.set(scopeKey, change)
+      } else if (input) {
+        // Its replaced content, without the receipts of returns it does not hold yet.
+        const owed = new Set(pending.map(({ receipt }) => handbackReceiptKey(receipt)))
+        const handbacks = change.draft?.handbacks?.filter(
+          (receipt) => !owed.has(handbackReceiptKey(receipt))
+        )
+        const { handbacks: _owed, ...content } = change.draft ?? { text: '', images: [] }
+        snapshots.set(scopeKey, {
+          at: change.at,
+          draft: change.draft && {
+            ...content,
+            savedAt: change.draft.savedAt,
+            ...(handbacks?.length ? { handbacks } : {})
+          }
+        })
+      }
+      if (!pending.length) {
+        continue
+      }
     }
-    // What was typed into the partial view joins the first pending hand-back.
-    const typed = records.get(scopeKey) ?? { text: '', images: [] }
+    const at = draftCustody.get(scopeKey)?.savedAt ?? change.at
+    // An edited partial view is one input; it joins the first pending hand-back, if any.
+    const record = input?.kind === 'partial' && !input.appends ? records.get(scopeKey) : undefined
+    const view = record && {
+      text: record.text === record.unsavedText ? '' : record.text,
+      images: record.images,
+      ...(record.document ? { document: record.document } : {}),
+      ...(record.pastedTextFiles ? { pastedTextFiles: record.pastedTextFiles } : {})
+    }
+    if (view) {
+      superseded.add(scopeKey)
+      if (!pending.length && (view.text !== '' || view.images.length > 0)) {
+        additions.push({ scopeKey, at, addition: view })
+      }
+    }
     pending.forEach((handback, index) =>
       additions.push({
         scopeKey,
-        at: draftCustody.get(scopeKey)?.savedAt ?? change.at,
+        at,
         addition:
-          index === 0
-            ? withIndependentNativeChatComposerDraft(typed, handback.contribution)
+          index === 0 && view
+            ? withIndependentNativeChatComposerDraft(view, handback.contribution)
             : handback.contribution,
         custody: { handback: handback.receipt, sourcePaths: handback.sourcePaths }
       })
     )
   }
-  const witness = writeNativeChatComposerDraftJournalBatch({ snapshots, additions })
+  const witness = writeNativeChatComposerDraftJournalBatch({ snapshots, additions, superseded })
   for (const scopeKey of witness.snapshots) {
     markNativeChatDraftHandbacksDurable(scopeKey, snapshots.get(scopeKey)?.draft)
   }
@@ -117,70 +144,18 @@ function installFlushOnHide(): void {
   document.addEventListener('visibilitychange', journalWhenHidden)
 }
 
-/** Before hydration, append atomically to storage’s current record and replay over the eventual loaded draft. */
-function appendBeforeLoad(scopeKey: string, append: DraftAppend): void {
-  load.appendSequence += 1
-  const entry: AppendBeforeLoad = { sequence: load.appendSequence, append, committed: false }
-  load.appendsBeforeLoad.set(scopeKey, [...(load.appendsBeforeLoad.get(scopeKey) ?? []), entry])
-  const owner = records.get(scopeKey)?.owner
-  const appendedAt = records.get(scopeKey)?.savedAt ?? 0
-  const empty: StoredNativeChatComposerDraft = { text: '', images: [], savedAt: 0 }
-  let saved: StoredNativeChatComposerDraft | null = null
-  const written = nativeChatComposerDraftStorage()
-    .update(scopeKey, (stored) => {
-      const base = parseStoredNativeChatComposerDraft(stored) ?? empty
-      saved = savedForm({
-        ...append({ ...base, ...(base.owner || !owner ? {} : { owner }) }),
-        handbacks: handbacksAtBase(scopeKey, base),
-        savedAt: nextSavedAt()
-      })
-      return saved
-    })
-    .then(
-      () => {
-        entry.committed = true
-        confirmNativeChatDraftCustody(scopeKey, saved)
-        pruneNativeChatComposerDraftJournal(scopeKey, appendedAt)
-        broadcastNativeChatComposerDraft(scopeKey)
-        completeDeferredRemovals(scopeKey, appendedAt)
-        return true
-      },
-      (error: unknown) => {
-        if (!refusedScopes.has(scopeKey)) {
-          console.warn(
-            '[native-chat-drafts] a draft could not be saved; it is kept in memory',
-            error
-          )
-          refusedScopes.add(scopeKey)
-          notifyScope(scopeKey)
-        }
-        return false
-      }
-    )
-  track(scopeKey, written)
-}
-
-/** Coalesce deferred typing; persist immediate edits now, with pre-hydration edits replacing and appends replaying over loaded drafts. */
+/** Coalesce deferred typing and persist immediate edits now; each write resolves the scope's
+ *  unresolved input at the base it actually reads. */
 export function persistNativeChatComposerDraft(
   scopeKey: string,
-  persist: 'immediate' | 'deferred',
-  append?: DraftAppend
+  persist: 'immediate' | 'deferred'
 ): void {
   installFlushOnHide()
   if (records.has(scopeKey)) {
     deferredRemovals.delete(scopeKey)
     authorizedRemovals.delete(scopeKey)
   }
-  // A scope waiting for its base composes everything onto it at its own read, appends included.
-  const partial = Boolean(draftCustody.get(scopeKey)?.pending.length)
-  if (!load.hydrated && append && !partial && !load.editedBeforeLoad.has(scopeKey)) {
-    appendBeforeLoad(scopeKey, append)
-    return
-  }
   dirtyScopes.add(scopeKey)
-  if (!load.hydrated) {
-    load.editedBeforeLoad.add(scopeKey)
-  }
   if (persist === 'immediate') {
     flushNativeChatComposerDrafts()
     return
@@ -198,9 +173,7 @@ export function removeNativeChatComposerDraftRecord(scopeKey: string): void {
 export function deleteLoadingNativeChatComposerDraftsWhere(
   matches: (scopeKey: string, draft: StoredNativeChatComposerDraft) => boolean
 ): void {
-  if (!load.hydrated) {
-    load.deletionsBeforeLoad.push(matches)
-  }
+  load.attempt?.deletions.push(matches)
 }
 
 // Adopt another window’s committed write, a read of what storage holds, only while this window
@@ -210,13 +183,17 @@ function adoptForeignChange(message: unknown): void {
     typeof message === 'object' && message !== null && 'scopeKey' in message
       ? message.scopeKey
       : null
-  if (typeof scopeKey !== 'string' || hasLocalChange(scopeKey)) {
+  if (typeof scopeKey !== 'string' || hasLocalChange(scopeKey) || scopeInputs.has(scopeKey)) {
     return
   }
   void nativeChatComposerDraftStorage()
     .read(scopeKey)
     .then((value) => {
-      if (hasLocalChange(scopeKey) || draftCustody.get(scopeKey)?.pending.length) {
+      if (
+        hasLocalChange(scopeKey) ||
+        scopeInputs.has(scopeKey) ||
+        draftCustody.get(scopeKey)?.pending.length
+      ) {
         return
       }
       if (isNativeChatSetupDraft(scopeKey) && value != null) {

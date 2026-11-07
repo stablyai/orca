@@ -299,9 +299,10 @@ it.each([10, 100])(
     for (let i = 0; i < rows.length; i++) {
       drafts.finishNativeChatComposerSubmission(rows[i].from, rows[i].attempt, i % 2 === 0)
     }
-    for (let i = 0; i < memory.load.deletionsBeforeLoad.length; i++) {
-      const matches = memory.load.deletionsBeforeLoad[i]
-      memory.load.deletionsBeforeLoad[i] = (key, value) => {
+    const deletions = memory.load.attempt?.deletions ?? []
+    for (let i = 0; i < deletions.length; i++) {
+      const matches = deletions[i]
+      deletions[i] = (key, value) => {
         counts.predicates++
         return matches(key, value)
       }

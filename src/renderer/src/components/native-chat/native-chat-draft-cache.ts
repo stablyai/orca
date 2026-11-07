@@ -8,6 +8,8 @@ import type {
 } from './native-chat-composer-draft-storage'
 // Expose text/document views of the durable whole-draft store so TUI switches and reloads retain unsent input.
 
+import { sameNativeChatComposerDraftImages } from './native-chat-composer-draft-comparison'
+import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import {
   appendToNativeChatComposerDraft,
   clearNativeChatComposerDraftsForTests,
@@ -16,19 +18,33 @@ import {
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { clearNativeChatPendingAttachmentsForTests } from './native-chat-pending-attachment-cache'
+import { currentDraftScope } from './native-chat-launch-draft-source'
+import {
+  replaceNativeChatDraftInput,
+  type NativeChatDraftConsumption
+} from './native-chat-composer-draft-input'
 
 export function readNativeChatDraftCache(scopeKey: string): string {
   return readNativeChatComposerDraft(scopeKey).text
 }
 
-/** `unsaved` shows text this run without saving it while the draft is still exactly that text. */
+export type NativeChatDraftWriteOptions = {
+  /** Shows text this run without saving it while the draft is still exactly that text. */
+  readonly unsaved?: boolean
+  /** An applied Send or accepted command consumed the shown input (all of it, or its text). */
+  readonly consumed?: NativeChatDraftConsumption
+}
+
 export function writeNativeChatDraftCache(
   scopeKey: string,
   draft: string,
-  options?: { unsaved?: boolean }
+  options?: NativeChatDraftWriteOptions
 ): void {
   if (readNativeChatComposerDraft(scopeKey).text === draft) {
     return
+  }
+  if (options?.consumed) {
+    replaceNativeChatDraftInput(currentDraftScope(scopeKey), options.consumed)
   }
   // Cleared at once, so a sent or emptied draft never resurfaces.
   updateNativeChatComposerDraft(
@@ -136,4 +152,22 @@ export function retireRemovedNativeChatDraftPositions(
       )
     }
   }
+}
+
+/** Clear only the sent draft’s unchanged portion so late acceptance cannot erase newer typing or attachments. */
+export function clearNativeChatComposerDraftIfUnchanged(
+  scopeKey: string,
+  sent: NativeChatComposerDraft
+): boolean {
+  const current = readNativeChatComposerDraft(scopeKey)
+  if (
+    current.text !== sent.text ||
+    !sameNativeChatComposerDraftImages(current.images, sent.images)
+  ) {
+    return false
+  }
+  // What was sent goes, including what the unread base held under it.
+  replaceNativeChatDraftInput(currentDraftScope(scopeKey))
+  updateNativeChatComposerDraft(scopeKey, { text: '', images: [] }, 'immediate')
+  return true
 }

@@ -22,6 +22,7 @@ import {
   updateNativeChatComposerDraft
 } from '@/components/native-chat/native-chat-composer-draft-store'
 import { draftCustody } from '@/components/native-chat/native-chat-composer-draft-custody'
+import { scopeInputs } from '@/components/native-chat/native-chat-composer-draft-input'
 import {
   dirtyScopes,
   load,
@@ -31,7 +32,10 @@ import {
   nativeChatDraftHasReceipt,
   nativeChatDraftReceiptProgress
 } from '@/components/native-chat/native-chat-composer-draft-handback'
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
+import {
+  appendNativeChatDraftCache,
+  writeNativeChatDraftCache
+} from '@/components/native-chat/native-chat-draft-cache'
 import { nativeChatComposerDraftStorage } from '@/components/native-chat/native-chat-composer-draft-storage'
 import type * as ReceiptEvents from '@/components/native-chat/native-chat-composer-draft-receipt-events'
 import type { AgentLaunchReleasePhaseStatusResult } from '../../../../../shared/rpc-contract/agent-launch-accept-params'
@@ -473,9 +477,21 @@ describe('many launches whose returns wait on their drafts', () => {
     return work
   }
 
-  it.each([3, 30])(
-    'unloads %i returns waiting on their unread drafts in one journal write, read from one snapshot',
-    async (count) => {
+  it.each([
+    [3, 'lands'],
+    [30, 'lands'],
+    [3, 'fails'],
+    [30, 'fails']
+  ] as const)(
+    'unloads %i returns waiting on their unread drafts in one journal write, read from one snapshot, when the older load %s',
+    async (count, outcome) => {
+      // What anything still owns of these chats' bases: the reading load's exclusions and any
+      // input not yet resolved at a read.
+      const owned = () =>
+        launches.filter(
+          (launch) =>
+            load.attempt?.excluded.has(scopeOf(launch)) || scopeInputs.has(scopeOf(launch))
+        ).length
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const launches = launchesOf(count)
       // Released; the host has said nothing more before the restart.
@@ -568,28 +584,27 @@ describe('many launches whose returns wait on their drafts', () => {
       expect(admission.indexLookups).toBeLessThanOrEqual(2 * count + count)
       const output = localStorage.getItem(JOURNAL) ?? ''
       const entries: { at: number; run: string }[] = JSON.parse(output)
-      // The one retained output: the unrelated journal and one identified addition per chat,
-      // holding what was typed and its return (generated time and run as written).
-      const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+      // The one retained output, test-owned (generated times and run as written).
       const envelope = JSON.stringify([
         ...corpus,
+        // What was typed replaces each chat's unseen saved draft: its whole draft, without the
+        // receipt of the return it does not hold yet.
+        ...launches.map((_launch, index) => ({
+          scopeKey: scopeOf(launches[index]),
+          draft: { text: `typed ${index}`, images: [], savedAt: entries[count + index].at },
+          at: entries[count + index].at,
+          run: entries[count + index].run
+        })),
+        // And each return, identified, to join it once.
         ...launches.map((launch, index) => ({
           scopeKey: scopeOf(launch),
-          at: entries[count + index].at,
-          addition: {
-            text: `typed ${index}\n\n${HELD}`,
-            document: {
-              type: 'doc',
-              content: [paragraph(`typed ${index}`), { type: 'paragraph' }, paragraph(HELD)]
-            },
-            images: [],
-            pastedTextFiles: {}
-          },
+          at: entries[2 * count + index].at,
+          addition: { text: HELD, images: [] },
           custody: {
             handback: { operationId: launch.operationId, clientMessageId: launch.messageId },
             sourcePaths: []
           },
-          run: entries[count + index].run
+          run: entries[2 * count + index].run
         }))
       ])
       expect(entries).toEqual(JSON.parse(envelope))
@@ -615,7 +630,7 @@ describe('many launches whose returns wait on their drafts', () => {
         reads.resolve()
         await vi.waitFor(() => {
           for (const [index, launch] of launches.entries()) {
-            expect(draft(launch.sessionId)).toBe(`Also run lint\n\ntyped ${index}\n\n${HELD}`)
+            expect(draft(launch.sessionId)).toBe(`typed ${index}\n\n${HELD}`)
           }
         })
       })
@@ -623,17 +638,24 @@ describe('many launches whose returns wait on their drafts', () => {
       expect(bases).toEqual({ entryVisits: 0, indexAdds: 0, indexLookups: count })
       saves.resolve()
       await nativeChatComposerDraftWritesSettled()
-      // The older load is still pending: it alone fences the scopes their own reads resolved.
+      // The older load still reads: it alone excludes the scopes their own reads resolved.
       for (const launch of launches) {
-        expect(load.fenced.has(scopeOf(launch))).toBe(true)
+        expect(load.attempt?.excluded.has(scopeOf(launch))).toBe(true)
+        expect(scopeInputs.has(scopeOf(launch))).toBe(false)
       }
-      // The older load lands after: it replaces none of them, and replays the unrelated panes.
-      landed.resolve()
+      // That load lands after and replaces none of them, or fails and owns nothing any more.
+      if (outcome === 'lands') {
+        landed.resolve()
+      } else {
+        landed.reject(new Error('second enumeration failed'))
+      }
       await hydrateNativeChatComposerDrafts()
       await nativeChatComposerDraftWritesSettled()
       for (const [index, launch] of launches.entries()) {
-        expect(draft(launch.sessionId)).toBe(`Also run lint\n\ntyped ${index}\n\n${HELD}`)
-        expect(readNativeChatComposerDraft(`tab-${index}:pane`).text).toBe(`unrelated ${index}`)
+        expect(draft(launch.sessionId)).toBe(`typed ${index}\n\n${HELD}`)
+        expect(readNativeChatComposerDraft(`tab-${index}:pane`).text).toBe(
+          outcome === 'lands' ? `unrelated ${index}` : ''
+        )
       }
 
       // Their rows still cannot be saved: each launch keeps its one obligation and its receipt.
@@ -658,17 +680,23 @@ describe('many launches whose returns wait on their drafts', () => {
           getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening
         ).toBeUndefined()
         const stored = backend.drafts.get(scopeOf(launch))
-        expect(stored?.text).toBe(`Also run lint\n\ntyped ${index}\n\n${HELD}`)
+        expect(stored?.text).toBe(`typed ${index}\n\n${HELD}`)
         expect(stored).not.toHaveProperty('handbacks')
         expect(stored).not.toHaveProperty('sourcePaths')
       }
-      expect(localStorage.getItem(JOURNAL)).toBeNull()
+      // The unrelated panes' journal stays until a load reads them.
+      expect(
+        JSON.parse(localStorage.getItem(JOURNAL) ?? '[]').map(
+          (entry: { scopeKey: string }) => entry.scopeKey
+        )
+      ).toEqual(outcome === 'lands' ? [] : corpus.map(({ scopeKey }) => scopeKey))
       expect(host.prepare).toHaveBeenCalledTimes(count)
       expect(host.release).toHaveBeenCalledTimes(count)
       // Nothing of these completed returns is kept while their ordinary drafts live on: no
-      // custody, no remembered completion behind their receipts, and no fence once no load can
-      // publish.
-      expect(load.fenced.size).toBe(0)
+      // custody, no remembered completion behind their receipts, and nothing of their bases owned,
+      // even between failed loads, before any retry has run.
+      expect(owned()).toBe(0)
+      expect(load.hydrated).toBe(outcome === 'lands')
       const forgotten = { backed: false, incorporated: false, retired: false }
       for (const launch of launches) {
         expect(draftCustody.has(scopeOf(launch))).toBe(false)
@@ -693,7 +721,13 @@ describe('many launches whose returns wait on their drafts', () => {
         )
       }
       expect(receiptListeners.live).toBe(0)
-      expect(load.fenced.size).toBe(0)
+      expect(owned()).toBe(0)
+      if (outcome === 'fails') {
+        // The rest of the schedule fails too and gives up: still nothing owned.
+        await vi.advanceTimersByTimeAsync(36_000)
+        expect(load).toMatchObject({ hydrated: true, complete: false, attempt: null })
+        expect(owned()).toBe(0)
+      }
       warn.mockRestore()
     }
   )
@@ -763,70 +797,95 @@ describe('many launches whose returns wait on their drafts', () => {
     warn.mockRestore()
   })
 
-  it('keeps the last identified backup when an unload’s replacement no longer fits, then recovers', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const [launch] = launchesOf(1)
-    const scope = scopeOf(launch)
-    await releaseLaunches([launch], () => new Promise(() => {}))
-    const backend = nativeChatComposerDraftStorage() as ReturnType<
-      typeof nativeChatComposerDraftStorage
-    > & { drafts: Map<string, { text: string; handbacks?: unknown }> }
-    // A restart whose load and the chat's own read are held; the launch's row cannot be saved.
-    restartRenderer()
-    const loadAll = backend.loadAll.bind(backend)
-    const landed = Promise.withResolvers<void>()
-    vi.spyOn(backend, 'loadAll').mockImplementation(async () => {
-      const drafts = await loadAll()
-      await landed.promise
-      return drafts
-    })
-    const reads = Promise.withResolvers<void>()
-    holdDraftSaves(new Set([scope]), () => reads.promise)
-    const rows = refuse(SAVED)
-    void hydrateNativeChatComposerDrafts()
-    host.status.mockReset()
-    host.status.mockResolvedValue({ state: 'unknown' })
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-    await vi.waitFor(() =>
-      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.callers.outcome).toBe('unknown')
-    )
-    // A stored, B owed and unshown, and B's identified backup written.
-    expect(draft(launch.sessionId)).toBe('')
-    expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeDefined()
-    expect(backend.drafts.get(scope)?.text).toBe('Also run lint')
-    const backup = localStorage.getItem(JOURNAL)
-    expect(JSON.parse(backup ?? '[]')).toEqual([
-      expect.objectContaining({
-        scopeKey: scope,
-        addition: expect.objectContaining({ text: HELD }),
-        custody: { handback: receiptOf(launch), sourcePaths: [] }
+  it.each(['an ordinary paste', 'an addition then edited'] as const)(
+    'keeps the last identified backup through an unload of %s too large for the journal, then recovers',
+    async (input) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const [launch] = launchesOf(1)
+      const scope = scopeOf(launch)
+      await releaseLaunches([launch], () => new Promise(() => {}))
+      const backend = nativeChatComposerDraftStorage() as ReturnType<
+        typeof nativeChatComposerDraftStorage
+      > & { drafts: Map<string, { text: string; handbacks?: unknown }> }
+      // A restart whose load and the chat's own read are held; the launch's row cannot be saved.
+      restartRenderer()
+      const loadAll = backend.loadAll.bind(backend)
+      const landed = Promise.withResolvers<void>()
+      vi.spyOn(backend, 'loadAll').mockImplementation(async () => {
+        const drafts = await loadAll()
+        await landed.promise
+        return drafts
       })
-    ])
-    // An ordinary paste whose coalesced replacement no longer fits the additions' cap.
-    const pasted = 'x'.repeat(410_000)
-    writeNativeChatDraftCache(scope, pasted)
-    window.dispatchEvent(new Event('pagehide'))
-    // The one unload keeps the backup it could not replace, exactly.
-    expect(localStorage.getItem(JOURNAL)).toBe(backup)
-    expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeDefined()
+      const reads = Promise.withResolvers<void>()
+      holdDraftSaves(new Set([scope]), () => reads.promise)
+      const rows = refuse(SAVED)
+      void hydrateNativeChatComposerDrafts()
+      host.status.mockReset()
+      host.status.mockResolvedValue({ state: 'unknown' })
+      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
+      await vi.waitFor(() =>
+        expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.callers.outcome).toBe(
+          'unknown'
+        )
+      )
+      // A stored, B owed and unshown, and B's identified backup written.
+      expect(draft(launch.sessionId)).toBe('')
+      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeDefined()
+      expect(backend.drafts.get(scope)?.text).toBe('Also run lint')
+      const backup = localStorage.getItem(JOURNAL)
+      expect(JSON.parse(backup ?? '[]')).toEqual([
+        expect.objectContaining({
+          scopeKey: scope,
+          addition: expect.objectContaining({ text: HELD }),
+          custody: { handback: receiptOf(launch), sourcePaths: [] }
+        })
+      ])
+      const pasted = 'x'.repeat(410_000)
+      if (input === 'an ordinary paste') {
+        // Ordinary typing replaces the unseen saved draft; its whole copy exceeds the whole-draft
+        // cap, while the return's backup is replaced by the same identified return.
+        writeNativeChatDraftCache(scope, pasted)
+        window.dispatchEvent(new Event('pagehide'))
+        expect(JSON.parse(localStorage.getItem(JOURNAL) ?? '[]')).toEqual([
+          expect.objectContaining({
+            scopeKey: scope,
+            addition: expect.objectContaining({ text: HELD }),
+            custody: { handback: receiptOf(launch), sourcePaths: [] }
+          })
+        ])
+      } else {
+        // An addition over the unread draft, then edited: its edited view joins the return as one
+        // identified addition, which no longer fits the additions' cap. The unload keeps both the
+        // return's backup and the addition's own, exactly.
+        appendNativeChatDraftCache(scope, pasted)
+        const appended = localStorage.getItem(JOURNAL)
+        writeNativeChatDraftCache(scope, `${pasted} typed`)
+        window.dispatchEvent(new Event('pagehide'))
+        expect(localStorage.getItem(JOURNAL)).toBe(appended)
+      }
+      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeDefined()
 
-    // The read, the load and the row's save recover: A, the paste and B, once; then no debt.
-    rows.mockRestore()
-    reads.resolve()
-    landed.resolve()
-    await hydrateNativeChatComposerDrafts()
-    const once = `Also run lint\n\n${pasted}\n\n${HELD}`
-    await vi.waitFor(() => expect(draft(launch.sessionId)).toBe(once))
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-    await vi.waitFor(() => expect(receiptListeners.live).toBe(0))
-    await nativeChatComposerDraftWritesSettled()
-    expect(draft(launch.sessionId)).toBe(once)
-    expect(backend.drafts.get(scope)?.text).toBe(once)
-    expect(backend.drafts.get(scope)).not.toHaveProperty('handbacks')
-    expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeUndefined()
-    expect(localStorage.getItem(JOURNAL)).toBeNull()
-    expect(host.prepare).toHaveBeenCalledOnce()
-    expect(host.release).toHaveBeenCalledOnce()
-    warn.mockRestore()
-  })
+      // The read, the load and the row's save recover: A, the paste and B, once; then no debt.
+      rows.mockRestore()
+      reads.resolve()
+      landed.resolve()
+      await hydrateNativeChatComposerDrafts()
+      const once =
+        input === 'an ordinary paste'
+          ? `${pasted}\n\n${HELD}`
+          : `Also run lint\n\n${pasted} typed\n\n${HELD}`
+      await vi.waitFor(() => expect(draft(launch.sessionId)).toBe(once))
+      expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
+      await vi.waitFor(() => expect(receiptListeners.live).toBe(0))
+      await nativeChatComposerDraftWritesSettled()
+      expect(draft(launch.sessionId)).toBe(once)
+      expect(backend.drafts.get(scope)?.text).toBe(once)
+      expect(backend.drafts.get(scope)).not.toHaveProperty('handbacks')
+      expect(getStructuredLaunchStateBySessionId(launch.sessionId)?.intent.opening).toBeUndefined()
+      expect(localStorage.getItem(JOURNAL)).toBeNull()
+      expect(host.prepare).toHaveBeenCalledOnce()
+      expect(host.release).toHaveBeenCalledOnce()
+      warn.mockRestore()
+    }
+  )
 })

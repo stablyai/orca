@@ -1,3 +1,4 @@
+import type { NativeChatDraftWriteOptions } from './native-chat-draft-cache'
 import { readNativeChatComposerDraft } from './native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import {
@@ -52,7 +53,7 @@ export function useNativeChatPtyComposerSend(args: {
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
-  setDraft: (value: string) => void
+  setDraft: (value: string, options?: NativeChatDraftWriteOptions) => void
   setCaret: Dispatch<SetStateAction<number>>
   clearSkillOrigin: () => void
   clearImageAttachments: () => void
@@ -163,7 +164,7 @@ export function useNativeChatPtyComposerSend(args: {
       })
       args.onSubmitted?.()
       if (!retry) {
-        args.setDraft('')
+        args.setDraft('', { consumed: 'all' })
         args.setCaret(0)
         args.clearSkillOrigin()
         args.clearImageAttachments()

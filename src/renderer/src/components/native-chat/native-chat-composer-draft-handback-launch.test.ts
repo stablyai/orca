@@ -74,6 +74,91 @@ afterEach(() => {
 })
 
 describe('a returned opening and a draft whose saved base the renderer has not read', () => {
+  it("keeps the launch's own message when loading gave up and typing, then a return, precede its own held read", async () => {
+    const backend = storageModule.nativeChatComposerDraftStorage()
+    await store.hydrateNativeChatComposerDrafts()
+    const parent = await released()
+    parent.resolve({ state: 'running' })
+    store.updateNativeChatComposerDraft(SCOPE, { text: A, images: [] }, 'immediate')
+    await store.nativeChatComposerDraftWritesSettled()
+    expect(savedRow()?.firstMessage).toBeTruthy()
+    // A cold restart whose every load fails, and whose chat's own read is held.
+    store.clearNativeChatComposerDraftsForTests()
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    const read = deferred<void>()
+    storageModule.setNativeChatComposerDraftStorageForTests({
+      ...backend,
+      loadAll: () => Promise.reject(new Error('database busy')),
+      update: async (scope, apply) => {
+        await read.promise
+        await backend.update(scope, apply)
+      }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await store.hydrateNativeChatComposerDrafts()
+    await vi.advanceTimersByTimeAsync(36_000)
+    expect(text()).toBe('')
+    // Before any typing, the launch's saved row alone holds the message it will return, under its
+    // own operation and message identity; the conversation's draft holds only its ordinary A.
+    expect(savedRow()).toMatchObject({
+      hostLaunchOperationId: OPERATION_ID,
+      firstMessage: {
+        clientMessageId: MESSAGE_ID,
+        body: { blocks: [{ type: 'text', text: HELD }] }
+      }
+    })
+    expect(await backend.read(SCOPE)).toMatchObject({ text: A })
+    expect(await backend.read(SCOPE)).not.toHaveProperty('handbacks')
+    // Ordinary rich typing: text with its editor document, a pasted file and an image.
+    const paste = '0b9e7b62-1b0c-4a7a-9c3e-2f6a1d2c3b4a'
+    const typed = `typed meanwhile [Pasted text](orca-paste:${paste})`
+    const image = { id: 'typed-image', path: '/client/typed.png' }
+    const cache = await import('./native-chat-draft-cache')
+    cache.writeNativeChatDraftDocument(
+      SCOPE,
+      typed,
+      { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: typed }] }] },
+      { [paste]: '/client/paste.txt' }
+    )
+    store.updateNativeChatComposerDraft(SCOPE, { images: [image] }, 'deferred')
+    host.status.mockReset()
+    host.status.mockResolvedValue({ state: 'unknown' })
+    expect(retryStructuredAgentSessionLaunch('workspace-1', SESSION_ID)).toBe(true)
+    await vi.waitFor(() => expect(lifecycle()).toBe('visibility-unknown'))
+    // Before its read: the typing shows, the message is owed by the launch and unshown.
+    expect(text()).toBe(typed)
+    expect(savedRow()?.firstMessage).toBeTruthy()
+    expect(await backend.read(SCOPE)).toMatchObject({ text: A })
+    read.resolve()
+    await store.nativeChatComposerDraftWritesSettled()
+    // Ordinary typing replaced the unseen ordinary A; the launch's own message joins it once.
+    const once = `${typed}\n\n${HELD}`
+    const expected = {
+      text: once,
+      images: [image],
+      pastedTextFiles: { [paste]: '/client/paste.txt' },
+      document: {
+        type: 'doc',
+        content: [
+          { type: 'paragraph', content: [{ type: 'text', text: typed }] },
+          { type: 'paragraph' },
+          { type: 'paragraph', content: [{ type: 'text', text: HELD }] }
+        ]
+      }
+    }
+    expect(store.readNativeChatComposerDraft(SCOPE)).toMatchObject(expected)
+    expect(await backend.read(SCOPE)).toMatchObject(expected)
+    // Then the launch lets go, only once the draft holds it.
+    await vi.waitFor(() => expect(savedRow()?.firstMessage).toBeUndefined())
+    await vi.waitFor(() => expect(heldReceipt()).toBe(false))
+    await store.nativeChatComposerDraftWritesSettled()
+    expect(text()).toBe(once)
+    expect(host.prepare).toHaveBeenCalledOnce()
+    expect(host.release).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
   it('keeps stored A when the user edits the returned input before the late load lands', async () => {
     const backend = storageModule.nativeChatComposerDraftStorage()
     await store.hydrateNativeChatComposerDrafts()
@@ -332,11 +417,12 @@ describe('a returned opening and a draft whose saved base the renderer has not r
     expect(text()).toBe('')
     expect(handback.nativeChatDraftReceiptProgress(SCOPE, RECEIPT).incorporated).toBe(false)
     expect(savedRow()?.firstMessage).toBeTruthy()
-    // The user can still type.
+    // The user can still type; ordinary typing replaces the unseen saved draft, and the return
+    // joins it once its read shows the return is not already held.
     store.updateNativeChatComposerDraft(SCOPE, { text: 'typed meanwhile' }, 'immediate')
     expect(text()).toBe('typed meanwhile')
     read.resolve()
-    const once = `${A}\n\ntyped meanwhile\n\n${HELD}`
+    const once = `typed meanwhile\n\n${HELD}`
     await vi.waitFor(() => expect(text()).toBe(once))
     loaded.resolve()
     await loading

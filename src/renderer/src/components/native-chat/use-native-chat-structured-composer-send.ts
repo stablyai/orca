@@ -36,6 +36,7 @@ import {
   subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { replaceNativeChatDraftInput } from './native-chat-composer-draft-input'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
 import {
   admitNativeChatPastedText,
@@ -156,9 +157,12 @@ export function useNativeChatStructuredComposerSend({
           readNativeChatComposerDraft(draftScopeKey),
           submitted
         )
+        // Another edit won: nothing was consumed, so the current input keeps its authority.
         if (!left) {
           return
         }
+        // What was sent goes, including what an unread saved base held under it.
+        replaceNativeChatDraftInput(draftScopeKey)
         if (completeAddition) {
           updateNativeChatComposerDraft(
             draftScopeKey,

@@ -12,9 +12,9 @@ import type { NativeChatComposerNotice } from '../native-chat/native-chat-compos
 import { useNativeChatComposerError } from '../native-chat/use-native-chat-composer-notice'
 import {
   nativeChatLaunchPromptDraftScopeKey,
-  readNativeChatComposerDraft,
-  clearNativeChatComposerDraftIfUnchanged
+  readNativeChatComposerDraft
 } from '../native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftIfUnchanged } from '../native-chat/native-chat-draft-cache'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
