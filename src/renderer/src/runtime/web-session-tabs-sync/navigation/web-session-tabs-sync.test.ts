@@ -14,7 +14,6 @@ import { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsSnapshot } from '.
 import '../tracking-mappings'
 import '../tracking-decisions'
 import '../tracking'
-import '../state'
 
 import {
   ENV,
