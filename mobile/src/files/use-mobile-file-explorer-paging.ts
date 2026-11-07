@@ -39,8 +39,6 @@ export function useMobileFileExplorerPaging({
       liveScope.current = null
     }
   }, [scope])
-  // Bumped per appended page: a closed folder's listing has no observer to re-render the filter.
-  const [revision, setRevision] = useState(0)
   const setStatus = useCallback(
     (relativePath: string, status: FolderPagingStatus | null) => {
       setScoped((previous) => {
@@ -91,7 +89,6 @@ export function useMobileFileExplorerPaging({
         return 'stale'
       }
       queryClient.setQueryData(queryKey, next)
-      setRevision((value) => value + 1)
       return 'appended'
     },
     [client, hostId, queryClient, target]
@@ -138,5 +135,5 @@ export function useMobileFileExplorerPaging({
 
   const searching = useMemo(() => [...statuses.values()].includes('searching'), [statuses])
 
-  return { folderPaging: statuses, pagedRevision: revision, searching, showMore, searchAll }
+  return { folderPaging: statuses, searching, showMore, searchAll }
 }

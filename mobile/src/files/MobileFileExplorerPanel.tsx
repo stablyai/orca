@@ -1,8 +1,22 @@
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { FlatList, View, type ListRenderItem } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, FolderOpen, X } from 'lucide-react-native'
-import { useQueryClient, type QueryKey, type UseQueryResult } from '@tanstack/react-query'
+import {
+  partialMatchKey,
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+  type UseQueryResult
+} from '@tanstack/react-query'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useHostQueries, useHostQuery } from '../query/host-query'
@@ -72,6 +86,27 @@ function folderPathOf(key: QueryKey): string | undefined {
 
 function directoryState(read: Extract<DirectoryRead, { kind: 'directory' }>): DirectoryState {
   return { entries: read.entries, total: read.total, hasMore: read.hasMore }
+}
+
+// Counts listings landing under `prefix` (keep it stable), observed or not: a folder closed before its read (or a
+// later page) finished still feeds the filter.
+function useListingsVersion(queryClient: QueryClient, prefix: QueryKey): number {
+  const version = useRef(0)
+  const subscribe = useCallback(
+    (notify: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (
+          event.type === 'updated' &&
+          event.action.type === 'success' &&
+          partialMatchKey(event.query.queryKey, prefix)
+        ) {
+          version.current += 1
+          notify()
+        }
+      }),
+    [prefix, queryClient]
+  )
+  return useSyncExternalStore(subscribe, () => version.current)
 }
 
 // A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
@@ -154,13 +189,17 @@ export function MobileFileExplorerPanel(props: {
     [hostId, queryClient, target]
   )
 
-  const { folderPaging, pagedRevision, searching, showMore, searchAll } =
-    useMobileFileExplorerPaging({
-      scope,
-      hostId,
-      client,
-      target
-    })
+  const { folderPaging, searching, showMore, searchAll } = useMobileFileExplorerPaging({
+    scope,
+    hostId,
+    client,
+    target
+  })
+  const listingsKey = useMemo(
+    () => [...hostScopeKey(hostId), fileDirectoryQuery.family, target],
+    [hostId, target]
+  )
+  const listingsVersion = useListingsVersion(queryClient, listingsKey)
   const refreshing = useRefreshHint(searching)
 
   const directoryCache = useMemo((): DirectoryCache => {
@@ -168,9 +207,7 @@ export function MobileFileExplorerPanel(props: {
       return rootRead.cache
     }
     // Closed folders and earlier visits stay in the cache, so the filter searches every folder opened before.
-    const cached = queryClient.getQueriesData<DirectoryRead>({
-      queryKey: [...hostScopeKey(hostId), fileDirectoryQuery.family, target]
-    })
+    const cached = queryClient.getQueriesData<DirectoryRead>({ queryKey: listingsKey })
     // fromEntries keeps a folder named __proto__ an own key; assignment would set the prototype.
     return Object.fromEntries([
       ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
@@ -184,7 +221,8 @@ export function MobileFileExplorerPanel(props: {
         folderState(folderReads[index], connState)
       ])
     ])
-  }, [connState, folderReads, folders, hostId, pagedRevision, queryClient, rootRead, target])
+    // listingsVersion marks cache writes that getQueriesData reads but nothing here observes.
+  }, [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead])
 
   const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
     useMobileFileExplorerRows({

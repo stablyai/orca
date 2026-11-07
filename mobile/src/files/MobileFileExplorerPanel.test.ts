@@ -502,6 +502,23 @@ describe('MobileFileExplorerPanel', () => {
     expect(renderedText(renderer)).not.toContain('Searched')
   })
 
+  it('filters a folder whose read finished after it was closed', async () => {
+    const srcRead = deferred()
+    createHost((_method, relativePath) =>
+      relativePath === 'src' ? srcRead.promise : ok([entry('src', true)])
+    )
+    const renderer = await renderExplorer()
+    await pressByLabel(renderer, 'Open folder src')
+    await pressByLabel(renderer, 'Open folder src')
+    await act(async () => {
+      srcRead.resolve(ok([entry('app.ts')]))
+    })
+    await settleQueryNotifications()
+
+    await typeFilter(renderer, 'app')
+    expect(renderedText(renderer)).toContain('app.ts')
+  })
+
   describe('Retry while the host is unreachable', () => {
     it("keeps a folder's Retry on the page, whose read runs when the shell reconnects", async () => {
       // The page cannot re-dial; the connected edge reads the folder.
