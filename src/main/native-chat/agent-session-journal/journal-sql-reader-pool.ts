@@ -15,6 +15,11 @@ import type {
   JournalSqlReaderResult
 } from './journal-sql-reader-protocol'
 import type { JournalSqlConversionTable } from './journal-sql-conversion'
+import type {
+  JournalSqlDatabaseRead,
+  JournalSqlDatabaseReadResult
+} from './journal-sql-database-read'
+import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -41,6 +46,22 @@ export class JournalSqlReaderPool {
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
     return this.slot().prepareConversion(sessionId)
+  }
+
+  async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
+    const response = await this.slot().request({ kind: 'database', operation })
+    if (response.type !== 'database') {
+      throw new Error('journal reader returned no database result')
+    }
+    return response.result
+  }
+
+  async point(request: JournalSqlPointRead): Promise<JournalSqlPointReadResult> {
+    const response = await this.slot().request({ kind: 'point', request })
+    if (response.type !== 'point') {
+      throw new Error('journal reader returned no point result')
+    }
+    return response.result
   }
 
   private slot(): ReaderSlot {

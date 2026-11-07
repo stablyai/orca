@@ -5,6 +5,8 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
 import { prepareJournalSqlConversion } from './journal-sql-conversion'
 import { journalSqlConversionPages } from './journal-sql-conversion-pages'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
+import { readJournalSqlPoint } from './journal-sql-point-read'
 
 if (!parentPort || typeof workerData?.filename !== 'string') {
   throw new Error('journal SQL reader requires a database path and parent port')
@@ -33,6 +35,12 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       throw new Error('journal SQL reader is unavailable')
     }
     switch (operation.kind) {
+      case 'point':
+        reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) })
+        break
+      case 'database':
+        reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
+        break
       case 'history':
         reply({ type: 'page', id, result: readJournalSqlHistoryPage(db, operation.request) })
         break

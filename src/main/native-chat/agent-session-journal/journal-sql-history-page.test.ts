@@ -224,3 +224,59 @@ it('answers that a chat is converting instead of serving its partly written rows
     readJournalSqlHistoryPage(db, { sessionId: 'session-1', direction: 'tail' })
   ).toThrow(JournalProjectionStaleError)
 })
+
+it('shrinks forward rows before advancing and refreshes a dependent Stop note from its turn key', async () => {
+  const turn = { provider: 'orca', clientMessageId: 'turn-1' } as const
+  const thread = { fence: 1, turnScope: { kind: 'thread' as const } }
+  await fixture.journal.appendItem(
+    turn,
+    { kind: 'turn', turnId: 'turn-1', state: 'running' },
+    thread
+  )
+  await fixture.journal.appendItem(
+    { provider: 'orca', clientMessageId: 'stop:turn-1' },
+    { kind: 'status', text: 'Waiting', failure: { kind: 'cancelUnconfirmed' } },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn-1' } }
+  )
+  const held = fixture.journal.cursor()
+  for (const id of ['large-1', 'large-2']) {
+    await fixture.journal.appendItem(
+      { provider: 'orca', clientMessageId: id },
+      body('x'.repeat(650)),
+      thread
+    )
+  }
+  await fixture.journal.appendItem(
+    turn,
+    { kind: 'turn', turnId: 'turn-1', state: 'interrupted' },
+    thread
+  )
+  const db = convert()
+  const reader = { budgetBytes: 1024, form: measureHistoryItem }
+  const pages = []
+  let cursor = held
+  for (;;) {
+    const page = readJournalSqlHistoryPage(
+      db,
+      { sessionId: 'session-1', direction: 'after', cursor, limit: 3 },
+      reader
+    )
+    if (!page.ok) {
+      throw new Error(page.reset)
+    }
+    pages.push(page.page)
+    if (!page.page.hasNewer) {
+      break
+    }
+    cursor = page.page.window.nextCursor
+  }
+  expect(pages.map((page) => page.window.nextCursor.sequence)).toEqual([4, 5, 6])
+  expect(pages.flatMap((page) => page.items).map((entry) => entry.itemId)).toEqual([
+    'orca:large-1',
+    'orca:large-2',
+    'orca:turn-1',
+    'orca:stop%3Aturn-1'
+  ])
+  expect(pages.at(-1)?.items.at(-1)?.body).toMatchObject({ kind: 'status' })
+  expect(pages.at(-1)?.items.at(-1)?.body).not.toHaveProperty('failure')
+})

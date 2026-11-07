@@ -1,26 +1,20 @@
+import { readAgentSessionForwardHistory } from './agent-session-history-forward-page'
+import { buildAgentSessionHistoryPage } from './agent-session-history-page-result'
 import { resolveHistoryLimit } from './agent-session-history-limit'
-import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { snapshotLatestTurn } from './agent-session-history-latest-turn'
 
-import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
   boundHistoryItemsByBytes,
   isSubagentRow,
-  historyContentBytes,
   type HistoryReader,
-  type HistoryPageInput,
-  measureHistoryItem,
   newestWholeSequenceGroups,
   wholeSubagentGroupsStart,
-  oversizedHistoryItem,
   submissionBytesByItemId
 } from './agent-session-history-page-bounds'
 import { offPageSubagentRoster } from './agent-session-history-subagent-roster'
@@ -90,7 +84,23 @@ export function readAgentSessionHistory(
     ) {
       return historyReset(journal, 'cursor_compacted', reader)
     }
-    return readForward(journal, snapshot, request.cursor, limit, reader, readSnapshot)
+    return readAgentSessionForwardHistory(
+      {
+        readSince: (cursor, count) => journal.readSince(cursor, count),
+        canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
+        hasSubmission: (id) => journal.submission(id) !== undefined,
+        queueSourceIds: reader.queueSourceIds?.bind(undefined, journal),
+        reset: (reset) => historyReset(journal, reset, reader)
+      },
+      snapshot,
+      request.cursor,
+      limit,
+      reader,
+      (ids) => {
+        const selected = readSnapshot(ids)
+        return reader.snapshot?.(journal, selected, ids) ?? selected
+      }
+    )
   }
   snapshot ??= view.currentSnapshot()
   const cursor = request.direction === 'before' ? request.cursor : undefined
@@ -116,7 +126,7 @@ export function readAgentSessionHistory(
   )
   return {
     ok: true,
-    page: buildPage({
+    page: buildAgentSessionHistoryPage({
       snapshot,
       direction: request.direction,
       items,
@@ -169,7 +179,7 @@ function buildHydrationPage(
     reader.budgetBytes,
     reader.form
   )
-  return buildPage({
+  return buildAgentSessionHistoryPage({
     snapshot,
     direction: 'tail',
     items: bounded.items,
@@ -193,135 +203,5 @@ function historyReset(
     ok: false,
     reset,
     page: readAgentSessionHydrationPage(journal, undefined, reader)
-  }
-}
-
-function readForward(
-  journal: AgentSessionJournal,
-  snapshot: AgentJournalSnapshot,
-  cursor: AgentJournalCursor | undefined,
-  limit: number,
-  reader: HistoryReader,
-  readSnapshot: (ids: ReadonlySet<string>) => AgentJournalSnapshot
-): AgentSessionHistoryResult {
-  if (!cursor) {
-    // Why: forward paging replays rows after a position; without one there is
-    // nothing to be after, and silently serving the tail would hand the client
-    // a page it cannot place.
-    return historyReset(journal, 'cursor_ahead', reader)
-  }
-  // One lookahead determines hasNewer without rereading the whole remaining journal.
-  const since = journal.readSince(cursor, limit + 1)
-  if (!since.ok) {
-    return historyReset(journal, since.reset, reader)
-  }
-  let submissionBytes = submissionBytesByItemId(snapshot.submissions)
-  // Shrink the row window; clipping items after advancing the cursor would permanently lose revisions.
-  let rows = since.rows.slice(0, limit)
-  const project = (window: typeof rows) => {
-    const result = projectJournalBatch({
-      rows: window,
-      snapshot,
-      afterSequence: cursor.sequence,
-      canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
-      hasSubmission: (id) => journal.submission(id) !== undefined,
-      queueSourceIds: reader.queueSourceIds?.bind(undefined, journal),
-      readSnapshot: (ids) => {
-        const selected = readSnapshot(ids)
-        return reader.snapshot?.(journal, selected, ids) ?? selected
-      }
-    })
-    if (!result.ok) {
-      return result
-    }
-    submissionBytes = submissionBytesByItemId(result.batch.submissions)
-    return { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }
-  }
-  let projected = project(rows)
-  if (!projected.ok) {
-    return historyReset(journal, projected.reset, reader)
-  }
-  let contentBytes = historyContentBytes(
-    projected.batch.items,
-    projected.batch.removedItemIds,
-    submissionBytes
-  )
-  while (rows.length > 1 && contentBytes > reader.budgetBytes) {
-    rows = rows.slice(0, Math.ceil(rows.length / 2))
-    const shrunk = project(rows)
-    if (!shrunk.ok) {
-      return historyReset(journal, shrunk.reset, reader)
-    }
-    projected = shrunk
-    contentBytes = historyContentBytes(
-      projected.batch.items,
-      projected.batch.removedItemIds,
-      submissionBytes
-    )
-  }
-  let items = projected.batch.items
-  if (contentBytes > reader.budgetBytes) {
-    items = items.map((formed) => {
-      const bytes = formed.bytes + (submissionBytes.get(formed.item.itemId) ?? 0)
-      return bytes > reader.budgetBytes
-        ? measureHistoryItem(oversizedHistoryItem(formed.item))
-        : formed
-    })
-    contentBytes = historyContentBytes(items, projected.batch.removedItemIds, submissionBytes)
-  }
-  if (contentBytes > reader.budgetBytes) {
-    // A single row's semantic payload — in practice a pre-bounding oversized
-    // removal id — can never fit any page, and truncating a removal id would
-    // break the client's keying. A bounded tail replaces the client's state
-    // wholesale, which applies the removal without carrying the id, and the
-    // client resumes from the live cursor past this row.
-    return historyReset(journal, 'cursor_compacted', reader)
-  }
-  const hasNewer = since.rows.length > rows.length
-  // A complete read moves past trailing writes that saved nothing. `through` cannot run ahead of
-  // `snapshot`: each write commits and adopts its state in one synchronous step on the write lane.
-  const lastSequence = hasNewer ? (rows.at(-1)?.seq ?? cursor.sequence) : since.through
-  return {
-    ok: true,
-    page: buildPage({
-      snapshot,
-      submissions: projected.batch.submissions,
-      direction: 'after',
-      items: items.map(({ item }) => item),
-      removedItemIds: projected.batch.removedItemIds,
-      hasOlder: cursor.sequence > 0,
-      hasNewer,
-      fallbackCursor: cursor,
-      nextCursor: { epoch: cursor.epoch, sequence: lastSequence }
-    })
-  }
-}
-
-function buildPage(input: HistoryPageInput): AgentSessionHistoryPage {
-  const epoch = input.snapshot.cursor.epoch
-  const pageItemIds = new Set(input.items.map((item) => item.itemId))
-  const oldest = input.items[0]
-  const newest = input.items.at(-1)
-  return {
-    sessionId: input.snapshot.sessionId,
-    epoch,
-    ...(input.fence !== undefined ? { fence: input.fence } : {}),
-    direction: input.direction,
-    items: input.items,
-    removedItemIds: input.removedItemIds ?? [],
-    submissions: (input.submissions ?? input.snapshot.submissions).filter((submission) =>
-      pageItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-    ),
-    window: {
-      oldest: oldest ? { epoch, sequence: oldest.sequence } : null,
-      newest: newest ? { epoch, sequence: newest.sequence } : null,
-      nextCursor: input.nextCursor ?? input.fallbackCursor
-    },
-    liveCursor: input.snapshot.cursor,
-    hasOlder: input.hasOlder,
-    hasNewer: input.hasNewer,
-    ...(input.subagentRoster === undefined ? {} : { subagentRoster: input.subagentRoster }),
-    // Read the whole timeline: long turns can begin below this page.
-    latestTurn: snapshotLatestTurn(input.snapshot)
   }
 }
