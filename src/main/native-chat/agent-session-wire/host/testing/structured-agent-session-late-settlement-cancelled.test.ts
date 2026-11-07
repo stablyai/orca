@@ -71,7 +71,7 @@ describe('settling a send the provider proves it received after the ack window',
     const params = sendParams('settle from provider echo')
     await fixture.host.send(CALLER, params)
     await handedOver(params.envelope.clientOperationId)
-    vi.spyOn(journal(), 'acceptLate').mockRejectedValueOnce(
+    vi.spyOn(journal(), 'settleLateDispatch').mockRejectedValueOnce(
       new Error('direct settlement write failed')
     )
 

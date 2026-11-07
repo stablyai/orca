@@ -16,6 +16,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   JournalItemAppendOptions,
+  JournalLateDispatchInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   ResolveDispatchInput
@@ -55,6 +56,7 @@ export type JournalWriterInputOperation =
       consume?: Omit<JournalSubmissionConsume, 'owed'> & { owed?: true }
     }
   | { kind: 'accept-late'; input: Extract<ResolveDispatchInput, { state: 'accepted' }> }
+  | { kind: 'late-dispatch'; input: JournalLateDispatchInput }
   | {
       kind: 'queue-insert'
       input: {
@@ -125,6 +127,11 @@ export async function runJournalWriterOperation(
     case 'accept-late':
       queue.legacy.rederiveWitnesses()
       return submissionWriter.acceptLate(operation.input)
+    case 'late-dispatch':
+      if (operation.input.state === 'accepted') {
+        queue.legacy.rederiveWitnesses()
+      }
+      return submissionWriter.settleLate(operation.input)
     case 'queue-insert':
       return queue.insert(operation.input, receipt)
     case 'queue-update':

@@ -456,3 +456,52 @@ it('accepts Stop, claims goal uploads and withdraws a goal with host proofs carr
   )
   expect(side.memory.goalAttachments.snapshot()).toEqual({ uploads: [], goals: [] })
 })
+
+it('uses the preceding handover to distinguish linked from direct unrun late settlements', async () => {
+  const side = await sides()
+  const rejection = agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+    surface: 'rejection'
+  })
+  await both(side, (j) => j.queuedMessages.insert({ messageId: 'card', body: text('linked') }), {
+    kind: 'queue-insert',
+    input: { messageId: 'card', body: text('linked') }
+  })
+  for (const id of ['linked', 'direct']) {
+    const input = {
+      clientMessageId: id,
+      payloadFingerprint:
+        id === 'linked' ? side.memory.queuedMessages.get('card')!.fingerprint : 'direct-fp',
+      body: text(id),
+      fence: 1,
+      handoverRecorded: true as const
+    }
+    const consume = id === 'linked' ? { messageId: 'card', expect: 'waiting' as const } : undefined
+    await both(side, (j) => j.submissionWriter.append(input, consume), {
+      kind: 'submission',
+      input,
+      consume
+    })
+    const settlement = {
+      clientMessageId: id,
+      state: 'rejected' as const,
+      fence: 1,
+      unrun: true as const,
+      ...rejection
+    }
+    await both(side, (j) => j.submissionWriter.settleLate(settlement), {
+      kind: 'late-dispatch',
+      input: settlement
+    })
+  }
+  expect(side.memory.state().submissions.get('linked')).toMatchObject({
+    dispatchState: 'rejected',
+    rejection: { kind: 'cancelled', neverReachedAgent: true }
+  })
+  expect(side.memory.state().submissions.get('direct')).toMatchObject({
+    dispatchState: 'rejected',
+    rejection: { kind: 'cancelled' }
+  })
+  expect(side.memory.state().submissions.get('direct')?.rejection).not.toHaveProperty(
+    'neverReachedAgent'
+  )
+})

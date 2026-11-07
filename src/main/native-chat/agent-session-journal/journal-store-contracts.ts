@@ -71,6 +71,10 @@ export type JournalAppendResult = {
   revision: number
 }
 
+export type JournalLateDispatchInput =
+  | Extract<ResolveDispatchInput, { state: 'accepted' | 'unknown' }>
+  | (Extract<ResolveDispatchInput, { state: 'rejected' }> & { unrun?: true })
+
 export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   echoOf?: JournalItemEcho['echoOf']
   fence: number

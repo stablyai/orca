@@ -209,8 +209,7 @@ export class AgentSessionJournal {
   ): void => this.visitItemsWithLinkage(visit)
 
   /** One reduced item's body by its journal key, for a writer revising a row it can name. */
-  itemBody = (itemId: string): journal.AgentJournalItemBody | null =>
-    this.item(itemId)?.body ?? null
+  itemBody = (itemId: string) => this.item(itemId)?.body ?? null
 
   /** Host-only stopped-history IDs carried by each send. */
   stoppedHistoryCarried = (): ReadonlyMap<string, readonly string[]> =>
@@ -220,8 +219,7 @@ export class AgentSessionJournal {
     journalInputSourceBody(this.state.inputs.sources.get(clientMessageId))
 
   /** One reduced item with its attribution, for a writer that needs the turn a row joined. */
-  item = (itemId: string): journal.AgentJournalRenderItem | null =>
-    journalInput.readJournalInputItem(this.state, itemId)
+  item = (itemId: string) => journalInput.readJournalInputItem(this.state, itemId)
 
   /** Visits reduced items with the producer that wrote each, for a producer re-deriving what an
    *  earlier run of this session left. */
@@ -368,6 +366,9 @@ export class AgentSessionJournal {
   }
 
   acceptLate: typeof this.submissionWriter.acceptLate = (i) => this.submissionWriter.acceptLate(i)
+
+  settleLateDispatch = (i: contracts.JournalLateDispatchInput) =>
+    this.submissionWriter.settleLate(i)
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {

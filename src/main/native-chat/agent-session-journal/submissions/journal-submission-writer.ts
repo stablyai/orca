@@ -20,6 +20,7 @@ import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journ
 import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
+  JournalLateDispatchInput,
   ResolveDispatchInput
 } from '../journal-store-contracts'
 
@@ -137,6 +138,28 @@ export class JournalSubmissionWriter {
         committed: () => witness?.receipt.committed()
       }
     )
+  }
+
+  /** Resolve queue ownership at this settlement's write position, after preceding handovers. */
+  async settleLate(input: JournalLateDispatchInput): Promise<void> {
+    if (input.state === 'accepted') {
+      return this.acceptLate(input)
+    }
+    await this.deps.rowWriter.append((seq, ts) => {
+      let settlement: ResolveDispatchInput = input
+      if (input.state === 'rejected') {
+        const { unrun, ...rejected } = input
+        const linked = this.deps.state().submissions.get(input.clientMessageId)?.queuedMessageId
+        settlement = {
+          ...rejected,
+          rejection:
+            unrun && linked !== undefined
+              ? { ...rejected.rejection, neverReachedAgent: true }
+              : rejected.rejection
+        }
+      }
+      return journalDispatchRowBuilder(this.deps.state, settlement)(seq, ts)
+    })
   }
 }
 
