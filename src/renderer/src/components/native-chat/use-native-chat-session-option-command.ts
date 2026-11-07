@@ -14,14 +14,14 @@ import {
 import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat/input/native-chat-session-option-dispatch'
 import { translate } from '@/i18n/i18n'
 
+/** Picker switches already show in the pill, so they add no "Ran" command marker to the transcript. */
 export function useNativeChatSessionOptionCommand(args: {
   agent: AgentType
   disabled: boolean
-  onSlashCommand?: (command: string) => void
   onSubmitted?: () => void
   resolveTarget: () => NativeChatResolvedTarget | null
 }): { dispatch: NativeChatSessionOptionDispatchCommand; isDispatching: boolean } {
-  const { agent, disabled, onSlashCommand, onSubmitted, resolveTarget } = args
+  const { agent, disabled, onSubmitted, resolveTarget } = args
   const mountedRef = useRef(true)
   const activeObserversRef = useRef(new Set<ClaudeModelSwitchConfirmationObserver>())
   const activeSendsRef = useRef(new Set<AbortController>())
@@ -107,7 +107,6 @@ export function useNativeChatSessionOptionCommand(args: {
         }
         // Start detection after acceptance so remote send latency cannot consume the response window.
         observer?.startDetection()
-        onSlashCommand?.(command.trim())
         emitNativeChatMessageSent({
           agent,
           runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
@@ -123,7 +122,7 @@ export function useNativeChatSessionOptionCommand(args: {
         }
       }
     },
-    [agent, disabled, onSlashCommand, onSubmitted, resolveTarget]
+    [agent, disabled, onSubmitted, resolveTarget]
   )
 
   return { dispatch, isDispatching }
