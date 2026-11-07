@@ -59,12 +59,15 @@ afterEach(() => {
   JournalWriteProjection.verifyEachCommit = false
 })
 
-const view = (journal: ContinuedJournal) => ({
-  snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.displayState().queue.cards.values()].sort(
-    (a, b) => a.position - b.position
-  )
-})
+const view = (journal: ContinuedJournal) => {
+  const state = journal.queuedMessages.displayState()
+  return {
+    snapshot: journal.snapshot(),
+    cards: [...state.queries.queueCardsForInitialization(state)].sort(
+      (a, b) => a.position - b.position
+    )
+  }
+}
 
 /** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
  * are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */

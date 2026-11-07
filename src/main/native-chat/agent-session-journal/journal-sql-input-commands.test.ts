@@ -198,8 +198,8 @@ async function both<T>(
   )
   if ('error' in expected) {
     expect(actual).toMatchObject({ error: expect.any(Error) })
-    const name = (result: { error?: unknown }) =>
-      result.error instanceof Error ? result.error.name : undefined
+    const name = (result: { error: unknown } | { value: unknown }) =>
+      'error' in result && result.error instanceof Error ? result.error.name : undefined
     expect(name(actual)).toBe(name(expected))
   } else {
     expect(actual).toEqual(expected)
