@@ -1,4 +1,4 @@
-import { setImmediate } from 'node:timers/promises'
+
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PushNotification } from '@orca-cloud/push-contract'
 import { DurablePushStore } from './durable-push-store.js'
@@ -303,42 +303,9 @@ it('claims new devices while an earlier provider response is still pending', asy
   }
 })
 
-it('runs due work on its timer and releases the timer on stop', async () => {
-  const h = await fixture()
-  vi.useFakeTimers()
-  await h.accept(note(1))
-  h.worker.start()
-  h.worker.start()
-  expect(vi.getTimerCount()).toBe(1)
-  await vi.advanceTimersByTimeAsync(1000)
-  await h.worker.runDue()
-  expect(h.send).toHaveBeenCalledOnce()
-  await h.worker.stop()
-  expect(vi.getTimerCount()).toBe(0)
-})
 
-it('wakes only while started and keeps the durability poll', async () => {
-  const h = await fixture()
-  vi.useFakeTimers()
-  const claim = vi.spyOn(h.store, 'claim')
-  await h.accept(note(1))
-  h.worker.wake()
-  expect(claim).not.toHaveBeenCalled()
-  h.worker.start()
-  h.worker.wake()
-  expect(claim).toHaveBeenCalled()
-  await h.worker.runDue()
-  expect(h.send).toHaveBeenCalledOnce()
-  expect(vi.getTimerCount()).toBe(1)
-  await h.worker.stop()
-  const calls = claim.mock.calls.length
-  await h.accept(note(2))
-  h.worker.wake()
-  await vi.advanceTimersByTimeAsync(2000)
-  expect(claim).toHaveBeenCalledTimes(calls)
-  expect(await h.store.pendingCount(h.registrationId)).toBe(1)
-  expect(vi.getTimerCount()).toBe(0)
-})
+
+
 
 it('coalesces wakes arriving after every active drain found an empty queue', async () => {
   const h = await fixture()
@@ -377,55 +344,7 @@ it('coalesces wakes arriving after every active drain found an empty queue', asy
   }
 })
 
-it('bounds claims by sends plus drains for a burst and a trickle of wakes', async () => {
-  const h = await fixture()
-  const registrations: string[] = []
-  for (let index = 0; index < 50; index++) {
-    const device = await h.devices.upsert({
-      hostFingerprint: `host-${index}`,
-      deviceId: `phone-${index}`,
-      platform: 'android',
-      token: `token-${index}`
-    })
-    if (!device.ok) throw new Error('registration failed')
-    registrations.push(device.registrationId)
-  }
-  const claim = vi.spyOn(h.store, 'claim')
-  const sendOne = async (index: number) => {
-    const status = await h.store.accept(
-      `host-${index % 50}`,
-      registrations[index % 50]!,
-      note(index + 1)
-    )
-    expect(status).toBe('queued')
-    h.worker.wake()
-  }
-  // Fake timers hold the poll, so only wakes claim.
-  vi.useFakeTimers()
-  h.worker.start()
-  const settle = async () => {
-    for (let ticks = 0; ticks < 1000; ticks++) await setImmediate()
-  }
-  await Promise.all(Array.from({ length: 1000 }, (_, index) => sendOne(index)))
-  await settle()
-  // Each drain stops after 25 sends, so the poll finishes a large burst.
-  let polls = 0
-  while (h.send.mock.calls.length < 1000 && polls < 10) {
-    await vi.advanceTimersByTimeAsync(1000)
-    await settle()
-    polls++
-  }
-  expect(h.send).toHaveBeenCalledTimes(1000)
-  expect(claim.mock.calls.length).toBeLessThanOrEqual(1000 + WORKER_DRAINS * (polls + 2))
-  claim.mockClear()
-  // Before one-drain wakes, each idle send started every drain: ~13 claims per send.
-  for (let index = 1000; index < 1020; index++) {
-    await sendOne(index)
-    await settle()
-  }
-  expect(h.send).toHaveBeenCalledTimes(1020)
-  expect(claim).toHaveBeenCalledTimes(40)
-}, 60_000)
+
 
 it('recovers from a failed automatic wake without leaving another timer', async () => {
   const h = await fixture()

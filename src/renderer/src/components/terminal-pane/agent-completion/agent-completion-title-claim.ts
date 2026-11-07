@@ -5,7 +5,7 @@ import type {
   LastCompletionIdentity
 } from './agent-completion-identity-store'
 import type { CompletionState } from './agent-completion-notification-controller'
-import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../agent-task-complete-policy'
+import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../notifications/agent-task-complete-policy'
 
 type TitleClaimDeps = {
   options: AgentCompletionCoordinatorOptions

@@ -12,13 +12,13 @@ import {
   startAntigravityChatSignIn,
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
-} from '@/runtime/antigravity-chat-sign-in-status'
+} from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
 } from '../../../../shared/antigravity-account-types'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'

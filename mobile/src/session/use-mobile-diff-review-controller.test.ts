@@ -9,9 +9,21 @@ import { useMobileDiffReviewController } from './use-mobile-diff-review-controll
 import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 const loadSnapshot = vi.hoisted(() => vi.fn())
+// Each build's notes-and-files read; status comes from the shared git.status query, held pending here.
+vi.mock('./mobile-diff-review-snapshot-loader', () => ({
+  startMobileDiffReviewSnapshot: (
+    client: unknown,
+    worktree: string,
+    input: { status: Promise<unknown> }
+  ) => {
+    input.status.catch(() => {})
+    return { snapshot: loadSnapshot(client, worktree), branch: Promise.resolve({ result: null }) }
+  },
+  withMobileDiffReviewBranch: (state: unknown) => state
+}))
 vi.mock('./mobile-diff-review-loaders', () => ({
-  loadMobileDiffReviewSnapshot: loadSnapshot,
-  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
+  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' }),
+  mobileReviewDiffInput: vi.fn(() => ({}))
 }))
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },

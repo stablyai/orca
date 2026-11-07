@@ -18,7 +18,7 @@ import {
   openingSimulatorTabId,
   openSimulatorTabThroughLayoutOwner
 } from './simulator-tab-layout-owner'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { SIMULATOR_DEFAULT_TAB_LABEL } from './simulator-tab-label'
 
 type EnsureSimulatorTabOptions = {

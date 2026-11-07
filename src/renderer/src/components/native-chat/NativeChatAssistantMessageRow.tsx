@@ -6,11 +6,12 @@ import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
-import { NativeChatPacedMarkdown } from './NativeChatPacedMarkdown'
+import { NativeChatPacedMarkdown } from './markdown/NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
 import { NativeChatToolRun } from './NativeChatToolRun'
-import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './NativeChatCodeBlock'
-import { NativeChatAgentControls, NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+import { NativeChatCodeBlock, NativeChatPlainCodeBlock } from './markdown/code/NativeChatCodeBlock'
+import { NativeChatAgentControls } from './messages/actions/NativeChatAgentControls'
+import { NativeChatImageAttachments } from './media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from './NativeChatForkAction'
 import type { useNativeChatWorkRun } from './use-native-chat-work-run'
 
@@ -70,8 +71,11 @@ export function NativeChatAssistantMessageRow({
     !message.agentStart &&
     !inSubagentSection &&
     isRootAgentJournalItem(message)
+  // A row whose fork is opening keeps its controls up so the spinner stays visible.
   const revealOnHover =
-    'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
+    fork?.pendingItemId === message.id
+      ? 'mt-1 w-fit select-none'
+      : 'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div

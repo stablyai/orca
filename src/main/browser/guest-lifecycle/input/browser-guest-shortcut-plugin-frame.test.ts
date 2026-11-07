@@ -82,10 +82,29 @@ describe('Orca shortcuts while a plugin guest has focus', () => {
 
   it('leaves browser-page chords and the editor save chord to the guest', () => {
     const { send, press } = pluginGuestHarness()
-    // Mod+L would focus a browser address bar; Mod+S rides editor.keydown, so it must not double-fire.
-    expect(press(keyDown('l', 'KeyL'))).not.toHaveBeenCalled()
+    // Mod+F would open browser find; Mod+S rides editor.keydown, so it must not double-fire.
     expect(press(keyDown('s', 'KeyS'))).not.toHaveBeenCalled()
     expect(press(keyDown('f', 'KeyF'))).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
+  })
+
+  // #37472: these resolved to Orca actions but the plugin frame kept the keys.
+  it('toggles the sidebars instead of the browser address bar', () => {
+    const { send, press } = pluginGuestHarness()
+    expect(press(keyDown('b', 'KeyB'))).toHaveBeenCalled()
+    expect(press(keyDown('l', 'KeyL'))).toHaveBeenCalled()
+    expect(send.mock.calls).toEqual([['ui:toggleLeftSidebar'], ['ui:toggleRightSidebar']])
+  })
+
+  it('sends zoom chords to Orca rather than dropping them', () => {
+    const { send, press } = pluginGuestHarness()
+    expect(press(keyDown('=', 'Equal'))).toHaveBeenCalled()
+    expect(press(keyDown('-', 'Minus'))).toHaveBeenCalled()
+    expect(press(keyDown('0', 'Digit0'))).toHaveBeenCalled()
+    expect(send.mock.calls).toEqual([
+      ['terminal:zoom', 'in'],
+      ['terminal:zoom', 'out'],
+      ['terminal:zoom', 'reset']
+    ])
   })
 })

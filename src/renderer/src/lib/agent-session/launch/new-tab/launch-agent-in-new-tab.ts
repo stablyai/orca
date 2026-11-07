@@ -12,16 +12,21 @@ import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
 import { pasteAgentLaunchPromptOnceReady } from '@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { snapshotAgentTabLaunchArgs } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-args'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
+import {
+  agentTabLaunchStore,
+  resolveAgentLaunchExecutionContext
+} from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import {
+  notifyAgentTabLaunchFailure,
   launchOnceHostAnswered,
   routeNewTabLaunch,
   type AgentTabLaunchOutcome,
@@ -42,13 +47,24 @@ export function launchAgentInNewTabWithOutcome(
   args: LaunchAgentInNewTabArgs,
   notifyFailure = true
 ): AgentTabLaunchOutcome {
-  args = {
-    ...args,
-    ...(args.sessionOptions !== undefined ? { sessionOptions: { ...args.sessionOptions } } : {}),
-    ...(args.chatSessionOptions !== undefined
-      ? { chatSessionOptions: { ...args.chatSessionOptions } }
-      : {})
+  const notify = () => notifyAgentTabLaunchFailure(args.agent)
+  try {
+    return openAgentInNewTab(args, notifyFailure, notify)
+  } catch {
+    args.focusIntent?.cancel()
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
+}
+
+function openAgentInNewTab(
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure: boolean,
+  notify: () => void
+): AgentTabLaunchOutcome {
+  args = snapshotAgentTabLaunchArgs(args)
   const {
     agent,
     worktreeId,
@@ -57,6 +73,7 @@ export function launchAgentInNewTabWithOutcome(
     agentArgs,
     sessionOptions,
     initialCwd,
+    trustWorktreeId,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
@@ -67,11 +84,15 @@ export function launchAgentInNewTabWithOutcome(
     beforeSurfaceOpen,
     activate
   } = args
-  const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const store = agentTabLaunchStore(useAppStore.getState(), args)
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    workspaceExecutionHostId: args.workspaceExecutionHostId
+  })
   if (!executionContext) {
     args.focusIntent?.cancel()
-    return null
+    return { refused: { delivered: false, failureNotified: true } }
   }
   const { resolvedLaunchPlatform, isRemote, queuedShell } = executionContext
   const trimmedPrompt = prompt?.trim() ?? ''
@@ -98,7 +119,12 @@ export function launchAgentInNewTabWithOutcome(
     ...(args.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
   })
   if ('awaited' in route) {
-    return launchOnceHostAnswered(route, args, (next) => launchAgentInNewTabWithOutcome(next))
+    return launchOnceHostAnswered(
+      route,
+      args,
+      (next) => launchAgentInNewTabWithOutcome(next, notifyFailure),
+      notifyFailure ? notify : undefined
+    )
   }
   const { plan } = route
   if (plan?.route === 'structured-native-chat') {
@@ -111,13 +137,16 @@ export function launchAgentInNewTabWithOutcome(
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
       openTerminal: (terminalPlan, terminalActivate) =>
-        launchAgentInNewTabWithOutcome({
-          ...args,
-          beforeSurfaceOpen: undefined,
-          ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
-          requestId: undefined,
-          agentSessionLaunchPlan: terminalPlan
-        })
+        launchAgentInNewTabWithOutcome(
+          {
+            ...args,
+            beforeSurfaceOpen: undefined,
+            ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
+            requestId: undefined,
+            agentSessionLaunchPlan: terminalPlan
+          },
+          notifyFailure
+        )
     })
     if (!structured) {
       args.focusIntent?.cancel()
@@ -159,8 +188,10 @@ export function launchAgentInNewTabWithOutcome(
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
+      workspaceExecutionHostId: args.workspaceExecutionHostId,
       groupId,
       cwd: initialCwd,
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       buildStartup,
       sessionOptions,
       prompt: trimmedPrompt,
@@ -184,7 +215,10 @@ export function launchAgentInNewTabWithOutcome(
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = buildStartup()
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
   if (!startupPlan) {
-    return null
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
 
   if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
@@ -202,6 +236,7 @@ export function launchAgentInNewTabWithOutcome(
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(sessionOptions ? { sessionOptions } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
       ...(activate === false ? { activate: false } : {}),
@@ -221,9 +256,11 @@ export function launchAgentInNewTabWithOutcome(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(activate === false ? { activate: false } : {}),
     pendingStartup: {
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
@@ -242,10 +279,6 @@ export function launchAgentInNewTabWithOutcome(
       }
     }
   })
-  if (initialCwd?.trim()) {
-    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
-    store.queueTabInitialCwd(tab.id, initialCwd)
-  }
   // Safe for native-prefill agents: delivery skips paste when their draft already arrived at launch.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
     // Native argv prefill skips the paste callback, so seed the chat composer here.

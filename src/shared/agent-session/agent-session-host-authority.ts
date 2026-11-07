@@ -138,6 +138,7 @@ export type RuntimeCreateAgentSessionRequest = {
   extraAgentArgs?: string
   launchPreferences?: AgentLaunchPreferences
   startupCwd?: string
+  trustWorktreeId?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'

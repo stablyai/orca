@@ -1,3 +1,5 @@
+import { agentTabLaunchStore } from './launch-agent-execution-context'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
@@ -8,20 +10,18 @@ import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/c
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import { agentSessionCreateCapabilities } from '@/runtime/agent-session-create-request'
+import { agentSessionCreateCapabilities } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
 import { AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
-import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
+import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import {
-  deliverCreatedWebRuntimeAgentSessionPrompt,
-  type createWebRuntimeSessionTerminal
-} from '@/runtime/web-runtime-terminal-creation'
-import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/web-runtime-session-types'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 import { planLaunchAgentStartupPrompt } from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
@@ -36,9 +36,11 @@ import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-
 export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
+  workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
   cwd?: string | null
+  trustWorktreeId?: string
   buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
   sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
@@ -115,9 +117,10 @@ export async function launchAgentInWebHostTab(args: {
     launch = {
       worktreeId,
       environmentId,
+      ...(args.trustWorktreeId ? { trustWorktreeId: args.trustWorktreeId } : {}),
       targetGroupId: groupId,
       activate: args.activate !== false,
-      ...(!hasPrompt && args.activate === false ? { selectWorktree: false } : {}),
+      ...(args.activate === false ? { selectWorktree: false } : {}),
       ...(cwd?.trim() ? { cwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       agentSessionKind: 'fresh',
@@ -203,10 +206,10 @@ export async function launchAgentInWebHostTab(args: {
             })
           } else {
             // Why: unavailable host recipes retain the existing no-refusal compatibility launch.
-            const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
-              kind: 'git-worktree',
-              worktreeId
-            })
+            const preferences = await ensureAgentLaunchPreferences(
+              agentTabLaunchStore(useAppStore.getState(), args),
+              { kind: 'git-worktree', worktreeId }
+            )
             startup = args.buildStartup(preferences.agentLaunchChoices)
           }
         } catch (error) {

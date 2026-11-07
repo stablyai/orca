@@ -2,10 +2,10 @@ import { useAppStore } from '@/store'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isFreshNonDoneAgentStatus } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { createAgentCompletionCoordinator } from '../../agent-completion/agent-completion-coordinator'
-import { dispatchAgentHookTerminalLifecycle } from '../../agent-hook-terminal-lifecycle'
+import { dispatchAgentHookTerminalLifecycle } from '../../agent-completion/agent-hook-terminal-lifecycle'
 import {
   hookLaneOwnsAgentTurnEnds,
   hookLaneTitleTurnEndEvidence
@@ -13,7 +13,7 @@ import {
 import { absorbBurstBellForHookOwnedIdle } from '../notifications/agent-task-complete-notify'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { isAgentTaskCompleteTrackingEnabled } from '../notifications/agent-task-complete-settings'
-import { isAgentProcessInspectionCostly } from '../../agent-process-inspection-cost'
+import { isAgentProcessInspectionCostly } from '../../agent-completion/process-inspection/agent-process-inspection-cost'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
 import { retireLiveAgentRowOnConfirmedProcessExit } from './confirmed-process-exit-row-retire'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

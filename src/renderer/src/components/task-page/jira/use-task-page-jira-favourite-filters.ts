@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   jiraListFavouriteFiltersForTarget,
   type JiraFavouriteFiltersResult
-} from '@/runtime/runtime-jira-favourite-filters-client'
+} from '@/runtime/jira/runtime-jira-favourite-filters-client'
 import type { JiraFavouriteFilter } from '../../../../../shared/jira/jira-favourite-filters'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
 import { translate } from '@/i18n/i18n'

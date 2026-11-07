@@ -7,7 +7,7 @@ import {
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
-import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 import { translate } from '@/i18n/i18n'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 

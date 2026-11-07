@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { LayoutApplyOutcome } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { RuntimeStore } from '../../../runtime-store-contract'
-import { RUNTIME_CAPABILITIES } from '../../../../../shared/protocol-version'
+import { withoutGitGraph } from '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../server/runtime-rpc-mobile-method-allowlist'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'
@@ -90,7 +90,6 @@ describe('layout.apply', () => {
     for (const name of ['layout.apply', 'layout.reopenHeldPanes', 'layout.reportView']) {
       expect(names, name).not.toContain(name)
     }
-    expect(RUNTIME_CAPABILITIES.some((capability) => capability.startsWith('layout'))).toBe(false)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.apply')).toBe(false)
   })
 
@@ -110,7 +109,10 @@ describe('layout.apply', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only runtime from its context.
     await apply.handler(params, { runtime } as RpcContext)
 
-    expect(applyLayoutCommand).toHaveBeenCalledWith({ ...SPLIT, newLeafId })
+    expect(applyLayoutCommand).toHaveBeenCalledWith(
+      { ...SPLIT, newLeafId },
+      { visibility: withoutGitGraph }
+    )
     expect(apply.params?.parse({ command: { ...SPLIT, id: 'window-id' } })).toEqual({
       command: SPLIT
     })

@@ -28,8 +28,8 @@ import {
   getStructuredAgentSessionLaunchLifecycle
 } from './structured-agent-session-launch-registry'
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
-import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { getStructuredAgentSessionSendNotice } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { recoverPublishedSessionReceipt } from './structured-agent-session-launch-recovery'
 import { publishStructuredLaunchCreateOptions } from './structured-agent-session-launch-create-message'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'

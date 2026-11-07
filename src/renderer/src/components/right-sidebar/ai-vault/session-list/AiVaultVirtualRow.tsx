@@ -70,6 +70,7 @@ export function AiVaultVirtualRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHits,
   searchHitHostLabels,
@@ -107,6 +108,7 @@ export function AiVaultVirtualRow({
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
+  onRevealArtifacts: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
   searchHits?: ReadonlyMap<string, AiVaultSearchHit>
   searchHitHostLabels?: ReadonlyMap<string, string> | null
@@ -294,6 +296,11 @@ export function AiVaultVirtualRow({
           onOpenCwd={
             searchPathAllowed && canOpenLocalSessionPaths && row.session.cwd
               ? () => onOpenCwd(row.session)
+              : undefined
+          }
+          onRevealArtifacts={
+            searchPathAllowed && canOpenLocalSessionPaths && row.session.antigravityArtifactPath
+              ? () => onRevealArtifacts(row.session)
               : undefined
           }
           onRequestDelete={searchPathAllowed ? onRequestDelete : undefined}

@@ -121,35 +121,37 @@ describe('OrcaYamlTrustDialog Always trust', () => {
 })
 
 describe('OrcaYamlTrustDialog created branch review', () => {
-  it("runs a created branch's setup once without replacing the primary checkout's approval", async () => {
+  it("saves a created branch's approved setup alongside the primary checkout's", async () => {
     useAppStore.setState({ repos: [makeRepo('local')] })
     serveSetupScript('pnpm install')
     const primary = confirmSetup()
     await waitForPrompt()
     clickButton('Run hooks')
     await expect(primary).resolves.toBe('run')
-    const primaryApproval = useAppStore.getState().trustedOrcaHooks['repo-1']
+    const primaryHash = useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash
 
-    const review = confirmCreatedWorktreeSetupContent(
-      () => useAppStore.getState(),
-      'repo-1',
-      'pnpm install && pnpm build',
-      'local'
-    )
+    const reviewBranch = (): ReturnType<typeof confirmCreatedWorktreeSetupContent> =>
+      confirmCreatedWorktreeSetupContent(
+        () => useAppStore.getState(),
+        'repo-1',
+        'pnpm install && pnpm build',
+        'local'
+      )
+    const review = reviewBranch()
     await waitForPrompt()
-    expect(document.body.textContent).toContain(
-      "This workspace's branch has different setup commands"
-    )
     expect(document.body.textContent).toContain('pnpm install && pnpm build')
     clickButton('Run hooks')
+    const approval = await review
+    expect(approval.decision).toBe('run')
 
-    await expect(review).resolves.toEqual({
-      decision: 'run',
-      approvedContentHash: expect.any(String)
+    expect(useAppStore.getState().trustedOrcaHooks['repo-1']?.setup).toEqual({
+      contentHash: approval.approvedContentHash,
+      approvedAt: expect.any(Number),
+      previousContentHashes: [primaryHash]
     })
-    // The next create from the primary checkout must not prompt again.
-    expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual(primaryApproval)
+    // Neither the primary checkout's script nor the branch's prompts again.
     await expect(confirmSetup()).resolves.toBe('run')
+    await expect(reviewBranch()).resolves.toEqual(approval)
     expect(useAppStore.getState().activeModal).toBe('none')
   })
 })

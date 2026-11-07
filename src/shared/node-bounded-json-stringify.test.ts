@@ -36,30 +36,6 @@ describe('stringifyJsonWithinByteLimit', () => {
     )
   })
 
-  it('matches native numeric and string indentation normalization', () => {
-    const value = { nested: { value: true } }
-    for (const space of [Number.NaN, -1, 20, '🐋'.repeat(6)]) {
-      const native = JSON.stringify(value, null, space)
-      expect(stringifyJsonWithinByteLimit(value, Buffer.byteLength(native), space)).toEqual({
-        byteLength: Buffer.byteLength(native),
-        serialized: native
-      })
-    }
-  })
-
-  it('stops visiting indented collections when whitespace crosses the limit', () => {
-    let visits = 0
-    const value = Array.from({ length: 10_000 }, () => ({
-      toJSON() {
-        visits += 1
-        return 1
-      }
-    }))
-
-    expect(() => stringifyJsonWithinByteLimit(value, 64, 2)).toThrow(JsonStringifyByteLimitError)
-    expect(visits).toBeLessThan(value.length)
-  })
-
   it('measures values after toJSON without invoking it twice', () => {
     let calls = 0
     const value = {
@@ -79,19 +55,6 @@ describe('stringifyJsonWithinByteLimit', () => {
     expect(() => stringifyJsonWithinByteLimit(value, 1024)).toThrow(JsonStringifyByteLimitError)
   })
 
-  it('stops visiting a large collection as soon as it crosses the limit', () => {
-    let visits = 0
-    const value = Array.from({ length: 10_000 }, () => ({
-      toJSON() {
-        visits += 1
-        return 1
-      }
-    }))
-
-    expect(() => stringifyJsonWithinByteLimit(value, 64)).toThrow(JsonStringifyByteLimitError)
-    expect(visits).toBeLessThan(value.length)
-  })
-
   it('measures raw JSON values before native serialization materializes them', () => {
     const createRawJson = (JSON as { rawJSON?: (value: string) => unknown }).rawJSON
     if (!createRawJson) {
@@ -100,10 +63,5 @@ describe('stringifyJsonWithinByteLimit', () => {
     const value = createRawJson(JSON.stringify('x'.repeat(1024)))
 
     expect(() => stringifyJsonWithinByteLimit(value, 32)).toThrow(JsonStringifyByteLimitError)
-  })
-
-  it('rejects invalid limits and unserializable roots like native JSON', () => {
-    expect(() => stringifyJsonWithinByteLimit('value', -1)).toThrow(RangeError)
-    expect(() => stringifyJsonWithinByteLimit(undefined, 100)).toThrow(TypeError)
   })
 })

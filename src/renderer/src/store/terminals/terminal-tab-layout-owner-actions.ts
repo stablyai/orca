@@ -1,9 +1,6 @@
 import type { AppState } from '../types'
-import {
-  getTabIdFromPaneKey,
-  type GeneratedTabTitleUpdate
-} from '../slices/terminal-tab-title-batch'
-import { getTerminalTabOwnerWorktreeId } from '../slices/terminal-tab-owner-index'
+import { getTabIdFromPaneKey, type GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
+import { getTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type { TerminalSlice, TerminalStoreGet } from './terminal-state'
 import {
   sendRenamableTabChangeToLayoutOwner,

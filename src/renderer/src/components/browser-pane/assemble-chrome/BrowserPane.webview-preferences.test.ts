@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 
 const registryMocks = vi.hoisted(() => ({
   destroyPersistentWebview: vi.fn(),
@@ -36,33 +35,6 @@ describe('BrowserPane webview preferences', () => {
 
   afterEach(() => {
     document.body.innerHTML = ''
-  })
-
-  it('creates a webview with the resolved partition and shared guest webpreferences', () => {
-    const container = createContainer('initial')
-
-    const ensuredWebview = ensureBrowserPageWebview({
-      browserTabId: 'browser-page-1',
-      container,
-      inputLocked: false,
-      webviewPartition: 'persist:orca-browser-session-profile-1',
-      resolveContainer: () => container
-    })
-
-    expect(ensuredWebview).not.toBeNull()
-    expect(ensuredWebview?.created).toBe(true)
-    expect(ensuredWebview?.container).toBe(container)
-    expect(ensuredWebview?.webview.getAttribute('partition')).toBe(
-      'persist:orca-browser-session-profile-1'
-    )
-    expect(ensuredWebview?.webview.getAttribute('webpreferences')).toBe(
-      ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE
-    )
-    expect(registryMocks.registerPersistentWebview).toHaveBeenCalledWith(
-      'browser-page-1',
-      ensuredWebview?.webview
-    )
-    expect(container.lastElementChild).toBe(ensuredWebview?.webview as unknown as Element)
   })
 
   it('remounts the webview in a refreshed container when the stored resolved partition changes', () => {

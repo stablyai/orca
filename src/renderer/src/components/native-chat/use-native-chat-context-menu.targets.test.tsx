@@ -34,7 +34,7 @@ vi.mock(
     openDetectedFilePath: mocks.openDetectedFilePath
   })
 )
-vi.mock('./native-chat-http-link-source-owner', () => ({
+vi.mock('./links/actions/native-chat-http-link-source-owner', () => ({
   resolveNativeChatHttpLinkSourceOwner: () => ({ kind: 'local' }),
   canNativeChatOpenOwnedBrowser: () => false
 }))

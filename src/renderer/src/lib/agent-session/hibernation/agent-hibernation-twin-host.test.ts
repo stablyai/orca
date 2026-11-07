@@ -10,7 +10,7 @@ import {
   runtimeListResult,
   tab
 } from './agent-hibernation-coordinator-test-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 afterEach(resetAgentHibernationCoordinatorFixture)
 

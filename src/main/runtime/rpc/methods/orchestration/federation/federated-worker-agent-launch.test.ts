@@ -6,7 +6,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
 import type { FederationEffect } from './federation-effects'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 
 function fakes(created: { startupTerminal?: { handle: string } } = {}) {
   const terminalCreation: RuntimeTerminalCreate = {

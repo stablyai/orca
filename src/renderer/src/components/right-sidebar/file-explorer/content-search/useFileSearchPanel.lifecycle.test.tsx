@@ -2,12 +2,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { useFileSearchPanel } from './useFileSearchPanel'
 import type { SearchResult } from '../../../../../../shared/code-search-types'
 
 const { search } = vi.hoisted(() => ({ search: vi.fn() }))
-vi.mock('@/runtime/runtime-file-search-client', () => ({ searchRuntimeFiles: search }))
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({ searchRuntimeFiles: search }))
 const initial = useAppStore.getInitialState()
 
 const empty: SearchResult = { files: [], totalMatches: 0, truncated: false }

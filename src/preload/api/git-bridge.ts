@@ -8,6 +8,7 @@ import type { ConflictResolution } from '../../shared/source-control/listing/sou
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitStageWorktreeScope } from '../../shared/git/paths/git-stage-worktree-scope'
 import type {
+  GitHistoryItemRef,
   GitHistoryOptions,
   GitHistoryResult
 } from '../../shared/git/history/git-history-types'
@@ -49,6 +50,11 @@ export const gitApi = {
     ipcRenderer.invoke('git:findHugeFoldersToIgnore', args),
   appendGitignore: (args: { worktreePath: string; folderName: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:appendGitignore', args),
+  refs: (args: {
+    worktreePath: string
+    connectionId?: string
+    query?: string
+  }): Promise<GitHistoryItemRef[]> => ipcRenderer.invoke('git:refs', args),
   history: (
     args: {
       worktreePath: string

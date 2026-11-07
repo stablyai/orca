@@ -2,6 +2,7 @@ import { Loader2 } from 'lucide-react'
 import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access-grants'
 import { Button } from '../../../ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { LegacyEncryptionNotice } from '../../legacy-encryption-notice'
 
 function formatAccessTimestamp(timestamp: number): string {
   return new Intl.DateTimeFormat(getIntlLocale(), {
@@ -95,6 +96,21 @@ export function RuntimeAccessGrantList({
                           'Not used yet'
                         )}
                   </div>
+                  {grant.usesLegacyEncryption ? (
+                    <LegacyEncryptionNotice
+                      message={translate(
+                        'auto.components.settings.RuntimeAccessGrantList.legacyEncryption',
+                        'Last used with older encryption. Update Orca where this link is used.'
+                      )}
+                    />
+                  ) : grant.olderPairingMethod ? (
+                    <div className="text-muted-foreground text-xs">
+                      {translate(
+                        'auto.components.settings.RuntimeAccessGrantList.olderPairingMethod',
+                        'Uses an older pairing method. Update Orca on the device that uses this link.'
+                      )}
+                    </div>
+                  ) : null}
                 </div>
                 <Button
                   type="button"

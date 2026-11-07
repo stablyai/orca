@@ -1,6 +1,7 @@
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type {
@@ -127,7 +128,7 @@ describe('a structured send in the open chat', () => {
 
   async function mount(): Promise<void> {
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent()))
@@ -328,7 +329,7 @@ describe('a structured send whose answer was lost', () => {
       if (renderer) {
         renderer.update(createElement(Harness, props))
       } else {
-        renderer = create(createElement(Harness, props))
+        renderer = createWithQueryClient(createElement(Harness, props))
       }
     })
   }

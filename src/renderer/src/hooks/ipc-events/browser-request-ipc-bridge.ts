@@ -3,7 +3,7 @@ import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+} from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'

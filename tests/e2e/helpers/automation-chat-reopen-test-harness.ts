@@ -11,12 +11,10 @@ import {
   codexProviderHandle,
   encodePersistedAgentSessionProviderHandle
 } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  createTestStore,
-  makeUnifiedTab,
-  makeWorktree
-} from '../../../src/renderer/src/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '../../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '../../../src/renderer/src/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '../../../src/renderer/src/store/folder-workspaces/folder-workspace.test-fixture'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'

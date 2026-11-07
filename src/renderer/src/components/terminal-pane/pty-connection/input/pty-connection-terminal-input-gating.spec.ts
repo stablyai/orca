@@ -649,7 +649,8 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks16 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { _resetTerminalPaneRecoveryForTests } = await import('../../terminal-pane-recovery')
+      const { _resetTerminalPaneRecoveryForTests } =
+        await import('../../render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
       mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
@@ -681,7 +682,8 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks17 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const { _resetTerminalPaneRecoveryForTests } = await import('../../terminal-pane-recovery')
+      const { _resetTerminalPaneRecoveryForTests } =
+        await import('../../render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
       const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
       mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState

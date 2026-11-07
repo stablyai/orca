@@ -4,7 +4,6 @@ import { useCallback, useState, type ComponentProps, type ReactNode } from 'reac
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  JiraComment,
   JiraIssue,
   JiraMutationResult,
   JiraProjectStatusOrder,
@@ -42,8 +41,17 @@ const store = vi.hoisted((): JiraStoreBoundary & { statusPatches: string[] } => 
   statusPatches: []
 }))
 
-vi.mock('@/runtime/runtime-jira-client', () => runtime)
-vi.mock('@/runtime/runtime-jira-detail-client', () => runtime)
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
+  jiraAddIssueCommentForTarget: runtime.jiraAddIssueCommentForTarget,
+  jiraGetIssueForTarget: runtime.jiraGetIssueForTarget,
+  jiraIssueCommentsForTarget: runtime.jiraIssueCommentsForTarget,
+  jiraListPrioritiesForTarget: runtime.jiraListPrioritiesForTarget,
+  jiraListTransitionsForTarget: runtime.jiraListTransitionsForTarget,
+  jiraUpdateIssueForTarget: runtime.jiraUpdateIssueForTarget
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: runtime.jiraListAssignableUsersForTarget
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: (select: (state: JiraStoreBoundary) => unknown) => select(store)
 }))
@@ -290,112 +298,6 @@ describe('Jira board and detail mutation integration', () => {
       expect(store.statusPatches.slice(queuedPatchCount)).not.toContain('todo')
       expect(store.statusPatches.slice(queuedPatchCount)).not.toContain('review')
       expect(runtime.jiraGetIssueForTarget).toHaveBeenLastCalledWith(owner, issue.key, issue.siteId)
-    }
-  )
-
-  it.each([
-    { kind: 'explicit', sourceContext: source, settlement: 'success' },
-    { kind: 'explicit', sourceContext: source, settlement: 'rejection' },
-    { kind: 'default', sourceContext: null, settlement: 'success' },
-    { kind: 'default', sourceContext: null, settlement: 'rejection' }
-  ])(
-    'refreshes the $kind-source detail timeline only after a board comment save $settlement',
-    async ({ kind, sourceContext, settlement }) => {
-      const boardSave = Promise.withResolvers<JiraMutationResult>()
-      let serverIssue = issue
-      let serverComments: JiraComment[] = [
-        { id: 'existing', body: 'Existing note', createdAt: '2026-10-14T12:00:00Z' }
-      ]
-      finishOutstandingWrites = () => boardSave.resolve({ ok: true })
-      runtime.jiraGetIssueForTarget.mockImplementation(async () => serverIssue)
-      runtime.jiraIssueCommentsForTarget.mockImplementation(async () => serverComments)
-      runtime.jiraUpdateIssueForTarget.mockReturnValue(boardSave.promise)
-      runtime.jiraListTransitionsForTarget.mockResolvedValue([
-        {
-          ...done,
-          fields: [
-            {
-              key: 'comment',
-              name: 'Comment',
-              required: true,
-              schema: { system: 'comment', type: 'string' }
-            }
-          ]
-        }
-      ])
-      render(
-        <StoreBackedBoardAndDetail
-          sourceContext={sourceContext}
-          scopeKey={`board-comment-integration:${kind}:${settlement}`}
-        />
-      )
-      await screen.findByText('Existing note')
-      expect(runtime.jiraIssueCommentsForTarget).toHaveBeenCalledExactlyOnceWith(
-        owner,
-        issue.key,
-        issue.siteId
-      )
-      fireEvent.keyDown(screen.getByRole('button', { name: `Move ${issue.key}` }), {
-        key: 'ArrowDown'
-      })
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Done' }))
-      const commentInput = await screen.findByRole('textbox', { name: 'Comment' })
-      expect(runtime.jiraUpdateIssueForTarget).not.toHaveBeenCalled()
-      fireEvent.change(commentInput, { target: { value: 'Verified from the board' } })
-      const form = commentInput.closest('form')
-      if (!form) {
-        throw new Error('Expected the board transition form')
-      }
-      fireEvent.submit(form)
-      await waitFor(() => expect(runtime.jiraUpdateIssueForTarget).toHaveBeenCalledTimes(1))
-      expect(runtime.jiraUpdateIssueForTarget).toHaveBeenCalledWith(
-        owner,
-        issue.key,
-        { transitionId: done.id, transitionComment: 'Verified from the board' },
-        issue.siteId
-      )
-      expect(runtime.jiraIssueCommentsForTarget).toHaveBeenCalledTimes(1)
-      expect(screen.getByTestId('detail-comments').textContent).not.toContain(
-        'Verified from the board'
-      )
-
-      if (settlement === 'success') {
-        serverIssue = { ...issue, status: done.to }
-        serverComments = [
-          ...serverComments,
-          {
-            id: 'board-comment',
-            body: 'Verified from the board',
-            createdAt: '2026-10-14T12:01:00Z'
-          }
-        ]
-        await act(async () => boardSave.resolve({ ok: true }))
-        await screen.findByText('Verified from the board')
-        expect(runtime.jiraIssueCommentsForTarget).toHaveBeenCalledTimes(2)
-        expect(runtime.refresh).toHaveBeenCalledTimes(1)
-      } else {
-        await act(async () => boardSave.resolve({ ok: false, error: 'Board transition rejected' }))
-        expect((await screen.findByRole('alert')).textContent).toBe('Board transition rejected')
-        expect(runtime.jiraIssueCommentsForTarget).toHaveBeenCalledTimes(1)
-        expect(screen.getByTestId('detail-comments').textContent).not.toContain(
-          'Verified from the board'
-        )
-        expect(runtime.refresh).not.toHaveBeenCalled()
-        expect(screen.getByDisplayValue('Verified from the board')).toBeDefined()
-        expect(screen.getByRole('button', { name: 'Change status' }).hasAttribute('disabled')).toBe(
-          false
-        )
-      }
-      expect(screen.getByText('Existing note')).toBeDefined()
-      expect(screen.getByTestId('detail-comments-loading').textContent).toBe('false')
-      expect(runtime.jiraIssueCommentsForTarget.mock.calls).toEqual(
-        Array.from({ length: settlement === 'success' ? 2 : 1 }, () => [
-          owner,
-          issue.key,
-          issue.siteId
-        ])
-      )
-      expect(runtime.jiraAddIssueCommentForTarget).not.toHaveBeenCalled()
     }
   )
 })

@@ -6,12 +6,9 @@ import {
   isDispatchReportType
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
-import {
-  SendParams,
-  isDispatchMutationMessageType,
-  isWorkerReportOutcome,
-  parseRemoteWorkerPayload
-} from '../schemas'
+import { SendParams } from './send-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
 import { resolveMessageRun } from '../routing'
 import {
   assertDispatchMailboxDeliverable,

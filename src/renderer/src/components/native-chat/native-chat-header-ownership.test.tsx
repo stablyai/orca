@@ -6,8 +6,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 
 import type { Tab } from '../../../../shared/tab-types'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
-import { makeTabGroup } from '@/store/slices/store-test-helpers'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
+import { makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
 import {
   makeFolderWorkspace,
   makeUnifiedTab
@@ -19,7 +19,7 @@ import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 const mocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('./NativeChatView', async () => {

@@ -6,7 +6,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { registerAgentHookTerminalLifecycleHandler } from '../../agent-hook-terminal-lifecycle'
+import { registerAgentHookTerminalLifecycleHandler } from '../../agent-completion/agent-hook-terminal-lifecycle'
 import type { AgentCompletionStatusSnapshot } from '../../agent-completion/agent-completion-coordinator-types'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'

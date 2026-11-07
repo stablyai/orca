@@ -1,4 +1,5 @@
 import { completeAntigravityTranscriptPairs } from './antigravity-transcript-candidates'
+import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -38,8 +39,9 @@ export function antigravityDiscoveries(
       origins.map((origin) => join(homeDir, '.gemini', origin, 'brain'))
     )
   ]
-  return rootDirs.map((rootDir) =>
-    discoverFiles({
+  return rootDirs.map((rootDir) => {
+    const antigravityArtifactPaths = new Map<string, string>()
+    return discoverFiles({
       rootDir,
       limit,
       agent: 'antigravity',
@@ -47,8 +49,12 @@ export function antigravityDiscoveries(
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
+      onDirectoryEntries: (dirPath, entries) =>
+        recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       signal: options.signal
-    }).then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
-  )
+    })
+      .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
+      .then((discovery) => ({ ...discovery, antigravityArtifactPaths }))
+  })
 }

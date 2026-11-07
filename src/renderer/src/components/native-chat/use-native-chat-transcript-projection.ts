@@ -8,7 +8,7 @@ import type { NativeChatMessage } from '../../../../shared/native-chat/native-ch
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import { createNativeChatMessageListProjection } from './native-chat-message-list-projection'
 import { createNativeChatConversationProjection } from './native-chat-conversation-projection'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 /** Separate conversation/subagent rows, using journal turn placement when available. */
 export function useNativeChatTranscriptProjection(

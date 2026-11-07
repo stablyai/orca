@@ -31,7 +31,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: (...args: unknown[]) => activate(...args)
 }))
-vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+vi.mock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
   focusRuntimeTerminalSurface: (...args: unknown[]) => focusRuntime(...args)
 }))
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')

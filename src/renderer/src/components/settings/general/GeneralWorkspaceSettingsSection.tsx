@@ -219,6 +219,7 @@ export function GeneralWorkspaceSettingsSection({
             'windsurf',
             'devin',
             'devin desktop',
+            'antigravity',
             'command',
             'vscode',
             'finder',

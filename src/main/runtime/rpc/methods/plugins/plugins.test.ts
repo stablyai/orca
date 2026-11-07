@@ -48,6 +48,7 @@ describe('plugin approval over RPC', () => {
         themes: [],
         terminalThemes: [],
         iconThemes: [],
+        fonts: [],
         syntaxes: [],
         customEditors: [],
         newFiles: [],

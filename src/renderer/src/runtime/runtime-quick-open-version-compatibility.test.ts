@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest'
-import { searchRuntimeFilePaths, listRuntimeFiles } from './runtime-file-search-client'
+import { searchRuntimeFilePaths, listRuntimeFiles } from './files/search/runtime-file-search-client'
 import {
   installRuntimeFileClientEnvironment,
   runtimeEnvironmentCall
-} from './runtime-file-client-test-harness'
+} from './files/runtime-file-client-test-harness'
 installRuntimeFileClientEnvironment()
 
 it('does not reuse unfiltered recent inventory after enabling supported ignore filtering', async () => {
