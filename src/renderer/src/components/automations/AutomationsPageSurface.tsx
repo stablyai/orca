@@ -5,7 +5,7 @@ import { AutomationEditorDialog } from './AutomationEditorDialog'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
 import { getAutomationAuthorityTarget } from './automation-host-client'
-import type { AutomationListRow } from './automation-list-row-identity'
+import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
@@ -268,7 +268,7 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
           selectedRepoDisplayName={
-            presentation.selectedRepo?.displayName ??
+            (selected && automationProjectName(selected, presentation.selectedRepo, repoMap)) ??
             translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
           }
           selectedRepoDefaultBaseRef={presentation.selectedRepo?.worktreeBaseRef ?? null}
