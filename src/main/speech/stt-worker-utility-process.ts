@@ -2,6 +2,7 @@ import { utilityProcess } from 'electron'
 import { getSttWorkerPath } from './stt-worker-paths'
 import {
   logSttWorkerStderr,
+  STT_UTILITY_PROCESS_NAME,
   SttWorkerChildProcess,
   type SttWorkerProcess
 } from './stt-worker-process'
@@ -9,7 +10,7 @@ import {
 /** A native crash or hang in the recognizer stays out of the app's main process. */
 export function spawnSttUtilityProcess(): SttWorkerProcess {
   const child = utilityProcess.fork(getSttWorkerPath(), [], {
-    serviceName: 'Orca Speech',
+    serviceName: STT_UTILITY_PROCESS_NAME,
     stdio: ['ignore', 'ignore', 'pipe']
   })
   const worker = new SttWorkerChildProcess({
