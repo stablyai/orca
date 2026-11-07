@@ -22246,17 +22246,11 @@
     "restartedInputNotSent": "The terminal restarted while you were typing, so some input may not have reached it. Check the new shell before typing it again.",
     "typingBeforeStartNotSent": "Some keys typed while the terminal was starting were not sent.",
     "windowsFontWeight": {
-      "sampleNow": "Now",
-      "sampleBefore": "Before",
-      "undo": {
-        "title": "Terminal font weight changed from 500 to 400",
-        "action": "Undo"
-      },
-      "notice": {
-        "title": "Terminal text is lighter on Windows",
-        "description": "Windows fonts like Cascadia Mono have no Medium face, so 500 drew as SemiBold. Terminals now use Regular.",
-        "action": "Adjust"
-      }
+      "choiceNew": "New",
+      "choicePrevious": "Previous",
+      "choiceLabel": "Terminal font weight",
+      "title": "Terminal text on Windows is now lighter",
+      "okay": "Okay"
     }
   },
   "fileExplorer": {

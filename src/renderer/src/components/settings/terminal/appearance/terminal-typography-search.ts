@@ -2,9 +2,6 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-/** Stable Settings deep-link / scroll target for the terminal Font Weight control. */
-export const TERMINAL_FONT_WEIGHT_SETTING_ID = 'terminal-font-weight'
-
 const getTerminalTypographySearchEntryCatalog = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.5930244899', 'Font Size'),

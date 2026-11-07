@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useLayoutEffect, useState } from 'react'
+import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../../store/index'
@@ -12,8 +12,6 @@ type AppearanceAdvancedDisclosureProps = {
   showTopBorder?: boolean
   className?: string
   contentClassName?: string
-  /** Setting ids inside; a deep link to one opens the disclosure. */
-  revealTargetIds?: readonly string[]
   children: React.ReactNode
 }
 
@@ -24,22 +22,11 @@ export function AppearanceAdvancedDisclosure({
   showTopBorder = true,
   className,
   contentClassName,
-  revealTargetIds,
   children
 }: AppearanceAdvancedDisclosureProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [open, setOpen] = useState(false)
-  const deepLinkTarget = useAppStore((state) => state.appearanceAdvancedDeepLinkTarget)
-  const revealed = deepLinkTarget !== null && revealTargetIds?.includes(deepLinkTarget) === true
-
-  // Open before the Settings deep-link scroll looks for the row.
-  useLayoutEffect(() => {
-    if (revealed) {
-      setOpen(true)
-      useAppStore.getState().setAppearanceAdvancedDeepLinkTarget(null)
-    }
-  }, [revealed])
   const forced = isSearching || forceOpen
   const expanded = open || forced
 

@@ -30,9 +30,6 @@ export type UISliceContextual = {
     section: NonNullable<UISliceContextual['appearanceAccordionDeepLink']>
   ) => void
   clearAppearanceAccordionDeepLink: () => void
-  /** One-shot deep link to a row inside an Advanced disclosure; the disclosure owning it opens and clears it. */
-  appearanceAdvancedDeepLinkTarget: string | null
-  setAppearanceAdvancedDeepLinkTarget: (targetId: string | null) => void
   activeModal:
     | 'none'
     | 'create-worktree'

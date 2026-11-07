@@ -21,10 +21,7 @@ import { clampNumber } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 import { defaultTerminalFontWeight } from '../../../../../../shared/terminal/appearance/terminal-platform-defaults'
 import { isWindowsDesktopClient } from '@/lib/windows-path-access'
-import {
-  getTerminalAdvancedTypographySearchEntries,
-  TERMINAL_FONT_WEIGHT_SETTING_ID
-} from './terminal-typography-search'
+import { getTerminalAdvancedTypographySearchEntries } from './terminal-typography-search'
 
 type TerminalAdvancedTypographyControlsProps = {
   settings: GlobalSettings
@@ -41,7 +38,6 @@ export function TerminalAdvancedTypographyControls({
   return (
     <div className="divide-y divide-border/40">
       <SearchableSetting
-        id={TERMINAL_FONT_WEIGHT_SETTING_ID}
         title={translate(
           'auto.components.settings.TerminalAppearanceSection.4aae5db258',
           'Font Weight'

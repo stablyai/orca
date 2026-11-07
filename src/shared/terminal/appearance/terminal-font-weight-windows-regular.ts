@@ -8,7 +8,7 @@ type TerminalFontWeightSettings = Pick<
 >
 
 /** Moves Windows profiles still on the old 500 default to Regular once. Settings stored the
- * default literally, so a deliberate 500 moves too; the notice offers Undo for that case. */
+ * default literally, so a deliberate 500 moves too; the notice lets them switch back. */
 export function migrateWindowsTerminalFontWeight(
   settings: Partial<TerminalFontWeightSettings> | undefined,
   platform: string
