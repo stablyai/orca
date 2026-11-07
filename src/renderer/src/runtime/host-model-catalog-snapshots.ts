@@ -13,6 +13,7 @@ import { structuredAgentSessionHostKey } from './structured-agent-session-host-c
 const snapshots = new Map<string, HostModelCatalogSnapshot>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
+const forgottenListeners = new Set<() => void>()
 
 function snapshotKey(hostKey: string, agent: string): string {
   return `${hostKey}\u0000${agent}`
@@ -59,6 +60,17 @@ export function forgetHostModelCatalogSnapshots(
       snapshots.delete(key)
     }
   }
+  forgottenListeners.forEach((listener) => listener())
+}
+
+/** Changes whenever this host's answers are dropped, so a held answer can tell it is out of date. */
+export function hostModelCatalogGeneration(target: RuntimeClientTarget): number {
+  return generations.get(structuredAgentSessionHostKey(target)) ?? 0
+}
+
+export function subscribeHostModelCatalogForgotten(listener: () => void): () => void {
+  forgottenListeners.add(listener)
+  return () => forgottenListeners.delete(listener)
 }
 
 /** The agents a host has answered for, so a reconnect can read them again. */

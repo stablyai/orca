@@ -405,6 +405,7 @@
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
       "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
+      "modelListFallback": "기본 제공 목록입니다. Orca가 이 호스트에서 모델 목록을 가져오지 못했습니다.",
       "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다.",
       "undetectedCommandHint": "{{agent}} CLI가 PATH 외부에 설치되어 있다면 이 호스트의 실행 파일 전체 경로를 입력하세요."
     },
