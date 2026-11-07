@@ -1,4 +1,5 @@
 import { notifyManager, useQueryClient, type QueryClient } from '@tanstack/react-query'
+import type * as HostListQueries from '../../../host-screen/host-list-queries'
 import type * as ResumeMetadata from '../../../agent-history/mobile-agent-history-resume-metadata'
 import { hostQueryKey, hostScopeKey } from '../../../query/host-query-key'
 import type { OperationExposure } from '../operation-module-loader'
@@ -91,7 +92,7 @@ export function settingsMountAdapters(
       const useMetadata = modules.load<
         typeof import('../../../host-screen/use-host-repo-metadata')
       >('mobile/src/host-screen/use-host-repo-metadata.ts').useHostRepoMetadata
-      const queries = modules.load<typeof import('../../../host-screen/host-list-queries')>(
+      const queries = modules.load<typeof HostListQueries>(
         'mobile/src/host-screen/host-list-queries.ts'
       )
       const state = observableModel(context, { clientRef: { current: context.client } })
