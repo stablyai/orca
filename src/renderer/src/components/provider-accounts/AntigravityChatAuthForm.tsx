@@ -322,7 +322,7 @@ function AuthForm({
                 }
               }}
             >
-              <SelectTrigger id={`${id}-method`} size="sm" className="w-full">
+              <SelectTrigger id={`${id}-method`} className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -339,7 +339,6 @@ function AuthForm({
               >
                 <Input
                   id={`${id}-project`}
-                  className="h-8 text-sm"
                   value={project}
                   disabled={blocked}
                   placeholder={translate(
@@ -361,7 +360,6 @@ function AuthForm({
               >
                 <Input
                   id={`${id}-location`}
-                  className="h-8 text-sm"
                   value={location}
                   disabled={blocked}
                   placeholder={translate('accounts.antigravity.locationPlaceholder', 'us-central1')}

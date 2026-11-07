@@ -11,9 +11,9 @@ export function SettingRow(props: {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,14rem)] items-center gap-x-4">
       <div className="min-w-0">
-        <Label htmlFor={props.htmlFor} className="text-sm font-medium">
-          {props.label}
-        </Label>
+        <div className="text-sm font-medium">
+          <Label htmlFor={props.htmlFor}>{props.label}</Label>
+        </div>
         {props.description ? (
           <p className="mt-0.5 text-xs text-muted-foreground">{props.description}</p>
         ) : null}

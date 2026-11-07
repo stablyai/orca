@@ -1,8 +1,8 @@
 import { useId, useState } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
 import { LoadingSpinner } from '../LoadingSpinner'
+import { ManagedRuntimeLinkButton } from '../managed-runtime/ManagedRuntimeLinkButton'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -16,26 +16,23 @@ export function AntigravityChatSignInBadge({
 }): React.JSX.Element | null {
   if (signIn.signingIn) {
     return (
-      <Badge variant="outline" className="text-muted-foreground">
-        <LoadingSpinner className="size-3" />
+      <Badge variant="dot">
+        <LoadingSpinner className="size-3 text-muted-foreground" />
         {translate('accounts.antigravity.chatBadgeSigningIn', 'Signing in')}
       </Badge>
     )
   }
   if (signIn.auth === 'signedIn') {
     return (
-      <Badge
-        variant="outline"
-        className="border-status-success-border bg-status-success-background text-status-success"
-      >
-        <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      <Badge variant="dot">
+        <span aria-hidden className="size-1.5 rounded-full bg-status-success" />
         {translate('accounts.antigravity.chatBadgeSignedIn', 'Signed in')}
       </Badge>
     )
   }
   if (signIn.auth === 'signedOut') {
     return (
-      <Badge variant="outline" className="text-muted-foreground">
+      <Badge variant="dot">
         <span aria-hidden className="size-1.5 rounded-full bg-muted-foreground/60" />
         {translate('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')}
       </Badge>
@@ -101,14 +98,11 @@ export function AntigravityChatSignInAction({
           (pasteOpen ? (
             <PastedAddressForm pending={signIn.pending} send={signIn.send} />
           ) : (
-            <Button
-              size="inline"
-              variant="link"
-              className="h-auto text-xs font-normal text-muted-foreground"
-              onClick={() => setPasteOpen(true)}
-            >
-              {translate('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
-            </Button>
+            <p className="text-xs text-muted-foreground">
+              <ManagedRuntimeLinkButton onClick={() => setPasteOpen(true)}>
+                {translate('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
+              </ManagedRuntimeLinkButton>
+            </p>
           ))}
       </div>
     )
@@ -139,7 +133,6 @@ export function AntigravityChatSignInAction({
       <Button
         size={size}
         variant={secondary ? 'outline' : 'default'}
-        className={cn(size === 'default' && 'px-5')}
         disabled={
           (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) || auth.disabled
         }
