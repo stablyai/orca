@@ -1,13 +1,4 @@
-import {
-  createElement,
-  Fragment,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject
-} from 'react'
+import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
@@ -15,12 +6,15 @@ import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/i
 import {
   MobileNativeChatQueuedMessages,
   mobileNativeChatChordHeadId,
-  type MobileNativeChatQueuedMessagesHandle,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
 import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
+import {
+  createMobileQueuedCardActionStore,
+  useMobileQueuedCardActions
+} from '../input/mobile-queued-card-actions'
 
 /** The head queued card as an empty Cmd/Ctrl+Enter reaches it. */
 export type MobileNativeChatSteerHead = {
@@ -58,15 +52,9 @@ export function useMobileNativeChatComposerTray({
   backgroundTasks: MobileStructuredBackgroundTasks | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
-  const queuedRef = useRef<MobileNativeChatQueuedMessagesHandle>(null)
-  const run = useCallback(
-    (alternateSteers: boolean) => queuedRef.current?.steerHead(alternateSteers) ?? false,
-    []
-  )
   // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.
   const [headLight] = useState(createMobileQueuedHeadLight)
-  // Per chat: a chat that settles after a switch must not overwrite the current chat's record.
-  const [busy, setBusy] = useState<ReadonlyMap<string, ReadonlySet<string>>>(() => new Map())
+  const [actionStore] = useState(createMobileQueuedCardActionStore)
   const {
     cards,
     onSend,
@@ -80,7 +68,7 @@ export function useMobileNativeChatComposerTray({
     steerHeld,
     agentWorking
   } = queued
-  const busyIds = busy.get(sessionKey)
+  const actions = useMobileQueuedCardActions(actionStore, sessionKey)
   return useMemo(
     () => ({
       content: createElement(
@@ -102,7 +90,7 @@ export function useMobileNativeChatComposerTray({
           : null,
         createElement(MobileNativeChatQueuedMessages, {
           key: sessionKey,
-          ref: queuedRef,
+          actions,
           cards,
           onSend,
           onDelete,
@@ -114,16 +102,6 @@ export function useMobileNativeChatComposerTray({
           onResume,
           steerHeld,
           headLight,
-          onBusyChange: (ids: ReadonlySet<string>) =>
-            setBusy((current) => {
-              const next = new Map(current)
-              if (ids.size > 0) {
-                next.set(sessionKey, new Set(ids))
-              } else {
-                next.delete(sessionKey)
-              }
-              return next
-            }),
           agentWorking
         })
       ),
@@ -135,9 +113,15 @@ export function useMobileNativeChatComposerTray({
             alternateSteers
           )
           // A card whose own action is on its way would refuse the press, as desktop hides it then.
-          return head !== null && busyIds?.has(head) !== true
+          return head !== null && !actions.busyIds.has(head)
         },
-        run,
+        run: (alternateSteers: boolean) => {
+          const head = mobileNativeChatChordHeadId(
+            { cards, steerHeld, agentWorking, editor },
+            alternateSteers
+          )
+          return head !== null && actions.run(head, onSend)
+        },
         light: headLight.set
       }
     }),
@@ -157,8 +141,7 @@ export function useMobileNativeChatComposerTray({
       sessionKey,
       steerHeld,
       headLight,
-      busyIds,
-      run,
+      actions,
       agentWorking
     ]
   )

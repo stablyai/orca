@@ -95,7 +95,8 @@ export function MobileNativeChatSteerPreviewButton({
       style={({ pressed }) => [inputStyles.sendPreviewButton, pressed && inputStyles.pressed]}
       onPress={(event) => {
         // As desktop: the label can change between a double-click's presses (Steer, then Steer queued).
-        const { detail } = event.nativeEvent as { detail?: unknown }
+        const native = event.nativeEvent
+        const detail = 'detail' in native ? native.detail : undefined
         if (typeof detail !== 'number' || detail <= 1) {
           onPress()
         }

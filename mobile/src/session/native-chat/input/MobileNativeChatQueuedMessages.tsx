@@ -1,7 +1,7 @@
 import { MobileNativeChatQueueFrame } from './MobileNativeChatQueueFrame'
 import { DragReorderList } from '../../../components/DragReorderList'
 import type { DragReorderMove } from '../../../components/drag-reorder-positions'
-import { useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { ActionSheetModal } from '../../../components/ActionSheetModal'
@@ -11,6 +11,11 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
 import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
+import {
+  createMobileQueuedCardActionStore,
+  useMobileQueuedCardActions,
+  type MobileQueuedCardActions
+} from './mobile-queued-card-actions'
 import { headSteerableQueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
@@ -24,11 +29,6 @@ import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-regi
 // Resume and Clear all share one key: a Resume would send the cards a Clear is deleting.
 const QUEUE_KEY = '\u0000queue'
 const MOVE_KEY = '\u0000move'
-
-export type MobileNativeChatQueuedMessagesHandle = {
-  /** Runs the head card's own Steer, or with no turn running its Send; false where that press is unavailable. */
-  steerHead: (alternateSteers: boolean) => boolean
-}
 
 /** The card an empty Cmd/Ctrl+Enter presses, or null where it presses none. */
 export function mobileNativeChatChordHeadId(
@@ -48,7 +48,8 @@ export function mobileNativeChatChordHeadId(
 }
 
 export type MobileNativeChatQueuedMessagesProps = {
-  ref?: Ref<MobileNativeChatQueuedMessagesHandle>
+  /** The chat's card actions, owned above the list; a list mounted alone keeps its own. */
+  actions?: MobileQueuedCardActions
   cards?: MobileQueuedMessageCard[]
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
@@ -62,14 +63,12 @@ export type MobileNativeChatQueuedMessagesProps = {
   steerHeld?: boolean
   /** Lights the head card while the composer previews sending it (Steer queued). */
   headLight?: MobileQueuedHeadLight
-  /** Each change to the cards with an action on its way, so the composer offers no press they'd refuse. */
-  onBusyChange?: (ids: ReadonlySet<string>) => void
   /** The agent is working: a steerable card's action reads Steer, otherwise Send. */
   agentWorking?: boolean
 }
 
 export function MobileNativeChatQueuedMessages({
-  ref,
+  actions,
   cards,
   onSend,
   onDelete,
@@ -81,51 +80,18 @@ export function MobileNativeChatQueuedMessages({
   onResume,
   steerHeld = false,
   headLight,
-  onBusyChange,
   agentWorking = false
 }: MobileNativeChatQueuedMessagesProps): React.JSX.Element | null {
   useMobileColorScheme()
   const lowerRegion = useMobileNativeChatLowerRegion()
   useLayoutEffect(() => lowerRegion?.layoutChanged())
   const t = useMobileTranslation()
-  // Use a ref to block duplicate actions before disabled state renders.
-  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set())
-  const inFlightRef = useRef(new Set<string>())
+  const [ownStore] = useState(createMobileQueuedCardActionStore)
+  const ownActions = useMobileQueuedCardActions(ownStore, '')
+  const { busyIds, run } = actions ?? ownActions
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(true)
   const largeText = useLargeSystemText()
-  const run = (
-    messageId: string,
-    action?: (id: string) => Promise<boolean>,
-    resources: readonly string[] = []
-  ): boolean => {
-    const keys = [messageId, ...resources]
-    if (keys.some((key) => inFlightRef.current.has(key)) || !action) {
-      return false
-    }
-    keys.forEach((key) => inFlightRef.current.add(key))
-    setBusyIds(new Set(inFlightRef.current))
-    onBusyChange?.(inFlightRef.current)
-    void (async () => {
-      try {
-        await action(messageId)
-      } finally {
-        keys.forEach((key) => inFlightRef.current.delete(key))
-        setBusyIds(new Set(inFlightRef.current))
-        onBusyChange?.(inFlightRef.current)
-      }
-    })()
-    return true
-  }
-  useImperativeHandle(ref, () => ({
-    steerHead: (alternateSteers) => {
-      const head = mobileNativeChatChordHeadId(
-        { cards, steerHeld, agentWorking, editor },
-        alternateSteers
-      )
-      return head !== null && run(head, onSend)
-    }
-  }))
   if (!cards || cards.length === 0) {
     if (!expanded) {
       setExpanded(true)
