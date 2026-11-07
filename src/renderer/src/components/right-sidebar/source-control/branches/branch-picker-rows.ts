@@ -75,7 +75,7 @@ export function branchPickerRows(
   localNames: Set<string>,
   remote: RuntimeRepoSearchRefs | null,
   query: string
-): { rows: BranchPickerRow[]; moreLocal: boolean } {
+): BranchPickerRow[] {
   const name = query.trim()
   const normalized = name.toLowerCase()
   const current: BranchPickerRow[] = []
@@ -94,8 +94,7 @@ export function branchPickerRows(
       rest.push(row)
     }
   }
-  const matches = [...current, ...exact, ...prefix, ...rest]
-  const rows = matches.slice(0, LOCAL_BRANCH_WINDOW)
+  const rows = [...current, ...exact, ...prefix, ...rest].slice(0, LOCAL_BRANCH_WINDOW)
   const remoteRows = remote?.refDetails ?? []
   const canCreate =
     isBranchNameValid(name) &&
@@ -116,5 +115,5 @@ export function branchPickerRows(
   if (canCreate) {
     rows.push({ target: { kind: 'new', name }, label: name })
   }
-  return { rows, moreLocal: matches.length > LOCAL_BRANCH_WINDOW }
+  return rows
 }

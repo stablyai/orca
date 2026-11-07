@@ -135,11 +135,7 @@ export function SourceControlCommitSurface({
       commitError={commitError}
       commitFailureRecoveryPrompt={commitFailureRecoveryPrompt}
       pushRecovery={pushRecovery}
-      remoteActionError={
-        pushRecovery || remoteActionError?.kind === 'switch_branch'
-          ? null
-          : (remoteActionError?.message ?? null)
-      }
+      remoteActionError={pushRecovery ? null : (remoteActionError?.message ?? null)}
       createPrIntentNotice={createPrIntentNotice}
       isCommitting={isCommitting}
       isFixingCommitFailureWithAI={isLaunchingCommitFailureAgent}

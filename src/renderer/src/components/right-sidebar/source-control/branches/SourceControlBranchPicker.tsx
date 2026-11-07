@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getExecutionHostLabel } from '../../../../../../shared/execution-host'
@@ -30,6 +31,11 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       ? state.runtimeEnvironments.find((host) => host.id === activeRepoTarget.environmentId)?.name
       : undefined
   )
+  const agentWorking = useAppStore((state) =>
+    activeWorktreeId
+      ? selectWorktreeAgentActivitySummary(state, activeWorktreeId).hasLiveWorking
+      : false
+  )
   const showDirtyBlocker =
     statusKnown && !statusReadError && conflictOperation === 'unknown' && entries.length > 0
   const changedCount = useMemo(
@@ -43,8 +49,11 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
   )
   const onSwitched = useCallback(
     (message?: string) => {
+      if (message) {
+        toast.warning(message, { duration: 15000 })
+      }
       if (activeWorktreeId) {
-        recordBranchSwitchOutcome(activeWorktreeId, message, refreshActiveGitStatusAfterMutation)
+        recordBranchSwitchOutcome(activeWorktreeId, refreshActiveGitStatusAfterMutation)
       }
     },
     [activeWorktreeId, recordBranchSwitchOutcome, refreshActiveGitStatusAfterMutation]
@@ -52,40 +61,45 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
   if (!activeWorktree || !activeWorktreeId || !activeRepo || !activeRepoTarget) {
     return null
   }
-  const blocker = statusReadError
+  // Checking out moves HEAD under the agent, so creating a branch waits too; the host re-checks on switch.
+  const blocker = agentWorking
     ? translate(
-        'sourceControl.branchPicker.statusFailed',
-        "Orca couldn't read this checkout's changes. Refresh Source Control before switching."
+        'sourceControl.branchPicker.agentWorking',
+        'An agent is working in this workspace. Switch branches after it finishes.'
       )
-    : !statusKnown
+    : statusReadError
       ? translate(
-          'sourceControl.branchPicker.statusUnknown',
-          'Read this checkout’s changes before switching.'
+          'sourceControl.branchPicker.statusFailed',
+          "Orca couldn't read this checkout's changes. Refresh Source Control before switching."
         )
-      : conflictOperation !== 'unknown'
+      : !statusKnown
         ? translate(
-            'sourceControl.branchPicker.conflict',
-            'Finish or abort the {{operation}} before switching branches.',
-            { operation: conflictOperation }
+            'sourceControl.branchPicker.statusUnknown',
+            'Read this checkout’s changes before switching.'
           )
-        : entries.length
+        : conflictOperation !== 'unknown'
           ? translate(
-              'sourceControl.branchPicker.dirty',
-              'Commit or discard {{count}} changed files before switching branches.',
-              {
-                count: changedCount,
-                defaultValue_one:
-                  'Commit or discard {{count}} changed file before switching branches.'
-              }
+              'sourceControl.branchPicker.conflict',
+              'Finish or abort the {{operation}} before switching branches.',
+              { operation: conflictOperation }
             )
-          : null
+          : entries.length
+            ? translate(
+                'sourceControl.branchPicker.dirty',
+                'Commit or discard {{count}} changed files before switching branches.',
+                {
+                  count: changedCount,
+                  defaultValue_one:
+                    'Commit or discard {{count}} changed file before switching branches.'
+                }
+              )
+            : null
   return (
     <BranchPicker
       key={`${activeWorktree.hostId}:${activeWorktreeId}`}
       branch={branchName}
       blocker={blocker}
-      dirtyOnlyBlocker={showDirtyBlocker}
-      agentHint={<BranchAgentHint worktreeId={activeWorktreeId} />}
+      dirtyOnlyBlocker={showDirtyBlocker && !agentWorking}
       context={{
         target: requireGitOwnerTarget(activeRepoTarget),
         worktreeId: activeWorktreeId,
@@ -99,18 +113,4 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       onSwitched={onSwitched}
     />
   )
-}
-
-function BranchAgentHint({ worktreeId }: { worktreeId: string }) {
-  const busy = useAppStore(
-    (state) => selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking
-  )
-  return busy ? (
-    <p className="px-3 py-2 text-xs text-muted-foreground">
-      {translate(
-        'sourceControl.branchPicker.agentHint',
-        'An agent last reported work here. Orca checks whether it is still working when you switch.'
-      )}
-    </p>
-  ) : null
 }

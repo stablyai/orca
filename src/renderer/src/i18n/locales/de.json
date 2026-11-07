@@ -21131,7 +21131,6 @@
     "branchPicker": {
       "switch": "Branch wechseln: {{branch}}",
       "search": "Branches suchen",
-      "more": "Weiter tippen, um mehr Branches zu finden.",
       "recover": "Zu {{branch}} wechseln",
       "create": "Branch {{name}} aus {{branch}} erstellen",
       "open": "Arbeitsbereich öffnen",
@@ -21142,10 +21141,11 @@
       "conflict": "Schließe den {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
       "dirty_one": "Committe oder verwirf {{count}} geänderte Datei, bevor du den Branch wechselst.",
       "dirty_other": "Committe oder verwirf {{count}} geänderte Dateien, bevor du den Branch wechselst.",
-      "agentHint": "Ein Agent hat hier zuletzt Arbeit gemeldet. Orca prüft beim Wechseln, ob er noch arbeitet.",
+      "agentWorking": "Ein Agent arbeitet in diesem Arbeitsbereich. Wechsle den Branch, wenn er fertig ist.",
       "listFailed": "Orca konnte die lokalen Branches nicht auflisten. Öffne die Auswahl erneut.",
       "discoveryFailed": "Orca konnte keine Remote-Branches finden. Du kannst trotzdem zu lokalen Branches wechseln oder einen Branch erstellen.",
       "switchFailed": "Orca konnte den Branch nicht wechseln. Versuche es erneut.",
+      "switchFailedTitle": "Branch konnte nicht gewechselt werden",
       "thisComputer": "diesem Computer",
       "updateHost": "Aktualisiere Orca auf {{host}}, um von hier aus Branches zu wechseln."
     }

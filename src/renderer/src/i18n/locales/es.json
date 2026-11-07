@@ -21933,7 +21933,6 @@
     "branchPicker": {
       "switch": "Cambiar de rama: {{branch}}",
       "search": "Buscar ramas",
-      "more": "Sigue escribiendo para encontrar más ramas.",
       "recover": "Cambiar a {{branch}}",
       "create": "Crear la rama {{name}} desde {{branch}}",
       "open": "Abrir espacio de trabajo",
@@ -21945,10 +21944,11 @@
       "dirty_one": "Confirma o descarta {{count}} archivo modificado antes de cambiar de rama.",
       "dirty_other": "Confirma o descarta {{count}} archivos modificados antes de cambiar de rama.",
       "dirty_many": "Confirma o descarta {{count}} archivos modificados antes de cambiar de rama.",
-      "agentHint": "Un agente informó de trabajo aquí por última vez. Orca comprueba si sigue trabajando cuando cambias.",
+      "agentWorking": "Un agente está trabajando en este espacio de trabajo. Cambia de rama cuando termine.",
       "listFailed": "Orca no pudo listar las ramas locales. Vuelve a abrir el selector.",
       "discoveryFailed": "Orca no encontró ramas remotas. Aún puedes cambiar a ramas locales o crear una rama.",
       "switchFailed": "Orca no pudo cambiar de rama. Inténtalo de nuevo.",
+      "switchFailedTitle": "No se pudo cambiar de rama",
       "thisComputer": "este equipo",
       "updateHost": "Actualiza Orca en {{host}} para cambiar de rama desde aquí."
     }

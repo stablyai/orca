@@ -20816,7 +20816,6 @@
     "branchPicker": {
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
-      "more": "繼續輸入以尋找更多分支。",
       "recover": "切換到 {{branch}}",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
@@ -20827,10 +20826,11 @@
       "conflict": "切換分支前，請完成或中止 {{operation}}。",
       "dirty_one": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
       "dirty_other": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
-      "agentHint": "上次有代理程式在此回報工作。切換時 Orca 會檢查它是否仍在工作。",
+      "agentWorking": "有代理正在此工作區中工作。請在其完成後再切換分支。",
       "listFailed": "Orca 無法列出本機分支。請嘗試重新開啟選擇器。",
       "discoveryFailed": "Orca 找不到遠端分支。你仍然可以切換本機分支或建立分支。",
       "switchFailed": "Orca 無法切換分支。請再試一次。",
+      "switchFailedTitle": "無法切換分支",
       "thisComputer": "這台電腦",
       "updateHost": "請在 {{host}} 上更新 Orca，以便從這裡切換分支。"
     }

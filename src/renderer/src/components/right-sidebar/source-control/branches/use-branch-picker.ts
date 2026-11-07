@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
 import {
@@ -44,7 +45,6 @@ export function useBranchPicker(options: BranchPickerOptions) {
   const [remote, setRemote] = useState<{ query: string; page: RuntimeRepoSearchRefs } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [discoveryError, setDiscoveryError] = useState<string | null>(null)
-  const [existingBranch, setExistingBranch] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
   const inFlight = useRef(false)
   const generation = useRef(0)
@@ -62,7 +62,6 @@ export function useBranchPicker(options: BranchPickerOptions) {
     }
     let stale = false
     setError(null)
-    setExistingBranch(null)
     setQuery('')
     void listRuntimeGitBranches(route)
       .then((result) => {
@@ -129,11 +128,12 @@ export function useBranchPicker(options: BranchPickerOptions) {
   )
   const localNames = useMemo(() => new Set(local.branches), [local])
   const currentRemote = remote?.query === query ? remote.page : null
-  const { rows, moreLocal } = useMemo(
+  const rows = useMemo(
     () => branchPickerRows(localRows, localNames, currentRemote, query),
     [localRows, localNames, currentRemote, query]
   )
   const { onOpenWorkspace, onSwitched, hostLabel } = options
+  const selectRef = useRef<(row: BranchPickerRow) => Promise<void>>(async () => {})
   const select = useCallback(
     async (row: BranchPickerRow) => {
       if (row.workspace) {
@@ -147,8 +147,6 @@ export function useBranchPicker(options: BranchPickerOptions) {
       inFlight.current = true
       const ownGeneration = generation.current
       setPending(true)
-      setError(null)
-      setExistingBranch(null)
       try {
         const result = await switchRuntimeGitBranch(route, row.target, hostLabel)
         onSwitched(result.warning)
@@ -157,15 +155,32 @@ export function useBranchPicker(options: BranchPickerOptions) {
         }
       } catch (failure) {
         if (generation.current === ownGeneration) {
-          setError(
-            failure instanceof Error
-              ? failure.message
-              : translate(
-                  'sourceControl.branchPicker.switchFailed',
-                  "Orca couldn't switch branches. Try again."
-                )
+          setOpen(false)
+          const existingBranch = branchSwitchExistingBranch(failure)
+          toast.error(
+            translate('sourceControl.branchPicker.switchFailedTitle', "Couldn't switch branches"),
+            {
+              description:
+                failure instanceof Error
+                  ? failure.message
+                  : translate(
+                      'sourceControl.branchPicker.switchFailed',
+                      "Orca couldn't switch branches. Try again."
+                    ),
+              action: existingBranch
+                ? {
+                    label: translate('sourceControl.branchPicker.recover', 'Switch to {{branch}}', {
+                      branch: existingBranch
+                    }),
+                    onClick: () =>
+                      void selectRef.current({
+                        target: { kind: 'local', name: existingBranch },
+                        label: existingBranch
+                      })
+                  }
+                : undefined
+            }
           )
-          setExistingBranch(branchSwitchExistingBranch(failure))
         }
       } finally {
         inFlight.current = false
@@ -176,8 +191,8 @@ export function useBranchPicker(options: BranchPickerOptions) {
     },
     [route, hostLabel, onOpenWorkspace, onSwitched, setOpen]
   )
+  selectRef.current = select
   return {
-    moreLocal,
     open,
     openedAt,
     setOpen,
@@ -186,7 +201,6 @@ export function useBranchPicker(options: BranchPickerOptions) {
     rows,
     error,
     discoveryError,
-    existingBranch,
     pending,
     select
   }

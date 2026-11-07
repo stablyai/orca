@@ -165,17 +165,8 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     expect(branchVisits).toBe(size)
     // The open window shows 50 local matches, regardless of catalog size.
     expect(container.querySelectorAll('[data-row]')).toHaveLength(50)
-    expect(container.textContent).toContain('Keep typing')
     counts.renders = 0
-    await act(async () =>
-      root.render(
-        <BranchPicker
-          {...props}
-          context={{ ...props.context }}
-          agentHint={<p>Unrelated update</p>}
-        />
-      )
-    )
+    await act(async () => root.render(<BranchPicker {...props} context={{ ...props.context }} />))
     expect(counts.renders).toBe(0)
     expect(counts.builds).toBe(1)
     const next = makeWorkspaces()
@@ -195,14 +186,7 @@ it.each([100, 1000])('bounds rendered picker work for %i branches and workspaces
     await act(async () => vi.advanceTimersByTimeAsync(200))
     counts.renders = 0
     await act(async () =>
-      root.render(
-        <BranchPicker
-          {...props}
-          context={{ ...props.context }}
-          workspaces={next}
-          agentHint={<p>Another update</p>}
-        />
-      )
+      root.render(<BranchPicker {...props} context={{ ...props.context }} workspaces={next} />)
     )
     expect(counts.renders).toBe(0)
     let resolveStale: ((value: unknown) => void) | undefined

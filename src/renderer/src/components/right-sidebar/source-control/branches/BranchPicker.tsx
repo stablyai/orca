@@ -1,8 +1,7 @@
-import { memo, type ReactNode } from 'react'
-import { Check, ChevronDown, GitBranch } from 'lucide-react'
+import { memo } from 'react'
+import { Check, ChevronDown, GitBranch, Info } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
@@ -13,13 +12,11 @@ export type BranchPickerProps = BranchPickerOptions & {
   branch: string
   blocker: string | null
   dirtyOnlyBlocker?: boolean
-  agentHint?: ReactNode
 }
 export function BranchPicker({
   branch,
   blocker,
   dirtyOnlyBlocker = false,
-  agentHint,
   ...options
 }: BranchPickerProps) {
   useUiLanguageRevision()
@@ -47,6 +44,19 @@ export function BranchPicker({
             value={picker.query}
             onValueChange={picker.setQuery}
           />
+          {[blocker, picker.error ?? picker.discoveryError].map(
+            (reason) =>
+              reason && (
+                <p
+                  key={reason}
+                  role="status"
+                  className="flex items-start gap-2 border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground"
+                >
+                  <Info className="mt-px size-3.5 shrink-0" />
+                  {reason}
+                </p>
+              )
+          )}
           <CommandList>
             {picker.rows.map((row) => (
               <BranchRow
@@ -61,38 +71,6 @@ export function BranchPicker({
             ))}
           </CommandList>
         </Command>
-        {picker.moreLocal && (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
-            {translate('sourceControl.branchPicker.more', 'Keep typing to find more branches.')}
-          </p>
-        )}
-        {picker.open && agentHint}
-        {blocker && (
-          <p role="status" className="border-t px-3 py-2 text-xs text-muted-foreground">
-            {blocker}
-          </p>
-        )}
-        {(picker.error || picker.discoveryError) && (
-          <p role="alert" className="px-3 py-2 text-xs text-destructive">
-            {picker.error ?? picker.discoveryError}
-          </p>
-        )}
-        {picker.existingBranch && (
-          <Button
-            variant="ghost"
-            disabled={disabled}
-            onClick={() =>
-              void picker.select({
-                target: { kind: 'local', name: picker.existingBranch ?? '' },
-                label: picker.existingBranch ?? ''
-              })
-            }
-          >
-            {translate('sourceControl.branchPicker.recover', 'Switch to {{branch}}', {
-              branch: picker.existingBranch
-            })}
-          </Button>
-        )}
       </PopoverContent>
     </Popover>
   )

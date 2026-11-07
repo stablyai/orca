@@ -154,7 +154,7 @@ it('probes the resolved local name when a remote checkout lands with a hook fail
     switchTo({ kind: 'remote', name: 'team/upstream/topic' }, null, recorded)
   ).rejects.toThrow(
     new BranchSwitchLandedWithWarningError(
-      'Switched to topic, but git reported an error: hook failed',
+      'Switched to topic. A git hook in this repository failed afterwards and said: hook failed. The switch itself worked.',
       'topic'
     )
   )

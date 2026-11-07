@@ -5,6 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { BranchPicker, type BranchPickerProps } from './BranchPicker'
 import { i18n } from '@/i18n/i18n'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
@@ -20,6 +21,7 @@ vi.mock('@/runtime/runtime-git-branch-client', async (importOriginal) => ({
   searchRuntimeRemoteBranches: vi.fn(),
   switchRuntimeGitBranch: vi.fn()
 }))
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({
     children,
@@ -69,7 +71,7 @@ afterEach(async () => {
   vi.clearAllMocks()
 })
 
-it('keeps disk blockers authoritative in the UI while agent hints stay advisory', async () => {
+it('keeps disk blockers authoritative and offers the existing branch after a collision', async () => {
   vi.mocked(listRuntimeGitBranches).mockResolvedValue({
     current: 'main',
     branches: ['main', 'feature']
@@ -86,8 +88,7 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
     hostLabel: 'This computer',
     workspaces: new Map(),
     onOpenWorkspace: vi.fn(),
-    onSwitched: vi.fn(),
-    agentHint: <p>Codex last reported work here.</p>
+    onSwitched: vi.fn()
   }
   await act(async () => root.render(<BranchPicker {...props} />))
   await act(async () => container.querySelector('button')?.click())
@@ -98,7 +99,6 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
   await act(async () => feature?.click())
   expect(switchRuntimeGitBranch).not.toHaveBeenCalled()
   expect(container.textContent).toContain('Commit or discard 2 changed files')
-  expect(container.textContent).toContain('Codex last reported work here.')
   await act(async () => root.render(<BranchPicker {...props} blocker={null} />))
   expect(feature?.disabled).toBe(false)
   await act(async () => feature?.click())
@@ -125,11 +125,11 @@ it('keeps disk blockers authoritative in the UI while agent hints stay advisory'
       .find((button) => button.textContent === 'feature')
       ?.click()
   )
-  const recovery = Array.from(container.querySelectorAll('button')).find(
-    (button) => button.textContent === 'Switch to hidden'
+  const recovery = vi.mocked(toast.error).mock.lastCall?.[1]?.action
+  expect(recovery).toMatchObject({ label: 'Switch to hidden' })
+  await act(async () =>
+    (recovery as { onClick: (event: unknown) => void }).onClick(new MouseEvent('click'))
   )
-  expect(recovery?.disabled).toBe(false)
-  await act(async () => recovery?.click())
   expect(switchRuntimeGitBranch).toHaveBeenLastCalledWith(
     props.context,
     { kind: 'local', name: 'hidden' },
@@ -225,7 +225,7 @@ it('renders a translated local-list recovery message', async () => {
       )
     )
     await act(async () => container.querySelector('button')?.click())
-    expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
       'Lokale Zweige konnten nicht geladen werden.'
     )
   } finally {

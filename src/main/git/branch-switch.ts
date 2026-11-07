@@ -270,13 +270,15 @@ export async function switchBranchGuarded(
       const failed = parseCheckoutSkippedPaths(stderr)
       const tracking =
         typeof target === 'string' ? null : branchSwitchTrackingFailure(stderr, branch)
-      const detail = gitFailureLine(stderr) ?? 'a post-checkout hook or git step failed'
+      const detail = gitFailureLine(stderr)
       throw new BranchSwitchLandedWithWarningError(
         failed.length > 0
           ? filesLeftBehindMessage(branch, failed)
           : tracking
             ? `Switched to ${branch}, but ${tracking}`
-            : `Switched to ${branch}, but git reported an error: ${detail}`,
+            : detail
+              ? `Switched to ${branch}. A git hook in this repository failed afterwards and said: ${detail}. The switch itself worked.`
+              : `Switched to ${branch}. A git hook or git step in this repository failed afterwards. The switch itself worked.`,
         branch
       )
     }
