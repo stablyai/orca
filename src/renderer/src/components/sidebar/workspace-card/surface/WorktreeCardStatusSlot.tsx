@@ -128,14 +128,17 @@ export function WorktreeCardStatusSlot({
   const status = useWorktreeActivityStatus(worktreeId)
   const isSleeping = useIsSleepingWorktree(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
-  // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
-  const canShowSleepingStatus =
-    newCardStyle && showStatus && isSleeping && QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowReviewStatus =
     newCardStyle &&
     showStatus &&
     (prDisplay !== null || Boolean(collectionChecks)) &&
-    !canShowSleepingStatus &&
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
+  // Why: the dimmed row already signals sleep, so review state keeps the lane; sleep only replaces quiet/branch glyphs.
+  const canShowSleepingStatus =
+    newCardStyle &&
+    showStatus &&
+    isSleeping &&
+    !canShowReviewStatus &&
     QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
@@ -154,10 +157,14 @@ export function WorktreeCardStatusSlot({
         : canShowBranchStatus
           ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
           : statusLabel
-  const reviewLabel =
+  const staleAwareLabel =
     isReviewStale && canShowReviewStatus && (collectionChecks || prDisplay)
       ? `${passiveStatusLabel} · ${translate('workspace.links.lastKnownStatus', 'Last known status')}`
       : passiveStatusLabel
+  const reviewLabel =
+    canShowReviewStatus && isSleeping
+      ? `${getSleepingStatusLabel()} · ${staleAwareLabel}`
+      : staleAwareLabel
   const passiveStatusAnnouncement =
     newCardStyle && isUnread
       ? translate('workspace.activity.unreadLabel', '{{status}} · Unread', { status: reviewLabel })
