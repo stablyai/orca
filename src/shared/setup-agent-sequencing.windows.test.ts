@@ -122,7 +122,9 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
         )
       )
       expect(startupExit.code).toBe(37)
-      expect(startupExit.stderr).toContain('Setup failed; skipping agent startup.')
+      expect(startupExit.stderr).toContain(
+        'Setup failed (exit 37); skipping agent startup. See the Setup terminal for details.'
+      )
       expect(existsSync(startupLogPath)).toBe(false)
     },
     WINDOWS_PROCESS_TEST_TIMEOUT_MS
