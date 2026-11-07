@@ -38,42 +38,61 @@ describe('terminal switch on a paired environment', () => {
     mocks.revealPairedTerminalOnLocalDesktop.mockReset()
   })
 
-  it('shows the terminal in the local desktop when the windowless server cannot (#24688)', async () => {
-    const call = vi.fn().mockResolvedValue(focusResponse(false))
+  it.each([
+    // The server's answer must not matter: a windowless one says false (#24688), a desktop true (#31073).
+    ['a windowless server', false],
+    ['a paired desktop with its own window', true]
+  ])('moves the local desktop, not %s', async (_case, hostWouldNavigate) => {
+    const call = vi.fn().mockResolvedValue(focusResponse(hostWouldNavigate))
     mocks.revealPairedTerminalOnLocalDesktop.mockResolvedValue(true)
 
     const printed = await runSwitch({ call, isRemote: true })
 
-    expect(call).toHaveBeenCalledWith('terminal.focus', { terminal: 'term-1', navigation: 'host' })
     expect(mocks.revealPairedTerminalOnLocalDesktop).toHaveBeenCalledWith(
       expect.objectContaining({ isRemote: true }),
       'term-1'
     )
+    expect(call).toHaveBeenCalledWith('terminal.focus', {
+      terminal: 'term-1',
+      navigation: 'caller'
+    })
+    expect(call).not.toHaveBeenCalledWith(
+      'terminal.focus',
+      expect.objectContaining({ navigation: 'host' })
+    )
     expect(printed).toMatchObject({ ok: true, result: { focus: { navigated: true } } })
   })
 
-  it('keeps navigated false when no local desktop shows that environment', async () => {
-    const call = vi.fn().mockResolvedValue(focusResponse(false))
-    mocks.revealPairedTerminalOnLocalDesktop.mockResolvedValue(false)
-
-    const printed = await runSwitch({ call, isRemote: true })
-
-    expect(mocks.revealPairedTerminalOnLocalDesktop).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ isRemote: true }),
-      'term-1'
-    )
-    expect(printed).toMatchObject({ result: { focus: { navigated: false } } })
-  })
-
   it.each([
-    ['a local terminal the host could not navigate to', false, false],
-    ['a remote host that navigated itself', true, true]
-  ])('leaves %s alone', async (_case, isRemote, navigated) => {
-    const call = vi.fn().mockResolvedValue(focusResponse(navigated))
+    ['a windowless server', false],
+    ['a paired desktop', true]
+  ])(
+    'falls back to %s navigating itself when no local desktop shows it',
+    async (_case, navigated) => {
+      const call = vi.fn().mockResolvedValue(focusResponse(navigated))
+      mocks.revealPairedTerminalOnLocalDesktop.mockResolvedValue(false)
 
-    const printed = await runSwitch({ call, isRemote })
+      const printed = await runSwitch({ call, isRemote: true })
+
+      expect(mocks.revealPairedTerminalOnLocalDesktop).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ isRemote: true }),
+        'term-1'
+      )
+      expect(call).toHaveBeenCalledWith('terminal.focus', {
+        terminal: 'term-1',
+        navigation: 'host'
+      })
+      expect(printed).toMatchObject({ result: { focus: { navigated } } })
+    }
+  )
+
+  it('leaves a local terminal to the host', async () => {
+    const call = vi.fn().mockResolvedValue(focusResponse(false))
+
+    const printed = await runSwitch({ call, isRemote: false })
 
     expect(mocks.revealPairedTerminalOnLocalDesktop).not.toHaveBeenCalled()
-    expect(printed).toMatchObject({ result: { focus: { navigated } } })
+    expect(call).toHaveBeenCalledWith('terminal.focus', { terminal: 'term-1', navigation: 'host' })
+    expect(printed).toMatchObject({ result: { focus: { navigated: false } } })
   })
 })
