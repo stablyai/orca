@@ -92,7 +92,6 @@ export function useNativeChatFork(input: {
     latestAgentSessionContextClearSequence(input.items),
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)
   )
-  const floorRef = useRef(contextFloorSequence)
   // Streaming replaces the items array on every commit; keep the set while its members hold, so the
   // context and every offered row's `fork` stay the same objects.
   const forkableRef = useRef<ReadonlySet<string>>(new Set())
@@ -105,15 +104,18 @@ export function useNativeChatFork(input: {
   }, [input.items])
   useLayoutEffect(() => {
     forkableRef.current = forkableItemIds
-    floorRef.current = contextFloorSequence
-  }, [contextFloorSequence, forkableItemIds])
+  }, [forkableItemIds])
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
     if (inFlight.current) {
       return 'pending'
     }
-    const throughItemId = nativeChatLatestForkItemId(latest.current.items, {
-      contextFloorSequence: floorRef.current,
-      forkableItemIds: forkableRef.current
+    const { items, contextFloor, epoch } = latest.current
+    const throughItemId = nativeChatLatestForkItemId(items, {
+      contextFloorSequence: Math.max(
+        latestAgentSessionContextClearSequence(items),
+        agentSessionContextFloorSequence(contextFloor, epoch)
+      ),
+      forkableItemIds: nativeChatForkableItemIds(items)
     })
     if (!throughItemId) {
       return 'none'
