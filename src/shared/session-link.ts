@@ -3,6 +3,7 @@ import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
 
 export {
   SESSION_LINK_CAPABILITY,
+  SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   SESSION_LINK_POLICY_CAPABILITY
 } from './orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
@@ -55,7 +56,34 @@ export const SessionLinkMessageKind = z.enum([
   'owner-note'
 ])
 export type SessionLinkMessageKind = z.infer<typeof SessionLinkMessageKind>
+export const SessionLinkOwnerChoices = z
+  .array(
+    z
+      .object({
+        label: z.string().trim().min(1).max(80),
+        description: z.string().trim().max(200).optional()
+      })
+      .strict()
+  )
+  .min(2)
+  .max(4)
+  .refine(
+    (choices) => new Set(choices.map((choice) => choice.label)).size === choices.length,
+    'Owner choices must have distinct labels.'
+  )
+export const SessionLinkOwnerQuestionOptions = z
+  .object({
+    choices: SessionLinkOwnerChoices.optional(),
+    allowOther: z.boolean().optional()
+  })
+  .refine(
+    (value) => value.allowOther !== false || value.choices !== undefined,
+    'A question without choices must allow a free-text answer.'
+  )
+export type SessionLinkOwnerQuestionOptions = z.infer<typeof SessionLinkOwnerQuestionOptions>
 export const SessionLinkEvent = z.object({
+  choices: SessionLinkOwnerChoices.optional(),
+  allowOther: z.boolean().optional(),
   id: identifier,
   linkId: identifier,
   actor: z.string(),
@@ -133,12 +161,23 @@ export const LinkSendParams = z
     operationId: identifier,
     body: z.string().trim().min(1).max(8192),
     kind: SessionLinkMessageKind.exclude(['introduction']),
-    replyTo: identifier.optional()
+    replyTo: identifier.optional(),
+    ...SessionLinkOwnerQuestionOptions.shape
   })
   .strict()
   .refine(
     (value) => value.kind !== 'reply' || value.replyTo !== undefined,
     'A reply must identify the partner message.'
+  )
+  .refine(
+    (value) =>
+      value.kind === 'owner-request' ||
+      (value.choices === undefined && value.allowOther === undefined),
+    'Choices are only supported for owner requests.'
+  )
+  .refine(
+    (value) => value.allowOther !== false || value.choices !== undefined,
+    'A question without choices must allow a free-text answer.'
   )
 
 export function sessionLinkPartner(link: SessionLink, id: string): SessionLinkParticipant {

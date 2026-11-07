@@ -135,19 +135,24 @@ export function SessionLinkControl({
           ) : null}
           {snapshot ? (
             <div className="space-y-4">
-              <p className="whitespace-pre-wrap break-words text-sm font-medium">
-                {snapshot.link.story}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {snapshot.link.participants.map((p) => `${p.agent} · ${p.name}`).join(' ↔ ')}
-              </p>
+              {!ownerRequest || link?.state === 'ended' ? (
+                <>
+                  <p className="whitespace-pre-wrap break-words text-sm font-medium">
+                    {snapshot.link.story}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {snapshot.link.participants.map((p) => `${p.agent} · ${p.name}`).join(' ↔ ')}
+                  </p>
+                </>
+              ) : null}
               <p role="status" className="text-sm">
                 {sessionLinkStatus(snapshot)}
               </p>
               {ownerRequest && link?.state !== 'ended' ? (
                 <SessionLinkOwnerDecision
                   key={ownerRequest.id}
-                  question={ownerRequest.body}
+                  request={ownerRequest}
+                  link={snapshot.link}
                   disabled={state.busy || state.uncertain || unresolvedDelivery}
                   atomic={state.policySupported}
                   onAnswer={(ownerMessage) =>

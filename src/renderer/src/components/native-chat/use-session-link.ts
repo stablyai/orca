@@ -23,6 +23,17 @@ const Candidates = z.object({
 })
 type LinkMutation = { method: string; fields: Record<string, unknown>; operationId: string }
 
+async function settleSessionLinkMutation(
+  run: () => Promise<boolean>,
+  onSettled: () => void
+): Promise<boolean> {
+  try {
+    return await run()
+  } finally {
+    onSettled()
+  }
+}
+
 export function useSessionLink(sessionId: string, target: RuntimeClientTarget, open: boolean) {
   const [supported, setSupported] = useState(false)
   const [policySupported, setPolicySupported] = useState(false)
@@ -170,44 +181,49 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     const issuedAt = generation.current
     setBusy(true)
     setError('')
-    try {
-      const params =
-        operation.method === 'orchestration.linkCreate'
-          ? { ...operation.fields, id: operation.operationId }
-          : { ...operation.fields, operationId: operation.operationId }
-      const result = SessionLinkSnapshot.parse(
-        await callStructuredAgentSession<unknown>(destination, operation.method, params)
-      )
-      if (issuedAt !== generation.current) {
-        return false
+    return settleSessionLinkMutation(
+      async () => {
+        try {
+          const params =
+            operation.method === 'orchestration.linkCreate'
+              ? { ...operation.fields, id: operation.operationId }
+              : { ...operation.fields, operationId: operation.operationId }
+          const result = SessionLinkSnapshot.parse(
+            await callStructuredAgentSession<unknown>(destination, operation.method, params)
+          )
+          if (issuedAt !== generation.current) {
+            return false
+          }
+          selected.current = result.link.id
+          setSnapshot(result)
+          request.current = null
+          setUncertain(false)
+          return true
+        } catch (e) {
+          if (issuedAt !== generation.current) {
+            return false
+          }
+          const data = e instanceof RuntimeRpcCallError ? e.response.error.data : undefined
+          const refused =
+            typeof data === 'object' &&
+            data !== null &&
+            'effectsApplied' in data &&
+            data.effectsApplied === false
+          if (refused || (e instanceof RuntimeRpcCallError && e.code === 'invalid_argument')) {
+            request.current = null
+          }
+          setUncertain(request.current !== null)
+          setError(e instanceof Error ? e.message : String(e))
+          return false
+        }
+      },
+      () => {
+        if (issuedAt === generation.current) {
+          inFlight.current = false
+          setBusy(false)
+        }
       }
-      selected.current = result.link.id
-      setSnapshot(result)
-      request.current = null
-      setUncertain(false)
-      return true
-    } catch (e) {
-      if (issuedAt !== generation.current) {
-        return false
-      }
-      const data = e instanceof RuntimeRpcCallError ? e.response.error.data : undefined
-      const refused =
-        typeof data === 'object' &&
-        data !== null &&
-        'effectsApplied' in data &&
-        data.effectsApplied === false
-      if (refused || (e instanceof RuntimeRpcCallError && e.code === 'invalid_argument')) {
-        request.current = null
-      }
-      setUncertain(request.current !== null)
-      setError(e instanceof Error ? e.message : String(e))
-      return false
-    } finally {
-      if (issuedAt === generation.current) {
-        inFlight.current = false
-        setBusy(false)
-      }
-    }
+    )
   }
   const mutate = (method: string, fields: Record<string, unknown>) => {
     if (request.current) {

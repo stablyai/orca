@@ -234,3 +234,69 @@ export const ownerQuestionRussian = defineFixture({
   },
   render: () => <SessionLinkOwnerQuestion sessionId={source.sessionId} />
 })
+
+const longOwnerQuestion = `Offline checks passed. Should we run the next verification stage with a maximum budget of $0.10, or continue using offline evidence only?
+
+The implementation report is at /projects/djinn/deid-reading-registry/docs/experiments/reading-slice-1b/checkpoint-report.md. The reviewer recorded the remaining limits at https://example.test/reviews/de-identification/slice-1b/privacy-boundary-and-verification.
+
+The run will use the configured provider and the existing data boundary. No corpus access or spending has been approved yet. Your choice will be delivered to both agents before the link resumes.`
+
+function setupLongOwnerQuestion() {
+  setup('paused')
+  window.api.runtime.call = async () => ({
+    id: 'fixture',
+    ok: true,
+    _meta: { runtimeId: 'fixture' },
+    result: {
+      link: { ...link, state: 'paused', reason: 'owner-decision' },
+      events: [
+        {
+          ...report,
+          id: 'owner-question',
+          actor: partner.sessionId,
+          recipient: null,
+          kind: 'owner-request',
+          messageId: null,
+          state: 'recorded',
+          body: longOwnerQuestion,
+          choices: [
+            {
+              label: 'Approve up to $0.10',
+              description: 'Run the verification within the existing data boundary.'
+            },
+            {
+              label: 'Continue offline only',
+              description: 'Keep working without provider calls or spending.'
+            },
+            {
+              label: 'Stop for review',
+              description: 'Leave the link paused until I review the report.'
+            }
+          ],
+          allowOther: true
+        }
+      ]
+    }
+  })
+}
+
+const renderOwnerQuestion = () => (
+  <div className="native-chat-appearance bg-chat-pane">
+    <SessionLinkOwnerQuestion sessionId={source.sessionId} />
+  </div>
+)
+export const ownerQuestion390 = defineFixture({
+  width: 390,
+  setup: setupLongOwnerQuestion,
+  render: renderOwnerQuestion
+})
+export const ownerQuestion560 = defineFixture({
+  width: 560,
+  setup: setupLongOwnerQuestion,
+  render: renderOwnerQuestion
+})
+export const ownerQuestion800 = defineFixture({
+  width: 800,
+  setup: setupLongOwnerQuestion,
+  render: renderOwnerQuestion
+})

@@ -21425,6 +21425,10 @@
       }
     },
     "sessionLink": {
+      "agentAsksYou": "{{agent}} asks you",
+      "reviewerRole": "reviewer",
+      "implementerRole": "implementer",
+      "goal": "Goal",
       "partner": "Partner session",
       "search": "Search agent, chat, workspace or branch…",
       "empty": "No available local Claude or Codex chats.",

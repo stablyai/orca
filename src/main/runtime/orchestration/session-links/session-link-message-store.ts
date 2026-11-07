@@ -3,6 +3,7 @@ import {
   SESSION_LINK_MESSAGE_BYTES,
   SESSION_LINK_MESSAGE_LIMIT,
   SessionLinkEvent,
+  SessionLinkOwnerQuestionOptions,
   type SessionLinkMessageKind
 } from '../../../../shared/session-link'
 import {
@@ -11,7 +12,7 @@ import {
 } from '../../../../shared/session-link-wait'
 import type { SessionLinkStore } from './session-link-store'
 
-export type SessionLinkAppend = {
+export type SessionLinkAppend = SessionLinkOwnerQuestionOptions & {
   id: string
   linkId: string
   actor: string
@@ -26,6 +27,10 @@ export function appendSessionLinkMessage(
   store: SessionLinkStore,
   input: SessionLinkAppend
 ): SessionLinkEvent {
+  const options = SessionLinkOwnerQuestionOptions.parse(input)
+  if (input.kind !== 'owner-request' && (options.choices || options.allowOther !== undefined)) {
+    throw new Error('Choices are only supported for owner requests.')
+  }
   if (Buffer.byteLength(input.body, 'utf8') > SESSION_LINK_MESSAGE_BYTES) {
     throw new Error('Link messages are limited to 8 KiB. Reference a local report instead.')
   }
@@ -40,7 +45,9 @@ export function appendSessionLinkMessage(
           !(input.kind === 'owner-request' && existing.recipient === null)) ||
         existing.kind !== input.kind ||
         existing.replyTo !== (input.replyTo ?? null) ||
-        existing.body !== input.body
+        existing.body !== input.body ||
+        JSON.stringify(existing.choices) !== JSON.stringify(options.choices) ||
+        (existing.allowOther ?? true) !== (options.allowOther ?? true)
       ) {
         throw new Error('Message operation was already used for different content.')
       }
@@ -153,6 +160,7 @@ export function appendSessionLinkMessage(
       createdAt: Date.now(),
       detail: '',
       body: input.body,
+      ...options,
       ...(input.requestId ? { requestId: input.requestId } : {})
     })
     store.write(event)

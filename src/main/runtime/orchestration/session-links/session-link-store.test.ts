@@ -59,6 +59,35 @@ describe('durable session link boundaries', () => {
     expect(db.getUndeliveredUnreadMessages('orca_session_id:claude_review')).toEqual([])
   })
 
+  it('persists owner choices across restart and rejects changed retry choices', () => {
+    const input = {
+      ...message('owner-question'),
+      kind: 'owner-request' as const,
+      choices: [
+        { label: 'Offline only' },
+        { label: 'Approve $0.10', description: 'Same data boundary' }
+      ],
+      allowOther: false
+    }
+    store.append(input)
+    db.close()
+    db = new OrchestrationDb(join(directory, 'mail.sqlite'))
+    store = new SessionLinkStore(db)
+    expect(store.events('link-1')[0]).toMatchObject({
+      choices: input.choices,
+      allowOther: false,
+      state: 'recorded',
+      recipient: null
+    })
+    expect(store.append(input).choices).toEqual(input.choices)
+    expect(() =>
+      store.append({ ...input, choices: [{ label: 'Offline only' }, { label: 'Approve $1' }] })
+    ).toThrow('different content')
+    expect(() => store.append({ ...input, allowOther: true })).toThrow('different content')
+    expect(store.events('link-1').filter((event) => event.kind === 'owner-request')).toHaveLength(1)
+    expect(db.getUndeliveredUnreadMessages('orca_session_id:claude_review')).toEqual([])
+  })
+
   it('keeps a queued checkpoint on pause and refuses a raced wakeup', () => {
     const event = store.append(message('checkpoint-1'))
     store.control('link-1', 'owner', 'pause-1', 1, 'pause')

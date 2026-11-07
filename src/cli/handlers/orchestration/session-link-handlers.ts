@@ -2,9 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime-client'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { getOptionalStringFlag, getOptionalJsonFlag, getRequiredStringFlag } from '../../flags'
 import { sessionLinkSendReceipt } from '../../../shared/session-link-receipt'
-import { SessionLinkSnapshot } from '../../../shared/session-link'
+import {
+  SessionLinkSnapshot,
+  LinkSendParams,
+  SESSION_LINK_OWNER_CHOICES_CAPABILITY
+} from '../../../shared/session-link'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 
 function linkOperationError(error: unknown, guidance: string): Error {
   const message = `${error instanceof Error ? error.message : String(error)}\n${guidance}`
@@ -29,15 +34,37 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration link-send': async ({ flags, client, json }) => {
     const operationId = getOptionalStringFlag(flags, 'operation') ?? randomUUID()
     try {
-      const result = await client.call('orchestration.linkSend', {
+      const choicesJson = getOptionalJsonFlag(flags, 'choices-json')
+      const allowOther = getOptionalStringFlag(flags, 'allow-other')
+      if (allowOther !== undefined && allowOther !== 'true' && allowOther !== 'false') {
+        throw new Error('--allow-other must be true or false.')
+      }
+      const params = LinkSendParams.parse({
         id: getRequiredStringFlag(flags, 'id'),
         operationId,
         body: getRequiredStringFlag(flags, 'body'),
         kind: getOptionalStringFlag(flags, 'kind') ?? 'message',
+        ...(choicesJson ? { choices: JSON.parse(choicesJson) } : {}),
+        ...(allowOther !== undefined ? { allowOther: allowOther === 'true' } : {}),
         ...(getOptionalStringFlag(flags, 'reply-to')
           ? { replyTo: getOptionalStringFlag(flags, 'reply-to') }
           : {})
       })
+      if (params.choices || params.allowOther !== undefined) {
+        const status = await client.call<RuntimeStatus>('status.get')
+        if (!status.result.capabilities?.includes(SESSION_LINK_OWNER_CHOICES_CAPABILITY)) {
+          // Older hosts reject extra fields; preserve the choices in their free-text question.
+          params.body = `${params.body}\n\n${(params.choices ?? [])
+            .map(
+              (choice, index) =>
+                `${index + 1}. ${choice.label}${choice.description ? ` — ${choice.description}` : ''}`
+            )
+            .join('\n')}`
+          delete params.choices
+          delete params.allowOther
+        }
+      }
+      const result = await client.call('orchestration.linkSend', params)
       const snapshot = SessionLinkSnapshot.parse(result.result)
       printResult(
         {

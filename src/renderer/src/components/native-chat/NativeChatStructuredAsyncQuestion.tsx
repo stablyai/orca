@@ -115,7 +115,7 @@ function NativeChatAsyncQuestionForm({
 export function nativeChatStructuredQuestions(
   props: Pick<
     NativeChatStructuredViewProps,
-    'target' | 'agent' | 'sessionId' | 'tabId' | 'isVisible'
+    'target' | 'agent' | 'sessionId' | 'tabId' | 'isVisible' | 'isFocusedGroup'
   >,
   controller: Pick<
     ReturnType<typeof useStructuredAgentSession>,

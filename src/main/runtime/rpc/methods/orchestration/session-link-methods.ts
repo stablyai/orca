@@ -232,6 +232,8 @@ export const SESSION_LINK_METHODS = [
               body: params.body,
               kind: params.kind,
               requestId: params.operationId,
+              ...(params.choices ? { choices: params.choices } : {}),
+              ...(params.allowOther !== undefined ? { allowOther: params.allowOther } : {}),
               ...(params.replyTo ? { replyTo: params.replyTo } : {})
             })
           }
