@@ -2,6 +2,7 @@
 
 import { findPaneSleepingRecord } from './pane-sleeping-record'
 import { hookRowPaneResumeRecord, isPaneLocalHookRow } from './hook-row-pane-resume-record'
+import { cwdInsideOtherTabbedWorktree } from '../../terminal/stop/hook-status-resume-records'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from './apply-mobile-session-tab-navigation'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-types'
@@ -88,6 +89,18 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
         })
     if (!record) {
       return undefined
+    }
+    // A conversation whose folder belongs to another tabbed worktree was never this pane's (#37799):
+    // its hook spoke through pane identity inherited from a shared tmux server. A stored record
+    // stays kept but resumes nothing; a hook-store read vetoes like its other checks.
+    if (
+      cwdInsideOtherTabbedWorktree(
+        this.getWorkspaceSessionForWorktree(worktreeId),
+        worktreeId,
+        record.providerSession?.cwd
+      )
+    ) {
+      return stored ? {} : undefined
     }
     const vetoed = stored ? {} : undefined
     // Records are unspent here; exclude aliases and already-live panes to prevent duplicate transcript writers.
