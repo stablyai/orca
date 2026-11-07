@@ -19,6 +19,10 @@ import {
   releaseWebglCanvasBackingWhileHidden,
   stopReleasingWebglCanvasBacking
 } from './terminal-webgl-hidden-canvas-release'
+import {
+  boundXtermWebglAtlasMemory,
+  shrinkClearedWebglAtlasTextures
+} from './terminal-webgl-atlas-memory'
 
 export { presentPaneViewport } from './pane-viewport-present'
 import {
@@ -176,6 +180,7 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
 }
 
+/** Clear the pane's WebGL glyph atlas and shrink its GPU texture slots until the next repaint. */
 export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   if (pane.webglDisabledAfterContextLoss) {
     return
@@ -183,9 +188,11 @@ export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   try {
     // TUI redraws can corrupt glyph atlases without context loss; clear and repaint on reveal/focus while retaining GPU rendering.
     pane.webglAddon?.clearTextureAtlas()
+    shrinkClearedWebglAtlasTextures(pane.webglAddon)
   } catch {}
 }
 
+/** Clear the pane's WebGL glyph atlas and immediately repaint the visible viewport. */
 export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
   clearWebglTextureAtlas(pane)
   presentPaneViewport(pane)
@@ -233,6 +240,7 @@ setPaneFitWebglAttachHook((pane) => {
   repairPaneWebglCanvasDprMismatch(pane)
 })
 
+/** Attach and bound a WebGL renderer addon for the pane when GPU rendering is eligible, or fall back to DOM. */
 export function attachWebgl(pane: ManagedPaneInternal): void {
   if (
     !ENABLE_WEBGL_RENDERER ||
@@ -280,6 +288,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       disposeWebgl(pane, { refreshDimensions: true })
     })
     pane.terminal.loadAddon(addon)
+    boundXtermWebglAtlasMemory(addon)
     pane.webglAddon = addon
     const canvas = getXtermWebglCanvas(addon)
     if (canvas) {
