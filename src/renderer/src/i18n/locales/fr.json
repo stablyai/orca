@@ -16870,6 +16870,10 @@
           "55127a3706": "Échec de la dictée : {{value0}}",
           "bb7f599ee7": "Ouvrir les paramètres",
           "2d5b9fabf9": "Accès au micro refusé. Accordez l'autorisation dans les réglages système, puis redémarrez Orca.",
+          "noModel": "Aucun modèle vocal sélectionné. Téléchargez-en un dans Paramètres > Voix.",
+          "disabled": "La dictée vocale est désactivée. Activez-la dans Paramètres > Voix.",
+          "notReady": "Le modèle vocal n'est pas prêt. Téléchargez-le dans Paramètres > Voix.",
+          "unknownModel": "Le modèle sélectionné n'est plus disponible. Choisissez-en un autre dans Paramètres > Voix.",
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée."
@@ -16880,7 +16884,8 @@
           "f082d0cb9d": "Traitement…",
           "3de5a129e7": "Écoute en cours",
           "4977162383": "Trop fort",
-          "25f2b7a6a5": "Vous parlez"
+          "25f2b7a6a5": "Vous parlez",
+          "loadingModel": "Chargement du modèle vocal…"
         }
       },
       "dashboard": {
