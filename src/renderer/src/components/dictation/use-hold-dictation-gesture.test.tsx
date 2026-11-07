@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { createRef, type MutableRefObject, act } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictationState } from '../../../../shared/speech-types'
@@ -11,7 +11,7 @@ const originalUserAgent = navigator.userAgent
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
-let dictationStateRef: MutableRefObject<DictationState>
+let dictationState: DictationState
 let startDictation: ReturnType<typeof vi.fn<() => void>>
 let stopDictation: ReturnType<typeof vi.fn<() => void>>
 
@@ -34,7 +34,7 @@ function holdSettings(): GlobalSettings {
 
 function Probe(): null {
   useHoldDictationGesture({
-    dictationStateRef,
+    canStartDictation: () => dictationState === 'idle',
     keybindings: {},
     settings: holdSettings(),
     startDictation,
@@ -68,13 +68,12 @@ function beginHold(init: KeyboardEventInit = {}): void {
   act(() => {
     dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, ...init })
   })
-  dictationStateRef.current = 'listening'
+  dictationState = 'listening'
 }
 
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
-  dictationStateRef = createRef<DictationState>() as MutableRefObject<DictationState>
-  dictationStateRef.current = 'idle'
+  dictationState = 'idle'
   startDictation = vi.fn<() => void>()
   stopDictation = vi.fn<() => void>()
 })
@@ -204,7 +203,7 @@ describe('useHoldDictationGesture', () => {
     await renderProbe()
 
     beginHold()
-    dictationStateRef.current = 'idle'
+    dictationState = 'idle'
 
     act(() => {
       dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })

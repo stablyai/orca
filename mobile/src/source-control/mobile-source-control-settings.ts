@@ -19,10 +19,11 @@ const DESKTOP_DEFAULTS: MobileSourceControlSettings = {
 
 const NO_INPUT = {}
 
-// Mobile has no settings stream, so these go stale on a timer and on an explicit refresh.
+// The desktop sends no settings change signal, so every mount and foreground rereads behind the cached copy.
 const sourceControlSettingsQuery = defineHostQuery({
   family: 'settings.sourceControl',
-  staleTime: 5 * 60_000,
+  staleTime: 0,
+  refetchOnWindowFocus: true,
   gcTime: 30 * 60_000,
   fetch: async (
     client,

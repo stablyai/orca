@@ -10960,7 +10960,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Ainda sem commits",
-            "781a8bcf7b": "Carregando gráfico...",
             "d0fb0f4bf2": "Atualizar commits",
             "9f7535d22b": "Refs são nomes de branch ou tag que apontam para esse commit exato. Eles só aparecem onde o Git tem uma ref nomeada para o commit.",
             "9289ba0cb9": "O que são refs?",
@@ -11162,7 +11161,6 @@
             "f8a2c4d1e0": "Modo de busca do Explorador"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Carregando arquivos…",
             "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit",
             "c3d4e5f6a7": "Abrir todas as alterações juntas"
           },
@@ -20106,17 +20104,6 @@
           "reviewStatus": "Veja o estado da issue, o status de revisão e as verificações de CI em cada worktree",
           "managePullRequests": "Leia, comente e faça merge de pull requests sem sair do Orca"
         }
-      },
-      "agyInstall": {
-        "open": "Instalar",
-        "thisDevice": "Este dispositivo",
-        "title": "Instalar Antigravity",
-        "description": "Pressione Enter no terminal para executar o instalador oficial. Fechar este terminal interrompe qualquer comando ainda em execução.",
-        "target": "Local de instalação: {{location}}",
-        "terminal": "Instalador do Antigravity",
-        "detected": "O Antigravity foi detectado no PATH. Feche o terminal quando o instalador terminar.",
-        "close": "Fechar terminal",
-        "recheck": "Verificar agentes novamente"
       }
     },
     "jiraUserPicker": {
@@ -23838,5 +23825,32 @@
     "discussionAction": "Participar da discussão",
     "checkAction": "Verificar compatibilidade",
     "settingsStatus": "O Orca {{version}} requer o macOS {{macos}} ou posterior. Esta é a versão mais recente para este Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Copiar hash do commit",
+    "parents": "Commits pais",
+    "files": "Arquivos",
+    "currentBranch": "Branch atual",
+    "allBranches": "Todas as branches",
+    "chosenBranches": "Branches escolhidas",
+    "searchRefs": "Buscar branches e tags",
+    "oldServer": "Esta versão do Orca no servidor mostra apenas a branch atual",
+    "copyBranch": "Copiar nome da branch",
+    "switchWorkspace": "Mudar para o espaço de trabalho",
+    "workspaceClosed": "Esta branch não está mais aberta em outro espaço de trabalho.",
+    "workspaceCheckFailed": "Não foi possível verificar este espaço de trabalho. Tente novamente quando estiver conectado.",
+    "refresh": "Atualizar commits",
+    "branchTag": "Branch / Tag",
+    "graph": "Grafo",
+    "resizeColumn": "Redimensionar coluna do grafo",
+    "message": "Mensagem",
+    "author": "Autor",
+    "date": "Data",
+    "loadMore": "Carregar mais",
+    "noCommits": "Ainda não há commits",
+    "historyChanged": "O histórico mudou novamente. Atualize o grafo do Git para tentar de novo.",
+    "loadFailed": "Não foi possível carregar o histórico do Git",
+    "updateHost": "Atualize o Orca em {{host}} para abrir o grafo do Git",
+    "title": "Grafo do Git"
   }
 }

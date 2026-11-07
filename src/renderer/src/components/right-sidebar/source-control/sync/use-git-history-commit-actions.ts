@@ -41,11 +41,13 @@ export function useGitHistoryCommitActions({
   activeWorktreeId,
   worktreePath,
   activeRepoTarget,
+  ownerConnectionId,
   resolveSplitTargetGroupId
 }: {
   activeWorktreeId: string | null | undefined
   worktreePath: string | null
   activeRepoTarget: RuntimeClientTarget | null
+  ownerConnectionId?: string | null
   resolveSplitTargetGroupId: (event?: SourceControlRowOpenEvent) => string | undefined
 }): GitHistoryCommitActions {
   const scope = useSourceControlScope()
@@ -70,7 +72,7 @@ export function useGitHistoryCommitActions({
       if (cached) {
         return cached.entries
       }
-      const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
+      const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
       const result = await getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
@@ -93,7 +95,7 @@ export function useGitHistoryCommitActions({
       commitCompareCacheRef.current.set(item.id, result)
       return result.entries
     },
-    [activeRepoTarget, activeWorktreeId, scope, worktreePath]
+    [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -216,7 +218,7 @@ export function useGitHistoryCommitActions({
             target: requireGitOwnerTarget(activeRepoTarget),
             worktreeId: activeWorktreeId,
             worktreePath,
-            connectionId: sourceControlConnectionId(scope, activeWorktreeId)
+            connectionId: sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
           },
           { sha: item.id }
         )
@@ -268,7 +270,7 @@ export function useGitHistoryCommitActions({
       }
       void explainCommitWithDefaultAgent(activeWorktreeId, item)
     },
-    [activeRepoTarget, activeWorktreeId, copyCommitText, scope, worktreePath]
+    [activeRepoTarget, activeWorktreeId, copyCommitText, scope, worktreePath, ownerConnectionId]
   )
 
   return { loadCommitFiles, openHistoryCommitDiff, openCommitFile, handleCommitAction }

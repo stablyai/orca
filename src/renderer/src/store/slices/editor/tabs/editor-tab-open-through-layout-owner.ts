@@ -19,6 +19,7 @@ import {
 } from '../../../../../../shared/workspace-layout/workspace-layout-published'
 
 type EditorTabOpen = {
+  fixedTabId?: string
   fileId: string
   worktreeId: string
   contentType: EditorTabContentType
@@ -79,7 +80,7 @@ export function openEditorTabThroughLayoutOwner(
   if (!file || !state.createUnifiedTab) {
     return null
   }
-  const tabId = createBrowserUuid()
+  const tabId = open.fixedTabId ?? createBrowserUuid()
   const groupId = placementGroupId(state, worktreeId, open.groupId)
   const command: WindowLayoutCommand = {
     type: 'openEditorTab',

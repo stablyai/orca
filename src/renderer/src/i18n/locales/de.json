@@ -13558,7 +13558,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Noch keine Commits",
-            "781a8bcf7b": "Graph wird geladen…",
             "d0fb0f4bf2": "Commits aktualisieren",
             "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
             "9289ba0cb9": "Was sind Referenzen?",
@@ -14783,7 +14782,6 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dateien werden geladen…",
             "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
             "c3d4e5f6a7": "Alle Änderungen gemeinsam öffnen"
           },
@@ -19192,17 +19190,6 @@
           "reviewStatus": "Issue-Status, Review-Status und CI-Checks für jeden Worktree anzeigen",
           "managePullRequests": "Pull Requests lesen, kommentieren und mergen, ohne Orca zu verlassen"
         }
-      },
-      "agyInstall": {
-        "open": "Installieren",
-        "title": "Antigravity installieren",
-        "description": "Drücke im Terminal die Eingabetaste, um das offizielle Installationsprogramm auszuführen. Beim Schließen dieses Terminals werden noch laufende Befehle gestoppt.",
-        "target": "Installationsort: {{location}}",
-        "thisDevice": "Dieses Gerät",
-        "terminal": "Antigravity-Installationsprogramm",
-        "detected": "Antigravity wurde in PATH gefunden. Schließe das Terminal, wenn die Installation abgeschlossen ist.",
-        "close": "Terminal schließen",
-        "recheck": "Agenten erneut prüfen"
       }
     },
     "jiraIssueAssigneeField": {
@@ -23458,5 +23445,32 @@
     "discussionAction": "An der Diskussion teilnehmen",
     "checkAction": "Kompatibilität prüfen",
     "settingsStatus": "Orca {{version}} benötigt macOS {{macos}} oder neuer. Dies ist die neueste Version für diesen Mac."
+  },
+  "gitGraph": {
+    "copyHash": "Commit-Hash kopieren",
+    "parents": "Übergeordnete Commits",
+    "files": "Dateien",
+    "currentBranch": "Aktueller Branch",
+    "allBranches": "Alle Branches",
+    "chosenBranches": "Ausgewählte Branches",
+    "searchRefs": "Branches und Tags suchen",
+    "oldServer": "Diese Orca-Version auf dem Server zeigt nur den aktuellen Branch",
+    "copyBranch": "Branch-Namen kopieren",
+    "switchWorkspace": "Zum Workspace wechseln",
+    "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Workspace geöffnet.",
+    "workspaceCheckFailed": "Dieser Workspace konnte nicht überprüft werden. Versuche es erneut, wenn die Verbindung wiederhergestellt ist.",
+    "refresh": "Commits aktualisieren",
+    "branchTag": "Branch / Tag",
+    "graph": "Graph",
+    "resizeColumn": "Breite der Graphspalte ändern",
+    "message": "Nachricht",
+    "author": "Autor",
+    "date": "Datum",
+    "loadMore": "Mehr laden",
+    "noCommits": "Noch keine Commits",
+    "historyChanged": "Der Verlauf hat sich erneut geändert. Aktualisiere den Git-Graphen, um es erneut zu versuchen.",
+    "loadFailed": "Git-Verlauf konnte nicht geladen werden",
+    "updateHost": "Aktualisiere Orca auf {{host}}, um den Git-Graphen zu öffnen",
+    "title": "Git-Graph"
   }
 }
