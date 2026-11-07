@@ -161,14 +161,15 @@ export class PREventDeliveryTrigger {
       return
     }
     const { database } = this.deps
-    void deliverPendingPullRequestEvents({ database, journal, sessionId: chatId, fence }).then(
-      () => {
-        if (!hasPRPendingDelivery(database.db, chatId)) {
+    void deliverPendingPullRequestEvents({ database, journal, sessionId: chatId, fence })
+      .then(() => {
+        // The database may be closing during shutdown; that throw is caught below too.
+        if (!database.isClosed && !hasPRPendingDelivery(database.db, chatId)) {
           this.owed.delete(chatId)
         }
-      },
-      (error: unknown) =>
+      })
+      .catch((error: unknown) =>
         this.deps.logger.warn('appending a CI line failed', { scope: 'pr-watch', chatId, error })
-    )
+      )
   }
 }

@@ -1,7 +1,8 @@
 import {
   COMMAND_START,
   shellCode,
-  shellSegments
+  shellSegments,
+  withoutShellRedirections
 } from '../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { posixShellWords } from '../../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 
@@ -49,7 +50,8 @@ export function runsGitPush(script: string): boolean {
   return (
     pushes.length > 0 &&
     pushes.every((segment) => {
-      const words = posixShellWords(segment.trim())
+      // `git push 2>&1` is common, as git writes its update lines to stderr.
+      const words = posixShellWords(withoutShellRedirections(segment).trim())
       // Words we can't read can't prove a real push.
       return words !== null && !isDryRun(words)
     })

@@ -57,6 +57,17 @@ describe('push updates from recorded tool calls', () => {
     expect(pushedBranches(codex)).toEqual([{ branch: 'ci-lines', newSha: '5d6e7f8' }])
   })
 
+  it('reads a push that merges its stderr into the output, and still skips a dry run', () => {
+    const push = (command: string, output: string) =>
+      pushedBranches(toolCallRow({ name: 'Bash', input: { command }, output }))
+    const output =
+      "To github.com:acme/repo.git\n   8d5f74b..c512e75  HEAD -> review\nbranch 'review' set up to track 'origin/review'.\n"
+    expect(push('git push -u origin HEAD 2>&1', output)).toEqual([
+      { branch: 'review', newSha: 'c512e75' }
+    ])
+    expect(push('git push --dry-run 2>&1', output)).toEqual([])
+  })
+
   it('takes new branches and porcelain lines, and nothing from pushes that updated nothing', () => {
     const push = (command: string, output: string) =>
       pushedBranches(toolCallRow({ name: 'Bash', input: { command }, output }))
