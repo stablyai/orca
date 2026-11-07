@@ -11,7 +11,7 @@ export const CUSTOM_APP_ICON_ID = 'custom'
 
 export type AppIconId = BuiltInAppIconId | typeof CUSTOM_APP_ICON_ID
 
-export const DEFAULT_APP_ICON_ID: AppIconId = 'classic'
+export const DEFAULT_APP_ICON_ID: BuiltInAppIconId = 'classic'
 
 function isAppIconId(value: unknown): value is AppIconId {
   return value === CUSTOM_APP_ICON_ID || APP_ICON_OPTIONS.some((option) => option.id === value)
@@ -23,7 +23,8 @@ export function normalizeAppIconId(value: unknown): AppIconId {
 
 export const CUSTOM_APP_ICON_MAX_BYTES = 10 * 1024 * 1024
 export const CUSTOM_APP_ICON_MIN_SIDE = 64
-export const CUSTOM_APP_ICON_MAX_SIDE = 4096
+// Why 2048: decoding runs on the main process, and the stored copy is downscaled to 1024 anyway.
+export const CUSTOM_APP_ICON_MAX_SIDE = 2048
 
 export type CustomAppIconImportFailureCode =
   | 'unsupportedFormat'

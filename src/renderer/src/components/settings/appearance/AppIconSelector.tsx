@@ -137,11 +137,10 @@ export function AppIconSelector({ value, onChange }: AppIconSelectorProps): Reac
     : BUILT_IN_APP_ICON_IDS
   const normalized = normalizeAppIconId(value)
   // Main falls back to Classic when the imported file is gone, so the preview does too.
-  const selected = options.includes(normalized) ? normalized : DEFAULT_APP_ICON_ID
-  const selectedUrl =
-    selected === CUSTOM_APP_ICON_ID && customPreviewUrl
-      ? customPreviewUrl
-      : APP_ICON_URLS[selected === CUSTOM_APP_ICON_ID ? DEFAULT_APP_ICON_ID : selected]
+  const builtInSelection = normalized === CUSTOM_APP_ICON_ID ? DEFAULT_APP_ICON_ID : normalized
+  const showsCustom = normalized === CUSTOM_APP_ICON_ID && customPreviewUrl !== null
+  const selected = showsCustom ? CUSTOM_APP_ICON_ID : builtInSelection
+  const selectedUrl = showsCustom ? customPreviewUrl : APP_ICON_URLS[builtInSelection]
 
   const importCustomIcon = async (): Promise<void> => {
     try {

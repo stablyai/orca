@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { app, nativeImage } from 'electron'
+import { nativeImage } from 'electron'
 import {
   CUSTOM_APP_ICON_MAX_BYTES,
   CUSTOM_APP_ICON_MAX_SIDE,
@@ -10,6 +10,7 @@ import {
   type CustomAppIconImportResult
 } from '../../../shared/app-icon'
 import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 
 // Why: 1024px covers the largest Dock and taskbar tiles; larger images only cost memory on every apply.
 const STORED_ICON_SIDE = 1024
@@ -18,7 +19,7 @@ const PREVIEW_ICON_SIDE = 192
 type CustomAppIconFormat = 'png' | 'jpeg' | 'ico'
 
 export function getCustomAppIconPath(): string {
-  return join(app.getPath('userData'), 'app-icon', 'custom.png')
+  return join(getCanonicalUserDataPath(), 'app-icon', 'custom.png')
 }
 
 export function hasCustomAppIcon(): boolean {
