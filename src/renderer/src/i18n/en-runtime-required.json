@@ -1303,7 +1303,7 @@
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
-      "managedHostServer": "{{host}} now runs automations on its Orca server"
+      "managedHostServer": "Needs migration to {{host}}"
     }
   },
   "browser": {

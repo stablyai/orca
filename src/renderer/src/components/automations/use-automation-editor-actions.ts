@@ -91,7 +91,11 @@ export function useAutomationEditorActions({
     setCreateOpen(true)
   }
 
-  const openEditDialog = async (row: AutomationListRow): Promise<void> => {
+  /** Resolves true once the edit session is set; headless keeps the dialog closed for Migrate. */
+  const openEditDialog = async (
+    row: AutomationListRow,
+    { headless = false }: { headless?: boolean } = {}
+  ): Promise<boolean> => {
     const requestId = (editRequestRef.current += 1)
     const automationId = row.automation.id
     const reread = await dispatchAutomationReread(
@@ -104,11 +108,11 @@ export function useAutomationEditorActions({
     )
     if (!reread.ok && reread.notice.severity === 'owner') {
       destination.reportOwnerAction(row.key, reread.notice)
-      return
+      return false
     }
     const latest = (reread.ok ? reread.value : null) ?? row.automation
     if (requestId !== editRequestRef.current) {
-      return
+      return false
     }
     setEditingAutomationId(latest.id)
     setEditingRowKey(row.key)
@@ -130,7 +134,8 @@ export function useAutomationEditorActions({
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
     setTargetEdited(movingToServer)
-    setCreateOpen(true)
+    setCreateOpen(!headless)
+    return true
   }
 
   const handleProjectChange = useCallback(

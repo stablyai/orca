@@ -8,7 +8,7 @@ export const AUTOMATION_RUN_FAILURE_COPY = {
     "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
   wslMoveOwnedByHost:
     "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
-  managedHostServer: '{{host}} now runs automations on its Orca server',
+  managedHostServer: 'Needs migration to {{host}}',
   missedGraceWindow: 'This run was past its missed-run grace window when Orca next checked.',
   targetMissing:
     'The automation host is no longer registered, so this automation has nowhere to run.',

@@ -42,8 +42,12 @@ const COPY: Record<
     translate('automations.runFailures.wslMoveInProgress', EN.wslMoveInProgress),
   wslMoveOwnedByHost: () =>
     translate('automations.runFailures.wslMoveOwnedByHost', EN.wslMoveOwnedByHost),
-  managedHostServer: (params) =>
-    typeof params?.host === 'string' ? managedHostServerText(params.host) : null,
+  managedHostServer: (params) => {
+    const host = params?.host
+    return typeof host === 'string'
+      ? translate('automations.runFailures.managedHostServer', EN.managedHostServer, { host })
+      : null
+  },
   missedGraceWindow: () =>
     translate('automations.runFailures.missedGraceWindow', EN.missedGraceWindow),
   targetMissing: () => translate('automations.runFailures.targetMissing', EN.targetMissing),
@@ -91,10 +95,6 @@ const COPY: Record<
       ? translate('automations.runFailures.wslDistroStopped', EN.wslDistroStopped, { distro })
       : null
   }
-}
-
-export function managedHostServerText(host: string): string {
-  return translate('automations.runFailures.managedHostServer', EN.managedHostServer, { host })
 }
 
 function isAutomationRunFailureCode(code: unknown): code is AutomationRunFailureCode {

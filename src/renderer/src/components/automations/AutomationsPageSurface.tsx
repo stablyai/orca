@@ -32,6 +32,7 @@ export function AutomationsPageSurface({
     draftEffects,
     editorActions,
     saveAutomation,
+    migrateAction,
     managementActions,
     runActions,
     externalActions,
@@ -290,6 +291,8 @@ export function AutomationsPageSurface({
           requestExternalAction={externalActions.requestExternalAction}
           runNow={() => runSelectedRowAction(runActions.runNow)}
           openEditDialog={() => runSelectedRowAction(editorActions.openEditDialog)}
+          migrateAutomation={() => runSelectedRowAction(migrateAction.migrateAutomation)}
+          isMigrating={!!selectedRow && migrateAction.migratingRowKey === selectedRow.key}
           toggleAutomation={() => runSelectedRowAction(managementActions.toggleAutomation)}
           requestDeleteAutomation={() =>
             runSelectedRowAction(managementActions.requestDeleteAutomation)

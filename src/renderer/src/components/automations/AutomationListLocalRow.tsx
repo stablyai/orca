@@ -78,6 +78,7 @@ export type AutomationListLocalRowProps = {
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   onSelect: (rowKey: string) => void
   onRunNow: (row: AutomationListRow) => void
   onEdit: (row: AutomationListRow) => void
@@ -105,6 +106,7 @@ export function AutomationListLocalRow({
   hostTargetFor,
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
+  needsMigration,
   onSelect,
   onRunNow,
   onEdit,
@@ -264,7 +266,11 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
+          <AutomationListStatusCell
+            enabled={automation.enabled}
+            movedToDistro={movedToDistro}
+            needsMigration={needsMigration?.(row)}
+          />
           <Tooltip>
             <TooltipTrigger asChild>
               <span
