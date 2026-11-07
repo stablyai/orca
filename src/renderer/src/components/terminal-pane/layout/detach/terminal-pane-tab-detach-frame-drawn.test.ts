@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
 import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
 import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
@@ -34,10 +34,13 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentStatusModule>()
-  return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
-})
+vi.mock(
+  '../../../../../../shared/agent-status/title/agent-title-status',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof AgentStatusModule>()
+    return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
+  }
+)
 
 createStoreCascadesMockApi()
 

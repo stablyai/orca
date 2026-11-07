@@ -26,14 +26,12 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -52,10 +50,6 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
 }))
 
 vi.mock('@/store/index', () => ({

@@ -10,10 +10,8 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { SearchState } from '../input/keyboard/terminal-keyboard-shortcut-matching'
 import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalDialog'
 
-import {
-  type TerminalLinkActionRequest,
-  closeTerminalLinkActionRequest
-} from '../links/terminal-link-action-request'
+import type { TerminalLinkActionRequest } from '../links/terminal-link-action-request'
+import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'

@@ -9,7 +9,7 @@ import { terminalLogicalLinkHasOscLink } from '../../../../../../shared/terminal
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
 import type { TerminalFileContext } from '../../host-files/terminal-file-path-mapping'
-import { reserveDetectedFilePathOpenTurn } from './terminal-file-open-turn'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
 import {
   fileLinkTargetExists,
   mayCheckFileLinkTargetUnprompted,
