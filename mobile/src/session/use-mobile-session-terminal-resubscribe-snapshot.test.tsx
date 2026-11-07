@@ -102,6 +102,7 @@ function harness(phone: Terminal) {
     terminalUnsubsRef: { current: new Map<string, () => void>() },
     subscribingHandlesRef: { current: new Set<string>() },
     leaseOnlyHandlesRef: { current: new Set<string>() },
+    replacedHandlesRef: { current: new Set<string>() },
     initializedHandlesRef: { current: new Set<string>() },
     terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },
@@ -141,6 +142,7 @@ function harness(phone: Terminal) {
       subscriptionsRef: fields.terminalUnsubsRef,
       subscribingRef: fields.subscribingHandlesRef,
       leaseOnlyRef: fields.leaseOnlyHandlesRef,
+      replacedRef: fields.replacedHandlesRef,
       webReadyRef: fields.webReadyHandlesRef,
       subscribe,
       unsubscribe: foundation.unsubscribeTerminal

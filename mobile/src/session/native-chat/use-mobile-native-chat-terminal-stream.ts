@@ -17,6 +17,8 @@ export function useMobileNativeChatTerminalStream(args: {
   subscriptionsRef: MutableRefObject<Map<string, () => void>>
   subscribingRef: MutableRefObject<Set<string>>
   leaseOnlyRef: MutableRefObject<Set<string>>
+  // Streams another surface of this phone took over; a tab switch lets this one subscribe again.
+  replacedRef: MutableRefObject<Set<string>>
   webReadyRef: MutableRefObject<Set<string>>
   // False when a local gate skipped the subscribe.
   subscribe: (handle: string) => boolean
@@ -38,10 +40,14 @@ export function useMobileNativeChatTerminalStream(args: {
   } | null>(null)
   const [webReadyRevision, setWebReadyRevision] = useState(0)
   const [rearmBudgetRevision, setRearmBudgetRevision] = useState(0)
-  const forgetRearmState = useCallback((handle: string) => {
-    rearmAttemptsRef.current.delete(handle)
-    absentSinceExhaustionRef.current.delete(handle)
-  }, [])
+  const forgetRearmState = useCallback(
+    (handle: string) => {
+      rearmAttemptsRef.current.delete(handle)
+      absentSinceExhaustionRef.current.delete(handle)
+      args.replacedRef.current.delete(handle)
+    },
+    [args.replacedRef]
+  )
   const cancelHealthyStreamProof = useCallback(() => {
     if (healthyStreamProofRef.current) {
       clearTimeout(healthyStreamProofRef.current.timer)
@@ -95,6 +101,11 @@ export function useMobileNativeChatTerminalStream(args: {
   }, [])
   const reconcileStream = useCallback(() => {
     const handle = args.activeHandle
+    const previousHandle = reconciledHandleRef.current
+    if (previousHandle != null && previousHandle !== handle) {
+      // Leaving a tab is the user's cue; coming back may take the stream again.
+      args.replacedRef.current.delete(previousHandle)
+    }
     reconciledHandleRef.current = handle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
       forgetRearmState(coveredHandleRef.current)
@@ -165,6 +176,7 @@ export function useMobileNativeChatTerminalStream(args: {
     args.activeTabType,
     args.leaseOnlyRef,
     args.leaseReady,
+    args.replacedRef,
     args.showNativeChat,
     args.streamRevision,
     args.subscribe,

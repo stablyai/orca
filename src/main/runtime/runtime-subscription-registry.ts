@@ -1,4 +1,7 @@
-type SubscriptionCleanup = () => void | Promise<void>
+/** Why a registration ended, when the cleanup has a reason its stream should report. */
+export type SubscriptionEndReason = 'replaced'
+
+type SubscriptionCleanup = (reason?: SubscriptionEndReason) => void | Promise<void>
 
 type RequestAddress = { connectionId: string; requestId: string }
 
@@ -43,7 +46,7 @@ export class RuntimeSubscriptionRegistry {
     if (existing) {
       this.removeConnectionIndex(subscriptionId)
       this.removeRequestIndex(existing)
-      this.cleanup(subscriptionId)
+      this.cleanup(subscriptionId, 'replaced')
     }
     const version = ++this.registrationVersion
     const request = connectionId && requestId ? { connectionId, requestId } : undefined
@@ -106,8 +109,8 @@ export class RuntimeSubscriptionRegistry {
     return true
   }
 
-  cleanup(subscriptionId: string): void {
-    void this.cleanupAndWait(subscriptionId).catch((error) => {
+  cleanup(subscriptionId: string, reason?: SubscriptionEndReason): void {
+    void this.cleanupAndWait(subscriptionId, reason).catch((error) => {
       console.error(`[runtime] subscription cleanup failed for ${subscriptionId}:`, error)
     })
   }
@@ -137,7 +140,7 @@ export class RuntimeSubscriptionRegistry {
     )
   }
 
-  async cleanupAndWait(subscriptionId: string): Promise<void> {
+  async cleanupAndWait(subscriptionId: string, reason?: SubscriptionEndReason): Promise<void> {
     const entry = this.cleanups.get(subscriptionId)
     if (!entry) {
       return
@@ -148,7 +151,7 @@ export class RuntimeSubscriptionRegistry {
     }
     let cleanupResult: void | Promise<void>
     try {
-      cleanupResult = entry.cleanup()
+      cleanupResult = entry.cleanup(reason)
     } catch (error) {
       cleanupResult = Promise.reject(error)
     }
