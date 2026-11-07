@@ -1,6 +1,6 @@
 // Lost acknowledgements may hide delivered sends: hold them quietly until the transcript confirms them, or hand them back at the deadline. Structured sends own a separate hold.
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import {
   findLandedUnconfirmedSends,
@@ -14,8 +14,8 @@ import {
   useMobileNativeChatSavedInFlightVersion
 } from './composer/mobile-native-chat-in-flight-sends'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import { createUnconfirmedSendDeadlines } from './unconfirmed-send-deadlines'
 
-export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 export const UNCONFIRMED_SEND_MESSAGE = 'Delivery unconfirmed — check chat before retrying'
 export const UNCONFIRMED_SEND_RESTORED_MESSAGE = 'Not confirmed. Restored to the box.'
 
@@ -62,25 +62,19 @@ export function useMobileNativeChatUnconfirmedSends(args: {
   const messagesRef = useRef(messages)
   const activeDraftKeyRef = useRef(draftKey)
   const activePendingKeyRef = useRef(pendingKey)
-  const connectedRef = useRef(connected)
   // Read only by the post-send hold, which runs after the commit that set them.
   useLayoutEffect(() => {
     messagesRef.current = messages
     activeDraftKeyRef.current = draftKey
     activePendingKeyRef.current = pendingKey
-    connectedRef.current = connected
-  }, [connected, draftKey, messages, pendingKey])
+  }, [draftKey, messages, pendingKey])
   const mountedRef = useRef(false)
   const unconfirmedRef = useRef<HeldSend[]>([])
+  const [deadlines] = useState(createUnconfirmedSendDeadlines<HeldSend>)
   const savedInFlightVersion = useMobileNativeChatSavedInFlightVersion()
-
-  const startDeadline = useCallback((entry: HeldSend) => {
-    entry.deadline = setTimeout(() => {
-      unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
-      entry.onUnconfirmed()
-      settleMobileNativeChatInFlightSend(entry.inFlightId)
-    }, UNCONFIRMED_SEND_DEADLINE_MS)
-  }, [])
+  useLayoutEffect(() => {
+    deadlines.setConnected(connected)
+  }, [connected, deadlines])
 
   const hold = useCallback(
     (entry: HeldSend) => {
@@ -92,12 +86,14 @@ export function useMobileNativeChatUnconfirmedSends(args: {
         settleMobileNativeChatInFlightSend(entry.inFlightId)
         return
       }
-      if (connectedRef.current) {
-        startDeadline(entry)
-      }
       unconfirmedRef.current = [...unconfirmedRef.current, entry]
+      deadlines.hold(entry, () => {
+        unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
+        entry.onUnconfirmed()
+        settleMobileNativeChatInFlightSend(entry.inFlightId)
+      })
     },
-    [startDeadline]
+    [deadlines]
   )
 
   const holdUnconfirmedSend = useCallback(
@@ -157,17 +153,6 @@ export function useMobileNativeChatUnconfirmedSends(args: {
   }, [draftKey, hold, onSendError, savedInFlightVersion])
 
   useEffect(() => {
-    for (const entry of unconfirmedRef.current) {
-      if (!connected) {
-        clearTimeout(entry.deadline ?? undefined)
-        entry.deadline = null
-      } else if (entry.deadline === null) {
-        startDeadline(entry)
-      }
-    }
-  }, [connected, startDeadline])
-
-  useEffect(() => {
     if (!draftKey || unconfirmedRef.current.length === 0) {
       return
     }
@@ -182,27 +167,25 @@ export function useMobileNativeChatUnconfirmedSends(args: {
     }
     for (const entry of unconfirmedRef.current) {
       if (landedSet.has(entry)) {
-        clearTimeout(entry.deadline ?? undefined)
+        deadlines.cancel(entry)
         settleMobileNativeChatInFlightSend(entry.inFlightId)
       }
     }
     unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
-  }, [messages, draftKey, pendingKey])
+  }, [deadlines, messages, draftKey, pendingKey])
 
   useEffect(() => {
     mountedRef.current = true
     return () => {
       mountedRef.current = false
-      for (const entry of unconfirmedRef.current) {
-        clearTimeout(entry.deadline ?? undefined)
-      }
+      deadlines.clear()
       // A send still unconfirmed stays saved; the chat's next open waits on it again.
       releaseMobileNativeChatInFlightSends(
         unconfirmedRef.current.flatMap((entry) => (entry.inFlightId ? [entry.inFlightId] : []))
       )
       unconfirmedRef.current = []
     }
-  }, [])
+  }, [deadlines])
 
   return { holdUnconfirmedSend }
 }
