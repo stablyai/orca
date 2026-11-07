@@ -6,6 +6,10 @@ import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-j
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../agent-session/options/agent-session-options-result'
 import type { NativeChatMessage } from './native-chat-types'
+import {
+  nativeChatTurnMembership,
+  type NativeChatTurnJournal
+} from './transcript/native-chat-turn-membership'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */
 export type NativeChatForkSupport =
@@ -84,4 +88,39 @@ export function nativeChatRowOffersFork(
     sequence > chat.contextFloorSequence &&
     (chat.support.kind === 'unknown' || chat.support.fork === 'checkpoint' || row.inLatestTurn)
   )
+}
+
+/** Where a side chat forks: the newest response "Fork from this response" offers, or why none is. */
+export type NativeChatLatestForkPoint =
+  | { kind: 'ready'; throughItemId: string }
+  | { kind: 'reply-running' }
+  | { kind: 'no-reply' }
+
+export function nativeChatLatestForkPoint(
+  conversation: {
+    messages: readonly NativeChatMessage[]
+    journal: NativeChatTurnJournal | null
+    agentWorking: boolean
+  },
+  chat: Parameters<typeof nativeChatRowOffersFork>[1]
+): NativeChatLatestForkPoint {
+  const { messages, journal, agentWorking } = conversation
+  const { turnKeys, liveTurnKey } = nativeChatTurnMembership(messages, journal)
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const turnKey = turnKeys[index]
+    const offered = nativeChatRowOffersFork(
+      {
+        message: messages[index],
+        inSubagentSection: false,
+        turnWorking: agentWorking && (turnKey === undefined || turnKey === liveTurnKey),
+        inLatestTurn: turnKey !== undefined && turnKey === latestTurnKey
+      },
+      chat
+    )
+    if (offered) {
+      return { kind: 'ready', throughItemId: messages[index].id }
+    }
+  }
+  return agentWorking ? { kind: 'reply-running' } : { kind: 'no-reply' }
 }

@@ -12,6 +12,8 @@ import type { useStructuredAgentSession } from './use-structured-agent-session'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
+import { useNativeChatFork } from './use-native-chat-fork'
+import { useNativeChatSideChat } from './use-native-chat-side-chat'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
 function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
@@ -30,7 +32,7 @@ function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: b
 }
 
 export function useNativeChatStructuredComposerTransport(args: {
-  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
+  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'tabId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
@@ -58,6 +60,24 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  // One fork surface for the response rows and `/btw`, so every fork action waits for the one opening.
+  const fork = useNativeChatFork({
+    ...props,
+    worktreeId: worktreeId ?? null,
+    items: controller.journalItems,
+    epoch: controller.epoch,
+    contextFloor: controller.contextFloor,
+    sessionForkSupport: controller.forkSupport
+  })
+  const sideChat = useNativeChatSideChat(fork, {
+    messages: controller.messages,
+    journal: {
+      items: controller.journalItems,
+      submissions: controller.submissions,
+      latestTurn: controller.latestTurn
+    },
+    agentWorking: controller.isWorking
+  })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     // A held host takes no turn; pausing or clearing a goal starts none.
@@ -81,6 +101,8 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           : undefined,
       capturePresentation: controller.capturePresentation,
+      ...(fork ? { fork } : {}),
+      ...(sideChat ? { sideChat } : {}),
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
         sendThroughLaunch(
@@ -152,6 +174,8 @@ export function useNativeChatStructuredComposerTransport(args: {
   }, [
     acceptsImages,
     controller,
+    fork,
+    sideChat,
     worktreeId,
     onError,
     onSubmitted,

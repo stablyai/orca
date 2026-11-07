@@ -17,14 +17,27 @@ import {
   nativeChatForkSupport,
   type NativeChatForkSupport
 } from '../../../../shared/native-chat/native-chat-fork-offer'
-import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-chat-fork-launch'
+import {
+  launchNativeChatFork,
+  nativeChatForkSurfaceAddress,
+  type NativeChatForkOutcome,
+  type NativeChatSideChatRequest
+} from './native-chat-fork-launch'
+import {
+  captureNativeChatSideChatSelection,
+  placeNativeChatSideChat
+} from './native-chat-side-chat-placement'
 
 /** What an offered row's button needs; the same object while support and pending hold. */
 export type NativeChatForkRowAction = {
   support: Exclude<NativeChatForkSupport, { kind: 'none' }>
   /** A fork is opening; every fork action in the chat waits for it. */
   pending: boolean
-  request: (throughItemId: string) => void
+  /** Undefined when nothing started: a fork is already opening, or the chat has no workspace. */
+  request: (
+    throughItemId: string,
+    side?: NativeChatSideChatRequest
+  ) => Promise<NativeChatForkOutcome | undefined>
 }
 
 export type NativeChatForkSurface = NativeChatForkRowAction & {
@@ -60,24 +73,38 @@ export function useNativeChatFork(input: {
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
   const [pending, setPending] = useState(false)
-  const request = useCallback((throughItemId: string) => {
-    const { agent, sessionId, tabId, target, worktreeId } = latest.current
-    if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
-      return
-    }
-    inFlight.current = true
-    setPending(true)
-    void launchNativeChatFork({
-      agent,
-      worktreeId,
-      target,
-      forkFrom: { sessionId, throughItemId },
-      surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId)
-    }).finally(() => {
-      inFlight.current = false
-      setPending(false)
-    })
-  }, [])
+  const request = useCallback(
+    async (
+      throughItemId: string,
+      side?: NativeChatSideChatRequest
+    ): Promise<NativeChatForkOutcome | undefined> => {
+      const { agent, sessionId, tabId, target, worktreeId } = latest.current
+      if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
+        return undefined
+      }
+      inFlight.current = true
+      setPending(true)
+      const selection = side ? captureNativeChatSideChatSelection(worktreeId) : undefined
+      try {
+        const outcome = await launchNativeChatFork({
+          agent,
+          worktreeId,
+          target,
+          forkFrom: { sessionId, throughItemId },
+          surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId),
+          ...(side ? { side } : {})
+        })
+        if (selection !== undefined && outcome.chat) {
+          placeNativeChatSideChat({ worktreeId, sourceTabId: tabId, selection, chat: outcome.chat })
+        }
+        return outcome
+      } finally {
+        inFlight.current = false
+        setPending(false)
+      }
+    },
+    []
+  )
   const contextFloorSequence = Math.max(
     latestAgentSessionContextClearSequence(input.items),
     agentSessionContextFloorSequence(input.contextFloor, input.epoch)

@@ -10,6 +10,7 @@ import {
   type NativeChatResumeCommand
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -30,7 +31,7 @@ export function useNativeChatComposerCommandPicker(
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
     }
-): { picker: NativeChatPickerState; resume: NativeChatResumeCommand } {
+): { picker: NativeChatPickerState; orcaCommands: NativeChatResumeCommand } {
   const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
@@ -66,5 +67,12 @@ export function useNativeChatComposerCommandPicker(
     editor,
     setNotice
   })
-  return { picker, resume }
+  const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
+  // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
+  const orcaCommands: NativeChatResumeCommand = {
+    matchesDraft: (draft) => side.matchesDraft(draft) || resume.matchesDraft(draft),
+    consume: (draft) => side.consume(draft) || resume.consume(draft),
+    interceptPick: (pick) => side.interceptPick(resume.interceptPick(pick))
+  }
+  return { picker, orcaCommands }
 }

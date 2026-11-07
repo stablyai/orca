@@ -82,3 +82,30 @@ export function moveTabToNewPaneColumn(args: {
   }
   return moved
 }
+
+/** Moves a tab into another pane as dropping it there does: main draws it ('owner'), or this window
+ *  moves it and tells a paired host ('moved'); false when nothing moved. */
+export function moveTabToGroup(
+  args: { worktreeId: string; unifiedTabId: string; groupId: string; index?: number },
+  dropUnifiedTab = useAppStore.getState().dropUnifiedTab
+): 'owner' | 'moved' | false {
+  const { worktreeId, unifiedTabId, groupId, index } = args
+  const at = index === undefined ? {} : { index }
+  if (
+    ORCA_LAYOUT_OWNER_IS_MAIN &&
+    dropTabThroughLayoutOwner(worktreeId, { kind: 'move', tabId: unifiedTabId, groupId, ...at })
+  ) {
+    return 'owner'
+  }
+  if (!dropUnifiedTab(unifiedTabId, { groupId, ...at })) {
+    return false
+  }
+  mirrorWebRuntimeTabMove({
+    kind: 'move-to-group',
+    worktreeId,
+    tabId: unifiedTabId,
+    targetGroupId: groupId,
+    ...at
+  })
+  return 'moved'
+}
