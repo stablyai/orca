@@ -10,6 +10,7 @@ import {
 } from '../host-catalog/runtime-environments'
 import {
   getRuntimeEnvironmentSidecarPath,
+  MAX_SIDECAR_FILE_BYTES,
   overlayRuntimeEnvironmentSidecar,
   readRuntimeEnvironmentSidecar,
   RuntimeEnvironmentSidecarInvalidError
@@ -26,15 +27,13 @@ import {
 } from './runtime-environment-store-records'
 import {
   getWslHostDeploymentStorePath,
+  MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
   overlayWslHostDeployments,
   readWslHostDeployments,
   WslHostDeploymentStoreInvalidError
 } from './wsl-host-deployment-store'
 import { isWslHostsServing } from '../../wsl-host-internal-gate'
-import {
-  createFileSignatureCache,
-  noteEnvironmentRegistryWrite
-} from './runtime-environment-store-read-cache'
+import { createFileContentCache } from './runtime-environment-store-read-cache'
 
 /** Readable records only; writeEnvironmentStore preserves unreadable corrupt/newer records verbatim. */
 export function readPersistedEnvironmentStore(
@@ -79,7 +78,7 @@ type MergedEnvironmentStore = {
   environments: KnownRuntimeEnvironment[]
 }
 
-const mergedStoreCache = createFileSignatureCache<MergedEnvironmentStore>()
+const mergedStoreCache = createFileContentCache<MergedEnvironmentStore>()
 
 export function readEnvironmentStore(
   userDataPath: string,
@@ -90,10 +89,17 @@ export function readEnvironmentStore(
   }
   return mergedStoreCache.read(
     `${userDataPath}\0${isWslHostsServing(process.env)}`,
+    userDataPath,
     [
-      getEnvironmentStorePath(userDataPath),
-      getRuntimeEnvironmentSidecarPath(userDataPath),
-      getWslHostDeploymentStorePath(userDataPath)
+      {
+        path: getEnvironmentStorePath(userDataPath),
+        maxBytes: MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+      },
+      { path: getRuntimeEnvironmentSidecarPath(userDataPath), maxBytes: MAX_SIDECAR_FILE_BYTES },
+      {
+        path: getWslHostDeploymentStorePath(userDataPath),
+        maxBytes: MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES
+      }
     ],
     () => readEnvironmentStoreUncached(userDataPath, options)
   )
@@ -176,7 +182,6 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
   writeSecureFile(path, serialized, { durable: true })
-  noteEnvironmentRegistryWrite()
   environmentStoreWrites++
 }
 

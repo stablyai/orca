@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { noteEnvironmentRegistryWrite } from './runtime-environment-store-read-cache'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
@@ -20,7 +19,7 @@ import { hardenExistingSecureFile } from '../../secure-file'
 
 // Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
-const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
+export const MAX_SIDECAR_FILE_BYTES = 1024 * 1024
 
 const SidecarBindingSchema = z.object({
   createdAt: z.number().finite(),
@@ -254,7 +253,6 @@ export function writeRuntimeEnvironmentSidecarEntry(
     MAX_SIDECAR_FILE_BYTES,
     { durable: true }
   )
-  noteEnvironmentRegistryWrite()
 }
 
 /** The current sidecar entry for an environment, or none when absent or stale. Throws when unreadable. */

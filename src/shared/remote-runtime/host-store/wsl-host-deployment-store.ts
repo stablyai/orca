@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { noteEnvironmentRegistryWrite } from './runtime-environment-store-read-cache'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
@@ -16,7 +15,7 @@ import { OrcadWslDeploymentLinkSchema } from '../host-catalog/wsl-host-deploymen
 
 // Isolate WSL records so older builds cannot reject the entire pairing store.
 const WSL_HOST_DEPLOYMENTS_FILE = 'orca-wsl-host-deployments.json'
-const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
+export const MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES = 256 * 1024
 
 /** A managed orcad in a WSL distro. The environment's name is its label; runtime state lives elsewhere. */
 /** A Remove that could not prove the host's server stopped (E11); the host stays until one does. */
@@ -170,7 +169,6 @@ export function writeWslHostDeployment(
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
     { durable: true }
   )
-  noteEnvironmentRegistryWrite()
 }
 
 export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {
