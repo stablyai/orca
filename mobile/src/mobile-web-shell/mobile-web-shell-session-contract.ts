@@ -99,7 +99,8 @@ export type MobileWebShellSessionEffect =
       readonly totalBytes: number
     }
   | { readonly kind: 'delete-cache' }
-  | { readonly kind: 'remount' }
+  // A reclaimed renderer reloaded off screen would only be reclaimed again, so it waits for the foreground.
+  | { readonly kind: 'remount'; readonly inForeground?: true }
   // Stamp expiry with its flow; arming either deadline replaces the armed one, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
   // A refused/uncommitted local load may report nothing; only the deadline can end it.

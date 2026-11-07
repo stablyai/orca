@@ -35,7 +35,7 @@ export function reduceShellFailed(
     case 'render-process-gone':
       // Only a loss the page could have caused spends the budget; background jetsam would otherwise wall on return.
       if (reclaimed) {
-        return step(session, {}, [{ kind: 'remount' }])
+        return step(session, {}, [{ kind: 'remount', inForeground: true }])
       }
       return session.remountedOnce
         ? step(session, { state: failedState(session, reason) })
