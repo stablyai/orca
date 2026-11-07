@@ -129,6 +129,7 @@ export function browserUnavailableError(): BrowserError {
   )
 }
 
+/** Requires an available desktop extension provider; headless and remote browser providers are unsupported. */
 export function getRuntimeBrowserExtensions(): NonNullable<
   RuntimeBrowserCommandsFactoryOptions['extensions']
 > {

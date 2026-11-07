@@ -58,6 +58,7 @@ async function settle(action: () => Promise<void>): Promise<BrowserExtensionActi
   }
 }
 
+/** Lists host-installed extensions with enablement and load status for the requested browser profile. */
 export async function listBrowserExtensionsForProfile(
   browserProfileId: string
 ): Promise<BrowserExtensionListResult> {

@@ -14,6 +14,7 @@ import {
   reloadUnpackedBrowserExtension
 } from './browser-extension-management'
 
+/** Defaults to the shared browser profile and rejects unknown profiles before any manager action. */
 function requireProfile({ profileId = 'default' }: BrowserExtensionListParams): string {
   if (!browserSessionRegistry.getProfile(profileId)) {
     throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
@@ -25,6 +26,7 @@ export const desktopBrowserExtensions = {
   async list(params: BrowserExtensionListParams) {
     return listBrowserExtensionsForProfile(requireProfile(params))
   },
+  /** Selects one installed unpacked extension by ID or canonical source folder, then reloads every enabled profile. */
   async reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult> {
     requireProfile(params)
     if ((params.extensionId === undefined) === (params.path === undefined)) {
