@@ -30,6 +30,7 @@ export function ModelPill({
   secondary,
   warning,
   icon: Icon,
+  leading,
   accessibleName,
   disabled,
   onPress
@@ -38,12 +39,14 @@ export function ModelPill({
   secondary: string | null
   warning: boolean
   icon?: LucideIcon
+  /** Shown before the label, unlike `icon`, which replaces it. */
+  leading?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
+  const PillIcon = Icon ?? leading ?? (warning ? ShieldAlert : undefined)
   return (
     <Pressable
       accessibilityLabel={accessibleName}
@@ -57,7 +60,13 @@ export function ModelPill({
       {PillIcon ? (
         <PillIcon
           size={15}
-          color={warning ? colors.statusAmber : disabled ? colors.textMuted : colors.textSecondary}
+          color={
+            warning && PillIcon !== leading
+              ? colors.statusAmber
+              : disabled
+                ? colors.textMuted
+                : colors.textSecondary
+          }
           strokeWidth={2.2}
         />
       ) : null}
