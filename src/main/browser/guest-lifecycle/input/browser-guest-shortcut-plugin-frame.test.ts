@@ -103,6 +103,19 @@ describe('Orca shortcuts while a plugin guest has focus', () => {
     expect(consumed).toHaveBeenCalled()
   })
 
+  it.each([false, true])(
+    'consumes held sidebar chord repeats without retoggling (browserPage=%s)',
+    (browserPage) => {
+      const { send, press } = pluginGuestHarness(browserPage)
+      press(keyDown('b', 'KeyB'))
+      expect(send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
+      send.mockClear()
+      const consumed = press({ ...keyDown('b', 'KeyB'), isAutoRepeat: true })
+      expect(consumed).toHaveBeenCalled()
+      expect(send).not.toHaveBeenCalled()
+    }
+  )
+
   it('leaves keys without an Orca chord with the guest', () => {
     const { send, press } = pluginGuestHarness()
     const bare = { ...keyDown('q', 'KeyQ'), meta: false, control: false }
