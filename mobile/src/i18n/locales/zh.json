@@ -1469,7 +1469,8 @@
       "microphonePermissionDenied": "麦克风权限被拒绝",
       "noSpeech": "未检测到语音。",
       "phoneUnavailable": "此手机上的听写尚未就绪。请在语音设置中下载，或选择“自动”。",
-      "phoneFailed": "此手机上的听写已停止工作。请重试。"
+      "phoneFailed": "此手机上的听写已停止工作。请重试。",
+      "phoneBusy": "此手机上的听写仍在启动。请稍后再试。"
     }
   },
   "host": {
@@ -2834,8 +2835,10 @@
       "phoneReady": "已可在此手机上使用",
       "phoneNeedsDownload": "需要下载语言",
       "phoneDownloading": "正在下载… {{progress}}%",
-      "phoneUnsupported": "不支持此手机的语言",
-      "download": "下载到此手机"
+      "phoneUnsupported": "此手机不支持",
+      "download": "下载到此手机",
+      "downloadSize": "约 {{size}} MB",
+      "phoneChecking": "正在检查…"
     }
   },
   "sourceControl": {

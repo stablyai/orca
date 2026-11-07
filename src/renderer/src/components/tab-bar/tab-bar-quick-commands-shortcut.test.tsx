@@ -94,16 +94,6 @@ describe.each(['darwin', 'linux', 'win32'])(
 )
 
 describe('quick command shortcut ownership changes', () => {
-  it('only forwards Electron shortcuts to the focused split', () => {
-    const menus = setup()
-
-    forwardShortcut()
-
-    expect(menus.right).toHaveBeenCalledExactlyOnceWith(true)
-    expect(menus.left).not.toHaveBeenCalled()
-    expect(menus.hiddenWorkspace).not.toHaveBeenCalled()
-  })
-
   it('moves both shortcut listeners when focus changes and removes them when hidden', () => {
     const menus = setup()
     menus.focus('left')

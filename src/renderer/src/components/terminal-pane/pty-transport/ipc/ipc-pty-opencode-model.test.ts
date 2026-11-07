@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions } from '../pty-transport-types'
 
-vi.mock('../../../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('../../../../runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 const spawn = vi.fn(async () => ({ id: 'pty_host', isReattach: true }))
 const options = (): IpcPtyTransportOptions => ({
   worktreeId: 'folder:private',

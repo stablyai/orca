@@ -48,6 +48,8 @@ export type DeviceEntry = {
   exchangeToken?: string
   // First sign-in with a ticket; exchange is offered only shortly after it.
   ticketFirstSeenAt?: number
+  // A plain-http browser re-registers a session-only key from this link on each page load.
+  servesSessionBrowsers?: true
 }
 
 export type TokenDeviceEntry = DeviceEntry & { token: string }

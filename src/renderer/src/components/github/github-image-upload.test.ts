@@ -2,8 +2,10 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { captureGitHubImageUpload } from './github-image-upload'
 const { rpc, revision } = vi.hoisted(() => ({ rpc: vi.fn(), revision: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc }))
-vi.mock('@/runtime/runtime-environment-revision', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: rpc
+}))
+vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
   getRuntimeEnvironmentRevision: revision
 }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => false }))

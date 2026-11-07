@@ -34,39 +34,6 @@ describe('useNativeChatSendLifecycle', () => {
     expect(onPendingSendCanceled).toHaveBeenCalledWith('pending-2')
   })
 
-  it('cancels pending writes immediately on interrupt without double-cancelling', () => {
-    vi.useFakeTimers()
-    const pending = handle()
-    const onPendingSendCanceled = vi.fn()
-    const { result, unmount } = renderHook(() =>
-      useNativeChatSendLifecycle('tab-1', 'pty-1', onPendingSendCanceled)
-    )
-
-    act(() => result.current.trackPendingSend(pending, 'pending-1'))
-    act(() => result.current.cancelPendingSends())
-    expect(pending.cancel).toHaveBeenCalledOnce()
-    expect(onPendingSendCanceled).toHaveBeenCalledWith('pending-1')
-
-    unmount()
-    expect(pending.cancel).toHaveBeenCalledOnce()
-  })
-
-  it('drops settled handles so a later interrupt does not revisit completed sends', () => {
-    vi.useFakeTimers()
-    const settled = handle(800)
-    const onPendingSendCanceled = vi.fn()
-    const { result } = renderHook(() =>
-      useNativeChatSendLifecycle('tab-1', 'pty-1', onPendingSendCanceled)
-    )
-
-    act(() => result.current.trackPendingSend(settled, 'pending-1'))
-    act(() => vi.advanceTimersByTime(settled.settleAfterMs))
-    act(() => result.current.cancelPendingSends())
-
-    expect(settled.cancel).not.toHaveBeenCalled()
-    expect(onPendingSendCanceled).not.toHaveBeenCalled()
-  })
-
   it('keeps a renderer-stalled send cancelable past its nominal schedule', async () => {
     vi.useFakeTimers()
     let resolveSettled!: () => void

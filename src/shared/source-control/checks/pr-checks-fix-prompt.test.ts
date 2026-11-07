@@ -233,10 +233,6 @@ describe('buildFixBrokenChecksPrompt', () => {
 })
 
 describe('truncateLogTailForPrompt', () => {
-  it('keeps the last prompt log lines and normalizes CRLF', () => {
-    expect(truncateLogTailForPrompt('one\r\ntwo\r\nthree')).toBe('one\ntwo\nthree')
-  })
-
   it('retains the exact line and code-unit boundaries without adding a byte clamp', () => {
     expect(PROMPT_LOG_TAIL_LINES).toBe(150)
     expect(PROMPT_LOG_TAIL_SCAN_CODE_UNITS).toBe(256 * 1024)

@@ -40,7 +40,7 @@ import {
   getVisibleWorktreeTerminalActivityTabs,
   getWorktreeIdsWithStructuredChat
 } from './visible-worktree-activity-inputs'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 

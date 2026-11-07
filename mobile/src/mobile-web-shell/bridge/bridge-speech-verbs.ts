@@ -4,7 +4,8 @@ import * as z from 'zod'
 // One verb with an action keeps the session route within the grant ceiling. The page polls read on its audio drain tick because the bridge has no push lane.
 export const BRIDGE_SPEECH_VERB = 'native.speech.act'
 
-export const BRIDGE_SPEECH_STATUSES = ['ready', 'needs-download', 'unsupported'] as const
+// busy: the phone's speech service didn't answer this time; use the computer (or say so) and ask again next dictation.
+export const BRIDGE_SPEECH_STATUSES = ['ready', 'needs-download', 'busy', 'unsupported'] as const
 
 export type BridgeSpeechStatus = (typeof BRIDGE_SPEECH_STATUSES)[number]
 

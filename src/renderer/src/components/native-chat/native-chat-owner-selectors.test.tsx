@@ -8,9 +8,9 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createNativeChatFileLinkContextSelector,
   resolveNativeChatFileLinkContext
-} from './native-chat-file-link'
+} from './links/actions/native-chat-file-link-context'
 import { useNativeChatTabOwnerWorktreeId } from './use-native-chat-tab-owner'
-import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-file-link-context'
 import { useAppStore } from '@/store'
 
 type ContextState = Parameters<typeof resolveNativeChatFileLinkContext>[0]

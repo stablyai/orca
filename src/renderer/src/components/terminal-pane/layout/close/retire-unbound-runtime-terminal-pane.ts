@@ -3,7 +3,7 @@ import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime
 import {
   buildTerminalTabRetirementPlan,
   getTerminalPtyOwnershipIdentity
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import { startTerminalTabProviderRetirement } from '@/store/terminals/terminal-tab-close-providers'
 import {
   terminalPaneHasOtherOwner,

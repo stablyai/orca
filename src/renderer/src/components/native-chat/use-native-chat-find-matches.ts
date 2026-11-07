@@ -220,15 +220,21 @@ export function useNativeChatFindMatches({
             Array.from(record.removedNodes).some((node) => holdsMatch(node, matchNodesRef.current))
         )
       if (now) {
-        frame ??= requestAnimationFrame(runSearch)
+        if (frame == null) {
+          frame = requestAnimationFrame(runSearch)
+        }
       } else {
-        timer ??= setTimeout(runSearch, TEXT_GROWTH_SEARCH_DELAY_MS)
+        if (timer == null) {
+          timer = setTimeout(runSearch, TEXT_GROWTH_SEARCH_DELAY_MS)
+        }
       }
     })
     // A disclosure opens with a height animation (not a mutation): what it cut off at first shows at its end.
     const onAnimationEnd = (event: Event): void => {
       if (event.target instanceof Node && column?.contains(event.target)) {
-        frame ??= requestAnimationFrame(runSearch)
+        if (frame == null) {
+          frame = requestAnimationFrame(runSearch)
+        }
       }
     }
     root.addEventListener('animationend', onAnimationEnd)

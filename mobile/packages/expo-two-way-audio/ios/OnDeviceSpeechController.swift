@@ -16,6 +16,8 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     private var finishing: OnDeviceSpeechSession?
     // Bumped whenever the live session changes so a stale session's events and start result are dropped.
     private var generation = 0
+    // Rises across sessions too, per the contract, so a reader can drop a previous session's late text.
+    private var revision = 0
     private let emit: @Sendable (String, [String: Any]) -> Void
 
     init(emit: @escaping @Sendable (String, [String: Any]) -> Void) {
@@ -62,10 +64,8 @@ final class OnDeviceSpeechController: @unchecked Sendable {
             let session = OnDeviceSpeechSession(
                 locale: identifier,
                 inputFormat: format,
-                onText: { [weak self] revision, committed, tentative in
-                    self?.emitIfCurrent(
-                        mine, ON_SPEECH_TEXT_EVENT_NAME,
-                        ["revision": revision, "committed": committed, "tentative": tentative])
+                onText: { [weak self] committed, tentative in
+                    self?.emitTextIfCurrent(mine, committed: committed, tentative: tentative)
                 },
                 onFailure: { [weak self] error in
                     self?.fail(mine, error)
@@ -131,11 +131,11 @@ final class OnDeviceSpeechController: @unchecked Sendable {
     }
 
     // Emits under the lock (sendEvent only schedules) so a cancel or start can't slip in after the check.
-    private func emitIfCurrent(_ generation: Int, _ name: String, _ body: [String: Any]) {
+    private func emitTextIfCurrent(_ generation: Int, committed: String, tentative: String) {
         lock.withLock {
-            if self.generation == generation {
-                emit(name, body)
-            }
+            guard self.generation == generation else { return }
+            revision += 1
+            emit(ON_SPEECH_TEXT_EVENT_NAME, ["revision": revision, "committed": committed, "tentative": tentative])
         }
     }
 

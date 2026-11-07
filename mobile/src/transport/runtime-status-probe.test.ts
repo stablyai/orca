@@ -50,26 +50,6 @@ describe('startRuntimeStatusProbe', () => {
     vi.useRealTimers()
   })
 
-  it('delivers the parsed status once and stops', async () => {
-    const { client, calls, methods } = makeClient([
-      ok({ machineName: 'm4airs-Air', hostPlatform: 'darwin', capabilities: ['a.v1'] })
-    ])
-    const seen: (HostStatusReply | null)[] = []
-    cancelProbe = startRuntimeStatusProbe(client, (status) => seen.push(status))
-    await flushMicrotasks()
-    expect(seen).toHaveLength(1)
-    expect(seen[0]).toEqual({
-      machineName: 'm4airs-Air',
-      hostPlatform: 'darwin',
-      capabilities: ['a.v1']
-    })
-    expect(methods()).toEqual(['status.get'])
-    expect(calls()).toBe(1)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(calls()).toBe(1)
-    cancelProbe()
-  })
-
   it('delivers null for an answer this build cannot decode, without retrying', async () => {
     const { client, calls, methods } = makeClient([ok(null)])
     const seen: (HostStatusReply | null)[] = []

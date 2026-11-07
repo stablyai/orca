@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 

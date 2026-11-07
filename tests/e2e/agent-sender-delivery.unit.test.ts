@@ -32,7 +32,7 @@ import {
   initialStore,
   resetSenderStore
 } from '@/components/native-chat/native-chat-agent-sender.test-fixture'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')

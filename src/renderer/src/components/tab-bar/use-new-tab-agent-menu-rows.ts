@@ -3,7 +3,7 @@ import {
   useAppStateView,
   useAppStateViewActive,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
@@ -25,7 +25,7 @@ import {
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
 } from '@/runtime/host-structured-agents'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -35,7 +35,7 @@ import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'

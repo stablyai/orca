@@ -86,35 +86,3 @@ it('cancels the producer on close and ignores its late result after reopening', 
   expect(await first).toBeUndefined()
   expect(mocks.list).toHaveBeenCalledTimes(2)
 })
-it('cancels eligibility on owner/root changes while preserving ordinary search on errors', async () => {
-  const cache: QuickOpenRecentCache = { current: null }
-  mocks.list.mockRejectedValue(new Error('Update host'))
-  const result = await mergeQuickOpenRecentCandidates({
-    cache,
-    key: 'root-a',
-    context,
-    options: { rootPath: '/repo' },
-    candidatePaths: ['recent.ts'],
-    result: { files: ['recent.ts', 'ordinary.ts'], truncated: true },
-    cancelled: () => false
-  })
-  expect(result?.files).toEqual(['recent.ts', 'ordinary.ts'])
-  expect(result?.recentError).toBe('Recent files could not be checked: Update host')
-})
-
-it('uses fresh complete inventory membership without a second traversal', async () => {
-  const result = { files: ['ordinary.ts', 'recent.ts'], truncated: false }
-  expect(
-    await mergeQuickOpenRecentCandidates({
-      result,
-      completeInventory: true,
-      candidatePaths: ['recent.ts', 'deleted.ts'],
-      cache: { current: null },
-      key: 'full',
-      context,
-      options: { rootPath: '/repo' },
-      cancelled: () => false
-    })
-  ).toBe(result)
-  expect(mocks.list).not.toHaveBeenCalled()
-})

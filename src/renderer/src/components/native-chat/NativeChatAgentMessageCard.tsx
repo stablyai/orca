@@ -16,15 +16,15 @@ import {
 import { agentMessageTranscriptText } from '../../../../shared/agent-session/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from './NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
-import { useNativeChatVisualOwner } from './native-chat-visual-owner'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatExpandable } from './NativeChatExpandable'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { NativeChatTextAttachments } from './NativeChatTextAttachments'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
+import { NativeChatTextAttachments } from './media/text/NativeChatTextAttachments'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
-import { NativeChatImageAttachments } from './NativeChatTranscriptChrome'
+import { NativeChatImageAttachments } from './media/images/NativeChatImageAttachments'
 
 function heading(from: AgentMessageSource, message: NativeChatMessage): string {
   switch (agentMessageHeading(from, message)) {

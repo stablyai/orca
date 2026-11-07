@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 

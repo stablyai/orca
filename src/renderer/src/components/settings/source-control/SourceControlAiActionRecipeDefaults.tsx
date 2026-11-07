@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Label } from '../../ui/label'
 import { useAppStore } from '@/store/index'
-import { useRepos } from '@/store/selectors'
+import { useRepos } from '@/store/repos/use-repository-catalog'
 import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary

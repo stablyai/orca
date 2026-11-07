@@ -1,5 +1,5 @@
 import { useSourceControlScope } from '../panel/worktree-scope'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   captureSourceControlActionSelection,

@@ -11,7 +11,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-path'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
@@ -20,7 +21,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
 import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function DeleteNestedWorktreesDialog({
   target,
@@ -42,7 +43,7 @@ export function DeleteNestedWorktreesDialog({
   // Nested worktrees must share the parent’s host and lie inside its folder.
   const unsavedTargets = useMemo(() => {
     const hostId = target.executionHostId ?? undefined
-    const rows = worktreesByRepo ? getAllWorktreesFromState({ worktreesByRepo }) : []
+    const rows = worktreesByRepo ? getIndexedAllWorktrees(worktreesByRepo) : []
     const parent = rows.find((row) => row.id === target.id && (!hostId || row.hostId === hostId))
     return parent
       ? rows

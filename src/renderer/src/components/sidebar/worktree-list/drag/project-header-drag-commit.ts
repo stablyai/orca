@@ -8,7 +8,7 @@ import {
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { isSameRepoRow } from '@/store/slices/repo-host-identity'
+import { isSameRepoRow } from '@/store/repos/repo-host-identity'
 
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession

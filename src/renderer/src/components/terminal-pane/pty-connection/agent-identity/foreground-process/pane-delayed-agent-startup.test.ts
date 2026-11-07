@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())

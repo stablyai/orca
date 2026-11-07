@@ -14,9 +14,9 @@ import {
   leaf
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
-import type { LayoutFrameSlices } from '../store/workspace-layout-frame-slices'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import type { LayoutFrameSlices } from '../store/workspace-layout/frames/workspace-layout-frame-slices'
 import { endLayoutFramePositions } from './layout-frame-position'
 import { holdTabPaneTree } from './layout-owner-pane-intents'
 import { holdDrawnTabs } from './layout-owner-drawn-tab-holds'

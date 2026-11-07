@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { createNativeChatTabOwnerSelector } from './native-chat-file-link'
+import { createNativeChatTabOwnerSelector } from './pane/ownership/native-chat-tab-owner'
 
 /** Owning workspace of a chat tab; launch identity must not wait on its directory resolving. */
 export function useNativeChatTabOwnerWorktreeId(tabId: string): string | null {

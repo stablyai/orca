@@ -9,14 +9,14 @@ import {
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { StructuredAgentSessionCreateRefusalError } from './launch/structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionLaunchFailure,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
 } from './launch/structured-agent-session-launch-registry'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
+import { structuredSessionNotices } from '../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 import type { AgentTerminalLaunchCompletion } from './launch/structured-agent-session-launch-admission'
 import {
   addNativeChatPendingAttachment,
@@ -34,9 +34,9 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

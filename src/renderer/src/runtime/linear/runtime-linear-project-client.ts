@@ -14,7 +14,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../../../shared/linear/workspace-types'
 import { isRuntimeProviderSearchQueryWithinLimit } from '../runtime-provider-search-bounds'
-import { callRuntimeRpc } from '../runtime-rpc-client'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import {
   getLinearRuntimeTarget,
   linearReadForce,

@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { appliedWorktreeCatalogVersionPatch } from '../listing/worktree-catalog-version-state'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'

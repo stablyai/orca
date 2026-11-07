@@ -11,7 +11,7 @@ import {
   NativeChatCardHideButton,
   NATIVE_CHAT_HIDEABLE_CARD_CLASS
 } from './NativeChatCardHideButton'
-import { useNativeChatLinkClick } from './native-chat-link-click-context'
+import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 
 function LineLink({ href, children }: { href: string; children: string }): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()

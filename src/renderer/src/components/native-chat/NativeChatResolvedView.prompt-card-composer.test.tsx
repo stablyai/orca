@@ -1,3 +1,4 @@
+import type * as RuntimeTerminalInputSendModule from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
@@ -7,16 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { AgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
 } from './native-chat-composer-types'
-import type * as RuntimeTerminalInspectionModule from '@/runtime/runtime-terminal-inspection'
-import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
-import { clearPendingSendCacheForTests } from './native-chat-pending'
 
-type RuntimeTerminalInspection = typeof RuntimeTerminalInspectionModule
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
+import { clearPendingSendCacheForTests } from './session/terminal/delivery/native-chat-pending'
 
 const MESSAGE = 'please also run lint'
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
@@ -25,14 +24,14 @@ const pty = vi.hoisted(() => ({
   verified: vi.fn<(id: string, data: string) => Promise<boolean>>(),
   raw: vi.fn<(id: string, data: string) => boolean>()
 }))
-vi.mock('./use-native-chat-retained-session', () => ({
+vi.mock('./session/terminal/read/use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', async (importOriginal) => ({
-  ...(await importOriginal<RuntimeTerminalInspection>()),
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeTerminalInputSendModule>()),
   sendRuntimePtyInput: pty.raw
 }))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: pty.verified
 }))
 // Stub only the field; retain the production send lifecycle, queue and observed writes.
@@ -100,7 +99,7 @@ const { useAppStore } = await import('../../store/index')
 const { installNativeChatMessageListTestViewport } =
   await import('./native-chat-message-list-test-viewport')
 const { resetNativeChatPtySendQueuesForTests } = await import('./native-chat-runtime-send')
-const { nativeChatPromptDismissals } = await import('./native-chat-prompt-dismissals')
+const { nativeChatPromptDismissals } = await import('./prompts/native-chat-prompt-dismissals')
 
 const paneKey = 'tab-hidden:leaf-hidden'
 const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'npm test' } })

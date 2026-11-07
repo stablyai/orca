@@ -6,7 +6,7 @@ import type {
   TabGroup,
   WorkspaceVisibleTabType
 } from '../../../../../../shared/tab-types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

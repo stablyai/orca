@@ -6,7 +6,9 @@ import {
 import { AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 
 const { call } = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: call }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: call
+}))
 afterEach(() => {
   call.mockReset()
   vi.useRealTimers()

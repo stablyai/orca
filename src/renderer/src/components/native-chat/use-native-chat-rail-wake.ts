@@ -17,12 +17,15 @@ export function useNativeChatRailWake(): {
 } {
   const railRef = useRef<HTMLDivElement | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastWake = useRef(0)
-  const lastInput = useRef(0)
+  /** When the rail may go dark again. */
+  const sleepAt = useRef(0)
+  /** Scroll events before this still belong to the reader's last input. */
+  const sustainUntil = useRef(0)
 
   const wake = useCallback(() => {
-    lastWake.current = performance.now()
-    lastInput.current = lastWake.current
+    const now = performance.now()
+    sleepAt.current = now + NATIVE_CHAT_RAIL_WAKE_MS
+    sustainUntil.current = now + NATIVE_CHAT_RAIL_SUSTAIN_MS
     const rail = railRef.current
     // Why: a gesture fires wheel events every frame; write the DOM and arm a timer once per gesture.
     if (rail && !('awake' in rail.dataset)) {
@@ -32,7 +35,7 @@ export function useNativeChatRailWake(): {
       return
     }
     const settle = (): void => {
-      const remaining = lastWake.current + NATIVE_CHAT_RAIL_WAKE_MS - performance.now()
+      const remaining = sleepAt.current - performance.now()
       if (remaining > 0) {
         timer.current = setTimeout(settle, remaining)
         return
@@ -46,9 +49,13 @@ export function useNativeChatRailWake(): {
   }, [])
 
   const sustain = useCallback(() => {
+    // Why: most scroll events (streaming, auto-follow) arrive with no wake pending; skip the clock read.
+    if (timer.current === null) {
+      return
+    }
     const now = performance.now()
-    if (timer.current !== null && now - lastInput.current < NATIVE_CHAT_RAIL_SUSTAIN_MS) {
-      lastWake.current = now
+    if (now < sustainUntil.current) {
+      sleepAt.current = now + NATIVE_CHAT_RAIL_WAKE_MS
     }
   }, [])
 

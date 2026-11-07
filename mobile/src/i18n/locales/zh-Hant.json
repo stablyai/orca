@@ -1469,7 +1469,8 @@
       "microphonePermissionDenied": "麥克風權限遭拒",
       "noSpeech": "未偵測到語音。",
       "phoneUnavailable": "此手機上的聽寫尚未就緒。請在語音設定中下載，或選擇「自動」。",
-      "phoneFailed": "此手機上的聽寫已停止運作。請再試一次。"
+      "phoneFailed": "此手機上的聽寫已停止運作。請再試一次。",
+      "phoneBusy": "此手機上的聽寫仍在啟動。請稍後再試。"
     }
   },
   "host": {
@@ -2834,8 +2835,10 @@
       "phoneReady": "已可在此手機上使用",
       "phoneNeedsDownload": "需要下載語言",
       "phoneDownloading": "正在下載… {{progress}}%",
-      "phoneUnsupported": "不支援此手機的語言",
-      "download": "下載到此手機"
+      "phoneUnsupported": "此手機不支援",
+      "download": "下載到此手機",
+      "downloadSize": "約 {{size}} MB",
+      "phoneChecking": "正在檢查…"
     }
   },
   "sourceControl": {

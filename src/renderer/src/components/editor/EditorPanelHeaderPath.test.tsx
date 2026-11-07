@@ -8,7 +8,7 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 

@@ -1,5 +1,5 @@
-import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
-import { useNativeChatSessionOptions } from './use-native-chat-session-options'
+import { useNativeChatSessionOptionCommand } from './session/options/terminal/use-native-chat-session-option-command'
+import { useNativeChatSessionOptions } from './session/options/terminal/use-native-chat-session-options'
 import type { NativeChatComposerProps } from './native-chat-composer-types'
 import type {
   SessionOptionDescriptor,

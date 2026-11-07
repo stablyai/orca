@@ -1,4 +1,4 @@
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import { clearWebSessionCloseIntentsForOwner } from '../web-session-close-intent'
 import { clearWebSessionFocusIntentsForOwner } from '../web-session-focus-intent'
 import { clearWebSessionReorderIntentsForOwner } from '../web-session-reorder-intent'
@@ -6,7 +6,7 @@ import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionSpec
-} from '../window-visibility-subscription-parking'
+} from '../rpc/subscriptions/window-visibility-subscription-parking'
 import { shouldSyncAllRuntimeSessionTabs } from './tracking-decisions'
 import {
   getWebSessionTabsTrackingGeneration,
@@ -21,7 +21,7 @@ import type {
   SessionTabsSnapshotHandler
 } from './visibility-resume-types'
 import { isSessionTabsStreamEnd, WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './state'
-import { subscribeRuntimeEnvironment } from '../runtime-environment-pairing-refresh'
+import { subscribeRuntimeEnvironment } from '../rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 type Ref<T> = { current: T }
 

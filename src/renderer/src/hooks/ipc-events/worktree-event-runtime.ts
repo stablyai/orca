@@ -34,7 +34,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 

@@ -1512,7 +1512,8 @@
       "microphonePermissionDenied": "Accès au microphone refusé",
       "noSpeech": "Aucune parole détectée.",
       "phoneUnavailable": "La dictée sur ce téléphone n’est pas prête. Téléchargez-la dans les réglages Voix ou choisissez Automatique.",
-      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez."
+      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez.",
+      "phoneBusy": "La dictée sur ce téléphone démarre encore. Réessayez dans un instant."
     }
   },
   "host": {
@@ -2910,8 +2911,10 @@
       "phoneReady": "Prêt sur ce téléphone",
       "phoneNeedsDownload": "Téléchargement de la langue requis",
       "phoneDownloading": "Téléchargement… {{progress}} %",
-      "phoneUnsupported": "Indisponible pour la langue de ce téléphone",
-      "download": "Télécharger pour ce téléphone"
+      "phoneUnsupported": "Indisponible sur ce téléphone",
+      "download": "Télécharger pour ce téléphone",
+      "downloadSize": "Environ {{size}} Mo",
+      "phoneChecking": "Vérification…"
     }
   },
   "sourceControl": {

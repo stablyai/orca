@@ -64,7 +64,7 @@ const detailTransport = vi.hoisted(() => {
     AuthError: class AuthenticationLinearError extends Error {}
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   callRuntimeRpc: (...args: unknown[]) => detailTransport.rpc(...args)
 }))
@@ -136,7 +136,7 @@ vi.mock('../../src/main/linear/linear-token-store', () => ({
   getWorkspaceTokenProtection: () => null
 }))
 const events = vi.hoisted(() => ({ emit: (_event: RuntimeClientEvent) => {} }))
-vi.mock('@/runtime/runtime-client-events', () => ({
+vi.mock('@/runtime/rpc/subscriptions/runtime-client-events', () => ({
   subscribeRuntimeClientEvents: async (
     _id: string,
     onEvent: (event: RuntimeClientEvent) => void

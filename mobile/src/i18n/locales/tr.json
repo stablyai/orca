@@ -1473,7 +1473,8 @@
       "microphonePermissionDenied": "Mikrofon izni reddedildi",
       "noSpeech": "Konuşma algılanmadı.",
       "phoneUnavailable": "Bu telefonda dikte hazır değil. Ses ayarlarından indirin veya Otomatik’i seçin.",
-      "phoneFailed": "Bu telefonda dikte çalışmayı durdurdu. Tekrar deneyin."
+      "phoneFailed": "Bu telefonda dikte çalışmayı durdurdu. Tekrar deneyin.",
+      "phoneBusy": "Bu telefonda dikte hâlâ başlatılıyor. Birazdan tekrar deneyin."
     }
   },
   "host": {
@@ -2838,8 +2839,10 @@
       "phoneReady": "Bu telefonda hazır",
       "phoneNeedsDownload": "Dil indirmesi gerekiyor",
       "phoneDownloading": "İndiriliyor… %{{progress}}",
-      "phoneUnsupported": "Bu telefonun dilinde kullanılamıyor",
-      "download": "Bu telefona indir"
+      "phoneUnsupported": "Bu telefonda kullanılamıyor",
+      "download": "Bu telefona indir",
+      "downloadSize": "Yaklaşık {{size}} MB",
+      "phoneChecking": "Kontrol ediliyor…"
     }
   },
   "sourceControl": {

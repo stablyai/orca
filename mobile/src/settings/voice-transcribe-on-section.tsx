@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { Platform } from 'react-native'
 import {
   addExpoTwoWayAudioEventListener,
   hasNativeSpeech,
@@ -11,6 +12,7 @@ import type { Translate } from '../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { DictationEnginePreference } from '../mobile-web-shell/bridge/bridge-speech-verbs'
+import { isSpeechBusyError } from '../platform/native-speech'
 import { onDeviceSpeechLocale } from '../platform/on-device-speech-locale'
 import {
   DEFAULT_DICTATION_ENGINE_PREFERENCE,
@@ -21,13 +23,15 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 type PhoneSpeech =
-  | { status: SpeechAvailabilityStatus }
+  | { status: SpeechAvailabilityStatus | 'checking' }
   | { status: 'downloading'; progress: number }
 
 function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | undefined {
   switch (phone?.status) {
     case undefined:
       return undefined
+    case 'checking':
+      return t('settings.voiceTranscribeOn.phoneChecking', 'Checking…')
     case 'ready':
       return t('settings.voiceTranscribeOn.phoneReady', 'Ready on this phone')
     case 'needs-download':
@@ -37,12 +41,28 @@ function phoneStatusText(phone: PhoneSpeech | null, t: Translate): string | unde
         progress: Math.round(phone.progress * 100).toLocaleString(getUiIntlLocale())
       })
     case 'unsupported':
-      return t(
-        'settings.voiceTranscribeOn.phoneUnsupported',
-        'Not available for this phone’s language'
-      )
+      // Covers an unsupported language and a phone or OS that can't run the recognizer.
+      return t('settings.voiceTranscribeOn.phoneUnsupported', 'Not available on this phone')
   }
 }
+
+// Assets are only ever downloaded on this tap, so say the size first when we know it. The OS reports none up front;
+// these were measured for en-US only (iOS 456 MB, Android's system pack 63 MB), so other languages show no size.
+const PHONE_SPEECH_EN_DOWNLOAD_MB: Partial<Record<typeof Platform.OS, number>> = {
+  ios: 450,
+  android: 65
+}
+
+function downloadSizeText(t: Translate, locale: string): string | undefined {
+  const size = /^en(-|$)/i.test(locale) ? PHONE_SPEECH_EN_DOWNLOAD_MB[Platform.OS] : undefined
+  return size === undefined
+    ? undefined
+    : t('settings.voiceTranscribeOn.downloadSize', 'About {{size}} MB', {
+        size: size.toLocaleString(getUiIntlLocale())
+      })
+}
+
+const PHONE_SPEECH_RECHECK_MS = 3_000
 
 // A shell built before on-device speech has nothing to choose between.
 export function voiceTranscribeOnShown(): boolean {
@@ -61,10 +81,24 @@ export function VoiceTranscribeOnSection() {
   const downloadingRef = useRef(false)
   const supported = voiceTranscribeOnShown()
 
+  // A busy speech service shows as checking and is asked again while this screen is open; it is never read as unsupported.
   const readPhone = useCallback(async () => {
-    const available = await speechAvailability(onDeviceSpeechLocale()).catch(() => null)
-    setPhone(available === null ? { status: 'unsupported' } : { status: available.status })
+    try {
+      const available = await speechAvailability(onDeviceSpeechLocale())
+      setPhone({ status: available.status })
+    } catch (error) {
+      setPhone({ status: isSpeechBusyError(error) ? 'checking' : 'unsupported' })
+    }
   }, [])
+
+  // Keyed on the state object: each busy answer is a new one, so it schedules the next check.
+  useEffect(() => {
+    if (phone?.status !== 'checking') {
+      return
+    }
+    const recheck = setTimeout(() => void readPhone(), PHONE_SPEECH_RECHECK_MS)
+    return () => clearTimeout(recheck)
+  }, [phone, readPhone])
 
   useEffect(() => {
     if (!supported) {
@@ -89,6 +123,9 @@ export function VoiceTranscribeOnSection() {
     setPreference(next)
     void saveDictationEnginePreference(next).catch(() => {})
   }
+
+  const downloadTitle = t('settings.voiceTranscribeOn.download', 'Download for this phone')
+  const downloadSize = downloadSizeText(t, onDeviceSpeechLocale())
 
   const download = () => {
     if (downloadingRef.current) {
@@ -137,7 +174,10 @@ export function VoiceTranscribeOnSection() {
       {phone?.status === 'needs-download' || phone?.status === 'downloading' ? (
         <ListRow
           key="download"
-          title={t('settings.voiceTranscribeOn.download', 'Download for this phone')}
+          title={downloadTitle}
+          subtitle={downloadSize}
+          // The row's default label is its title alone; screen readers need the size before the tap too.
+          accessibilityLabel={downloadSize ? `${downloadTitle}, ${downloadSize}` : downloadTitle}
           busy={phone.status === 'downloading'}
           onPress={download}
         />

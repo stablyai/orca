@@ -1469,7 +1469,8 @@
       "microphonePermissionDenied": "マイクの使用が許可されていません",
       "noSpeech": "音声が検出されませんでした。",
       "phoneUnavailable": "この端末での音声入力は準備ができていません。音声設定でダウンロードするか、「自動」を選んでください。",
-      "phoneFailed": "この端末での音声入力が停止しました。もう一度お試しください。"
+      "phoneFailed": "この端末での音声入力が停止しました。もう一度お試しください。",
+      "phoneBusy": "この端末の音声入力はまだ起動中です。少し待ってからもう一度お試しください。"
     }
   },
   "host": {
@@ -2834,8 +2835,10 @@
       "phoneReady": "この端末で使用可能",
       "phoneNeedsDownload": "言語のダウンロードが必要",
       "phoneDownloading": "ダウンロード中… {{progress}}%",
-      "phoneUnsupported": "この端末の言語では使用できません",
-      "download": "この端末にダウンロード"
+      "phoneUnsupported": "この端末では使用できません",
+      "download": "この端末にダウンロード",
+      "downloadSize": "約 {{size}} MB",
+      "phoneChecking": "確認中…"
     }
   },
   "sourceControl": {
