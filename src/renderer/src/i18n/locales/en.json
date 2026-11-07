@@ -12415,7 +12415,8 @@
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
           "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
-          "installGitMoved": "The repository changed after Orca checked it. Try again."
+          "installGitMoved": "The repository changed after Orca checked it. Try again.",
+          "installReservedIdentity": "This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change \"id\" in orca-plugin.json so it doesn’t start with \"orca-\", and set \"publisher\" to your own name."
         },
         "plugins": {
           "search": {
