@@ -23821,6 +23821,17 @@
         "effortRepeated": "Extra arguments set the effort more than once."
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
+    },
+    "setupTrust": {
+      "reviewTitle": "Approve the new setup commands for this automation?",
+      "reviewBody": "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>.",
+      "approve": "Approve",
+      "approved": "Setup approved. Later runs of this automation will run it.",
+      "skippedSinceApproved": "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them.",
+      "skippedReview": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs.",
+      "reviewAction": "Review and approve setup",
+      "listSkipped": "Setup skipped",
+      "listSkippedTitle": "The last run skipped setup because its branch's orca.yaml setup commands changed. Review them from the actions menu."
     }
   },
   "codeHost": {

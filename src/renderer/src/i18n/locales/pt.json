@@ -23477,6 +23477,17 @@
         "effortRepeated": "Os argumentos extras definem o esforço mais de uma vez."
       },
       "hostUpdateRequired": "Atualize o Orca neste host para usar argumentos extras."
+    },
+    "setupTrust": {
+      "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",
+      "reviewBody": "Uma execução pulou a configuração porque os comandos de configuração no <code>orca.yaml</code> da branch mudaram. Ao aprovar, as próximas execuções usarão esses comandos. Aprove apenas se você confia em <repo/>.",
+      "approve": "Aprovar",
+      "approved": "Configuração aprovada. As próximas execuções desta automação vão executá-la.",
+      "skippedSinceApproved": "A configuração não foi executada nesta execução porque os comandos de configuração no orca.yaml da branch mudaram. Eles já foram aprovados, então as próximas execuções vão executá-los.",
+      "skippedReview": "A configuração não foi executada: a branch desta execução tem comandos de configuração no orca.yaml diferentes dos aprovados para esta automação. Revise-os para que as próximas execuções executem a configuração.",
+      "reviewAction": "Revisar e aprovar a configuração",
+      "listSkipped": "Configuração pulada",
+      "listSkippedTitle": "A última execução pulou a configuração porque os comandos de configuração no orca.yaml da branch mudaram. Revise-os no menu de ações."
     }
   },
   "codeHost": {

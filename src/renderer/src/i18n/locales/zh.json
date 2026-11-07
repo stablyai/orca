@@ -22814,6 +22814,17 @@
         "effortRepeated": "额外参数重复设置了推理强度。"
       },
       "hostUpdateRequired": "请更新此主机上的 Orca 以使用额外参数。"
+    },
+    "setupTrust": {
+      "reviewTitle": "要批准此自动化的新设置命令吗？",
+      "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",
+      "approve": "批准",
+      "approved": "已批准设置。此自动化之后的运行将执行它。",
+      "skippedSinceApproved": "由于分支的 orca.yaml 设置命令已更改，此次运行未执行设置。这些命令此后已获批准，之后的运行将执行它们。",
+      "skippedReview": "设置未运行：此次运行分支中的 orca.yaml 设置命令与此自动化已批准的命令不同。请审查它们，以便之后的运行执行设置。",
+      "reviewAction": "审查并批准设置",
+      "listSkipped": "已跳过设置",
+      "listSkippedTitle": "由于分支的 orca.yaml 设置命令已更改，上次运行跳过了设置。请从操作菜单中审查。"
     }
   },
   "codeHost": {

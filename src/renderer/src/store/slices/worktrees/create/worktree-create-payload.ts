@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import type {
@@ -27,6 +28,7 @@ export type CreateWorktreeCallOptions = {
   setupOnly?: boolean
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayNameKind?: CreateWorktreeArgs['displayNameKind']
@@ -82,9 +84,7 @@ function sharedCreateFields(
     ...(attempt.branchNameOverride ? { branchNameOverride: attempt.branchNameOverride } : {}),
     ...(request.branchIntent ? { branchIntent: request.branchIntent } : {}),
     setupDecision: request.setupDecision,
-    ...(options?.approvedSetupHash !== undefined
-      ? { approvedSetupHash: options.approvedSetupHash }
-      : {}),
+    ...(options ? pickApprovedSetupHashes(options) : {}),
     ...(options?.setupOnly !== undefined ? { setupOnly: options.setupOnly } : {}),
     sparseCheckout: request.sparseCheckout,
     ...(request.displayName ? { displayName: request.displayName } : {}),

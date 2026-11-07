@@ -1,3 +1,4 @@
+import { pickApprovedSetupHashes } from '../../../../shared/worktree/approved-setup-hashes'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
@@ -81,9 +82,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
-        ...(args.approvedSetupHash !== undefined
-          ? { approvedSetupHash: args.approvedSetupHash }
-          : {}),
+        ...pickApprovedSetupHashes(args),
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup

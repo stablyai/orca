@@ -1,5 +1,6 @@
 import type {
   Automation,
+  AutomationDispatchResult,
   AutomationRun,
   AutomationRunOutputSnapshot,
   AutomationRunSetupSkippedReason
@@ -20,6 +21,7 @@ export type AutomationLaunch = {
   /** Settles once a newly opened terminal's prompt is handed over, or with why it was not; never rejects. */
   delivery?: Promise<{ error: string | null }>
   setupSkippedReason?: AutomationRunSetupSkippedReason
+  setupSkippedContent?: AutomationDispatchResult['setupSkippedContent']
   completion?: Promise<
     {
       status: 'completed' | 'dispatch_failed'
