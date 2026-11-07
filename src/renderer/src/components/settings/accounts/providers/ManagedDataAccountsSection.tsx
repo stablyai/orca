@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
@@ -26,6 +26,7 @@ export function ManagedDataAccountsSection({
   provider: ManagedDataAccountProvider
   target: RuntimeClientTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const [state, setState] = useState<ManagedDataAccountsState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -89,11 +90,11 @@ export function ManagedDataAccountsSection({
     <section className="space-y-3">
       <h3 className="text-sm font-semibold">
         {provider === 'opencode'
-          ? translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode')
-          : translate('auto.lib.agent.catalog.fc80296033', 'Devin')}
+          ? t('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode')
+          : t('auto.lib.agent.catalog.fc80296033', 'Devin')}
       </h3>
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'accounts.managedData.description',
           'Add accounts by running this command in a terminal on the Orca host. Selection applies to new explicit agent launches on that host; direct SSH relay and Windows-hosted WSL launches use their own credentials.'
         )}
@@ -111,8 +112,8 @@ export function ManagedDataAccountsSection({
           }}
         >
           {copied
-            ? translate('accounts.managedData.copied', 'Copied')
-            : translate('accounts.managedData.add', 'Copy add account command')}
+            ? t('accounts.managedData.copied', 'Copied')
+            : t('accounts.managedData.add', 'Copy add account command')}
         </Button>
         <Button
           variant="ghost"
@@ -122,12 +123,12 @@ export function ManagedDataAccountsSection({
             void refresh()
           }}
         >
-          {translate('accounts.managedData.refresh', 'Refresh accounts')}
+          {t('accounts.managedData.refresh', 'Refresh accounts')}
         </Button>
       </div>
       {!state && !error && (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'accounts.managedData.upgrade',
             'If accounts do not appear, update or restart the Orca host.'
           )}
@@ -141,9 +142,7 @@ export function ManagedDataAccountsSection({
       {state && (
         <>
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs">
-              {translate('accounts.managedData.system', 'System default')}
-            </span>
+            <span className="text-xs">{t('accounts.managedData.system', 'System default')}</span>
             <Button
               variant="ghost"
               size="xs"
@@ -153,8 +152,8 @@ export function ManagedDataAccountsSection({
               }}
             >
               {state.activeAccountId === null
-                ? translate('accounts.managedData.active', 'Active')
-                : translate('accounts.managedData.select', 'Select')}
+                ? t('accounts.managedData.active', 'Active')
+                : t('accounts.managedData.select', 'Select')}
             </Button>
           </div>
           {state.accounts.map((account) => (
@@ -165,9 +164,7 @@ export function ManagedDataAccountsSection({
               </div>
               <div className="flex items-center gap-2">
                 {state.activeAccountId === account.id ? (
-                  <Badge variant="secondary">
-                    {translate('accounts.managedData.active', 'Active')}
-                  </Badge>
+                  <Badge variant="secondary">{t('accounts.managedData.active', 'Active')}</Badge>
                 ) : (
                   <Button
                     variant="ghost"
@@ -177,7 +174,7 @@ export function ManagedDataAccountsSection({
                       void mutate('select', account.id)
                     }}
                   >
-                    {translate('accounts.managedData.select', 'Select')}
+                    {t('accounts.managedData.select', 'Select')}
                   </Button>
                 )}
                 <Button
@@ -186,7 +183,7 @@ export function ManagedDataAccountsSection({
                   disabled={busy}
                   onClick={() => setRemoveId(account.id)}
                 >
-                  {translate('accounts.managedData.remove', 'Remove')}
+                  {t('accounts.managedData.remove', 'Remove')}
                 </Button>
               </div>
             </div>
@@ -204,10 +201,10 @@ export function ManagedDataAccountsSection({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {translate('accounts.managedData.removeTitle', 'Remove managed account?')}
+              {t('accounts.managedData.removeTitle', 'Remove managed account?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'accounts.managedData.removeDescription',
                 'Stop agents using this profile first. Removal deletes its saved credentials and conversation data. Your system login stays unchanged.'
               )}
@@ -215,7 +212,7 @@ export function ManagedDataAccountsSection({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveId(null)}>
-              {translate('accounts.managedData.cancel', 'Cancel')}
+              {t('accounts.managedData.cancel', 'Cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -227,7 +224,7 @@ export function ManagedDataAccountsSection({
                 }
               }}
             >
-              {translate('accounts.managedData.remove', 'Remove')}
+              {t('accounts.managedData.remove', 'Remove')}
             </Button>
           </DialogFooter>
         </DialogContent>

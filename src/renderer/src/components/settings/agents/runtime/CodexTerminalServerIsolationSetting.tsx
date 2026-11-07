@@ -13,6 +13,7 @@ import {
 } from './codex-terminal-server-isolation-copy'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CodexTerminalServerIsolationSettingProps = {
   settings: GlobalSettings
@@ -23,8 +24,9 @@ export function CodexTerminalServerIsolationSetting({
   settings,
   updateSettings
 }: CodexTerminalServerIsolationSettingProps): React.JSX.Element {
-  const title = getCodexTerminalServerIsolationTitle()
-  const description = getCodexTerminalServerIsolationDescription()
+  const t = useTranslate()
+  const title = getCodexTerminalServerIsolationTitle(t)
+  const description = getCodexTerminalServerIsolationDescription(t)
   const enabled = isCodexTerminalServerIsolationEnabled(settings)
   return (
     <section className="space-y-3">
@@ -32,7 +34,7 @@ export function CodexTerminalServerIsolationSetting({
         id={CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID}
         title={title}
         description={description}
-        keywords={getCodexTerminalServerIsolationSearchKeywords()}
+        keywords={getCodexTerminalServerIsolationSearchKeywords(t)}
       >
         <SettingsSwitchRow
           label={title}
@@ -43,8 +45,8 @@ export function CodexTerminalServerIsolationSetting({
         {/* With isolation off, sharing is intentional and needs no warning control. */}
         {enabled ? (
           <SettingsSwitchRow
-            label={getCodexSharedServerWarningTitle()}
-            description={getCodexSharedServerWarningDescription()}
+            label={getCodexSharedServerWarningTitle(t)}
+            description={getCodexSharedServerWarningDescription(t)}
             checked={isCodexSharedServerWarningEnabled(settings)}
             onChange={() =>
               void updateSettings({

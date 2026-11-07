@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
 import type { ZcodePlanCredentialsStatus } from '../../../../../../shared/zcode-plan-sites'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -20,6 +20,7 @@ export function useZcodePlanCredentials(
   updatedAt: number | undefined,
   owner: RuntimeClientTarget = LOCAL_OWNER
 ) {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<ZcodePlanCredentialsStatus | null>(null)
   const [access, setAccess] = useState<UsageCredentialAccess>(
@@ -86,7 +87,7 @@ export function useZcodePlanCredentials(
       recordFeatureInteraction('usage-tracking')
       if (action === 'save') {
         toast.success(
-          translate(
+          t(
             'auto.components.settings.ZcodePlanAccountsSection.keySaved',
             'GLM Coding Plan API key saved.'
           )
@@ -97,7 +98,7 @@ export function useZcodePlanCredentials(
         setAccess('outdated')
       }
       toast.error(
-        translate(
+        t(
           'auto.components.settings.ZcodePlanAccountsSection.keySaveFailed',
           'GLM Coding Plan credential update failed.'
         ),

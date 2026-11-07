@@ -60,7 +60,7 @@ import {
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -93,6 +93,7 @@ export function AgentLaunchSettingsCatalog({
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   }
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     detectedIds: detected,
     detectionFailed,
@@ -196,12 +197,12 @@ export function AgentLaunchSettingsCatalog({
       const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
       toast.success(
         chatSupported
-          ? translate(
+          ? t(
               'settings.agents.permissionFromArgs',
               '{{agent}} set to {{mode}} in terminals and new chats.',
               values
             )
-          : translate(
+          : t(
               'settings.agents.permissionFromArgsTerminals',
               '{{agent}} set to {{mode}} in terminals.',
               values
@@ -330,7 +331,7 @@ export function AgentLaunchSettingsCatalog({
           isTuiAgentEnabled(agent.id, settings.disabledTuiAgents)
         )}
         catalog={catalog}
-        description={translate(
+        description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}

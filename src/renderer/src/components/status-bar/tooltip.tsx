@@ -33,19 +33,19 @@ export { clampUsedPercent }
 
 export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
-export function formatTimeAgo(ts: number): string {
+export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
+    return t('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+    return t('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
       minutes: mins
     })
   }
   const hours = Math.floor(mins / 60)
-  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
+  return t('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.

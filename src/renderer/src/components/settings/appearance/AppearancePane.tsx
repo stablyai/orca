@@ -38,7 +38,7 @@ import { normalizeAppIconId } from '../../../../../shared/app-icon'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
 
@@ -73,6 +73,7 @@ export function AppearancePane({
   terminalConfigImport,
   warpThemes
 }: AppearancePaneProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
   const clearAppearanceAccordionDeepLink = useAppStore(
@@ -113,19 +114,13 @@ export function AppearancePane({
       cancelAnimationFrame(frameId)
     }
   }, [appearanceAccordionDeepLink, clearAppearanceAccordionDeepLink])
-  const interfaceTitle = translate(
-    'auto.components.settings.AppearancePane.interfaceTitle',
-    'Interface'
-  )
-  const terminalTitle = translate(
-    'auto.components.settings.AppearancePane.terminalTitle',
-    'Terminal'
-  )
-  const windowSidebarTitle = translate(
+  const interfaceTitle = t('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
+  const terminalTitle = t('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
+  const windowSidebarTitle = t(
     'auto.components.settings.AppearancePane.windowSidebarTitle',
     'Window & Sidebar'
   )
-  const windowSidebarSummary = translate(
+  const windowSidebarSummary = t(
     'auto.components.settings.AppearancePane.windowSidebarSummary',
     'Sidebar, status bar, and file explorer'
   )
@@ -195,10 +190,10 @@ export function AppearancePane({
     })
   }
 
-  const interfaceSummary = resolveInterfaceSectionSummary(settings)
+  const interfaceSummary = resolveInterfaceSectionSummary(settings, t)
   const terminalSummary = `${
     settings.terminalFontFamily ||
-    translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
+    t('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')
   } · ${settings.terminalFontSize}px`
 
   return (
@@ -270,8 +265,8 @@ export function AppearancePane({
       {/* Keep the App Icon easter egg at the bottom instead of inside Interface advanced. */}
       {appIconMatches ? (
         <SearchableSetting
-          title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
-          description={translate(
+          title={t('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+          description={t(
             'auto.components.settings.AppearancePane.0cd9b8228f',
             'Choose the app icon shown in the Dock and window switcher.'
           )}

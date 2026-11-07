@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
@@ -12,12 +13,12 @@ export const JIRA_ISSUE_KEY_CASING_KEYWORDS = [
   'lowercase'
 ]
 
-export function getJiraIssueKeyCasingTitle(): string {
-  return translate('auto.components.settings.GitPane.jiraIssueKeyCasingTitle', 'Jira Key Casing')
+export function getJiraIssueKeyCasingTitle(t: Translate = translate): string {
+  return t('auto.components.settings.GitPane.jiraIssueKeyCasingTitle', 'Jira Key Casing')
 }
 
-export function getJiraIssueKeyCasingDescription(): string {
-  return translate(
+export function getJiraIssueKeyCasingDescription(t: Translate = translate): string {
+  return t(
     'auto.components.settings.GitPane.jiraIssueKeyCasingDescription',
     'Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.'
   )
