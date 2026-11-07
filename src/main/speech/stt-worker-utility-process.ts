@@ -14,6 +14,7 @@ export function spawnSttUtilityProcess(): SttWorkerProcess {
   })
   const worker = new SttWorkerChildProcess({
     send: (message) => child.postMessage(message),
+    sendPort: (message, port) => child.postMessage(message, [port]),
     kill: () => child.kill()
   })
   logSttWorkerStderr(child.stderr)

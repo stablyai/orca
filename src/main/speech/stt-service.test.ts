@@ -22,6 +22,7 @@ const {
     emitExitOnTerminate = true
     terminatePromise: Promise<number> | null = null
     messages: WorkerMessage[] = []
+    attachedPorts: { streamId: string; port: unknown }[] = []
     private listeners = new Map<string, Set<(...args: unknown[]) => void>>()
 
     constructor() {
@@ -68,6 +69,11 @@ const {
       ) {
         queueMicrotask(() => this.emit('message', { type: 'stopped', streamId: message.streamId }))
       }
+    }
+
+    attachAudioPort(streamId: string, port: unknown): boolean {
+      this.attachedPorts.push({ streamId, port })
+      return true
     }
 
     terminate(): Promise<number> {
@@ -225,6 +231,19 @@ describe('SttService', () => {
       [{ type: 'partial', text: 'from the desk' }]
     ])
     expect(worker.messages.at(-1)).toMatchObject({ type: 'feed', streamId: desktopStream })
+  })
+
+  it("hands a renderer's audio port only to its own on-device stream", async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    await service.startDictation('model-a', vi.fn(), undefined, 'mobile:phone-a:1')
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop:1:0:1')
+    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop:2:0:1')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService hands the port to the mock worker untouched; only its identity is checked.
+    const port = { id: 'port' } as never
+
+    expect(service.attachAudioPort('desktop:2:0:1', port)).toBe(false)
+    expect(service.attachAudioPort('desktop:1:0:1', port)).toBe(true)
+    expect(getLastWorker()!.attachedPorts).toEqual([{ streamId: '1', port }])
   })
 
   it('refuses a fifth device, and another model while devices are dictating', async () => {
