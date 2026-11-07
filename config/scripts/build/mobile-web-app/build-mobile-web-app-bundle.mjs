@@ -325,13 +325,12 @@ export function entryStaticClosure(metafile, entryOutputPath) {
   return reached
 }
 
-// esbuild cuts one chunk per set of routes sharing a module, so most shared chunks hold a few KB and each costs
-// a request and a slot under the chunk fence. Chunks this small cost little to load on every route instead.
+// esbuild cuts a chunk per set of routes sharing a module; one this small costs more as a request than as code every route loads.
 const MERGED_SHARED_CHUNK_MAX_BYTES = 16 * 1024
 
 // Small route-shared chunks whose static imports already load at boot or merge too, so merging adds only their own bytes.
 // ESM only: a bare import runs a CommonJS module's body at route load, not where its importer first needs it.
-export function sharedModulesToMerge(metafile, entryOutputPath) {
+function sharedModulesToMerge(metafile, entryOutputPath) {
   const { inputs, outputs } = metafile
   const boot = entryStaticClosure(metafile, entryOutputPath)
   const routeReached = new Set(
@@ -352,7 +351,7 @@ export function sharedModulesToMerge(metafile, entryOutputPath) {
       )
       .map(([path]) => path)
   )
-  const leaves = (path) =>
+  const importsUnmerged = (path) =>
     outputs[path].imports.some(
       ({ kind, path: imported }) =>
         kind === 'import-statement' && !boot.has(imported) && !merged.has(imported)
@@ -360,7 +359,7 @@ export function sharedModulesToMerge(metafile, entryOutputPath) {
   for (let dropped = true; dropped;) {
     dropped = false
     for (const path of merged) {
-      if (leaves(path)) {
+      if (importsUnmerged(path)) {
         merged.delete(path)
         dropped = true
       }
@@ -482,7 +481,7 @@ export async function mobileWebAppModuleClosure(entryModules, { absWorkingDir } 
 // One lazily imported chunk per UI language; the page fetches only the active one after init.
 const LOCALE_CATALOG_INPUT = /(^|\/)src\/i18n\/locales\/[^/]+\.json$/
 
-export function localeCatalogOutputs(metafile) {
+function localeCatalogOutputs(metafile) {
   return new Set(
     Object.entries(metafile.outputs)
       .filter(([, output]) => {
@@ -491,6 +490,14 @@ export function localeCatalogOutputs(metafile) {
       })
       .map(([output]) => basename(output))
   )
+}
+
+// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
+export function pageScriptCount(metafile) {
+  const catalogs = localeCatalogOutputs(metafile)
+  return Object.keys(metafile.outputs).filter(
+    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
+  ).length
 }
 
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
@@ -559,6 +566,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
+    chunkCount: pageScriptCount(result.metafile),
     routeKeys: routes.map((route) => route.key),
     routeChunks: routeChunkNames(result.metafile, routes, renamed)
   }
@@ -596,7 +604,7 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, routeChunks, routeKeys },
+    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
@@ -645,9 +653,7 @@ export async function buildMobileWebAppBundle({
     routeChunks,
     routeKeys,
     entryStaticBytes,
-    // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    // Locale catalogs are counted separately against their own allowance.
-    chunkCount: chunks.length - catalogChunks.length + 1,
+    chunkCount,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,
