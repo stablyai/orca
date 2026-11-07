@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
 import { createRoot, type Root } from 'react-dom/client'
 import { act } from 'react'
 import { afterEach, beforeEach, it, vi } from 'vitest'

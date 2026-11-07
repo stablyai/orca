@@ -11,7 +11,7 @@ vi.mock('@/store', async () => {
 
 import { useAppStore } from '@/store'
 import { useNativeChatHookStatus } from './use-native-chat-hook-status'
-import { useNativeChatTerminalTurnTiming } from '../../use-native-chat-terminal-turn-timing'
+import { useNativeChatTerminalTurnTiming } from '../../conversation/turns/use-native-chat-terminal-turn-timing'
 
 afterEach(() => {
   cleanup()

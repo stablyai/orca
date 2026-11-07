@@ -4,7 +4,7 @@ import {
   resolveNativeChatSession,
   type NativeChatPaneResolution,
   type NativeChatPaneResolutionInput
-} from '../native-chat-pane-resolution'
+} from '../pane/routing/native-chat-pane-resolution'
 
 export type NativeChatSessionGateProps = NativeChatPaneResolutionInput & {
   children: (resolution: NativeChatPaneResolution) => ReactNode

@@ -3,7 +3,7 @@ import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/run
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
-import type { NativeChatComposerNotice } from '../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
 import type { NativeChatHostOutage } from './use-native-chat-host-outage'
 
 export function useNativeChatHostOutageNotice(

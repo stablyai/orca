@@ -24,14 +24,10 @@ import {
   settleStructuredAgentSessionSendsFromJournal,
   stopStructuredAgentSessionSends
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice,
@@ -41,7 +37,7 @@ import {
   captureNativeChatStagedInput,
   releaseNativeChatStagedFiles,
   stageNativeChatDraftFile
-} from '@/components/native-chat/native-chat-draft-attachment-staging'
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {

@@ -4,7 +4,7 @@ import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { NativeChatComposerNotice } from '../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
 
 export type NativeChatHostPermissionGate = {
   /** User action required to unblock Send. */

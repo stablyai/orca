@@ -9,12 +9,10 @@ import PendingNativeChatCreation from '@/components/worktree-creation/PendingNat
 import {
   changePrompt,
   promptValue
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   drawTabsFromMain,
@@ -35,7 +33,7 @@ import {
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (
-    await import('../../../components/native-chat/NativeChatStructuredSession.test-harness')
+    await import('../../../components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness')
   ).createStructuredSessionMocks()
 )
 const host = vi.hoisted(() => ({

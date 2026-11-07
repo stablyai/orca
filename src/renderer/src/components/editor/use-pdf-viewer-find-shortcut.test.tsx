@@ -4,7 +4,7 @@ import { useContext, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
-import { useNativeChatFind } from '../native-chat/use-native-chat-find'
+import { useNativeChatFind } from '../native-chat/viewport/find/use-native-chat-find'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ keybindings: undefined }) } }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => ({ keybindings: undefined }) } }))

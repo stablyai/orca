@@ -10,7 +10,7 @@ import type { StructuredAgentSubagentRoster } from '../../../../../../shared/age
 import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/native-chat-turn-activity'
 import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
 import { structuredSessionForegroundCommands } from '../../../../../../shared/structured-session-foreground-commands'
-import { useStructuredAgentTurnTiming } from '../../use-structured-agent-turn-timing'
+import { useStructuredAgentTurnTiming } from '../../conversation/turns/use-structured-agent-turn-timing'
 import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/agent-session-context-clear'
 
 const NO_JOURNAL_ITEMS: StructuredAgentSessionState['items'] = []

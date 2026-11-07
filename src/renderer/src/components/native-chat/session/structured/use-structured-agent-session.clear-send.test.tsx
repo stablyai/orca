@@ -41,13 +41,11 @@ vi.mock('./read/use-structured-agent-session-read', () => ({
 }))
 
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../../shared/agent-session/agent-session-conversation-command'
-import { useStructuredAgentSession } from './use-structured-agent-session'
-import { resetStructuredAgentSessionSendsForTests } from './delivery/structured-agent-session-message-sender'
-import { structuredAgentSessionSendOut } from './delivery/structured-agent-session-pending-sends'
-import {
-  clearNativeChatComposerDraftsForTests,
-  structuredAgentSessionDraftScopeKey
-} from '../../native-chat-composer-draft-store'
+import { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { structuredAgentSessionSendOut } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 const CONVERSATION_IN_FLIGHT = {
   ok: false,

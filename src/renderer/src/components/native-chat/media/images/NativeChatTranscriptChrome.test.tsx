@@ -12,7 +12,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import {
   nativeChatFanoutFixture,
   nativeChatFanoutWorkspace
-} from '../../native-chat-workspace-test-fixtures'
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 // Chat images carry their runtime owner without resolving an editor connection.
 const mocks = vi.hoisted(() => ({
