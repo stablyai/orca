@@ -54,7 +54,7 @@ function encodeImagePng(
 // Pastes shrink to fit the save limit; copies keep full size and fail instead of silently degrading.
 export async function convertImageBlobToPng(
   blob: Blob,
-  { downscaleToFit = false }: { downscaleToFit?: boolean } = {}
+  { downscaleToFit = false, maxEdge }: { downscaleToFit?: boolean; maxEdge?: number } = {}
 ): Promise<Blob> {
   assertClipboardImageByteLengthWithinLimit(blob.size)
   const url = URL.createObjectURL(blob)
@@ -64,20 +64,31 @@ export async function convertImageBlobToPng(
     await image.decode()
     const width = image.naturalWidth
     const height = image.naturalHeight
+    if (maxEdge !== undefined && (!Number.isFinite(maxEdge) || maxEdge <= 0)) {
+      throw new Error('Clipboard image could not be decoded')
+    }
+    const scale = maxEdge === undefined ? 1 : Math.min(1, maxEdge / Math.max(width, height))
+    const size =
+      maxEdge === undefined
+        ? { width, height }
+        : {
+            width: Math.max(1, Math.round(width * scale)),
+            height: Math.max(1, Math.round(height * scale))
+          }
     const pastedOverPixelCap = downscaleToFit && width * height > CLIPBOARD_IMAGE_MAX_PIXELS
     // Why: re-encoding a PNG costs time and can grow it past the clipboard size limit.
-    if (!pastedOverPixelCap && (await hasPngSignature(blob))) {
+    if (maxEdge === undefined && !pastedOverPixelCap && (await hasPngSignature(blob))) {
       assertClipboardImageDimensionsWithinLimit({ width, height })
       return blob
     }
     if (!downscaleToFit) {
       assertClipboardImageDimensionsWithinLimit({ width, height })
-      const png = await encodeImagePng(image, { width, height })
+      const png = await encodeImagePng(image, size)
       assertClipboardImageByteLengthWithinLimit(png.size)
       return png
     }
     return await encodeClipboardImageWithinLimit(
-      { width, height },
+      size,
       (size) => encodeImagePng(image, size),
       (png) => png.size
     )
