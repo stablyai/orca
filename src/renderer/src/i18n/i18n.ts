@@ -88,11 +88,16 @@ const PLAIN_TRANSLATION_CACHE_LIMIT = 5000
 const plainTranslationCache = new Map<string, string>()
 let plainTranslationCacheScope = ''
 
+/** Changes exactly when translate() results can change: init, language or loaded resources. */
+export function getTranslationScope(): string {
+  return `${i18n.isInitialized}\0${i18n.language}\0${getTranslationResourceVersion()}`
+}
+
 export function translate(key: string, fallback: string, options?: TOptions): string {
   if (options !== undefined) {
     return orcaI18n.translate(key, fallback, options)
   }
-  const scope = `${i18n.isInitialized}\0${i18n.language}\0${getTranslationResourceVersion()}`
+  const scope = getTranslationScope()
   if (
     scope !== plainTranslationCacheScope ||
     plainTranslationCache.size >= PLAIN_TRANSLATION_CACHE_LIMIT

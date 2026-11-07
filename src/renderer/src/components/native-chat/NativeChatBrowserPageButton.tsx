@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { BrowserFavicon } from '@/components/browser-favicon'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/mirrored-browser-tabs'
@@ -47,6 +47,7 @@ function BrowserPageButton({
   pageId: string | null
   runCallId: string | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const owner = useNativeChatVisualOwner()
   const latest = useLastBrowserAgentActivity(owner?.worktreeId ?? null)
   // A call appears before its command reaches the browser, so only later activity is its own.
@@ -99,7 +100,7 @@ function BrowserPageButton({
       type="button"
       className="flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       title={title}
-      aria-label={translate('components.native-chat.tool.showBrowserPageLabel', 'Show {{value0}}', {
+      aria-label={t('components.native-chat.tool.showBrowserPageLabel', 'Show {{value0}}', {
         value0: title
       })}
       onClick={() =>
@@ -111,7 +112,7 @@ function BrowserPageButton({
       }
     >
       <BrowserFavicon faviconUrl={page.faviconUrl} className="size-3.5" />
-      {translate('components.native-chat.tool.showBrowserPage', 'Show')}
+      {t('components.native-chat.tool.showBrowserPage', 'Show')}
     </button>
   )
 }

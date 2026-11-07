@@ -3,7 +3,7 @@ import { NativeChatTextAttachments } from './NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
@@ -36,6 +36,7 @@ function UserMessageMeta({
   sending: boolean
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!markdown && timestamp === null && !sending && !rewind) {
     return null
   }
@@ -50,7 +51,7 @@ function UserMessageMeta({
       ) : null}
       {sending ? (
         <span className="text-xs whitespace-nowrap text-chat-foreground-faint">
-          {translate('components.native-chat.messageSending', 'Sending…')}
+          {t('components.native-chat.messageSending', 'Sending…')}
         </span>
       ) : (
         <NativeChatMessageTimestamp timestamp={timestamp} focusable />
@@ -83,6 +84,7 @@ export function NativeChatUserMessageRow({
   rewind?: NativeChatRewindSurface
   deliveryNotice?: NativeChatDeliveryNotice
 }): React.JSX.Element {
+  const t = useTranslate()
   // Agent-authored input belongs to the turn but uses a left-aligned sender row instead of the person’s bubble.
   const from = message.from
   const sending = deliveryNotice?.sending === true
@@ -146,7 +148,7 @@ export function NativeChatUserMessageRow({
       {message.sentAs === 'goal' ? (
         <div className="flex items-center gap-1 text-xs text-chat-foreground-faint">
           <Goal className="size-3" aria-hidden />
-          <span>{translate('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
+          <span>{t('components.native-chat.goal.sentAsGoal', 'Sent as goal')}</span>
         </div>
       ) : null}
       {!from ? (
@@ -163,17 +165,17 @@ export function NativeChatUserMessageRow({
           <NativeChatSignInButton failureKind={deliveryNotice.failureKind} />
           {deliveryNotice.onSend ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
-              {translate('components.native-chat.queuedMessages.send', 'Send')}
+              {t('components.native-chat.queuedMessages.send', 'Send')}
             </Button>
           ) : null}
           {deliveryNotice.onEdit ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onEdit}>
-              {translate('components.native-chat.editDeliveryNotice', 'Edit')}
+              {t('components.native-chat.editDeliveryNotice', 'Edit')}
             </Button>
           ) : null}
           {deliveryNotice.onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onDismiss}>
-              {translate('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
+              {t('components.native-chat.dismissDeliveryNotice', 'Dismiss')}
             </Button>
           ) : null}
         </div>
@@ -181,7 +183,7 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.detail ? (
         <div className="max-w-[85%]">
           <NativeChatDetailsDisclosure
-            summary={translate('components.native-chat.notices.details', 'Details')}
+            summary={t('components.native-chat.notices.details', 'Details')}
           >
             {deliveryNotice.detail}
           </NativeChatDetailsDisclosure>

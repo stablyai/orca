@@ -2,6 +2,7 @@ import { Circle, CircleCheck, CircleDot, ChevronRight, ListChecks } from 'lucide
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   diffNativeChatTaskLists,
   nativeChatCompletedTaskCount,
@@ -12,37 +13,38 @@ import {
   type NativeChatTaskList as TaskList
 } from '../../../../shared/native-chat/input/native-chat-task-list'
 
-function statusLabel(task: NativeChatTask): string {
+function statusLabel(task: NativeChatTask, t: Translate = translate): string {
   if (task.status === 'completed') {
-    return translate('components.native-chat.taskList.completed', 'Completed')
+    return t('components.native-chat.taskList.completed', 'Completed')
   }
   if (task.status === 'in_progress') {
-    return translate('components.native-chat.taskList.inProgress', 'In progress')
+    return t('components.native-chat.taskList.inProgress', 'In progress')
   }
-  return translate('components.native-chat.taskList.pending', 'Pending')
+  return t('components.native-chat.taskList.pending', 'Pending')
 }
 
-function changeLabel(change: NativeChatTaskChange): string {
+function changeLabel(change: NativeChatTaskChange, t: Translate = translate): string {
   const { key, task } = nativeChatTaskChangeWords(change)
   switch (key) {
     case 'added':
-      return translate('components.native-chat.taskList.added', 'Added {{task}}', { task })
+      return t('components.native-chat.taskList.added', 'Added {{task}}', { task })
     case 'removed':
-      return translate('components.native-chat.taskList.removed', 'Removed {{task}}', { task })
+      return t('components.native-chat.taskList.removed', 'Removed {{task}}', { task })
     case 'started':
-      return translate('components.native-chat.taskList.started', 'Started {{task}}', { task })
+      return t('components.native-chat.taskList.started', 'Started {{task}}', { task })
     case 'finished':
-      return translate('components.native-chat.taskList.finished', 'Completed {{task}}', { task })
+      return t('components.native-chat.taskList.finished', 'Completed {{task}}', { task })
     case 'reset':
-      return translate('components.native-chat.taskList.reset', 'Marked pending: {{task}}', {
+      return t('components.native-chat.taskList.reset', 'Marked pending: {{task}}', {
         task
       })
     case 'updated':
-      return translate('components.native-chat.taskList.updated', 'Updated {{task}}', { task })
+      return t('components.native-chat.taskList.updated', 'Updated {{task}}', { task })
   }
 }
 
 function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): React.JSX.Element {
+  const t = useTranslate()
   const Icon =
     task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
   return (
@@ -53,7 +55,7 @@ function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): Rea
       )}
     >
       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-      <span className="sr-only">{statusLabel(task)}: </span>
+      <span className="sr-only">{statusLabel(task, t)}: </span>
       <span
         className={cn(
           'min-w-0 whitespace-pre-wrap break-words',
@@ -67,13 +69,11 @@ function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): Rea
 }
 
 function Checklist({ list }: { list: TaskList }): React.JSX.Element {
+  const t = useTranslate()
   return list.tasks.length === 0 ? (
-    <p className="text-xs">{translate('components.native-chat.taskList.empty', 'No tasks')}</p>
+    <p className="text-xs">{t('components.native-chat.taskList.empty', 'No tasks')}</p>
   ) : (
-    <ul
-      aria-label={translate('components.native-chat.taskList.title', 'Tasks')}
-      className="space-y-1 py-1"
-    >
+    <ul aria-label={t('components.native-chat.taskList.title', 'Tasks')} className="space-y-1 py-1">
       {list.tasks.map((task, index) => (
         <TaskRow key={`${task.content}:${index}`} task={task} />
       ))}
@@ -81,8 +81,8 @@ function Checklist({ list }: { list: TaskList }): React.JSX.Element {
   )
 }
 
-function taskProgressLabel(completed: number, total: number): string {
-  return translate(
+function taskProgressLabel(completed: number, total: number, t: Translate = translate): string {
+  return t(
     'components.native-chat.taskList.progress',
     '{{completed}} of {{count}} tasks completed',
     { completed, count: total, defaultValue_one: '{{completed}} of {{count}} task completed' }
@@ -98,6 +98,7 @@ export function NativeChatTaskList({
   previous?: TaskList
   presentation?: 'inline' | 'composer'
 }): React.JSX.Element {
+  const t = useTranslate()
   const completed = nativeChatCompletedTaskCount(list)
   if (presentation === 'composer') {
     return (
@@ -105,11 +106,11 @@ export function NativeChatTaskList({
         <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <ListChecks aria-hidden className="size-4 shrink-0" />
           <span className="flex-1 font-medium">
-            {translate('components.native-chat.taskList.title', 'Tasks')}
+            {t('components.native-chat.taskList.title', 'Tasks')}
           </span>
           <span
             className="tabular-nums"
-            aria-label={taskProgressLabel(completed, list.tasks.length)}
+            aria-label={taskProgressLabel(completed, list.tasks.length, t)}
           >
             {completed}/{list.tasks.length}
           </span>
@@ -133,10 +134,11 @@ export function NativeChatTaskList({
     <div className="space-y-1 py-1 text-sm text-chat-foreground-faint">
       <div className="flex items-center gap-1.5 text-xs text-chat-foreground-faint">
         <ListChecks aria-hidden className="size-4 shrink-0" />
-        <span className="font-medium">
-          {translate('components.native-chat.taskList.title', 'Tasks')}
-        </span>
-        <span className="tabular-nums" aria-label={taskProgressLabel(completed, list.tasks.length)}>
+        <span className="font-medium">{t('components.native-chat.taskList.title', 'Tasks')}</span>
+        <span
+          className="tabular-nums"
+          aria-label={taskProgressLabel(completed, list.tasks.length, t)}
+        >
           {completed}/{list.tasks.length}
         </span>
       </div>
@@ -148,13 +150,13 @@ export function NativeChatTaskList({
                 <TaskRow
                   key={`${change.kind}:${index}`}
                   task={change.task}
-                  label={changeLabel(change)}
+                  label={changeLabel(change, t)}
                 />
               ))}
             </ul>
           ) : (
             <p className="text-xs text-chat-foreground-faint">
-              {translate('components.native-chat.taskList.unchanged', 'Tasks unchanged')}
+              {t('components.native-chat.taskList.unchanged', 'Tasks unchanged')}
             </p>
           )}
           <Collapsible>
@@ -164,7 +166,7 @@ export function NativeChatTaskList({
                 className="group flex items-center gap-1 rounded py-0.5 text-xs text-chat-foreground-faint hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ChevronRight aria-hidden className="size-3.5 group-data-[state=open]:rotate-90" />
-                {translate('components.native-chat.taskList.showAll', 'Full task list')}
+                {t('components.native-chat.taskList.showAll', 'Full task list')}
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent animation="height" data-native-chat-member-detail>

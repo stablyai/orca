@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   runNativeChatCliFork,
@@ -61,6 +61,7 @@ export function NativeChatResumeInCliButton({
   worktreeId: string
   nativeChat: NativeChatTabSession
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const tab = { id: tabId, worktreeId }
   const { sessionId, agent: nativeAgent } = nativeChat
   const selectExecutionHost = useMemo(
@@ -73,7 +74,7 @@ export function NativeChatResumeInCliButton({
   )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
-  const label = translate(
+  const label = t(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
     'Continue with Terminal Agent'
   )

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -84,6 +84,7 @@ export function NativeChatToolLine({
   /** Identity this line's open state is remembered under while it is unmounted. */
   disclosureKey?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(disclosureKey, false)
 
   const view = useMemo(
@@ -99,11 +100,11 @@ export function NativeChatToolLine({
   }
   const name = isCall
     ? block.name
-    : translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+    : t('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
   const { label: sharedLabel, body, resultPreview, failed, results, hasDetail } = view
   const label = sharedLabel && {
     ...sharedLabel,
-    verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb)
+    verb: sharedLabel.verb === null ? null : nativeChatToolRowVerb(sharedLabel.verb, t)
   }
   // A call opens to its output; its arguments are the row's own words, bar a shortened command.
   const fullCommand = label?.commandDetail ?? null

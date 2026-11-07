@@ -3,7 +3,7 @@ import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from '
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
 import { useAppStore } from '@/store'
@@ -65,6 +65,7 @@ export function useNativeChatInterruptedContinuation(input: {
   transport: NativeChatStructuredComposerTransport
   pending: readonly Pick<StructuredAgentSessionPendingSend, 'phase'>[]
 }): NativeChatInterruptedContinuation {
+  const t = useTranslate()
   const { target, sessionId, reportComposerError, focusComposer, transport, agent } = input
   const latestTransport = useRef(transport)
   useLayoutEffect(() => {
@@ -210,7 +211,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueUsageLimit
     ]
   )
-  const failedText = translate(
+  const failedText = t(
     'components.native-chat.interruptedContinue.failed',
     "Couldn't continue this chat. Try again, or send a message."
   )
@@ -240,10 +241,11 @@ export function NativeChatInterruptedContinueButton({
   /** What Continue does here, when it is not picking up a reply Orca's stop cut off. */
   explanation?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const explanationId = useId()
   const explanation =
     shownExplanation ??
-    translate(
+    t(
       'components.native-chat.interruptedContinue.explanation',
       'Continue, and the agent first checks whether its last step finished.'
     )
@@ -261,7 +263,7 @@ export function NativeChatInterruptedContinueButton({
             disabled={disabled}
           >
             <Play />
-            {label ?? translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            {label ?? t('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

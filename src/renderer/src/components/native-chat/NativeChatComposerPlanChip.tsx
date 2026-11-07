@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { PencilRuler } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
@@ -40,14 +40,15 @@ export function NativeChatComposerPlanChip({
   control: ReturnType<typeof useNativeChatPlanMode>
   onExit?: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!control) {
     return null
   }
   return (
     <NativeChatComposerModeChip
       icon={PencilRuler}
-      label={translate('components.native-chat.composer.planMode', 'Plan')}
-      exitLabel={translate('components.native-chat.composer.exitPlanMode', 'Exit plan mode')}
+      label={t('components.native-chat.composer.planMode', 'Plan')}
+      exitLabel={t('components.native-chat.composer.exitPlanMode', 'Exit plan mode')}
       disabled={control.disabled}
       onExit={() => {
         control.exit()
