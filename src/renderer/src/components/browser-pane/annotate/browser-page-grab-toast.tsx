@@ -7,7 +7,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPageGrabToastState } from '../describe-page/browser-page-types'
 
 export function BrowserPageGrabToast({
@@ -21,6 +21,7 @@ export function BrowserPageGrabToast({
   dismissGrabToast: () => void
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
@@ -79,7 +80,7 @@ export function BrowserPageGrabToast({
                       prev
                         ? {
                             ...prev,
-                            message: translate(
+                            message: t(
                               'auto.components.browser.pane.BrowserPane.f30d2d35a7',
                               'Screenshotted'
                             )
@@ -90,10 +91,7 @@ export function BrowserPageGrabToast({
                 }}
               >
                 <Image className="size-3.5" />
-                {translate(
-                  'auto.components.browser.pane.BrowserPane.1ded0d3168',
-                  'Copy Screenshot'
-                )}
+                {t('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
                 <DropdownMenuShortcut>S</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>
