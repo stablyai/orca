@@ -1,4 +1,5 @@
 import type { MRComment } from '../../shared/gitlab-types'
+import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
 import { encodedProject } from './project-path-encoding'
 import {
   glabHostnameArgs,
@@ -27,7 +28,10 @@ export type GitLabRawDiscussion = {
   notes?: GitLabRawNote[]
 }
 
-export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRComment[] {
+function flattenDiscussions(
+  discussions: GitLabRawDiscussion[],
+  viewerUsername: string | null
+): MRComment[] {
   const out: MRComment[] = []
   for (const discussion of discussions) {
     const notes = discussion.notes ?? []
@@ -43,6 +47,7 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
         createdAt: note.created_at ?? '',
         url: '',
         isBot: note.author?.state === 'bot',
+        ...viewerAuthorship(note.author?.username, viewerUsername),
         ...(discussion.id ? { threadId: discussion.id } : {}),
         ...(note.resolvable === true ? { isResolved: note.resolved === true } : {}),
         ...(note.position?.new_path ? { path: note.position.new_path } : {}),
@@ -53,23 +58,31 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
 }
 
-export async function fetchDiscussions(
+export async function fetchDiscussionComments(
   repoPath: string,
   projectRef: ProjectRef,
   type: 'issue' | 'mr',
   iid: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<GitLabRawDiscussion[]> {
+): Promise<MRComment[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      // Bound detail loads to a recent page rather than retaining every historic discussion.
-      `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-  )
-  return JSON.parse(stdout) as GitLabRawDiscussion[]
+  const hostArgs = glabHostnameArgs(projectRef, connectionId)
+  const options = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  const [{ stdout }, viewerUsername] = await Promise.all([
+    glabExecFileAsync(
+      [
+        'api',
+        ...hostArgs,
+        // Bound detail loads to a recent page rather than retaining every historic discussion.
+        `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
+      ],
+      options
+    ),
+    // Notes carry no authorship flag, so ask the same host and account who is reading. Uncached: glab can switch accounts.
+    glabExecFileAsync(['api', ...hostArgs, 'user'], options)
+      .then((user) => (JSON.parse(user.stdout) as { username?: string | null }).username ?? null)
+      .catch(() => null)
+  ])
+  return flattenDiscussions(JSON.parse(stdout) as GitLabRawDiscussion[], viewerUsername)
 }
