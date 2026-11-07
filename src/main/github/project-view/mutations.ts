@@ -65,8 +65,8 @@ export async function updateIssueBySlug(
     if (!result.ok) {
       return { ok: false, error: result.error }
     }
-    if (body !== undefined) {
-      bodyImageUrls = githubBodyImageUrls(result.data.body ?? body, result.data.body_html)
+    if (body !== undefined && result.data.body === body) {
+      bodyImageUrls = githubBodyImageUrls(body, result.data.body_html)
     }
   }
   const labelResult = await updateIssueLabels(args, base)

@@ -24,7 +24,13 @@ import { updatePullRequestBySlug } from '../../../../../main/github/project-view
 import { updateIssueBySlug } from '../../../../../main/github/project-view/mutations'
 import { listLabelsBySlug } from '../../../../../main/github/project-view/repository-field-options'
 
-import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
+import {
+  runIssueUpdate,
+  runWorkItemBodyUpdate
+} from '@/components/github/github-work-item-edit-mutations'
+import type * as IssueBodyModule from '../open-dialog/github-item-dialog-issue-body'
+import type { ConversationTab } from '../discuss-item/conversation-tab'
+import type { ComponentProps } from 'react'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -42,6 +48,13 @@ type Published = {
   appendOptimisticComment: (comment: PRComment) => void
 }
 const published = vi.hoisted(() => new Map<string, Published>())
+let issueBodyUpdated: ComponentProps<typeof ConversationTab>['onBodyUpdated']
+vi.mock('../discuss-item/conversation-tab', () => ({
+  ConversationTab: (props: ComponentProps<typeof ConversationTab>) => {
+    issueBodyUpdated = props.onBodyUpdated
+    return <div>{props.body}</div>
+  }
+}))
 vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
 vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: () => null,
@@ -578,3 +591,105 @@ it('publishes through the actual Tasks PR page and Project dialog using one acce
   expect(published.get('page')?.body).toBe('saved body')
   expect(published.get('dialog')?.body).toBe('saved body')
 })
+
+it.each(['repo', 'project'] as const)(
+  'installs a saved issue representation through the actual parent cache callback (%s)',
+  async (origin) => {
+    const { GitHubItemDialogIssueBody } = await vi.importActual<typeof IssueBodyModule>(
+      '../open-dialog/github-item-dialog-issue-body'
+    )
+    const opened: GitHubWorkItem = {
+      ...item('fork'),
+      type: 'issue',
+      id: 'issue:93',
+      url: 'https://github.com/fork/widgets/issues/93'
+    }
+    const projectOrigin =
+      origin === 'project'
+        ? {
+            owner: 'fork',
+            repo: 'widgets',
+            host: 'github.com',
+            number: 93,
+            type: 'issue' as const,
+            projectId: 'p',
+            projectItemId: 'row',
+            cacheKey: 'p'
+          }
+        : undefined
+    const key = `saved-${origin}`
+    const details: GitHubWorkItemDetails = {
+      item: opened,
+      body: 'old',
+      comments: [],
+      bodyImageUrls: { 'https://github.com/user-attachments/assets/old': 'old-display' }
+    }
+    touchWorkItemDetailsCache(key, { details, fetchedAt: NOW })
+    await act(async () =>
+      root.render(
+        <GitHubItemDialogIssueBody
+          workItem={opened}
+          displayWorkItem={opened}
+          repoPath="/clone"
+          effectiveRepoId="clone"
+          projectOrigin={projectOrigin}
+          details={details}
+          detailsCacheKey={key}
+          loading={false}
+          detailsLoaded
+          localState="open"
+          localLabels={[]}
+          onStateChange={() => {}}
+          onLabelsChange={() => {}}
+          onMutated={() => {}}
+          onUse={() => {}}
+          onOpenOrUse={() => {}}
+          attachedWorkspaceLabel={null}
+          onCommentAdded={() => {}}
+          canUseDetailsRepoContext
+        />
+      )
+    )
+    const savedMap = {
+      'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+        'https://private-user-images.githubusercontent.com/1/new.png?jwt=TEST'
+    }
+    const update =
+      origin === 'repo'
+        ? vi.spyOn(window.api.gh, 'updateIssue')
+        : vi.spyOn(window.api.gh, 'updateIssueBySlug')
+    update.mockResolvedValue({ ok: true, bodyImageUrls: savedMap })
+    const save = async (body: string) => {
+      const representation = await runWorkItemBodyUpdate({
+        item: opened,
+        repoPath: '/clone',
+        projectOrigin,
+        body,
+        parsedSlug: { owner: 'fork', repo: 'widgets', host: 'github.com' }
+      })
+      issueBodyUpdated(body, representation)
+    }
+    await act(async () =>
+      save(
+        '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      )
+    )
+    expect(workItemDetailsCache.get(key)?.details).toMatchObject({
+      body: '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)',
+      bodyImageUrls: savedMap
+    })
+    await runIssueUpdate({
+      repoPath: '/clone',
+      repoId: 'clone',
+      projectOrigin,
+      number: 93,
+      issueRepo: { owner: 'fork', repo: 'widgets', host: 'github.com' },
+      updates: { title: 'metadata' }
+    })
+    expect(workItemDetailsCache.get(key)?.details?.bodyImageUrls).toEqual(savedMap)
+    update.mockResolvedValue({ ok: true })
+    await act(async () => save('old-host accepted body'))
+    expect(workItemDetailsCache.get(key)?.details?.body).toBe('old-host accepted body')
+    expect(workItemDetailsCache.get(key)?.details?.bodyImageUrls).toBeUndefined()
+  }
+)

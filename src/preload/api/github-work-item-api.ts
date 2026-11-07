@@ -120,7 +120,7 @@ export type GithubWorkItemApi = {
       updates: GitHubIssueUpdate
       ownerRepo?: GitHubOwnerRepo
     }
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }>
   addIssueComment: (
     args: GitHubRepoSelectorArgs & {
       number: number

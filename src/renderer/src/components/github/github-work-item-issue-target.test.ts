@@ -92,8 +92,13 @@ describe('issue edits retain the displayed repository', () => {
   describe.each(['local', 'runtime:project-source'] as const)('Project source %s', (hostId) => {
     const sourceContext = { ...localSource, hostId }
     it('saves the Project row body through the original exact slug actor', async () => {
-      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-      await runWorkItemBodyUpdate({
+      const bodyImageUrls = {
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+          'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+      }
+      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true, bodyImageUrls })
+      vi.mocked(callRuntimeRpc).mockResolvedValue({ ok: true, bodyImageUrls })
+      const result = await runWorkItemBodyUpdate({
         item: { ...item, url: 'https://github.com/upstream-owner/widgets/issues/12' },
         repoPath: '/home/fixture/fork-widgets',
         sourceContext,
@@ -101,6 +106,7 @@ describe('issue edits retain the displayed repository', () => {
         body: 'Project edit',
         parsedSlug: UPSTREAM
       })
+      expect(result).toEqual({ bodyImageUrls })
       expectProjectUpdate(sourceContext, { body: 'Project edit' })
     })
   })

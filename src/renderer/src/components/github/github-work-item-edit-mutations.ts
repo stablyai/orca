@@ -30,7 +30,7 @@ export async function runIssueUpdate(args: {
   type?: 'issue' | 'pr'
   number: number
   updates: Parameters<typeof window.api.gh.updateIssue>[0]['updates']
-}): Promise<void> {
+}): Promise<{ bodyImageUrls?: Record<string, string> } | undefined> {
   const issueRepo = args.projectOrigin
   if (issueRepo) {
     const target =
@@ -61,7 +61,7 @@ export async function runIssueUpdate(args: {
       },
       { local: target.kind !== 'environment' }
     )
-    return
+    return args.updates.body !== undefined ? { bodyImageUrls: res.bodyImageUrls } : undefined
   }
   if (!args.issueRepo) {
     throw new Error('Unable to identify this GitHub item. Open it again from Tasks.')
@@ -106,6 +106,7 @@ export async function runIssueUpdate(args: {
       { local: !runtimeHost }
     )
   }
+  return args.updates.body !== undefined ? { bodyImageUrls: res.bodyImageUrls } : undefined
 }
 
 export async function runWorkItemBodyUpdate(args: {
@@ -154,7 +155,7 @@ export async function runWorkItemBodyUpdate(args: {
     return { bodyImageUrls: res.bodyImageUrls }
   }
 
-  await runIssueUpdate({
+  return runIssueUpdate({
     repoPath: args.repoPath,
     repoId: args.item.repoId,
     sourceContext: args.sourceContext,
@@ -163,7 +164,6 @@ export async function runWorkItemBodyUpdate(args: {
     number: args.item.number,
     updates: { body: args.body }
   })
-  return undefined
 }
 
 export async function runPullRequestStateUpdate(args: {

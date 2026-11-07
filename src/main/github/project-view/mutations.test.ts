@@ -106,6 +106,22 @@ describe('updateIssueBySlug', () => {
     })
   })
 
+  it('does not attach a Project issue map from a different accepted body snapshot', async () => {
+    const body =
+      '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    runRestMock.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        body: `${body}\nchanged elsewhere`,
+        body_html:
+          '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+      }
+    })
+    await expect(
+      updateIssueBySlug({ owner: 'acme', repo: 'widgets', number: 12, updates: { body } })
+    ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
+  })
+
   it('closes slug-addressed issues with completed and not planned reasons via gh issue close', async () => {
     await expect(
       updateIssueBySlug({
