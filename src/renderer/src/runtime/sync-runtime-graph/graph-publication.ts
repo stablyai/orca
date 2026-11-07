@@ -45,6 +45,14 @@ export async function syncRuntimeGraph(): Promise<void> {
   }
   // The store getter is injected to break the terminal-slice construction cycle.
   const state = graphState.getStoreState()
+  // Activity ownership helpers reach the store; load them only after store construction.
+  const hasActivity =
+    Object.keys(state.agentStatusByPaneKey ?? {}).length > 0 ||
+    Object.keys(state.retainedAgentsByPaneKey ?? {}).length > 0 ||
+    Object.keys(state.migrationUnsupportedByPtyId ?? {}).length > 0
+  const agentActivitySubjects = hasActivity
+    ? (await import('./agent-activity-subjects')).buildAgentActivitySubjects(state)
+    : []
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
   const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
@@ -78,6 +86,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     : undefined
   const senderBase = state.agentSenderPublicationsByHost?.local?.['*']?.revision
   const graph: RuntimeRendererSyncWindowGraph = {
+    agentActivitySubjects,
     tabs: [],
     leaves: [],
     rendererGeneration: mobilePublicationEpoch,

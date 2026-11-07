@@ -4,6 +4,7 @@ import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatFollowUpChanges } from './runtime-native-chat-follow-up-events'
 import { publishWorkspaceViewChanges } from './runtime-workspace-view-change-events'
+import { publishAgentActivityReadChanges } from './runtime-agent-activity-read-events'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -171,6 +172,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+    publishAgentActivityReadChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatFollowUpChanges(this.store, (event) => this.emitClientEvent(event))
   }
 

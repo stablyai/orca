@@ -30,6 +30,8 @@ import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 import { useHostDisplay } from '../transport/use-host-display'
+import { useHostActivityView } from './use-host-activity-view'
+import { useHostActivityReadState } from './use-host-activity-read-state'
 import { classifyConnection } from '../transport/connection-health'
 
 export type HostScreenProps = {
@@ -47,6 +49,7 @@ export function useHostScreenController({
   useMobileTranslation()
   const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
+  const activityView = useHostActivityView(hostId)
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
@@ -64,6 +67,13 @@ export function useHostScreenController({
   const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
+  const activityRead = useHostActivityReadState({
+    client,
+    hostId,
+    connState,
+    active: activityView.active,
+    onError: state.setActionError
+  })
   const settings = useHostViewSettings({ client, connState, state })
   const connectionVerdict = classifyConnection({
     state: connState,
@@ -159,6 +169,9 @@ export function useHostScreenController({
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
 
   return {
+    activityRead,
+    activityView,
+    hostContextOf,
     actions,
     activeFilterCount,
     activeWorktreeScroll,

@@ -50,10 +50,16 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  * reader refines each key against its own list and refuses the whole frame on one it lacks, so
  * the host sends these only to a page whose `ready` named them in `storageKeys`.
  */
-export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+export const NEGOTIATED_PAGE_STORAGE_KEYS = [
+  'orca:terminalSplitLayout',
+  'orca:activityView:'
+] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {
+  if (key.startsWith('orca:activityView:')) {
+    return declared?.includes('orca:activityView:') ?? false
+  }
   return (
     !NEGOTIATED_PAGE_STORAGE_KEYS.some((negotiated) => negotiated === key) ||
     (declared?.includes(key) ?? false)
@@ -74,6 +80,7 @@ export function pageStorageForReader(
 }
 
 export const PAGE_STORAGE_KEY_PREFIXES = [
+  'orca:activityView:',
   'orca:pins:',
   'orca:nativeChatTabs:',
   'orca:terminalLiveInputDisabled:',
@@ -145,7 +152,12 @@ export function pageStorageKeysForRoute(hostId: string, routePathname: string): 
       : WORKSPACE_KEY_PREFIXES.map((prefix) =>
           workspaceScopedKey(prefix, hostId, workspace.worktreeId)
         )
-  return [...PAGE_STORAGE_EXACT_KEYS, `orca:pins:${hostId}`, ...scoped].filter(isPageStorageKey)
+  return [
+    ...PAGE_STORAGE_EXACT_KEYS,
+    `orca:pins:${hostId}`,
+    `orca:activityView:${encodeURIComponent(hostId)}`,
+    ...scoped
+  ].filter(isPageStorageKey)
 }
 
 // Narrow key shapes to this host/workspace; host-area pages additionally reach this host’s other workspaces.

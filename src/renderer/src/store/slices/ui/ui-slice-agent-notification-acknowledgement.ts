@@ -47,19 +47,7 @@ export function collectAcknowledgedAgentNotificationId({
   }
 }
 
-export function usableTimestamp(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
-}
-
-/** Newest turn timestamp an unread check can compare against for one agent row. */
-export function latestAgentTurnTimestamp(entry: {
-  stateStartedAt?: number
-  stateHistory?: { startedAt?: number }[]
-}): number {
-  let latest = usableTimestamp(entry.stateStartedAt)
-  // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
-  for (const history of entry.stateHistory ?? []) {
-    latest = Math.max(latest, usableTimestamp(history.startedAt))
-  }
-  return latest
-}
+export {
+  usableTimestamp,
+  latestAgentTurnTimestamp
+} from '../../../../../shared/agent-activity-read-state'

@@ -67,6 +67,7 @@ import {
   SelectCodexAccountForTargetParams,
   SelectDataAccountParams
 } from './accounts-params'
+import { SetAgentActivityReadStateParams } from './agent-activity-read-params'
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch-settings-params'
@@ -1569,11 +1570,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminalDaemon.setLimit': TerminalLimitUpdateParams,
   'terminalDaemon.severedStatus': null,
   'ui.get': null,
+  'ui.getAgentActivityReadState': null,
   'ui.getJiraQuickFilters': null,
   'ui.getJiraSavedFilters': null,
   'ui.mutateJiraSavedFilters': JiraSavedFilterMutationParam,
   'ui.recordFeatureInteraction': FeatureInteractionIdParam,
   'ui.set': UiUpdate,
+  'ui.setAgentActivityReadState': SetAgentActivityReadStateParams,
   'ui.setCollapsed': SetCollapsedParams,
   'ui.setJiraQuickFilters': JiraQuickFilterStateParam,
   'updater.check': UpdaterCheckParams,
