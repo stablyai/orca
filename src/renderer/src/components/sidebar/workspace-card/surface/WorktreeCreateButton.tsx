@@ -1,3 +1,4 @@
+import { focusWorktreeCreateTriggerAfterDismissal } from './worktree-create-menu-dismissal-focus'
 import { afterPendingWorkspaceTabs } from '@/runtime/layout-owner-pending-tabs'
 import { restoreWorktreeCreateMenuSurface } from './restore-worktree-create-menu-surface'
 import { useState, useRef, useLayoutEffect, useCallback } from 'react'
@@ -20,7 +21,6 @@ function Trigger(props: React.ComponentProps<typeof Button>): React.JSX.Element 
   return (
     <Button
       type="button"
-      data-worktree-create-trigger
       variant="ghost"
       size="icon-xs"
       className="size-5 shrink-0"
@@ -47,9 +47,10 @@ export function WorktreeCreateButton({
   useLayoutEffect(() => {
     if (groupId === null && focusAfterClose.current) {
       focusAfterClose.current = false
-      root.current?.querySelector('button')?.focus()
+      return focusWorktreeCreateTriggerAfterDismissal(root.current, worktreeId, executionHostId)
     }
-  }, [groupId])
+    return undefined
+  }, [groupId, worktreeId, executionHostId])
   return (
     <span
       ref={root}

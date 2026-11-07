@@ -149,7 +149,7 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     const sidebar = overlay('listbox')
     sidebar.setAttribute('data-worktree-sidebar', '')
     const button = document.createElement('button')
-    button.setAttribute('data-worktree-create-trigger', '')
+    button.setAttribute('data-worktree-create-focus-recovery', '')
     sidebar.append(button)
     button.focus()
     focus(f)
