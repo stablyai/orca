@@ -151,6 +151,25 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
+// Pending until the pushed host route commits, so a second tap for this host folds into the first instead of pushing another document.
+function pendingUntilHostRoute(navigation: HostStackRootNavigation): HostStackNavigationController {
+  let active = true
+  let unsubscribe = () => {}
+  const stop = () => {
+    if (active) {
+      active = false
+      unsubscribe()
+    }
+  }
+  unsubscribe = navigation.addListener('state', () => {
+    const state = navigation.getState()
+    if (state && focusedHostRoute(state)) {
+      stop()
+    }
+  })
+  return { cancel: stop, isActive: () => active, retarget: () => {} }
+}
+
 // Mount the host first, then open the target after its stack commits; a cold nested push otherwise resolves to a blank index without hostId.
 export function navigateToHostStackRoute(
   navigation: HostStackRootNavigation,
@@ -198,7 +217,7 @@ export function navigateToHostStackRoute(
   }
   if (open !== null) {
     router.push({ pathname: '/h/[hostId]', params: { hostId, [BRIDGE_OPEN_ROUTE_PARAM]: open } })
-    return SETTLED_NAVIGATION
+    return pendingUntilHostRoute(navigation)
   }
 
   let active = true

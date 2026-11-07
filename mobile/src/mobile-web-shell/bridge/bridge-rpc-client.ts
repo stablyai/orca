@@ -86,6 +86,8 @@ export type BridgeRpcClient = RpcClient &
     callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
     // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
     notifyPagePainted: () => void
+    // Where the page has navigated inside its document, so the shell knows which session it shows.
+    notifyPageLocation: (href: string) => void
     // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
     claimBack: (consumer: PageBackConsumer) => () => void
     notifyStorageWrite: (key: string, value: string | null) => boolean
@@ -340,6 +342,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
+    notifyPageLocation: notifications.notifyPageLocation,
     claimBack: back.claim,
     close,
     ...shellSessionListeners(shellSession),

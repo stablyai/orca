@@ -248,6 +248,24 @@ describe('host stack navigation', () => {
       expect(harness.navigation.dispatch).not.toHaveBeenCalled()
     })
 
+    it('folds a second tap for the same host into the push still committing', () => {
+      const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+      const push = vi.fn()
+      const router = { push, replace: vi.fn() }
+
+      const pending = coordinateHostStackNavigation(
+        null,
+        harness.navigation,
+        router,
+        'host/one',
+        SESSION,
+        true
+      )
+      coordinateHostStackNavigation(pending, harness.navigation, router, 'host/one', SESSION, true)
+
+      expect(push).toHaveBeenCalledTimes(1)
+    })
+
     it('hands the session to the host list already showing', () => {
       const harness = navigationHarness(committedHostState('host/one'))
       const push = vi.fn()
