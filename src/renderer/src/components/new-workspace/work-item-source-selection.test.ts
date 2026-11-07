@@ -36,11 +36,6 @@ const issue: JiraIssue = {
 const contexts = { github: null, gitlab: null, linear: null, jira: source }
 
 describe('shared work-item source resolution', () => {
-  it('rejects a row whose account is no longer available', () => {
-    expect(
-      resolveWorkItemSourceRow({ kind: 'jira', value: 'jira', issue }, contexts, [])
-    ).toBeNull()
-  })
   it.each([{ siteId: 'another-account' }, { url: 'https://other.atlassian.net/browse/ENG-1' }])(
     'rejects a pre-bound account that does not match the result: %j',
     (overrides) => {

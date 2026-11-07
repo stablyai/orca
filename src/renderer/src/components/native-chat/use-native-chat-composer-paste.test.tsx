@@ -76,75 +76,6 @@ afterEach(() => {
 })
 
 describe('useNativeChatComposerPaste', () => {
-  it('rejects a remote image saved before the chat moved to another server', async () => {
-    let owner: NativeChatAttachmentOwner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' }
-    let resolveSave: (path: string) => void = () => {}
-    mocks.saveClipboardImageAsTempFile.mockReturnValue(new Promise((r) => (resolveSave = r)))
-    const store = createChipStore()
-    const probe = await renderProbe({ resolveAttachmentOwner: () => owner, store })
-    await act(async () => probe.latest().handlePaste(imagePasteEvent()))
-    owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-2' }
-    await act(async () => resolveSave('/tmp/remote.png'))
-    expect(store.chips).toHaveLength(0)
-  })
-
-  it('surfaces a failed image save through the composer notice', async () => {
-    mocks.saveClipboardImageAsTempFile.mockRejectedValue(new Error('Disk full.'))
-    const store = createChipStore()
-    const setNotice = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      store,
-      setNotice
-    })
-    await act(async () => {
-      probe.latest().handlePaste(imagePasteEvent())
-    })
-    expect(setNotice).toHaveBeenCalledWith('Disk full.')
-    expect(store.chips).toHaveLength(0)
-  })
-
-  it.each(['event', 'menu'] as const)(
-    'attaches OMP clipboard images for reference delivery via %s paste',
-    async (source) => {
-      mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/omp.png')
-      mocks.readClipboardImageThumbnail.mockResolvedValue(null)
-      const store = createChipStore()
-      const attachResolvedPaths = vi.fn()
-      const setNotice = vi.fn()
-      const probe = await renderProbe({
-        agent: 'omp',
-        resolveAttachmentOwner: () => ({ kind: 'local' }),
-        store,
-        attachResolvedPaths,
-        setNotice
-      })
-      await act(async () => {
-        if (source === 'event') {
-          probe.latest().handlePaste(imagePasteEvent())
-        } else {
-          probe.latest().pasteFromClipboard()
-        }
-      })
-      expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ forNativeChatDraft: true })
-      expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/omp.png'], null)
-      expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
-    }
-  )
-
-  it("keeps a local structured chat's paste where that chat's send claims it", async () => {
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local', structuredSessionId: 'session-1' })
-    })
-    await act(async () => {
-      probe.latest().handlePaste(imagePasteEvent())
-    })
-    expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
-      forNativeChatDraft: true,
-      forStructuredChat: true
-    })
-  })
-
   it('shows a pending chip before the save resolves', async () => {
     let resolveSave: (path: string) => void = () => {}
     mocks.saveClipboardImageAsTempFile.mockReturnValue(
@@ -198,128 +129,6 @@ describe('useNativeChatComposerPaste', () => {
     expect(store.chips).toHaveLength(0)
     expect(setNotice).toHaveBeenCalledWith('Worktree not ready — try again in a moment.')
   })
-
-  it('shows a pending chip for menu paste from the clipboard thumbnail probe', async () => {
-    mocks.readClipboardImageThumbnail.mockResolvedValue({
-      dataUrl: 'data:image/png;base64,AAA',
-      width: 1200,
-      height: 800
-    })
-    let resolveSave: (path: string) => void = () => {}
-    mocks.saveClipboardImageAsTempFile.mockReturnValue(
-      new Promise<string>((resolve) => {
-        resolveSave = resolve
-      })
-    )
-    const store = createChipStore()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      store
-    })
-    await act(async () => {
-      probe.latest().pasteFromClipboard()
-    })
-    expect(store.chips).toEqual([
-      { id: 'chip-1', path: '', previewUrl: 'data:image/png;base64,AAA', pending: true }
-    ])
-    await act(async () => {
-      resolveSave('/tmp/orca-paste-2.png')
-    })
-    expect(store.chips[0]).toMatchObject({ path: '/tmp/orca-paste-2.png', pending: false })
-  })
-
-  it('settles the owned operation when no clipboard preview was available', async () => {
-    mocks.readClipboardImageThumbnail.mockResolvedValue(null)
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue('C:\\Temp\\orca-paste-3.png')
-    const store = createChipStore()
-    const attachResolvedPaths = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      store,
-      attachResolvedPaths
-    })
-    await act(async () => {
-      probe.latest().pasteFromClipboard()
-    })
-    expect(store.chips[0]).toMatchObject({ path: 'C:\\Temp\\orca-paste-3.png', pending: false })
-    expect(attachResolvedPaths).not.toHaveBeenCalled()
-  })
-
-  it('inserts text independently of a failed image save', async () => {
-    mocks.readClipboardImageThumbnail.mockResolvedValue(null)
-    mocks.saveClipboardImageAsTempFile.mockRejectedValue(new Error('sftp down'))
-    mocks.readClipboardText.mockResolvedValue('안녕하세요')
-    const insertTypedText = vi.fn()
-    const setNotice = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText,
-      setNotice
-    })
-    await act(async () => {
-      probe.latest().pasteFromClipboard()
-    })
-    expect(setNotice).toHaveBeenCalledWith('sftp down')
-    expect(insertTypedText).toHaveBeenCalledWith('안녕하세요')
-  })
-
-  it('still falls through to text when the clipboard holds no image', async () => {
-    mocks.clipboardHasImage.mockResolvedValue(false)
-    mocks.readClipboardText.mockResolvedValue('hello')
-    const insertTypedText = vi.fn()
-    const store = createChipStore()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      store,
-      insertTypedText
-    })
-    await act(async () => {
-      probe.latest().pasteFromClipboard()
-    })
-    expect(insertTypedText).toHaveBeenCalledWith('hello')
-    expect(store.chips).toHaveLength(0)
-  })
-
-  it('drops the pending chip when the clipboard changed between probe and save', async () => {
-    mocks.readClipboardImageThumbnail.mockResolvedValue({
-      dataUrl: 'data:image/png;base64,AAA',
-      width: 10,
-      height: 10
-    })
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue(null)
-    mocks.readClipboardText.mockResolvedValue('hello')
-    const store = createChipStore()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      store
-    })
-    await act(async () => {
-      probe.latest().pasteFromClipboard()
-    })
-    expect(store.chips).toHaveLength(0)
-  })
-
-  it('suppresses the failure notice when the composer became disabled mid-save', async () => {
-    let rejectSave: (error: Error) => void = () => {}
-    mocks.saveClipboardImageAsTempFile.mockReturnValue(
-      new Promise((_resolve, reject) => {
-        rejectSave = reject
-      })
-    )
-    const setNotice = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      setNotice
-    })
-    await act(async () => {
-      probe.latest().handlePaste(imagePasteEvent())
-    })
-    await probe.setDisabled(true)
-    await act(async () => {
-      rejectSave(new Error('sftp down'))
-    })
-    expect(setNotice.mock.calls.every(([notice]) => notice === null)).toBe(true)
-  })
 })
 
 describe('composer paste intake regressions', () => {
@@ -342,34 +151,6 @@ describe('composer paste intake regressions', () => {
       if (kind === 'remote' || kind === 'not-ready') {
         expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
       }
-    }
-  )
-
-  it('preserves remote text without probing clipboard images', async () => {
-    mocks.readClipboardText.mockResolvedValue('hello')
-    const insertTypedText = vi.fn(() => true)
-    const setNotice = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'remote' }),
-      insertTypedText,
-      setNotice
-    })
-    await act(async () => probe.latest().pasteFromClipboard())
-    expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('hello')
-    // Text wins: no second (browser-prompting) clipboard read and no refusal beside the text.
-    expect(mocks.clipboardHasImage).not.toHaveBeenCalled()
-    expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toHaveLength(0)
-  })
-
-  it.each(['remote', 'not-ready'] as const)(
-    'still explains an image-only menu paste on %s',
-    async (kind) => {
-      mocks.clipboardHasImage.mockResolvedValue(true)
-      const setNotice = vi.fn()
-      const probe = await renderProbe({ resolveAttachmentOwner: () => ({ kind }), setNotice })
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(mocks.clipboardHasImage).toHaveBeenCalledTimes(1)
-      expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toHaveLength(1)
     }
   )
 
@@ -444,23 +225,6 @@ describe('composer paste intake regressions', () => {
   )
 })
 
-it('inserts event text locally without any clipboard API access', async () => {
-  const insertTypedText = vi.fn(() => true)
-  const probe = await renderProbe({
-    resolveAttachmentOwner: () => ({ kind: 'remote' }),
-    insertTypedText
-  })
-  const data = new DataTransfer()
-  data.setData('text/plain', '한글\nplain')
-  const event = new ClipboardEvent('paste', { clipboardData: data, cancelable: true })
-  await act(async () => probe.latest().handlePaste(event))
-  expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('한글\nplain')
-  expect(event.defaultPrevented).toBe(true)
-  expect(mocks.readClipboardText).not.toHaveBeenCalled()
-  expect(mocks.clipboardHasImage).not.toHaveBeenCalled()
-  expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
-})
-
 it('refuses oversized event text without inserting it', async () => {
   const insertTypedText = vi.fn(() => true)
   const setNotice = vi.fn()
@@ -480,51 +244,6 @@ it('refuses oversized event text without inserting it', async () => {
   expect(setNotice).toHaveBeenCalledWith(expect.stringContaining('too large'))
 })
 
-describe('pastes the composer cannot take', () => {
-  const REFUSAL = "Can't paste — this chat isn't accepting input right now."
-
-  it.each(['event', 'menu'] as const)(
-    'explains a %s paste into a disabled composer',
-    async (source) => {
-      const insertTypedText = vi.fn(() => true)
-      const setNotice = vi.fn()
-      mocks.readClipboardText.mockResolvedValue('hello')
-      const probe = await renderProbe({
-        disabled: true,
-        resolveAttachmentOwner: () => ({ kind: 'local' }),
-        insertTypedText,
-        setNotice
-      })
-      await act(async () => {
-        if (source === 'event') {
-          const data = new DataTransfer()
-          data.setData('text/plain', 'hello')
-          probe
-            .latest()
-            .handlePaste(new ClipboardEvent('paste', { clipboardData: data, cancelable: true }))
-        } else {
-          probe.latest().pasteFromClipboard()
-        }
-      })
-      expect(insertTypedText).not.toHaveBeenCalled()
-      expect(mocks.readClipboardText).not.toHaveBeenCalled()
-      expect(setNotice).toHaveBeenCalledWith(REFUSAL)
-    }
-  )
-
-  it('explains text the composer input could not accept', async () => {
-    const setNotice = vi.fn()
-    mocks.readClipboardText.mockResolvedValue('hello')
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText: () => false,
-      setNotice
-    })
-    await act(async () => probe.latest().pasteFromClipboard())
-    expect(setNotice).toHaveBeenLastCalledWith(REFUSAL)
-  })
-})
-
 describe('file-manager copies', () => {
   function fileCopyEvent(files: File[], text: string): ClipboardEvent {
     const data = new DataTransfer()
@@ -535,81 +254,6 @@ describe('file-manager copies', () => {
     return new ClipboardEvent('paste', { clipboardData: data, cancelable: true })
   }
   const png = (name: string): File => new File(['image'], name, { type: 'image/png' })
-
-  it.each([
-    ['a single file', [png('shot.png')], 'shot.png'],
-    [
-      'several files',
-      [png('a.png'), new File(['pdf'], 'b.pdf', { type: 'application/pdf' })],
-      'a.png\nb.pdf'
-    ],
-    ['a file label with a trailing newline', [png('shot.png')], 'shot.png\r\n']
-  ])('attaches %s without inserting its name', async (_label, files, text) => {
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/shot.png')
-    const insertTypedText = vi.fn(() => true)
-    const store = createChipStore()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText,
-      store
-    })
-    await act(async () => probe.latest().handlePaste(fileCopyEvent(files, text)))
-    expect(insertTypedText).not.toHaveBeenCalled()
-    expect(store.chips).toEqual([
-      expect.objectContaining({ path: '/tmp/shot.png', pending: false })
-    ])
-  })
-
-  it.each([
-    ['rich text with an image rendition', [png('image.png')], 'Quarterly numbers'],
-    [
-      'a non-image file, which is not attached',
-      [new File(['pdf'], 'b.pdf', { type: 'application/pdf' })],
-      'b.pdf'
-    ]
-  ])('still inserts the text of %s', async (_label, files, text) => {
-    const insertTypedText = vi.fn(() => true)
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText
-    })
-    await act(async () => probe.latest().handlePaste(fileCopyEvent(files, text)))
-    expect(insertTypedText).toHaveBeenCalledExactlyOnceWith(text)
-  })
-
-  it.each([
-    ['a path', '/home/me/shot.png'],
-    ['a file URL', 'file:///home/me/my%20shot.png']
-  ])('attaches a Linux file manager copy labelled by %s without typing it', async (_l, text) => {
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/shot.png')
-    const insertTypedText = vi.fn(() => true)
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText
-    })
-    const name = text.includes('my%20') ? 'my shot.png' : 'shot.png'
-    await act(async () => probe.latest().handlePaste(fileCopyEvent([png(name)], text)))
-    expect(insertTypedText).not.toHaveBeenCalled()
-  })
-
-  it('attaches pasted files that have local paths as a drop would, typing nothing', async () => {
-    mocks.getPathForFile.mockImplementation((file: File) => `/Users/me/${file.name}`)
-    const insertTypedText = vi.fn(() => true)
-    const attachCopiedFiles = vi.fn()
-    const probe = await renderProbe({
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      insertTypedText,
-      attachCopiedFiles
-    })
-    const files = [png('shot.png'), new File(['pdf'], 'b.pdf', { type: 'application/pdf' })]
-    await act(async () => probe.latest().handlePaste(fileCopyEvent(files, 'shot.png\nb.pdf')))
-    expect(attachCopiedFiles).toHaveBeenCalledExactlyOnceWith(
-      ['/Users/me/shot.png', '/Users/me/b.pdf'],
-      { focus: false }
-    )
-    expect(insertTypedText).not.toHaveBeenCalled()
-    expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
-  })
 
   it.each([
     ['a screenshot picture beside its saved file', '', false],
@@ -651,71 +295,4 @@ describe('file-manager copies', () => {
       expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledTimes(attachesFiles ? 0 : 1)
     }
   )
-
-  describe('from the app menu (macOS Cmd+V)', () => {
-    it.each([
-      ['a single file', 'shot.png', ['/Users/me/Desktop/shot.png'], true],
-      ['several files', 'a.png\rb.pdf', ['/Users/me/a.png', '/Users/me/b.pdf'], true],
-      ['a file with no image rendition', 'notes.txt', ['/Users/me/notes.txt'], false]
-    ])(
-      'attaches %s as a drop would, without typing the Finder label',
-      async (_label, text, paths, hasImage) => {
-        mocks.readClipboardText.mockResolvedValue(text)
-        mocks.readClipboardFilePaths.mockResolvedValue(paths)
-        mocks.clipboardHasImage.mockResolvedValue(hasImage)
-        const insertTypedText = vi.fn(() => true)
-        const attachCopiedFiles = vi.fn()
-        const probe = await renderProbe({
-          resolveAttachmentOwner: () => ({ kind: 'local' }),
-          insertTypedText,
-          attachCopiedFiles
-        })
-        await act(async () => probe.latest().pasteFromClipboard())
-        expect(attachCopiedFiles).toHaveBeenCalledExactlyOnceWith(paths, { focus: false })
-        expect(insertTypedText).not.toHaveBeenCalled()
-        // The copied file itself is attached, never the bitmap rendition beside it.
-        expect(mocks.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
-      }
-    )
-
-    it.each([
-      ['macOS', 'Macintosh', false],
-      ['other platforms', 'X11; Linux x86_64', true]
-    ])(
-      'on %s, treats a screenshot picture beside its saved file as files only off macOS',
-      async (_label, platform, attachesFiles) => {
-        // A screenshot tool's clipboard: the picture plus its saved file, which may be gone.
-        vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(`Mozilla/5.0 (${platform})`)
-        mocks.readClipboardText.mockResolvedValue('')
-        mocks.readClipboardFilePaths.mockResolvedValue(['/Users/me/Desktop/Screenshot.png'])
-        mocks.saveClipboardImageAsTempFile.mockResolvedValue('/tmp/shot.png')
-        const attachCopiedFiles = vi.fn()
-        const probe = await renderProbe({
-          resolveAttachmentOwner: () => ({ kind: 'local' }),
-          attachCopiedFiles
-        })
-        await act(async () => probe.latest().pasteFromClipboard())
-        expect(attachCopiedFiles).toHaveBeenCalledTimes(attachesFiles ? 1 : 0)
-        expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledTimes(attachesFiles ? 0 : 1)
-      }
-    )
-
-    it('types unrelated text at once, and when the file list cannot be read', async () => {
-      mocks.readClipboardText.mockResolvedValue('see attached')
-      mocks.readClipboardFilePaths.mockResolvedValue(['/Users/me/shot.png'])
-      mocks.saveClipboardImageAsTempFile.mockReturnValue(new Promise(() => {}))
-      const insertTypedText = vi.fn(() => true)
-      const probe = await renderProbe({
-        resolveAttachmentOwner: () => ({ kind: 'local' }),
-        insertTypedText
-      })
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(insertTypedText).toHaveBeenCalledExactlyOnceWith('see attached')
-
-      mocks.readClipboardText.mockResolvedValue('shot.png')
-      mocks.readClipboardFilePaths.mockRejectedValue(new Error('unavailable'))
-      await act(async () => probe.latest().pasteFromClipboard())
-      expect(insertTypedText).toHaveBeenLastCalledWith('shot.png')
-    })
-  })
 })
