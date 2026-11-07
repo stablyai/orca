@@ -22,8 +22,8 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredWorkerHandleAgentStatus } from '../../orchestration/structured-worker-group-addressing'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'
 import {
   retitleStructuredConversationTab,
   titleStructuredConversationTabs

@@ -1,3 +1,4 @@
+import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-owner'
 import type { AppState } from '@/store'
 import React from 'react'
@@ -41,6 +42,10 @@ export function SourceControlNotesShelf({
   deleteDiffComment: AppState['deleteDiffComment']
   handleOpenComment: (comment: DiffComment) => void
 }): React.JSX.Element {
+  const scope = useSourceControlScope()
+  const placementGroupId = useSourceControlState((s) =>
+    scope ? s.activeGroupIdByWorktree[scope.placementWorkspaceId] : undefined
+  )
   const { owner } = useDiffCommentView(activeWorktreeId, 'selection')
   return (
     <div className="border-b border-border">
@@ -79,7 +84,7 @@ export function SourceControlNotesShelf({
           <DiffNotesSendMenu
             owner={owner}
             worktreeId={activeWorktreeId}
-            groupId={activeGroupId ?? activeWorktreeId}
+            groupId={placementGroupId ?? activeGroupId ?? activeWorktreeId}
             comments={diffCommentsForActive}
             triggerClassName="size-6"
             respondToOpenRequest

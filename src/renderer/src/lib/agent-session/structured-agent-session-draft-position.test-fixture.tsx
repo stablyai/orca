@@ -11,7 +11,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type * as structuredSessionClient from '@/runtime/structured-agent-session-client'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-agent-session-launch-registry'
 import {
@@ -32,7 +32,7 @@ const rpcMock = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>()
 }))
 export const rpc = rpcMock
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

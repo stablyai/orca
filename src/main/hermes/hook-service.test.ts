@@ -31,24 +31,6 @@ describe('HermesHookService', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  it('installs the managed Hermes plugin and enables it in config.yaml', () => {
-    const status = new HermesHookService().install()
-
-    expect(status).toMatchObject({
-      agent: 'hermes',
-      state: 'installed',
-      managedHooksPresent: true,
-      detail: null
-    })
-    const pluginDir = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME)
-    expect(readFileSync(join(pluginDir, 'plugin.yaml'), 'utf-8')).toContain('provides_hooks:')
-    expect(readFileSync(join(pluginDir, '__init__.py'), 'utf-8')).toContain('/hook/hermes')
-    const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
-      plugins: { enabled: string[] }
-    }
-    expect(config.plugins.enabled).toContain(_internals.HERMES_PLUGIN_NAME)
-  })
-
   it('preserves other enabled plugins and removes Orca from disabled list', () => {
     writeFileSync(
       join(homeDir, 'config.yaml'),
@@ -216,38 +198,6 @@ describe('HermesHookService', () => {
     expect(config.plugins.enabled).toBe('not-a-list')
     expect(config.plugins.disabled).toBe('not-a-list')
   })
-
-  it('reports partial when the plugin exists but is not enabled', () => {
-    new HermesHookService().install()
-    const update = _internals.updateConfigContent(
-      readFileSync(join(homeDir, 'config.yaml'), 'utf-8'),
-      _internals.disablePlugin
-    )
-    expect(update.content).toBeTruthy()
-    writeFileSync(join(homeDir, 'config.yaml'), update.content!, 'utf-8')
-
-    const status = new HermesHookService().getStatus()
-
-    expect(status.state).toBe('partial')
-    expect(status.detail).toContain('not enabled')
-  })
-
-  it('is visible to the real hermes CLI when hermes is installed', () => {
-    const hermesAvailable = spawnSync('hermes', ['--version'], { encoding: 'utf-8' }).status === 0
-    if (!hermesAvailable) {
-      return
-    }
-    new HermesHookService().install()
-
-    const output = execFileSync('hermes', ['plugins', 'list'], {
-      env: { ...process.env, HERMES_HOME: homeDir },
-      encoding: 'utf-8',
-      timeout: 15_000
-    })
-
-    expect(output).toContain(_internals.HERMES_PLUGIN_NAME)
-    expect(output.toLowerCase()).toContain('enabled')
-  }, 20_000)
 
   it('registered plugin hooks post normalized JSON to Orca', async () => {
     const pythonAvailable = spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0

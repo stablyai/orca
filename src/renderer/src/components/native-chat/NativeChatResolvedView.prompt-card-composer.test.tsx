@@ -1,3 +1,4 @@
+import type * as RuntimeTerminalInputSendModule from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-launch/startup/agent-tui-input-clear'
 // @vitest-environment happy-dom
 
@@ -12,11 +13,9 @@ import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
 } from './native-chat-composer-types'
-import type * as RuntimeTerminalInspectionModule from '@/runtime/runtime-terminal-inspection'
+
 import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import { clearPendingSendCacheForTests } from './native-chat-pending'
-
-type RuntimeTerminalInspection = typeof RuntimeTerminalInspectionModule
 
 const MESSAGE = 'please also run lint'
 const retained = vi.hoisted((): { session: NativeChatLiveSession | null } => ({ session: null }))
@@ -28,11 +27,11 @@ const pty = vi.hoisted(() => ({
 vi.mock('./use-native-chat-retained-session', () => ({
   useNativeChatRetainedSession: () => retained.session
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', async (importOriginal) => ({
-  ...(await importOriginal<RuntimeTerminalInspection>()),
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeTerminalInputSendModule>()),
   sendRuntimePtyInput: pty.raw
 }))
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: pty.verified
 }))
 // Stub only the field; retain the production send lifecycle, queue and observed writes.

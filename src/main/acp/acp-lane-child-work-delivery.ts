@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
+import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/observations/structured-agent-session-subagent-rows'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredLaneDeps } from './acp-structured-lane'
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
@@ -74,11 +74,10 @@ export default function SidebarAgentsList({
     visibleThreadGroups
   } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
 
-  useEffect(() => {
-    if (!selectedPaneKeyIsLive) {
-      setSelectedPaneKey(null)
-    }
-  }, [selectedPaneKeyIsLive])
+  if (!selectedPaneKeyIsLive) {
+    // Clear a vanished pane during render so it cannot reselect if the pane key returns.
+    setSelectedPaneKey(null)
+  }
 
   const {
     markThreadRead,

@@ -113,6 +113,44 @@ describe('buildPluginList consent identity', () => {
   })
 })
 
+it('projects structured monorepo and recorded author sources only for the installed bytes', async () => {
+  const plugin: ValidDiscoveredPlugin = {
+    pluginKey: 'samples.demo',
+    rootDir: join(tmpdir(), 'plugins', 'samples.demo'),
+    manifest,
+    consentFingerprint: 'sha256-current',
+    contentHash: 'a'.repeat(64),
+    isDev: false
+  }
+  const lock = emptyPluginLockfile()
+  lock.plugins[plugin.pluginKey] = {
+    pluginKey: 'samples.demo',
+    version: '1.0.0',
+    source: {
+      kind: 'marketplace',
+      marketplace: {
+        url: 'https://github.com/catalog/plugins.git',
+        ref: 'main',
+        resolvedCommit: 'b'.repeat(40)
+      },
+      plugin: { url: 'https://github.com/mirrors/plugins.git', ref: 'main', path: 'plugins/demo' }
+    },
+    authorRepository: 'https://github.com/samples/demo',
+    resolvedCommit: 'c'.repeat(40),
+    contentHash: 'a'.repeat(64),
+    consentFingerprint: 'sha256-current',
+    installedAt: 1
+  }
+  expect((await buildPluginList(serviceWith(plugin), lock))[0]?.source).toMatchObject({
+    url: 'https://github.com/mirrors/plugins.git',
+    path: 'plugins/demo',
+    authorRepository: 'https://github.com/samples/demo'
+  })
+  expect(
+    (await buildPluginList(serviceWith({ ...plugin, contentHash: 'd'.repeat(64) }), lock))[0]
+  ).not.toHaveProperty('source')
+})
+
 describe('buildPluginList I/O', () => {
   it('builds the list for installed plugins without reading the plugin directories', async () => {
     const plugin: ValidDiscoveredPlugin = {

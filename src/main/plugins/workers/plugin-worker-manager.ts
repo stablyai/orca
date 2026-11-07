@@ -24,6 +24,7 @@ import {
   nextPluginWorkerGeneration
 } from './plugin-worker-generation-retention'
 import { finishPluginWorkerActivation, pluginWorkerErrorText } from './plugin-worker-lifecycle'
+import { PluginWorkerIdleClock } from './plugin-worker-idle-clock'
 
 export type { PluginWorkerFactory, PluginWorkerSpawnSpec } from './plugin-worker-startup'
 
@@ -58,12 +59,12 @@ export class PluginWorkerManager {
   private readonly generations = new Map<string, number>()
   private readonly stoppingWorkers = new Set<Promise<void>>()
   private readonly slots: PluginWorkerSlots
-  private readonly idleReapMs: number
+  private readonly idleClock: PluginWorkerIdleClock
   private disposed = false
 
   constructor(private readonly options: PluginWorkerManagerOptions) {
     this.slots = new PluginWorkerSlots(options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT)
-    this.idleReapMs = options.idleReapMs ?? PLUGIN_WORKER_IDLE_REAP_MS
+    this.idleClock = new PluginWorkerIdleClock(options.idleReapMs ?? PLUGIN_WORKER_IDLE_REAP_MS)
   }
 
   /** The live worker, without starting one. */
@@ -166,6 +167,7 @@ export class PluginWorkerManager {
           onExit: (record, code) => this.handleUnexpectedExit(spec.pluginKey, record, code)
         })
         this.workers.set(spec.pluginKey, worker)
+        this.idleClock.watchFrom(Date.now())
         const earlyExit = worker.completeStart()
         if (earlyExit.exited) {
           this.detachWorker(spec.pluginKey, worker)
@@ -246,14 +248,7 @@ export class PluginWorkerManager {
   }
 
   reapIdle(now = Date.now()): void {
-    for (const [pluginKey, record] of this.workers) {
-      if (
-        record.spec.keepWarm ||
-        record.handle.inFlightCount() !== 0 ||
-        now - record.handle.lastActivityAt() <= this.idleReapMs
-      ) {
-        continue
-      }
+    for (const [pluginKey, record] of this.idleClock.idleWorkers(this.workers, now)) {
       this.nextGeneration(pluginKey)
       this.known.delete(pluginKey)
       this.workers.delete(pluginKey)

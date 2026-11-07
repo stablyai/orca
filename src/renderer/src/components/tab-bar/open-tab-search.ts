@@ -15,7 +15,7 @@ import {
   searchBrowserPages,
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
-} from '@/lib/browser-palette-search'
+} from '@/lib/browser/palette/browser-palette-search'
 import {
   searchSimulatorTabs,
   type SearchableSimulatorTab,
@@ -23,12 +23,13 @@ import {
 } from '@/lib/simulator-palette-search'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import {
-  searchWorkspaceTabs,
-  type SearchableWorkspaceTab,
-  type WorkspaceTabContentType,
-  type WorkspaceTabPaletteSearchResult
-} from '@/lib/workspace-tab-palette-search'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
+import type {
+  SearchableWorkspaceTab,
+  WorkspaceTabContentType
+} from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 
 export const OPEN_TAB_SEARCH_RESULT_LIMIT = 4
 

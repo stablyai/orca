@@ -1,3 +1,6 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
+import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
+import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -285,6 +288,24 @@ export function ConversationTab({
     >
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationDescription
+          imageUploadAddress={() => {
+            const slug = item.type === 'pr' ? (prRepo ?? bodySlug) : markdownGitHubRepo
+            return (item.type === 'pr' || projectOrigin) && slug
+              ? {
+                  runtime:
+                    sourceContext?.provider === 'github'
+                      ? taskSourceRuntimeTarget(sourceContext)
+                      : getGitHubMutationTarget(item.repoId, projectOrigin),
+                  target: { kind: 'slug', ...slug, wakeWslDistro: true }
+                }
+              : githubCommentImageUploadAddress({
+                  repoPath: repoPath ?? '',
+                  repoId: item.repoId,
+                  sourceContext,
+                  type: item.type,
+                  prRepo: bodySlug
+                })
+          }}
           authorLabel={authorLabel}
           updatedAt={item.updatedAt}
           canEditBody={canEditBody}

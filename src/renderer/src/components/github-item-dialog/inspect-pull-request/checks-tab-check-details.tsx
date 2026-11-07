@@ -14,7 +14,7 @@ import {
   getCheckDetailsKey,
   getCheckStatusLabel
 } from '@/components/github/pr-check-presentation'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function ChecksTabCheckDetails({
   check,

@@ -121,6 +121,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null
 
+  /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
+  readonly getAcceptedAgentReply: RuntimeConstructionBindings['getAcceptedAgentReply']
+  /** Synchronous on every hook status row change, including clears. */
+  readonly subscribeAgentStatusRowChanges: RuntimeConstructionBindings['subscribeAgentStatusRowChanges']
+
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
   )
@@ -246,6 +251,8 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.getAgentProviderSessionSnapshotFn =
       deps?.getAgentProviderSessionSnapshot ?? deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionRowsForPaneFn = deps?.getAgentProviderSessionRowsForPane ?? null
+    this.getAcceptedAgentReply = deps?.getAcceptedAgentReply ?? (() => undefined)
+    this.subscribeAgentStatusRowChanges = deps?.subscribeAgentStatusRowChanges ?? (() => () => {})
     this.attestAgentHookCompatibilityAuthorityFn =
       deps?.attestAgentHookCompatibilityAuthority ?? null
     this.retireAgentHookCompatibilityAuthorityFn =

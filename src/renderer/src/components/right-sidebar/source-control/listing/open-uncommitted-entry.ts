@@ -25,7 +25,14 @@ export function openUncommittedEntry(
     (entry.status === 'added' || entry.status === 'untracked')
   ) {
     state.openFile(
-      { filePath, relativePath: entry.path, worktreeId, language, mode: 'edit' },
+      {
+        filePath,
+        relativePath: entry.path,
+        worktreeId,
+        language,
+        mode: 'edit',
+        runtimeEnvironmentId: options.runtimeEnvironmentId
+      },
       options
     )
     return

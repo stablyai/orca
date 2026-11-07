@@ -8,7 +8,8 @@ export function callAcpSession<T>(
   method: string,
   params: unknown,
   schema: z.ZodType<T>,
-  answered: ((signedIn: boolean) => void) | undefined
+  answered: ((signedIn: boolean) => void) | undefined,
+  received?: (response: T) => void
 ): Promise<T> {
   return peer.request(method, params, {
     ...acpStepBound(method),
@@ -35,6 +36,7 @@ export function callAcpSession<T>(
       if (['session/new', 'session/load', 'session/resume'].includes(method)) {
         answered?.(true)
       }
+      received?.(parsed.data)
       return parsed.data
     }
   })

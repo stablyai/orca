@@ -15,7 +15,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 
-vi.mock('@/runtime/runtime-hooks-client', () => ({
+vi.mock('@/runtime/repo-hooks/runtime-hooks-client', () => ({
   readRuntimeIssueCommand: vi.fn().mockResolvedValue({ command: '', exists: false }),
   writeRuntimeIssueCommand: vi.fn().mockResolvedValue(undefined)
 }))

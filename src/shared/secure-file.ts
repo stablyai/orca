@@ -98,13 +98,21 @@ function hardenExistingWindowsFile(targetPath: string): boolean {
 }
 
 /** Returns false when the file was written but its permissions could not be restricted. */
-export function writeSecureJsonFile(targetPath: string, value: unknown): boolean {
-  return writeSecureFile(targetPath, JSON.stringify(value, null, 2))
+export function writeSecureJsonFile(
+  targetPath: string,
+  value: unknown,
+  options: { shouldPublish?: () => boolean } = {}
+): boolean {
+  return writeSecureFile(targetPath, JSON.stringify(value, null, 2), options)
 }
 
 /** Returns false when the file was written but its permissions could not be restricted. */
-export function writeDurableSecureJsonFile(targetPath: string, value: unknown): boolean {
-  return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { durable: true })
+export function writeDurableSecureJsonFile(
+  targetPath: string,
+  value: unknown,
+  options: { shouldPublish?: () => boolean } = {}
+): boolean {
+  return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { ...options, durable: true })
 }
 
 /** Publish a staged file and return whether user-only file permissions hold. Windows addon creates restricted or throws;

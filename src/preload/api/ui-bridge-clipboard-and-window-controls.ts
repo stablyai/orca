@@ -55,6 +55,15 @@ export const uiClipboardAndWindowControlsApi = {
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
   },
+  onTerminalPaneMoveToNewTabRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:terminalPaneMoveToNewTabRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalPaneMoveToNewTabRequest', listener)
+  },
+  replyTerminalPaneMoveToNewTab: (reply) => {
+    ipcRenderer.send('ui:terminalPaneMoveToNewTabReply', reply)
+  },
   onWorkspaceSleep: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>
       callback(notice)
@@ -191,6 +200,12 @@ export const uiClipboardAndWindowControlsApi = {
       callback(isMaximized)
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
+  },
+  isWindowActive: (): Promise<boolean> => ipcRenderer.invoke('window:isActive'),
+  onWindowActiveChanged: (callback: (active: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, active: boolean) => callback(active)
+    ipcRenderer.on('window:active-changed', listener)
+    return () => ipcRenderer.removeListener('window:active-changed', listener)
   },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')

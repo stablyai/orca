@@ -13,7 +13,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import { buildBranchNamePrompt } from '../../../../../../shared/source-control/ai/naming/branch-name-from-work'
@@ -31,7 +31,7 @@ import './text-generation-params'
 type SourceControlTextGenerationBaseDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  settings: GlobalSettings | null
+  settings: SourceControlRenderSettings | null
   repo?: Pick<Repo, 'id' | 'sourceControlAi'> | null
   discoveryHostKey: string
   /** Omitted by workspace-less callers (Settings dry-run); `null` means "linked to nothing". */

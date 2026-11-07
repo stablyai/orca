@@ -1,4 +1,4 @@
-import { unwrapRuntimeRpcResult } from '../../../src/renderer/src/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-result'
 import type { AutomationRun } from '../../../src/shared/automations-types'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
@@ -9,8 +9,8 @@ import { RuntimeRpcEnvelopeSchema } from '../../../src/shared/runtime-rpc-envelo
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/shared/electron-remote-runtime-client-capabilities'
 import { decodeSessionTabsDeltaEvents } from '../../../src/main/ipc/runtime-environments/runtime-environment-session-tabs-delta-decoding'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-agent-session'
-import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
+import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {
   createTestStore,

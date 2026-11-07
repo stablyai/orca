@@ -4,15 +4,15 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeTerminalResolvePane } from '../../../shared/runtime-terminal-contracts'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {
   focusRendererTerminalHandle,
   focusRuntimeTerminalHandle
-} from '@/components/terminal-pane/terminal-handle-links'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+} from '@/components/terminal-pane/links/handles/terminal-handle-links'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import {
   activateAiVaultStructuredSession,
   structuredSessionOpenFeedback,

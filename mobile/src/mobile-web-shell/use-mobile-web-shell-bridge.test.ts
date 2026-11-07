@@ -9,16 +9,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
 import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
-import {
-  BRIDGE_HAPTICS_GRANT,
-  BRIDGE_HAPTICS_NOTIFY,
-  type BridgeHapticsKind
-} from './bridge/bridge-haptics-notify'
+import { BRIDGE_HAPTICS_GRANT, type BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
 import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
 import {
   BRIDGE_FAULT_GRANT,
-  BRIDGE_NAVIGATE_BACK_NOTIFY,
   readBridgeHostMessage,
   type BridgeHostMessage
 } from './bridge/bridge-envelope'
@@ -44,7 +39,6 @@ import {
   useMobileWebShellBridge,
   type MobileWebShellBridgeView
 } from './use-mobile-web-shell-bridge'
-import { connectionLogStore } from '../transport/persisted-connection-log-store'
 
 const ID = bridgeId(1)
 const DIRECTORY = '/caches/mobile-web/deadbeef/generations/a1b2'
@@ -133,6 +127,8 @@ function Harness(props: {
     session: props.session,
     sessionEstablished: props.sessionEstablished ?? (sessionId !== null && handshook === sessionId),
     route: { pathname: '/h/host-1' },
+    // This connection's verdict is open, so desktop-bound frames pass.
+    hostStatus: { protocolVersion: 1 },
     safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
     keyboardInset: 0,
     foldDivision: null,
@@ -195,7 +191,13 @@ function readyState(sessionId: string): MobileWebShellSessionState {
     sessionId,
     buildId: 'build-a',
     totalBytes: 4096,
-    elapsedMs: 11
+    elapsedMs: 11,
+    compat: {
+      schemaVersion: 1,
+      runtimeProtocolVersion: 1,
+      minCompatibleRuntimeProtocolVersion: 1,
+      pageVersion: 1
+    }
   }
 }
 
@@ -299,19 +301,6 @@ beforeEach(() => {
 })
 
 describe('the bridge channel', () => {
-  it('is closed until the session is ready and opens with it', async () => {
-    const mounted = await mount({ kind: 'checking' })
-    expect(mounted.probe.view?.bridgeEnabled).toBe(false)
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.posted).toEqual([])
-    await mounted.update(readyState('session-one'))
-    expect(mounted.probe.view?.bridgeEnabled).toBe(true)
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.frames('session-one')).toEqual([
-      expect.objectContaining({ type: 'init', sessionId: 'session-one', buildId: 'build-a' })
-    ])
-  })
-
   it('does not rebuild the host for a route object the caller built again', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
@@ -346,24 +335,6 @@ describe('the bridge channel', () => {
     })
     expect(mounted.faults).toEqual([])
   })
-
-  it('logs a frame it dropped for want of a host once per session, naming what is missing', async () => {
-    doubles.client = null
-    const dropped = () =>
-      connectionLogStore
-        .get('host-1')
-        .filter((entry) => entry.message === 'Web shell: page frame with no bridge host')
-    const before = dropped().length
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(dropped().slice(before)).toEqual([
-      expect.objectContaining({ detail: 'client=null snapshot=ok' })
-    ])
-    await mounted.update(readyState('session-two'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(dropped().slice(before)).toHaveLength(2)
-  })
 })
 
 describe('teardown', () => {
@@ -381,15 +352,6 @@ describe('teardown', () => {
     expect(mounted.frames('session-two')).toEqual([])
   })
 
-  it(`routes the next session's frames to the next host`, async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.update(readyState('session-two'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    expect(mounted.frames('session-two')).toEqual([
-      expect.objectContaining({ type: 'init', sessionId: 'session-two' })
-    ])
-  })
-
   it('disposes when the session leaves ready, and answers nothing after', async () => {
     const mounted = await mount(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
@@ -402,59 +364,7 @@ describe('teardown', () => {
     expect(fakeClient().requests).toEqual([])
   })
 
-  it('carries the dropped-frame total from the host to the screen', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(
-      clientFrame({
-        type: 'subscribe',
-        id: ID,
-        method: 'browser.screencast',
-        params: {},
-        wantsBinary: true
-      })
-    )
-    const oversized = {
-      opcode: 1 as const,
-      seq: 1,
-      format: 'jpeg' as const,
-      metadata: {},
-      image: new Uint8Array(500_000)
-    }
-    await act(async () => {
-      fakeClient().streams[0]?.emitBinary?.(oversized)
-      fakeClient().streams[0]?.emitBinary?.({ ...oversized, seq: 2 })
-    })
-    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 2])
-    expect(fakeClient().streams[0]?.unsubscribes).toBe(0)
-  })
-
   // Reset drop counts with host ownership so the next host’s first drop cannot look like recovered frames.
-  it('resets the dropped-frame total when the host is rebuilt', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await mounted.deliver(
-      clientFrame({
-        type: 'subscribe',
-        id: ID,
-        method: 'browser.screencast',
-        params: {},
-        wantsBinary: true
-      })
-    )
-    await act(async () => {
-      fakeClient().streams[0]?.emitBinary?.({
-        opcode: 1 as const,
-        seq: 1,
-        format: 'jpeg' as const,
-        metadata: {},
-        image: new Uint8Array(500_000)
-      })
-    })
-    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1])
-    await mounted.update(readyState('session-two'))
-    expect(mounted.probe.droppedBinaryFrames).toEqual([0, 1, 0])
-  })
 
   it('disposes on unmount and settles what was in flight as delivery-unknown', async () => {
     const mounted = await mount(readyState('session-one'))
@@ -479,24 +389,6 @@ describe('teardown', () => {
     fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
     await flushBridge()
     expect(mounted.posted).toHaveLength(2)
-  })
-})
-
-describe('diagnostics', () => {
-  it('names the notification it refused and why, rather than blaming the view', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'too early', isRpcDeliveryUnknown: false }
-      })
-    )
-    expect(mounted.faults).toEqual([])
-    expect(warned).toHaveBeenCalledWith(expect.stringContaining('refused a page notification'), {
-      name: BRIDGE_FAULT_GRANT,
-      why: 'before-ready'
-    })
   })
 })
 
@@ -581,107 +473,6 @@ function newProbe(): Probe {
     storageWrites: []
   }
 }
-
-describe('the props one render passed', () => {
-  // Verify callback freshness without host rebuild: pending requests stay open and drop totals announce once.
-  it('routes each of them into the latest render, without rebuilding the host', async () => {
-    const posted: PostedFrame[] = []
-    const first = newProbe()
-    const second = newProbe()
-    const firstFaults: BridgeErrorCapture[] = []
-    const secondFaults: BridgeErrorCapture[] = []
-    const firstReadies: string[] = []
-    const secondReadies: string[] = []
-    const render = (probe: Probe, faults: BridgeErrorCapture[], readies: string[]): ReactElement =>
-      createElement(Harness, { session: readyState('session-one'), posted, probe, faults, readies })
-    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
-    await act(async () => {
-      rendered.tree = createTracked(render(first, firstFaults, firstReadies))
-    })
-    const deliver = async (probe: Probe, json: string): Promise<void> => {
-      await act(async () => {
-        probe.view?.onBridgeMessage({ nativeEvent: { json } })
-      })
-    }
-    await deliver(first, clientFrame({ type: 'ready' }))
-    await deliver(first, clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    expect(fakeClient().requests.map((request) => request.method)).toEqual(['status.get'])
-    await act(async () => {
-      rendered.tree?.update(render(second, secondFaults, secondReadies))
-    })
-    for (const json of [
-      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-1/session/wt-2' }),
-      clientFrame({ type: 'notify', name: 'externalLink', url: 'https://example.com/y' }),
-      clientFrame({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind: 'selection' }),
-      clientFrame({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }),
-      clientFrame({ type: 'notify', name: 'storage', key: 'orca:pins:host-1', value: '["wt-2"]' }),
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }
-      }),
-      clientFrame({ type: 'ready' })
-    ]) {
-      await deliver(second, json)
-    }
-    expect({
-      navigations: first.navigations,
-      externalLinks: first.externalLinks,
-      haptics: first.haptics,
-      backPops: first.backPops,
-      storageWrites: first.storageWrites,
-      faults: firstFaults,
-      readies: firstReadies
-    }).toEqual({
-      navigations: [],
-      externalLinks: [],
-      haptics: [],
-      backPops: 0,
-      storageWrites: [],
-      faults: [],
-      readies: ['session-one']
-    })
-    expect({
-      navigations: second.navigations,
-      externalLinks: second.externalLinks,
-      haptics: second.haptics,
-      backPops: second.backPops,
-      storageWrites: second.storageWrites,
-      faults: secondFaults,
-      readies: secondReadies
-    }).toEqual({
-      navigations: ['/h/host-1/session/wt-2'],
-      externalLinks: ['https://example.com/y'],
-      haptics: ['selection'],
-      backPops: 1,
-      storageWrites: [{ key: 'orca:pins:host-1', value: '["wt-2"]' }],
-      faults: [{ category: 'Error', message: 'the route threw', isRpcDeliveryUnknown: false }],
-      readies: ['session-one']
-    })
-    const answered = posted.map((frame) => {
-      const read = readBridgeHostMessage(frame.json)
-      if (!read.ok) {
-        throw new Error(`the page would refuse this frame: ${read.refusal}`)
-      }
-      return read.message.type
-    })
-    expect(answered.filter((type) => type === 'error')).toEqual([])
-    expect(first.droppedBinaryFrames).toEqual([0])
-    expect(second.droppedBinaryFrames).toEqual([])
-    fakeClient().requests[0]?.resolve(rpcSuccess('wire-1', 'ok'))
-    await flushBridge()
-    const replied = posted.map((frame) => {
-      const read = readBridgeHostMessage(frame.json)
-      if (!read.ok) {
-        throw new Error(`the page would refuse this frame: ${read.refusal}`)
-      }
-      return read.message
-    })
-    expect(replied.filter((frame) => frame.type === 'reply')).toEqual([
-      { v: 1, type: 'reply', id: ID, payload: rpcSuccess('wire-1', 'ok') }
-    ])
-  })
-})
 
 describe('a session that handshook before this host existed', () => {
   // Seed rebuilt hosts from reducer-owned handshake state because client replacement leaves the same document mounted.

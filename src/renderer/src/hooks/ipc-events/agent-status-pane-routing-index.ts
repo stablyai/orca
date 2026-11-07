@@ -1,4 +1,4 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'

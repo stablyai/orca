@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type * as OriginalModule0 from '@/runtime/runtime-provider-accounts-client'
+import type * as OriginalModule0 from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -53,17 +53,20 @@ vi.mock('@/lib/windows-terminal-capabilities', () => ({
   getWindowsTerminalCapabilityOwnerKey: () => 'local',
   useWindowsTerminalCapabilities: () => ({ wslDistros: [] })
 }))
-vi.mock('@/runtime/runtime-provider-accounts-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof OriginalModule0>()),
-  fetchProviderAccountsSnapshot: mocks.snapshot,
-  watchProviderAccounts: mocks.watch,
-  selectClaudeProviderAccount: mocks.select,
-  emptyClaudeAccountsState: () => ({
-    accounts: [],
-    activeAccountId: null,
-    activeAccountIdsByRuntime: { host: null, wsl: {} }
+vi.mock(
+  '@/runtime/provider-accounts/observations/runtime-provider-accounts-client',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof OriginalModule0>()),
+    fetchProviderAccountsSnapshot: mocks.snapshot,
+    watchProviderAccounts: mocks.watch,
+    selectClaudeProviderAccount: mocks.select,
+    emptyClaudeAccountsState: () => ({
+      accounts: [],
+      activeAccountId: null,
+      activeAccountIdsByRuntime: { host: null, wsl: {} }
+    })
   })
-}))
+)
 vi.mock('@/lib/claude-account-switch-sessions', () => ({
   handleRunningClaudeSessionsAfterSwitch: vi.fn()
 }))

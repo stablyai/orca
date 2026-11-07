@@ -7,7 +7,14 @@ import {
   printResult,
   type HostNameResult
 } from '../format'
-import { listSshTargets, LOCAL_HOST_LIST_NAME } from '../host-selector-alternatives'
+import { parseHostFlag } from '../execution-host-flag'
+import {
+  fetchSshTargetSummaries,
+  listSshTargets,
+  LOCAL_HOST_LIST_NAME,
+  normalizeTypedName,
+  type SshTargetSummary
+} from '../host-selector-alternatives'
 import {
   getDefaultUserDataPath,
   RuntimeClientError,
@@ -25,6 +32,7 @@ import {
   type EnvironmentAddResult,
   type EnvironmentRemoveResult
 } from '../runtime/environments'
+import { exchangeCliPairingCode } from '../runtime/environment-pairing-exchange'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
@@ -50,7 +58,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   },
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
+    const pairingCode = await exchangeCliPairingCode(getRequiredStringFlag(flags, 'pairing-code'))
     const environment = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
@@ -100,6 +108,36 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...environments
     ]
     printResult(localSuccess({ hosts }), json, formatHostList)
+  },
+  'host rm': async ({ client, flags, json }) => {
+    rejectLocalPairingStoreRetargeting(
+      flags,
+      '`orca host rm`. It removes an SSH target from this machine\u2019s own Orca runtime, the same one `orca host list` reads.',
+      'Run `orca host rm` on that machine to remove an SSH target registered there.'
+    )
+    const targetId = requireSshHostFlag(flags)
+    // Unlike listSshTargets, this keeps runtime_unavailable instead of reporting an unknown target.
+    const { targets } = await fetchSshTargetSummaries<SshTargetSummary>(client)
+    const target = targets.find((candidate) => candidate.id === targetId)
+    if (!target) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target with that id.`,
+        {
+          knownSshTargets: targets,
+          nextSteps: ['Run `orca host list` to see each SSH target and its --host ssh:<id> flag.']
+        }
+      )
+    }
+    // Same RPC as the UI: the runtime tombstones the alias so the ~/.ssh/config import skips it.
+    const response = await client.call('ssh.removeTarget', { targetId })
+    const removed = { kind: 'ssh' as const, name: target.label, id: target.id }
+    printResult(
+      { ...response, result: { removed } },
+      json,
+      (result: { removed: typeof removed }) =>
+        `Removed SSH target ${result.removed.name} (${result.removed.id}).`
+    )
   },
   'environment list': async ({ flags, json }) => {
     rejectLocalPairingStoreRetargeting(
@@ -156,6 +194,28 @@ function rejectLocalPairingStoreRetargeting(
   rejectRemoteSelectionFlags(flags, suffix, {
     nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
   })
+}
+
+function requireSshHostFlag(flags: Map<string, string | boolean>): string {
+  const host = parseHostFlag(flags)
+  if (host?.kind === 'ssh') {
+    return host.targetId
+  }
+  if (!host) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host ssh:<target-id>')
+  }
+  const named = host.kind === 'alias' ? host.alias : host.id
+  const nextStep =
+    host.kind === 'runtime'
+      ? 'A paired Orca server is removed with `orca environment rm --environment <name>`.'
+      : host.kind === 'local' || normalizeTypedName(named) === LOCAL_HOST_LIST_NAME
+        ? 'This machine is always listed and cannot be removed.'
+        : 'Pass the SSH target id as --host ssh:<target-id>; `orca host list` prints it.'
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `\`orca host rm\` removes saved SSH targets only, and --host ${named} is not one.`,
+    { nextSteps: [nextStep, 'Run `orca host list` to see each SSH target and its --host flag.'] }
+  )
 }
 
 function getRequiredStringFlag(flags: Map<string, string | boolean>, name: string): string {

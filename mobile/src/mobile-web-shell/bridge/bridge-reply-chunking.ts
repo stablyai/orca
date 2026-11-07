@@ -14,8 +14,9 @@ import {
 } from './bridge-envelope'
 
 // Split replies above the frame cap rather than inventing native-incompatible refusals; abort only above the absolute reply ceiling, never truncate the caller’s answer.
+// Frames are ready JSON: the payload is serialized once and spliced into envelopes that match JSON.stringify of the frame objects byte for byte.
 export type BridgeReplySplit =
-  | { ok: true; frames: BridgeReplyMessage[] }
+  | { ok: true; frames: string[] }
   | { ok: false; refusal: BridgeRefusal }
 
 export type BridgeReplyAssembly =
@@ -23,31 +24,28 @@ export type BridgeReplyAssembly =
   | { status: 'complete'; payload: BridgeReplyPayload }
   | { status: 'failed'; refusal: BridgeRefusal }
 
-// Measure with the widest allowed part counters because `of` is unknown until splitting finishes.
-function partFrameBytes(id: string, chunk: string): number {
-  return utf8ByteLength(
-    JSON.stringify({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id,
-      part: { i: BRIDGE_MAX_REPLY_PARTS, of: BRIDGE_MAX_REPLY_PARTS },
-      chunk
-    })
-  )
+function partHead(head: string, i: number, of: number): string {
+  return `${head}"part":{"i":${i},"of":${of}},"chunk":`
 }
 
 // Ship the exact measured frame so JSON escaping cannot exceed the cap; even a single code unit fits the envelope budget.
-function chunkEnd(id: string, serialized: string, start: number): number {
+function nextChunk(
+  serialized: string,
+  start: number,
+  envelopeBytes: number
+): { end: number; escaped: string } {
   let end = Math.min(serialized.length, start + BRIDGE_MAX_MESSAGE_BYTES)
-  while (end - start > 1) {
-    const bytes = partFrameBytes(id, serialized.slice(start, end))
-    if (bytes <= BRIDGE_MAX_MESSAGE_BYTES) {
-      break
+  for (;;) {
+    const escaped = JSON.stringify(serialized.slice(start, end))
+    const bytes = envelopeBytes + utf8ByteLength(escaped)
+    if (end - start <= 1 || bytes <= BRIDGE_MAX_MESSAGE_BYTES) {
+      return end - start > 1 && splitsASurrogatePair(serialized, end)
+        ? { end: end - 1, escaped: JSON.stringify(serialized.slice(start, end - 1)) }
+        : { end, escaped }
     }
     const scaled = Math.floor((end - start) * (BRIDGE_MAX_MESSAGE_BYTES / bytes))
     end = start + Math.max(1, Math.min(scaled, end - start - 1))
   }
-  return end - start > 1 && splitsASurrogatePair(serialized, end) ? end - 1 : end
 }
 
 // Keep surrogate pairs together so chunk byte counts agree with the joined reply; backing up one unit preserves a frame that already fits.
@@ -68,29 +66,30 @@ export function splitBridgeReply(id: string, payload: BridgeReplyPayload): Bridg
   } catch {
     return { ok: false, refusal: 'malformed-json' }
   }
-  if (utf8ByteLength(serialized) > BRIDGE_MAX_REPLY_BYTES) {
+  const payloadBytes = utf8ByteLength(serialized)
+  if (payloadBytes > BRIDGE_MAX_REPLY_BYTES) {
     return { ok: false, refusal: 'reply-too-large' }
   }
-  const whole: BridgeReplyMessage = { v: BRIDGE_PROTOCOL_VERSION, type: 'reply', id, payload }
-  if (utf8ByteLength(JSON.stringify(whole)) <= BRIDGE_MAX_MESSAGE_BYTES) {
-    return { ok: true, frames: [whole] }
+  // Envelope text is ASCII-delimited, so its bytes add to the payload's without recounting the payload.
+  const head = `{"v":${BRIDGE_PROTOCOL_VERSION},"type":"reply","id":${JSON.stringify(id)},`
+  const wholeHead = `${head}"payload":`
+  if (utf8ByteLength(wholeHead) + payloadBytes + 1 <= BRIDGE_MAX_MESSAGE_BYTES) {
+    return { ok: true, frames: [`${wholeHead}${serialized}}`] }
   }
-  const chunks: string[] = []
+  // Measure with the widest allowed part counters because `of` is unknown until splitting finishes.
+  const envelopeBytes =
+    utf8ByteLength(partHead(head, BRIDGE_MAX_REPLY_PARTS, BRIDGE_MAX_REPLY_PARTS)) + 1
+  const frames: string[] = []
   for (let start = 0; start < serialized.length;) {
-    const end = chunkEnd(id, serialized, start)
-    chunks.push(serialized.slice(start, end))
-    start = end
+    const chunk = nextChunk(serialized, start, envelopeBytes)
+    frames.push(chunk.escaped)
+    start = chunk.end
   }
-  return {
-    ok: true,
-    frames: chunks.map((chunk, index) => ({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'reply',
-      id,
-      part: { i: index, of: chunks.length },
-      chunk
-    }))
+  // Wrap in place so each escaped chunk can be released as its frame is built.
+  for (let index = 0; index < frames.length; index += 1) {
+    frames[index] = `${partHead(head, index, frames.length)}${frames[index]}}`
   }
+  return { ok: true, frames }
 }
 
 type PendingReply = { of: number; chunks: Map<number, string>; units: number }

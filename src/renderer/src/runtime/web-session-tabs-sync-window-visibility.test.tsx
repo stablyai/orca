@@ -4,8 +4,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
-import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
+import type * as WebRuntimeTerminalCreationModule from './hosted-terminals/creation/web-runtime-terminal-creation'
 
 const mocks = vi.hoisted(() => ({
   createTerminal: vi.fn(),
@@ -26,18 +26,21 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
     workspaceId ? (mocks.ownerEnvironmentIdForWorkspace(state, workspaceId) ?? null) : null
 }))
 
-vi.mock('./web-session-terminal-orphan-recovery', () => ({
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', () => ({
   recoverWebSessionTerminalOrphansBeforeApply: mocks.recoverSnapshot
 }))
 
-vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+vi.mock('./hosted-terminals/creation/web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
-  return { ...actual, createWebRuntimeSessionTerminal: mocks.createTerminal }
+  return {
+    ...actual,
+    createWebRuntimeSessionTerminal: mocks.createTerminal
+  }
 })
 
 import { useAppStore } from '@/store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { clearHostLiveTerminalProbesForTests } from './hosted-terminals/inventory/host-live-terminal-probe'
 import {
   _getWebSessionTabsTrackingCountsForTest,
   resetWebSessionTabsSnapshotFreshnessForTests
@@ -45,14 +48,12 @@ import {
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS } from './web-session-tabs-sync/state'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import {
-  WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT,
-  WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS
-} from './window-visibility-subscription-parking'
+import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_BACKOFF_LIMIT } from './rpc/subscriptions/window-visibility-subscription-parking'
+import { WINDOW_HIDE_PARK_GRACE_MS as WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from '../lib/window-park-visibility'
 import {
   connectedRuntimeStatus,
   publicRuntimeEnvironment
-} from './paired-runtime-environment-test-fixture'
+} from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const ENV_B = 'env-b'

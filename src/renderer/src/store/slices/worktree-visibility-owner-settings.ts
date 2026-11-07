@@ -1,4 +1,5 @@
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import {
   LOCAL_EXECUTION_HOST_ID,

@@ -25,6 +25,13 @@ export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap
       for (const member of row.rows) {
         rekeyed.set(`wt:${member.rowKey}`, groupKey)
       }
+      if (row.folder) {
+        rekeyed.set(getRenderRowKey(row.folder), groupKey)
+      }
+      continue
+    }
+    if (row.type === 'folder-workspace') {
+      rekeyed.set(`lineage-group:${row.key}`, getRenderRowKey(row))
       continue
     }
     if (row.type !== 'item') {
@@ -82,7 +89,9 @@ export function estimateRenderRowSize(
     )
   }
   if (row?.type === 'lineage-group') {
-    return 100 + Math.max(0, row.rows.length - 1) * 96
+    return row.folder
+      ? FOLDER_WORKSPACE_ROW_HEIGHT + row.rows.length * 96
+      : 100 + Math.max(0, row.rows.length - 1) * 96
   }
   if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
     return IMPORTED_WORKTREES_LINE_ROW_HEIGHT

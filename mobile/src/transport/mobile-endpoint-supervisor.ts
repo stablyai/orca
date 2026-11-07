@@ -30,10 +30,6 @@ import {
 
 export type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
 
-const DIRECT_OBSERVATION_MS = 30_000
-const MINIMUM_DWELL_MS = 60_000
-const FAILURE_COOLDOWN_MS = 60_000
-
 export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
@@ -58,12 +54,7 @@ export class MobileEndpointSupervisor {
     relay: MobileRelayEndpoint,
     private readonly dependencies: MobileEndpointSupervisorDependencies
   ) {
-    this.hysteresis = new MobileEndpointHysteresis(dependencies.now(), {
-      directSuccessesRequired: 3,
-      directObservationMs: DIRECT_OBSERVATION_MS,
-      failureCooldownMs: FAILURE_COOLDOWN_MS,
-      minimumDwellMs: MINIMUM_DWELL_MS
-    })
+    this.hysteresis = new MobileEndpointHysteresis(dependencies.now())
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.relayReconnect.reportRecoveryTo(logical)
@@ -73,14 +64,16 @@ export class MobileEndpointSupervisor {
       isStopped: () => this.stopped,
       isForeground: () => this.backgroundGrace.isForeground(),
       setForeground: (foreground) => this.setForeground(foreground),
-      scheduleDirectProbe: () => this.directProbe.schedule(0)
+      scheduleDirectProbe: () => this.directProbe.schedule(0),
+      readLocalNetwork: dependencies.readLocalNetwork,
+      onLocalNetworkArrival: () => this.directProbe.arrive()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true
       void this.recoverRelay(true)
     })
     // The race owns recovery and must book shared cooldown on failure; recoverRelay already guards stopped/background state.
-    this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
+    this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, hostId, () => {
       void this.recoverRelay(true, true)
     })
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
@@ -155,7 +148,7 @@ export class MobileEndpointSupervisor {
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
-        this.directGrace.clear()
+        this.directGrace.onConnected()
         if (this.logical.getActivePath() !== 'relay') {
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
@@ -170,6 +163,7 @@ export class MobileEndpointSupervisor {
         logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
       }
     })
+    void this.directGrace.loadLastGoodPath()
     if (this.relayReconnect.needsRecovery(this.logical.getState())) {
       // Why: the first direct dial can fail while encrypted relay credentials
       // are still loading, before the supervisor subscribes to state changes.

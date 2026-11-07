@@ -4,8 +4,15 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { AgentSessionProviderHandleChain } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
+import {
+  providerTimelineKeyPart,
+  spelledProviderTimelineItemKey
+} from '../native-chat/agent-session-timeline/provider-timeline-identity'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AcpAgentError, AcpAuthRequiredError } from './acp-errors'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
 import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
@@ -85,4 +92,41 @@ export function acpSessionNotRestoredRow(
       join: { thread: providerSessionId }
     }
   ]
+}
+
+/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
+export function acpUnannouncedLosses(
+  readJournal: (sessionId: string) => JournalLoad | null,
+  sessionId: string,
+  chain: AgentSessionProviderHandleChain
+): string[] {
+  const lost = chain.flatMap((link) =>
+    link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
+  )
+  if (lost.length === 0) {
+    return []
+  }
+  let load: JournalLoad | null
+  try {
+    load = readJournal(sessionId)
+  } catch {
+    return []
+  }
+  if (!load) {
+    return lost
+  }
+  if (load.damage || load.newer) {
+    return []
+  }
+  const written = new Set<string>()
+  for (const itemId of load.state.items.keys()) {
+    const identity = parseAgentJournalItemKey(itemId)
+    const spelled =
+      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
+    if (spelled !== null) {
+      written.add(spelled)
+    }
+  }
+  // Warnings survive even if the replacement session that wrote them is superseded.
+  return lost.filter((key) => !written.has(providerTimelineKeyPart(acpSessionNotRestoredItem(key))))
 }
