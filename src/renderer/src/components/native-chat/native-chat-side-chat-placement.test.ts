@@ -56,15 +56,15 @@ import { beginNativeChatSideChatPlacement } from './native-chat-side-chat-placem
 
 let store: StoreApi<State>
 
-/** A pane whose tab list counts its reads: reading the workspace's selection reads every pane's. */
+/** A pane that counts reads of its selection: reading the workspace's selection reads every pane's. */
 function group(id: string, activeTabId: string | null, tabOrder: string[]): Group {
   return {
     id,
-    activeTabId,
-    get tabOrder() {
+    get activeTabId() {
       mocks.selectionReads++
-      return tabOrder
-    }
+      return activeTabId
+    },
+    tabOrder
   }
 }
 
@@ -233,6 +233,28 @@ describe('when main draws the move', () => {
     })
 
     expect(mocks.activateTab).toHaveBeenCalledWith('tab-side', { worktreeId: 'wt-1' })
+  })
+
+  it('stays in the background after the user selects it in the pane it is leaving and goes back', () => {
+    beginNativeChatSideChatPlacement('wt-1', 'tab-source').settle(chat)
+    publishSideChat()
+    const sourcePane = (activeTabId: string): void =>
+      store.setState({
+        groupsByWorktree: {
+          ...store.getState().groupsByWorktree,
+          'wt-1': [
+            group('g-left', activeTabId, ['tab-source', 'tab-side']),
+            group('g-right', null, [])
+          ]
+        }
+      })
+
+    sourcePane('tab-side')
+    sourcePane('tab-source')
+    drawMove()
+    completion?.refused()
+
+    expect(mocks.activateTab).not.toHaveBeenCalled()
   })
 
   it('selects the side chat where it is when main refuses the move', () => {

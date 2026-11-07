@@ -40,6 +40,8 @@ export function beginNativeChatSideChatPlacement(
   let movingFrom: string | undefined
   let retired = false
 
+  const moving = (): Moving | undefined =>
+    forkTabId && movingFrom ? { forkTabId, from: movingFrom } : undefined
   const retire = (): void => {
     if (!retired) {
       retired = true
@@ -125,7 +127,7 @@ export function beginNativeChatSideChatPlacement(
       ((state.groupsByWorktree[worktreeId] !== previous.groupsByWorktree[worktreeId] ||
         state.activeGroupIdByWorktree[worktreeId] !==
           previous.activeGroupIdByWorktree[worktreeId]) &&
-        selectionOf(state, worktreeId, forkTabId, before).key !== before.key)
+        selectionOf(state, worktreeId, moving(), before).key !== before.key)
     ) {
       retire()
       return
@@ -167,33 +169,42 @@ type Selection = {
   activeTabByGroup: ReadonlyMap<string, string | null>
 }
 
-/** The workspace's selection (its active pane and each pane's active tab), with what moving the side
- *  chat itself changes read as it was at Send: a new pane holding only it, or a pane showing it. */
+/** The side chat on its way out of `from`, while main draws its move. */
+type Moving = { forkTabId: string; from: string }
+
+/** The workspace's selection (its active pane and each pane's active tab). While main moves the side
+ *  chat, what that move changes reads as it was at Send: a new pane holding only the side chat, or
+ *  another pane showing it. Selecting it in the pane it is leaving is still the user's. */
 function selectionOf(
   state: SelectionState,
   worktreeId: string,
-  forkTabId: string | undefined,
+  moving: Moving | undefined,
   before: Selection | undefined
 ): Selection {
-  // A pane that opened since Send to hold only the side chat is the side chat's own split.
+  const shownByMove = (group: { id: string; activeTabId: string | null }): boolean =>
+    moving !== undefined && group.id !== moving.from && group.activeTabId === moving.forkTabId
   const groups = (state.groupsByWorktree[worktreeId] ?? []).filter(
     (group) =>
       before?.activeTabByGroup.has(group.id) !== false ||
-      !(group.tabOrder.length === 1 && group.tabOrder[0] === forkTabId)
+      !(
+        shownByMove(group) &&
+        group.tabOrder.length === 1 &&
+        group.tabOrder[0] === moving?.forkTabId
+      )
   )
   const activeTabByGroup = new Map(
     groups.map((group) => [
       group.id,
-      forkTabId !== undefined && group.activeTabId === forkTabId
+      shownByMove(group)
         ? (before?.activeTabByGroup.get(group.id) ?? null)
         : (group.activeTabId ?? null)
     ])
   )
   const active = state.activeGroupIdByWorktree[worktreeId]
-  const activeGroup = groups.find((group) => group.id === active)
-  const showsFork =
-    forkTabId !== undefined && (!activeGroup || activeGroup.activeTabId === forkTabId)
-  const activeGroupId = showsFork ? before?.activeGroupId : active
+  const activeGroup = (state.groupsByWorktree[worktreeId] ?? []).find(
+    (group) => group.id === active
+  )
+  const activeGroupId = activeGroup && shownByMove(activeGroup) ? before?.activeGroupId : active
   const tabs = [...activeTabByGroup].map(([id, tab]) => `${id}:${tab ?? ''}`)
   return { key: `${activeGroupId ?? ''}|${tabs.join(',')}`, activeGroupId, activeTabByGroup }
 }
