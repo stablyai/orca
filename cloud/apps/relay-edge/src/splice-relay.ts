@@ -24,16 +24,13 @@ type State = {
 type SocketKind = 'phone' | 'data'
 // Per-direction flood guard: bytes forwarded to a peer since that peer last sent anything.
 // place: client ingress '<continent>/<colo>', for metrics.
-type GuardAttachment = { silentBytes: number; windowStart: number; place?: string }
+// sentBytes/sentFrames: what this socket sent, kept on the attachment so it survives hibernation.
+type GuardAttachment = { silentBytes: number; windowStart: number; place?: string; sentBytes?: number; sentFrames?: number }
 
 const NO_DEADLINE = Number.MAX_SAFE_INTEGER
 const KEY_PREFIX = 'splice:'
 
 export class SpliceRelay extends DurableObject<Env> {
-  // Spike traffic counters per connId, in memory only (lost if the object hibernates mid-splice).
-  // [bytes to host, frames to host, bytes to phone, frames to phone]
-  private traffic = new Map<string, number[]>()
-
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort' && this.env.SPIKE_ADMIN === '1') this.ctx.abort('spike reset')
@@ -206,8 +203,13 @@ export class SpliceRelay extends DurableObject<Env> {
     if (!peer) return
     // The sender spoke, so its own inbound direction is evidently being read.
     const fromGuard = from.deserializeAttachment() as GuardAttachment
-    if (fromGuard.silentBytes !== 0) from.serializeAttachment({ ...fromGuard, silentBytes: 0, windowStart: Date.now() })
     const size = typeof message === 'string' ? message.length : message.byteLength
+    from.serializeAttachment({
+      ...fromGuard,
+      ...(fromGuard.silentBytes !== 0 ? { silentBytes: 0, windowStart: Date.now() } : {}),
+      sentBytes: (fromGuard.sentBytes ?? 0) + size,
+      sentFrames: (fromGuard.sentFrames ?? 0) + 1
+    })
     const budget = Number(this.env.SPLICE_SILENT_BYTES_MAX ?? '0')
     if (budget > 0) {
       const g = peer.deserializeAttachment() as GuardAttachment
@@ -223,11 +225,6 @@ export class SpliceRelay extends DurableObject<Env> {
         return
       }
     }
-    const counters = this.traffic.get(connId) ?? [0, 0, 0, 0]
-    const i = kind === 'phone' ? 0 : 2
-    counters[i] += size
-    counters[i + 1] += 1
-    this.traffic.set(connId, counters)
     try {
       peer.send(message)
     } catch {
@@ -242,7 +239,13 @@ export class SpliceRelay extends DurableObject<Env> {
     if (!id) return
     const state = await this.state(id.connId)
     if (!state) return
-    const counters = this.traffic.get(id.connId) ?? [0, 0, 0, 0]
+    // [bytes to host, frames to host, bytes to phone, frames to phone], from each side's attachment.
+    const sent = (k: SocketKind) => {
+      const peer = k === id.kind ? ws : this.socket(id.connId, k)
+      const g = peer?.deserializeAttachment() as GuardAttachment | undefined
+      return [g?.sentBytes ?? 0, g?.sentFrames ?? 0]
+    }
+    const counters = [...sent('phone'), ...sent('data')]
     const place = this.place(ws)
     metric(this.env, 'phone_close', 1, `${id.kind}:${code}`, [], '', place)
     metric(this.env, 'splice_bytes', counters[0] + counters[2], '', counters, '', place)
@@ -307,7 +310,6 @@ export class SpliceRelay extends DurableObject<Env> {
 
   // Closed splices are deleted, not kept: the object is reused and connIds are never reused.
   private async forget(connId: string): Promise<void> {
-    this.traffic.delete(connId)
     await this.ctx.storage.delete(KEY_PREFIX + connId)
   }
 
