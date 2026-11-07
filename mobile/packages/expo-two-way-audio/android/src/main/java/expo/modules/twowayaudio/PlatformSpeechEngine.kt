@@ -132,7 +132,9 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
   // slowly is busy, not unsupported: the next check asks again on the same recognizer.
   private suspend fun support(locale: Locale): RecognitionSupport? {
     repeat(2) {
+      var asked: SpeechRecognizer? = null
       val (support, error) = request(SUPPORT_TIMEOUT_MS) { recognizer, done: (Pair<RecognitionSupport?, Int>) -> Unit ->
+        asked = recognizer
         recognizer.checkRecognitionSupport(
           recognizeIntent(locale),
           context.mainExecutor,
@@ -146,7 +148,7 @@ internal class PlatformSpeechEngine(private val context: Context) : OnDeviceSpee
         if (support == null) Log.w(SPEECH_LOG_TAG, "Recognition support check for $locale failed: $error")
         return support
       }
-      withContext(Dispatchers.Main) { replace(shared) }
+      withContext(Dispatchers.Main) { replace(asked) }
     }
     Log.w(SPEECH_LOG_TAG, "Recognition support check for $locale: the service stayed disconnected")
     return null
