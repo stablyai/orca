@@ -10,8 +10,10 @@ import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
-  readCachedAiVaultSessionResult
+  readCachedAiVaultSessionResult,
+  readLastAiVaultSessionResult
 } from './ai-vault-session-result-cache'
+import type { SavedAiVaultSessionList } from './ai-vault-saved-session-lists'
 
 /** Match panel requests so readers share host/renderer caches instead of evicting one another. */
 export type AiVaultSessionListRequest = {
@@ -42,6 +44,20 @@ export function readCachedAiVaultSessionList(
   request: AiVaultSessionListRequest
 ): AiVaultListResult | null {
   return readCachedAiVaultSessionResult({
+    key: aiVaultSessionResultCacheKey(
+      request.executionHostScope,
+      request.scopePaths,
+      request.scopeOnly
+    ),
+    limit: request.sessionLimit,
+    scopePaths: request.scopePaths
+  })
+}
+
+export function readLastAiVaultSessionList(
+  request: AiVaultSessionListRequest
+): Promise<SavedAiVaultSessionList | null> {
+  return readLastAiVaultSessionResult({
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,

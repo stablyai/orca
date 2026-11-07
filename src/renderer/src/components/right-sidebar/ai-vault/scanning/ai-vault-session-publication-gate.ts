@@ -9,7 +9,20 @@ export class AiVaultSessionPublicationGate {
   private generation = 0
   private cancelPending: (() => void) | null = null
 
+  private published = 0
+
+  /** Applies a list that arrives later unless a list was published meanwhile; cancels don't drop it. */
+  showUntilPublished<T>(pending: Promise<T | null>, apply: (value: T) => void): void {
+    const published = this.published
+    void pending.then((value) => {
+      if (value !== null && published === this.published) {
+        startTransition(() => apply(value))
+      }
+    })
+  }
+
   publish(result: AiVaultListResult, apply: (result: AiVaultListResult) => void): void {
+    this.published += 1
     this.cancel()
     const generation = this.generation
     if (hasInputBeenQuietFor(AI_VAULT_PUBLICATION_QUIET_MS)) {

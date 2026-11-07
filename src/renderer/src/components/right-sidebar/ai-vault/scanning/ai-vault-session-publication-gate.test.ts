@@ -67,4 +67,19 @@ describe('AiVaultSessionPublicationGate', () => {
 
     expect(apply).not.toHaveBeenCalled()
   })
+
+  it('shows a late saved list after a cancel but never over a newer published list', async () => {
+    const shown = vi.fn()
+    const gate = new AiVaultSessionPublicationGate()
+    gate.showUntilPublished(Promise.resolve(FIRST), shown)
+    gate.cancel()
+    await Promise.resolve()
+    expect(shown).toHaveBeenCalledWith(FIRST)
+
+    const late = vi.fn()
+    gate.showUntilPublished(Promise.resolve(FIRST), late)
+    gate.publish(SECOND, vi.fn())
+    await Promise.resolve()
+    expect(late).not.toHaveBeenCalled()
+  })
 })
