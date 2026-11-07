@@ -122,12 +122,37 @@ describe('updateIssueBySlug', () => {
     ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
   })
 
-  it('keeps a Project body edit successful when the accepted response has no representation', async () => {
-    runRestMock.mockResolvedValueOnce({ ok: true, data: null })
-    await expect(
-      updateIssueBySlug({ owner: 'acme', repo: 'widgets', number: 12, updates: { body: 'saved' } })
-    ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
-  })
+  it.each([null, true])(
+    'finishes a Project compound save with unusable optional HTML (%s)',
+    async (html) => {
+      const body =
+        '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      runRestMock.mockResolvedValueOnce({
+        ok: true,
+        data: html === null ? null : { body, body_html: html }
+      })
+      await expect(
+        updateIssueBySlug({
+          owner: 'acme',
+          repo: 'widgets',
+          number: 12,
+          updates: { body, addLabels: ['saved-label'] }
+        })
+      ).resolves.toEqual({ ok: true, bodyImageUrls: undefined })
+      expect(runRestMock).toHaveBeenCalledWith(
+        [
+          '-X',
+          'POST',
+          'repos/acme/widgets/issues/12/labels',
+          '--raw-field',
+          'labels[]=saved-label'
+        ],
+        undefined,
+        'core',
+        { host: 'github.com' }
+      )
+    }
+  )
 
   it('closes slug-addressed issues with completed and not planned reasons via gh issue close', async () => {
     await expect(

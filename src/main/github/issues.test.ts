@@ -245,13 +245,21 @@ describe('issue source operations', () => {
   it.each([
     '',
     'not JSON',
-    JSON.stringify({ body: 'different', body_html: '<img src="https://example.test">' })
+    JSON.stringify({
+      body: 'different ![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)',
+      body_html:
+        '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+    })
   ])(
     'keeps an accepted issue edit successful without a usable paired response (%s)',
     async (stdout) => {
       getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
       ghExecFileAsyncMock.mockResolvedValueOnce({ stdout })
-      await expect(updateIssue('/repo-root', 924, { body: 'saved' })).resolves.toEqual({
+      await expect(
+        updateIssue('/repo-root', 924, {
+          body: '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+        })
+      ).resolves.toEqual({
         ok: true,
         bodyImageUrls: undefined
       })
