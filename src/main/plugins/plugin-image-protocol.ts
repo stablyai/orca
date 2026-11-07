@@ -8,10 +8,18 @@ import { readCheckedPluginImage, type CheckedPluginImage } from './plugin-image-
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { declaredPluginImages } from './plugin-image-artifact-validation'
 import type { PluginImageCache } from './plugin-image-cache'
+import { readPluginFontSlot } from './plugin-font-files'
+import { parsePluginFontSlot } from '../../shared/plugins/contributions/plugin-font-contribution'
 
 export type PluginImageProtocolDependencies = {
   cache: PluginImageCache
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
+  /** Enabled and consented; fonts are served only for these, so disabling stops them at once. */
+  findApprovedPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
+}
+
+function isCurrentContent(plugin: ValidDiscoveredPlugin, contentHash: string): boolean {
+  return contentHash === (plugin.isDev ? 'dev' : plugin.contentHash)
 }
 
 /** An installed plugin's declared image or theme background, re-checked on every read like at install. */
@@ -20,7 +28,7 @@ async function readInstalledImage(
   contentHash: string,
   slot: string
 ): Promise<CheckedPluginImage | null> {
-  if (contentHash !== (plugin.isDev ? 'dev' : plugin.contentHash)) {
+  if (!isCurrentContent(plugin, contentHash)) {
     return null
   }
   const declared = declaredPluginImages(plugin.manifest).find(
@@ -45,8 +53,15 @@ export function createPluginImageRequestHandler(
     const reference = parsePluginImageUrl(request.url)
     try {
       let image: CheckedPluginImage | null = null
+      const isFont = reference?.kind === 'installed' && parsePluginFontSlot(reference.slot) !== null
       if (reference?.kind === 'sha') {
         image = await dependencies.cache.get(reference.sha256)
+      } else if (reference?.kind === 'installed' && isFont) {
+        const plugin = dependencies.findApprovedPlugin(reference.pluginKey)
+        image =
+          plugin && isCurrentContent(plugin, reference.contentHash)
+            ? await readPluginFontSlot(plugin.rootDir, plugin.manifest, reference.slot)
+            : null
       } else if (reference?.kind === 'installed') {
         const plugin = dependencies.findValidPlugin(reference.pluginKey)
         image = plugin
@@ -65,7 +80,10 @@ export function createPluginImageRequestHandler(
             reference?.kind === 'installed' && reference.contentHash === 'dev'
               ? 'no-store'
               : 'private, max-age=31536000, immutable',
-          'X-Content-Type-Options': 'nosniff'
+          'X-Content-Type-Options': 'nosniff',
+          // Why: web fonts load in CORS mode; only the default session handles this scheme, so
+          // plugin frames and browser tabs, which use their own sessions, still cannot reach it.
+          ...(isFont ? { 'Access-Control-Allow-Origin': '*' } : {})
         }
       })
     } catch {

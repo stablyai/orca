@@ -14,6 +14,7 @@ import {
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
@@ -149,7 +150,9 @@ export function createTerminalPaneManagerOptions(
         ...buildWindowsPtyCompatibilityOptions(ptyBackendContext),
         ...buildTerminalKeyboardProtocolOptions(ptyBackendContext),
         fontSize: currentSettings?.terminalFontSize ?? 14,
-        fontFamily: buildFontFamily(currentSettings?.terminalFontFamily ?? ''),
+        fontFamily: buildFontFamily(
+          pluginFontFamilyWhenLoaded(currentSettings?.terminalFontFamily ?? '')
+        ),
         fontWeight: terminalFontWeights.fontWeight,
         fontWeightBold: terminalFontWeights.fontWeightBold,
         scrollback: normalizeDesktopTerminalScrollbackRows(currentSettings?.terminalScrollbackRows),
