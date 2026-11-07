@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
@@ -84,7 +85,11 @@ export type EditorFilesSlice = {
     intent: EditorOpenLinkIntent | null,
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
-  openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewMarkdownInActiveWorkspace: (
+    groupId: string,
+    targetWorktreeId?: string,
+    executionHostId?: ExecutionHostId
+  ) => Promise<void>
   acquireEditorFileOperationProvenance: (
     file: OpenFile,
     selected?: OpenFile['operationProvenance']
@@ -94,7 +99,9 @@ export type EditorFilesSlice = {
   /** Creates a plugin's new-file type at the active workspace root and opens it. */
   openNewPluginFileInActiveWorkspace: (
     newFile: { pluginKey: string; id: string; title: string; extension: string },
-    groupId?: string
+    groupId?: string,
+    targetWorktreeId?: string,
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   /** Opens an empty `untitled<extension>` at the active workspace root. */
   openBlankFileInActiveWorkspace: (extension: string) => Promise<void>

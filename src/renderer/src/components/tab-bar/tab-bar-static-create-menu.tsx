@@ -24,6 +24,7 @@ export function TabBarStaticCreateMenu({
   mobileEmulatorCreationEnabled,
   workspaceHasSimulatorTab,
   showMobileEmulatorIntroCallout,
+  onNewPluginFile,
   props,
   windowsShellEntries,
   defaultWindowsPowerShellImplementation,
@@ -36,6 +37,7 @@ export function TabBarStaticCreateMenu({
   queueNewActiveTerminalFocusAfterNewTabMenuClose
 }: {
   props: TabBarProps
+  onNewPluginFile?: (newFile: ReturnType<typeof usePluginNewFiles>[number]) => void
   groupId: string
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
@@ -167,7 +169,11 @@ export function TabBarStaticCreateMenu({
           <DropdownMenuItem
             key={newFile.key}
             onSelect={() => {
-              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              if (onNewPluginFile) {
+                onNewPluginFile(newFile)
+              } else {
+                void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              }
             }}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
           >

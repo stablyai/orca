@@ -1,3 +1,4 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
@@ -15,11 +16,11 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
 import { launchAgentInWebHostTab } from '@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
-import '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import {
   launchOnceHostAnswered,
@@ -68,7 +69,11 @@ export function launchAgentInNewTabWithOutcome(
     activate
   } = args
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    executionHostId: args.selectedExecutionHostId
+  })
   if (!executionContext) {
     args.focusIntent?.cancel()
     return null
@@ -132,7 +137,10 @@ export function launchAgentInNewTabWithOutcome(
     return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
   const buildStartup = (
-    agentLaunchChoices = readAgentLaunchPreferencesForWorktree(store, worktreeId).agentLaunchChoices
+    agentLaunchChoices = readAgentLaunchPreferencesForWorkspace(
+      store,
+      worktreeLaunchWorkspace(worktreeId, args.selectedExecutionHostId)
+    ).agentLaunchChoices
   ) =>
     planLaunchAgentStartupPrompt({
       base: resolveAgentStartupPlanInputs({
@@ -150,7 +158,16 @@ export function launchAgentInNewTabWithOutcome(
       isFollowupPath
     })
   args.focusIntent?.cancel()
-  const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  const selectedOwner = args.selectedExecutionHostId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: worktreeId,
+        hostId: args.selectedExecutionHostId
+      })
+    : undefined
+  const runtimeEnvironmentId =
+    selectedOwner?.kind === 'resolved'
+      ? selectedOwner.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
       return null
@@ -195,6 +212,7 @@ export function launchAgentInNewTabWithOutcome(
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
     const launched = launchNewTabPromptThroughHost({
+      ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
       agent,
       worktreeId,
       ...(groupId ? { groupId } : {}),
@@ -219,6 +237,7 @@ export function launchAgentInNewTabWithOutcome(
     }
   }
   const tab = store.createTab(worktreeId, groupId, undefined, {
+    ...(args.selectedExecutionHostId ? { executionHostId: args.selectedExecutionHostId } : {}),
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),

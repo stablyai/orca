@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 import {
   openSidebarProjectDialog,
   openSidebarWorkspaceComposer
@@ -315,7 +316,7 @@ async function waitForTerminalPaneManager(page: Page): Promise<void> {
 
 async function createTerminalTabThroughMenu(page: Page): Promise<void> {
   const tabIdsBefore = await renderedTabIds(page)
-  await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+  await (await tabCreateMenuTrigger(page)).click({ force: true })
   const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
   await newTerminalMenuItem.click({ force: true })
   await expect.poll(() => countRenderedTabs(page), { timeout: 5_000 }).toBe(tabIdsBefore.length + 1)
@@ -371,7 +372,7 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
   })
   const newTabStep = page.getByRole('dialog', { name: 'New agents start here', exact: true })
   await expect(newTabStep).toBeVisible()
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await (await tabCreateMenuTrigger(page)).click()
   await expect(page.getByRole('menu')).toBeVisible()
   await expect(newTabStep).toBeHidden()
   await expect(page.getByRole('dialog', { name: /Split a terminal pane/i })).toBeHidden()
@@ -384,7 +385,7 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
   await expect(splitStep).toBeVisible()
   await splitStep.getByRole('button', { name: 'Back', exact: true }).click()
   await expect(newTabStep).toBeVisible()
-  await page.locator('[data-contextual-tour-target="tab-create-menu"]').click()
+  await (await tabCreateMenuTrigger(page)).click()
   await expect(newTabStep).toBeHidden()
   await page.getByRole('menuitem', { name: /^New Terminal/ }).click()
   await expect(page.getByRole('menu')).toBeHidden()

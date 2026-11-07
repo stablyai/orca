@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 /**
  * Native chat on a WSL host with a fake WSL transport: the HUB stands in for the distro's orcad and
  * runs the Claude stub. A second desktop adds the "distro" as a host, opens a chat on a project
@@ -80,7 +81,7 @@ test.describe('native chat on a WSL host', () => {
         })
       expect(await askSupport()).toMatchObject({ supported: true })
 
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await (await tabCreateMenuTrigger(page)).click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -215,7 +216,7 @@ test.describe('native chat on a WSL host', () => {
       })
       await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
       // The menu offers only installed agents, so the chat starts while claude is there.
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await (await tabCreateMenuTrigger(page)).click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })
@@ -352,7 +353,7 @@ test.describe('native chat on a WSL host', () => {
         kind: 'git'
       })
       await expect.poll(() => focusProject(page, projectPath), { timeout: 60_000 }).toBeTruthy()
-      await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
+      await (await tabCreateMenuTrigger(page)).click()
       await page
         .getByRole('menu')
         .getByText('Claude', { exact: true })

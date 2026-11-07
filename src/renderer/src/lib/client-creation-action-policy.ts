@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { resolveOwner, runtimeEnvironmentIdForWorkspaceOwner } from './resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -71,10 +73,11 @@ export function resolveClientCreationActionPolicy(args: {
 
 export function getClientCreationActionPolicy(
   state: AppState,
-  worktreeId: string | null
+  worktreeId: string | null,
+  executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
   return worktreeId
-    ? getWorkspaceClientCreationActionPolicy(state, worktreeId)
+    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, executionHostId)
     : creationPolicyForRuntime(
         state,
         state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
@@ -84,12 +87,26 @@ export function getClientCreationActionPolicy(
 
 export function getWorkspaceClientCreationActionPolicy(
   state: AppState,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
+  const ownerRef = { workspaceId: worktreeId, hostId: executionHostId }
+  if (executionHostId && resolveOwner(state, ownerRef).kind !== 'resolved') {
+    const unavailable = {
+      state: 'hidden' as const,
+      reason: 'The selected workspace host is unavailable.'
+    }
+    return { 'managed-browser': unavailable, 'mobile-emulator': unavailable }
+  }
+  const owner = executionHostId ? runtimeEnvironmentIdForWorkspaceOwner(state, ownerRef) : undefined
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   return creationPolicyForRuntime(
     state,
-    floatingWorkspace ? null : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
+    floatingWorkspace
+      ? null
+      : owner?.kind === 'resolved'
+        ? owner.environmentId
+        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
     floatingWorkspace
   )
 }

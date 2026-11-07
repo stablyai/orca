@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { findGroupAndWorktree, findGroupForTab } from '../../tab-group-state'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
@@ -13,7 +15,6 @@ import {
 } from '@/lib/create-untitled-markdown'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
-import { findGroupForTab } from '../../tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 
@@ -35,11 +36,21 @@ export async function createUntitledFileInActiveWorkspace(
   get: EditorGet,
   groupId: string | undefined,
   create: (context: UntitledFileCreationContext) => Promise<UntitledMarkdownFileInfo | null>,
-  failureMessage: string
+  failureMessage: string,
+  targetWorktreeId?: string,
+  targetExecutionHostId?: ExecutionHostId
 ): Promise<boolean> {
   const state = get()
-  const worktreeId = state.activeWorktreeId
-  const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
+  const worktreeId =
+    targetWorktreeId ??
+    (groupId ? findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId : undefined) ??
+    state.activeWorktreeId
+  const executionHostId =
+    targetExecutionHostId ??
+    (state.activeWorktreeId === worktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined)
+  const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId, executionHostId) : undefined
   if (!worktreeId || !worktree) {
     return false
   }
@@ -48,7 +59,8 @@ export async function createUntitledFileInActiveWorkspace(
       state,
       worktreeId,
       undefined,
-      false
+      false,
+      executionHostId
     )
     const operationContext = getEditorFileOperationContext(
       state,
@@ -83,7 +95,9 @@ async function openSeededUntitledFile(
   get: EditorGet,
   extension: string,
   readContent: () => Promise<string>,
-  groupId?: string
+  groupId?: string,
+  targetWorktreeId?: string,
+  targetExecutionHostId?: ExecutionHostId
 ): Promise<boolean> {
   const failureMessage = translate('auto.store.pluginNewFile.failed', "Couldn't create the file.")
   // An empty floating panel's + menu passes the workspace ID in place of a group ID.
@@ -134,7 +148,9 @@ async function openSeededUntitledFile(
           assertOperationCurrent: context.assertOperationCurrent
         }
       ),
-    failureMessage
+    failureMessage,
+    targetWorktreeId,
+    targetExecutionHostId
   )
 }
 
@@ -143,7 +159,12 @@ export function createPluginNewFileActions(
   get: EditorGet
 ): Pick<EditorSlice, 'openNewPluginFileInActiveWorkspace' | 'openBlankFileInActiveWorkspace'> {
   return {
-    openNewPluginFileInActiveWorkspace: async (newFile, groupId) => {
+    openNewPluginFileInActiveWorkspace: async (
+      newFile,
+      groupId,
+      targetWorktreeId,
+      executionHostId
+    ) => {
       const readTemplate = window.api?.plugins?.readNewFileTemplate
       if (!readTemplate) {
         return
@@ -167,7 +188,9 @@ export function createPluginNewFileActions(
           }
           return content
         },
-        groupId
+        groupId,
+        targetWorktreeId,
+        executionHostId
       )
     },
     openBlankFileInActiveWorkspace: async (extension) => {

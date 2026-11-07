@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 import { existsSync, readFileSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
@@ -129,7 +130,7 @@ test.describe('structured chat tabs', () => {
     await expect(tabInStrip(page, secondTab)).toHaveCount(0)
 
     // A chat the window opens from the New tab menu.
-    await page.getByRole('button', { name: 'New tab' }).click({ force: true })
+    await (await tabCreateMenuTrigger(page)).click({ force: true })
     const claudeOption = page.getByRole('menuitem', {
       name: 'Claude Configure Claude',
       exact: true

@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from './helpers/terminal-tab-menu'
 // H5c-2: with ORCA_LAYOUT_OWNER=main, desktop close/rename/split/create must update windowless server layout, session tabs and drawn frames; close must also stop its PTY.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
@@ -239,7 +240,7 @@ test.describe('paired desktop writes to a switch-on server’s workspace land in
             )
           )
         )
-        await desktop.page.getByRole('button', { name: 'New tab' }).click({ force: true })
+        await (await tabCreateMenuTrigger(desktop.page)).click({ force: true })
         await desktop.page
           .getByRole('menuitem', { name: /New Terminal/i })
           .first()

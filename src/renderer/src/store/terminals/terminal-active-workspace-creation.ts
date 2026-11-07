@@ -1,9 +1,14 @@
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { TabSplitTarget } from '../slices/tabs'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import {
+  resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResultForHost
+} from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
@@ -12,10 +17,22 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId) => {
-      const worktreeId = get().activeWorktreeId
+    openNewTerminalTabInActiveWorkspace: async (
+      groupId,
+      targetWorktreeId,
+      executionHostId,
+      shellOverride
+    ) => {
+      const worktreeId = targetWorktreeId ?? get().activeWorktreeId
       if (worktreeId) {
-        await openNewTerminalTabInWorkspace(get, worktreeId, groupId)
+        await openNewTerminalTabInWorkspace(
+          get,
+          worktreeId,
+          groupId,
+          undefined,
+          executionHostId,
+          shellOverride
+        )
       }
     }
   }
@@ -25,22 +42,39 @@ export async function openNewTerminalTabInWorkspace(
   get: TerminalStoreGet,
   worktreeId: string,
   groupId?: string,
-  split?: TabSplitTarget
+  split?: TabSplitTarget,
+  executionHostId?: ExecutionHostId,
+  shellOverride?: string
 ): Promise<void> {
   const state = get()
   const workspaceScope = parseWorkspaceKey(worktreeId)
   const worktreeRoute =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
       ? null
-      : resolveWorktreeOperationRouteResult(state, worktreeId)
+      : executionHostId
+        ? resolveWorktreeOperationRouteResultForHost(state, worktreeId, executionHostId)
+        : resolveWorktreeOperationRouteResult(state, worktreeId)
   if (worktreeRoute && worktreeRoute.kind !== 'resolved') {
     return
   }
-  const runtimeEnvironmentId =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? null
-      : worktreeRoute
-        ? worktreeRoute.route.runtimeEnvironmentId
+  const selectedOwner =
+    !worktreeRoute && executionHostId
+      ? runtimeEnvironmentIdForWorkspaceOwner(state, {
+          workspaceId: worktreeId,
+          hostId: executionHostId
+        })
+      : undefined
+  if (selectedOwner?.kind === 'ambiguous') {
+    return
+  }
+  const runtimeEnvironmentId = worktreeRoute
+    ? worktreeRoute.route.runtimeEnvironmentId
+    : executionHostId
+      ? selectedOwner?.kind === 'resolved'
+        ? selectedOwner.environmentId
+        : null
+      : worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? null
         : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   if (runtimeEnvironmentId) {
     const splitGroupId = split
@@ -63,7 +97,8 @@ export async function openNewTerminalTabInWorkspace(
           environmentId: runtimeEnvironmentId,
           targetGroupId: splitGroupId ?? groupId,
           activate: true,
-          selectWorktree: !split
+          selectWorktree: !split,
+          ...(shellOverride === undefined ? {} : { shell: shellOverride })
         },
         { userAct: true }
       )
@@ -76,7 +111,17 @@ export async function openNewTerminalTabInWorkspace(
   if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
     return
   }
-  const terminal = get().createTab(worktreeId, groupId, undefined, split ? { split } : undefined)
+  const terminal = get().createTab(
+    worktreeId,
+    groupId,
+    shellOverride,
+    split || executionHostId
+      ? {
+          ...(split ? { split } : {}),
+          ...(executionHostId ? { executionHostId } : {})
+        }
+      : undefined
+  )
   get().setActiveTab(terminal.id)
   get().setActiveTabType('terminal', worktreeId)
   const latest = get()
