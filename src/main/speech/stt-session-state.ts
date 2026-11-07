@@ -16,7 +16,6 @@ export type SttRecognizerConfig = {
 export type SttEngine = SttRecognizerConfig & {
   worker: SttWorkerProcess
   ready: Promise<void>
-  dead: boolean
   detach: () => void
 }
 
@@ -30,7 +29,6 @@ export type SttSession = {
   engine: SttEngine | null
   cloud: OpenAiTranscriptionSession | null
   phase: 'starting' | 'active' | 'stopping'
-  canceled: boolean
   stopPromise: Promise<void> | null
 }
 

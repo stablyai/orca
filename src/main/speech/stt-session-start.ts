@@ -7,7 +7,6 @@ import type { SttEventSink } from './stt-service'
 import {
   MAX_STT_SESSIONS,
   sameSttRecognizerConfig,
-  sttEngineUsers,
   type SttEngine,
   type SttRecognizerConfig,
   type SttSession,
@@ -17,6 +16,7 @@ import {
   clearSttIdleTeardownTimer,
   failSttEngine,
   releaseSttSession,
+  teardownIdleSttEngine,
   teardownSttEngine
 } from './stt-session-stop'
 import { getSherpaModulePath, LOCAL_SPEECH_UNAVAILABLE_ERROR } from './stt-worker-paths'
@@ -58,7 +58,7 @@ export async function startSttDictation(
     manifest.provider === 'openai'
       ? null
       : { modelId, hotwordsFilePath, language: engineDictationLanguage(manifest, language) }
-  if (liveSessions(state).length >= MAX_STT_SESSIONS) {
+  if (state.sessions.size >= MAX_STT_SESSIONS) {
     throw new Error('dictation_session_limit')
   }
   if (config && conflictingSessions(state, config).some((other) => other.phase !== 'stopping')) {
@@ -74,7 +74,6 @@ export async function startSttDictation(
     engine: null,
     cloud: null,
     phase: 'starting',
-    canceled: false,
     stopPromise: null
   }
   state.sessions.set(owner, session)
@@ -84,25 +83,20 @@ export async function startSttDictation(
       // Audio fed while the model loads queues in the process behind init.
       session.engine = engine
       await engine.ready
-      if (engine.dead) {
+      if (state.engine !== engine) {
         throw new Error(STT_WORKER_EXITED_ERROR)
       }
     } else {
       await requireModelReady(state, modelId)
       // A cloud dictation needs no recognizer; free one nobody else uses.
-      const idle = state.engine
-      if (idle && sttEngineUsers(state, idle).length === 0) {
-        await teardownSttEngine(state, idle)
-      }
+      await teardownIdleSttEngine(state)
       session.cloud = new OpenAiTranscriptionSession(
         modelId,
         readOpenAiSpeechApiKey,
         engineDictationLanguage(manifest, language)
       )
     }
-    if (session.canceled) {
-      throw new Error('dictation_canceled')
-    }
+    throwIfCanceled(state, session)
     session.phase = 'active'
     sink({ type: 'ready' })
   } catch (error) {
@@ -114,23 +108,22 @@ export async function startSttDictation(
 
 // Sessions share one recognizer, so a second model would load another copy; refuse it while others use the first.
 function conflictingSessions(state: SttSessionState, config: SttRecognizerConfig): SttSession[] {
-  return liveSessions(state).filter(
+  return [...state.sessions.values()].filter(
     (other) => other.config && !sameSttRecognizerConfig(other.config, config)
   )
 }
 
-// A canceled start only waits out its model load; it holds no device's slot.
-function liveSessions(state: SttSessionState): SttSession[] {
-  return [...state.sessions.values()].filter((session) => !session.canceled)
+// A stop during start drops the session from the map; the start notices once its model is loaded.
+function throwIfCanceled(state: SttSessionState, session: SttSession): void {
+  if (state.sessions.get(session.owner) !== session) {
+    throw new Error('dictation_canceled')
+  }
 }
 
 async function requireModelReady(state: SttSessionState, modelId: string): Promise<void> {
   const modelState = await state.modelManager.getModelState(modelId)
   if (modelState.status !== 'ready') {
-    const idle = state.engine
-    if (idle?.modelId === modelId && sttEngineUsers(state, idle).length === 0) {
-      await teardownSttEngine(state, idle)
-    }
+    await teardownIdleSttEngine(state, modelId)
     throw new Error(`Model not ready: ${modelState.status}`)
   }
 }
@@ -143,9 +136,7 @@ async function acquireSttEngine(
 ): Promise<SttEngine> {
   await requireModelReady(state, config.modelId)
   for (;;) {
-    if (session.canceled) {
-      throw new Error('dictation_canceled')
-    }
+    throwIfCanceled(state, session)
     const conflicts = conflictingSessions(state, config)
     if (conflicts.some((other) => other.phase !== 'stopping')) {
       throw new Error('dictation_model_busy')
@@ -162,7 +153,7 @@ async function acquireSttEngine(
     if (!current) {
       return spawnSttEngine(state, config, manifest)
     }
-    // Only canceled starts can still wait on a recognizer with another config.
+    // No session uses a recognizer with another config, so it is idle.
     await teardownSttEngine(state, current)
   }
 }
@@ -179,11 +170,23 @@ function spawnSttEngine(
   clearSttIdleTeardownTimer(state)
   const worker = state.spawnWorker()
   const readyPromise = waitForSttWorkerReady(worker, START_DICTATION_TIMEOUT_MS)
+  const detach = attachSttWorkerLifecycle({
+    worker,
+    isCurrent: () => state.engine === engine,
+    onMessage: ({ streamId, ...event }) => {
+      for (const session of state.sessions.values()) {
+        if (session.engine === engine && session.streamId === streamId) {
+          session.sink(event)
+        }
+      }
+    },
+    onError: (error) => failSttEngine(state, engine, String(error)),
+    onExit: () => failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
+  })
   const engine: SttEngine = {
     ...config,
     worker,
-    dead: false,
-    detach: () => undefined,
+    detach,
     ready: readyPromise.catch((error: unknown) => {
       failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
       throw error
@@ -191,17 +194,6 @@ function spawnSttEngine(
   }
   // Every awaiting session sees the rejection; this only keeps an unawaited one from being reported.
   engine.ready.catch(() => undefined)
-  engine.detach = attachSttWorkerLifecycle({
-    worker,
-    isCurrent: () => !engine.dead,
-    onMessage: (event) => {
-      const { streamId, ...sessionEvent } = event
-      const session = sttEngineUsers(state, engine).find((user) => user.streamId === streamId)
-      session?.sink(sessionEvent)
-    },
-    onError: (error) => failSttEngine(state, engine, String(error)),
-    onExit: () => failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
-  })
   state.engine = engine
   initializeSttWorker(worker, {
     sherpaModulePath,

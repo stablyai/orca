@@ -34,7 +34,7 @@ export class SttService {
 
   feedAudio(samples: Float32Array, sampleRate: number, owner = 'desktop'): boolean {
     const session = this.state.sessions.get(owner)
-    if (!session || session.phase === 'stopping' || session.canceled) {
+    if (!session || session.phase === 'stopping') {
       return false
     }
     if (session.cloud) {

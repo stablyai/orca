@@ -1,8 +1,8 @@
 import type { SttEvent } from './stt-service'
+import type { SttWorkerProcess } from './stt-worker-process'
 
 /** Session events carry the stream they belong to. */
-type SttWorkerEvent = SttEvent & { streamId?: string }
-import type { SttWorkerProcess } from './stt-worker-process'
+export type SttWorkerEvent = SttEvent & { streamId?: string }
 
 export function waitForSttWorkerReady(worker: SttWorkerProcess, timeoutMs: number): Promise<void> {
   const { promise, resolve, reject } = Promise.withResolvers<void>()

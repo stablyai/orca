@@ -1,3 +1,4 @@
+import { errorMessage } from '../../shared/error-message'
 import {
   sttEngineUsers,
   type SttEngine,
@@ -22,8 +23,8 @@ export function stopSttDictation(
     return Promise.resolve()
   }
   if (session.phase === 'starting') {
-    // The start sees this once its model is loaded, then drops the session.
-    session.canceled = true
+    // The start sees it was dropped once its model is loaded, which a quick retry can then reuse.
+    state.sessions.delete(owner)
     return Promise.resolve()
   }
   if (session.phase === 'stopping') {
@@ -53,7 +54,7 @@ async function stopCloudSession(
       session.sink({ type: 'final', text })
     }
   } catch (error) {
-    session.sink({ type: 'error', error: error instanceof Error ? error.message : String(error) })
+    session.sink({ type: 'error', error: errorMessage(error) })
   } finally {
     releaseSttSession(state, session)
     session.sink({ type: 'stopped' })
@@ -69,7 +70,7 @@ function stopLocalSession(
   const stopped = waitForSttWorkerStop({
     worker: engine.worker,
     streamId: session.streamId,
-    capturedSink: session.sink,
+    sink: session.sink,
     timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
     discard,
     finish: (outcome) => finishLocalStop(state, session, engine, outcome, discard)
@@ -102,28 +103,25 @@ export function releaseSttSession(state: SttSessionState, session: SttSession): 
     state.sessions.delete(session.owner)
   }
   const engine = session.engine
-  if (!engine || engine.dead) {
+  if (!engine || state.engine !== engine) {
     return
   }
   if (session.phase === 'starting') {
     engine.worker.postMessage({ type: 'discard', streamId: session.streamId })
   }
-  if (state.engine === engine && sttEngineUsers(state, engine).length === 0) {
+  if (sttEngineUsers(state, engine).length === 0) {
     scheduleSttIdleTeardown(state)
   }
 }
 
 /** Ends every live session on a dead or hung process; stopping ones report through their own stop. */
 export function failSttEngine(state: SttSessionState, engine: SttEngine, error: string): void {
-  if (engine.dead) {
+  if (state.engine !== engine) {
     return
   }
-  engine.dead = true
+  state.engine = null
+  clearSttIdleTeardownTimer(state)
   engine.detach()
-  if (state.engine === engine) {
-    state.engine = null
-    clearSttIdleTeardownTimer(state)
-  }
   for (const session of sttEngineUsers(state, engine)) {
     if (session.phase !== 'active') {
       continue
@@ -162,12 +160,24 @@ function scheduleSttIdleTeardown(state: SttSessionState): void {
   clearSttIdleTeardownTimer(state)
   state.idleTeardownTimer = setTimeout(() => {
     state.idleTeardownTimer = null
-    const engine = state.engine
-    if (engine && sttEngineUsers(state, engine).length === 0) {
-      void teardownSttEngine(state, engine)
-    }
+    void teardownIdleSttEngine(state)
   }, IDLE_WORKER_TEARDOWN_MS)
   state.idleTeardownTimer.unref?.()
+}
+
+/** Frees the loaded recognizer (only one with this model, when given) if no session uses it. */
+export async function teardownIdleSttEngine(
+  state: SttSessionState,
+  modelId?: string
+): Promise<void> {
+  const engine = state.engine
+  if (
+    engine &&
+    (modelId === undefined || engine.modelId === modelId) &&
+    sttEngineUsers(state, engine).length === 0
+  ) {
+    await teardownSttEngine(state, engine)
+  }
 }
 
 /** Only for a process no session uses. */
@@ -180,7 +190,6 @@ export async function teardownSttEngine(
     state.engine = null
     clearSttIdleTeardownTimer(state)
   }
-  engine.dead = true
   engine.detach()
   try {
     engine.worker.postMessage({ type: 'teardown' })
