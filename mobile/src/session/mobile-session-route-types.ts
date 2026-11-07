@@ -6,6 +6,7 @@ import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
+  RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTerminalTab
@@ -94,6 +95,11 @@ export type MobileSessionTab =
     })
   | MobileBrowserTab
 
+export type MobileSessionTabGroup = Pick<
+  RuntimeMobileSessionTabGroup,
+  'id' | 'activeTabId' | 'tabOrder'
+>
+
 export type SessionTabsResult = Pick<
   RuntimeMobileSessionTabsResult,
   | 'worktree'
@@ -104,7 +110,8 @@ export type SessionTabsResult = Pick<
   | 'activeTabType'
   | 'navigationIntent'
 > &
-  Partial<Pick<RuntimeMobileSessionTabsResult, 'publicationEpoch'>> & {
+  Partial<Pick<RuntimeMobileSessionTabsResult, 'publicationEpoch' | 'activeGroupId'>> & {
+    tabGroups?: MobileSessionTabGroup[]
     tabs: MobileSessionTab[]
   }
 

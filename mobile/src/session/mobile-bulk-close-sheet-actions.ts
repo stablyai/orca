@@ -3,6 +3,7 @@ import type { ActionSheetAction } from '../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 import { closeTabsAfterConfirmation } from '../../../src/shared/bulk-tab-close-confirmation'
 import { translate } from '../i18n/mobile-i18n'
+import { createReorderTabSheetActions } from './mobile-session-tab-reorder'
 
 type BulkCloseSheetDeps = {
   sessionTabsRef: { readonly current: readonly MobileSessionTab[] }
@@ -11,6 +12,7 @@ type BulkCloseSheetDeps = {
   switchSessionTab: (tab: MobileSessionTab) => void
   closeSessionTab: (tab: MobileSessionTab) => Promise<void>
   confirmBulkClose: () => Promise<boolean>
+  moveTabByOffset?: (tabId: string, delta: -1 | 1) => void
 }
 
 // Pass tab ids so long-press sheets share bulk-close orchestration without retaining full tabs.
@@ -46,11 +48,12 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       anchorTabId == null
         ? undefined
         : deps.sessionTabsRef.current.find((candidate) => candidate.id === anchorTabId)
-    if (!anchor || selectClosable(anchor.id).length === 0) {
+    if (!anchor) {
       return []
     }
-    return [
-      {
+    const actions: ActionSheetAction[] = []
+    if (selectClosable(anchor.id).length > 0) {
+      actions.push({
         id: 'closeOtherTabs',
         label: translate('session.bulkCloseSheetActions.closeOtherTabs', 'Close Other Tabs'),
         destructive: true,
@@ -63,8 +66,16 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
             (tabIds) => void bulkClose(anchor, tabIds)
           )
         }
-      }
-    ]
+      })
+    }
+    actions.push(
+      ...createReorderTabSheetActions({
+        tabs: deps.sessionTabsRef.current,
+        anchorTabId: anchor.id,
+        onMoveByOffset: deps.moveTabByOffset
+      })
+    )
+    return actions
   }
 }
 
