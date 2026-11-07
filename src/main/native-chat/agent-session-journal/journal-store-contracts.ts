@@ -20,7 +20,7 @@ import type {
   JournalHostDatabase,
   JournalTransactionalDatabase
 } from './database/journal-host-database'
-import type { JournalLifecycleMutationInput } from './writing/journal-row-builders'
+import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
 import type { JournalRowsRead } from './replay/journal-read-row'
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalOperationReceipt, JournalRowWriter } from './writing/journal-row-writer'

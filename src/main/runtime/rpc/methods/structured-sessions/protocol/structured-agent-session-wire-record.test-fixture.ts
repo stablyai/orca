@@ -1,4 +1,4 @@
-import { memoryJournalMap } from '../../../native-chat/agent-session-journal/journal-memory-collections'
+import { memoryJournalMap } from '../../../../../native-chat/agent-session-journal/journal-memory-collections'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
