@@ -10,7 +10,6 @@ type WorkerMessage =
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
   | { type: 'stop' }
   | { type: 'discard' }
-  | { type: 'teardown' }
 
 const parentPort = connectSttWorkerParentPort()
 // Use the platform native addon: the main sherpa-onnx WASM package cannot load host model files. Main supplies its resolved path.
@@ -199,14 +198,6 @@ function handleDiscard(): void {
   parentPort.post({ type: 'stopped' })
 }
 
-function handleTeardown(): void {
-  stream = null
-  recognizer = null
-  sherpa = null
-  offlineChunker = null
-  process.exit(0)
-}
-
 parentPort.onMessage((message) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the session host posts here, and it sends WorkerMessage.
   const msg = message as WorkerMessage
@@ -222,9 +213,6 @@ parentPort.onMessage((message) => {
       break
     case 'discard':
       handleDiscard()
-      break
-    case 'teardown':
-      handleTeardown()
       break
   }
 })

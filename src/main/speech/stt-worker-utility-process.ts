@@ -12,7 +12,6 @@ export function spawnSttUtilityProcess(): SttWorkerProcess {
     serviceName: 'Orca Speech',
     stdio: ['ignore', 'ignore', 'pipe']
   })
-  // W1.4 seam: a renderer MessagePortMain can be posted to this child directly.
   const worker = new SttWorkerChildProcess({
     send: (message) => child.postMessage(message),
     kill: () => child.kill()

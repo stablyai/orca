@@ -29,7 +29,8 @@ export function spawnSttForkedProcess(): SttWorkerProcess {
   child.once('close', () => process.off('exit', kill))
   logSttWorkerStderr(child.stderr)
   child.on('message', (message) => worker.receiveMessage(message))
-  child.on('error', (error) => worker.receiveError(error))
+  // Exit or close follows every failure that matters and reports it; unheard, 'error' would throw.
+  child.on('error', () => undefined)
   // A failed spawn can emit close without exit.
   child.on('exit', (code) => worker.receiveExit(code))
   child.on('close', (code) => worker.receiveExit(code))

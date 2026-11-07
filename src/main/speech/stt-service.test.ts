@@ -68,12 +68,7 @@ const {
       ) {
         queueMicrotask(() => this.emit('message', { type: 'stopped' }))
       }
-      if (message.type === 'teardown') {
-        this.terminated = true
-      }
     }
-
-    unref(): void {}
 
     terminate(): Promise<number> {
       this.terminated = true
@@ -419,7 +414,6 @@ describe('SttService', () => {
 
     await service.prepareModelForDeletion('model-a')
 
-    expect(worker!.messages.some((message) => message.type === 'teardown')).toBe(true)
     expect(worker!.terminated).toBe(true)
     expect(service.isActive()).toBe(false)
   })

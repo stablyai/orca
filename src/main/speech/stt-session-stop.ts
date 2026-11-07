@@ -86,9 +86,7 @@ export async function stopSttDictation(
     capturedSink,
     // A model still loading answers after its load; killing it would strand the pending start.
     timeoutMs:
-      options.discard && state.startingOwner !== owner
-        ? DISCARD_DICTATION_TIMEOUT_MS
-        : STOP_DICTATION_TIMEOUT_MS,
+      options.discard && !state.starting ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
     discard: options.discard === true,
     finish: (outcome) => finishSttWorkerStop(state, worker, outcome)
   }).finally(() => {
@@ -122,7 +120,7 @@ function finishSttWorkerStop(
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
   if (outcome !== 'exit') {
-    void worker.terminate().catch(() => undefined)
+    void worker.terminate()
   }
   if (state.worker === worker) {
     clearSttWorkerState(state)
@@ -137,7 +135,7 @@ export async function prepareSttModelForDeletion(
     throw new Error('voice_model_in_use')
   }
   if (state.worker && state.activeModelId === modelId) {
-    await teardownIdleSttWorker(state, { ignoreTerminateErrors: false })
+    await teardownIdleSttWorker(state)
     if (state.worker && state.activeModelId === modelId) {
       throw new Error('voice_model_in_use')
     }
@@ -159,40 +157,26 @@ function scheduleSttIdleTeardown(state: SttSessionState): void {
   state.idleTeardownTimer.unref?.()
 }
 
-async function teardownIdleSttWorker(
-  state: SttSessionState,
-  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
-): Promise<void> {
+async function teardownIdleSttWorker(state: SttSessionState): Promise<void> {
   clearSttIdleTeardownTimer(state)
   if (!state.worker || state.activeOwner || state.startingOwner) {
     return
   }
-  await teardownSttWorker(state, state.worker, options)
+  await teardownSttWorker(state, state.worker)
 }
 
 export async function teardownSttWorker(
   state: SttSessionState,
-  worker: SttWorkerProcess,
-  options: { ignoreTerminateErrors?: boolean } = { ignoreTerminateErrors: true }
+  worker: SttWorkerProcess
 ): Promise<void> {
   clearSttIdleTeardownTimer(state)
   if (state.stopInFlight?.worker === worker) {
     await state.stopInFlight.promise
   }
-  try {
-    worker.postMessage({ type: 'teardown' })
-  } catch {
-    // The worker may already have exited on a forced stop path.
-  }
   cleanupActiveSttWorkerLifecycleListeners(state)
   worker.removeAllListeners()
-  try {
-    await worker.terminate()
-  } catch (error) {
-    if (!options.ignoreTerminateErrors) {
-      throw error
-    }
-  }
+  // Resolves once the process is gone, so its model files are free to delete.
+  await worker.terminate()
   if (state.worker === worker) {
     clearSttWorkerState(state)
   }

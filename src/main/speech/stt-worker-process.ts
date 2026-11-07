@@ -4,7 +4,7 @@ import type { WorkerRequestTransport } from '../worker-threads/worker-thread-tra
 export const STT_WORKER_EXITED_ERROR = 'The speech engine stopped unexpectedly. Try again.'
 export const STT_WORKER_HUNG_ERROR = 'The speech engine stopped responding. Try again.'
 
-export type SttWorkerProcess = WorkerRequestTransport
+export type SttWorkerProcess = Omit<WorkerRequestTransport, 'unref'>
 export type SpawnSttWorkerProcess = () => SttWorkerProcess
 
 /** Session code drops its listeners with removeAllListeners; this keeps the child's own intact. */
@@ -35,17 +35,8 @@ export class SttWorkerChildProcess extends EventEmitter implements SttWorkerProc
     return this.exit.promise
   }
 
-  unref(): void {}
-
   receiveMessage(message: unknown): void {
     this.emit('message', message)
-  }
-
-  receiveError(error: Error): void {
-    // An 'error' with no listener would throw in main after session code detached.
-    if (this.listenerCount('error') > 0) {
-      this.emit('error', error)
-    }
   }
 
   receiveExit(code: number | null): void {
