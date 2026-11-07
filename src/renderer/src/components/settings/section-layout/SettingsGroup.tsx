@@ -22,13 +22,7 @@ export function SettingsGroup({
   return (
     <section data-settings-group="" className={cn('space-y-3', className)}>
       {title ? (
-        <div className="flex items-end justify-between gap-3 px-1">
-          <div className="min-w-0 space-y-1">
-            <h3 className="text-base font-semibold leading-tight">{title}</h3>
-            {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-          </div>
-          {action ? <div className="shrink-0">{action}</div> : null}
-        </div>
+        <SettingsGroupHeader title={title} description={description} action={action} />
       ) : null}
       <div
         className={cn(
@@ -45,5 +39,23 @@ export function SettingsGroup({
         </div>
       </div>
     </section>
+  )
+}
+
+// Shared so lists that must keep row identity across groups can draw the same header.
+export function SettingsGroupHeader({
+  title,
+  description,
+  action,
+  className
+}: Pick<SettingsGroupProps, 'title' | 'description' | 'action' | 'className'>): React.JSX.Element {
+  return (
+    <div className={cn('flex items-end justify-between gap-3 px-1', className)}>
+      <div className="min-w-0 space-y-1">
+        <h3 className="text-base font-semibold leading-tight">{title}</h3>
+        {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
   )
 }
