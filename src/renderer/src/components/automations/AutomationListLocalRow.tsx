@@ -46,7 +46,7 @@ import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAgentLabel } from './automation-draft-model'
-import type { AutomationListRow } from './automation-list-row-identity'
+import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
 import { formatAutomationUsageSummary } from './automation-usage-model'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
@@ -78,6 +78,7 @@ export type AutomationListLocalRowProps = {
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled?: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   onSelect: (rowKey: string) => void
   onRunNow: (row: AutomationListRow) => void
   onEdit: (row: AutomationListRow) => void
@@ -105,6 +106,7 @@ export function AutomationListLocalRow({
   hostTargetFor,
   hostLabelById = EMPTY_HOST_LABELS,
   isActionEnabled,
+  needsMigration,
   onSelect,
   onRunNow,
   onEdit,
@@ -134,7 +136,7 @@ export function AutomationListLocalRow({
     automationHostTarget: hostTargetFor(row)
   })
   const projectLabel =
-    automationRepo?.displayName ??
+    automationProjectName(automation, automationRepo, repoMap, !!needsMigration?.(row)) ??
     translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
   const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
   const nextRunLabel = automation.enabled
@@ -264,7 +266,11 @@ export function AutomationListLocalRow({
             {nextRunLabel}
           </span>
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
-          <AutomationListStatusCell enabled={automation.enabled} movedToDistro={movedToDistro} />
+          <AutomationListStatusCell
+            enabled={automation.enabled}
+            movedToDistro={movedToDistro}
+            needsMigration={needsMigration?.(row)}
+          />
           <Tooltip>
             <TooltipTrigger asChild>
               <span

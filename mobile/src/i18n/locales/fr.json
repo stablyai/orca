@@ -4173,6 +4173,7 @@
       "noRunnableHost": "Cette automatisation n’a pas d’hôte sur lequel s’exécuter.",
       "wslMoveInProgress": "Le projet de cette automatisation est en cours de déplacement vers son hôte WSL. Orca a donc ignoré cette exécution. Les exécutions reprendront à la fin du déplacement.",
       "wslMoveOwnedByHost": "Le projet de cette automatisation s’exécute désormais sur son hôte WSL, qui y exécute cette automatisation. Orca n’exécute plus cette copie locale.",
+      "managedHostServer": "Migration vers {{host}} requise",
       "missedGraceWindow": "Lors de la vérification suivante par Orca, la marge de rattrapage de cette exécution manquée était déjà dépassée.",
       "targetMissing": "L’hôte de l’automatisation n’est plus enregistré. Cette automatisation n’a donc plus d’hôte sur lequel s’exécuter.",
       "targetReplaced": "L’hôte de l’automatisation a été supprimé puis réenregistré. Cette automatisation doit donc être rattachée à nouveau avant de pouvoir s’exécuter.",

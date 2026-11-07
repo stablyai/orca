@@ -4,11 +4,14 @@ import { translate } from '@/i18n/i18n'
 
 export function AutomationListStatusCell({
   enabled,
-  movedToDistro = null
+  movedToDistro = null,
+  needsMigration = false
 }: {
   enabled: boolean
   /** A moved project's local copy: the host runs it, never this computer. */
   movedToDistro?: string | null
+  /** A copy its host's Orca server now serves: it runs only once migrated. */
+  needsMigration?: boolean
 }): React.JSX.Element {
   if (movedToDistro) {
     const label = translate(
@@ -18,6 +21,17 @@ export function AutomationListStatusCell({
     )
     return (
       <span className="min-w-0 truncate text-muted-foreground" title={label}>
+        {label}
+      </span>
+    )
+  }
+  if (enabled && needsMigration) {
+    const label = translate(
+      'auto.components.automations.AutomationDetail.needsMigration',
+      'Needs migration'
+    )
+    return (
+      <span className="min-w-0 line-clamp-2 leading-tight text-muted-foreground" title={label}>
         {label}
       </span>
     )

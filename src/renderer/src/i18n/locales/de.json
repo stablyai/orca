@@ -17556,7 +17556,10 @@
           "reuseLiveSession": "Laufende Sitzung wiederverwenden",
           "freshEachRun": "Bei jeder Ausführung neu",
           "precheckEnabled": "Aktiviert, {{timeout}}",
-          "precheckNone": "Keine"
+          "precheckNone": "Keine",
+          "migrate": "Migrieren",
+          "migrateNotice": "{{host}} wurde auf einen neuen Remote-Host umgestellt. Migriere diese Automatisierung, damit sie weiterläuft.",
+          "needsMigration": "Migration erforderlich"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -23018,6 +23021,7 @@
       "noRunnableHost": "Dieser Automatisierung fehlt ein Host zur Ausführung.",
       "wslMoveInProgress": "Das Projekt dieser Automatisierung wird auf seinen WSL-Host verschoben. Deshalb hat Orca diese Ausführung übersprungen. Die Ausführungen werden nach Abschluss des Verschiebens fortgesetzt.",
       "wslMoveOwnedByHost": "Das Projekt dieser Automatisierung läuft jetzt auf seinem WSL-Host, der die Automatisierung dort ausführt. Orca führt diese lokale Kopie nicht mehr aus.",
+      "managedHostServer": "Migration zu {{host}} erforderlich",
       "missedGraceWindow": "Bei der nächsten Prüfung durch Orca war die Nachholfrist für diese verpasste Ausführung bereits abgelaufen.",
       "targetMissing": "Der Host der Automatisierung ist nicht mehr registriert. Daher gibt es für diese Automatisierung keinen Ausführungsort.",
       "targetReplaced": "Der Host der Automatisierung wurde entfernt und erneut registriert. Daher muss diese Automatisierung vor der Ausführung erneut zugeordnet werden.",

@@ -16902,7 +16902,10 @@
           "reuseLiveSession": "実行中のセッションを再利用",
           "freshEachRun": "実行ごとに新規作成",
           "precheckEnabled": "有効、{{timeout}}",
-          "precheckNone": "なし"
+          "precheckNone": "なし",
+          "migrate": "移行",
+          "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
+          "needsMigration": "移行が必要"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -22765,6 +22768,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",
