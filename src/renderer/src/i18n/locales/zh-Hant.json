@@ -16743,7 +16743,8 @@
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
-          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。"
+          "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
+          "stoppedAfterSilence": "靜音一分鐘後已停止"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",

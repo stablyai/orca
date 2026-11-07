@@ -16697,7 +16697,8 @@
           "5d2c3e7ae3": "No se detectó ninguna voz.",
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
-          "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube."
+          "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
+          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "No se pudo insertar el dictado, así que se copió al portapapeles.",

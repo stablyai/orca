@@ -16922,7 +16922,8 @@
           "5d2c3e7ae3": "Aucune parole détectée.",
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
-          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes."
+          "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes.",
+          "stoppedAfterSilence": "Arrêt après une minute de silence"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "La dictée n'a pas pu être insérée, elle a donc été copiée dans le presse-papiers.",

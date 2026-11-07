@@ -17355,7 +17355,8 @@
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
-          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit."
+          "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
+          "stoppedAfterSilence": "Stopped after a minute of silence"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",

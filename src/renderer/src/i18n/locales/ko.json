@@ -16294,7 +16294,8 @@
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
-          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
+          "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "받아쓰기를 삽입할 수 없어 클립보드에 복사했습니다.",
