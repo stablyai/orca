@@ -158,6 +158,64 @@ describe('ACP model catalog probes', () => {
     }
   })
 
+  it('retries a transient -32603 session/new and still lists the catalog', async () => {
+    const { agent, deps, closed } = scriptedOpenCode2(true)
+    let sessionNews = 0
+    agent.on('session/new', (frame) => {
+      sessionNews += 1
+      if (sessionNews === 1) {
+        agent.fail(frame, -32603, 'Internal error: Internal service failure')
+        return
+      }
+      agent.reply(frame, {
+        sessionId: 'probe-session',
+        configOptions: [
+          {
+            id: 'model',
+            name: 'Model',
+            category: 'model',
+            type: 'select',
+            currentValue: 'opencode/exo-free',
+            options: [
+              { value: 'opencode/big-pickle', name: 'Big Pickle' },
+              { value: 'opencode/exo-free', name: 'Exo Free' }
+            ]
+          }
+        ]
+      })
+    })
+    const success = await createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project' }
+    )
+    expect(sessionNews).toBe(2)
+    expect(success.models.map((model) => model.id)).toEqual([
+      'opencode/big-pickle',
+      'opencode/exo-free'
+    ])
+    expect(agent.frames.at(-1)?.method).toBe('session/delete')
+    expect(closed()).toBe(1)
+  })
+
+  it('does not issue another session/new when aborted during retry backoff', async () => {
+    const { agent, deps, closed } = scriptedOpenCode2(true)
+    agent.on('session/new', (frame) =>
+      agent.fail(frame, -32603, 'Internal error: Internal service failure')
+    )
+    const stop = new AbortController()
+    const listing = createAcpModelCatalogProbe(OPENCODE, deps)(
+      { kind: 'opencode', locator: { kind: 'unmanaged' } },
+      { workspacePath: '/work/project', signal: stop.signal }
+    )
+    await vi.waitFor(() =>
+      expect(agent.frames.filter((frame) => frame.method === 'session/new')).toHaveLength(1)
+    )
+    stop.abort()
+    await expect(listing).rejects.toThrow()
+    expect(agent.frames.filter((frame) => frame.method === 'session/new')).toHaveLength(1)
+    expect(closed()).toBe(1)
+  })
+
   it('lists OMP from a session kept in a folder it removes, in the chat folder', async () => {
     const { agent, deps, launches } = scriptedOpenCode2(false)
     const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-omp-listing-'))
