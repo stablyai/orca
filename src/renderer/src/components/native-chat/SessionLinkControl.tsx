@@ -155,6 +155,7 @@ export function SessionLinkControl({
                   link={snapshot.link}
                   disabled={state.busy || state.uncertain || unresolvedDelivery}
                   atomic={state.policySupported}
+                  shouldFocus
                   onAnswer={(ownerMessage) =>
                     state.policySupported
                       ? state.mutate('orchestration.linkControl', {

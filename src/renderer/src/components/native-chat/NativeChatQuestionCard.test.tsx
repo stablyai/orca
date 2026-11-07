@@ -464,6 +464,30 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
   })
 
+  it('focuses a question inside a dialog and keeps number keys scoped to that dialog', () => {
+    vi.useFakeTimers()
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    container.before(dialog)
+    dialog.append(container)
+    const onAnswer = vi.fn()
+    const dialogControl = dialog.appendChild(document.createElement('button'))
+    act(() => dialogControl.focus())
+    render(tabsOrSpaces, onAnswer, true, true)
+    const option = container.querySelector<HTMLButtonElement>('button[aria-pressed]')!
+    expect(document.activeElement).toBe(option)
+    expect(pressKey({ key: '2' }, option).defaultPrevented).toBe(true)
+    passAutoAdvanceBeat()
+    expect(onAnswer).toHaveBeenCalledExactlyOnceWith([{ indices: [1], other: '' }])
+    const outside = document.body.appendChild(document.createElement('button'))
+    act(() => outside.focus())
+    expect(pressKey({ key: '1' }, outside).defaultPrevented).toBe(false)
+    passAutoAdvanceBeat()
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+    outside.remove()
+    dialog.replaceWith(container)
+  })
+
   it('toggles multi-select options by number key and waits for Submit', () => {
     vi.useFakeTimers()
     const onAnswer = vi.fn()
