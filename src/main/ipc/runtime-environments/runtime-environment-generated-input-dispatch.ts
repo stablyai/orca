@@ -49,6 +49,8 @@ export function generatedInputDispatch(
 
 function budgetOf(params: unknown): number | undefined {
   const budget =
-    typeof params === 'object' && params !== null ? Reflect.get(params, 'timeoutMs') : undefined
+    typeof params === 'object' && params !== null && 'timeoutMs' in params
+      ? params.timeoutMs
+      : undefined
   return typeof budget === 'number' ? budget : undefined
 }

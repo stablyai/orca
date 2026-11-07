@@ -10,6 +10,8 @@
     "../src/renderer/src/lib/agent-generated-input-safety.test.ts",
     "../src/renderer/src/lib/generated-input-contract.test.ts",
     "../src/renderer/src/lib/generated-input-paired-host-route.test.ts",
+    "../src/renderer/src/lib/agent-paste-draft-operation-identity.test.ts",
+    "../src/renderer/src/runtime/generated-agent-input-notices.test.ts",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",

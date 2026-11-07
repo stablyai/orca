@@ -164,11 +164,16 @@ export function selectionOfStatusResult(
   expectedRevision?: number
 ): RuntimeEnvironmentSelectedPairing | undefined {
   const told =
-    typeof response === 'object' && response !== null
-      ? Reflect.get(response, 'selectedPairing')
+    typeof response === 'object' && response !== null && 'selectedPairing' in response
+      ? response.selectedPairing
       : undefined
-  if (typeof told === 'object' && told !== null && typeof told.revision === 'number') {
-    return told.crossedRepair === true
+  if (
+    typeof told === 'object' &&
+    told !== null &&
+    'revision' in told &&
+    typeof told.revision === 'number'
+  ) {
+    return 'crossedRepair' in told && told.crossedRepair === true
       ? { revision: told.revision, crossedRepair: true }
       : { revision: told.revision }
   }

@@ -212,11 +212,12 @@ it.each(
   let armed = true
   const stringify = JSON.stringify
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the spy forwards every argument to the real stringify.
-  const serialized = vi.spyOn(JSON, 'stringify').mockImplementation(((...args: unknown[]) => {
+  const serialized = vi.spyOn(JSON, 'stringify').mockImplementation(((
+    ...args: Parameters<typeof JSON.stringify>
+  ) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only request envelopes are inspected, each field optional.
     const value = args[0] as { method?: string; params?: unknown } | undefined
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stringify of a request envelope returns a string.
-    const text = Reflect.apply(stringify, JSON, args) as string
+    const text = stringify(...args)
     // The handoff's own bytes: the copy carrying only the time left.
     if (
       order === 'serialization' &&

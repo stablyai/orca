@@ -79,8 +79,8 @@ function retainedOperationIdOf(params: unknown): string | undefined {
   if (typeof params !== 'object' || params === null) {
     return undefined
   }
-  const operationId: unknown = Reflect.get(params, 'operationId')
-  return Reflect.get(params, 'retainNotice') === true && typeof operationId === 'string'
+  const operationId = 'operationId' in params ? params.operationId : undefined
+  return 'retainNotice' in params && params.retainNotice === true && typeof operationId === 'string'
     ? operationId
     : undefined
 }

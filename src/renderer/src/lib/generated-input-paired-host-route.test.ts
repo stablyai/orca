@@ -479,8 +479,8 @@ async function pairedWindow(options: {
           callbacks: Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
         ) => {
           calls.push(args)
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window's subscribe args are the preload's subscription args.
-          return subscribeRuntimeEnvironmentFromPreload(ipc, args as never, callbacks)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the window's subscribe args are the preload's subscription args, the only args the fake ipc.invoke receives.
+          return subscribeRuntimeEnvironmentFromPreload(ipc as never, args as never, callbacks)
         }
       }
     }

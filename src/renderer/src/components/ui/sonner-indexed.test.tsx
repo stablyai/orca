@@ -71,7 +71,9 @@ beforeEach(async () => {
       shell: { openUrl: vi.fn(async () => {}) }
     }
   })
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+    this: HTMLElement
+  ) {
     measurements++
     return DOMRect.fromRect({
       width: 340,
@@ -79,7 +81,10 @@ beforeEach(async () => {
     })
   })
   const get = Map.prototype.get
-  vi.spyOn(Map.prototype, 'get').mockImplementation(function (key) {
+  vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+    this: Map<unknown, unknown>,
+    key: unknown
+  ) {
     if (key === 'measure:live') {
       storeLookups++
     }
@@ -173,7 +178,9 @@ it.each([100, 1_000])('keeps one-ID store work independent of %i historical reco
   storeLookups = 0
   let traversed = 0
   const values = Map.prototype.values
-  const valuesSpy = vi.spyOn(Map.prototype, 'values').mockImplementation(function () {
+  const valuesSpy = vi.spyOn(Map.prototype, 'values').mockImplementation(function (
+    this: Map<unknown, unknown>
+  ) {
     const iterator = values.call(this)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: it forwards to the real iterator's next and is its own iterator.
     return {
