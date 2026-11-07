@@ -31,11 +31,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
+function isProcessId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
 export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   const trimmed = contents.trim()
   try {
     const parsed = JSON.parse(trimmed)
-    if (isRecord(parsed) && typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
+    if (isRecord(parsed) && isProcessId(parsed.pid)) {
       return {
         pid: parsed.pid,
         startedAtMs:
@@ -56,8 +60,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
     // Legacy daemons wrote the pid file as a bare integer.
   }
 
-  const pid = Number(trimmed)
-  return Number.isFinite(pid)
+  const pid = /^\d+$/.test(trimmed) ? Number(trimmed) : Number.NaN
+  return isProcessId(pid)
     ? {
         pid,
         startedAtMs: null,
