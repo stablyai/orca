@@ -1,14 +1,16 @@
+import { existsSync, statSync } from 'node:fs'
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
 } from '../../node-bounded-json-stringify'
-import { writeSecureFile } from '../../secure-file'
+import { hardenExistingSecureFile, writeSecureFile } from '../../secure-file'
 import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
   type RuntimeEnvironmentStore
 } from '../host-catalog/runtime-environments'
 import {
+  getRuntimeEnvironmentSidecarPath,
   overlayRuntimeEnvironmentSidecar,
   readRuntimeEnvironmentSidecar,
   RuntimeEnvironmentSidecarInvalidError
@@ -24,6 +26,7 @@ import {
   warnUnreadableEnvironmentState
 } from './runtime-environment-store-records'
 import {
+  getWslHostDeploymentStorePath,
   overlayWslHostDeployments,
   readWslHostDeployments,
   WslHostDeploymentStoreInvalidError
@@ -54,7 +57,7 @@ export function readPersistedEnvironmentStore(
  */
 function readWslHostDeploymentsForRegistry(
   userDataPath: string
-): ReturnType<typeof readWslHostDeployments> {
+): ReturnType<typeof readWslHostDeployments> & { degraded?: true } {
   const gateOpen = isWslHostsServing(process.env)
   try {
     const read = readWslHostDeployments(userDataPath)
@@ -64,20 +67,96 @@ function readWslHostDeploymentsForRegistry(
       throw error
     }
     warnUnreadableEnvironmentState(error.message)
-    return { deployments: [], unreadableEnvironmentIds: new Set(), fileUnreadable: gateOpen }
+    return {
+      deployments: [],
+      unreadableEnvironmentIds: new Set(),
+      fileUnreadable: gateOpen,
+      degraded: true
+    }
   }
 }
 
+type EnvironmentStoreRead = { version: 1; environments: KnownRuntimeEnvironment[] }
+
+let cachedStoreRead: {
+  userDataPath: string
+  fingerprint: string
+  store: EnvironmentStoreRead
+} | null = null
+
+/** Identity of one file's current contents; null where the filesystem cannot tell a replacement apart. */
+function fileFingerprint(path: string): string | null {
+  try {
+    const stats = statSync(path)
+    return stats.ino === 0
+      ? null
+      : `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT' ? 'none' : null
+  }
+}
+
+function environmentStoreFingerprint(userDataPath: string): string | null {
+  const parts = environmentStorePaths(userDataPath).map(fileFingerprint)
+  return parts.includes(null) ? null : `${isWslHostsServing(process.env)}|${parts.join('|')}`
+}
+
+function environmentStorePaths(userDataPath: string): string[] {
+  return [
+    getEnvironmentStorePath(userDataPath),
+    getRuntimeEnvironmentSidecarPath(userDataPath),
+    getWslHostDeploymentStorePath(userDataPath)
+  ]
+}
+
+/**
+ * Hot RPC paths resolve servers several times per call; re-reading and re-validating three files
+ * each time dominated main. Writers replace these files atomically, so an unchanged stat means
+ * unchanged contents; special reads, failed reads and degraded reads always go to disk.
+ */
 export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
-): {
-  version: 1
-  environments: KnownRuntimeEnvironment[]
-} {
+): EnvironmentStoreRead {
+  const cacheable = !options.requireStoreFile && !options.recoverBlankStore
+  const fingerprint = cacheable ? environmentStoreFingerprint(userDataPath) : null
+  if (
+    fingerprint &&
+    cachedStoreRead?.userDataPath === userDataPath &&
+    cachedStoreRead.fingerprint === fingerprint &&
+    rehardenEnvironmentStoreFiles(userDataPath)
+  ) {
+    return structuredClone(cachedStoreRead.store)
+  }
+  const { store, degraded } = readEnvironmentStoreFromDisk(userDataPath, options)
+  if (fingerprint && !degraded && environmentStoreFingerprint(userDataPath) === fingerprint) {
+    cachedStoreRead = { userDataPath, fingerprint, store: structuredClone(store) }
+  }
+  return store
+}
+
+// Disk reads re-harden these credential files; a hit must keep that repair and its retries.
+// A failure goes to the disk read, which owns the error handling and degraded fallback.
+function rehardenEnvironmentStoreFiles(userDataPath: string): boolean {
+  try {
+    for (const path of environmentStorePaths(userDataPath)) {
+      if (existsSync(path)) {
+        hardenExistingSecureFile(path)
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readEnvironmentStoreFromDisk(
+  userDataPath: string,
+  options: EnvironmentStoreRecordsReadOptions
+): { store: EnvironmentStoreRead; degraded: boolean } {
   const store = readPersistedEnvironmentStore(userDataPath, options)
   let sidecar: ReturnType<typeof readRuntimeEnvironmentSidecar>
-  let wslDeployments: ReturnType<typeof readWslHostDeployments>
+  let wslDeployments: ReturnType<typeof readWslHostDeploymentsForRegistry>
   try {
     sidecar = readRuntimeEnvironmentSidecar(userDataPath)
     wslDeployments = readWslHostDeploymentsForRegistry(userDataPath)
@@ -100,15 +179,18 @@ export function readEnvironmentStore(
     )
   }
   return {
-    version: 1,
-    environments: overlayWslHostDeployments(
-      store.environments
-        .filter((environment) => !isHidden(environment.id))
-        .map((environment) =>
-          overlayRuntimeEnvironmentSidecar(environment, sidecar.entries[environment.id])
-        ),
-      wslDeployments
-    )
+    store: {
+      version: 1,
+      environments: overlayWslHostDeployments(
+        store.environments
+          .filter((environment) => !isHidden(environment.id))
+          .map((environment) =>
+            overlayRuntimeEnvironmentSidecar(environment, sidecar.entries[environment.id])
+          ),
+        wslDeployments
+      )
+    },
+    degraded: wslDeployments.degraded === true
   }
 }
 
