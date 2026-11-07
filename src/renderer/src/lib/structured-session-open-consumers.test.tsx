@@ -9,7 +9,7 @@ import { useAiVaultOriginalPaneActions } from '@/components/right-sidebar/ai-vau
 import { reportCliChatResumeFailure } from '@/components/tab-bar/cli-chat-resume-feedback'
 import AiVaultSessionDropLayer from '@/components/tab-group/AiVaultSessionDropLayer'
 import { writeAiVaultSessionDragData } from './agent-session/resume/history/ai-vault-session-drag'
-import { makeWorktree } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 const transport = vi.hoisted(() => ({ rpc: vi.fn(), toast: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: transport.toast, success: vi.fn() } }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({

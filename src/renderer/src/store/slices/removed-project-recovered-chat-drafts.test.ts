@@ -1,6 +1,8 @@
 // Exercise production project removal and draft persistence; only the host location read is external.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createTestStore, makeWorktree, makeUnifiedTab } from '../testing/app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from './worktrees/worktree.test-fixture'
+import { makeUnifiedTab } from './tabs/tab-group.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
   hydrateNativeChatComposerDrafts,
