@@ -1,11 +1,26 @@
 import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { writeOpenCodeSqliteDatabase } from './scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { isolatedScanRoots, writeJsonlFile } from './session-scanner-test-fixtures'
 import { aiVaultScanWork, trackAiVaultScanProgress } from './ai-vault-scan-progress'
+
+// Worker bundles are absent in tests; read OpenCode's database in-process instead.
+vi.mock(
+  './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
+  async (importOriginal) => {
+    const list = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite-list')
+    const parse = await import('./scanners/opencode/sqlite/session-scanner-opencode-sqlite')
+    return {
+      ...(await importOriginal<object>()),
+      listOpenCodeSqliteSessionsViaWorker: list.listOpenCodeSqliteSessions,
+      parseOpenCodeSqliteSessionViaWorker: parse.parseOpenCodeSqliteSession
+    }
+  }
+)
 
 let tempRoots: string[] = []
 
@@ -153,7 +168,24 @@ describe('scanAiVaultSessions scope inclusion', () => {
         ]
       )
     }
-    const options = { ...roots, limit: 5, scopePaths: ['/repo/app'] }
+    const opencodeDb = join(root, 'opencode', 'opencode.db')
+    writeOpenCodeSqliteDatabase(
+      opencodeDb,
+      [
+        ['ses_in_scope', '/repo/app'],
+        ['ses_elsewhere', '/other']
+      ].map(([id, directory]) => ({
+        id,
+        directory,
+        turns: [{ role: 'user' as const, parts: [`work in ${directory}`] }]
+      }))
+    )
+    const options = {
+      ...roots,
+      opencodeDbPaths: [opencodeDb],
+      limit: 10,
+      scopePaths: ['/repo/app']
+    }
     const ids = (result: { sessions: { sessionId: string }[] }) =>
       result.sessions.map((session) => session.sessionId).sort()
 
@@ -173,12 +205,21 @@ describe('scanAiVaultSessions scope inclusion', () => {
     expect(ids(scopeOnly)).toEqual([
       '019f0000-1111-7222-8333-000000000001',
       'old-in-scope',
-      'recent-in-scope'
+      'recent-in-scope',
+      'ses_in_scope'
     ])
     // The scanned-files count still reports the in-scope Claude transcripts it read.
     expect(claudeFiles).toBe(2)
     // All keeps sending scopePaths without scopeOnly and still gets the newest sessions everywhere.
-    expect(ids(widened)).toContain('019f0000-1111-7222-8333-000000000002')
+    expect(ids(widened)).toEqual([
+      '019f0000-1111-7222-8333-000000000001',
+      '019f0000-1111-7222-8333-000000000002',
+      'old-in-scope',
+      'recent-elsewhere',
+      'recent-in-scope',
+      'ses_elsewhere',
+      'ses_in_scope'
+    ])
   })
 
   it('finds scope-only Claude buckets for a root, another-case Windows path, a hashed long path and either WSL share', async () => {

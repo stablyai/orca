@@ -11,6 +11,7 @@ import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
 } from './ai-vault-session-refresh'
+import { resetAiVaultSessionResultCacheForTest } from './ai-vault-session-result-cache'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
@@ -41,12 +42,13 @@ function HookProbe(props: {
   scopePaths: readonly string[]
   executionHostScope?: ExecutionHostScope
   sessionLimit?: AiVaultSessionLimit
+  scopeOnly?: boolean
 }): null {
   latest = useAiVaultSessionRefresh(
     props.scopePaths,
     props.executionHostScope ?? 'local',
     props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT,
-    false
+    props.scopeOnly ?? false
   )
   return null
 }
@@ -54,28 +56,34 @@ function HookProbe(props: {
 async function renderHook(
   scopePaths: readonly string[] = [],
   executionHostScope: ExecutionHostScope = 'local',
-  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT
+  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT,
+  scopeOnly = false
 ): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit }))
+    root.render(
+      createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit, scopeOnly })
+    )
   })
 }
 
 async function rerenderHook(
   scopePaths: readonly string[] = [],
   executionHostScope: ExecutionHostScope = 'local',
-  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT
+  sessionLimit: AiVaultSessionLimit = DEFAULT_AI_VAULT_SESSION_LIMIT,
+  scopeOnly = false
 ): Promise<void> {
   const root = roots.at(-1)
   if (!root) {
     throw new Error('renderHook must be called before rerenderHook')
   }
   await act(async () => {
-    root.render(createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit }))
+    root.render(
+      createElement(HookProbe, { scopePaths, executionHostScope, sessionLimit, scopeOnly })
+    )
   })
 }
 
@@ -149,6 +157,7 @@ beforeEach(() => {
     }
   }
   resetAiVaultForcedRescanThrottleForTest()
+  resetAiVaultSessionResultCacheForTest()
   useAppStore.setState(initialAppState, true)
 })
 
@@ -197,6 +206,29 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     await flushMicrotasks()
 
     expect(latest?.scanResult?.scannedAt).toBe('2026-07-01T00:00:02.000Z')
+  })
+
+  it('does not show Workspace-only rows under All while All loads or after it fails', async () => {
+    let failAll: (error: Error) => void = () => {}
+    listSessionsMock.mockImplementation((args) =>
+      args.scopeOnly
+        ? Promise.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+        : new Promise((_resolve, reject) => {
+            failAll = reject
+          })
+    )
+    await renderHook(['/repo'], 'local', 250, true)
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+
+    await rerenderHook(['/repo'], 'local', 250, false)
+    await flushMicrotasks()
+    expect(latest?.sessions).toEqual([])
+    expect(latest?.loading).toBe(true)
+
+    await act(async () => failAll(new Error('scan failed')))
+    await flushMicrotasks()
+    expect(latest?.sessions).toEqual([])
   })
 
   it('replaces a stuck scan on manual Refresh without cancelling an automatic rescan', async () => {

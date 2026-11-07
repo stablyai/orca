@@ -3,6 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
@@ -57,17 +58,7 @@ it('does not show Workspace-only rows as All while All loads or the host is offl
       ? { id: 'scan', ok: true, result: { issues: [], sessions: [row('mine', '/repo/app')] } }
       : new Promise((resolve) => pending.push(resolve))
   })
-  connection.client = {
-    sendRequest: send,
-    subscribe: () => () => {},
-    updateTerminalSubscriptionViewport: () => {},
-    getState: () => connection.state,
-    getReconnectAttempt: () => 0,
-    getLastConnectedAt: () => null,
-    onStateChange: () => () => {},
-    notifyForeground: () => {},
-    close: () => {}
-  }
+  connection.client = stubRpcClient({ sendRequest: send, getState: () => connection.state })
   let current: ReturnType<typeof useMobileAgentHistoryState> | null = null
   function Probe() {
     current = useMobileAgentHistoryState({
@@ -100,10 +91,6 @@ it('does not show Workspace-only rows as All while All loads or the host is offl
       kind: 'ready',
       sessions: [{ id: 'mine' }, { id: 'other' }]
     })
-
-    // All's rows already cover Workspace, so switching back keeps them on screen.
-    await act(async () => read().onSelectScope('workspace'))
-    expect(read().screenState.kind).toBe('ready')
 
     // Offline, Project's rows still cover Workspace, but All gets the offline state, not a spinner.
     await act(async () => read().onSelectScope('project'))

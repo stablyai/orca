@@ -25,6 +25,7 @@ import {
 
 type PanelRequest = {
   scopePaths: readonly string[]
+  scopeOnly: boolean
   executionHostScope: string
   sessionLimit: number | 'unlimited'
 }
@@ -139,10 +140,12 @@ it.each([false, true])(
     returned.sessions = [session]
     const { default: AiVaultPanel } = await import('../panel/AiVaultPanel')
     render(<AiVaultPanel workspace={bound ? { worktreeId: folderId } : undefined} />)
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: true })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session).toBe(session)
     fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: false })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session.cwd).toBe('/private/var/example')
