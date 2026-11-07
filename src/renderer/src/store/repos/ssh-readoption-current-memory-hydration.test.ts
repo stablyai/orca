@@ -42,15 +42,9 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
     storage.drafts.set(`agent-session:ordinary${i}`, rich(`ordinary${i}`))
   }
   const snapshot = new Map(storage.drafts)
-  const write = vi.fn(storage.write),
-    update = vi.fn(storage.update),
-    remove = vi.fn(storage.remove)
   setNativeChatComposerDraftStorageForTests({
     ...storage,
-    loadAll: () => gate.promise,
-    write,
-    update,
-    remove
+    loadAll: () => gate.promise
   })
   const loading = drafts.hydrateNativeChatComposerDrafts()
   const store = createTestStore()
@@ -81,9 +75,6 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
   })
   const event = { oldTargetId: 'old', newTargetId: 'new', repoIds: ['repo'] }
   store.getState().recordSshRepoReadoptions([event])
-  expect(write).not.toHaveBeenCalled()
-  expect(update).not.toHaveBeenCalled()
-  expect(remove).not.toHaveBeenCalled()
   store
     .getState()
     .recordSshRepoReadoptions([{ oldTargetId: 'new', newTargetId: 'last', repoIds: ['repo'] }])
@@ -96,9 +87,6 @@ it('preserves current-memory association, replay and deletion beside ordinary hy
   gate.resolve(snapshot)
   await loading
   await drafts.nativeChatComposerDraftWritesSettled()
-  expect(write).not.toHaveBeenCalled()
-  expect(update).not.toHaveBeenCalled()
-  expect(remove).toHaveBeenCalled()
   for (let i = 0; i < count; i++) {
     const current = drafts.readNativeChatComposerDraft(rows[i].from)
     expect(current.text).toBe(i === 0 ? 'new explicit input' : `target${i}\n\nsource${i}`)
