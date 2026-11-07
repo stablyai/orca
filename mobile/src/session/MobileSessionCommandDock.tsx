@@ -6,6 +6,7 @@ import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
+import { commandDockBottomPadding } from './command-dock-bottom-padding'
 import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
 import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
@@ -44,7 +45,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     <View
       style={[
         dockStyles.dock,
-        { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+        { paddingBottom: commandDockBottomPadding(insets.bottom, keyboardLift), transform: [{ translateY: -keyboardLift }] }
       ]}
     >
       {rail.keysInRail ? (
