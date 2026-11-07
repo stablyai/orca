@@ -41,7 +41,7 @@ export function NativeChatPullRequestEventLine({
     <div
       className={cn(
         NATIVE_CHAT_HIDEABLE_CARD_CLASS,
-        'relative flex h-6 min-w-0 items-center justify-center gap-1.5 text-xs text-chat-foreground-faint'
+        'relative flex h-6 min-w-0 items-center justify-center gap-1.5 px-6 text-xs text-chat-foreground-faint'
       )}
     >
       <Icon
@@ -66,7 +66,8 @@ export function NativeChatPullRequestEventLine({
       ) : (
         <span className="min-w-0 truncate">{block.text}</span>
       )}
-      {/* Pinned to the row's end, so the centered line doesn't shift when it shows. */}
+      {/* Pinned to the row's end, so the centered line doesn't shift when it shows; the row's
+          padding, the button's width on both sides, keeps long text from running under it. */}
       <span className="absolute inset-y-0 right-0 flex items-center">
         <NativeChatCardHideButton
           updates={{ nativeChatCiResultLines: false }}

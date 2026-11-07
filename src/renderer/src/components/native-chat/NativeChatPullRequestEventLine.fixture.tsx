@@ -30,3 +30,19 @@ export const greenHideShown = defineFixture({
   ),
   interact: focusHide
 })
+const LONG_MESSAGE_ID =
+  'orca:pr-event:github.com/stablyai/some-very-long-repository-name#12345:abc1234def5678:1'
+export const narrowLongHideShown = defineFixture({
+  width: 340,
+  render: () => (
+    <NativeChatPullRequestEventLine
+      block={{
+        type: 'text',
+        text: 'CI failing on some-very-long-repository-name#12345 at abc1234',
+        tone: 'failure'
+      }}
+      messageId={LONG_MESSAGE_ID}
+    />
+  ),
+  interact: focusHide
+})
