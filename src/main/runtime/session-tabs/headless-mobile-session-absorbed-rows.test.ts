@@ -1,6 +1,3 @@
-// A phone on a host with no window may show something other than main only where it then shows
-// what the desktop window does; the window's side is pinned in headless-phone-window-parity.test.ts.
-
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import {

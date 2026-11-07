@@ -1,6 +1,6 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'

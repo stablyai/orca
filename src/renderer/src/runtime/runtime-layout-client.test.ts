@@ -4,7 +4,7 @@ import {
   applyLayoutFrame,
   EMPTY_WORKSPACE_LAYOUT_CACHE,
   type WorkspaceLayoutCache
-} from '../store/workspace-layout-cache'
+} from '../store/workspace-layout/workspace-layout-cache'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeLayout, type RuntimeLayoutStreamStatus } from './runtime-layout-client'
 

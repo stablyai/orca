@@ -1,13 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import {
-  TEST_REPO,
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '../slices/store-cascades-test-harness'
+import { TEST_REPO } from '../repos/repo.test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeTab } from './terminal-tab.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 

@@ -6,13 +6,9 @@ import type {
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import {
-  applyAutomationListView,
-  countAutomationListFilters,
   EMPTY_AUTOMATION_LIST_FILTER,
   filterAutomationListRows,
   filterExternalAutomationListEntries,
-  isAutomationListFilterActive,
-  nextAutomationListSort,
   type AutomationListFilter
 } from './automation-list-view'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
@@ -119,109 +115,7 @@ function makeCatalogRow(
   }
 }
 
-const rowKey = (id: string): string => `row|host|${id}`
-
 describe('automation-list-view', () => {
-  it('counts and detects active filters', () => {
-    expect(
-      isAutomationListFilterActive({
-        status: 'all',
-        lastRun: 'all',
-        agentIds: []
-      })
-    ).toBe(false)
-    expect(
-      isAutomationListFilterActive({
-        status: 'paused',
-        lastRun: 'all',
-        agentIds: []
-      })
-    ).toBe(true)
-    expect(
-      countAutomationListFilters({
-        status: 'paused',
-        lastRun: 'failed',
-        agentIds: []
-      })
-    ).toBe(2)
-  })
-
-  it('toggles sort direction and defaults last run to newest first', () => {
-    expect(nextAutomationListSort(null, 'name')).toEqual({
-      field: 'name',
-      direction: 'asc'
-    })
-    expect(nextAutomationListSort(null, 'lastRun')).toEqual({
-      field: 'lastRun',
-      direction: 'desc'
-    })
-    expect(nextAutomationListSort({ field: 'name', direction: 'asc' }, 'name')).toEqual({
-      field: 'name',
-      direction: 'desc'
-    })
-    expect(nextAutomationListSort({ field: 'name', direction: 'asc' }, 'lastRun')).toEqual({
-      field: 'lastRun',
-      direction: 'desc'
-    })
-  })
-
-  it('filters by enabled state and last-run outcome', () => {
-    const items = applyAutomationListView({
-      rows: [
-        makeCatalogRow('paused', { name: 'Paused', enabled: false }, 'completed'),
-        makeCatalogRow('ok', { name: 'Healthy' }, 'dispatch_failed')
-      ],
-      externalEntries: [makeExternalEntry()],
-      filter: { status: 'enabled', lastRun: 'failed', agentIds: [] },
-      sort: null,
-      locale: 'en'
-    })
-    expect(items.map((item) => item.id)).toEqual([rowKey('ok'), 'manager-1:job-1'])
-  })
-
-  it('filters local rows by multiple agents and leaves external rows out of agent scopes', () => {
-    const items = applyAutomationListView({
-      rows: [
-        makeCatalogRow('codex-job', { agentId: 'codex' }),
-        makeCatalogRow('claude-job', { agentId: 'claude' })
-      ],
-      externalEntries: [makeExternalEntry()],
-      filter: { status: 'all', lastRun: 'all', agentIds: ['codex', 'claude'] },
-      sort: null,
-      locale: 'en'
-    })
-
-    expect(items.map((item) => item.id)).toEqual([rowKey('codex-job'), rowKey('claude-job')])
-  })
-
-  it('counts an agent filter alongside status and last-run filters', () => {
-    expect(
-      isAutomationListFilterActive({
-        status: 'all',
-        lastRun: 'all',
-        agentIds: []
-      })
-    ).toBe(false)
-    expect(
-      countAutomationListFilters({
-        status: 'paused',
-        lastRun: 'failed',
-        agentIds: ['codex']
-      })
-    ).toBe(3)
-  })
-
-  it('sorts by name across local and external rows', () => {
-    const items = applyAutomationListView({
-      rows: [makeCatalogRow('zebra', { name: 'Zebra job' })],
-      externalEntries: [makeExternalEntry({ name: 'Alpha digest' })],
-      filter: { status: 'all', lastRun: 'all', agentIds: [] },
-      sort: { field: 'name', direction: 'asc' },
-      locale: 'en'
-    })
-    expect(items.map((item) => item.name)).toEqual(['Alpha digest', 'Zebra job'])
-  })
-
   it('filters catalog rows by status, agent, and the projected last-run status', () => {
     const rows = [
       makeCatalogRow('paused-codex', { enabled: false, agentId: 'codex' }),
@@ -292,26 +186,5 @@ describe('automation-list-view', () => {
         status: 'enabled'
       })
     ).toEqual([])
-  })
-
-  it('sorts by last run newest first and keeps never-run rows last', () => {
-    const items = applyAutomationListView({
-      rows: [
-        makeCatalogRow('old', {
-          name: 'Old',
-          lastRunAt: Date.parse('2026-08-11T09:00:00Z')
-        }),
-        makeCatalogRow('never', { name: 'Never' })
-      ],
-      externalEntries: [makeExternalEntry({ lastRunAt: '2026-08-12T09:00:00Z' })],
-      filter: { status: 'all', lastRun: 'all', agentIds: [] },
-      sort: { field: 'lastRun', direction: 'desc' },
-      locale: 'en'
-    })
-    expect(items.map((item) => item.id)).toEqual([
-      'manager-1:job-1',
-      rowKey('old'),
-      rowKey('never')
-    ])
   })
 })

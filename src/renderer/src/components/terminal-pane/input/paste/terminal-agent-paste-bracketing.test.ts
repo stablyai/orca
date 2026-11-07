@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { PaneForegroundAgentEntry } from '../../../../store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '../../../../store/slices/agent-status/pane-foreground-agent'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { executeTerminalPastePlan } from './terminal-paste-executor'

@@ -73,7 +73,7 @@ import {
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const WORKTREE = 'repo-1::/srv/app'
 const INITIAL_SETTINGS = useAppStore.getState().settings

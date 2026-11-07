@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useActiveWorktree } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { cn } from '@/lib/utils'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {

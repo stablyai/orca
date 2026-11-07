@@ -37,7 +37,7 @@ import {
   createWorkspaceCleanupFacetListCache,
   createWorkspaceCleanupReviewInfoCache
 } from './workspace-cleanup-facet-row-caches'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export type WorkspaceCleanupFacetRows = {

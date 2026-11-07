@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {

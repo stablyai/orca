@@ -9,7 +9,7 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import '../../../shared/workspace-session/workspace-session-pane-ownership'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import {
   _resetLayoutFramePositionForTests,
   beginLayoutFramePositions,

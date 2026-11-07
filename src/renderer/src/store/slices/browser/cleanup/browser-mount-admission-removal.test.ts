@@ -1,10 +1,13 @@
 /** Release background-page start admission on every removal, including bulk purge; exercise the same sweep as useTerminalWindowLifecycle (STA-7436). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }

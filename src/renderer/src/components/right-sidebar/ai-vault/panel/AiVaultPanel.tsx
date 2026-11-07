@@ -2,7 +2,9 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { useAllWorktrees, useProjectHostSetupProjection, useRepos } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepos } from '@/store/repos/use-repository-catalog'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
 import {
   deriveAiVaultScopeSessionPaths,
@@ -50,7 +52,10 @@ import {
 } from '../session-list/use-ai-vault-session-keyboard-navigation'
 import { useAiVaultPanelHandle, type AiVaultPanelProps } from '../scope/ai-vault-panel-handle'
 import { aiVaultSearchHitHostLabels } from '../search/ai-vault-search-hit-hosts'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 
 export default function AiVaultPanel({

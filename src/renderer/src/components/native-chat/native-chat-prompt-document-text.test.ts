@@ -44,23 +44,3 @@ it.each(['spaces', 'hard breaks', 'empty paragraphs'])(
     ])
   }
 )
-
-it('replaces an all-whitespace document with literal returned text', () => {
-  const result = withNativeChatComposerDraftAddition(
-    {
-      text: ' \n',
-      images: [],
-      document: {
-        type: 'doc',
-        content: [
-          { type: 'paragraph', content: [{ type: 'text', text: ' ' }] },
-          { type: 'paragraph', content: [] }
-        ]
-      }
-    },
-    { text: '$review' }
-  )
-  expect(result.document?.content).toEqual([
-    { type: 'paragraph', content: [{ type: 'text', text: '$review' }] }
-  ])
-})

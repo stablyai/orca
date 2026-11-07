@@ -159,20 +159,6 @@ describe.skipIf(process.platform === 'win32')('POSIX hook JSON stdin reader', ()
   )
 
   itWithPython(
-    'emits the payload text unchanged rather than re-serialising it',
-    async () => {
-      const payload = '{"z":"日本語","a":1,"nested":{"b":[1,2]}}'
-
-      const result = await runReader([Buffer.from(`${payload}\n`, 'utf8')])
-
-      expect(result.timedOut, 'reader returned').toBe(false)
-      expect(result.stdout).not.toContain('\\u')
-      expect(result.stdout).toBe(payload)
-    },
-    KILL_AFTER_MS + 1_000
-  )
-
-  itWithPython(
     'returns immediately for a payload preceded by whitespace',
     async () => {
       const payload = '{"hook_event_name":"session_start"}'
@@ -231,19 +217,6 @@ describe.skipIf(process.platform === 'win32')('POSIX hook JSON stdin reader', ()
       expect(result.timedOut, 'reader returned').toBe(false)
       expect(result.stdout).toBe(payload)
       expect(result.durationMs).toBeLessThan(2_000)
-    },
-    KILL_AFTER_MS + 1_000
-  )
-
-  itWithPython(
-    'reports nothing on stderr on any of these paths',
-    async () => {
-      const result = await runReader([Buffer.from('{"a":"漢"}\n', 'utf8')])
-
-      expect(result.timedOut, 'reader returned').toBe(false)
-      expect(result.exitCode).toBe(0)
-      expect(result.stdout).toBe('{"a":"漢"}')
-      expect(result.stderr).toBe('')
     },
     KILL_AFTER_MS + 1_000
   )

@@ -6,7 +6,7 @@ import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility
 import { issueCacheKey } from '../cache/cache-identity'
 import { CACHE_TTL } from '../cache/cache-policy'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
-import { selectWorktreesByRepo } from '../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export const createStaleWorktreeRefreshActions = (
   get: Parameters<StateCreator<AppState>>[1]

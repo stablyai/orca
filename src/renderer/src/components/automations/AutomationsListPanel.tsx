@@ -1,5 +1,5 @@
 import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 import React, { useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type {

@@ -9,7 +9,7 @@ import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcom
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import '../../workspace-switch-user-act'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.

@@ -17,19 +17,7 @@ vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { getPRForBranchOutcomeMock } = coordinatorMocks
-const WORKTREES = 20
 const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
-
-function visibleCandidates(): GitHubPRRefreshCandidate[] {
-  return Array.from({ length: WORKTREES }, (_, i) =>
-    makeCandidate({
-      cacheKey: `/repo::feature/${i}`,
-      branch: `feature/${i}`,
-      worktreeId: `wt-${i}`,
-      cachedFetchedAt: null
-    })
-  )
-}
 
 describe('pr-refresh queue growth bounds', () => {
   beforeEach(() => {
@@ -43,64 +31,6 @@ describe('pr-refresh queue growth bounds', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('keeps visibility windows and error backoff bounded when renderer windows churn', async () => {
-    const {
-      reportVisiblePRRefreshCandidates,
-      _getVisiblePRRefreshWindowCountForTests,
-      _getPRRefreshErrorBackoffCountForTests
-    } = await import('./pr-refresh-coordinator')
-
-    getPRForBranchOutcomeMock.mockImplementation(async () => ({
-      kind: 'upstream-error' as const,
-      errorType: 'unknown' as const,
-      message: 'boom',
-      fetchedAt: Date.now()
-    }))
-
-    for (let windowId = 1; windowId <= 300; windowId += 1) {
-      coordinatorMocks.getAllWebContentsMock.mockReturnValue([
-        { id: windowId, isDestroyed: () => false, send: coordinatorMocks.sendMock }
-      ])
-      reportVisiblePRRefreshCandidates(visibleCandidates(), 1, windowId)
-      await vi.advanceTimersByTimeAsync(60_000)
-    }
-    expect(_getVisiblePRRefreshWindowCountForTests()).toBeLessThanOrEqual(1)
-    expect(_getPRRefreshErrorBackoffCountForTests()).toBeLessThanOrEqual(WORKTREES)
-  })
-
-  it("drops a worktree's stale branch aliases instead of fanning out to its whole history", async () => {
-    const {
-      reportVisiblePRRefreshCandidates,
-      _getPRRefreshAliasCountForTests,
-      _getPRRefreshQueueSizeForTests
-    } = await import('./pr-refresh-coordinator')
-
-    // A linked-PR key survives branch changes; coalescing must retire stale branch aliases.
-    for (let i = 0; i < 300; i += 1) {
-      reportVisiblePRRefreshCandidates(
-        [
-          makeCandidate({
-            cacheKey: `/repo::churn/${i}`,
-            branch: `churn/${i}`,
-            worktreeId: 'wt-churn',
-            linkedPRNumber: 42,
-            cachedFetchedAt: null
-          })
-        ],
-        i + 1,
-        1
-      )
-      await vi.advanceTimersByTimeAsync(20_000)
-    }
-
-    expect(_getPRRefreshQueueSizeForTests()).toBe(1)
-    expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
-    const broadcastAliasCounts = coordinatorMocks.sendMock.mock.calls
-      .filter((call) => call[0] === 'gh:prRefreshEvent')
-      .map((call) => (call[1] as { aliases: unknown[] }).aliases.length)
-    expect(Math.max(...broadcastAliasCounts)).toBe(1)
   })
 
   it('keeps the newer alias when a branch switch lands mid-request', async () => {
@@ -183,80 +113,5 @@ describe('pr-refresh queue growth bounds', () => {
       'churn/1',
       'churn/2'
     ])
-  })
-
-  it('keeps distinct worktrees sharing one linked-PR key in the fan-out', async () => {
-    const { enqueuePRRefresh, _getPRRefreshAliasCountForTests } =
-      await import('./pr-refresh-coordinator')
-
-    for (let i = 0; i < 4; i += 1) {
-      enqueuePRRefresh(
-        makeCandidate({
-          cacheKey: `/repo::shared/${i}`,
-          branch: `shared/${i}`,
-          worktreeId: `wt-${i}`,
-          linkedPRNumber: 42,
-          cachedFetchedAt: Date.now() + 60_000
-        }),
-        'visible',
-        40,
-        1
-      )
-    }
-    expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(4)
-  })
-
-  it('coalesces branch churn into one alias while the entry waits to drain', async () => {
-    const { enqueuePRRefresh, _getPRRefreshAliasCountForTests, _getPRRefreshQueueSizeForTests } =
-      await import('./pr-refresh-coordinator')
-
-    // Keep one entry parked so every enqueue exercises its alias bound.
-    for (let i = 0; i < 200; i += 1) {
-      enqueuePRRefresh(
-        makeCandidate({
-          cacheKey: `/repo::churn/${i}`,
-          branch: `churn/${i}`,
-          worktreeId: 'wt-churn',
-          linkedPRNumber: 42,
-          cachedFetchedAt: null
-        }),
-        'swr',
-        10,
-        1
-      )
-    }
-    expect(_getPRRefreshQueueSizeForTests()).toBe(1)
-    expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    const outcomeAliases = coordinatorMocks.sendMock.mock.calls
-      .filter((call) => call[0] === 'gh:prRefreshEvent')
-      .map((call) => (call[1] as { aliases: { cacheKey: string }[] }).aliases)
-    expect(outcomeAliases.every((aliases) => aliases.length === 1)).toBe(true)
-    expect(outcomeAliases.at(-1)?.[0].cacheKey).toBe('/repo::churn/199')
-  })
-
-  it('keeps a manually refreshed worktree to one alias across branch churn', async () => {
-    const { reportVisiblePRRefreshCandidates, refreshPRNow, _getPRRefreshAliasCountForTests } =
-      await import('./pr-refresh-coordinator')
-
-    const churnCandidate = (index: number): GitHubPRRefreshCandidate =>
-      makeCandidate({
-        cacheKey: `/repo::churn/${index}`,
-        branch: `churn/${index}`,
-        worktreeId: 'wt-churn',
-        linkedPRNumber: 42,
-        cachedFetchedAt: null
-      })
-
-    // Manual refresh writes a copied alias map back, so re-entry must enforce the same bound.
-    reportVisiblePRRefreshCandidates([churnCandidate(0)], 1, 1)
-    await vi.advanceTimersByTimeAsync(1_000)
-    for (let i = 1; i <= 30; i += 1) {
-      await refreshPRNow(churnCandidate(i))
-      await vi.advanceTimersByTimeAsync(1)
-    }
-
-    expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
   })
 })

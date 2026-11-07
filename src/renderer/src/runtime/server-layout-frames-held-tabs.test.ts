@@ -16,7 +16,7 @@ import {
   _reloadDesktopCreatedServerTabsForTests,
   _resetDesktopCreatedServerTabsForTests
 } from '@/lib/desktop-created-server-tabs'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import { useAppStore } from '@/store'
 import { stageWebRuntimeBrowserTab } from './web-runtime-browser-tab-staging'

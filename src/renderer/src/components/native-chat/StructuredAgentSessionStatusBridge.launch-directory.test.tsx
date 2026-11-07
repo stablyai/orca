@@ -15,7 +15,7 @@ import {
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 type TestStore = {
   getState: () => AppState
@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const useAppStore = createTestStore()
   const { transactAgentStatuses } = useAppStore.getState()
   useAppStore.setState({

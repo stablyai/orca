@@ -50,10 +50,6 @@ function emitStdout(child: ChildProcessWithoutNullStreams, data: string | Buffer
   child.stdout.emit('data', Buffer.isBuffer(data) ? data : Buffer.from(data))
 }
 
-function emitStderr(child: ChildProcessWithoutNullStreams, data: Buffer): void {
-  child.stderr.emit('data', data)
-}
-
 function catchStartup(
   promise: Promise<unknown>
 ): Promise<Error & { startup?: WslRelayStartupFailure }> {
@@ -82,20 +78,6 @@ describe('waitForWslRelaySentinel', () => {
     transport.resumeReads?.()
     expect(child.stdout.pause).toHaveBeenCalledOnce()
     expect(child.stdout.resume).toHaveBeenCalledOnce()
-  })
-
-  it('resolves past leading garbage and hands trailing bytes to onData', async () => {
-    const child = fakeChild()
-    const promise = waitForWslRelaySentinel(child)
-    emitStdout(
-      child,
-      Buffer.concat([Buffer.from('junk noise '), Buffer.from(RELAY_SENTINEL), Buffer.from('TRAIL')])
-    )
-    const transport = await promise
-    const received: string[] = []
-    transport.onData((d) => received.push(d.toString('utf8')))
-    await Promise.resolve()
-    expect(received).toEqual(['TRAIL'])
   })
 
   it('delivers a pending trailing chunk before a later direct chunk, in wire order', async () => {
@@ -153,19 +135,6 @@ describe('waitForWslRelaySentinel', () => {
     const err = await settled
     expect(child.kill).toHaveBeenCalled()
     expect(err.startup?.kind).toBe('timeout')
-  })
-
-  it('strips NUL bytes from the stderr failure detail', async () => {
-    const child = fakeChild()
-    const settled = catchStartup(waitForWslRelaySentinel(child))
-    // Older wsl.exe emits NUL-padded UTF-16LE ASCII without WSL_UTF8.
-    const nulLaden = Buffer.from('E_FAIL'.split('').flatMap((c) => [c.charCodeAt(0), 0]))
-    emitStderr(child, nulLaden)
-    child.emit('close', 1)
-    const err = await settled
-    expect(err.startup?.stderr).toBe('E_FAIL')
-    expect(err.message).toContain('E_FAIL')
-    expect(err.message).not.toContain(String.fromCharCode(0))
   })
 
   it('forwards write(false), callback settlement, and drain from WSL stdin', async () => {

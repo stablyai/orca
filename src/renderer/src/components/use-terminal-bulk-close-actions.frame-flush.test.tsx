@@ -5,7 +5,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 vi.mock('./use-bulk-tab-close-confirmation', () => ({ useBulkTabCloseConfirmation: () => vi.fn() }))
 
 import { useAppStore } from '../store'
-import { makeOpenFile, makeTab, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { makeOpenFile } from '../store/slices/editor/types/open-file.test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { registerEditorFrameFlush } from './editor/save/flush/editor-pending-flush'
 import { useTerminalBulkCloseActions } from './use-terminal-bulk-close-actions'
 

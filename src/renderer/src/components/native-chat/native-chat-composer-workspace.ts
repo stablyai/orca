@@ -15,7 +15,7 @@ import {
   selectWorktreesByRepo,
   selectFolderWorkspaces,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   isUnresolvedOwnerHostId,
   parseExecutionHostId,

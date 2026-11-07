@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { useAppStateValue } from '@/store/app-state-view'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
-import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
+import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {
   diffCommentSendKey,
   holdNotesForSend,

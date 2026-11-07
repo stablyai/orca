@@ -3,14 +3,17 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import { drawTabsFromMain, type TabsDrawnFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import {
+  drawTabsFromMain,
+  type TabsDrawnFromMain
+} from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
 import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { workspaceEditorFiles } from './workspace-editor-files'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
-import { buildHydratedTabState } from '../../tabs-hydration'
+import { buildHydratedTabState } from '../../tabs/tabs-hydration'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 

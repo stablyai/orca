@@ -17,7 +17,7 @@ import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
   hydrateNativeChatComposerDrafts

@@ -17,8 +17,8 @@ import {
   type WorkspaceLayoutFrameSync
 } from '../../../runtime/workspace-layout-frame-sync'
 
-import { createStoreSessionMockApi } from '../../../store/slices/store-session-test-harness'
-import { createTestStore } from '../../../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../../../store/testing/app-store-test-fixture'
 import { adoptLiveWorkspacePtySurfaces } from './worktree-agent-live-surface-adoption'
 import type { LiveTerminalSurfaceOwnerIndex } from '../../worktree-live-terminal-surface-owners'
 

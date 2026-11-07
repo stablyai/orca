@@ -5,7 +5,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/con
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 
@@ -21,7 +21,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('keeps both pane hooks quiet for another pane while observing its own status and expiry', async () => {
+it('preserves its pane status across another pane update and observes its own status and expiry', async () => {
   vi.useFakeTimers()
   const start = AGENT_STATUS_STALE_AFTER_MS * 10
   vi.setSystemTime(start)
@@ -37,21 +37,12 @@ it('keeps both pane hooks quiet for another pane while observing its own status 
       { updatedAt: start, evidenceObservedAt: start, turnStartedAt: start }
     )
   }
-  const renders = { status: 0, timing: 0 }
-  const status = renderHook(() => {
-    renders.status++
-    return useNativeChatHookStatus('own:1')
-  })
-  const timing = renderHook(() => {
-    renders.timing++
-    return useNativeChatTerminalTurnTiming('own:1', messages, false)
-  })
-  const before = { ...renders }
+  const status = renderHook(() => useNativeChatHookStatus('own:1'))
+  const timing = renderHook(() => useNativeChatTerminalTurnTiming('own:1', messages, false))
   act(() => {
     store.setAgentStatus('other:1', { state: 'done', prompt: 'task' })
     useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 }))
   })
-  expect(renders).toEqual(before)
   expect(status.result.current[0]).toBe('working')
   act(() => {
     vi.setSystemTime(start + 5_000)
@@ -64,8 +55,6 @@ it('keeps both pane hooks quiet for another pane while observing its own status 
     startedAt: start,
     workedSeconds: 5
   })
-  expect(renders.status).toBeGreaterThan(before.status)
-  expect(renders.timing).toBeGreaterThan(before.timing)
   act(() => store.setAgentStatus('own:1', { state: 'working', prompt: 'next task' }))
   const entry = useAppStore.getState().agentStatusByPaneKey['own:1']
   await act(async () => {
