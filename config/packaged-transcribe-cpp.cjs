@@ -46,6 +46,9 @@ function copyWindowsCrt(nativeDir) {
       )
     }
     const [major, minor] = readFileVersion(source)
+    if (!Number.isFinite(major) || !Number.isFinite(minor)) {
+      throw new Error(`Cannot read the file version of ${source}.`)
+    }
     const [minMajor, minMinor] = MIN_WINDOWS_CRT_VERSION
     if (major < minMajor || (major === minMajor && minor < minMinor)) {
       throw new Error(
