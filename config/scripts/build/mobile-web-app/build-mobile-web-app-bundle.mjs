@@ -522,15 +522,19 @@ function entryOutput(metafile) {
   return path
 }
 
+// The page's scripts as shipped: a first build finds the small shared chunks, a second merges them.
+export async function buildMobileWebAppScripts(routes) {
+  const split = await esbuild.build(mobileWebAppBuildOptions(routes))
+  const sharedModules = sharedModulesToMerge(split.metafile, entryOutput(split.metafile))
+  return sharedModules.length === 0
+    ? split
+    : esbuild.build(mobileWebAppBuildOptions(routes, sharedModules))
+}
+
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
-  const split = await esbuild.build(mobileWebAppBuildOptions(routes))
-  const sharedModules = sharedModulesToMerge(split.metafile, entryOutput(split.metafile))
-  const result =
-    sharedModules.length === 0
-      ? split
-      : await esbuild.build(mobileWebAppBuildOptions(routes, sharedModules))
+  const result = await buildMobileWebAppScripts(routes)
   assertNoZodLocaleTables(result.metafile)
   const entryOutputPath = entryOutput(result.metafile)
   const renamed = renameOutputsByContent(result.metafile, result.outputFiles)

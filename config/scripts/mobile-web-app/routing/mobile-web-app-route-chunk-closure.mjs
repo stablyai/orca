@@ -1,9 +1,8 @@
 import { basename, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as esbuild from 'esbuild'
 import {
-  entryStaticClosure,
-  mobileWebAppBuildOptions
+  buildMobileWebAppScripts,
+  entryStaticClosure
 } from '../../build/mobile-web-app/build-mobile-web-app-bundle.mjs'
 import { collectMobileWebAppRoutes } from '../mobile-web-app-route-manifest.mjs'
 
@@ -20,11 +19,7 @@ function chunkOwnerPaths(routeModule) {
 // Return deferred inputs too: absence from static inputs matters only when module still exists elsewhere in bundle.
 export async function mobileWebAppRouteChunkClosure(routeModule) {
   const routes = await collectMobileWebAppRoutes(join(mobileDir, 'app'))
-  const { metafile } = await esbuild.build({
-    ...mobileWebAppBuildOptions(routes),
-    metafile: true,
-    write: false
-  })
+  const { metafile } = await buildMobileWebAppScripts(routes)
   const routePaths = chunkOwnerPaths(routeModule)
   const owner = Object.entries(metafile.outputs).find(([, output]) =>
     Object.keys(output.inputs ?? {}).some((input) => routePaths.includes(resolve(mobileDir, input)))
