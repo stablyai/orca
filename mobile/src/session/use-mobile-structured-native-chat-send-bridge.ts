@@ -13,6 +13,11 @@ import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
 } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  beginMobileNativeChatInFlightSend,
+  noteMobileNativeChatInFlightMessageId,
+  settleMobileNativeChatInFlightSend
+} from './native-chat/composer/mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
@@ -69,11 +74,14 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
+      // Saved in the same write as the clear; the journal id joins it once the send is minted.
+      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text)
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
         ...intent,
         onCreated: (id) => {
           created.clientMessageId = id
+          noteMobileNativeChatInFlightMessageId(inFlightId, id)
           intent?.onCreated?.(id)
         }
       })
@@ -81,15 +89,19 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
-      if (outcome === 'rejected') {
-        handBack()
-      } else if (outcome === 'unknown' && created.clientMessageId) {
+      if (outcome === 'unknown' && created.clientMessageId) {
         // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
         holdUnconfirmed(created.clientMessageId, () => {
           handBack()
           intent?.onHandBack?.()
           onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+          settleMobileNativeChatInFlightSend(inFlightId)
         })
+        return outcome
+      }
+      settleMobileNativeChatInFlightSend(inFlightId)
+      if (outcome === 'rejected') {
+        handBack()
       }
       return outcome
     },

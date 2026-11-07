@@ -21,6 +21,10 @@ import {
   refreshPageTerminalSettings
 } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
+  createPageDeviceStore,
+  publishPageDeviceStore
+} from '../src/mobile-web-shell/bridge/page-device-store'
+import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
 } from '../src/mobile-web-shell/bridge/page-first-paint'
@@ -164,6 +168,7 @@ bootstrapShellPage({
             ).value
         : null
     )
+    publishPageDeviceStore(createPageDeviceStore(client))
     client.onStorageUpdate(() => {
       const current = client.getShellSession()
       if (current !== null) {
