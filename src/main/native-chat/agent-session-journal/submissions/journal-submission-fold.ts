@@ -13,6 +13,10 @@ import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { journalDispatchRowApplies } from '../projection/journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../projection/journal-dispatch-doubt-reasons'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import {
+  journalInputSourceBody,
+  journalInputSourceSequence
+} from '../input-order/journal-input-source'
 
 export function applyJournalSubmission(
   state: JournalReducerState,
@@ -205,5 +209,28 @@ export function journalSubmissionIsPersonal(
   return (
     submission.source?.kind === 'user' ||
     (submission.source === undefined && submission.origin === 'client')
+  )
+}
+
+/** Old importers could remove a completed card while retaining its original personal request. */
+export function journalLegacySubmissionIsPersonal(
+  state: Pick<JournalReducerState, 'queue' | 'inputs' | 'epoch'>,
+  submission: AgentJournalSubmission
+): boolean {
+  if (!submission.queuedMessageId || state.queue.cards.has(submission.queuedMessageId)) {
+    return journalSubmissionIsPersonal(state, submission)
+  }
+  const admission = state.inputs.sources.get(submission.clientMessageId)
+  const request = admission?.kind === 'submission' ? admission : admission?.submission
+  const body = journalInputSourceBody(admission)
+  return Boolean(
+    admission?.epoch === state.epoch &&
+    request?.queuedMessageId === submission.queuedMessageId &&
+    request?.origin === 'client' &&
+    request.source === undefined &&
+    request.payloadFingerprint === submission.payloadFingerprint &&
+    journalInputSourceSequence(admission) === submission.acceptedSequence &&
+    body &&
+    !body.from
   )
 }

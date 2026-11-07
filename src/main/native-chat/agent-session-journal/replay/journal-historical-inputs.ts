@@ -1,5 +1,8 @@
 import { journalInputOrder } from '../input-order/journal-input-order'
-import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
+import {
+  journalLegacySubmissionIsPersonal,
+  journalSubmissionIsPersonal
+} from '../submissions/journal-submission-fold'
 import { outcomeFormat3Card } from '../outcomes/journal-outcome-format-3'
 import { z } from 'zod'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -180,7 +183,10 @@ export function restoreHistoricalPersonAcceptance(
       }
     }
     const queue = { cards: new Map(card ? [[card.messageId, card]] : []) }
-    if (journalSubmissionIsPersonal({ queue }, submission)) {
+    if (
+      journalSubmissionIsPersonal({ queue }, submission) ||
+      (!card && record.format < 3 && journalLegacySubmissionIsPersonal(state, submission))
+    ) {
       owner.seedPersonAcceptance(submission.acceptedSequence ?? 0)
     }
   }
