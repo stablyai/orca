@@ -22,6 +22,7 @@ import { useBrowserClientHostedDownloadNotices } from '../components/browser-pan
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
+import { useNotchRevealBridge } from '../components/notch/useNotchRevealBridge'
 
 /** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
@@ -42,6 +43,7 @@ export function useAppShellServices(): void {
   useRemoteRuntimeRecoveryTriggers()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
+  useNotchRevealBridge()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()

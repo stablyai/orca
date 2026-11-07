@@ -5,6 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { MenuBarIconSetting } from './MenuBarIconSetting'
+import { NotchStatusSetting } from './NotchStatusSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
@@ -22,7 +24,11 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import {
+  getMenuBarIconEntries,
+  getNotchStatusEntries,
+  getSystemTrayEntries
+} from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../../shared/ui-language'
@@ -103,7 +109,6 @@ export function AppearanceInterfaceSection({
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
   const languageEntry = getLanguageEntries()[0]
-  const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
@@ -115,7 +120,8 @@ export function AppearanceInterfaceSection({
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac }),
+    ...getNotchStatusEntries({ showNotchStatus: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
   const languageTitle = translate('settings.appearance.language.title', 'Language')
@@ -382,24 +388,17 @@ export function AppearanceInterfaceSection({
             ) : null}
 
             {isDesktopMac ? (
-              <SearchableSetting
-                title={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
-                description={menuBarIconEntry?.description}
-                keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
-              >
-                <SettingsSwitchRow
-                  label={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
-                  // Hiding the status item preserves Dock activation and close-keeps-running behavior.
-                  description={translate(
-                    'settings.appearance.menuBarIcon.description',
-                    'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
-                  )}
-                  checked={settings.showMenuBarIcon !== false}
-                  onChange={() =>
-                    updateSettings({ showMenuBarIcon: settings.showMenuBarIcon === false })
-                  }
-                />
-              </SearchableSetting>
+              <MenuBarIconSetting
+                enabled={settings.showMenuBarIcon !== false}
+                updateSettings={updateSettings}
+              />
+            ) : null}
+
+            {isDesktopMac ? (
+              <NotchStatusSetting
+                enabled={settings.showNotchStatus === true}
+                updateSettings={updateSettings}
+              />
             ) : null}
           </div>
         </AppearanceAdvancedDisclosure>

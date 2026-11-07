@@ -23,6 +23,7 @@ import {
 import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-services'
 import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-existing-window'
 import { mainProcessState as state } from './main-process-state'
+import { syncNotchStatus } from './notch-status-wiring'
 import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
@@ -259,6 +260,7 @@ export function createSystemTrayDeferred(
       if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
         onCreated?.()
       }
+      syncNotchStatus(state.store.getSettings().showNotchStatus === true)
       return
     }
     const options = getSystemTrayOptions()
