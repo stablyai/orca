@@ -96,7 +96,9 @@ it.each(['person', 'mail'] as const)(
     await journal.appendStopEvent({ reason: 'user-stop' }, 0)
     const body = {
       ...message('sent'),
-      ...(sender === 'mail' ? { from: { kind: 'agent' as const, senders: [] } } : {})
+      ...(sender === 'mail'
+        ? { from: { kind: 'agent' as const, senders: [], orchestration: null } }
+        : {})
     }
     await journal.appendSubmission({
       clientMessageId: 'H',
