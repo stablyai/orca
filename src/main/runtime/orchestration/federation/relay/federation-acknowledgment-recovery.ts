@@ -107,7 +107,10 @@ export class FederationAcknowledgmentRecovery {
     if (generation !== this.generation) {
       return
     }
-    if (synced) {
+    // A sync that leaves the row pending (e.g. a host without settlement support) made no progress.
+    const settled =
+      synced && this.deps.findNextAfter(next.rowId - 1)?.dispatchId !== next.dispatchId
+    if (settled) {
       this.deadlines.delete(next.dispatchId)
     } else {
       const failures = (this.deadlines.get(next.dispatchId)?.failures ?? 0) + 1

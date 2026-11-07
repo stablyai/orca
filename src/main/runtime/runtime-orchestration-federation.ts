@@ -42,20 +42,18 @@ export class RuntimeOrchestrationFederation {
   private readonly syncs = new Map<string, { db: OrchestrationDb; promise: Promise<void> }>()
   private readonly warnings = new Set<string>()
   private relayGeneration = 0
+  private stopVerifiedWatch: (() => void) | null = null
   /** Worker server -> runtime incarnation that last proved the orchestration contract. */
   private readonly contractVerifiedRuntimeIds = new Map<string, string>()
 
   constructor(
     private readonly runtime: FederationRuntime,
     private readonly transport: OrchestrationEnvironmentTransport | null
-  ) {
-    transport?.onEnvironmentVerified?.((environmentId) =>
-      this.relays.resetEnvironment(environmentId)
-    )
-  }
+  ) {}
 
   resetForDatabaseChange(): void {
     this.relayGeneration += 1
+    this.unwatchVerifiedEnvironments()
     this.relays.clear()
     this.acknowledgmentRecovery.reset()
     clearFederationAckCheckpoints(this.runtime)
@@ -184,6 +182,7 @@ export class RuntimeOrchestrationFederation {
       .then(() => {
         if (this.syncs.get(dispatchId)?.promise === sync) {
           this.warnings.delete(dispatchId)
+          this.relays.noteSynced(dispatchId)
         }
       })
       .catch((error: unknown) => {
@@ -208,9 +207,13 @@ export class RuntimeOrchestrationFederation {
 
   async syncDispatchAfterCurrent(dispatchId: string): Promise<void> {
     const db = this.runtime.getOrchestrationDb()
+    const generation = this.relayGeneration
     const current = this.syncs.get(dispatchId)
     if (current?.db === db) {
       await current.promise.catch(() => undefined)
+    }
+    if (generation !== this.relayGeneration || this.runtime.getOrchestrationDb() !== db) {
+      return
     }
     await this.syncDispatch(dispatchId)
   }
@@ -219,6 +222,10 @@ export class RuntimeOrchestrationFederation {
     if (!this.transport) {
       return
     }
+    this.stopVerifiedWatch ??=
+      this.transport.onEnvironmentVerified?.((environmentId) =>
+        this.relays.resetEnvironment(environmentId)
+      ) ?? null
     for (const dispatch of this.runtime.getOrchestrationDb().listActiveFederatedDispatches(runId)) {
       this.relays.arm(dispatch.dispatch_id, dispatch.environment_id)
     }
@@ -236,8 +243,14 @@ export class RuntimeOrchestrationFederation {
     )
   }
 
+  private unwatchVerifiedEnvironments(): void {
+    this.stopVerifiedWatch?.()
+    this.stopVerifiedWatch = null
+  }
+
   stopRelay(): void {
     this.relayGeneration += 1
+    this.unwatchVerifiedEnvironments()
     this.relays.clear()
     this.acknowledgmentRecovery.reset()
     this.warnings.clear()

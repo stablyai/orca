@@ -21,6 +21,7 @@ type RelayChain = {
 /** One self-rescheduling sync per dispatch, so a dead or unreachable dispatch backs off instead of polling every second. */
 export class FederationRelayScheduler {
   private readonly chains = new Map<string, RelayChain>()
+  private readonly dispatchesByEnvironment = new Map<string, Set<string>>()
 
   constructor(private readonly tick: (dispatchId: string) => Promise<FederationRelayTickOutcome>) {}
 
@@ -39,17 +40,31 @@ export class FederationRelayScheduler {
       runAgain: false
     }
     this.chains.set(dispatchId, created)
+    const siblings = this.dispatchesByEnvironment.get(environmentId) ?? new Set<string>()
+    siblings.add(dispatchId)
+    this.dispatchesByEnvironment.set(environmentId, siblings)
     void this.run(dispatchId, created)
   }
 
   /** A server that just verified is worth retrying at the base cadence. */
   resetEnvironment(environmentId: string): void {
-    for (const [dispatchId, chain] of this.chains) {
-      if (chain.environmentId === environmentId) {
+    for (const dispatchId of this.dispatchesByEnvironment.get(environmentId) ?? []) {
+      const chain = this.chains.get(dispatchId)
+      if (chain) {
         chain.failures = 0
         this.syncSoon(dispatchId, chain)
       }
     }
+  }
+
+  /** A sync another caller completed proves the relay healthy again, so the next one returns to the base cadence. */
+  noteSynced(dispatchId: string): void {
+    const chain = this.chains.get(dispatchId)
+    if (!chain || chain.running || chain.failures === 0) {
+      return
+    }
+    chain.failures = 0
+    this.schedule(dispatchId, chain, federationRelayRetryDelayMs(0))
   }
 
   clear(): void {
@@ -59,6 +74,7 @@ export class FederationRelayScheduler {
       }
     }
     this.chains.clear()
+    this.dispatchesByEnvironment.clear()
   }
 
   private syncSoon(dispatchId: string, chain: RelayChain): void {
@@ -91,6 +107,11 @@ export class FederationRelayScheduler {
     }
     if (outcome === 'ended') {
       this.chains.delete(dispatchId)
+      const siblings = this.dispatchesByEnvironment.get(chain.environmentId)
+      siblings?.delete(dispatchId)
+      if (siblings?.size === 0) {
+        this.dispatchesByEnvironment.delete(chain.environmentId)
+      }
       return
     }
     chain.failures = outcome === 'synced' ? 0 : chain.failures + 1

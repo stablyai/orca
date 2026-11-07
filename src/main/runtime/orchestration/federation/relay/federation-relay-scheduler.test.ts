@@ -121,19 +121,17 @@ describe('FederationRelayScheduler', () => {
     expect(calls.filter((at) => at === 8_000)).toHaveLength(1)
     relays.clear()
   })
-  it.each([7, 70])(
-    'bounds syncs for %i always-failing dispatches to the ramp plus one per minute',
-    async (dispatchCount) => {
-      const tick = vi.fn(async (): Promise<FederationRelayTickOutcome> => 'failed')
-      const relays = new FederationRelayScheduler(tick)
-      for (let index = 0; index < dispatchCount; index += 1) {
-        relays.arm(`dispatch-${index}`, 'env-1')
-      }
-      await advance(10 * 60_000)
 
-      // Each dispatch needs at most the 2^n ramp to the 60 s cap (6 steps) plus one retry per minute.
-      expect(tick.mock.calls.length).toBeLessThanOrEqual(dispatchCount * (6 + 10))
-      relays.clear()
-    }
-  )
+  it('returns to one-second syncs when another caller completes a sync', async () => {
+    const { tick, calls } = scripted(['failed', 'failed', 'failed', 'synced'])
+    const relays = new FederationRelayScheduler(tick)
+    relays.arm('dispatch-1', 'env-1')
+    await advance(2_000 + 4_000)
+    expect(calls).toEqual([0, 2_000, 6_000])
+
+    relays.noteSynced('dispatch-1')
+    await advance(1_000)
+    expect(calls).toEqual([0, 2_000, 6_000, 7_000])
+    relays.clear()
+  })
 })

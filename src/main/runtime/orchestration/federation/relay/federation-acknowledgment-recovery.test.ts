@@ -39,4 +39,29 @@ describe('FederationAcknowledgmentRecovery', () => {
     ).toEqual([0, 2_000, 6_000])
     recovery.reset()
   })
+
+  it('backs off a row whose sync succeeds without settling it, and settles it once the host can', async () => {
+    const pending = [{ dispatchId: 'awaiting-settlement', rowId: 1 }]
+    let hostCanSettle = false
+    const attempts: number[] = []
+    const recovery = new FederationAcknowledgmentRecovery({
+      findNextAfter: (afterRowId) => pending.find((row) => row.rowId > afterRowId),
+      sync: async () => {
+        attempts.push(Date.now())
+        if (hostCanSettle) {
+          pending.length = 0
+        }
+      }
+    })
+
+    recovery.ensure()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(attempts).toEqual([0, 2_000, 6_000])
+
+    hostCanSettle = true
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(attempts).toEqual([0, 2_000, 6_000, 14_000])
+    expect(pending).toHaveLength(0)
+    recovery.reset()
+  })
 })

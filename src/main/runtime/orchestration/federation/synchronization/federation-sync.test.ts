@@ -675,6 +675,23 @@ describe('federation relay acknowledgments', () => {
     ).toHaveLength(2)
   })
 
+  it('does not record an acknowledgment or epoch from a sync the relay stopped in flight', async () => {
+    const { runtime, blockAck } = createIdleSyncHarness()
+    const db = runtime.getOrchestrationDb()
+    const recordAck = vi.spyOn(db, 'recordFederatedHomeAcknowledgment')
+    const writeEpoch = vi.spyOn(db, 'updateFederatedDispatchRuntimeEpoch')
+    const gate = blockAck()
+
+    const oldSync = runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+    await gate.reached
+    runtime.stopOrchestrationFederationRelay()
+    gate.release()
+    await oldSync
+
+    expect(recordAck).not.toHaveBeenCalled()
+    expect(writeEpoch).not.toHaveBeenCalled()
+  })
+
   it('releases the checkpoint once a dispatch is no longer relay eligible', async () => {
     const { runtime, settleDispatch } = createIdleSyncHarness()
     const identity: FederationAckIdentity = {

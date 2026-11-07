@@ -1,28 +1,17 @@
-import { getRuntimeEnvironmentStatusSnapshots } from './runtime-environment-request-connections'
-import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
-function verifiedEnvironmentIds(): Set<string> {
-  const ids = new Set<string>()
-  for (const snapshot of getRuntimeEnvironmentStatusSnapshots()) {
-    if (snapshot.verification === 'verified' && !snapshot.retired) {
-      ids.add(snapshot.environmentId)
+/** Reports a server only when it newly turns verified; repeat publishes of a healthy server stay silent. */
+export function trackRuntimeEnvironmentVerifiedTransitions(
+  listener: (environmentId: string) => void
+): (snapshot: RuntimeHostStatusSnapshot) => void {
+  const verified = new Set<string>()
+  return (snapshot) => {
+    const { environmentId } = snapshot
+    if (snapshot.verification !== 'verified' || snapshot.retired) {
+      verified.delete(environmentId)
+    } else if (!verified.has(environmentId)) {
+      verified.add(environmentId)
+      listener(environmentId)
     }
   }
-  return ids
-}
-
-/** Reports only servers that newly turned verified; repeat publishes of a healthy server stay silent. */
-export function onRuntimeEnvironmentVerified(
-  listener: (environmentId: string) => void
-): () => void {
-  let verified = verifiedEnvironmentIds()
-  return onRuntimeEnvironmentStatusPublished(() => {
-    const next = verifiedEnvironmentIds()
-    for (const environmentId of next) {
-      if (!verified.has(environmentId)) {
-        listener(environmentId)
-      }
-    }
-    verified = next
-  })
 }

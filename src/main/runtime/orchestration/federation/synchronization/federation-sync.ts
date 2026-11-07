@@ -85,6 +85,9 @@ async function syncFederatedDispatchPages(
     federated,
     currentServer.pairingRevision
   )
+  if (!isCurrent()) {
+    return { imported: 0, acknowledgedThrough: federated.to_home_imported_sequence }
+  }
   const supportsLifecycleSettlement =
     federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
     capability?.supported === true
@@ -221,21 +224,25 @@ async function syncFederatedDispatchPages(
     const locallyAcknowledgedThrough = keepRelayEligible
       ? Math.max(0, delivered.acknowledgedThrough - 1)
       : delivered.acknowledgedThrough
-    db.recordFederatedHomeAcknowledgment({
-      dispatchId,
-      remoteRuntimeEpoch: pulled.runtimeEpoch,
-      sequence: locallyAcknowledgedThrough
-    })
-    recordFederationAckCheckpoint(runtime, ackLease, {
-      ...ackIdentity,
-      throughSequence: locallyAcknowledgedThrough
-    })
+    if (isCurrent()) {
+      db.recordFederatedHomeAcknowledgment({
+        dispatchId,
+        remoteRuntimeEpoch: pulled.runtimeEpoch,
+        sequence: locallyAcknowledgedThrough
+      })
+      recordFederationAckCheckpoint(runtime, ackLease, {
+        ...ackIdentity,
+        throughSequence: locallyAcknowledgedThrough
+      })
+    }
   }
-  getOrchestrationPeerCapabilityCache(runtime).observeEpoch(
-    federated.peer_fingerprint,
-    pulled.runtimeEpoch
-  )
-  db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
+  if (isCurrent()) {
+    getOrchestrationPeerCapabilityCache(runtime).observeEpoch(
+      federated.peer_fingerprint,
+      pulled.runtimeEpoch
+    )
+    db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
+  }
   if (isCurrent()) {
     // Best effort: without a deadline the worker keeps manual release, as before.
     await armHomeAutoReleaseForOlderHost(runtime, dispatchId, currentServer.pairingRevision).catch(
