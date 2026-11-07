@@ -144,8 +144,13 @@ export class PtyStartupIngress {
         if (this.askerWait.waiting) {
           return this.settleAskerWait(this.askerWait.review(operation))
         }
-        return operation.kind === 'echo'
-          ? this.emit(operation.chunk, true, '')
+        if (operation.kind === 'echo') {
+          // Release torn candidates before suppressed ranges so raw sequence accounting stays aligned.
+          this.releaseQueryPending()
+          return this.emit(operation.chunk, true, '')
+        }
+        return operation.charged
+          ? this.classifyRead(operation.chunk)
           : this.processEchoSpan(operation.chunk)
       case 'asker-wait':
         this.settleAskerWait(this.askerWait.judge(true))
@@ -227,10 +232,8 @@ export class PtyStartupIngress {
       if (this.askerWait.waiting) {
         // A colour query in the prefix holds everything after it, this claimed echo included.
         this.applyOperation({ kind: 'echo', chunk: echo })
-        return this.applyOperation({
-          kind: 'data',
-          chunk: slicePtyIngressSourceSpan(input, echoEnd)
-        })
+        const rest = slicePtyIngressSourceSpan(input, echoEnd)
+        return this.applyOperation({ kind: 'data', chunk: rest, charged: true })
       }
       // Release torn candidates before suppressed ranges so raw sequence accounting stays aligned.
       this.releaseQueryPending()
@@ -326,12 +329,12 @@ export class PtyStartupIngress {
     }
   }
 
-  /** Settle held askers first: a barrier ends only a wait proven gone, a final snapshot judges each, teardown drops them.
+  /** Settle held askers first: a barrier ends only a wait proven gone; teardown and a final snapshot drop them.
    * Anything still behind a held asker stays held. Release query before echo defensively: it would own earlier bytes, though current classification never arms both.
    * Retain torn colors across barriers unless explicitly included: viewers lack reply authority, so only hold timeout/teardown ends them. */
   private releasePendingInSourceOrder(includeColorQuery: boolean, drain = includeColorQuery): void {
     do {
-      this.settleAskerWait(includeColorQuery ? 'gone' : this.askerWait.judge(drain))
+      this.settleAskerWait(includeColorQuery || drain ? 'gone' : this.askerWait.judge(false))
     } while (drain && this.askerWait.waiting)
     if (this.askerWait.waiting) {
       return

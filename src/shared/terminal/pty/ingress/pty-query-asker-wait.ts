@@ -22,8 +22,9 @@ export class PtyQueryAskerWait {
   private readonly query: PtyIngressHeldSpan
   private later: PtyIngressDeferredRead[] = []
   private verdict: { untilSeq: number; presence: PtyQueryAskerVerdict } | null = null
-  // Why: every query held before the command's finish marker shares its verdict, so replay never re-holds them.
+  // Why: queries held behind the first one share its verdict, so replay never re-holds them one by one.
   private finishSeq = -1
+  private reviewedEndSeq = -1
   // Keyed by raw range, not the string, so a large read is not retained after its queries are decided.
   private finishEnd: { startSeq: number; endSeq: number; end: number } | null = null
 
@@ -61,7 +62,11 @@ export class PtyQueryAskerWait {
     if (end >= 0 && this.finishSeq < 0) {
       this.finishSeq = read.chunk.rawStartSeq + end
     }
-    return this.presence.judge(false)
+    const verdict = this.presence.judge(false)
+    if (verdict === null) {
+      this.reviewedEndSeq = read.chunk.rawEndSeq
+    }
+    return verdict
   }
 
   /** `gone` once proven; otherwise `present` when `final` (expiry), else null to keep holding. */
@@ -72,14 +77,16 @@ export class PtyQueryAskerWait {
   /** One finish-marker scan per read, however many queries it holds. */
   private lastFinishEndOf(input: PtyIngressSourceSpan): number {
     const cached = this.finishEnd
-    if (cached?.startSeq !== input.rawStartSeq || cached.endSeq !== input.rawEndSeq) {
-      this.finishEnd = {
-        startSeq: input.rawStartSeq,
-        endSeq: input.rawEndSeq,
-        end: lastCommandFinishEnd(input.data)
-      }
-    }
-    return this.finishEnd?.end ?? -1
+    const finishEnd =
+      cached?.startSeq === input.rawStartSeq && cached.endSeq === input.rawEndSeq
+        ? cached
+        : {
+            startSeq: input.rawStartSeq,
+            endSeq: input.rawEndSeq,
+            end: lastCommandFinishEnd(input.data)
+          }
+    this.finishEnd = finishEnd
+    return finishEnd.end
   }
 
   /** Ends the wait; queries in the held span take `verdict`, and later reads are classified afresh. */
@@ -89,14 +96,15 @@ export class PtyQueryAskerWait {
     const from = this.query.take()
     const later = this.later
     this.later = []
-    const finishSeq = this.finishSeq
+    // A finish marker bounds the asker's output; otherwise it covers every read seen before the verdict changed.
+    const coveredSeq = this.finishSeq >= 0 ? this.finishSeq : this.reviewedEndSeq
     this.finishSeq = -1
+    this.reviewedEndSeq = -1
     this.presence.release()
     if (!from) {
       return null
     }
-    const untilSeq = verdict === 'gone' ? Math.max(from.rawEndSeq, finishSeq) : from.rawEndSeq
-    this.verdict = { untilSeq, presence: verdict }
+    this.verdict = { untilSeq: Math.max(from.rawEndSeq, coveredSeq), presence: verdict }
     return { from, later }
   }
 }

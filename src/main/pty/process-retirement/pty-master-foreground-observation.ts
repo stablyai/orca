@@ -1,3 +1,4 @@
+import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
@@ -43,9 +44,7 @@ export function readPtyForegroundGroup(proc: unknown): number | null | undefined
 }
 
 /** ConPTY has no foreground process group, so Windows PTYs get no reader. */
-export function ptyForegroundGroupReader(
-  proc: unknown
-): (() => number | null | undefined) | undefined {
+export function ptyForegroundGroupReader(proc: unknown): PtyForegroundGroupReader | undefined {
   return process.platform === 'win32' ? undefined : () => readPtyForegroundGroup(proc)
 }
 

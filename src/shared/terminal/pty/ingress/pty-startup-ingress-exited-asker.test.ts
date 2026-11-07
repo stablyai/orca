@@ -214,6 +214,45 @@ describe('PTY owner colour replies after the asker exits', () => {
     expect(emissions.at(-1)?.rawEndSeq).toBe(ingress.acceptedRawSequence)
   })
 
+  it('answers queries queued during a wait together, not 20 ms apart', () => {
+    vi.useFakeTimers()
+    const { ingress, writes, runCommand } = createHarness()
+    runCommand()
+    for (let index = 0; index < 6; index += 1) {
+      ingress.accept(QUERY)
+    }
+    vi.advanceTimersByTime(20)
+
+    expect(writes).toHaveLength(6)
+  })
+
+  it("drops a gone asker's later queries along with the first", () => {
+    vi.useFakeTimers()
+    const { ingress, writes, setGroup, runCommand } = createHarness()
+    runCommand()
+    ingress.accept(QUERY)
+    ingress.accept(QUERY)
+    setGroup(COMMAND_GROUP + 1)
+    ingress.accept('next program output')
+    vi.runAllTimers()
+
+    expect(writes).toEqual([])
+  })
+
+  it('keeps emitted ranges contiguous when a torn query precedes a held echo', () => {
+    vi.useFakeTimers()
+    const { ingress, emissions, runCommand } = createHarness()
+    ingress.accept(QUERY)
+    runCommand()
+    ingress.accept(`${QUERY}\x1b]1^[]11;rgb:0000/0000/0000^[\\tail`)
+    vi.runAllTimers()
+    ingress.drainAndClose()
+
+    for (const [index, emission] of emissions.entries()) {
+      expect(emission.rawStartSeq).toBe(index === 0 ? 0 : emissions[index - 1]?.rawEndSeq)
+    }
+  })
+
   it('answers at once at the prompt', () => {
     const { ingress, writes } = createHarness()
     ingress.accept(QUERY)

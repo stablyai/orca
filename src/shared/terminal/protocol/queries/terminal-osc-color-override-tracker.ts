@@ -39,6 +39,9 @@ function mayBeColorOsc(input: string, bodyStart: number, appearance: boolean): b
   return input[bodyStart] === '1' && (next === '0' || next === '1' || (appearance && next === '2'))
 }
 
+/** Receives each OSC 133 payload; `adjacent` means no other output since the previous one. */
+export type TerminalOsc133MarkerSink = { noteMarker: (payload: string, adjacent: boolean) => void }
+
 // Why char codes: this runs for every OSC in every PTY read.
 function isOsc133(input: string, bodyStart: number): boolean {
   return (
@@ -64,7 +67,7 @@ export class TerminalOscColorOverrideTracker {
    *  OSC 133 payload in this same pass; `adjacent` means no other output since the previous one. */
   constructor(
     private readonly appearance = false,
-    private readonly commandMarkers?: { noteMarker: (payload: string, adjacent: boolean) => void }
+    private readonly commandMarkers?: TerminalOsc133MarkerSink
   ) {
     this.maxPendingChars = appearance ? MAX_APPEARANCE_OSC_BODY_CHARS + 16 : MAX_PENDING_OSC_CHARS
   }

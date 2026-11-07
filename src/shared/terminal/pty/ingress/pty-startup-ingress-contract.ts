@@ -31,7 +31,8 @@ export type PtyIngressSourceSpan = {
 }
 
 export type PtyStartupIngressOperation =
-  | { kind: 'data'; chunk: PtyIngressSourceSpan }
+  // `charged`: the rest of a read already charged against the echo search budget.
+  | { kind: 'data'; chunk: PtyIngressSourceSpan; charged?: boolean }
   // A reply's echo already claimed in its read, emitted suppressed once a colour query held ahead of it settles.
   | { kind: 'echo'; chunk: PtyIngressSourceSpan }
   | { kind: 'close-query' }
