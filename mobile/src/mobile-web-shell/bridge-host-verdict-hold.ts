@@ -6,6 +6,7 @@ import {
   type BridgeConnectionSnapshot
 } from './bridge/bridge-connection-snapshot'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
+import { isPhoneOnlyNativeVerb } from './bridge/bridge-native-verbs'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeCapExceededError, BridgeHostDisposedError } from './bridge-host-errors'
 
@@ -15,22 +16,6 @@ export type DesktopBound = Extract<BridgeClientMessage, { type: 'request' | 'sub
 export function isDesktopBound(message: BridgeClientMessage): message is DesktopBound {
   return message.type === 'request' || message.type === 'subscribe'
 }
-
-// Native verbs that never touch the desktop; any other (native.pdf.view downloads its file) waits like a request.
-const PHONE_ONLY_NATIVE_VERBS: ReadonlySet<string> = new Set([
-  'native.clipboard.write',
-  'native.clipboard.read',
-  'native.media.pick',
-  'native.media.read',
-  'native.media.release',
-  'native.media.name',
-  'native.audio.start',
-  'native.audio.read',
-  'native.audio.stop',
-  'native.storage.read',
-  'native.image.act',
-  'native.speech.act'
-])
 
 export type BridgeVerdictHold = {
   // A connection whose verdict has not opened is still handshaking to the page.
@@ -75,7 +60,7 @@ export function createBridgeVerdictHold(
         !isDesktopBound(message) ||
         (open() && parked.length === 0) ||
         message.method === 'status.get' ||
-        PHONE_ONLY_NATIVE_VERBS.has(message.method)
+        isPhoneOnlyNativeVerb(message.method)
       ) {
         return true
       }
