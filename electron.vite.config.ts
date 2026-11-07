@@ -6,6 +6,7 @@ import type { Plugin, Rollup } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
+import { createMainCompileCacheBanner } from './config/build-plugins/main-compile-cache-banner'
 import { createSandboxedScriptBundlesPlugin } from './config/build-plugins/sandboxed-script-bundles'
 import { createMainLocaleSubsetPlugin } from './config/build-plugins/main-locale-subset'
 import { createSucraseUnusedTransformersPlugin } from './config/build-plugins/sucrase-unused-transformers'
@@ -195,7 +196,11 @@ function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
     throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
   }
   // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-  return createBootstrapFatalExitBanner() + createStartupDiagnosticsBanner(chunk.fileName)
+  return (
+    createBootstrapFatalExitBanner() +
+    createStartupDiagnosticsBanner(chunk.fileName) +
+    createMainCompileCacheBanner(ORCA_BUILD_COMMIT_LITERAL)
+  )
 }
 
 // Dev-only unminified main bundle exposes function names in V8 profiles; releases and pnpm build never read this flag.
