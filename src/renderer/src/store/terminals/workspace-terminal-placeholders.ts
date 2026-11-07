@@ -26,6 +26,7 @@ function runtimePlaceholderOwner(
   return row ? repoRowOwnerStamp(row) : { hostId }
 }
 
+/** Determine whether a worktree belongs to the specified runtime execution host. */
 function worktreeBelongsToRuntimeHost(worktree: Worktree, hostId: ExecutionHostId): boolean {
   if (worktree.hostId === hostId) {
     return true
