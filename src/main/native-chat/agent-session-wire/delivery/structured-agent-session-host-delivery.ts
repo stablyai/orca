@@ -232,7 +232,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     input.clientDelivery.publishRestored(sessionId)
     await settleInterruptedStructuredAgentSessionCommands(deps, sessionId, session)
     input.clientDelivery.publishRestored(sessionId)
-    if (session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)) {
+    if (
+      (await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
+        isQueuedAgentJournalSubmission
+      )
+    ) {
       loop.wake(sessionId)
     }
   }

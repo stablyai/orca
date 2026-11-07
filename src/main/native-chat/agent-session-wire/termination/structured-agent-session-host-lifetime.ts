@@ -203,17 +203,19 @@ export type StructuredAgentSessionCloseCause = Extract<
 >
 
 /** Idle cache eviction also retains waiting cards so unseen closes cannot introduce reopen pauses. */
-export function structuredAgentSessionConversationClosable(
+export async function structuredAgentSessionConversationClosable(
   session: StructuredAgentSessionHostSession,
   atRest = false
-): boolean {
+): Promise<boolean> {
   return (
     session.child === null &&
     ![...structuredAgentSessionHandingOver(session.journal).keys()].some((id) =>
       finalizingStructuredAgentSessionInput(session.journal, id)
     ) &&
-    !session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission) &&
-    session.journal.pendingSubmissions().length === 0 &&
+    !(await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
+      isQueuedAgentJournalSubmission
+    ) &&
+    (await session.journal.reads.pendingSubmissions()).length === 0 &&
     !(atRest && session.journal.queuedMessages.awaitReopenMark())
   )
 }
@@ -227,7 +229,7 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
   atRest = false
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
-  if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
+  if (!session || !(await structuredAgentSessionConversationClosable(session, atRest))) {
     return false
   }
   context.sessions.delete(sessionId)
@@ -264,7 +266,8 @@ export function beginFinalizedStructuredAgentSessionClose(
             context.sessions.get(sessionId) === session &&
             !session.child &&
             session.lastEndedChild === ended &&
-            !session.journal.inputOrder.acceptedAfter(acceptedBy)
+            !(await session.journal.reads.input({ kind: 'accepted-after', sequence: acceptedBy }))
+              .answer
           ) {
             await context.closeConversation(sessionId)
           }

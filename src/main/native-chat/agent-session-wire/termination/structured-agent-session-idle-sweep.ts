@@ -152,7 +152,11 @@ export class StructuredAgentSessionIdleSweep {
       return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
-    if (session.child && session.child.phase !== 'starting' && this.owesWork(sessionId, session)) {
+    if (
+      session.child &&
+      session.child.phase !== 'starting' &&
+      (await this.owesWork(sessionId, session))
+    ) {
       this.deps.sessions.touch(sessionId)
       return null
     }
@@ -179,17 +183,22 @@ export class StructuredAgentSessionIdleSweep {
     return null
   }
 
-  private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
+  private async queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
+      (await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
+        isQueuedAgentJournalSubmission
+      )
     )
   }
 
   /** Without a child, leftover turns/prompts are history and cannot retain the handle. */
-  private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
+  private async owesWork(
+    sessionId: string,
+    session: StructuredAgentSessionHostSession
+  ): Promise<boolean> {
     return (
-      this.queuedOrDelivering(sessionId, session) ||
+      (await this.queuedOrDelivering(sessionId, session)) ||
       structuredAgentSessionChildHasOpenWork({
         currentWork: () =>
           heldStructuredAgentSessionCurrentWork(
