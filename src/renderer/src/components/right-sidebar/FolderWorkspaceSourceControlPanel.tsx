@@ -116,6 +116,7 @@ const WorktreeSection = memo(
       >
         <FolderWorktreeSectionHeader
           repoName={owner.repo.displayName}
+          worktreeName={owner.worktree.displayName}
           branch={identity?.kind === 'branch' ? identity.branchName : owner.worktree.branch}
           ahead={remote?.ahead}
           behind={remote?.behind}

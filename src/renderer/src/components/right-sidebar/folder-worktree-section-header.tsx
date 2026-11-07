@@ -9,6 +9,7 @@ export const FOLDER_WORKTREE_CARD_CLASS =
 
 type FolderWorktreeSectionHeaderProps = {
   repoName: string
+  worktreeName?: string
   branch: string
   ahead?: number
   behind?: number
@@ -20,6 +21,7 @@ type FolderWorktreeSectionHeaderProps = {
 
 export function FolderWorktreeSectionHeader({
   repoName,
+  worktreeName,
   branch,
   ahead,
   behind,
@@ -41,36 +43,54 @@ export function FolderWorktreeSectionHeader({
         type="button"
         aria-expanded={expanded}
         onClick={onToggle}
-        className="flex min-w-0 flex-1 items-center gap-1.5 py-2 pl-2 text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex min-w-0 flex-1 flex-col gap-0.5 py-1.5 pl-2 text-left text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        <ChevronRight
-          className={`size-3 shrink-0 text-muted-foreground ${expanded ? 'rotate-90' : ''}`}
-        />
-        <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="max-w-[50%] shrink-0 truncate text-[13px] font-semibold">{repoName}</span>
-        <span className="flex min-w-0 items-center gap-1 rounded-full border border-input px-1.5 text-muted-foreground">
-          <GitBranch className="size-3 shrink-0" />
-          <span className="truncate">{branch}</span>
-        </span>
-        <span className="ml-auto flex shrink-0 items-center gap-1 text-muted-foreground">
-          {!!ahead && (
-            <span className="flex items-center">
-              <ArrowUp className="size-3" />
-              {ahead}
-            </span>
-          )}
-          {!!behind && (
-            <span className="flex items-center">
-              <ArrowDown className="size-3" />
-              {behind}
+        <span className="flex w-full min-w-0 items-center gap-1.5">
+          <ChevronRight
+            className={`size-3 shrink-0 text-muted-foreground ${expanded ? 'rotate-90' : ''}`}
+          />
+          <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate text-[13px] font-semibold">{repoName}</span>
+          {/* Same-repo worktrees are told apart by name, as main did. */}
+          {worktreeName && worktreeName !== branch && (
+            <span
+              title={worktreeName}
+              className="min-w-0 flex-1 basis-0 truncate text-muted-foreground"
+            >
+              {worktreeName}
             </span>
           )}
           {changeCount > 0 && (
-            <span className="rounded-full bg-muted px-1.5 text-2xs text-foreground">
+            <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 text-2xs text-foreground">
               {changeCount}
             </span>
           )}
         </span>
+        {(branch || !!ahead || !!behind) && (
+          <span className="flex w-full min-w-0 items-center gap-1 pl-[1.625rem] text-muted-foreground">
+            {branch && (
+              <span
+                title={branch}
+                className="flex min-w-0 items-center gap-1 rounded-full border border-input px-1.5"
+              >
+                <GitBranch className="size-3 shrink-0" />
+                <span className="truncate">{branch}</span>
+              </span>
+            )}
+            {!!ahead && (
+              <span className="ml-auto flex shrink-0 items-center">
+                <ArrowUp className="size-3" />
+                {ahead}
+              </span>
+            )}
+            {!!behind && (
+              <span className={`flex shrink-0 items-center ${ahead ? '' : 'ml-auto'}`}>
+                <ArrowDown className="size-3" />
+                {behind}
+              </span>
+            )}
+          </span>
+        )}
       </button>
       <Tooltip>
         <TooltipTrigger asChild>
