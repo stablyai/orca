@@ -60,6 +60,8 @@ export type MobileSourceControlLoaders = {
   mountedRef: MutableRefObject<boolean>
   setRootRef: (node: View | null) => void
   loadStatus: (options?: LoadStatusOptions) => Promise<boolean>
+  // Shown rows are being re-read; feeds the header's refresh line.
+  refreshing: boolean
   settings: MobileSourceControlSettings
   // Desktop's rebase target; kept apart from the compare so a failed or unsupported compare keeps it.
   rebaseBaseRef: string | null
@@ -292,6 +294,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     mountedRef,
     setRootRef,
     loadStatus,
+    refreshing: statusQuery.isRefetching,
     settings,
     rebaseBaseRef
   }
