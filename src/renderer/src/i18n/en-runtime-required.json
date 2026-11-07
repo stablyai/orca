@@ -1129,7 +1129,9 @@
             "endOrphanTerminals_one": "End {{count}} orphan terminal",
             "endOrphanTerminals_other": "End {{count}} orphan terminals",
             "orphanCount_one": "{{count}} orphan",
-            "orphanCount_other": "{{count}} orphans"
+            "orphanCount_other": "{{count}} orphans",
+            "outsideTerminalProcesses_one": "{{count}} process outside terminals",
+            "outsideTerminalProcesses_other": "{{count}} processes outside terminals"
           },
           "SkillUpdateStatusSegment": {
             "runningSkills_one": "Updating {{count}} skill…",

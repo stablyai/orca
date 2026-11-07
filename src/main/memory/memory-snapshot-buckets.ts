@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import type { SessionMemory } from '../../shared/process-stats-types'
+import type { OutsideTerminalUsage } from './outside-terminal-usage'
 import type { Store } from '../persistence/loading-store/store'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../shared/folder-workspaces/folder-workspace-worktree'
@@ -64,6 +65,7 @@ export type WorktreeMemoryBucket = {
   memory: number
   privateMemory: number
   sessions: SessionMemory[]
+  outsideTerminals?: OutsideTerminalUsage
 }
 
 export function resolveWorktreeMemoryNames(

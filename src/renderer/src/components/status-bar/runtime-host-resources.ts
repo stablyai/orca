@@ -1,6 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { SessionMemory, WorktreeMemory } from '../../../../shared/process-stats-types'
+import type {
+  OutsideTerminalsMemory,
+  SessionMemory,
+  WorktreeMemory
+} from '../../../../shared/process-stats-types'
 import type { RuntimeHostResourceSample } from './resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =
@@ -113,6 +117,7 @@ function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
     ) {
       continue
     }
+    const outsideTerminals = parseOutsideTerminalsMemory(row.outsideTerminals)
     worktrees.push({
       worktreeId: row.worktreeId,
       worktreeName: typeof row.worktreeName === 'string' ? row.worktreeName : row.worktreeId,
@@ -121,12 +126,24 @@ function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
       cpu,
       memory,
       sessions: Array.isArray(row.sessions) ? row.sessions.flatMap(parseSessionMemory) : [],
+      ...(outsideTerminals && { outsideTerminals }),
       history: Array.isArray(row.history)
         ? row.history.flatMap((sample) => finiteNumber(sample) ?? [])
         : []
     })
   }
   return worktrees
+}
+
+function parseOutsideTerminalsMemory(value: unknown): OutsideTerminalsMemory | null {
+  if (!isRecord(value) || !Array.isArray(value.pids)) {
+    return null
+  }
+  const cpu = finiteNumber(value.cpu)
+  const memory = finiteNumber(value.memory)
+  return cpu === null || memory === null
+    ? null
+    : { cpu, memory, pids: value.pids.flatMap((pid) => finiteNumber(pid) ?? []) }
 }
 
 function parseSessionMemory(value: unknown): SessionMemory[] {
