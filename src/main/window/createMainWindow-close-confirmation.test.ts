@@ -96,6 +96,64 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('window:unload-prevented')
   })
 
+  it('clears the quit latch when its renderer cancels the newest close request', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
+    })
+    const webContents = {
+      id: 42,
+      on: vi.fn(),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    browserWindowMock.mockImplementation(function () {
+      return {
+        webContents,
+        on: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(() => Promise.resolve()),
+        loadURL: vi.fn(() => Promise.resolve())
+      }
+    })
+    let isQuitting = true
+    const onQuitAborted = vi.fn(() => {
+      isQuitting = false
+    })
+    createMainWindow(null, { getIsQuitting: () => isQuitting, onQuitAborted })
+    const cancel = (senderId: number): void =>
+      ipcHandlers['window:close-cancelled']?.({ sender: { id: senderId } })
+
+    windowHandlers.close({ preventDefault: vi.fn() } as never)
+    const requestId: unknown = vi
+      .mocked(webContents.send)
+      .mock.calls.find(([channel]) => channel === 'window:close-requested')?.[1]?.requestId
+    expect(requestId).toEqual(expect.any(Number))
+    // Why: a cancel sent before the renderer saw this quit belongs to an older prompt.
+    cancel(42)
+    ipcHandlers['window:close-request-received']?.({ sender: { id: 42 } }, requestId)
+    cancel(99)
+    expect(onQuitAborted).not.toHaveBeenCalled()
+    cancel(42)
+    cancel(42)
+    expect(onQuitAborted).toHaveBeenCalledOnce()
+  })
+
   it('allows close after the renderer process is gone', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
