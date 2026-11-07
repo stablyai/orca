@@ -161,13 +161,15 @@ describe('worktree.ps host coverage', () => {
     const cutover = orcadMigrationCutoverFixture('ps-conversion', 'converted-box')
     const userData = getAppEnvironment().getPath('userData')
     writeOrcadMigrationSourceCutover(userData, cutover)
-    const before = await new OrcaRuntimeService(store as never).getWorktreePs(10_000)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing reads only the catalog and metadata methods supplied by this fixture.
+    const runtime = new OrcaRuntimeService(store as never)
+    const before = await runtime.getWorktreePs(10_000)
     expect(
       before.worktrees.find((row) => row.worktreeId === 'folder:converted-notes')?.hostId
     ).toBe('ssh:converted-box')
 
     writeOrcadMigrationSourceCutover(userData, { ...cutover, phase: 'destination-committed' })
-    const after = await new OrcaRuntimeService(store as never).getWorktreePs(10_000)
+    const after = await runtime.getWorktreePs(10_000)
     expect(
       after.worktrees
         .filter((row) => row.workspaceKind === 'folder-workspace')
