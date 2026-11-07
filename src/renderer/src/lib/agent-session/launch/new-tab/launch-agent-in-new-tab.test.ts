@@ -101,7 +101,7 @@ describe('launchAgentInNewTab', () => {
       if (failure === 'context') {
         Object.assign(store, { activeWorkspaceExecutionHostId: 'runtime:unanswered' })
       } else {
-        const startup = await import('./launch-agent-startup-prompt-plan')
+        const startup = await import('../prompt/launch-agent-startup-prompt-plan')
         const planner = vi.spyOn(startup, 'planLaunchAgentStartupPrompt')
         if (failure === 'command') {
           planner.mockReturnValue({
