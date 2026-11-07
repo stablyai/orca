@@ -2,6 +2,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ClaudeHookEventVersions from '../claude-hook-event-versions'
+
+vi.mock('../claude-hook-event-versions', async (importOriginal) => ({
+  ...(await importOriginal<typeof ClaudeHookEventVersions>()),
+  probeRecentClaudeCliVersion: () => Promise.resolve(claudeVersion)
+}))
+let claudeVersion: string | null = '2.1.319'
 import { syncClaudeCodeThemeConfigDirs } from './claude-code-theme-sync'
 import { claudeCodeThemeFromTerminal } from './claude-code-theme'
 import { TERMINAL_THEME_CATALOG } from '../../../shared/terminal-themes/terminal-theme-catalog'
@@ -74,6 +81,14 @@ describe('Claude Code theme sync', () => {
     writeSettings({ theme: 'dark-daltonized' })
     await sync(on)
     expect(readSettings()).toEqual({ theme: 'dark-daltonized' })
+  })
+
+  it('leaves settings alone for a Claude Code without custom themes', async () => {
+    claudeVersion = '2.1.118'
+    writeSettings({ theme: 'dark' })
+    await sync(on)
+    claudeVersion = '2.1.319'
+    expect(readSettings()).toEqual({ theme: 'dark' })
   })
 
   it('never rewrites a settings file it cannot parse', async () => {
