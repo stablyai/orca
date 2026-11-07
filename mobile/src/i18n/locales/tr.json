@@ -110,7 +110,8 @@
       "pastePairingCode": "Veya eşleştirme kodunu yapıştır",
       "scanCodeStep": "QR kodunu tarayın",
       "title": "Masaüstüyle eşleştir",
-      "tryAgain": "Tekrar Dene"
+      "tryAgain": "Tekrar Dene",
+      "codeExpiredOrReplaced": "Bu eşleştirme kodunun süresi doldu veya kod değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
       "defaultText": "Varsayılan (%100)",
@@ -219,7 +220,9 @@
       "historyRepaired": "Bu sohbetin geçmişinin bir bölümü yüklenemedi."
     },
     "message": {
-      "copyMessage": "Mesajı kopyala"
+      "copyMessage": "Mesajı kopyala",
+      "forkFromResponse": "Bu yanıttan çatalla",
+      "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Metin panoya kopyalanamadı.",
@@ -301,7 +304,8 @@
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
       "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
       "signIn": "Oturum aç",
-      "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar"
+      "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
+      "forkedFrom": "Çatallandığı kaynak"
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -547,7 +551,15 @@
       "windowCredits": "ek kullanım",
       "windowSession": "oturum",
       "windowWeekly": "haftalık",
-      "windowWeeklyModel": "haftalık model"
+      "windowWeeklyModel": "haftalık model",
+      "switchAccount": "Hesap değiştir",
+      "autoContinueCancelFailed": "Otomatik devam iptal edilemedi. Tekrar deneyin.",
+      "autoContinueCancel": "Devam etme",
+      "statusResetAt": "{{time}} saatinde sıfırlandı",
+      "statusResetsAt": "{{time}} saatinde sıfırlanır",
+      "statusContinuesShortly": "Orca birazdan devam edecek",
+      "statusContinuesThen": "Orca o zaman devam edecek",
+      "statusWontContinue": "Orca otomatik olarak devam etmeyecek"
     },
     "useImageUpload": {
       "attachFailed": "Eklenemedi",
@@ -617,6 +629,12 @@
       "outcomeUnknownReturned": "Orca, sohbette bu mesaja dönülüp dönülmediğini doğrulayamadı. Mesajınız yazma kutusuna geri getirildi. Orca, bir sonraki mesajınız gönderilmeden önce sohbeti kontrol edecek.",
       "timeout": "Bu mesaja dönüldükten sonra sohbet güncellenmedi. Son durumu görmek için sohbeti yeniden açın.",
       "pending": "Sohbetin önceki mesaja dönmesini bekleyin."
+    },
+    "fork": {
+      "busy": "Başka bir sohbet veya terminal açılıyor. Bekleyin, ardından {{agent}} sohbetini yeniden çatallayın.",
+      "unconfirmed": "{{agent}} çatallamayı doğrulayamadı. Yine de açılmış olabilir; yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
+      "failed": "{{agent}} bu sohbeti çatallayamadı. {{detail}}",
+      "unsupported": "Bu ana makinede eski bir Orca sürümü çalışıyor. Ana makinedeki Orca’yı güncelleyip tekrar deneyin."
     }
   },
   "common": {
@@ -1064,6 +1082,12 @@
     "mermaidDiagram": {
       "expand": "Diyagramı genişlet",
       "label": "Mermaid diyagramı"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Plan",
+        "exitPlanMode": "Plan modundan çık"
+      }
     }
   },
   "connection": {
@@ -1493,7 +1517,8 @@
       "removeHost": "Sunucuyu Kaldır",
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
-      "unpin": "Sabitlemeyi Kaldır"
+      "unpin": "Sabitlemeyi Kaldır",
+      "rename": "Yeniden adlandır"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Kontroller: Başarısız",
@@ -1575,6 +1600,12 @@
       "thisComputer": "Bu bilgisayar",
       "waitingForDesktop": "Bilgisayardan hâlâ yanıt bekleniyor",
       "workspaceOptions": "Çalışma alanı seçenekleri"
+    },
+    "workspaceRenameSheet": {
+      "title": "Çalışma alanını yeniden adlandır",
+      "emptyUsesBranch": "Dal adını kullanmak için boş bırakın.",
+      "emptyUsesFolder": "Klasör adını kullanmak için boş bırakın.",
+      "failed": "Çalışma alanı yeniden adlandırılamadı. {{reason}}"
     }
   },
   "navigation": {
@@ -2090,7 +2121,8 @@
       "usageLimitWindowWeeklyModel": "haftalık model",
       "waitForBackgroundTasks": "Arka plan görevlerinin tamamlanmasını bekleyin.",
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
-      "writeFailed": "Orca bu mesajı ajana iletemediği için mesaj gönderilmedi."
+      "writeFailed": "Orca bu mesajı ajana iletemediği için mesaj gönderilmedi.",
+      "pluginInputRequired": "{{agent}} durdu çünkü \"{{plugin}}\" eklentisi bir terminal bölmesinde girdi bekliyor. Sohbet oturumları için eklentiyi devre dışı bırakın veya görevi bir {{agent}} terminalinde çalıştırın."
     },
     "fileReader": {
       "copyReviewNotes": "İnceleme notlarını kopyala",
@@ -2321,7 +2353,8 @@
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
       "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
-      "allowAutoClose": "Otomatik kapatmaya izin ver"
+      "allowAutoClose": "Otomatik kapatmaya izin ver",
+      "renameTerminalFailed": "Terminal yeniden adlandırılamadı. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -4020,7 +4053,11 @@
       "notReported": "Bildirilmedi",
       "searchOptions": "Seçenekleri ara",
       "task": "Görev",
-      "review": "İncele"
+      "review": "İncele",
+      "discardChangesTitle": "Değişiklikler atılsın mı?",
+      "discardChangesMessage": "Bu otomasyondaki kaydedilmemiş düzenlemeler kaybolacak.",
+      "discard": "Değişiklikleri at",
+      "keepEditing": "Düzenlemeye devam et"
     },
     "orphanIssues": {
       "hostReselection": "Bu otomasyonu çalıştırmadan önce düzenleyin ve ana bilgisayarını yeniden seçin.",

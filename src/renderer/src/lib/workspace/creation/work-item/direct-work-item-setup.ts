@@ -69,7 +69,9 @@ export async function prepareDirectWorkItemSetup(
   ownerHostId: ExecutionHostId,
   signal?: AbortSignal,
   onSetupRequired?: () => void
-): Promise<SetupDecision | 'cancelled' | 'review-request'> {
+): Promise<
+  { setupDecision: SetupDecision; approvedSetupHash?: string } | 'cancelled' | 'review-request'
+> {
   const inspection = await resolveDirectSetupDecision(repo.id, repo, ownerHostId)
   if (signal?.aborted) {
     return 'cancelled'
@@ -98,5 +100,9 @@ export async function prepareDirectWorkItemSetup(
     () => signal?.aborted === true,
     signal
   )
-  return confirmed === 'cancelled' ? 'cancelled' : confirmed.setupDecision
+  if (confirmed === 'cancelled') {
+    return 'cancelled'
+  }
+  const { setupDecision, approvedSetupHash } = confirmed
+  return { setupDecision, ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}) }
 }

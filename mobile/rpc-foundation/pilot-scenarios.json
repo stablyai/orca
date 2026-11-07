@@ -14790,49 +14790,6 @@
       ]
     },
     {
-      "id": "speech-desktop-start-recording-failed",
-      "operation": "speech.desktop-start",
-      "family": "speech.dictation-start",
-      "sites": ["mobile/src/hooks/mobile-dictation-desktop-start.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "start",
-          "id": "start",
-          "args": {
-            "recording": false
-          }
-        },
-        {
-          "complete": "speech.dictation.start#1",
-          "params": {
-            "dictationId": "dictation-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "started": true
-            }
-          }
-        },
-        {
-          "complete": "speech.dictation.cancel#1",
-          "params": {
-            "dictationId": "dictation-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "cancelled": true
-            }
-          }
-        },
-        {
-          "checkpoint": "rolled-back"
-        }
-      ]
-    },
-    {
       "id": "speech-audio-chunk-acknowledged",
       "operation": "speech.audio-chunk",
       "family": "speech.dictation-chunk",

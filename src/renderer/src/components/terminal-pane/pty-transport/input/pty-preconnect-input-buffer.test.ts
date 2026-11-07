@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createDeferred, flushAsyncTicks } from '../../pty-connection-test-async'
+import {
+  createDeferred,
+  flushAsyncTicks
+} from '../../pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createPtyPreconnectInputBuffer,
   PTY_PRECONNECT_INPUT_MAX_CODE_UNITS,

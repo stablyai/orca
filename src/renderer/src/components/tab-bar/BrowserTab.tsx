@@ -32,7 +32,10 @@ import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { cn } from '@/lib/utils'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
-import { useBrowserAgentDrivesAnyPage } from '../browser-pane/agent-cursor/browser-agent-activity-state'
+import {
+  useBrowserAgentControllerHost,
+  useBrowserAgentDrivesAnyPage
+} from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store'
@@ -126,8 +129,12 @@ export default function BrowserTab({
   const toggleAudioMutedLabel = audioMuted
     ? translate('components.tab.bar.BrowserTab.unmuteTab', 'Unmute Tab')
     : translate('components.tab.bar.BrowserTab.muteTab', 'Mute Tab')
-  const agentDriving = useBrowserAgentDrivesAnyPage(tab.pageIds ?? [tab.activePageId])
-  const agentDrivingLabel = translate('browserTab.agentDriving', 'An agent is using this page')
+  const tabPageIds = tab.pageIds ?? [tab.activePageId]
+  const agentDriving = useBrowserAgentDrivesAnyPage(tabPageIds)
+  const controllerHost = useBrowserAgentControllerHost(tabPageIds)
+  const agentDrivingLabel = controllerHost
+    ? translate('browserTab.controlledByHost', 'Controlled by {{host}}', { host: controllerHost })
+    : translate('browserTab.agentDriving', 'An agent is using this page')
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -255,6 +262,7 @@ export default function BrowserTab({
           ) : (
             <TabHoverCard
               title={tabLabel}
+              showWhenUnclipped={controllerHost !== null}
               icon={<BrowserFavicon faviconUrl={tab.faviconUrl} className="size-4" />}
               programName={
                 agentDriving

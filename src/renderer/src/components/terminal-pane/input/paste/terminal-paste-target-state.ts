@@ -1,3 +1,5 @@
+import { isEditableKeyboardTarget } from '@/components/browser-pane/host-guest/browser-keyboard'
+
 type TerminalPastePaneIdentity = {
   id: number
   leafId: string
@@ -60,22 +62,17 @@ export function isTerminalPanePasteFocusCurrent({
   if (activeElement === activeElementAtDispatch) {
     return true
   }
-  // Permission/dictation handoffs can blur xterm to body or replace its textarea mid-paste.
-  if (isInertDocumentFocus(activeElement)) {
+  // xterm can replace its helper textarea mid-paste.
+  if (paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)) {
     return true
   }
-  if (activeElement === paneContainer) {
-    return true
-  }
-  return paneContainer.contains(activeElement) && isXtermHelperTextarea(activeElement)
+  // Blur to body, overlays and external dictation move focus mid-paste; cancel only if another typing surface took it.
+  return !isOtherPasteTarget(activeElement)
 }
 
-function isInertDocumentFocus(element: Element | null): boolean {
-  if (!element) {
-    return true
-  }
-  const tagName = element.tagName?.toUpperCase()
-  return tagName === 'BODY' || tagName === 'HTML'
+function isOtherPasteTarget(element: Element | null): boolean {
+  const tagName = element?.tagName?.toUpperCase()
+  return isEditableKeyboardTarget(element) || tagName === 'IFRAME' || tagName === 'WEBVIEW'
 }
 
 function isXtermHelperTextarea(element: Element | null): boolean {

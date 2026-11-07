@@ -1,7 +1,7 @@
 // POSIX hooks drain before exit; Windows missing-context hooks may exit without owning stdin.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
-import { runProcess, spawnProcess } from '@orca/process-host'
+import { spawnProcess } from '@orca/process-host'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -87,6 +87,10 @@ import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
+import {
+  WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS,
+  warmWindowsEncodedPowerShell
+} from './windows-powershell-warm-up.test-fixture'
 import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
@@ -259,19 +263,11 @@ async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, str
 }
 
 describe('Windows managed hook stdin structure', () => {
-  // A fresh runner's first encoded-PowerShell launch took 5-15s; the per-hook bound detects stdin hangs, not cold start.
   beforeAll(async () => {
-    if (process.platform !== 'win32') {
-      return
+    if (process.platform === 'win32') {
+      await warmWindowsEncodedPowerShell(hookEnvironment())
     }
-    const warm = await runProcess({
-      program: 'cmd.exe',
-      args: ['/d', '/c', wrapWindowsHookCommand('C:\\missing\\orca-hook.cmd')],
-      env: hookEnvironment(),
-      timeoutMs: 55_000
-    })
-    expect(warm, 'encoded PowerShell warm-up').toMatchObject({ code: 0, timedOut: false })
-  }, 60_000)
+  }, WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS)
 
   it.skipIf(process.platform !== 'win32')(
     'exits 0 for every local script and missing-script launcher, dropping stdin only without Orca env',

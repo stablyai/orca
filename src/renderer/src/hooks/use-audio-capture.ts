@@ -25,6 +25,8 @@ type StartAudioCaptureOptions = {
   microphoneDeviceLabel?: string | null
   /** Fires when the live input device disappears mid-capture */
   onCaptureLost?: () => void
+  /** Fires when the host's session accepts no more audio (cloud upload cap) */
+  onAudioLimitReached?: () => void
 }
 
 export type StartAudioCaptureResult = {
@@ -216,6 +218,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           }
           void window.api.speech
             .feedAudio(samples, actualRate, sessionIdRef.current)
+            .then((limitReached) => limitReached && options.onAudioLimitReached?.())
             .catch(() => undefined)
         }
 

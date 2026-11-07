@@ -85,7 +85,8 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
         }
       },
       worktreeLineageById: {},
-      worktreesByRepo: { 'repo-1': [visible, archived, stale] }
+      worktreesByRepo: { 'repo-1': [visible, archived, stale] },
+      crossStoreChildrenByFolderId: new Map()
     })
 
     expect(result.childWorktrees.map((worktree) => worktree.id)).toEqual([visible.id])

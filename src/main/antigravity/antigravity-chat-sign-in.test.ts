@@ -1,3 +1,4 @@
+import type { AntigravityChatAuthConfig } from '../../shared/antigravity-chat-auth-config'
 import { structuredAgentHostLaunchSources } from '../runtime/agent-session/launch/structured-agent-launch-support'
 import * as profileStorage from '../orca-profiles/profile-storage-paths'
 // The chat sign-in against a scripted Antigravity server.
@@ -95,6 +96,7 @@ async function signInAgainst(
     stream?: 'stdout' | 'stderr'
     metaCwd?: string
     sessionResult?: Record<string, unknown>
+    authConfig?: AntigravityChatAuthConfig
     realLaunchSources?: boolean
   } = {}
 ) {
@@ -142,7 +144,8 @@ async function signInAgainst(
               requireStore: () => ({
                 getSettings: () => ({
                   nativeChatInheritShellEnvironment: true,
-                  agentDefaultEnv: {}
+                  agentDefaultEnv: {},
+                  antigravityChatAuth: options.authConfig
                 })
               }),
               resolveStructuredAgentAccountHome: async () => ({
@@ -155,7 +158,7 @@ async function signInAgainst(
       : async () => ({
           accountHome: { variable: 'GEMINI_HOME', path: folder },
           env: { PATH: bin },
-          commandSettings: {},
+          commandSettings: { antigravityChatAuth: options.authConfig },
           dataDirectory: stateDirectory
         }),
     stopLiveChats: async () => {},
@@ -499,4 +502,25 @@ it('drops checking-session models when cancellation wins while start is pending'
     wslDistro: null
   })
   expect(agentModelCatalogStore.get(key)).toBeNull()
+})
+
+it('explicit Enterprise sign-in authenticates the host choice and verifies a usable session', async () => {
+  const state = await signInAgainst(async () => '', {
+    realLaunchSources: true,
+    authConfig: {
+      method: 'oauth-business',
+      gcpProject: 'enterprise-project',
+      gcpLocation: 'us-central1'
+    }
+  })
+  await vi.waitFor(() =>
+    expect(state.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
+      methodId: 'oauth-business'
+    })
+  )
+  state.finishBrowser()
+  state.openSession()
+  await vi.waitFor(() =>
+    expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('signedIn')
+  )
 })

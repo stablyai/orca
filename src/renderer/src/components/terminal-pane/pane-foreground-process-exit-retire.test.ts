@@ -11,7 +11,7 @@ import {
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 
 // Wires the pane's tracker and completion monitor the way pane-agent-identity.ts and
-// terminal-keydown-fit.ts do, for a pane whose shell emits no OSC 133 command marks.
+// agent-identity/pane-agent-completion.ts do, for a pane whose shell emits no OSC 133 command marks.
 function createUnmarkedPane(args: { visible: boolean }) {
   let entry: PaneForegroundAgentEntry | undefined
   let foreground: string | null = 'codex'
