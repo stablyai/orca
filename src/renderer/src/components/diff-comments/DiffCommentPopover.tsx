@@ -9,6 +9,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
@@ -55,6 +56,7 @@ export function DiffCommentPopover({
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState('')
   // Why: mirror the draft into a ref so the mousedown listener reads it fresh without re-registering each keystroke.
   const bodyRef = useRef(body)
@@ -160,7 +162,7 @@ export function DiffCommentPopover({
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
-        translate(
+        t(
           'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
           'Comment is too large to submit safely.'
         )
@@ -194,12 +196,12 @@ export function DiffCommentPopover({
         <div id={labelId} className="orca-diff-comment-popover-label">
           {title ??
             (startLine && startLine !== lineNumber
-              ? translate(
+              ? t(
                   'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
                   'Lines {{value0}}-{{value1}}',
                   { value0: startLine, value1: lineNumber }
                 )
-              : translate(
+              : t(
                   'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
                   'Line {{value0}}',
                   { value0: lineNumber }
@@ -233,7 +235,7 @@ export function DiffCommentPopover({
         />
         <div className="orca-diff-comment-popover-footer">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
+            {t('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={submitting || !canSubmitComment}>
             {submitting ? submittingLabel : submitLabel}

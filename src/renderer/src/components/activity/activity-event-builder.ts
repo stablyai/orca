@@ -29,6 +29,7 @@ import {
   resolveActivityEventOwner,
   type ActivityEventOwner
 } from './activity-event-builder-context'
+import type { Translate } from '@/i18n/use-translate'
 
 export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
@@ -52,7 +53,8 @@ export type BuildActivityEventsArgs = {
 
 export function buildActivityEvents(
   args: BuildActivityEventsArgs,
-  cache?: ActivityEventBuildCache
+  cache?: ActivityEventBuildCache,
+  t?: Translate
 ): {
   events: ActivityEvent[]
   liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
@@ -103,7 +105,8 @@ export function buildActivityEvents(
       entry,
       context.tab.ptyId,
       tabHostIndex,
-      ownerCache
+      ownerCache,
+      t
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Only fresh raw live state proves working; history and orchestration enrichment cannot establish liveness.
