@@ -5,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 import type * as TranscribeCpp from 'transcribe-cpp'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { resolveFile } from './stt-worker-model-config'
 import type { SttRecognizer, SttRecognizerInit, SttRecognizerPost } from './stt-recognizer'
 
 // Past ~8 threads decode slowed 2-4x under load in the 2026-11 benchmark; E-cores and SMT siblings
@@ -15,13 +14,13 @@ function performanceCoreThreads(): number {
   return Math.min(logical, 8, Math.max(4, Math.floor(logical / 2)))
 }
 
-// The hotwords file is written in sherpa's format, one `term :score` per line. The host deletes it
-// once dictation starts, so a CPU fallback's reload finds it gone and runs without.
+// One term per line. The host deletes the file once dictation starts, so a CPU fallback's reload
+// finds it gone and runs without.
 async function readVocabulary(path: string | undefined): Promise<string[]> {
   const text = path ? await readFile(path, 'utf8').catch(() => '') : ''
   return text
     .split('\n')
-    .map((line) => line.replace(/\s+:[\d.]+\s*$/, '').trim())
+    .map((line) => line.trim())
     .filter(Boolean)
 }
 
@@ -39,9 +38,11 @@ export async function createTranscribeCppRecognizer(
 ): Promise<SttRecognizer> {
   const entry = join(init.speechModulesDir, 'transcribe-cpp', 'dist', 'index.js')
   const transcribe: typeof TranscribeCpp = await import(pathToFileURL(entry).href)
-  const model = await transcribe.TranscribeModel.load(
-    resolveFile(init.files, '.gguf', init.modelDir, '.gguf')
-  )
+  const gguf = init.files.find((file) => file.endsWith('.gguf'))
+  if (!gguf) {
+    throw new Error(`No .gguf model file in: ${init.files.join(', ')}`)
+  }
+  const model = await transcribe.TranscribeModel.load(join(init.modelDir, gguf))
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
   const vocabulary = await readVocabulary(init.hotwordsFilePath)

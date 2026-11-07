@@ -45,7 +45,7 @@ export async function prewarmSttModel(
   const ready =
     manifest !== undefined &&
     config !== null &&
-    hasLocalSpeechRecognizer(manifest) &&
+    hasLocalSpeechRecognizer() &&
     (await state.modelManager.getModelState(modelId)).status === 'ready'
   for (;;) {
     // Never disturb a dictation; whatever it loaded is what the user is using.

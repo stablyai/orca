@@ -49,7 +49,6 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-bilingual-zh-en'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'cjkchar+bpe',
     // transcribe-cpp has no zipformer; SenseVoice covers Chinese and English.
     replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
@@ -77,7 +76,6 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-en-20m'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'bpe',
     // The model itself loses the first words of every utterance.
     replacedBy: 'parakeet-tdt-0.6b-v2-int8'
   },
@@ -91,7 +89,6 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-zh-14m'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'cjkchar',
     // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
     replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
@@ -105,7 +102,6 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     ...getSpeechModelDownloadMetadata('zipformer-streaming-korean'),
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'bpe',
     // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
     replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },

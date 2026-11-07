@@ -7,8 +7,6 @@ export type SpeechModelType =
   | 'openai'
 export type SpeechModelProvider = 'local' | 'openai'
 
-export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
-
 export type SpeechModelDownloadFile = {
   name: string
   url: string
@@ -30,7 +28,6 @@ export type SpeechModelManifest = {
   legacyDownloadFiles?: SpeechModelDownloadFile[]
   sampleRate: number
   streaming: boolean
-  modelingUnit?: ModelingUnit
   recommended?: boolean
   /** Retired: never offered for selection, and a saved selection moves to this model on load. */
   replacedBy?: string
