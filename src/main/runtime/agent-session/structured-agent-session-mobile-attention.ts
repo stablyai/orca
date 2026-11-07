@@ -109,6 +109,9 @@ export function createStructuredAttentionMobileDelivery(
         worktreeId: scope.workspaceId,
         ...readLabels(deps, scope),
         agentState: news.agentState,
+        ...(edge.type === 'prompt' && edge.prompt.kind === 'question'
+          ? { agentToolName: 'AskUserQuestion' }
+          : {}),
         ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
         ...(summary ? { agentType: summary.agent } : {}),
         ...(summary?.latestPrompt ? { agentPrompt: summary.latestPrompt } : {}),
@@ -124,7 +127,8 @@ export function createStructuredAttentionMobileDelivery(
       const desktopAllowed = isNotificationSourceEnabled(
         settings,
         'agent-task-complete',
-        news.agentState
+        news.agentState,
+        request.agentToolName
       )
       deps.dispatch({
         type: 'notification',

@@ -143,6 +143,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
           scope: session.params.location,
           sessionId,
           promptId: raised,
+          kind: state.pendingQuestionIds?.includes(raised) ? 'question' : 'approval',
           journalCursor: cursor,
           raisedAt: this.deps.now()
         }

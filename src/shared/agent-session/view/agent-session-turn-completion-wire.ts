@@ -27,6 +27,8 @@ export type AgentSessionPromptAttention = {
   sessionId: string
   /** The prompt's journal item id. */
   promptId: string
+  /** Older hosts omit this; absence cannot establish a question for question-only alerts. */
+  kind?: 'question' | 'approval'
   /** Execution host's clock at journal commit. */
   raisedAt: number
 }

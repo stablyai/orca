@@ -200,6 +200,18 @@ describe('TerminalAgentPhonePush', () => {
     ])
   })
 
+  it('applies question-only preferences to headless phone delivery using the observed tool', () => {
+    const { push, sent, state, advance } = harness({
+      settings: { agentQuestionsOnly: true },
+      hookRow: row({ state: 'waiting', toolName: 'Bash' })
+    })
+    push.observe(moved('needs-input', 'needs-you'))
+    advance(5_000)
+    state.hookRow = row({ state: 'waiting', toolName: 'AskUserQuestion', stateStartedAt: 10_000 })
+    push.observe(moved('needs-input', 'needs-you'))
+    expect(sent.map((event) => event.desktopAllowed !== false)).toEqual([false, true])
+  })
+
   it('stays silent while a window owns the host, including one that arrives mid quiet window', () => {
     const { sent, state, advance, working, finish } = harness()
     state.hasWindow = true

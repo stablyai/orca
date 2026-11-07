@@ -1,4 +1,3 @@
-// Set tray attention before gates and fan out to phones before desktop early returns.
 import type { BrowserWindow } from 'electron'
 import type {
   NotificationDispatchRequest,
@@ -83,6 +82,7 @@ export function createNotificationDeliveryService(
   }
 
   return {
+    /** Tray attention and phone fan-out precede desktop-only mutes so window focus cannot silence remote alerts. */
     dispatch: (request) => {
       if (request.executionHost && request.notificationId) {
         request = {
@@ -108,7 +108,8 @@ export function createNotificationDeliveryService(
       const desktopAllowed = isNotificationSourceEnabled(
         settings,
         request.source,
-        request.agentState
+        request.agentState,
+        request.agentToolName
       )
 
       const notificationOptions = buildNotificationOptions(request, translateMain)
