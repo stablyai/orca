@@ -1,7 +1,4 @@
-import {
-  stageNativeChatDraftFile,
-  releaseNativeChatStagedFiles
-} from './native-chat-draft-attachment-staging'
+import { stageNativeChatDraftFile } from './native-chat-draft-attachment-staging'
 import {
   holdBrowserAttachmentFiles,
   readBrowserAttachmentFile
@@ -155,7 +152,6 @@ it('keeps returned browser images available after the queued editor closes', () 
   const edit = createNativeChatQueuedEditDraft(body, 'bottom')
   const file = new File(['queued image'], 'queued.png', { type: 'image/png' })
   const [path] = holdBrowserAttachmentFiles([file])
-  stageNativeChatDraftFile(edit.scopeKey, path!)
   updateNativeChatComposerDraft(
     edit.scopeKey,
     {
@@ -164,11 +160,14 @@ it('keeps returned browser images available after the queued editor closes', () 
     },
     'immediate'
   )
+  stageNativeChatDraftFile(edit.scopeKey, path!)
+  updateNativeChatComposerDraft(edit.scopeKey, { text: 'edited after staging' }, 'immediate')
   expect(handBackNativeChatQueuedEdit(edit)).toBe(true)
   discardNativeChatQueuedEdit(edit)
   expect(readNativeChatComposerDraft('bottom').images).toEqual([
     { id: 'queued-browser-image', path }
   ])
   expect(readBrowserAttachmentFile(path!)).toBe(file)
-  releaseNativeChatStagedFiles('bottom')
+  updateNativeChatComposerDraft('bottom', { text: '', images: [] }, 'immediate')
+  expect(readBrowserAttachmentFile(path!)).toBeNull()
 })
