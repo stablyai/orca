@@ -113,7 +113,7 @@
       "scanCodeStep": "Escaneie o código QR",
       "title": "Parear com desktop",
       "tryAgain": "Tentar novamente",
-      "codeExpiredOrReplaced": "Este código de pareamento expirou ou foi substituído. Mostre um novo código no computador e escaneie novamente."
+      "codeNoLongerValid": "Este código de pareamento expirou, já foi usado ou foi substituído. Mostre um novo código no computador e escaneie novamente."
     },
     "terminalSettings": {
       "defaultText": "Padrão (100%)",

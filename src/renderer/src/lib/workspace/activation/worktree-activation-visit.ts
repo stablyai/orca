@@ -122,3 +122,14 @@ export function buildActivationStateTransition(
     })
   }
 }
+
+/** A user visit focuses the tab it shows; automation run retention keeps a tab once focused. */
+export function recordShownTabFocus(
+  state: Pick<AppState, 'getActiveTab' | 'activateTab'>,
+  workspaceKey: string
+): void {
+  const shown = state.getActiveTab(workspaceKey)
+  if (shown) {
+    state.activateTab(shown.id, { worktreeId: workspaceKey, preservePreview: true })
+  }
+}

@@ -35,12 +35,17 @@ export type MobileDictationAudioPhase = 'closed' | 'holding' | 'sending'
 
 // Newer hosts report the text so far: shown while speaking, and handed over by a failure instead of dropped.
 export class MobileDictationTranscriptSoFar {
-  private kept: { dictationId: string; text: string } | null = null
+  private kept: { dictationId: string; text: string; revision: number } | null = null
 
   constructor(private readonly onNote: (text: string) => void = () => {}) {}
 
-  note(dictationId: string, text: string): void {
-    this.kept = { dictationId, text }
+  // Several chunk replies can be in flight; hosts that number their text let an older reply arrive last without undoing words.
+  note(dictationId: string, text: string, revision = Number.POSITIVE_INFINITY): void {
+    const kept = this.kept
+    if (kept?.dictationId === dictationId && revision < kept.revision) {
+      return
+    }
+    this.kept = { dictationId, text, revision }
     this.onNote(text)
   }
 
@@ -222,8 +227,13 @@ async function sendAudioChunk(
     // Only newer hosts send the text, and only when it changed; any other result still acknowledges the chunk.
     const result = dictationAudioChunkSend.interpret(reply)
     const text = result == null ? undefined : rpcPayloadMember(result, 'text')
+    const revision = result == null ? undefined : rpcPayloadMember(result, 'revision')
     if (typeof text === 'string' && queue.isActive(dictationId)) {
-      queue.transcriptSoFar.note(dictationId, text)
+      queue.transcriptSoFar.note(
+        dictationId,
+        text,
+        typeof revision === 'number' ? revision : undefined
+      )
     }
   } catch (err) {
     // A host that cannot dedupe loses only the audio in flight at a drop; for one that dedupes, still being offline here means the reconnect grace ran out and later held audio would wait it out again.

@@ -1183,7 +1183,7 @@
         "insecureOrigin": "Orca bu sayfadan eşleştirmeyi reddetti: sayfa başka bir makinede şifrelenmemiş http kullanıyor, dolayısıyla ağ yolu üzerindeki herhangi biri sayfayı değiştirebilir ve eşleştirme kodunu ele geçirebilir. Web istemcisini https üzerinden, bu bilgisayarda localhost üzerinden veya bir SSH tüneli aracılığıyla açın. Yine de izin vermek için sunucu yöneticisi Orca'yı ORCA_ALLOW_INSECURE_WEB_PAIRING=1 ile yeniden başlatabilir.",
         "deviceDowngraded": "Bu Orca sunucusu artık bu tarayıcının oturum açma anahtarını desteklemiyor (sunucunun sürümü düşürülmüş olabilir). Sunucuyu güncelleyin veya bu tarayıcıyı tekrar eşleştirin.",
         "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin.",
-        "unauthorizedNewLink": "Yetkisiz erişim. Yeni bir eşleştirme bağlantısı isteyin."
+        "unauthorizedLinkUsedOrExpired": "Yetkisiz erişim. Bu eşleştirme bağlantısının süresi dolmuş veya bağlantı zaten kullanılmış olabilir. Orca'da yeni bir eşleştirme bağlantısı oluşturup açın."
       }
     },
     "store": {
@@ -1886,13 +1886,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Hedef çalışma alanı artık kullanılamıyor.",
-        "16a21d6413": "SSH'yi yeniden bağlamak etkileşimli kimlik bilgileri gerektirir.",
-        "386db94f3e": "Hedef proje artık kullanılamıyor.",
-        "3ad7d77f57": "Hedef çalışma alanı, bu otomasyon çalıştırma hedefinden farklı bir sunucuda.",
-        "workspaceHostUnresolved": "Hedef çalışma alanı birden fazla sunucuya yayılıyor, bu yüzden bu çalıştırmanın kullanacağı tek bir sunucu yok."
-      },
       "useComposerState": {
         "b2ead86962": "PR tabanı belirlenemedi.",
         "3db83fc58a": "Bu sunucuda ekler için kullanılabilir bir proje yolu yok.",
@@ -23055,6 +23048,17 @@
         "effortRepeated": "Ek argümanlar çabayı birden fazla kez belirtiyor."
       },
       "hostUpdateRequired": "Ek argümanları kullanmak için bu ana makinedeki Orca'yı güncelleyin."
+    },
+    "setupTrust": {
+      "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",
+      "reviewBody": "Dalının <code>orca.yaml</code> kurulum komutları değiştiği için bir çalıştırma kurulumu atladı. Onaylarsanız sonraki çalıştırmalar bu komutları kullanır. Yalnızca <repo/> deposuna güveniyorsanız onaylayın.",
+      "approve": "Onayla",
+      "approved": "Kurulum onaylandı. Bu otomasyonun sonraki çalıştırmaları onu çalıştıracak.",
+      "skippedSinceApproved": "Dalının orca.yaml kurulum komutları değiştiği için bu çalıştırmada kurulum çalışmadı. Komutlar o zamandan beri onaylandı; sonraki çalıştırmalar onları çalıştıracak.",
+      "skippedReview": "Kurulum çalışmadı: bu çalıştırmanın dalındaki orca.yaml kurulum komutları bu otomasyon için onaylananlardan farklı. Sonraki çalıştırmalarda kurulumun çalışması için onları inceleyin.",
+      "reviewAction": "Kurulumu incele ve onayla",
+      "listSkipped": "Kurulum atlandı",
+      "listSkippedTitle": "Dalının orca.yaml kurulum komutları değiştiği için son çalıştırma kurulumu atladı. Eylemler menüsünden inceleyin."
     }
   },
   "codeHost": {

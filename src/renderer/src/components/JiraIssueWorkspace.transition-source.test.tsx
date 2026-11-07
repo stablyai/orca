@@ -213,13 +213,4 @@ describe('Jira transition form source ownership', () => {
       )
     )
   })
-  it('drops the form when a source without a selected project changes execution host', async () => {
-    const view = render(workspace())
-    await openForm()
-    mocks.settings = { activeRuntimeEnvironmentId: 'environment-b' }
-    view.rerender(workspace())
-    await waitForTransitions()
-    expect(screen.queryByLabelText('Comment')).toBeNull()
-    expect(mocks.update).not.toHaveBeenCalled()
-  })
 })

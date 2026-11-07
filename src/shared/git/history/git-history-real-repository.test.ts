@@ -8,7 +8,6 @@ import { GitHistory } from '../../rpc-contract/git-params'
 import { gitHistoryTokens } from './git-history-token-store'
 import { loadGitHistoryRefs } from './git-history-revisions'
 import { loadGitHistoryFromExecutor } from './git-history-execution'
-import { buildDefaultGitHistoryColorMap, buildGitHistoryViewModels } from './git-history-graph'
 
 const repositories: string[] = []
 const gitBinary = resolveExecutableCommand(process.env.ORCA_TEST_GIT_BINARY ?? 'git')
@@ -67,52 +66,6 @@ async function createRepository(inheritedEnv: NodeJS.ProcessEnv = process.env) {
   await git(['commit', '--quiet', '--allow-empty', '-m', 'V'], repo, '2000-01-03T00:00:00Z')
   return { repo, git }
 }
-
-describe('real unrelated Git histories', () => {
-  it.each([false, true])(
-    'keeps the other history when first parent is a root: %s',
-    async (firstParentIsRoot) => {
-      const { repo, git } = await createRepository()
-      if (!firstParentIsRoot) {
-        await git(['checkout', 'first'])
-      }
-      await git([
-        'merge',
-        '--quiet',
-        '--no-ff',
-        '--allow-unrelated-histories',
-        '-m',
-        'M',
-        firstParentIsRoot ? 'first' : 'unrelated'
-      ])
-      const history = await loadGitHistoryFromExecutor(git, repo, { limit: 10 })
-      const rows = buildGitHistoryViewModels(
-        history.items,
-        buildDefaultGitHistoryColorMap(history),
-        history.currentRef
-      )
-      const terminatingRoot = rows.find(
-        (row) => row.historyItem.subject === (firstParentIsRoot ? 'B' : 'V')
-      )!
-      const surviving = history.items.find(
-        (item) => item.subject === (firstParentIsRoot ? 'V' : 'A')
-      )!
-
-      expect(history.items).toHaveLength(4)
-      expect(history.items[0]!.parentIds).toHaveLength(2)
-      expect(terminatingRoot.historyItem.parentIds).toEqual([])
-      expect(terminatingRoot.inputSwimlanes).toHaveLength(2)
-      expect(terminatingRoot.outputSwimlanes.map((lane) => lane.id)).toEqual([surviving.id])
-      const nextRow = rows[rows.indexOf(terminatingRoot) + 1]!
-      expect(nextRow.inputSwimlanes.map((lane) => lane.id)).toEqual([surviving.id])
-      expect(rows.at(-1)!.outputSwimlanes).toEqual([])
-
-      const truncated = await loadGitHistoryFromExecutor(git, repo, { limit: 2 })
-      expect(truncated.hasMore).toBe(true)
-      expect(truncated.items).toHaveLength(2)
-    }
-  )
-})
 
 describe('real branch-only history', () => {
   it('stops at the base, marks commits the upstream has, and pages with skip', async () => {

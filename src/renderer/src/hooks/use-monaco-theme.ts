@@ -4,6 +4,23 @@ import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
 
 const definedThemes = new Set<string>()
 
+type PluginMonacoTheme = NonNullable<ReturnType<typeof useCodeEditorThemeStore.getState>['monaco']>
+
+// Why outside the hook: the React compiler cannot lower dynamic imports inside a hook.
+async function definePluginMonacoTheme(theme: PluginMonacoTheme): Promise<void> {
+  // Why lazy: surfaces that never show an editor must not load Monaco for a theme.
+  const [monaco, data] = await Promise.all([
+    import('monaco-editor'),
+    import('@/lib/monaco-languages/markdown-monaco-theme-rules').then(
+      ({ monacoThemeDataWithMarkdown }) => monacoThemeDataWithMarkdown(theme.data),
+      // Why: markdown colors are extra; a failed chunk must not keep the theme undefined.
+      () => theme.data
+    )
+  ])
+  monaco.editor.defineTheme(theme.name, data)
+  definedThemes.add(theme.name)
+}
+
 /** The Monaco theme every editor surface uses: the editor or app theme's, else the built-in.
  *  `isDarkOverride` passes an already resolved app mode; a separate editor theme's base wins. */
 export function useMonacoTheme(isDarkOverride?: boolean): string {
@@ -18,10 +35,7 @@ export function useMonacoTheme(isDarkOverride?: boolean): string {
       return
     }
     let current = true
-    // Why lazy: surfaces that never show an editor must not load Monaco for a theme.
-    void import('monaco-editor').then((monaco) => {
-      monaco.editor.defineTheme(pluginTheme.name, pluginTheme.data)
-      definedThemes.add(pluginTheme.name)
+    void definePluginMonacoTheme(pluginTheme).then(() => {
       if (current) {
         setDefined(new Set(definedThemes))
       }

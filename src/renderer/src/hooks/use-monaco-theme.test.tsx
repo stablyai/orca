@@ -20,7 +20,13 @@ it('uses the built-in theme until the plugin theme is defined, then switches to 
   useCodeEditorThemeStore.setState({ monaco: { name: 'orca-plugin-test', data } })
   rerender()
   await waitFor(() => expect(result.current).toBe('orca-plugin-test'))
-  expect(defineTheme).toHaveBeenCalledWith('orca-plugin-test', data)
+  // Why markdown rules: Monaco's inherit reads only its stock themes, not the redefined ones.
+  expect(defineTheme).toHaveBeenCalledWith(
+    'orca-plugin-test',
+    expect.objectContaining({
+      rules: expect.arrayContaining([expect.objectContaining({ token: 'md.markup.heading' })])
+    })
+  )
 
   useCodeEditorThemeStore.setState({ monaco: null, override: null })
   rerender()
