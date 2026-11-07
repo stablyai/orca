@@ -1,6 +1,14 @@
 # Orca Mobile
 
-React Native companion app for Orca. Monitor worktrees, view terminal output, and send commands from your phone.
+React Native companion app for Orca. Open project conversations, view terminal output, and send commands from your phone.
+
+The host screen lists conversations directly under their projects. A project’s **New chat** action uses its main workspace (or its folder workspace), detects agents on that execution host, and launches through the existing agent API. Workspace management remains under **More options → Advanced: workspaces**. Branches, paths and linked pull requests appear in conversation details.
+
+Open agent panes, persisted session tabs and saved transcripts are separate sources. The optional `includeStructuredSessions` mode of `aiVault.listSessions` adds durable Orca records, including closed chats with no provider transcript; only a host that actually read its record catalog answers `includesStructuredSessions: true`. Older hosts keep serving open tabs and transcript history, with a visible coverage notice. The list is bounded to the history API’s 500-session recency window. Reopening a saved Orca chat uses its recorded session identity; transcript history retains the existing preview and explicit resume flow.
+
+Project and conversation identities include the execution host. Paired servers use the existing relay-scoped client, and an unavailable relay never falls back to the desktop. SSH workspaces retain their existing host-aware pane and launch paths; this screen does not claim SSH transcript history when the connection cannot list it. Folder workspaces do not require a Git branch.
+
+The standalone mobile app has no shared localization catalog. The conversation screen provides English and Russian copy using the device locale; the existing history, launch and advanced workspace screens keep their current language. Desktop’s language setting is not synchronized into this small mobile copy module.
 
 Local development uses two processes:
 
