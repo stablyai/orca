@@ -55,13 +55,15 @@ export function useAiVaultSearch(
   useEffect(() => {
     const { request, scope } = identity
     if (!request || !scope) {
+      // A torn-down search leaves no page behind to revive when its scope returns (#39298).
+      setPage(null)
       return
     }
     let cancelled = false
     let pending = false
     let followUp = false
     let started = false
-    async function run(cursor?: string, revalidate = false) {
+    async function run(cursor?: string) {
       if (pending || cancelled || !request || !scope) {
         return
       }
@@ -71,7 +73,8 @@ export function useAiVaultSearch(
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
       setPage((previous) => ({
         identity,
-        hits: (cursor || revalidate) && previous?.identity === identity ? previous.hits : [],
+        // A follow-up query keeps the hits already on screen while it runs (#39298).
+        hits: previous?.hits ?? [],
         response: null,
         error: false,
         loading: true
@@ -110,7 +113,7 @@ export function useAiVaultSearch(
         pending = false
         if (followUp && !cancelled) {
           followUp = false
-          void run(undefined, true)
+          void run()
         }
       }
     }
@@ -122,10 +125,10 @@ export function useAiVaultSearch(
       if (pending) {
         followUp = true
       } else {
-        void run(undefined, true)
+        void run()
       }
     })
-    const timer = setTimeout(() => void run(undefined, true), 250)
+    const timer = setTimeout(() => void run(), 250)
     return () => {
       cancelled = true
       followUp = false
@@ -136,11 +139,13 @@ export function useAiVaultSearch(
   }, [identity, associations])
 
   const current = page?.identity === identity ? page : null
+  const loading = Boolean(request && scope && (!current || current.loading))
   return {
-    hits: current?.hits ?? [],
+    // Before the first page of a new query lands, the previous page's hits stay on screen (#39298).
+    hits: current ? current.hits : loading && page ? page.hits : [],
     response: current?.response ?? null,
     error: current?.error ?? false,
-    loading: Boolean(request && scope && (!current || current.loading)),
+    loading,
     removeHit: (hit: AiVaultSearchHit) =>
       setPage((previous) =>
         previous?.identity === identity

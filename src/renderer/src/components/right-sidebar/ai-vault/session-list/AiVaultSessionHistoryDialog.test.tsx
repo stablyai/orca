@@ -64,6 +64,32 @@ vi.mock('./AiVaultSessionVirtualList', () => ({
 
 import AiVaultSessionHistoryDialog from './AiVaultSessionHistoryDialog'
 import AiVaultSidebarPanel from '../panel/AiVaultSidebarPanel'
+import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
+
+function historySession(id: string, title: string): AiVaultSession {
+  return {
+    id,
+    executionHostId: 'local',
+    agent: 'codex',
+    sessionId: id,
+    title,
+    cwd: '/repo/chat',
+    branch: null,
+    model: null,
+    filePath: `/host/${id}.jsonl`,
+    codexHome: null,
+    createdAt: null,
+    updatedAt: null,
+    modifiedAt: '',
+    messageCount: 1,
+    totalTokens: 0,
+    previewMessages: [],
+    queuedMessageCount: 0,
+    subagentTranscriptCount: 0,
+    resumeCommand: '',
+    subagent: null
+  }
+}
 
 const CHAT_WORKTREE = 'repo-1::/repo/chat'
 const OTHER_WORKTREE = 'repo-1::/repo/other'
@@ -148,6 +174,26 @@ describe('Session History dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Resume row' }))
     await waitFor(() => expect(useAppStore.getState().activeModal).toBe('none'))
     expect(composer).not.toHaveFocus()
+  })
+
+  it('shows title matches from the loaded list right away while a full-text query is still running', async () => {
+    mocks.sessions = [
+      historySession('sess-title-match', 'Fix auth flow'),
+      historySession('sess-unrelated', 'Refactor terminal')
+    ]
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture({
+        aiVaultSearch: { enabled: true, historyDays: null }
+      })
+    })
+    render(<Host />)
+    openHistory('auth')
+    await waitFor(() => expect(dialogSearch()).toHaveFocus())
+    expect(screen.getByText('sess-title-match')).toBeInTheDocument()
+    expect(screen.queryByText('sess-unrelated')).not.toBeInTheDocument()
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Refresh Session History' })
+    ).toHaveAttribute('aria-busy', 'true')
   })
 
   it("keeps its search apart from the sidebar's and leaves Settings' request to the sidebar", async () => {

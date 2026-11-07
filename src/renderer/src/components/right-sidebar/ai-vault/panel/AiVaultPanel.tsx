@@ -171,7 +171,10 @@ export default function AiVaultPanel({
     () => withAiVaultHistoryPreviews(search.sessions, history),
     [history, search.sessions]
   )
-  const sessions = searching ? searchSessions : history
+  // A pending query with no hits on screen yet shows title matches from the loaded list, the way title-only search does (#39298).
+  const titleMatchPending = searching && search.loading && searchSessions.length === 0
+  const listSearching = searching && !titleMatchPending
+  const sessions = listSearching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     includeAntigravityIdeSessions: true,
@@ -179,7 +182,7 @@ export default function AiVaultPanel({
     unlimited: sessionLimit === 'unlimited'
   })
   const scanProgress = useAiVaultScanProgress(executionHostScope, requestedScanKey)
-  const stripProgress = searching ? null : scanProgress
+  const stripProgress = listSearching ? null : scanProgress
   // Keep session maps independent of active workspace switches to avoid rebuilding them during navigation (#10841).
   const sessionProjectById = useMemo(
     () =>
@@ -218,7 +221,7 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
-  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, searching, group, {
+  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listSearching, group, {
     query,
     agents,
     scope,
@@ -230,8 +233,8 @@ export default function AiVaultPanel({
     hideEmptySessions
   })
   const searchHitHostLabels = useMemo(
-    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
-    [filteredSessions, hostScopeOptions, searching]
+    () => (listSearching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
+    [filteredSessions, hostScopeOptions, listSearching]
   )
 
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {
@@ -294,15 +297,15 @@ export default function AiVaultPanel({
 
       {stripProgress ? <AiVaultScanProgressStrip {...stripProgress} /> : null}
 
-      {!searching && error ? (
+      {!listSearching && error ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
           {error}
         </div>
       ) : null}
 
-      {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+      {!listSearching && <AiVaultScanIssueBanners scanResult={scanResult} />}
       <AiVaultPanelSearch search={search} noAgents={agents.length === 0}>
-        {searching
+        {listSearching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
                 label={aiVaultResultCountLabel(filteredSessions.length)}
@@ -319,15 +322,15 @@ export default function AiVaultPanel({
                 onChange={setSort}
               />
             )}
-        {(!searching || sessions.length > 0 || search.loading) && (
+        {(!listSearching || sessions.length > 0 || search.loading) && (
           <AiVaultSessionVirtualList
-            key={searching ? search.resetKey : 'history'}
-            searchHits={searching ? searchHits : undefined}
+            key={listSearching ? search.resetKey : 'history'}
+            searchHits={listSearching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}
             groups={groups}
             collapsedGroups={collapsedGroups}
-            loading={searching ? search.loading : loading}
-            scopePending={!searching && scopePending}
+            loading={listSearching ? search.loading : loading}
+            scopePending={!listSearching && scopePending}
             scanProgressShown={stripProgress !== null}
             sessionsCount={sessions.length}
             filteredSessionsCount={filteredSessions.length}
@@ -382,7 +385,7 @@ export default function AiVaultPanel({
             onRequestDelete={(session) => void requestDelete(session)}
           />
         )}
-        {!searching && (
+        {!listSearching && (
           <AiVaultShowMoreSessionsRow
             loaded={sessions.length}
             loadedSessionLimit={loadedSessionLimit}

@@ -118,6 +118,46 @@ it('ignores a late failure for a superseded query', async () => {
   unmount()
 })
 
+it('keeps the previous query hits on screen while the next query runs', async () => {
+  searchSessions.mockResolvedValueOnce(searchResults())
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'ne' } } }
+  )
+  await debounce()
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['host-session'])
+  rerender({ request: { query: 'need' } })
+  expect(result.current.loading).toBe(true)
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['host-session'])
+  await debounce()
+  expect(result.current.hits).toEqual([])
+  unmount()
+})
+
+it('never lets a late reply for a superseded query replace the newer results', async () => {
+  let settleFirst: (response: AiVaultSearchResponse) => void = () => {}
+  searchSessions.mockImplementation((request: AiVaultSearchRequest) =>
+    request.query === 'first'
+      ? new Promise((resolve) => {
+          settleFirst = resolve
+        })
+      : Promise.resolve(searchResults())
+  )
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'first' } } }
+  )
+  await debounce()
+  rerender({ request: { query: 'second' } })
+  await debounce()
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['host-session'])
+  await act(async () =>
+    settleFirst({ ...searchResults(), hits: [{ ...searchHit(), sessionId: 'late-first' }] })
+  )
+  expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['host-session'])
+  unmount()
+})
+
 it('does not revive old results or cursors before debounce when returning from an invalid host', async () => {
   const request = { query: 'needle' }
   searchSessions.mockResolvedValueOnce({
