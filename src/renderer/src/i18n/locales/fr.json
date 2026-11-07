@@ -22738,7 +22738,8 @@
     },
     "chart": {
       "folderSizes": "Tailles des dossiers",
-      "clickToZoom": "Cliquez sur un espace de travail pour zoomer"
+      "clickToZoom": "Cliquez sur un espace de travail pour zoomer",
+      "moreItems": "{{value0}} autres"
     },
     "status": {
       "notManaged": "Non géré"

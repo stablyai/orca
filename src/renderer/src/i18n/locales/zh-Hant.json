@@ -21929,7 +21929,8 @@
     },
     "chart": {
       "folderSizes": "資料夾大小",
-      "clickToZoom": "點選工作區以放大檢視"
+      "clickToZoom": "點選工作區以放大檢視",
+      "moreItems": "另有 {{value0}} 項"
     },
     "window": {
       "errorTitle": "Space 發生錯誤。",

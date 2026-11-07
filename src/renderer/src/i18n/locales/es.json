@@ -22747,7 +22747,8 @@
     },
     "chart": {
       "folderSizes": "Tamaños de carpeta",
-      "clickToZoom": "Haga clic en un espacio de trabajo para ampliar"
+      "clickToZoom": "Haga clic en un espacio de trabajo para ampliar",
+      "moreItems": "{{value0}} más"
     },
     "window": {
       "errorTitle": "Se produjo un error en Space.",

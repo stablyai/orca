@@ -22116,7 +22116,8 @@
     },
     "chart": {
       "clickToZoom": "单击工作区进行缩放",
-      "folderSizes": "文件夹尺寸"
+      "folderSizes": "文件夹尺寸",
+      "moreItems": "另有 {{value0}} 项"
     },
     "window": {
       "errorDescription": "关闭并重新打开 Space 后重试。",

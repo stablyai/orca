@@ -22059,7 +22059,8 @@
     },
     "chart": {
       "clickToZoom": "확대하려면 워크스페이스를 클릭하세요.",
-      "folderSizes": "폴더 크기"
+      "folderSizes": "폴더 크기",
+      "moreItems": "{{value0}}개 더"
     },
     "scan": {
       "moreErrors": "{{value0}} 추가 스캔 오류"

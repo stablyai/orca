@@ -22262,7 +22262,8 @@
     },
     "chart": {
       "folderSizes": "Ordnergrößen",
-      "clickToZoom": "Zum Vergrößern auf einen Arbeitsbereich klicken"
+      "clickToZoom": "Zum Vergrößern auf einen Arbeitsbereich klicken",
+      "moreItems": "{{value0}} weitere"
     },
     "window": {
       "errorTitle": "In Space ist ein Fehler aufgetreten.",

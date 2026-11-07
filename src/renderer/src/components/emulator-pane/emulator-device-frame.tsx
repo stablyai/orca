@@ -30,7 +30,7 @@ import { PhoneHardwareButtons } from './emulator-phone-hardware-buttons'
 import { EmulatorScreenSurface } from './emulator-screen-surface'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
-import { useEmulatorPaneSize } from './use-emulator-pane-size'
+import { useElementSize } from '@/hooks/use-element-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
 
@@ -76,7 +76,7 @@ export function EmulatorDeviceFrame({
   onGesture,
   onStreamLost
 }: EmulatorDeviceFrameProps) {
-  const { paneRef, paneSize } = useEmulatorPaneSize()
+  const { ref: paneRef, size: paneSize } = useElementSize<HTMLDivElement>()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
   const activePointerIdRef = useRef<number | null>(null)
   const liveTouchRef = useRef(false)
