@@ -23332,6 +23332,8 @@
       "editorReplace": "Replace in editor",
       "editorSave": "Save File",
       "editorMarkdownPreview": "Show Markdown Preview",
+      "editorToggleChanges": "Toggle Changes",
+      "editorCycleViewMode": "Cycle Editor View",
       "editorToggleWordWrap": "Toggle Word Wrap",
       "editorCopyContext": "Copy Context",
       "editorPreviousChange": "Go to Previous Change",
