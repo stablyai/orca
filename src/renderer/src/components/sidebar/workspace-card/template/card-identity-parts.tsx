@@ -38,7 +38,7 @@ function title(props: Readonly<Record<string, unknown>>, card: Card): React.Reac
       displayName={card.visibleCardTitle}
       disabled={card.isDeleting || affiliateListMode}
       showUnreadEmphasis={card.showUnreadEmphasis}
-      dimReadTitle={props.dimWhenRead === true}
+      dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}
       className="text-[13px] leading-5"
       editingClassName="flex-1"
       titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}

@@ -1,4 +1,11 @@
 import { Files, GitBranch, LayoutGrid } from 'lucide-react'
+import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  makeRepo,
+  makeTerminalTab,
+  makeWorktree
+} from '../worktree-jump/worktree-jump-palette-test-fixtures'
+import WorktreeCard from '../sidebar/workspace-card/surface/WorktreeCard'
 import { contrastRatio } from '../../lib/plugin-theme-tokens'
 import type { CSSProperties } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
@@ -38,8 +45,28 @@ const palette: ThemeVariables = {
   '--worktree-sidebar-accent-foreground': '#D1D3DA'
 }
 
+const repo = makeRepo()
+const activeWorktree = makeWorktree('selection-active', 'main')
+const idleWorktree = makeWorktree('selection-idle', 'feature/layout')
+const activeTab = {
+  ...makeTerminalTab('selection-active-terminal', activeWorktree.id, 'Shell'),
+  ptyId: 'selection-active-pty'
+}
+const idleTab = {
+  ...makeTerminalTab('selection-idle-terminal', idleWorktree.id, 'Shell'),
+  ptyId: 'selection-idle-pty'
+}
+
 export const selected = defineFixture({
   width: 760,
+  store: {
+    settings: { ...getDefaultSettings('/home/fixture'), experimentalNewWorktreeCardStyle: true },
+    repos: [repo],
+    worktreesByRepo: { [repo.id]: [activeWorktree, idleWorktree] },
+    worktreeCardProperties: ['branch'],
+    tabsByWorktree: { [activeWorktree.id]: [activeTab], [idleWorktree.id]: [idleTab] },
+    ptyIdsByTabId: { [activeTab.id]: [activeTab.ptyId], [idleTab.id]: [idleTab.ptyId] }
+  },
   render: () => (
     <TooltipProvider>
       <div data-selection-fixture style={palette} className="bg-background p-4 text-foreground">
@@ -82,18 +109,21 @@ export const selected = defineFixture({
         </div>
         <div className="flex gap-4">
           <div className="w-64 bg-worktree-sidebar p-2">
-            <div
-              data-worktree-card-surface
-              data-worktree-card-active="primary"
-              className="rounded-lg border p-3 text-xs"
-            >
-              <div className="font-medium text-foreground" data-selected-title>
-                main
-              </div>
-              <div className="mt-2">Current workspace</div>
+            <div data-selected-title>
+              <WorktreeCard
+                worktree={activeWorktree}
+                repo={repo}
+                isActive
+                nativeDragEnabled={false}
+              />
             </div>
-            <div className="mt-2 rounded-lg border border-transparent p-3 text-xs text-muted-foreground">
-              feature/layout
+            <div data-idle-title>
+              <WorktreeCard
+                worktree={idleWorktree}
+                repo={repo}
+                isActive={false}
+                nativeDragEnabled={false}
+              />
             </div>
           </div>
           <div className="flex-1 p-3 text-xs text-muted-foreground">
@@ -151,6 +181,17 @@ export const selected = defineFixture({
     }
     if (!card || getComputedStyle(card).backgroundColor !== token('--worktree-sidebar-active')) {
       throw new Error('Current worktree must use its dedicated theme fill')
+    }
+    const selectedTitle = scope.querySelector(
+      '[data-selected-title] [data-worktree-title-inline-rename]'
+    )
+    const idleTitle = scope.querySelector('[data-idle-title] [data-worktree-title-inline-rename]')
+    if (!selectedTitle || getComputedStyle(selectedTitle).color !== token('--foreground')) {
+      throw new Error('Selected workspace title must keep full foreground contrast')
+    }
+    probe.style.color = 'color-mix(in oklab, var(--foreground) 80%, transparent)'
+    if (!idleTitle || getComputedStyle(idleTitle).color !== getComputedStyle(probe).color) {
+      throw new Error('Inactive workspace title must retain 80% foreground')
     }
     probe.remove()
   }
