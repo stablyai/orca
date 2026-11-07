@@ -200,3 +200,26 @@ it('follows forkability, the /clear floor and turn attribution', async () => {
   await act(() => sideChat!.open('q'))
   expect(request).toHaveBeenLastCalledWith('live', { question: 'q' })
 })
+
+it('does no layout work when only the fork pending state changes', () => {
+  const c = conversation(100, 'a')
+  const fork = forkSurface(allReplies(100))
+  const view = render(<Pane fork={fork} conversation={c} />)
+  offers.checks = 0
+
+  view.rerender(<Pane fork={{ ...fork, pending: true }} conversation={c} />)
+
+  expect(offers.checks).toBe(0)
+})
+
+it('has nothing to fork once a rewind empties the conversation', async () => {
+  const fork = forkSurface(allReplies(2))
+  const view = render(<Pane fork={fork} conversation={conversation(2, 'a')} />)
+  const empty = { messages: [], turnKeys: [], working: false }
+
+  view.rerender(<Pane fork={fork} conversation={empty} />)
+  const outcome = await act(() => sideChat!.open('q'))
+
+  expect(outcome).toHaveProperty('refused')
+  expect(request).not.toHaveBeenCalled()
+})
