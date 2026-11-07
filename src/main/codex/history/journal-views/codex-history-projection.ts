@@ -1,7 +1,11 @@
+import {
+  finishTranscriptWork,
+  type TranscriptWork
+} from '../../../native-chat/transcript-work-scheduler'
 import { historicalTurnLifecycle } from '../../structured/journal/codex-structured-journal-translation-restore'
 import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journal-tool-call-lifecycle'
-import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
+import { codexJournalItemWork } from '../../structured/items/codex-structured-item-translation'
 import type { CodexHelperName } from '../../structured/items/codex-collab-agent-item-translation'
 import type {
   AgentJournalItemBody,
@@ -81,13 +85,22 @@ export function projectCodexHistoryItem(
   interrupted = false,
   helperName?: CodexHelperName
 ): AgentJournalItemBody | null {
+  return finishTranscriptWork(projectCodexHistoryItemWork(item, saved, interrupted, helperName))
+}
+
+export function* projectCodexHistoryItemWork(
+  item: CodexThreadItem,
+  saved: AgentJournalRenderItem | null = null,
+  interrupted = false,
+  helperName?: CodexHelperName
+): TranscriptWork<AgentJournalItemBody | null> {
   if (item.type === 'subAgentActivity') {
     return null
   }
   let body =
     item.type === 'contextCompaction'
       ? { kind: 'status' as const, text: 'Context compacted', presentation: 'compaction' as const }
-      : codexJournalItem(item, helperName).body
+      : (yield* codexJournalItemWork(item, helperName)).body
   if (!body) {
     return null
   }

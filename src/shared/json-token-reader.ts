@@ -1,6 +1,11 @@
-import parser, { type Token } from 'stream-json/core/parser.js'
-import exec from 'stream-chain/exec.js'
-import { none } from 'stream-chain/defs.js'
+import * as StreamJson from 'stream-json/core/parser.js'
+import type { ParserOptions, Token } from 'stream-json/core/parser.js'
+import { none, type Many } from 'stream-chain/defs.js'
+
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The installed parser exports jsonParser but omits its declaration.
+const { jsonParser } = StreamJson as typeof StreamJson & {
+  jsonParser: (options: ParserOptions) => (input: string | typeof none) => Many<Token> | typeof none
+}
 
 /** Bounds token batches while preserving caller-owned UTF-8 decoding. */
 export function createJsonTokenReader(
@@ -14,15 +19,14 @@ export function createJsonTokenReader(
   if (!Number.isSafeInteger(batchCodeUnits) || batchCodeUnits < 1) {
     throw new RangeError('JSON token batch size must be a positive safe integer')
   }
-  const parse = exec(
-    parser({
-      streamValues: false,
-      packStrings: retainScalar === undefined,
-      packNumbers: retainScalar === undefined,
-      streamStrings: retainScalar !== undefined,
-      streamNumbers: retainScalar !== undefined
-    })
-  )
+  const parse = jsonParser({
+    streamValues: false,
+    packStrings: retainScalar === undefined,
+    packNumbers: retainScalar === undefined,
+    streamStrings: retainScalar !== undefined,
+    streamNumbers: retainScalar !== undefined
+  })
+  let flushed = false
   let scalar: 'string' | 'number' | null = null
   let retained = false
   let value = ''
@@ -48,24 +52,25 @@ export function createJsonTokenReader(
     }
   }
   function run(input: string | typeof none): void {
-    let consumerFailed = false
+    let batch: Many<Token> | typeof none
     try {
-      const pending = parse(input, (token: Token) => {
-        try {
-          consumeToken(token)
-        } catch (error) {
-          consumerFailed = true
-          throw error
-        }
-      })
-      if (pending) {
-        throw new Error('JSON token reader requires a synchronous parser')
+      if (flushed) {
+        throw new Error('Call to a flushed pipe.')
       }
+      if (input === none) {
+        flushed = true
+      }
+      batch = parse(input)
     } catch (error) {
-      if (!consumerFailed && error instanceof Error) {
+      if (error instanceof Error) {
         throw new SyntaxError(error.message)
       }
       throw error
+    }
+    if (batch !== none) {
+      for (const token of batch.values) {
+        consumeToken(token)
+      }
     }
   }
   return {

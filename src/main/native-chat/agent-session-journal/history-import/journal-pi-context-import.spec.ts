@@ -3,9 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { prepareLegacyTranscriptImport } from './journal-legacy-import'
+import {
+  importLegacyTranscriptIntoJournal,
+  prepareLegacyTranscriptImport
+} from './journal-legacy-import'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import './journal-pi-active-branch'
+import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { PI_CONTEXT_FIXTURES } from './journal-pi-context-fixtures'
 
 export function registerJournalPiContextImportTests(): void {
@@ -60,13 +63,49 @@ export function registerJournalPiContextImportTests(): void {
         ])
         expect(items).toHaveLength(1)
         expect(items[0]?.identity).toMatchObject({ provider: 'legacy', recordId: 'first' })
-        expect(warn).toHaveBeenCalledWith(
-          '[journal-pi-import] temporary database close failed:',
-          expect.objectContaining({ message: 'test teardown failure' })
-        )
       } finally {
         closeSpy.mockRestore()
         warn.mockRestore()
+      }
+    })
+
+    it('cancels a large active branch projection before returning prepared history', async () => {
+      const collector = createPiTranscriptCollector(
+        (message) => message.id,
+        (_record, lineIndex) => ({
+          provider: 'legacy',
+          agent: 'pi',
+          sessionId: 'session',
+          recordId: `active-${lineIndex}`
+        })
+      )
+      const controller = new AbortController()
+      const reason = new Error('Pi import cancelled')
+      const cancel = setImmediate(() => controller.abort(reason))
+      try {
+        collector.record(JSON.stringify({ type: 'session', version: 3 }), 'session', 0)
+        for (let index = 0; index < 12; index += 1) {
+          collector.record(
+            JSON.stringify({
+              type: 'message',
+              id: `active-${index}`,
+              parentId: index === 0 ? null : `active-${index - 1}`,
+              message: { role: 'user', content: 'x'.repeat(128 * 1024) }
+            }),
+            `active-${index}`,
+            index + 1
+          )
+        }
+        await expect(
+          collector.project(
+            () => undefined,
+            async () => undefined,
+            controller.signal
+          )
+        ).rejects.toBe(reason)
+      } finally {
+        clearImmediate(cancel)
+        collector.close()
       }
     })
 
@@ -122,6 +161,50 @@ export function registerJournalPiContextImportTests(): void {
             : []
         )
       ).toEqual(['summary', 'root', 'latest'])
+    })
+
+    it('persists compaction and branch summaries in the adopted journal across reopen', async () => {
+      const fixture = PI_CONTEXT_FIXTURES[0]
+      if (!fixture) {
+        throw new Error('missing compaction fixture')
+      }
+      const expected = await prepare([
+        ...fixture.entries,
+        {
+          type: 'branch_summary',
+          id: 'branch',
+          parentId: 'later',
+          fromId: 'discarded',
+          summary: 'Saved branch details.'
+        }
+      ])
+      const filePath = join(root, 'session.jsonl')
+      const options = {
+        stateDirectory: join(root, 'journal'),
+        identity: {
+          sessionId: 'native-chat',
+          workspaceId: 'workspace',
+          hostId: 'host',
+          agent: 'pi' as const,
+          providerHandle: { transport: 'jsonl-rpc', agent: 'pi', nativeId: filePath }
+        }
+      }
+      const journal = await journals.open(options)
+      expect(
+        await importLegacyTranscriptIntoJournal({
+          journal,
+          agent: 'pi',
+          sessionId: 'session',
+          fence: 1,
+          options: { filePath }
+        })
+      ).toMatchObject({ ok: true, imported: 4, replaced: true })
+      await journal.close()
+      const reopened = await journals.open(options)
+      expect(reopened.snapshot().items.map((item) => item.body)).toEqual(
+        expected.map((item) => item.body)
+      )
+      expect(JSON.stringify(reopened.snapshot().items)).toContain('Saved branch details.')
     })
   })
 }

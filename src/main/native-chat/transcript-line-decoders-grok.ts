@@ -5,14 +5,36 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { claudeContentBlocksWork, toolResultOutputWork } from './transcript-record-blocks'
+import { finishTranscriptWork, type TranscriptWork } from './transcript-work-scheduler'
+import { parseTranscriptValueWork } from './transcript-record-parser'
 import { AGENT_SESSION_PASTED_IMAGE_SUFFIX_SOURCE } from '../../shared/agent-session/agent-session-attachments'
 
 export function decodeGrokTranscriptLine(
   line: string,
   fallbackId: string
 ): NativeChatMessage | null {
-  const record = parseJsonObject(line)
+  return decodeGrokTranscriptRecord(parseJsonObject(line), fallbackId)
+}
+
+export function decodeGrokTranscriptRecord(
+  record: Record<string, unknown> | null,
+  fallbackId: string
+): NativeChatMessage | null {
+  return finishTranscriptWork(
+    decodeGrokTranscriptRecordWork(record, fallbackId, function* (text) {
+      yield 1
+      const value: unknown = JSON.parse(text)
+      return value
+    })
+  )
+}
+
+export function* decodeGrokTranscriptRecordWork(
+  record: Record<string, unknown> | null,
+  fallbackId: string,
+  parseValue: (text: string) => TranscriptWork<unknown> = parseTranscriptValueWork
+): TranscriptWork<NativeChatMessage | null> {
   if (!record) {
     return null
   }
@@ -33,21 +55,25 @@ export function decodeGrokTranscriptLine(
     ) {
       return null
     }
-    const rawBlocks = claudeContentBlocks(record.content)
-    const blocks = type === 'user' ? rawBlocks.flatMap(normalizeGrokUserQueryBlock) : rawBlocks
+    const rawBlocks = yield* claudeContentBlocksWork(record.content)
+    const blocks = type === 'user' ? yield* normalizeGrokUserQueryBlocks(rawBlocks) : rawBlocks
     if (blocks.length === 0) {
-      const toolBlocks = grokToolCallBlocks(record.tool_calls)
+      const toolBlocks = yield* grokToolCallBlocks(record.tool_calls, parseValue)
       if (toolBlocks.length === 0) {
         return null
       }
       return { id, role: 'assistant', blocks: toolBlocks, timestamp, source: 'transcript' }
     }
     if (type === 'assistant') {
-      const toolBlocks = grokToolCallBlocks(record.tool_calls)
+      const toolBlocks = yield* grokToolCallBlocks(record.tool_calls, parseValue)
+      for (const block of toolBlocks) {
+        yield 1
+        blocks.push(block)
+      }
       return {
         id,
         role: 'assistant',
-        blocks: [...blocks, ...toolBlocks],
+        blocks,
         timestamp,
         source: 'transcript'
       }
@@ -58,7 +84,7 @@ export function decodeGrokTranscriptLine(
   if (type === 'reasoning') {
     const text =
       extractString(record.text) ??
-      grokSummaryText(record.summary) ??
+      (yield* grokSummaryText(record.summary)) ??
       extractString(asRecord(record.content)?.text)
     if (!text?.trim()) {
       return null
@@ -88,7 +114,7 @@ export function decodeGrokTranscriptLine(
   }
 
   if (type === 'tool_result') {
-    const output = toolResultOutput(record.content ?? record.output ?? record.result)
+    const output = yield* toolResultOutputWork(record.content ?? record.output ?? record.result)
     return {
       id,
       role: 'tool',
@@ -107,12 +133,16 @@ export function decodeGrokTranscriptLine(
   return null
 }
 
-function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
+function* grokToolCallBlocks(
+  value: unknown,
+  parseValue: (text: string) => TranscriptWork<unknown>
+): TranscriptWork<NativeChatBlock[]> {
   if (!Array.isArray(value)) {
     return []
   }
   const blocks: NativeChatBlock[] = []
   for (const item of value) {
+    yield 1
     const record = asRecord(item)
     if (!record) {
       continue
@@ -121,8 +151,11 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
     let input: unknown = record.arguments ?? record.input ?? record.args
     if (typeof input === 'string') {
       try {
-        input = JSON.parse(input)
-      } catch {
+        input = yield* parseValue(input)
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) {
+          throw error
+        }
         // Preserve unparseable arguments as text.
       }
     }
@@ -131,7 +164,7 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
   return blocks
 }
 
-function grokSummaryText(value: unknown): string | null {
+function* grokSummaryText(value: unknown): TranscriptWork<string | null> {
   if (typeof value === 'string') {
     return value
   }
@@ -140,6 +173,7 @@ function grokSummaryText(value: unknown): string | null {
   }
   const parts: string[] = []
   for (const item of value) {
+    yield 1
     const record = asRecord(item)
     const text = extractString(record?.text) ?? extractString(record?.summary_text)
     if (text) {
@@ -245,4 +279,17 @@ function stripGrokUserQueryEnvelope(text: string): string {
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function* normalizeGrokUserQueryBlocks(
+  blocks: NativeChatBlock[]
+): TranscriptWork<NativeChatBlock[]> {
+  const normalized: NativeChatBlock[] = []
+  for (const block of blocks) {
+    yield 1
+    for (const part of normalizeGrokUserQueryBlock(block)) {
+      normalized.push(part)
+    }
+  }
+  return normalized
 }

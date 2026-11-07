@@ -1,3 +1,5 @@
+import { finishTranscriptWork, type TranscriptWork } from '../../transcript-work-scheduler'
+import { sortTranscriptWork } from '../../transcript-sort-work'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 
@@ -67,23 +69,30 @@ export function createCodexHistoryPlacement() {
         ...(kind === 'root' ? { turnGroup: group } : {})
       })
     },
-    items(rows: JournalReplacementItem[]) {
-      const keys = new Set(rows.map((row) => agentJournalItemKey(row.identity)))
-      for (const row of rows) {
-        if (row.body.kind === 'turn' && row.body.userItemId && !keys.has(row.body.userItemId)) {
-          delete row.body.userItemId
-        }
-      }
-      return rows.sort((a, b) => {
-        const x = entries.get(a)!,
-          y = entries.get(b)!
-        return (
-          compareRoot(x.group, y.group) ||
-          slots[x.kind] - slots[y.kind] ||
-          compareNumber(x.at, y.at) ||
-          x.position - y.position
-        )
-      })
+    items: (rows: JournalReplacementItem[]) => finishTranscriptWork(itemsWork(rows)),
+    itemsWork
+  }
+  function* itemsWork(rows: JournalReplacementItem[]): TranscriptWork<JournalReplacementItem[]> {
+    const keys = new Set<string>()
+    for (const row of rows) {
+      keys.add(agentJournalItemKey(row.identity))
+      yield 1
     }
+    for (const row of rows) {
+      if (row.body.kind === 'turn' && row.body.userItemId && !keys.has(row.body.userItemId)) {
+        delete row.body.userItemId
+      }
+      yield 1
+    }
+    return yield* sortTranscriptWork(rows, (a, b) => {
+      const x = entries.get(a)!,
+        y = entries.get(b)!
+      return (
+        compareRoot(x.group, y.group) ||
+        slots[x.kind] - slots[y.kind] ||
+        compareNumber(x.at, y.at) ||
+        x.position - y.position
+      )
+    })
   }
 }

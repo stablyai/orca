@@ -1,13 +1,14 @@
+import { finishTranscriptWork } from '../native-chat/transcript-work-scheduler'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
 import { join } from 'node:path'
 import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { asRecord, parseJsonObject } from '../ai-vault/session-scanner-values'
+import { asRecord } from '../ai-vault/session-scanner-values'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { createLegacyIdentityTracker } from '../native-chat/agent-session-journal/history-import/journal-legacy-identity'
 import { readCodexLocalHistory } from '../native-chat/codex-local-history'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
-import { decodeCodexTranscriptLine } from '../native-chat/transcript-line-decoders-codex'
+import { decodeCodexTranscriptRecordWork } from '../native-chat/transcript-line-decoders-codex'
 import {
   CodexAppServerTimeoutError,
   type CodexAppServerRpc
@@ -47,10 +48,10 @@ export async function codexForkHistory(input: {
   await readCodexLocalHistory({
     filePath: input.path,
     roots: input.roots,
-    visit: (line, fallbackId, _selected, recordId) => {
+    signal: input.signal,
+    visit: (_line, fallbackId, _selected, recordId, raw) => {
       input.signal?.throwIfAborted()
-      const tracked = tracker.identify(line, lineIndex++)
-      const raw = parseJsonObject(line)
+      const tracked = tracker.identify(raw, lineIndex++)
       const payload = asRecord(raw?.payload)
       if (
         raw?.type === 'event_msg' &&
@@ -67,7 +68,9 @@ export async function codexForkHistory(input: {
           prompt: false
         })
       }
-      const message = decodeCodexTranscriptLine(line, fallbackId, { historyImport: true })
+      const message = finishTranscriptWork(
+        decodeCodexTranscriptRecordWork(raw, fallbackId, { historyImport: true })
+      )
       if (message?.role === 'user') {
         const previous = roots.at(-1)
         if (!previous || (previous.prompt && (!previous.id || previous.terminal))) {

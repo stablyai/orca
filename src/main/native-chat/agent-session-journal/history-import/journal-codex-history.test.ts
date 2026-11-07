@@ -1,3 +1,4 @@
+import { createTranscriptWorkScheduler } from '../../transcript-work-scheduler'
 import { createCodexHistoryCollector } from './journal-codex-history'
 import { readRecord } from '../../../codex/app-server/codex-item-field-readers'
 import { codexCommandPresentation } from '../../../codex/history/rollouts/codex-command-presentation'
@@ -44,6 +45,41 @@ function request(filePath: string) {
     }
   }
 }
+
+it('cancels canonical message preparation before returning completed history', async () => {
+  const collector = createCodexHistoryCollector(CHILD, { inlineHeadBytes: 1024 }, 16777216)
+  const controller = new AbortController()
+  const reason = new Error('History import cancelled')
+  const cancel = setImmediate(() => controller.abort(reason))
+  try {
+    const run = createTranscriptWorkScheduler(controller.signal)
+    await expect(
+      run(
+        collector.recordWork({
+          record: {
+            type: 'event_msg',
+            payload: {
+              type: 'item_completed',
+              item: {
+                type: 'UserMessage',
+                id: 'large',
+                content: Array.from({ length: 20000 }, () => ({ type: 'Text', text: 'kept' }))
+              }
+            }
+          },
+          segmentId: CHILD,
+          paginated: true,
+          ordinal: 1,
+          offset: 0,
+          selected: true,
+          recordId: 'large'
+        })
+      )
+    ).rejects.toBe(reason)
+  } finally {
+    clearImmediate(cancel)
+  }
+})
 
 it.each(['active', 'archive', 'compressed'] as const)(
   'imports %s ancestor prefixes oldest first and excludes later turns',

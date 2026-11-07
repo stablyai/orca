@@ -1,11 +1,17 @@
 import { createReadStream } from 'node:fs'
 import { finished } from 'node:stream/promises'
 import { createZstdDecompress } from 'node:zlib'
+import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 
 /** Bookmarks count decoded JSONL bytes, including newlines, never compressed file bytes. */
-export async function* readCodexRolloutBytes(path: string, end?: number): AsyncGenerator<Buffer> {
+export async function* readCodexRolloutBytes(
+  path: string,
+  end?: number,
+  signal?: AbortSignal
+): AsyncGenerator<Buffer> {
+  throwIfSignalAborted(signal)
   const decoder = path.endsWith('.zst') ? createZstdDecompress() : undefined
-  const file = createReadStream(path)
+  const file = createReadStream(path, { signal })
   try {
     if (decoder) {
       file.on('error', (error) => decoder.destroy(error))
@@ -13,6 +19,7 @@ export async function* readCodexRolloutBytes(path: string, end?: number): AsyncG
     }
     let remaining = end ?? Infinity
     for await (const chunk of decoder ?? file) {
+      throwIfSignalAborted(signal)
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
       const prefix = buffer.subarray(0, Math.min(buffer.length, remaining))
       if (prefix.length) {
@@ -23,6 +30,9 @@ export async function* readCodexRolloutBytes(path: string, end?: number): AsyncG
         break
       }
     }
+  } catch (error) {
+    throwIfSignalAborted(signal)
+    throw error
   } finally {
     decoder?.destroy()
     file.destroy()

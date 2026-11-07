@@ -1,3 +1,8 @@
+import {
+  finishTranscriptWork,
+  type TranscriptWork
+} from '../../native-chat/transcript-work-scheduler'
+
 export function readRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 }
@@ -21,6 +26,13 @@ export function readFirstString(
 }
 
 export function readTextContent(source: Record<string, unknown>, key: string): string | null {
+  return finishTranscriptWork(readTextContentWork(source, key))
+}
+
+export function* readTextContentWork(
+  source: Record<string, unknown>,
+  key: string
+): TranscriptWork<string | null> {
   const direct = readString(source, key)
   if (direct) {
     return direct
@@ -29,15 +41,22 @@ export function readTextContent(source: Record<string, unknown>, key: string): s
   if (!Array.isArray(value)) {
     return null
   }
-  const parts = value.flatMap((part) => {
+  const parts: string[] = []
+  for (const part of value) {
+    yield 1
     if (typeof part === 'string') {
-      return part.length > 0 ? [part] : []
+      if (part.length > 0) {
+        parts.push(part)
+      }
+      continue
     }
     if (typeof part !== 'object' || part === null) {
-      return []
+      continue
     }
     const text = readString(part as Record<string, unknown>, 'text')
-    return text ? [text] : []
-  })
+    if (text) {
+      parts.push(text)
+    }
+  }
   return parts.length > 0 ? parts.join('\n') : null
 }

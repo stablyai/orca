@@ -105,6 +105,9 @@ export function boundToolInput(input: unknown, limits: JournalPayloadLimits): un
       head: '[unserializable input]'
     }
   }
+  if (Buffer.byteLength(encoded, 'utf8') <= limits.inlineHeadBytes) {
+    return input
+  }
   const bounded = boundPayload(encoded, limits)
   return bounded.truncated
     ? {
@@ -131,10 +134,10 @@ export function boundLegacyImportBlock(
   limits: JournalPayloadLimits
 ): NativeChatBlock {
   if (block.type === 'text') {
-    return { ...block, text: boundInlineText(block.text, limits).text }
+    return { ...block, text: legacyInlineText(block.text, limits) }
   }
   if (block.type === 'tool-result') {
-    return { ...block, output: boundInlineText(block.output, limits).text }
+    return { ...block, output: legacyInlineText(block.output, limits) }
   }
   if (block.type === 'tool-call') {
     return { ...block, input: boundToolInput(block.input, limits) }
@@ -146,11 +149,17 @@ export function boundLegacyImportBlock(
         ...agent,
         // Digest-based roster IDs keep children with shared prefixes distinct.
         id: boundSubagentEntryId(agent.id),
-        label: boundInlineText(agent.label, limits).text
+        label: legacyInlineText(agent.label, limits)
       }))
     }
   }
   return block
+}
+
+function legacyInlineText(text: string, limits: JournalPayloadLimits): string {
+  return Buffer.byteLength(text, 'utf8') <= limits.inlineHeadBytes
+    ? text
+    : boundInlineText(text, limits).text
 }
 
 export function boundLegacyImportBody(
