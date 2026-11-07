@@ -5,6 +5,7 @@ import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 export type JiraListColumnId =
   | 'key'
   | 'title'
+  | 'type'
   | 'status'
   | 'priority'
   | 'assignee'
@@ -26,6 +27,7 @@ export type JiraListColumn = {
 export const JIRA_LIST_COLUMNS: readonly JiraListColumn[] = [
   { id: 'key', widths: [90, 96, 104], locked: true, defaultVisible: true },
   { id: 'title', widths: [180, 180, 180], locked: true, defaultVisible: true },
+  { id: 'type', widths: [104, 112, 128], defaultVisible: false },
   { id: 'status', widths: [128, 132, 144], defaultVisible: true },
   { id: 'priority', widths: [92, 120, 132], defaultVisible: true },
   { id: 'assignee', widths: [0, 136, 160], defaultVisible: true },
@@ -46,6 +48,8 @@ export function getJiraListColumnLabel(id: JiraListColumnId): string {
       return translate('auto.components.TaskPage.37e7ee311e', 'Key')
     case 'title':
       return translate('auto.components.TaskPage.b1eaa18ace', 'Issue')
+    case 'type':
+      return translate('auto.components.TaskPage.jiraColumnType', 'Type')
     case 'status':
       return translate('auto.components.TaskPage.154b0fa623', 'Status')
     case 'priority':
