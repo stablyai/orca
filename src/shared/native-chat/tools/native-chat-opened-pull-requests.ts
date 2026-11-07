@@ -40,18 +40,69 @@ function createCount(code: string): number {
   return CREATE_RUNS.reduce((count, { run }) => count + [...code.matchAll(run)].length, 0)
 }
 
-/** A script with each heredoc body reduced to its `<<`, so no body line reads as a command. */
-export function withoutHeredocBodies(script: string): string {
-  return script.replace(HEREDOC_BODY, '<<')
-}
-
 /** The commands a script runs, without the text it carries. */
 export function shellCode(script: string): string {
-  return withoutHeredocBodies(script).replace(QUOTED_OR_COMMENT, (text) =>
+  return script.replace(HEREDOC_BODY, '<<').replace(QUOTED_OR_COMMENT, (text) =>
     // A line continuation (backslash-LF) joins lines, as the shell removes it; any other text,
     // including a backslash before CR, becomes one word.
     text === '\\\n' ? '' : "''"
   )
+}
+
+// Quoted text, escapes and comments match first and are skipped; then an unquoted heredoc
+// operator (`<<EOF`, `<<'EOF'`, `<<"EOF"`, `<<-EOF`, never a `<<<` here-string), or a line end.
+const TEXT_HEREDOC_OR_LINE_END = new RegExp(
+  `(${QUOTED_OR_COMMENT.source})|(?<!<)<<(-?)[ \\t]*(['"]?)(\\w+)\\3|\\n`,
+  'gmu'
+)
+
+/** Where the body that starts at `start` ends: after its delimiter line, or at the script's end. */
+function heredocBodyEnd(script: string, start: number, delimiter: string, tabs: boolean): number {
+  let lineStart = start
+  while (lineStart < script.length) {
+    const newline = script.indexOf('\n', lineStart)
+    const lineEnd = newline === -1 ? script.length : newline
+    const line = script.slice(lineStart, lineEnd)
+    if ((tabs ? line.replace(/^\t+/u, '') : line) === delimiter) {
+      return newline === -1 ? script.length : newline + 1
+    }
+    lineStart = lineEnd + 1
+  }
+  // Unterminated: everything after the declaration is the body, never commands.
+  return script.length
+}
+
+/**
+ * A script without its heredoc bodies and delimiter lines. Each declaration line keeps its own
+ * commands, separators and spelling (`cat <<'EOF' > notes.md; git push 2>&1`), and the newline that
+ * ends it, so the line after the delimiter still starts a new command.
+ */
+export function withoutHeredocBodyLines(script: string): string {
+  const scan = new RegExp(TEXT_HEREDOC_OR_LINE_END)
+  const pending: { delimiter: string; tabs: boolean }[] = []
+  let kept = ''
+  let from = 0
+  for (let match = scan.exec(script); match; match = scan.exec(script)) {
+    if (match[1] !== undefined) {
+      continue
+    }
+    if (match[4] !== undefined) {
+      pending.push({ delimiter: match[4], tabs: match[2] === '-' })
+      continue
+    }
+    if (pending.length === 0) {
+      continue
+    }
+    // Bodies follow the declaration line in the order their operators appeared.
+    let end = match.index + 1
+    for (const { delimiter, tabs } of pending.splice(0)) {
+      end = heredocBodyEnd(script, end, delimiter, tabs)
+    }
+    kept += script.slice(from, match.index + 1)
+    from = end
+    scan.lastIndex = end
+  }
+  return kept + script.slice(from)
 }
 
 // Redirections outside quotes: an fd copy or close (`2>&1`, `>&2`, `<&-`), or a file target

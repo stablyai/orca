@@ -2,7 +2,7 @@ import {
   COMMAND_START,
   shellCode,
   shellSegments,
-  withoutHeredocBodies,
+  withoutHeredocBodyLines,
   withoutShellRedirections
 } from '../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { posixShellWords } from '../../../shared/native-chat/tools/native-chat-tool-preview-prefix'
@@ -48,7 +48,7 @@ function isDryRun(words: readonly string[]): boolean {
 /** A script that runs `git push` itself, not as text it carries, and not as a dry run. */
 export function runsGitPush(script: string): boolean {
   // Heredoc bodies go first, across the whole script: one body line alone can't show it is text.
-  const pushes = shellSegments(withoutHeredocBodies(script)).filter((segment) =>
+  const pushes = shellSegments(withoutHeredocBodyLines(script)).filter((segment) =>
     GIT_PUSH_RUN.test(shellCode(segment))
   )
   return (

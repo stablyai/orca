@@ -32,6 +32,13 @@ function pushedBranches(row: ToolCallRow): unknown[] {
 }
 
 const TO_ORIGIN = 'To github.com:acme/repo.git\n'
+const REVIEW_PUSHED =
+  "To github.com:acme/repo.git\n   8d5f74b..c512e75  HEAD -> review\nbranch 'review' set up to track 'origin/review'.\n"
+const REVIEW_UPDATE = { branch: 'review', newSha: 'c512e75' }
+
+function pushBy(command: string, output: string): unknown[] {
+  return pushedBranches(toolCallRow({ name: 'Bash', input: { command }, output }))
+}
 
 describe('push updates from recorded tool calls', () => {
   it("reads Claude's Bash push and Codex's shell push", () => {
@@ -58,22 +65,52 @@ describe('push updates from recorded tool calls', () => {
   })
 
   it('reads a push that merges its stderr into the output, and still skips a dry run', () => {
-    const push = (command: string, output: string) =>
-      pushedBranches(toolCallRow({ name: 'Bash', input: { command }, output }))
-    const output =
-      "To github.com:acme/repo.git\n   8d5f74b..c512e75  HEAD -> review\nbranch 'review' set up to track 'origin/review'.\n"
-    expect(push('git push -u origin HEAD 2>&1', output)).toEqual([
-      { branch: 'review', newSha: 'c512e75' }
-    ])
-    expect(push('git push --dry-run 2>&1', output)).toEqual([])
-    // An escaped `>` before a real pipe doesn't hide the push after it.
-    expect(push('printf x \\>|git push origin HEAD', output)).toEqual([
-      { branch: 'review', newSha: 'c512e75' }
-    ])
-    // A heredoc prints a push and its update lines; no git command runs.
+    expect(pushBy('git push -u origin HEAD 2>&1', REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+    expect(pushBy('git push --dry-run 2>&1', REVIEW_PUSHED)).toEqual([])
+  })
+
+  it("reads a push after a heredoc's declaration, past `;`", () => {
+    const command = "cat <<'EOF' > notes.md; git push -u origin HEAD 2>&1\nnotes\nEOF"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+  })
+
+  it("reads a push after a heredoc's declaration, past `&&`", () => {
+    const command = "cat <<'EOF' > notes.md && git push -u origin HEAD 2>&1\nnotes\nEOF"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+  })
+
+  it("reads an unredirected push after a heredoc's declaration", () => {
+    const command = "cat <<'EOF' > notes.md; git push -u origin HEAD\nnotes\nEOF"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+  })
+
+  it("reads a piped push after a heredoc's declaration", () => {
+    const command = "cat <<'EOF' > notes.md && git push -u origin HEAD 2>&1 | tail -5\nnotes\nEOF"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+  })
+
+  it("skips a quoted dry run after a heredoc's declaration", () => {
+    const command = "cat <<'EOF' > notes.md; git push '--dry-run' -u origin HEAD 2>&1\nnotes\nEOF"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([])
+  })
+
+  it('takes nothing from a heredoc that prints a push and its update lines', () => {
     const printed =
       'git push -u origin HEAD 2>&1\nTo github.com:acme/repo.git\n   1234567..89abcde  HEAD -> review\n'
-    expect(push(`cat <<'EOF'\n${printed}EOF`, printed)).toEqual([])
+    for (const opener of ["<<'EOF'", '<<EOF', '<<"EOF"']) {
+      expect(pushBy(`cat ${opener}\n${printed}EOF`, printed)).toEqual([])
+    }
+    const indented = printed.replace(/^/gmu, '\t').replace(/\t$/u, '')
+    expect(pushBy(`cat <<-EOF\n${indented}\tEOF`, printed)).toEqual([])
+  })
+
+  it("reads a push after a heredoc's delimiter", () => {
+    const command = "cat <<'EOF' > notes.md\nnotes\nEOF\ngit push -u origin HEAD 2>&1"
+    expect(pushBy(command, REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
+  })
+
+  it("doesn't let an escaped `>` before a real pipe hide the push after it", () => {
+    expect(pushBy('printf x \\>|git push origin HEAD', REVIEW_PUSHED)).toEqual([REVIEW_UPDATE])
   })
 
   it('takes new branches and porcelain lines, and nothing from pushes that updated nothing', () => {
