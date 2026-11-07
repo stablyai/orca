@@ -924,7 +924,7 @@
 12 src/renderer/src/components/settings/mobile/emulator/MobileEmulatorAvailabilityDetails.tsx
 6 src/renderer/src/components/settings/mobile/emulator/MobileEmulatorExamples.tsx
 8 src/renderer/src/components/settings/mobile/emulator/MobileEmulatorSettingsPane.tsx
-7 src/renderer/src/components/settings/mobile/pairing/MobilePairedDevicesSection.tsx
+8 src/renderer/src/components/settings/mobile/pairing/MobilePairedDevicesSection.tsx
 10 src/renderer/src/components/settings/mobile/pairing/MobilePairingConnectionOptions.tsx
 9 src/renderer/src/components/settings/mobile/pairing/MobilePairingQrSection.tsx
 11 src/renderer/src/components/settings/mobile/pairing/MobilePairingSetupSection.tsx
@@ -984,7 +984,7 @@
 6 src/renderer/src/components/settings/runtime-environments/catalog/use-runtime-environment-mutation-actions.ts
 22 src/renderer/src/components/settings/runtime-environments/managed-servers/managed-server-row-parts.tsx
 18 src/renderer/src/components/settings/runtime-environments/managed-servers/runtime-install-server-dialog.tsx
-10 src/renderer/src/components/settings/runtime-environments/pairing/RuntimeAccessGrantList.tsx
+11 src/renderer/src/components/settings/runtime-environments/pairing/RuntimeAccessGrantList.tsx
 1 src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingGeneratedUrlRows.tsx
 37 src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingGeneratorForm.tsx
 9 src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingUrlGenerator.tsx
