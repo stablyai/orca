@@ -51,7 +51,7 @@ export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
   sessionLimit: AiVaultSessionLimit,
-  scopeOnly = false
+  scopeOnly: boolean
 ): {
   error: string | null
   loading: boolean
@@ -84,7 +84,8 @@ export function useAiVaultSessionRefresh(
   const scopeBaseKey = aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)
   const scanScopeKey = `${scopeBaseKey}\n${sessionLimit}`
   // Another scope's scope-only rows would pass for this scope's list while it loads or after it fails.
-  const shown = scan && (scan.scopeOnlyKey ?? scopeBaseKey) === scopeBaseKey ? scan : null
+  const shown =
+    scan && (!scan.scopeOnly || scan.scopeKey === `${scopeBaseKey}\n${scan.limit}`) ? scan : null
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
   const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
@@ -123,7 +124,6 @@ export function useAiVaultSessionRefresh(
         sessionLimit: selectedLimit
       }
       const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, request.scopeOnly)
-      const scopeOnlyKey = request.scopeOnly ? baseKey : null
       const cachedResult =
         args.reuseLoadedDepth === true ? readCachedAiVaultSessionList(request) : null
       if (cachedResult) {
@@ -134,7 +134,7 @@ export function useAiVaultSessionRefresh(
           if (!mountedRef.current || scanKey !== currentScanScopeKey() || !associationCurrent()) {
             return
           }
-          applyScan(published, selectedLimit, scanKey, scopeOnlyKey, (applied) => {
+          applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
             conditionalSnapshotRef.current = published.fingerprint
               ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
               : null
@@ -192,7 +192,7 @@ export function useAiVaultSessionRefresh(
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
         publicationGateRef.current.publish(result, (published) => {
           if (requestCurrent()) {
-            applyScan(published, selectedLimit, scanKey, scopeOnlyKey, (applied) => {
+            applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
               conditionalSnapshotRef.current = published.fingerprint
                 ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
                 : null

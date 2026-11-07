@@ -45,7 +45,8 @@ function HookProbe(props: {
   latest = useAiVaultSessionRefresh(
     props.scopePaths,
     props.executionHostScope ?? 'local',
-    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT
+    props.sessionLimit ?? DEFAULT_AI_VAULT_SESSION_LIMIT,
+    false
   )
   return null
 }

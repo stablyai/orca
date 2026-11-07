@@ -23,9 +23,17 @@ export const CLAUDE_CWD_BUCKET_LAYOUT: CwdBucketLayout = {
       encoded.slice(0, CLAUDE_BUCKET_NAME_MAX_LENGTH)
     ),
   // A root (`-`, `c--`) already ends at a separator, so every bucket below it starts with it.
-  isDirInScope: (dirName, prefixes) =>
-    isClaudeProjectDirInScope(dirName, prefixes) ||
-    [...prefixes].some((prefix) => prefix.endsWith('-') && dirName.startsWith(prefix))
+  isDirInScope: (dirName, prefixes) => {
+    if (isClaudeProjectDirInScope(dirName, prefixes)) {
+      return true
+    }
+    for (const prefix of prefixes) {
+      if (prefix.endsWith('-') && dirName.startsWith(prefix)) {
+        return true
+      }
+    }
+    return false
+  }
 }
 
 // Omit Pi's closing -- so the prefix also matches nested working directories.

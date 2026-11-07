@@ -8,8 +8,8 @@ export type AiVaultAppliedScan = {
   result: AiVaultListResult
   limit: AiVaultSessionLimit
   scopeKey: string
-  /** Set for Workspace/Project rows, which hold only that scope and cannot stand in for another. */
-  scopeOnlyKey: string | null
+  /** Workspace/Project rows hold only that scope and cannot stand in for another. */
+  scopeOnly: boolean
 }
 
 export function useAppliedAiVaultScan(): {
@@ -18,7 +18,7 @@ export function useAppliedAiVaultScan(): {
     published: AiVaultListResult,
     limit: AiVaultSessionLimit,
     scopeKey: string,
-    scopeOnlyKey: string | null,
+    scopeOnly: boolean,
     onApplied?: (result: AiVaultListResult) => void
   ) => void
 } {
@@ -30,7 +30,7 @@ export function useAppliedAiVaultScan(): {
       published: AiVaultListResult,
       limit: AiVaultSessionLimit,
       scopeKey: string,
-      scopeOnlyKey: string | null,
+      scopeOnly: boolean,
       onApplied?: (result: AiVaultListResult) => void
     ) => {
       const previous = acceptedScanRef.current
@@ -41,7 +41,7 @@ export function useAppliedAiVaultScan(): {
         previous.limit === limit &&
         previous.scopeKey === scopeKey
           ? previous
-          : { result, limit, scopeKey, scopeOnlyKey }
+          : { result, limit, scopeKey, scopeOnly }
       acceptedScanRef.current = next
       setScan(next)
       onApplied?.(result)

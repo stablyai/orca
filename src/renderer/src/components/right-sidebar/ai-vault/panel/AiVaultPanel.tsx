@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { useAllWorktrees, useProjectHostSetupProjection, useRepos } from '@/store/selectors'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
 import {
+  aiVaultScopeListsOnlyItself,
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
 } from '../../../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
@@ -146,8 +147,7 @@ export default function AiVaultPanel({
       }),
     [activeProjectKey, activeWorktree, allWorktrees, projectHostSetupProjection, scope]
   )
-  // Workspace and Project scan only their own sessions; All keeps the newest sessions everywhere.
-  const scopeOnly = scope !== 'all'
+  const scopeOnly = aiVaultScopeListsOnlyItself(scope)
   const {
     error,
     loading,
@@ -176,7 +176,7 @@ export default function AiVaultPanel({
   const sessions = searching ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
-    scopeOnly: scopeOnly || undefined,
+    scopeOnly,
     includeAntigravityIdeSessions: true,
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'

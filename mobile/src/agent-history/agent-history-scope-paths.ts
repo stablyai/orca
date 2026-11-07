@@ -1,4 +1,7 @@
-import { deriveAiVaultScopeSessionPaths } from '../../../src/shared/ai-vault/scanning/ai-vault-scope-paths'
+import {
+  aiVaultScopeListsOnlyItself,
+  deriveAiVaultScopeSessionPaths
+} from '../../../src/shared/ai-vault/scanning/ai-vault-scope-paths'
 import {
   boundedAiVaultScopeArgs,
   type AiVaultListArgs,
@@ -29,7 +32,7 @@ export function mobileAiVaultScanScopeArgs(
   scope: AiVaultScope,
   scopePaths: readonly string[]
 ): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
-  return boundedAiVaultScopeArgs(scopePaths, scope !== 'all')
+  return boundedAiVaultScopeArgs(scopePaths, aiVaultScopeListsOnlyItself(scope))
 }
 
 /** Rows fetched for `fetched` contain every row `requested` shows. */

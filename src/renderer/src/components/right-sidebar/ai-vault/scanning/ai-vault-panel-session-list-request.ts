@@ -4,7 +4,10 @@ import { getProjectHostSetupProjectionFromState } from '@/store/selectors'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import { resolveAiVaultHostScopeDefaults } from '../scope/ai-vault-host-scope'
 import { DEFAULT_AI_VAULT_SCOPE } from '../scope/ai-vault-scope-state'
-import { deriveAiVaultScopeSessionPaths } from '../../../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
+import {
+  aiVaultScopeListsOnlyItself,
+  deriveAiVaultScopeSessionPaths
+} from '../../../../../../shared/ai-vault/scanning/ai-vault-scope-paths'
 import { buildAiVaultProjectContext } from '../scope/ai-vault-session-projects'
 import { selectAiVaultPanelWorkspace } from '../scope/ai-vault-panel-workspace'
 import type { AiVaultSessionListRequest } from './ai-vault-session-list-request'
@@ -33,7 +36,7 @@ export function resolveAiVaultPanelSessionListRequest(
       activeProjectKey,
       projectHostSetupProjection
     }),
-    scopeOnly: DEFAULT_AI_VAULT_SCOPE !== 'all',
+    scopeOnly: aiVaultScopeListsOnlyItself(DEFAULT_AI_VAULT_SCOPE),
     executionHostScope: resolveAiVaultHostScopeDefaults(
       getAiVaultResumeWorkspaceExecutionHostId(state, workspaceId),
       workspaceId

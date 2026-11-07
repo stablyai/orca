@@ -1,5 +1,6 @@
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { join } from 'node:path'
+import { BoundedMap } from '../../shared/bounded-map'
 import { claudeProfileHistoryDirs } from '../claude-accounts/claude-profile-installed-router'
 import {
   clearAiVaultBackgroundRestartCircuit,
@@ -72,7 +73,9 @@ type CachedAiVaultList = {
   expiresAt: number
 }
 
-const cachedLists = new Map<string, CachedAiVaultList>()
+const cachedLists = new BoundedMap<string, CachedAiVaultList>({
+  maxEntries: MAX_CACHED_AI_VAULT_SCOPES
+})
 let scanCoordinator = new AiVaultScanCoordinator()
 let sources: AiVaultSessionSources = {}
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
@@ -151,15 +154,18 @@ export async function listAiVaultSessions(
     cacheWriteEpoch++
     cachedLists.clear()
   }
+  // Expire on every read, not only the same scope's, so idle scopes free their rows.
+  for (const [cachedKey, entry] of cachedLists.entries()) {
+    if (entry.expiresAt <= now) {
+      cachedLists.delete(cachedKey)
+    }
+  }
   const cached = cachedLists.get(key)
-  if (cached && cached.expiresAt <= now) {
-    cachedLists.delete(key)
-  } else if (
+  if (
     args?.force !== true &&
     cached &&
     aiVaultCachedDepthServes(cached.depth, depth, args?.scopePaths)
   ) {
-    cacheAiVaultList(key, cached)
     return truncateAiVaultListResult(cached.result, depth, args?.scopePaths)
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
@@ -207,30 +213,19 @@ export async function listAiVaultSessions(
         startGeneration === cacheGeneration &&
         startWriteEpoch === cacheWriteEpoch
       ) {
-        const current = cachedLists.get(key)
+        const current = cachedLists.peek(key)
         if (
           args?.force === true ||
           !current ||
           current.expiresAt <= Date.now() ||
           !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
         ) {
-          cacheAiVaultList(key, { depth, result, expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS })
+          cachedLists.set(key, { depth, result, expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS })
         }
       }
       return result
     }
   })
-}
-
-function cacheAiVaultList(key: string, entry: CachedAiVaultList): void {
-  cachedLists.delete(key)
-  cachedLists.set(key, entry)
-  for (const oldest of cachedLists.keys()) {
-    if (cachedLists.size <= MAX_CACHED_AI_VAULT_SCOPES) {
-      break
-    }
-    cachedLists.delete(oldest)
-  }
 }
 
 /** Trust cached absence of any distro; otherwise a confirmed running list (E9). */

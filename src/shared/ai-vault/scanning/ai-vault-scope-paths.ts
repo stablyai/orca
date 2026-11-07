@@ -6,6 +6,11 @@ import type { Worktree } from '../../worktree/types'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'
 import { toAiVaultProjectKey } from './ai-vault-project-key'
 
+/** Workspace and Project list only their own sessions; All also lists the newest sessions everywhere. */
+export function aiVaultScopeListsOnlyItself(scope: AiVaultScope): boolean {
+  return scope !== 'all'
+}
+
 export function deriveAiVaultWorkspaceScopePaths(
   activeWorktree: Pick<Worktree, 'id' | 'path' | 'priorWorktreeIds' | 'repoId'> | null,
   liveWorktrees: readonly Pick<Worktree, 'id' | 'path' | 'repoId'>[] = []

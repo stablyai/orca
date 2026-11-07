@@ -5,17 +5,17 @@ import {
   wslGatedReaddir,
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import type { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
 import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
 import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
+import { isMissingTranscriptPathError } from './session-scanner-discovery'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -38,8 +38,7 @@ export function recordRefusal(
   error: unknown,
   agent: AiVaultAgent
 ): void {
-  const code = error instanceof Error && 'code' in error ? error.code : undefined
-  if (error instanceof WslTranscriptFsError || (code !== 'ENOENT' && code !== 'ENOTDIR')) {
+  if (!isMissingTranscriptPathError(error)) {
     issues({ agent, path, ...scanIssueTextFromError(error) })
   }
 }
@@ -91,11 +90,12 @@ function scopePathCandidates(scopePath: string): string[] {
   if (!wsl) {
     return [scopePath]
   }
-  const rest = wsl.linuxPath === '/' ? '\\' : wsl.linuxPath.replace(/\//g, '\\')
+  const localhostSpelling = toWindowsWslUncPath(wsl.linuxPath, wsl.distro)
   return [
     scopePath,
     wsl.linuxPath,
-    ...['wsl.localhost', 'wsl$'].map((share) => `\\\\${share}\\${wsl.distro}${rest}`)
+    localhostSpelling,
+    localhostSpelling.replace(/^\\\\wsl\.localhost\\/, '\\\\wsl$\\')
   ]
 }
 
