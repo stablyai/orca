@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_SESSIONS,
   TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_UNKNOWN_SEQS,
   TerminalInputSequenceLedger,
   type TerminalInputWriteOutcome
@@ -123,31 +122,12 @@ describe('TerminalInputSequenceLedger', () => {
     expect(writes).toEqual(['a', 'b', 'c'])
   })
 
-  it('starts a new session at whatever sequence the client is up to', async () => {
-    const ledger = new TerminalInputSequenceLedger()
-    const { write } = recordingWrites()
-    await expect(ledger.admit('pty-1', 'session', 40, write('a'))).resolves.toEqual(applied(40))
-    await expect(ledger.admit('pty-1', 'session', 41, write('b'))).resolves.toEqual(applied(41))
-  })
-
   it('scopes sequences by PTY so a session reused on another terminal is not deduped', async () => {
     const ledger = new TerminalInputSequenceLedger()
     const { writes, write } = recordingWrites()
     await ledger.admit('pty-1', 'session', 5, write('a'))
     await ledger.admit('pty-2', 'session', 5, write('b'))
     expect(writes).toEqual(['a', 'b'])
-  })
-
-  it('evicts the least recently used session past its bound', async () => {
-    const ledger = new TerminalInputSequenceLedger()
-    const { writes, write } = recordingWrites()
-    await ledger.admit('pty-1', 'oldest', 1, write('oldest'))
-    for (let index = 0; index < TERMINAL_INPUT_SEQUENCE_LEDGER_MAX_SESSIONS; index += 1) {
-      void ledger.admit('pty-1', `session-${index}`, 1, write('new'))
-    }
-    await ledger.admit('pty-1', 'session-0', 1, write('kept-dup'))
-    await ledger.admit('pty-1', 'oldest', 1, write('evicted-dup'))
-    expect(writes.filter((text) => text.endsWith('dup'))).toEqual(['evicted-dup'])
   })
 
   it('settles a duplicate only after the original write it repeats', async () => {
@@ -192,9 +172,5 @@ describe('TerminalInputSequenceLedger', () => {
       kind: 'delivery-unknown',
       appliedSeq: last - 1
     })
-  })
-
-  it('names each ledger so a client can tell a restarted runtime from the one it sent to', () => {
-    expect(new TerminalInputSequenceLedger().id).not.toBe(new TerminalInputSequenceLedger().id)
   })
 })

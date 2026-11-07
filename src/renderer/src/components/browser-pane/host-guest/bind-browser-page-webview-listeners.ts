@@ -1,4 +1,4 @@
-import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parkBrowserPageViewport } from './browser-page-viewport'

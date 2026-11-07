@@ -118,11 +118,11 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
   identical: 385,
   'reply-meta-required': 0,
-  'result-absent-settlement': 336,
+  'result-absent-settlement': 329,
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
   'params-undefined': 27,
-  'write-ordinal': 12,
+  'write-ordinal': 21,
   unclassified: 0
 }
 
@@ -164,9 +164,18 @@ export const BRIDGED_PARITY_MEMBERS: Readonly<
     'matrix-session.native-chat-page-nativechat.subscribe-1-1'
   ],
   'write-ordinal': [
+    'diff-review-notes-refused-before-compare',
+    'diff-review-snapshot',
+    'diff-review-status-unavailable',
+    'matrix-session.diff-review-git.branchcompare-1',
+    'matrix-session.diff-review-git.status-1',
+    'matrix-session.diff-review-repo.list-1',
+    'matrix-session.diff-review-worktree.show-1',
+    'aivault-history-scan-association',
     'aivault-history-scan-fulfilled',
+    'aivault-history-scan-refresh',
+    'aivault-history-scan-revisit',
     'aivault-history-scan-unsupported',
-    'aivault-history-scan-worktrees-late',
     'aivault-history-screen-listed',
     'aivault-history-screen-worktrees',
     'host-worktree-refresh-stream',

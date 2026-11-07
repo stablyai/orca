@@ -1,16 +1,17 @@
 import type { AppState } from '../../../types'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { WorktreePurgeTarget } from '../../worktree-purge-target'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { getProjectGroupHostId } from '../../project-group-owner-routing'
+import { getProjectGroupHostId } from '../../../project-groups/project-group-owner-routing'
 import {
   collectRemovedHostTwinState,
   removedHostCanonicalizer,
@@ -18,9 +19,9 @@ import {
 } from '../../../repos/repo-removal-host-twin-attribution'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
-import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
+import { getRepoHostSummaries } from '../listing/worktree-host-ownership'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
-import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
+import { collectPtyIdsForTab } from '../../../terminals/terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
@@ -29,16 +30,47 @@ import {
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
-import {
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
-type PublisherRow = {
-  id: string
-  hostId?: ExecutionHostId
-  runtimeOwnerEnvironmentId?: string
+import {
+  worktreePurgePublishers,
+  type PurgePublisher
+} from '../../../repos/repo-removal-publisher-index'
+
+function purgedPublisherMatcher(
+  s: AppState,
+  repoId: string,
+  purgedHosts: ReadonlySet<ExecutionHostId>
+) {
+  const positions = new Map([...purgedHosts].map((hostId, index) => [hostId, index]))
+  const runtimeHostsByEnvironment = new Map<string, ExecutionHostId>()
+  for (const hostId of purgedHosts) {
+    const parsed = parseExecutionHostId(hostId)
+    if (parsed?.kind === 'runtime' && !runtimeHostsByEnvironment.has(parsed.environmentId)) {
+      runtimeHostsByEnvironment.set(parsed.environmentId, hostId)
+    }
+  }
+  return (row: PurgePublisher): ExecutionHostId | undefined => {
+    if (row.runtimeOwnerEnvironmentId) {
+      return runtimeHostsByEnvironment.get(row.runtimeOwnerEnvironmentId)
+    }
+    if (row.hostId) {
+      return purgedHosts.has(row.hostId) ? row.hostId : undefined
+    }
+    const localPosition = positions.get(LOCAL_EXECUTION_HOST_ID)
+    if (localPosition === 0 || purgedHosts.size === 0) {
+      return localPosition === 0 ? LOCAL_EXECUTION_HOST_ID : undefined
+    }
+    // Only legacy unhosted rows can need the sole-repo-owner fallback.
+    const soleOwner = getRepoHostSummaries(s.repos).get(repoId)?.onlyHostId
+    const ownerPosition = soleOwner ? positions.get(soleOwner) : undefined
+    return ownerPosition !== undefined &&
+      (localPosition === undefined || ownerPosition < localPosition)
+      ? soleOwner
+      : localPosition !== undefined
+        ? LOCAL_EXECUTION_HOST_ID
+        : undefined
+  }
 }
 
 /** Resolve surviving publishers and purged attribution with listing rules; legacy unstamped and runtime-proxied SSH rows may be the purged copy, not twins. */
@@ -69,15 +101,11 @@ function resolvePurgedPublishers(
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows: PublisherRow[] = [
-    ...(selectWorktreesByRepo(s)[repoId] ?? []),
-    ...(selectDetectedWorktreesByRepo(s)[repoId]?.worktrees ?? [])
-  ].filter((row) => row.id === worktreeId)
+  const rows = worktreePurgePublishers(s, worktreeId).rows()
+  const matchPurgedHost = purgedPublisherMatcher(s, repoId, purgedHosts)
   const survivors = new Set<ExecutionHostId>()
   for (const row of rows) {
-    const purgedHost = [...purgedHosts].find((hostId) =>
-      worktreeMatchesHost(row, hostId, worktreeHostMatchOptions(s, repoId, hostId))
-    )
+    const purgedHost = matchPurgedHost(row)
     if (purgedHost) {
       // Why: a copy reached through a paired runtime stamps its tabs with its own SSH host.
       if (row.hostId && !purgedHosts.has(row.hostId)) {

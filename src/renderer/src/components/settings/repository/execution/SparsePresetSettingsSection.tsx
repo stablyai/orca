@@ -9,7 +9,8 @@ import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-
 import { SparsePresetDraftEditor } from './sparse-preset-draft-editor'
 import type { SparsePresetDraft } from '../../../sparse/SparseCheckoutPresetDraftForm'
 import { SparsePresetSettingsRow } from './sparse-preset-settings-row'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type SparsePresetSettingsSectionProps = {
   repoId: string
@@ -18,6 +19,7 @@ type SparsePresetSettingsSectionProps = {
 export function SparsePresetSettingsSection({
   repoId
 }: SparsePresetSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const repo = useAppStore((s) => s.repos.find((entry) => entry.id === repoId))
   const presets = useAppStore((s) => s.sparsePresetsByRepo[repoId])
   const loadStatus = useAppStore((s) => s.sparsePresetsLoadStatusByRepo[repoId] ?? 'idle')
@@ -71,10 +73,10 @@ export function SparsePresetSettingsSection({
   }, [fetchSparsePresets, loadStatus, mountedRef, presets, repoId])
 
   const sortedPresets = presets ?? []
-  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
+  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText, t) : null
   const trimmedName = draft?.name.trim() ?? ''
   const nameError = draft
-    ? validateSparsePresetName(draft.name, sortedPresets, draft.presetId)
+    ? validateSparsePresetName(draft.name, sortedPresets, draft.presetId, t)
     : null
   const canSaveDraft =
     !!draft &&
@@ -202,113 +204,108 @@ export function SparsePresetSettingsSection({
   ) : null
 
   return (
-    <section ref={sectionRef} className="space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.SparsePresetSettingsSection.388513be2d',
-              'Sparse Checkout Presets'
-            )}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',
-              'Manage saved directory sets for sparse worktree creation.'
-            )}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={startNewPreset}
-          disabled={!!draft || presets === undefined || deletingPresetId !== null}
-        >
-          <Plus className="size-3.5" />
-          {translate(
-            'auto.components.settings.SparsePresetSettingsSection.d7565029a9',
-            'New Preset'
-          )}
-        </Button>
-      </div>
+    <section ref={sectionRef}>
+      <SettingsGroup
+        title={t(
+          'auto.components.settings.SparsePresetSettingsSection.388513be2d',
+          'Sparse Checkout Presets'
+        )}
+        description={t(
+          'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',
+          'Manage saved directory sets for sparse worktree creation.'
+        )}
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={startNewPreset}
+            disabled={!!draft || presets === undefined || deletingPresetId !== null}
+          >
+            <Plus className="size-3.5" />
+            {t('auto.components.settings.SparsePresetSettingsSection.d7565029a9', 'New Preset')}
+          </Button>
+        }
+      >
+        {visibleError ? (
+          <div
+            role="alert"
+            className="my-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+          >
+            {visibleError}
+          </div>
+        ) : null}
 
-      {visibleError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive"
-        >
-          {visibleError}
-        </div>
-      ) : null}
+        {draft?.mode === 'new' ? <div className="py-3">{draftEditor}</div> : null}
 
-      {draft?.mode === 'new' ? draftEditor : null}
-
-      {presets === undefined ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
-          {loadError
-            ? translate(
-                'auto.components.settings.SparsePresetSettingsSection.92c08ccae3',
-                'Sparse presets could not be loaded.'
-              )
-            : translate(
-                'auto.components.settings.SparsePresetSettingsSection.8deb7024ab',
-                'Loading sparse presets...'
-              )}
-          {loadError ? (
-            <div className="mt-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={loadStatus === 'loading'}
-                onClick={() => {
-                  setOperationError(null)
-                  void fetchSparsePresets(repoId).catch((error: unknown) => {
-                    if (mountedRef.current) {
-                      setOperationError(
-                        getSparsePresetOperationErrorMessage(
-                          error,
-                          'Failed to load sparse presets.'
+        {presets === undefined ? (
+          <div className="py-4 text-sm text-muted-foreground">
+            {loadError
+              ? t(
+                  'auto.components.settings.SparsePresetSettingsSection.92c08ccae3',
+                  'Sparse presets could not be loaded.'
+                )
+              : t(
+                  'auto.components.settings.SparsePresetSettingsSection.8deb7024ab',
+                  'Loading sparse presets...'
+                )}
+            {loadError ? (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={loadStatus === 'loading'}
+                  onClick={() => {
+                    setOperationError(null)
+                    void fetchSparsePresets(repoId).catch((error: unknown) => {
+                      if (mountedRef.current) {
+                        setOperationError(
+                          getSparsePresetOperationErrorMessage(
+                            error,
+                            'Failed to load sparse presets.'
+                          )
                         )
-                      )
-                    }
-                  })
-                }}
-              >
-                <RefreshCcw />
-                {translate('sparsePreset.retryLoad', 'Retry loading presets')}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : sortedPresets.length === 0 && !draft ? (
-        <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
-          {translate(
-            'auto.components.settings.SparsePresetSettingsSection.88bfbf1a9c',
-            'No sparse presets saved for this repository.'
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {sortedPresets.map((preset) =>
-            draft?.presetId === preset.id ? (
-              <div key={preset.id}>{draftEditor}</div>
-            ) : (
-              <SparsePresetSettingsRow
-                key={preset.id}
-                preset={preset}
-                confirmingDeleteId={confirmingDeleteId}
-                deletingPresetId={deletingPresetId}
-                submitting={submitting || !!draft}
-                onEdit={startEditPreset}
-                onDelete={handleDeletePreset}
-                onClearDeleteConfirm={() => setConfirmingDeleteId(null)}
-              />
-            )
-          )}
-        </div>
-      )}
+                      }
+                    })
+                  }}
+                >
+                  <RefreshCcw />
+                  {t('sparsePreset.retryLoad', 'Retry loading presets')}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : sortedPresets.length === 0 && !draft ? (
+          <div className="py-4 text-sm text-muted-foreground">
+            {t(
+              'auto.components.settings.SparsePresetSettingsSection.88bfbf1a9c',
+              'No sparse presets saved for this repository.'
+            )}
+          </div>
+        ) : (
+          <div>
+            {sortedPresets.map((preset) =>
+              draft?.presetId === preset.id ? (
+                <div key={preset.id} data-settings-row="" className="py-3">
+                  {draftEditor}
+                </div>
+              ) : (
+                <SparsePresetSettingsRow
+                  key={preset.id}
+                  preset={preset}
+                  confirmingDeleteId={confirmingDeleteId}
+                  deletingPresetId={deletingPresetId}
+                  submitting={submitting || !!draft}
+                  onEdit={startEditPreset}
+                  onDelete={handleDeletePreset}
+                  onClearDeleteConfirm={() => setConfirmingDeleteId(null)}
+                />
+              )
+            )}
+          </div>
+        )}
+      </SettingsGroup>
     </section>
   )
 }

@@ -1,9 +1,9 @@
 import {
   findIndexedProjectGroupOwner,
-  findIndexedWorktreeOwner,
-  getCatalogOwnerHostId
-} from '../../worktree-runtime-owner-index'
-import { findIndexedRepoOwner } from '../../repo-owner-index'
+  findIndexedWorktreeOwner
+} from '../../workspace/ownership/worktree-runtime-owner-index'
+import { getCatalogOwnerHostId } from '../../workspace/ownership/workspace-catalog-owner-index'
+import { findIndexedRepoOwner } from '../../workspace/ownership/repo-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
@@ -31,13 +31,13 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import {
   openAgentSessionTabThroughLayoutOwner,
   type OpenedAgentSessionTab
-} from '../../structured-agent-session-tab-open-through-layout-owner'
+} from './pane/structured-agent-session-tab-open-through-layout-owner'
 import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LaunchSurface = {
   sessionId: string

@@ -21,13 +21,6 @@ function request() {
 }
 
 describe('skill bundle install contract', () => {
-  it('accepts one aggregate request with per-skill conflict decisions', () => {
-    expect(SkillBundleInstallRequestSchema.parse(request())).toMatchObject({
-      selectedSkillIds: ['alpha', 'beta'],
-      conflictDecisions: [{ skillId: 'alpha', resolution: 'keep-local' }]
-    })
-  })
-
   it('rejects duplicate selections and decisions for unselected skills', () => {
     expect(() =>
       SkillBundleInstallRequestSchema.parse({

@@ -149,7 +149,7 @@ export function WorkspaceDirectorySetting({
         'Root directory where workspace folders are created.'
       )}
       keywords={['workspace', 'folder', 'path', 'worktree', 'host', 'override']}
-      className="space-y-2"
+      className="space-y-2 py-3"
     >
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={inputId}>

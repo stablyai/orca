@@ -1,9 +1,13 @@
 import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { appendReturnedDraftText } from '../../../../../src/shared/returned-draft-text'
+import { createUuidV4 } from '../../../../../src/shared/uuid-v4'
 import {
   resetMobileNativeChatDraftInputsForTests,
+  returnMobileNativeChatDraftAttachments,
   closeMobileNativeChatEditInputs,
   mobileNativeChatDraftDestination,
+  mobileNativeChatDraftInputScopes,
   pruneMobileNativeChatTabInputs,
   pruneMobileNativeChatDraftSkills,
   readMobileNativeChatDraftInputs,
@@ -11,14 +15,30 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import {
+  readMobileNativeChatInFlightSend,
+  readMobileNativeChatInFlightSendsByScope,
+  registerSavedMobileNativeChatInFlightSends,
+  resetMobileNativeChatInFlightSendsForTests,
+  retireMobileNativeChatInFlightSends,
+  savedMobileNativeChatFiles,
+  settleMobileNativeChatInFlightSend
+} from './mobile-native-chat-in-flight-sends'
 import {
   closeSavedMobileNativeChatDraft,
   resetMobileNativeChatDraftPersistenceForTests,
   retainSavedMobileNativeChatDrafts,
   saveMobileNativeChatDraft,
-  setMobileNativeChatDraftSource,
-  type MobileNativeChatSavedDraft
+  setMobileNativeChatDraftSource
 } from './mobile-native-chat-draft-persistence'
+import {
+  isSavedDraftKept,
+  type MobileNativeChatSavedDraft,
+  type MobileNativeChatSavedFile,
+  type MobileNativeChatSavedImage
+} from './mobile-native-chat-saved-drafts'
 
 // Text and its edit revision outlive the screen while its tab remains open.
 // Picks behave like desktop chips: user edits drop skills the text stops naming and an origin that stops leading.
@@ -154,7 +174,37 @@ export function clearMobileNativeChatDraftForSend(
 function retireTabText(scope: string): boolean {
   const changed = drafts.delete(scope)
   mobileNativeChatLaunchDraftSeeds.delete(scope)
+  retireMobileNativeChatInFlightSends(scope)
   return changed
+}
+
+/** Puts an unconfirmed saved send back in its box, chips included, then forgets it. */
+export function returnMobileNativeChatInFlightSend(id: string): void {
+  const entry = readMobileNativeChatInFlightSend(id)
+  if (!entry) {
+    return
+  }
+  const destination = mobileNativeChatDraftDestination(entry.scope)
+  const { send } = entry
+  setMobileNativeChatDraftText(destination, (current) =>
+    appendReturnedDraftText(current, send.text, { preserveConversationCommands: send.command })
+  )
+  restoreMobileNativeChatPickedSkills(destination, send.skills)
+  returnMobileNativeChatDraftAttachments(
+    destination,
+    restoredImages(send.images),
+    restoredFiles(send.files)
+  )
+  settleMobileNativeChatInFlightSend(id)
+}
+
+// Phone previews die with the page; a restored image chip shows its file name instead.
+function restoredImages(images: readonly MobileNativeChatSavedImage[]): PendingNativeChatImage[] {
+  return images.map(({ path }) => ({ id: createUuidV4(), path, previewUri: '' }))
+}
+
+function restoredFiles(files: readonly MobileNativeChatSavedFile[]): PendingNativeChatFile[] {
+  return files.map((file) => ({ ...file, id: createUuidV4() }))
 }
 
 function notifyDrafts(): void {
@@ -195,30 +245,60 @@ function userText(scope: string): string {
 setMobileNativeChatDraftSource({
   saved: () => {
     const saved = new Map<string, MobileNativeChatSavedDraft>()
-    for (const [scope, draft] of drafts) {
-      if (userText(scope) !== '') {
-        saved.set(scope, {
-          text: draft.text,
-          skills: readMobileNativeChatDraftInputs(scope).skills,
-          skillOrigin: draft.skillOrigin
-        })
+    const inFlightByScope = readMobileNativeChatInFlightSendsByScope()
+    const scopes = [
+      ...drafts.keys(),
+      ...mobileNativeChatDraftInputScopes(),
+      ...inFlightByScope.keys()
+    ]
+    for (const scope of new Set(scopes)) {
+      const inFlight = inFlightByScope.get(scope) ?? []
+      // Chips riding a send are saved with it, not twice.
+      const sending = new Set(
+        inFlight.flatMap((send) => [...send.images, ...send.files]).map((chip) => chip.path)
+      )
+      const inputs = readMobileNativeChatDraftInputs(scope)
+      const text = userText(scope)
+      const draft: MobileNativeChatSavedDraft = {
+        text,
+        skills: text === '' ? [] : inputs.skills,
+        skillOrigin: text === '' ? undefined : drafts.get(scope)?.skillOrigin,
+        images: inputs.images.flatMap(({ path }) => (sending.has(path) ? [] : [{ path }])),
+        files: savedMobileNativeChatFiles(inputs.files).filter((file) => !sending.has(file.path)),
+        inFlight
+      }
+      if (isSavedDraftKept(draft)) {
+        saved.set(scope, draft)
       }
     }
     return saved
   },
   restore: (scope, saved) => {
+    registerSavedMobileNativeChatInFlightSends(scope, saved.inFlight)
     const current = drafts.get(scope)
+    const inputs = readMobileNativeChatDraftInputs(scope)
     // Any write before the load finished, a clear or send included, outranks the saved draft; only untouched prefill yields.
-    if (current && current.text !== mobileNativeChatLaunchDraftSeeds.get(scope)?.text) {
+    if (
+      (current && current.text !== mobileNativeChatLaunchDraftSeeds.get(scope)?.text) ||
+      inputs.images.length > 0 ||
+      inputs.files.length > 0
+    ) {
       return
     }
-    updateMobileNativeChatDraftInputs(scope, (inputs) => ({ ...inputs, skills: saved.skills }))
-    drafts.set(scope, {
-      text: saved.text,
-      editGeneration: (current?.editGeneration ?? 0) + 1,
-      skillOrigin: saved.skillOrigin
-    })
-    notifyDrafts()
+    updateMobileNativeChatDraftInputs(scope, (held) => ({
+      ...held,
+      skills: saved.skills,
+      images: restoredImages(saved.images),
+      files: restoredFiles(saved.files)
+    }))
+    if (saved.text !== '') {
+      drafts.set(scope, {
+        text: saved.text,
+        editGeneration: (current?.editGeneration ?? 0) + 1,
+        skillOrigin: saved.skillOrigin
+      })
+      notifyDrafts()
+    }
   }
 })
 
@@ -230,6 +310,7 @@ export function useMobileNativeChatDraft(draftKey: string | null): string {
 export function resetMobileNativeChatDraftStoreForTests(): void {
   resetMobileNativeChatDraftInputsForTests()
   drafts.clear()
+  resetMobileNativeChatInFlightSendsForTests()
   mobileNativeChatLaunchDraftSeeds.clear()
   resetMobileNativeChatDraftPersistenceForTests()
 }

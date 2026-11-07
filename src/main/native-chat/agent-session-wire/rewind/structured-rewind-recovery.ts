@@ -1,4 +1,4 @@
-import { remapForkChildBoundary } from '../agent-session-fork-boundary-remap'
+import { remapForkChildBoundary } from './agent-session-fork-boundary-remap'
 import { persistRewindRecord, settleUnsupportedClaudeRewind } from './structured-rewind-record'
 
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'

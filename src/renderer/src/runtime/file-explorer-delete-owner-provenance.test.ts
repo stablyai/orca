@@ -14,7 +14,7 @@ import type {
   FileExplorerOperationOwner,
   TreeNode
 } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { renameFileOnDisk } from '@/lib/rename-file'
 
 const { confirm, toastError } = vi.hoisted(() => ({

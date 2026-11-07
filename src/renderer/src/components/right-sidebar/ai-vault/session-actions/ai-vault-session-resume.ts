@@ -1,17 +1,17 @@
-import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { canResumeAiVaultSessionOnTarget } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
-} from '@/lib/ai-vault-resume-target'
+} from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import '../session-list/ai-vault-session-worktree'
@@ -21,7 +21,10 @@ import {
   resolveAiVaultSessionWorktreeInfo,
   type AiVaultSessionWorktreeInfo
 } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,

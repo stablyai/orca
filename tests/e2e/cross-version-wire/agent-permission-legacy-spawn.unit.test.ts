@@ -14,15 +14,14 @@ import {
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../../src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'
-import { AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/agent-session'
+import { AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/terminal/agent-session'
 import { YOLO_TUI_AGENT_ENV } from '../../../src/shared/agent-launch/permissions/tui-agent-permissions'
-import { createRuntimeAgentBackgroundTerminal } from '../../../src/renderer/src/lib/runtime-agent-background-create'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/launch-agent-web-host-tab'
+import { launchAgentInWebHostTab } from '../../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import { buildAgentStartupPlan } from '../../../src/shared/agent-launch/startup/tui-agent-startup'
-import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/web-runtime-terminal-creation'
+import { createWebRuntimeSessionTerminal } from '../../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { resetWebSessionCloseIntentForTests } from '../../../src/renderer/src/runtime/web-session-close-intent'
 import {
   ENVIRONMENT_ID,
@@ -30,8 +29,8 @@ import {
   makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
-} from '../../../src/renderer/src/runtime/web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from '../../../src/renderer/src/runtime/runtime-environment-bridge-fixture'
+} from '../../../src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../src/renderer/src/runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -86,7 +85,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
@@ -121,7 +120,6 @@ describe('createWebRuntimeSessionTerminal', () => {
       activate: false,
       userMode: 'approve'
     },
-    { agent: 'goose', mode: 'full-access', hostMode: 'own', authority: true, background: true },
     { agent: 'codex', mode: 'ask', hostMode: 'own', authority: true },
     { agent: 'claude', mode: 'ask', hostMode: 'own', authority: true, loose: true },
     { agent: 'goose', mode: 'own', hostMode: 'full-access', authority: true, fail: true }
@@ -233,14 +231,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           command: plan.launchCommand,
           env: plan.env ?? {},
           launchConfig: plan.launchConfig,
-          ...('background' in test
-            ? { tabId: 'host-tab-1', leafId: 'leaf-1', presentation: 'background' }
-            : {
-                cwd: TEST_WORKTREE_PATH,
-                targetGroupId: 'group',
-                activate: false,
-                select: 'activate' in test ? test.activate : true
-              })
+          cwd: TEST_WORKTREE_PATH,
+          targetGroupId: 'group',
+          activate: false,
+          select: 'activate' in test ? test.activate : true
         })
       }
       vi.spyOn(startupInputs, 'resolveAgentStartupPlanInputs').mockImplementation(
@@ -256,46 +250,27 @@ describe('createWebRuntimeSessionTerminal', () => {
       return response
     })
     stubRuntimeEnvironmentBridge({ call: runtimeCall })
-    if ('background' in test) {
-      await createRuntimeAgentBackgroundTerminal({
-        environmentId: ENVIRONMENT_ID,
-        worktreeId: TEST_WORKTREE_ID,
-        tabId: 'host-tab-1',
-        leafId: 'leaf-1',
-        agent: test.agent,
-        legacy: async () => ({
-          sessionOptions: plan.sessionOptions,
-          command: plan.launchCommand,
-          env: plan.env ?? {},
-          launchConfig: plan.launchConfig,
-          launchToken: 'token'
-        })
-      })
-    } else {
-      const result = await launchAgentInWebHostTab({
-        agent: test.agent,
-        worktreeId: TEST_WORKTREE_ID,
-        environmentId: ENVIRONMENT_ID,
-        agentArgs:
-          'loose' in test ? '--dangerously-skip-permissions --verbose' : '--profile "with spaces"',
-        sessionOptions: options,
-        buildStartup: () => ({
-          startupPlan: plan,
-          pasteDraftAfterLaunch: null,
-          submitPastedPrompt: false
-        }),
-        prompt: '',
-        promptDelivery: 'auto-submit',
-        activate: 'activate' in test ? test.activate : true,
-        cwd: TEST_WORKTREE_PATH,
-        groupId: 'group',
-        viewMode: 'terminal'
-      })
-      expect(result.outcome.status).toBe('fail' in test ? 'failed' : 'created')
-    }
-    expect(creates).toEqual([
-      'background' in test ? 'terminal.create' : 'session.tabs.createTerminal'
-    ])
+    const result = await launchAgentInWebHostTab({
+      agent: test.agent,
+      worktreeId: TEST_WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      agentArgs:
+        'loose' in test ? '--dangerously-skip-permissions --verbose' : '--profile "with spaces"',
+      sessionOptions: options,
+      buildStartup: () => ({
+        startupPlan: plan,
+        pasteDraftAfterLaunch: null,
+        submitPastedPrompt: false
+      }),
+      prompt: '',
+      promptDelivery: 'auto-submit',
+      activate: 'activate' in test ? test.activate : true,
+      cwd: TEST_WORKTREE_PATH,
+      groupId: 'group',
+      viewMode: 'terminal'
+    })
+    expect(result.outcome.status).toBe('fail' in test ? 'failed' : 'created')
+    expect(creates).toEqual(['session.tabs.createTerminal'])
     expect(spawn).toHaveBeenCalledTimes(1)
     const final = spawn.mock.calls[0][0]
     expect(final.cwd).toBe(TEST_WORKTREE_PATH)
@@ -344,6 +319,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1',
         targetGroupId: 'group-left',
@@ -425,6 +401,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
       await expect(
         createWebRuntimeSessionTerminal({
+          environmentId: ENVIRONMENT_ID,
           worktreeId: WORKTREE_ID,
           afterTabId,
           agent,
@@ -480,6 +457,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         activate: true,
         selectWorktree: false
@@ -521,6 +499,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         launchAgent: 'codex',
         targetGroupId: 'group-left'
@@ -579,6 +558,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
         launchAgent: 'codex',
@@ -655,6 +635,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
     await expect(
       createWebRuntimeSessionTerminal({
+        environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         agentSessionKind: 'resume',
         launchAgent: 'omp',

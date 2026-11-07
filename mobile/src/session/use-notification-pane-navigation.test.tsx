@@ -43,7 +43,7 @@ const pageUrl = vi.hoisted(() => {
 })
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => pageUrl.params,
-  useRouter: () => pageUrl
+  useNavigation: () => pageUrl
 }))
 
 vi.mock('../transport/client-context.web', () => ({

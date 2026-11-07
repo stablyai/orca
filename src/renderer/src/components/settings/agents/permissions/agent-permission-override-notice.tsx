@@ -13,7 +13,7 @@ import {
   type AgentPermissionChoice
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { nativeChatPermissionModeLabel } from '../../../native-chat/native-chat-permission-mode-labels'
+import { nativeChatPermissionModeLabel } from '../../../native-chat/session/options/controls/native-chat-permission-mode-labels'
 
 type Permissions =
   | Pick<NonNullable<AgentLaunchSettings['agentPermission']>, 'default' | 'overrides'>

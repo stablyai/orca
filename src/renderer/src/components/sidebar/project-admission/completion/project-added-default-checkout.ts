@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { track } from '@/lib/telemetry'
 import type {
   AddRepoDefaultCheckoutHandoffSource,
@@ -13,7 +13,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 

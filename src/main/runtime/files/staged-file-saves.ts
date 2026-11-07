@@ -5,12 +5,13 @@
  * per host; idle saves and a closed socket's saves are dropped, and host start empties the folder.
  */
 import { randomUUID } from 'node:crypto'
-import { appendFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../shared/file-write-disk-precondition'
+import { restrictWindowsDirectory } from '../../../shared/secure-path-windows-acl'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/staged-file-save'
 import { writeLocalTextFileWithDiskPrecondition } from '../../ipc/filesystem/local-disk-write-precondition'
 import { inspectProcessLiveness } from '../../daemon/endpoint/identity/daemon-process-inspection'
@@ -48,6 +49,7 @@ export class StagedFileSaves {
   private readonly saves = new Map<string, StagedSave>()
   private readonly limits: typeof STAGED_FILE_SAVE_LIMITS
   private sweep: Promise<void> | null = null
+  private warnedUnrestrictedDir = false
 
   constructor(private readonly deps: StagedFileSavesDeps) {
     this.limits = deps.limits ?? STAGED_FILE_SAVE_LIMITS
@@ -93,8 +95,10 @@ export class StagedFileSaves {
       await this.queue(save, async () => {
         // Before the first save of this run, so the sweep never takes a temp this run made.
         await this.sweepOrphans()
-        await mkdir(dir, { recursive: true })
-        await writeFile(tempPath, Buffer.alloc(0), { flag: 'wx' })
+        await mkdir(dir, { recursive: true, mode: 0o700 })
+        await this.restrictProcessDir(dir)
+        // Created owner-only: the umask can only remove bits from 0o600, and wx keeps the create exclusive.
+        await writeFile(tempPath, Buffer.alloc(0), { flag: 'wx', mode: 0o600 })
       })
       // Abort owns the temp and the reservation until its removal finishes.
       if (save.aborting) {
@@ -228,6 +232,21 @@ export class StagedFileSaves {
   private processDir(): string | null {
     const root = this.deps.stagingDir()
     return root ? join(root, String(this.deps.pid ?? process.pid)) : null
+  }
+
+  /** Best effort: network, FAT and some WSL mounts ignore modes/ACLs, and saves must still work there. */
+  private async restrictProcessDir(dir: string): Promise<void> {
+    // POSIX chmod also tightens a folder an older build created with default modes.
+    const restricted =
+      process.platform === 'win32'
+        ? await restrictWindowsDirectory(dir)
+        : await chmod(dir, 0o700)
+            .then(async () => ((await stat(dir)).mode & 0o777) === 0o700)
+            .catch(() => false)
+    if (!restricted && !this.warnedUnrestrictedDir) {
+      this.warnedUnrestrictedDir = true
+      console.warn('[files] Could not restrict the staged-saves folder to its owner:', dir)
+    }
   }
 
   private queue<TResult>(save: StagedSave, op: () => Promise<TResult>): Promise<TResult> {

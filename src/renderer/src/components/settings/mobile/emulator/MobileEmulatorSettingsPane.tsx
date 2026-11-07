@@ -1,22 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
-import { AndroidLogo, IosBrandIcon } from '../../../mobile/MobileBrandIcons'
+import { EmulatorOpeningSettings } from './EmulatorOpeningSettings'
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { MobileEmulatorAvailabilityDetails } from './MobileEmulatorAvailabilityDetails'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsRow, SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
 import { translate } from '@/i18n/i18n'
 import { emulatorErrorText, emulatorMessageText } from '@/lib/emulator-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { simulatorRuntimeLabel } from '@/lib/simulator-runtime-label'
 
 type SimulatorDeviceRow = {
   name: string
@@ -41,11 +40,6 @@ type MobileEmulatorSettingsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
-
-const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
-const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
-const SIMULATOR_STATE_SUFFIX_RE =
-  /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
 
 function statusText(availability: EmulatorAvailability | null, enabled: boolean): string {
   if (!enabled) {
@@ -72,34 +66,6 @@ function statusBadgeClassName(availability: EmulatorAvailability | null, enabled
   return availability.available
     ? 'border-status-success-border bg-status-success-background text-status-success'
     : 'border-destructive/30 bg-destructive/10 text-destructive'
-}
-
-function deviceLabel(device: SimulatorDeviceRow): string {
-  const state = device.state.trim()
-  const runtime = simulatorRuntimeLabel(device.runtime)
-  const bareName = device.name.replace(SIMULATOR_STATE_SUFFIX_RE, '').trim()
-  const name = runtime ? `${bareName} · ${runtime}` : bareName
-  if (device.isAvailable === false) {
-    return `${name} (Unavailable)`
-  }
-  if (!state || state.toLowerCase() === 'shutdown') {
-    return name
-  }
-  return `${name} (${state})`
-}
-
-function isAndroidDevice(device: SimulatorDeviceRow): boolean {
-  return device.runtime === 'Android'
-}
-
-function DeviceSelectItemLabel({ device }: { device: SimulatorDeviceRow }): React.JSX.Element {
-  const Icon = isAndroidDevice(device) ? AndroidLogo : IosBrandIcon
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <Icon className="size-3.5 shrink-0 fill-current text-muted-foreground" />
-      <span className="truncate">{deviceLabel(device)}</span>
-    </span>
-  )
 }
 
 function availabilityDetail(availability: EmulatorAvailability | null): string {
@@ -129,7 +95,7 @@ export function MobileEmulatorSettingsPane({
   settings,
   updateSettings
 }: MobileEmulatorSettingsPaneProps): React.JSX.Element {
-  const languageRevision = useUiLanguageRevision()
+  useUiLanguageRevision()
   const [availability, setAvailability] = useState<EmulatorAvailability | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const enabled = settings.mobileEmulatorEnabled !== false
@@ -169,143 +135,93 @@ export function MobileEmulatorSettingsPane({
   }, [refreshAvailability])
 
   const devices = availability?.devices ?? []
-  const selectedDeviceKnown = devices.some(
-    (device) => device.udid === settings.mobileEmulatorDefaultDeviceUdid
-  )
-  const selectValue =
-    settings.mobileEmulatorDefaultDeviceUdid && selectedDeviceKnown
-      ? settings.mobileEmulatorDefaultDeviceUdid
-      : AUTOMATIC_DEVICE_VALUE
-
-  const defaultDeviceDescription = useMemo(() => {
-    if (devices.length === 0) {
-      return translate(
-        'auto.components.settings.MobileEmulatorSettingsPane.f62a1bb759',
-        'Orca will auto-select an emulator device after devices are detected.'
-      )
-    }
-    return translate(
-      'auto.components.settings.MobileEmulatorSettingsPane.b2fd62ea75',
-      'Default device for new emulator tabs and agent attach commands. Auto-select prefers an already running device.'
-    )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [devices.length, languageRevision])
-
   return (
-    <div className="space-y-4">
-      <SearchableSetting
-        title={translate(
-          'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
-          'Mobile Emulator'
-        )}
-        description={translate(
-          'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
-          'Configure mobile emulator support for Orca and coding agents.'
-        )}
-        keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
-        className="divide-y divide-border/40"
-      >
-        <SettingsSwitchRow
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
-            'Enable Mobile Emulator'
+    <div className="space-y-8">
+      <SettingsGroup>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
+            'Mobile Emulator'
           )}
           description={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
-            'Shows the New Mobile Emulator action and allows agents to attach to the active emulator.'
+            'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
+            'Configure mobile emulator support for Orca and coding agents.'
           )}
-          checked={enabled}
-          onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
-        />
+          keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
+          className="divide-y divide-border"
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
+              'Enable Mobile Emulator'
+            )}
+            description={translate(
+              'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
+              'Shows the New Mobile Emulator action and allows agents to attach to the active emulator.'
+            )}
+            checked={enabled}
+            onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
+          />
 
-        <div className="py-2">
-          <div className="flex items-start gap-4">
-            <div className="min-w-0 flex-1 space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
-                  'Availability'
-                )}
-              </Label>
-              <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+          <div className="py-3">
+            <div className="flex items-start gap-4">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <Label>
+                  {translate(
+                    'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
+                    'Availability'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">{availabilityDetail(availability)}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
+                >
+                  {refreshing ? <Loader2 className="size-3 animate-spin" /> : null}
+                  {statusText(availability, enabled)}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  aria-label={translate(
+                    'auto.components.settings.MobileEmulatorSettingsPane.8aec2f99a0',
+                    'Refresh emulator availability'
+                  )}
+                  onClick={() => void refreshAvailability()}
+                  disabled={refreshing}
+                >
+                  {refreshing ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-3.5" />
+                  )}
+                </Button>
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Badge
-                variant="outline"
-                className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
-              >
-                {refreshing ? <Loader2 className="size-3 animate-spin" /> : null}
-                {statusText(availability, enabled)}
-              </Badge>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-xs"
-                aria-label={translate(
-                  'auto.components.settings.MobileEmulatorSettingsPane.8aec2f99a0',
-                  'Refresh emulator availability'
-                )}
-                onClick={() => void refreshAvailability()}
-                disabled={refreshing}
-              >
-                {refreshing ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-3.5" />
-                )}
-              </Button>
-            </div>
+
+            {enabled ? (
+              <MobileEmulatorAvailabilityDetails
+                availability={availability}
+                configuredPath={settings.androidSdkPath ?? null}
+                onSetAndroidSdkPath={async (path) => {
+                  await updateSettings({ androidSdkPath: path })
+                  await refreshAvailability()
+                }}
+              />
+            ) : null}
           </div>
 
-          {enabled ? (
-            <MobileEmulatorAvailabilityDetails
-              availability={availability}
-              configuredPath={settings.androidSdkPath ?? null}
-              onSetAndroidSdkPath={async (path) => {
-                await updateSettings({ androidSdkPath: path })
-                await refreshAvailability()
-              }}
-            />
-          ) : null}
-        </div>
-
-        <SettingsRow
-          alignTop
-          label={translate(
-            'auto.components.settings.MobileEmulatorSettingsPane.143961d031',
-            'Default Device'
-          )}
-          description={defaultDeviceDescription}
-          control={
-            <Select
-              value={selectValue}
-              disabled={!enabled}
-              onValueChange={(value) =>
-                updateSettings({
-                  mobileEmulatorDefaultDeviceUdid: value === AUTOMATIC_DEVICE_VALUE ? null : value
-                })
-              }
-            >
-              <SelectTrigger size="sm" className="w-56 max-w-full">
-                <SelectValue placeholder={AUTOMATIC_DEVICE_LABEL} />
-              </SelectTrigger>
-              <SelectContent position="popper" align="end">
-                <SelectItem value={AUTOMATIC_DEVICE_VALUE}>{AUTOMATIC_DEVICE_LABEL}</SelectItem>
-                {devices.map((device) => (
-                  <SelectItem
-                    key={device.udid}
-                    value={device.udid}
-                    textValue={deviceLabel(device)}
-                    disabled={device.isAvailable === false}
-                  >
-                    <DeviceSelectItemLabel device={device} />
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          }
-        />
-      </SearchableSetting>
+          <EmulatorOpeningSettings
+            settings={settings}
+            devices={devices}
+            enabled={enabled}
+            updateSettings={updateSettings}
+          />
+        </SearchableSetting>
+      </SettingsGroup>
 
       {enabled ? (
         <SearchableSetting

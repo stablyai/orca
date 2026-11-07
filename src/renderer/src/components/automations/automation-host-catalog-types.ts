@@ -53,6 +53,8 @@ export type AutomationHostCatalogEntry = {
   querySupport: AutomationHostQuerySupport
   /** Present only while `querySupport` is degraded; explains which repair, if any, applies. */
   scopeGap?: AutomationHostScopeGap
+  /** A desktop SSH host whose managed Orca server owns its automations: that server's self entry. */
+  servedBy?: string
 }
 
 export type AutomationCatalogSshTargetInput = {
@@ -91,6 +93,8 @@ export type AutomationRuntimeAuthorityInput = {
   querySupport: AutomationHostQuerySupport
   ssh: AutomationCatalogSshMirrorInput
   orphanCount?: number
+  /** The desktop SSH target this runtime is the managed Orca server for. */
+  managedSshTargetId?: string
 }
 
 export type AutomationHostCatalogInput = {

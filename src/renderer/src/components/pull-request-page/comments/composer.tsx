@@ -1,3 +1,5 @@
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -42,6 +44,7 @@ export function GHCommentComposer({
   mentionOptions: MentionOption[]
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
+  const images = useGitHubImagePending()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -57,6 +60,9 @@ export function GHCommentComposer({
   }, [])
 
   const handleSubmit = useCallback(async () => {
+    if (images.pendingRef.current) {
+      return
+    }
     const bodyState = getCommentBodySubmitState(body)
     if (bodyState.status === 'empty') {
       return
@@ -112,6 +118,7 @@ export function GHCommentComposer({
     }
   }, [
     autoGrow,
+    images.pendingRef,
     body,
     mountedRef,
     repoPath,
@@ -137,6 +144,17 @@ export function GHCommentComposer({
   return (
     <div className={cn('relative', className)}>
       <MentionTextarea
+        imageUpload={{
+          address: githubCommentImageUploadAddress({
+            repoPath,
+            repoId,
+            sourceContext,
+            type: itemType,
+            prRepo
+          }),
+          onPending: images.onPending,
+          enabled: !submitting
+        }}
         textareaRef={textareaRef}
         value={body}
         onValueChange={(nextValue) => {
@@ -157,7 +175,7 @@ export function GHCommentComposer({
             type="button"
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!canSubmitComment || submitting}
+            disabled={!canSubmitComment || submitting || images.pending}
             className="absolute bottom-3 right-3 shadow-sm"
             aria-label={translate('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
           >

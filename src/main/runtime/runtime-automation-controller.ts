@@ -1,4 +1,5 @@
 import { hostQualifiedRepoSelector } from './workspaces/catalog/runtime-repo-selector'
+import { RUNTIME_AUTOMATION_PATCH_KEYS } from './runtime-automation-patch-keys'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import type { AutomationService } from '../automations/service'
 import type {
@@ -39,7 +40,7 @@ export class RuntimeAutomationController {
 
   /** Completed automation run terminals no client used, closed before an update; 0 off-headless. */
   releaseFinishedRunTerminals(): Promise<number> {
-    return this.service?.releaseFinishedRunTerminals?.() ?? Promise.resolve(0)
+    return this.service?.runTerminalRetention?.drain() ?? Promise.resolve(0)
   }
 
   /** Keep runtime-owned automation work ahead of queued external probes. */
@@ -116,6 +117,7 @@ export class RuntimeAutomationController {
         workspaceId: target.workspaceId,
         baseBranch: input.baseBranch,
         setupDecision: input.setupDecision,
+        setupTrustHash: input.setupTrustHash,
         reuseSession: input.reuseSession,
         timezone: input.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
         rrule: input.rrule,
@@ -224,25 +226,7 @@ export class RuntimeAutomationController {
     updates: RuntimeAutomationUpdateInput,
     patch: AutomationUpdateInput
   ): void {
-    const keys = [
-      'name',
-      'prompt',
-      'precheck',
-      'agentId',
-      'extraAgentArgs',
-      'launchSetupPatch',
-      'runContext',
-      'sourceContext',
-      'baseBranch',
-      'setupDecision',
-      'reuseSession',
-      'timezone',
-      'rrule',
-      'dtstart',
-      'enabled',
-      'missedRunGraceMinutes'
-    ] as const
-    for (const key of keys) {
+    for (const key of RUNTIME_AUTOMATION_PATCH_KEYS) {
       if (hasRuntimeAutomationUpdateValue(updates, key)) {
         Object.assign(patch, { [key]: updates[key] })
       }

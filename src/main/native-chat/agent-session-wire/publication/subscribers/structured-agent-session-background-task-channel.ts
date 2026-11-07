@@ -1,4 +1,4 @@
-import { readForkMarker } from '../../agent-session-fork-marker'
+import { readForkMarker } from '../history/agent-session-fork-marker'
 import { structuredAgentSessionOwnerStatus } from '../../host/structured-agent-session-owner-status'
 import type { AgentSessionCurrentRequestsRead } from '../../../../../shared/agent-session/requests/agent-session-current-requests-wire'
 import { readCurrentRequestsPiece } from '../../observations/agent-session-current-requests'

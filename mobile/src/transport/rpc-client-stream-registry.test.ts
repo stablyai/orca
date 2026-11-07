@@ -133,6 +133,26 @@ describe('RpcClientStreamRegistry', () => {
     expect(registry.size()).toBe(0)
   })
 
+  it('re-sends a stream its owner holds only when the owner resends it, and a cancel before then sends nothing', () => {
+    const { registry, sent } = createRegistry()
+    const held: (() => void)[] = []
+    const holdReplay = (resend: () => void) => held.push(resend) > 0
+    const cancel = registry.subscribe('terminal.subscribe', { terminal: 'term-1' }, () => {}, {
+      holdReplay
+    })
+    registry.subscribe('terminal.subscribe', { terminal: 'term-2' }, () => {}, { holdReplay })
+
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+    expect(sent).toHaveLength(2)
+
+    cancel()
+    held.forEach((resend) => resend())
+    expect(sent.slice(2)).toEqual([
+      expect.objectContaining({ method: 'terminal.subscribe', params: { terminal: 'term-2' } })
+    ])
+  })
+
   it('does not replay a terminal stream the host already ended', () => {
     const { registry, sent, setState } = createRegistry()
     registry.subscribe(

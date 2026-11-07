@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeStoredTaskSourceContext, type TaskSourceContext } from './task-source-context'
 
 export const TaskSourceContextSchema = z.unknown().transform((value, ctx): TaskSourceContext => {

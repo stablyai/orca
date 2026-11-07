@@ -98,6 +98,50 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.dictationLanguageTitle',
+      'Dictation Language'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.dictationLanguageDescription',
+      'Tell the speech model which language you speak.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.dictationLanguageKeyword',
+        'language'
+      ),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.modelUnloadTitle',
+      'Unload Speech Model'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.modelUnloadDescription',
+      'Choose when the on-device speech model is unloaded from memory.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.080202facb', 'model'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.modelUnloadKeyword',
+        'unload'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.modelMemoryKeyword',
+        'memory'
+      )
+    ]
+  },
   getOpenaiTranscriptionSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),

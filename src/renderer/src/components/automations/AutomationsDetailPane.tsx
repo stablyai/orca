@@ -53,6 +53,8 @@ type AutomationsDetailPaneProps = {
   ) => void
   runNow: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
+  migrateAutomation?: (automation: Automation) => void
+  isMigrating?: boolean
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
   openAutomationRunPage: (run: AutomationRun) => void
@@ -79,6 +81,8 @@ export function AutomationsDetailPane({
   requestExternalAction,
   runNow,
   openEditDialog,
+  migrateAutomation,
+  isMigrating,
   toggleAutomation,
   requestDeleteAutomation,
   openAutomationRunPage,
@@ -192,6 +196,8 @@ export function AutomationsDetailPane({
               now={relativeNow}
               onRunNow={(automation) => void runNow(automation)}
               onEdit={(automation) => void openEditDialog(automation)}
+              onMigrate={migrateAutomation}
+              isMigrating={isMigrating}
               onToggle={(automation) => void toggleAutomation(automation)}
               onDelete={requestDeleteAutomation}
             />

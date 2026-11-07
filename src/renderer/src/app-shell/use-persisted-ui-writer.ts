@@ -6,7 +6,7 @@ import {
   diffPersistedUIWriteFields,
   persistedUIWriteFieldsToWireUpdate,
   type PersistedUIWriteBaseline
-} from '../store/slices/persisted-ui-write-baseline'
+} from '../store/slices/ui/persisted-ui-write-baseline'
 
 /** Protect in-flight fields from hydration reverting local flip-backs. Fold acknowledged patches only into the same baseline generation, then debounce a fresh diff for edits made during flight.
  * Rejected writes remain dirty until a new edit; never auto-retry a terminal failure. setWithAck exposes failures swallowed by web’s plain set. */
@@ -121,6 +121,7 @@ export function usePersistedUIWriter(): void {
   const activeView = useAppStore((s) => s.activeView)
   const ui = useAppStore(
     useShallow((s): PersistedUIWriteBaseline => ({
+      gitGraphFiltersByWorktree: s.gitGraphFiltersByWorktree,
       sidebarWidth: s.sidebarWidth,
       sidebarOpen: s.sidebarOpen,
       rightSidebarOpen: s.rightSidebarOpen,

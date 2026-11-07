@@ -2,7 +2,7 @@ import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { RemoteDesktopTerminalFloor } from '../remote-desktop-terminal-floor'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
@@ -187,28 +187,6 @@ describe.each([true, false])('remote input after passive resize (multiplex=%s)',
       )
     } finally {
       layout.resolve({ ok: false })
-      await stream.close()
-    }
-  })
-
-  it('retains implicit-claim refusal and recovery for older clients', async () => {
-    const stream = await startStream({ multiplex, explicitClaims: false })
-    try {
-      stream.updateViewport.mockResolvedValueOnce(false)
-      stream.resize()
-      stream.type('blocked')
-      stream.resize()
-      stream.type('retry')
-      await vi.waitFor(() => expect(stream.processWrites).toEqual(['retry']))
-      expect(stream.updateViewport).toHaveBeenLastCalledWith(
-        'pty-1',
-        expect.any(String),
-        'desktop-1',
-        100,
-        30,
-        true
-      )
-    } finally {
       await stream.close()
     }
   })

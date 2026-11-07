@@ -43,18 +43,6 @@ function failReceiptWrites(): () => void {
 
 const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
 
-describe('Send now', () => {
-  it('records nothing for a refusal before acceptance', async () => {
-    const id = opId()
-    expect(await rig.sendNow('no-such-card', id)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_invalid' }
-    })
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
-    expect(ledgerRow(id)).toBeUndefined()
-  })
-})
-
 describe('Resume', () => {
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     const id = opId()

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
 import { getGitHubPRCacheKeyCandidates } from '../github/github-cache-key'

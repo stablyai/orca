@@ -5,8 +5,8 @@ import {
   isWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
-import { buildByIdIndex } from '../slices/worktree-by-id-index'
-import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
+import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
+import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration

@@ -33,15 +33,13 @@ import {
 } from './project-group-sections'
 import { getSidebarLineageChildren } from './pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
+import { appendWorktreeRows, buildPendingCreationRow } from './row-builders'
+import { getRenderableFolderWorkspaces } from './folder-workspace-lanes'
 import {
-  appendWorktreeRows,
-  buildFolderWorkspaceRow,
-  buildPendingCreationRow
-} from './row-builders'
-import {
-  compareFolderWorkspacesForDisplay,
-  getRenderableFolderWorkspaces
-} from './folder-workspace-lanes'
+  getFolderLaneSections,
+  getSidebarFolderOccurrences,
+  isFolderLaneSectionKey
+} from './folder-workspace-occurrences'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -56,6 +54,7 @@ import { orderMainWorktreeFirst } from './section-order'
 import { appendImportedWorktreeLines } from './imported-worktree-lines'
 import { withRepoSectionDisplayLabels } from '../project-section-order'
 import { buildOrderedGroups } from './worktree-grouping'
+import { buildSidebarProjectVisibility } from './sidebar-project-visibility'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
@@ -124,51 +123,48 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const pendingByRepo = new Map<string, PendingCreationRef[]>()
-  for (const creation of pendingCreations) {
-    const list = pendingByRepo.get(creation.repoId) ?? []
-    list.push(creation)
-    pendingByRepo.set(creation.repoId, list)
-  }
-  const keptProjects =
-    inputs.hideEmptyProjects && groupBy === 'repo'
-      ? new Set(
-          [...worktrees.map((worktree) => worktree.repoId), ...pendingByRepo.keys()].map(
-            (repoId) => getProjectGroupingForRepo(repoId, repoMap, projectIndex).key
-          )
-        )
-      : null
+  const { pendingByRepo, keptProjects } = buildSidebarProjectVisibility(inputs, projectIndex)
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
+  // Folder rows are occurrences too, so a folder parent nests its children like any other row.
+  const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces)
+  const lineageChildren = nestLineage
+    ? getSidebarLineageChildren(
+        worktrees,
+        lineageById,
+        worktreeMap,
+        filterRepoIds,
+        lineageParentIdentities,
+        folders.rows
+      )
+    : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
-    rows: worktrees,
+    rows: [...worktrees, ...folders.rows],
     identityOf: getWorktreeHostIdentity,
-    childrenByParentIdentity: nestLineage
-      ? getSidebarLineageChildren(
-          worktrees,
-          lineageById,
-          worktreeMap,
-          filterRepoIds,
-          lineageParentIdentities
-        )
-      : new Map<string, Worktree[]>(),
-    isPinned: (worktree) => worktree.isPinned === true,
+    childrenByParentIdentity: lineageChildren,
+    isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
     owningSectionOf: (worktree) =>
       getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
+      const folderBound =
+        groupBy === 'repo'
+          ? folders.boundRowsByGroupId(natural, displayRootByIdentity, lineageChildren)
+          : null
+      // Rows under a folder still count in their own projects; only their display moves.
+      const naturalWorktrees = natural.filter((row) => !folders.isFolder(row))
       const groups: OrderedGroupEntry[] =
         groupBy === 'none'
-          ? [[ALL_GROUP_KEY, { label: '', items: [...natural], repoIds: new Set() }]]
+          ? [[ALL_GROUP_KEY, { label: '', items: naturalWorktrees, repoIds: new Set() }]]
           : buildOrderedGroups({
               groupBy,
-              naturalWorktrees: natural,
+              naturalWorktrees,
               repoMap,
               prGroupOf,
               workspaceStatuses,
               projectIndex,
-              displayRootByIdentity,
+              displayRootByIdentity: folderBound?.groupingRootByIdentity ?? displayRootByIdentity,
               placeholderRepoIds,
               importedWorktreesByRepo,
               newExternalWorktreesInboxByRepo,
@@ -182,28 +178,35 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       if (pinned.length > 0) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
-      return groups.map(([key, group]): SidebarOccurrenceSection => {
+      const sections = groups.map(([key, group]): SidebarOccurrenceSection => {
         const revealPath =
           groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
             ? projectGroupPaths.get(group.repo.projectGroupId)
             : undefined
+        const items = (
+          groupBy === 'repo' && key !== PINNED_GROUP_KEY
+            ? orderMainWorktreeFirst(group.items, sortBy)
+            : group.items
+        ).filter((row) => key === PINNED_GROUP_KEY || !folderBound?.bound.has(row))
         return {
           key,
           group,
           placement: key === PINNED_GROUP_KEY ? 'pinned' : 'natural',
+          // Folder rows follow the lane's worktrees, as their rows always have.
           items:
-            groupBy === 'repo' && key !== PINNED_GROUP_KEY
-              ? orderMainWorktreeFirst(group.items, sortBy)
-              : group.items,
+            key === ALL_GROUP_KEY
+              ? [...items, ...folders.rows]
+              : [...items, ...folders.rowsOf(group.folderWorkspaces)],
           revealPath: { key, parent: revealPath }
         }
       })
+      return [...sections, ...getFolderLaneSections(folderBound, projectGroupPaths)]
     }
   })
   const pinnedSectionWorktrees =
     occurrencePlan.sections.find((section) => section.key === PINNED_GROUP_KEY)?.group.items ?? []
   const orderedGroups: OrderedGroupEntry[] = occurrencePlan.sections
-    .filter((section) => section.key !== PINNED_GROUP_KEY)
+    .filter((section) => section.key !== PINNED_GROUP_KEY && !isFolderLaneSectionKey(section.key))
     .map((section) => [section.key, section.group])
   const naturalWorktrees = orderedGroups.flatMap(([, group]) => group.items)
   const render = (collapsedGroups: Set<string>): Row[] => {
@@ -216,6 +219,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     // Include pinned-only rows when testing mixed hosts or pinned remotes lose host labels.
     const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
       worktrees,
+      renderableFolderWorkspaces,
       repoOf,
       hostLabelById,
       defaultHostId
@@ -266,13 +270,9 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
             collapsedGroups,
             groupDepth: 0,
             sectionKey: ALL_GROUP_KEY,
-            hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+            hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
+            folderPairByIdentity: folders.pairByIdentity
           })
-          for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
-            compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
-          )) {
-            result.push(buildFolderWorkspaceRow(pair, 0))
-          }
         }
       }
       return withImportedLines(result)
@@ -293,7 +293,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       pendingByRepo,
       mixedWorktreeHostContextLabels,
       noticeHostContextLabelByRepoId,
-      occurrencePlan
+      occurrencePlan,
+      folderPairByIdentity: folders.pairByIdentity
     }
 
     if (groupBy !== 'repo' || projectGroups.length === 0) {

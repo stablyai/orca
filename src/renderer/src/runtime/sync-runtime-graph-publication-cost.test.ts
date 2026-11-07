@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
-import { registerRuntimeTerminalTab } from './mounted-terminal-tab-registry'
+import { registerRuntimeTerminalTab } from './hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { AppState } from '../store/types'
 
 // tab.title getter counts snapshot rebuilds; slice reads alone would also pass with a cheap hoist.

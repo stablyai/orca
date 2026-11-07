@@ -1,6 +1,6 @@
 import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ConflictBanner } from './ConflictComponents'

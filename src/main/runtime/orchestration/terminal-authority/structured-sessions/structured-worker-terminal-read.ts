@@ -8,8 +8,8 @@ import { formatWorkerTranscriptMessage } from '../../../../../shared/worker-tran
 import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { boundStructuredJournalTail } from '../../structured-worker-journal-archive'
-import { readStructuredLineageJournalPage } from '../../structured-worker-journal-page'
+import { boundStructuredJournalTail } from '../../workers/archives/structured-worker-journal-archive'
+import { readStructuredLineageJournalPage } from '../../workers/archives/structured-worker-journal-page'
 import {
   holdStructuredWorker,
   observeStructuredSession,

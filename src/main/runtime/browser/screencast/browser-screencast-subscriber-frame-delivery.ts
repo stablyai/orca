@@ -1,6 +1,10 @@
+import { readBrowserScreencastFrameSeq } from '../../../../shared/browser-screencast-protocol'
 import type { ActiveBrowserScreencastSubscriber } from './browser-screencast-contracts'
 import { recordScreencastSubscriberSend } from './browser-screencast-ghost-subscriber-eviction'
-import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
+import {
+  sendRemoteBrowserScreencastFrame,
+  type ScreencastFrameSendOutcome
+} from './remote-browser-screencast-frame-admission'
 
 // Match the frame pacer's backpressure retry interval.
 export const SCREENCAST_PENDING_FRAME_RETRY_MS = 50
@@ -10,7 +14,12 @@ export function deliverScreencastSubscriberFrame(
   subscriber: ActiveBrowserScreencastSubscriber,
   bytes: Uint8Array<ArrayBufferLike>
 ): void {
-  const outcome = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
+  // Held for credit, not refused: the viewer's ack or the stall probe sends the newest held frame.
+  if (subscriber.frameCredit && !subscriber.frameCredit.credit.canSend()) {
+    subscriber.pendingFrame = bytes
+    return
+  }
+  const outcome = sendSubscriberFrame(subscriber, bytes)
   subscriber.pendingFrame = outcome === 'handled' ? null : bytes
   // Backlog proves an active socket, not a ghost.
   if (outcome !== 'backlogged') {
@@ -21,6 +30,14 @@ export function deliverScreencastSubscriberFrame(
   }
 }
 
+/** Credit opened up: send the held frame now instead of on the next produced one. */
+export function flushCreditedScreencastFrame(subscriber: ActiveBrowserScreencastSubscriber): void {
+  if (subscriber.pendingFrameRetry) {
+    return
+  }
+  retryPendingFrame(subscriber)
+}
+
 export function cancelScreencastSubscriberFrameRetry(
   subscriber: ActiveBrowserScreencastSubscriber
 ): void {
@@ -29,6 +46,36 @@ export function cancelScreencastSubscriberFrameRetry(
     subscriber.pendingFrameRetry = null
   }
   subscriber.pendingFrame = null
+  subscriber.frameCredit?.release()
+  subscriber.frameCredit = null
+}
+
+function sendSubscriberFrame(
+  subscriber: ActiveBrowserScreencastSubscriber,
+  bytes: Uint8Array<ArrayBufferLike>
+): ScreencastFrameSendOutcome {
+  const outcome = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
+  if (outcome === 'handled' && subscriber.frameCredit) {
+    const seq = readBrowserScreencastFrameSeq(bytes)
+    if (seq !== null) {
+      subscriber.frameCredit.credit.recordSent(seq)
+    }
+  }
+  return outcome
+}
+
+function retryPendingFrame(subscriber: ActiveBrowserScreencastSubscriber): void {
+  const bytes = subscriber.pendingFrame
+  if (!bytes || (subscriber.frameCredit && !subscriber.frameCredit.credit.canSend())) {
+    return
+  }
+  // Count ghost refusals only on produced frames, never retries.
+  if (sendSubscriberFrame(subscriber, bytes) === 'handled') {
+    subscriber.pendingFrame = null
+    subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
+  } else {
+    schedulePendingFrameRetry(subscriber)
+  }
 }
 
 function schedulePendingFrameRetry(subscriber: ActiveBrowserScreencastSubscriber): void {
@@ -37,16 +84,6 @@ function schedulePendingFrameRetry(subscriber: ActiveBrowserScreencastSubscriber
   }
   subscriber.pendingFrameRetry = setTimeout(() => {
     subscriber.pendingFrameRetry = null
-    const bytes = subscriber.pendingFrame
-    if (!bytes) {
-      return
-    }
-    // Count ghost refusals only on produced frames, never retries.
-    if (sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes) === 'handled') {
-      subscriber.pendingFrame = null
-      subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, true)
-    } else {
-      schedulePendingFrameRetry(subscriber)
-    }
+    retryPendingFrame(subscriber)
   }, SCREENCAST_PENDING_FRAME_RETRY_MS)
 }

@@ -14,7 +14,7 @@ import { journalDatabasePath } from '../../src/main/native-chat/agent-session-jo
 import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentSessionHostRefusal } from '../../src/main/runtime/agent-session/structured-agent-session-host-refusal'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { SESSION_TAB_CLOSE_METHODS } from '../../src/main/runtime/rpc/methods/session-tab-close-methods'
+import { SESSION_TAB_CLOSE_METHODS } from '../../src/main/runtime/rpc/methods/session-tabs/session-tab-close-methods'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
 import { createMobileCreateTestNotifier } from '../../src/main/runtime/orca-runtime-tests/orca-runtime-test-scenario-builders.spec'

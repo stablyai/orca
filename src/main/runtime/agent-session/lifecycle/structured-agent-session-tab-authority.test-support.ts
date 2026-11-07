@@ -52,6 +52,15 @@ afterEach(async () => {
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  protected override structuredAgentCatalogDependencies() {
+    const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
+    return {
+      ...super.structuredAgentCatalogDependencies(),
+      resolveClaudeCommand: missing,
+      resolveCodexCommand: missing
+    }
+  }
+
   protected override async refreshMobileSessionPtyRecords() {
     return new Set<string>()
   }

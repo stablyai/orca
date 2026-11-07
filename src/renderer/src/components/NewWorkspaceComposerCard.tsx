@@ -13,7 +13,7 @@ import {
 } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type * as SetProjectLocationDialogModule from '@/components/new-workspace/SetProjectLocationDialog'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
+import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { withUiConnectTimeout } from '@/ssh/ssh-connect-ui-timeout'
 import { isSshConnectInFlight, trackSshConnect } from '@/ssh/ssh-connect-in-flight'
 import { translate } from '@/i18n/i18n'
@@ -255,7 +255,7 @@ export default function NewWorkspaceComposerCard(
   )
   const handleNamePlainEnter = React.useCallback((): void => {
     const agentTrigger = composerRef?.current?.querySelector<HTMLElement>(
-      '[data-agent-combobox-root="true"][role="combobox"]'
+      '[data-agent-launch-picker-trigger="true"]'
     )
     agentTrigger?.focus()
   }, [composerRef])

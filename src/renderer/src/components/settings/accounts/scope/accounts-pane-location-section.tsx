@@ -7,6 +7,7 @@ import { getHostRuntimeLabel } from './accounts-pane-runtime'
 import { WSL_DEFAULT_DISTRO_KEY } from '../../../provider-accounts/provider-account-visibility'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 export function renderAccountsLocationSection(
   model: AccountsPaneSectionModel
@@ -126,8 +127,8 @@ export function renderAccountsLocationSection(
   ) : null
 
   return (
-    <section key="account-runtime" id="accounts-runtime" className="space-y-3 scroll-mt-6">
-      {accountRuntimeControls}
-    </section>
+    <div key="account-runtime" id="accounts-runtime" className="scroll-mt-6">
+      <SettingsGroup>{accountRuntimeControls}</SettingsGroup>
+    </div>
   )
 }

@@ -3,7 +3,11 @@ import type * as SnapshotModule from './web-runtime-session-snapshot'
 import { useAppStore } from '../store'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { resetWebSessionBrowserPlacementsForTests } from './web-session-browser-placement'
-import { resetWebSessionTabsSyncTestState, ENV, WT } from './web-session-tabs-sync-test-harness'
+import {
+  resetWebSessionTabsSyncTestState,
+  ENV,
+  WT
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   AFTER,
   G1,
@@ -22,7 +26,7 @@ import {
   seedPairedWorktree,
   wrapperForRemotePage
 } from './web-runtime-browser-creation-placement-test-rig'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock('./web-runtime-session-snapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof SnapshotModule>()),

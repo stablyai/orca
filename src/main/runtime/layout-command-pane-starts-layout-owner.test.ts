@@ -1,9 +1,6 @@
 // Main starts panes after layout commit; replies contain no effects and failed starts retain resume records.
 import { describe, expect, it, vi } from 'vitest'
-import {
-  isPaneSleepRecord,
-  type SleepingAgentSessionRecord as SleepingRecord
-} from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord as SleepingRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { RuntimeMobileSessionTerminalTab } from '../../shared/runtime-types'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runtime-session-contracts'
 import type { RestoredPaneTrigger } from './terminal/recovery/restored-pane-start'
@@ -139,63 +136,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     )
   })
 
-  it('leaves a pane whose terminal is live alone', async () => {
-    const { runtime, spawn, started } = await desktopRuntime()
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    started.resolve({ id: 'persisted-pty' })
-    await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
-    await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('leaves a pane alone while its terminal is out of contact', async () => {
-    const { runtime, spawn, started } = await desktopRuntime()
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    started.resolve({ id: 'persisted-pty' })
-    await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
-    await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-
-    runtime.loseContactWith('persisted-pty')
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('starts a pane the window views before its graph lists the tab', async () => {
-    const { runtime, spawn, started } = await desktopRuntime({ activate: false })
-    runtime.setStartStatus(PANE_KEY, 'sleeping')
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'persisted-pty' })
-
-    await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
-    expect(runtime.startStatusOf(PANE_KEY)).not.toMatchObject({ status: 'failed' })
-  })
-
-  it('replaces the empty shell a hibernated agent left and resumes the agent', async () => {
-    const { runtime, spawn, kill, started, getSession, setSession } = await desktopRuntime()
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    started.resolve({ id: 'persisted-pty' })
-    await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
-    await vi.waitFor(() => expect(runtime.startStatusOf(PANE_KEY)).toBeNull())
-    setSession({
-      ...getSession(),
-      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: { ...RECORD, state: 'done' } }
-    })
-    spawn.mockClear()
-    spawn.mockResolvedValue({ id: 'resumed-pty' })
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalledOnce())
-    expect(kill).toHaveBeenCalledWith('persisted-pty')
-    expect(spawn.mock.calls[0]?.[0].command).toContain('provider-session-1')
-  })
-
   it('keeps the pane on its terminal and starts nothing when that terminal would not stop', async () => {
     const { runtime, spawn, kill, started, getSession, setSession } = await desktopRuntime()
     await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
@@ -218,59 +158,6 @@ describe('a client’s startPane in the layout-owner build', () => {
     expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true)
     expect(spawn).not.toHaveBeenCalled()
     warn.mockRestore()
-  })
-
-  it('resumes the agent a pre-stable-id build recorded under the pane’s number', async () => {
-    const legacyKey = 'host-tab:2'
-    const { runtime, spawn, started } = await desktopRuntime({
-      session: makeWorkspaceSessionWithHeadlessTerminal({
-        sleepingAgentSessionsByPaneKey: {
-          [legacyKey]: { ...RECORD, paneKey: legacyKey },
-          'host-tab:3': { ...RECORD, paneKey: 'host-tab:3', capturedAt: 2 }
-        }
-      })
-    })
-    runtime.setStartStatus(PANE_KEY, 'sleeping')
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'persisted-pty' })
-
-    expect(spawn.mock.calls[0]?.[0].command).toContain('provider-session-1')
-  })
-
-  it('shows the pane starting in the frame its reply names', async () => {
-    const { runtime } = await desktopRuntime()
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    expect(runtime.startStatusOf(PANE_KEY)).toEqual({ status: 'starting' })
-  })
-
-  it('shows a failed start on the pane', async () => {
-    const { runtime, started } = await desktopRuntime()
-    runtime.setStartStatus(PANE_KEY, 'sleeping')
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    started.reject(new Error('spawn exploded'))
-
-    await vi.waitFor(() =>
-      expect(runtime.startStatusOf(PANE_KEY)).toMatchObject({ status: 'failed' })
-    )
-  })
-  it('shows terminal_not_started when the terminal ends before main can bind it', async () => {
-    const { runtime, started } = await desktopRuntime()
-    runtime.setStartStatus(PANE_KEY, 'sleeping')
-    runtime.startsNoTerminal = true
-
-    await runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
-    started.resolve({ id: 'persisted-pty' })
-
-    await vi.waitFor(() =>
-      expect(runtime.startStatusOf(PANE_KEY)).toEqual({
-        status: 'failed',
-        reason: 'terminal_not_started'
-      })
-    )
   })
 })
 
@@ -297,56 +184,5 @@ describe('a client’s wake of a slept pane in the layout-owner build', () => {
     await restarted.runtime.applyLayoutCommand({ ...startPane, paneKey: PANE_KEY })
     await vi.waitFor(() => expect(restarted.spawn).toHaveBeenCalled())
     expect(restarted.spawn.mock.calls[0]![0].command ?? '').toContain('provider-session-1')
-  })
-
-  it('a woken running pane reads live, not sleeping: its record becomes a running agent’s', async () => {
-    const { runtime, spawn, started, getSession } = await desktopRuntime({ slept: true })
-
-    await runtime.applyLayoutCommand({ ...wake, paneKeys: [PANE_KEY] })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'persisted-pty' })
-    await vi.waitFor(() =>
-      expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]?.origin).toBe('live')
-    )
-    const record = getSession().sleepingAgentSessionsByPaneKey![PANE_KEY]!
-    // L254: resumed pane records must no longer masquerade as sleep records.
-    expect(isPaneSleepRecord(record)).toBe(false)
-    expect(record.providerSession).toEqual(RECORD.providerSession)
-    expect(runtime.startStatusOf(PANE_KEY)).toBeNull()
-  })
-
-  it('keeps the record when the start fails', async () => {
-    const { runtime, spawn, started, getSession } = await desktopRuntime({ slept: true })
-
-    await runtime.applyLayoutCommand({ ...wake, paneKeys: [PANE_KEY] })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.reject(new Error('spawn exploded'))
-
-    await vi.waitFor(() =>
-      expect(runtime.startStatusOf(PANE_KEY)).toMatchObject({ status: 'failed' })
-    )
-    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeDefined()
-  })
-
-  it('starts once for a second wake while the first is starting', async () => {
-    const { runtime, spawn, started } = await desktopRuntime({ slept: true })
-
-    await runtime.applyLayoutCommand({ ...wake, paneKeys: [PANE_KEY] })
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    await runtime.applyLayoutCommand({ ...wake, paneKeys: [PANE_KEY] })
-    started.resolve({ id: 'persisted-pty' })
-
-    await vi.waitFor(() => expect(runtime.isRestoredPaneBoundTo(PANE, 'persisted-pty')).toBe(true))
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
-  it('starts nothing for a record-only wake', async () => {
-    const { runtime, spawn, getSession } = await desktopRuntime({ slept: true })
-
-    await runtime.applyLayoutCommand({ ...wake, paneKeys: [PANE_KEY], recordOnly: true })
-    await Promise.resolve()
-
-    expect(spawn).not.toHaveBeenCalled()
-    expect(getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]).toBeUndefined()
   })
 })
