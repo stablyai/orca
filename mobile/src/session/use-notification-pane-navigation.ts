@@ -27,7 +27,7 @@ export function useNotificationPaneNavigation({
 }) {
   const client = usePageBridgeClient()
   // This screen's own navigation: a screen in a preloaded first commit mounts before the router's container reports ready.
-  const navigation = useNavigation()
+  const navigation = useNavigation<{ setParams: (params: { paneKey: undefined }) => void }>()
   // An in-page hop (an agent row, a sender jump) carries the tap only in the page URL; the shell route never names it.
   const urlPaneKey =
     firstParam(useLocalSearchParams<{ paneKey?: string | string[] }>().paneKey) || null
