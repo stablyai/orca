@@ -179,12 +179,13 @@ describe('permission changes with already admitted ACP input', () => {
     await waitFor(() => expect(original.exited).toBe(true))
     expect(framesOf(original, 'session/cancel')).toHaveLength(1)
     expect(framesOf(original, 'session/prompt')).toHaveLength(0)
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+    const handoffId = journal.queuedMessages.get(id)?.consumedAs ?? id
     const prompt = await rig.frame('session/prompt')
-    expect(promptIdOf(prompt)).toBe(`prompt:${id}`)
+    expect(promptIdOf(prompt)).toBe(`prompt:${handoffId}`)
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    await waitFor(() => expect(journal.submission(id)?.dispatchState).toBe('accepted'))
+    await waitFor(() => expect(journal.submission(handoffId)?.dispatchState).toBe('accepted'))
     expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
     await host.close(SESSION, 'user-close')
   })
@@ -211,32 +212,39 @@ describe('permission changes with already admitted ACP input', () => {
       ).toMatchObject({ ok: true })
       const c = await send(host, 'C new policy')
       const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      const handoffId = (id: string) => journal.queuedMessages.get(id)?.consumedAs ?? id
+      expect(journal.queuedMessages.get(c)).toMatchObject({ state: 'waiting', consumedAs: null })
+      expect(journal.submission(handoffId(b))?.dispatchState).toBe('pending')
+      expect(framesOf(original, 'session/prompt')).toHaveLength(1)
+      original.agent.reply(promptA, { stopReason: 'cancelled' })
+      const promptB = await rig.frame('session/prompt', 1)
+      expect(promptIdOf(promptB)).toBe(`prompt:${handoffId(b)}`)
+      original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
+      await waitFor(() => expect(journal.submission(handoffId(b))?.dispatchState).toBe('accepted'))
       if (outcome === 'deadline') {
-        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('rejected'))
-        expect(journal.submission(c)?.rejection).toMatchObject({
+        await waitFor(() =>
+          expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
+        )
+        expect(journal.submission(handoffId(c))?.rejection).toMatchObject({
           kind: 'restartFailed',
           neverReachedAgent: true
         })
-        expect(journal.submission(b)?.dispatchState).toBe('pending')
         expect(original.exited).toBe(false)
       }
-      original.agent.reply(promptA, { stopReason: 'cancelled' })
-      const promptB = await rig.frame('session/prompt', 1)
-      expect(promptIdOf(promptB)).toBe(`prompt:${b}`)
-      original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
       original.agent.reply(promptB, { stopReason: 'end_turn' })
-      await waitFor(() => expect(journal.submission(b)?.dispatchState).toBe('accepted'))
       expect(journal.submission(a)?.dispatchState).toBe('accepted')
       expect(framesOf(original, 'session/prompt')).toHaveLength(2)
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
         const promptC = await rig.frame('session/prompt')
-        expect(promptIdOf(promptC)).toBe(`prompt:${c}`)
+        expect(promptIdOf(promptC)).toBe(`prompt:${handoffId(c)}`)
         rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))
         rig.child().agent.reply(promptC, { stopReason: 'end_turn' })
-        await waitFor(() => expect(journal.submission(c)?.dispatchState).toBe('accepted'))
+        await waitFor(() =>
+          expect(journal.submission(handoffId(c))?.dispatchState).toBe('accepted')
+        )
       } else {
-        expect(journal.submission(c)?.dispatchState).toBe('rejected')
+        expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
       }
       await host.close(SESSION, 'user-close')
     }

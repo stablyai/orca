@@ -82,6 +82,8 @@ export type StructuredMobileSession = Omit<
 
 export type MobileStructuredAgentSessionArgs = {
   client: RpcClient | null
+  /** The paired host the route opened: its query cache holds the chat's last model lists. */
+  hostId?: string
   /** The route's paired host owns follow-up behavior even when another host executes the chat. */
   pairedHostClient: RpcClient | null
   sessionId: string | null

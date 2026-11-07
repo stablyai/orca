@@ -6,10 +6,10 @@ import {
   mockCreateSupport,
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
-  structuredLaunchIntent,
   launchErrorMocks,
   mockToastError
 } from './launch-agent-structured-chat-test-fixture'
+import { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
@@ -22,16 +22,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { agentLaunchPromptScopeKey } from '@/components/agent/AgentLaunchPromptComposer'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   changePrompt,
   promptEditor
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import * as launcher from './launch-agent-in-new-tab'
 import type * as StructuredLaunch from '../../../launch-structured-agent-session'
@@ -377,8 +377,8 @@ import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent
 import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/workspace/ownership/worktree-runtime-owner'
-import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as terminalCreate from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
+import * as runtimeRpc from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 
 it.each([

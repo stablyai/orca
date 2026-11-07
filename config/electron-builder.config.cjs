@@ -603,6 +603,8 @@ module.exports = {
         rank: 'Alternate'
       }))
     ],
+    // Bundled ONNX Runtime (speech) needs macOS 13.4 (#22690); the update-manifest gate reads this from Info.plist.
+    minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',

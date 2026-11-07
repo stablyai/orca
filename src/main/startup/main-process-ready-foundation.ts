@@ -160,6 +160,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'desktop',
+    initializeHomeWorkspace: !state.isServeMode,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop',
     onPersistenceFailure: reportProfileStateWriteFailure,
     onPersistenceSaveDelayChanged: reportProfileStateSaveDelay

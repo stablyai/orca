@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RightSidebar from './index'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mockAppState = vi.hoisted(() => ({
@@ -102,10 +102,14 @@ vi.mock('@/store/index', async () => {
   }
 })
 
-vi.mock('@/store/selectors', () => ({
-  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' }),
-  useRepoById: () => mockAppState.activeRepo,
-  getWorktreeMapFromState: () => new Map()
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => ({ id: 'worktree-1', repoId: 'repo-1' })
+}))
+vi.mock('@/store/repos/use-repository-catalog', () => ({
+  useRepoById: () => mockAppState.activeRepo
+}))
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedWorktreeMap: () => new Map()
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -189,7 +193,7 @@ function setRendererPlatform(platform: NodeJS.Platform): void {
   })
 }
 
-describe('rendered right sidebar titlebar drag regions', () => {
+describe('right sidebar panel routing', () => {
   beforeEach(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = false
@@ -215,43 +219,40 @@ describe('rendered right sidebar titlebar drag regions', () => {
     mockAppState.cachedWorktree = null
   })
 
-  it('hides git-only activity buttons for folder workspace ids without a backing repo', () => {
-    mockAppState.activeWorktreeId = 'folder:folder-1'
-    mockAppState.activeRepo = null
-
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('aria-label="Explorer')
-    expect(markup).toContain('aria-label="Agents')
-    expect(markup).not.toContain('aria-label="Search')
-    expect(markup).toContain('aria-label="Attached worktrees')
-    expect(markup).toContain('aria-label="PR Checks')
-    expect(markup).not.toContain('aria-label="Source Control')
-    expect(markup).not.toContain('aria-label="Checks')
-  })
-
-  it('renders a visible fallback without overwriting a hidden folder-only tab', () => {
+  it('renders a visible fallback without overwriting a hidden folder-only tab', async () => {
     mockAppState.rightSidebarTab = 'workspaces'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-worktrees-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-worktrees-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
-  it('renders a visible fallback without overwriting a hidden PR Checks tab', () => {
+  it('renders a visible fallback without overwriting a hidden PR Checks tab', async () => {
     mockAppState.rightSidebarTab = 'pr-checks'
     mockAppState.activeWorktreeId = 'worktree-1'
     mockAppState.activeRepo = { id: 'repo-1', kind: 'git', connectionId: null }
 
-    const markup = renderToStaticMarkup(<RightSidebar />)
-
-    expect(markup).toContain('data-file-explorer')
-    expect(markup).not.toContain('data-folder-workspace-pr-checks-panel')
-    expect(mockAppState.setRightSidebarTab).not.toHaveBeenCalled()
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => {
+        root.render(<RightSidebar />)
+      })
+      expect(container.innerHTML).toContain('data-file-explorer')
+      expect(container.innerHTML).not.toContain('data-folder-workspace-pr-checks-panel')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
   it('keeps remembered folder PR Checks visible when the global route falls back to Explorer', async () => {

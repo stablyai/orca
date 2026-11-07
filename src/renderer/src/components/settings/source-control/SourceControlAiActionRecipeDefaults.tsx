@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Label } from '../../ui/label'
 import { useAppStore } from '@/store/index'
-import { useRepos } from '@/store/selectors'
+import { useRepos } from '@/store/repos/use-repository-catalog'
 import {
   summarizeReposOverridingActionRecipe,
   type SourceControlActionRecipeOverrideSummary
@@ -211,7 +211,7 @@ export function SourceControlAiActionRecipeDefaults({
       title={ACTION_RECIPES_SEARCH_ENTRY.title}
       description={ACTION_RECIPES_SEARCH_ENTRY.description}
       keywords={ACTION_RECIPES_SEARCH_ENTRY.keywords}
-      className="space-y-3 px-1 py-2"
+      className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
         <Label>{ACTION_RECIPES_SEARCH_ENTRY.title}</Label>

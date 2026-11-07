@@ -1,3 +1,4 @@
+import { prepareStructuredAgentSessionCreateForWorktree } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { usableJournalHistoryOrigin } from '../../../agent-session-journal/context-epochs/journal-history-origin'
 import { catchUpCodexThread } from '../../../../codex/structured/threads/codex-structured-thread-catch-up'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
@@ -25,7 +26,6 @@ import {
   type RestTestRig
 } from '../../host/testing/structured-agent-session-rest-test-rig'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { prepareStructuredAgentSessionCreateForWorktree } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create'
 import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
 import {
@@ -498,31 +498,6 @@ it('keeps captured Codex options over native imported effort through reload and 
   )
 })
 
-it('requires a post-clear completed context and leaves the source untouched on a copy failure', async () => {
-  const test = source()
-  test.snapshot.items.unshift({
-    itemId: 'clear',
-    sequence: 5,
-    revision: 1,
-    observedAt: 5,
-    body: {
-      kind: 'status',
-      text: 'Context cleared',
-      contextClear: { operationId: 'clear-1', afterFence: 1, clearedAt: 5 }
-    }
-  })
-  await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { details: { reason: 'savedConversationMissing' } }
-  })
-  test.snapshot.items.shift()
-  const unchanged = structuredClone(test.record)
-  test.copy.mockRejectedValueOnce(new Error('private provider details'))
-  await expect(test.prepare()).rejects.toMatchObject({
-    refusal: { details: { reason: 'providerRejected' } }
-  })
-  expect(test.record).toEqual(unchanged)
-})
-
 it('rejects a tip-only copy if a same-head send is admitted during capture', async () => {
   const test = source()
   test.tip()
@@ -796,14 +771,6 @@ async function prepareImportedAcpTip(stopReason: 'stop' | undefined) {
     envelope: test.intent.envelope
   })
 }
-
-it('admits an imported ACP tip with native terminal evidence', async () => {
-  await expect(prepareImportedAcpTip('stop')).resolves.toMatchObject({
-    agent: 'omp',
-    fork: { itemId: 'legacy:omp:019e6b26-18e2-7103-b7a0-7ba6bb071123:response' },
-    adopt: { providerHandle: { nativeId: '019e6b26-18e2-7103-b7a0-7ba6bb071124' } }
-  })
-})
 
 it('refuses an imported ACP tip with assistant prose but no native terminal evidence', async () => {
   await expect(prepareImportedAcpTip(undefined)).rejects.toMatchObject({

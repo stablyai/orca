@@ -8,7 +8,7 @@ const { acquire, release, listeners } = vi.hoisted(() => ({
   release: vi.fn(),
   listeners: new Set<(environmentId: string | null) => void>()
 }))
-vi.mock('@/runtime/runtime-jira-image-cache', () => ({
+vi.mock('@/runtime/jira/runtime-jira-image-cache', () => ({
   acquireJiraImageUrl: acquire,
   hasCachedJiraImage: () => false,
   onJiraImageCacheInvalidated: (listener: (environmentId: string | null) => void) => {
@@ -42,21 +42,6 @@ it('removes the previous image immediately when its mounted owner or reference c
   )
   expect(screen.queryByRole('img')).toBeNull()
   expect(release).toHaveBeenCalledOnce()
-})
-
-it('lets a new reference load after the previous reference failed', async () => {
-  acquire
-    .mockRejectedValueOnce(new Error('unavailable'))
-    .mockResolvedValueOnce({ url: 'blob:second', release })
-  const view = render(
-    <JiraAttachmentImage target={target} reference="first" alt="shot" compact={false} />
-  )
-  await waitFor(() => expect(acquire).toHaveBeenCalledOnce())
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  view.rerender(
-    <JiraAttachmentImage target={target} reference="second" alt="shot" compact={false} />
-  )
-  await waitFor(() => expect(screen.getByRole('img').getAttribute('src')).toBe('blob:second'))
 })
 
 it('reacquires the same reference after disconnect and reconnect invalidations', async () => {

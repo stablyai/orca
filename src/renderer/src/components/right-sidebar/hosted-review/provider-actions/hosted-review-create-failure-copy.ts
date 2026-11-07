@@ -271,3 +271,13 @@ export function localizedCreateFailureDetail(
       : null) ?? result.error.replace(ENGLISH_CREATE_FAILED_PREFIX, '')
   )
 }
+
+export function localizedCreateException(error: unknown, reviewLabel: string): string {
+  return error instanceof Error
+    ? error.message
+    : translate(
+        'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+        'Failed to create {{value0}}',
+        { value0: reviewLabel }
+      )
+}

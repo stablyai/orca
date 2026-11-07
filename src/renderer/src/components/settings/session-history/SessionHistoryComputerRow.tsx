@@ -36,7 +36,8 @@ export function SessionHistoryComputerRow({
   const Icon = kind === 'local' ? Laptop : Server
   return (
     <div
-      className={cn('flex items-center gap-3 border-t border-border py-3', dimmed && 'opacity-60')}
+      data-settings-row=""
+      className={cn('flex items-center gap-3 py-3', dimmed && 'opacity-60')}
     >
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1 space-y-1">

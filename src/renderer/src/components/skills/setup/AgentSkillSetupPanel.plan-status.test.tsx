@@ -10,7 +10,7 @@ const TARGET = { kind: 'environment', environmentId: 'agents-host' } as const
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({ bundledSkillTarget: TARGET })
 }))
-vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+vi.mock('@/runtime/skills/bundled/runtime-bundled-skills-client', () => ({
   planBundledSkillsOnTarget: mocks.plan,
   executeBundledSkillsOnTarget: mocks.execute
 }))

@@ -145,10 +145,13 @@ describe('sendAgentTurn through the real host', () => {
     operationId = hostTestOperationId()
   ) {
     const outcome = sendTurn(delivery, operationId)
-    await eventually(async () =>
-      expect((await rig.submission(operationId))?.handedOverAt).toBeDefined()
-    )
-    await rig.settleAccepted(operationId, 'mail')
+    let handedOverId = operationId
+    await eventually(async () => {
+      const submission = (await rig.handoff(operationId)) ?? (await rig.submission(operationId))
+      expect(submission?.handedOverAt).toBeDefined()
+      handedOverId = submission!.clientMessageId
+    })
+    await rig.settleAccepted(handedOverId, 'mail')
     return outcome
   }
 
@@ -160,7 +163,7 @@ describe('sendAgentTurn through the real host', () => {
     expect((await sentMessage(sent))?.body).toMatchObject({ from: MAIL_SOURCE })
   })
 
-  // Idle mail is agent-kind without host-only sender details, so restart/close rejects it instead of preserving a card.
+  // Sender details stay on the message, outside its submission.
   it('records an idle chat’s mail as an agent’s, by kind only', async () => {
     const operationId = hostTestOperationId()
     await sendTurnAccepted('queue', operationId)
@@ -169,12 +172,11 @@ describe('sendAgentTurn through the real host', () => {
     expect(JSON.stringify(submission)).not.toContain('term_peer')
   })
 
-  it('has a `now` send join the running turn, never the queue', async () => {
-    await openRigTurnFor(rig, await rig.workingSend())
-    await expect(sendTurnAccepted('now')).resolves.toMatchObject({
-      kind: 'sent',
-      submission: { dispatchState: 'accepted' }
-    })
+  it('has a `now` send join the running turn through its row', async () => {
+    const working = await rig.workingSend()
+    await rig.settleAccepted(working, 'work')
+    await openRigTurnFor(rig, working)
+    await expect(sendTurnAccepted('now')).resolves.toMatchObject({ kind: 'queued' })
     expect(await rig.drafts()).toEqual([])
   })
 })

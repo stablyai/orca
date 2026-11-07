@@ -6,13 +6,13 @@ import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch/c
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import { normalizeNativeChatProviderChoices } from '../../../../../shared/native-chat/native-chat-providers'
 import { nativeChatPreferenceFor } from '../../../../../shared/structured-native-chat-launch-route'
-import { installManagedRuntime } from '@/runtime/managed-runtime-install-status'
+import { installManagedRuntime } from '@/runtime/hosts/installation/managed-runtime-install-status'
 import { buildNewTabAgentMenuRows } from '../../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type * as HostChatProgramModule from '@/lib/host-chat-program'
-import type * as ManagedRuntimeInstallModule from '@/runtime/managed-runtime-install-status'
+import type * as ManagedRuntimeInstallModule from '@/runtime/hosts/installation/managed-runtime-install-status'
 import type * as SignInAreaModule from '../../../components/provider-accounts/AntigravityProviderSignInArea'
 import { TooltipProvider } from '../../../components/ui/tooltip'
 import { AgentCatalogRow } from '../../../components/settings/agents/launch/AgentCatalogRow'
@@ -78,11 +78,11 @@ vi.mock('@/lib/host-chat-program', async (importOriginal) => ({
 vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgents: () => [{ agent: 'antigravity', managedRuntime: true }]
 }))
-vi.mock('@/runtime/managed-runtime-install-status', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/installation/managed-runtime-install-status', async (importOriginal) => ({
   ...(await importOriginal<typeof ManagedRuntimeInstallModule>()),
   installManagedRuntime: vi.fn(async () => {})
 }))
-vi.mock('@/runtime/use-managed-runtime-install', () => ({
+vi.mock('@/runtime/hosts/installation/use-managed-runtime-install', () => ({
   useManagedRuntimeInstall: () => runtime.current
 }))
 vi.mock('../../../components/provider-accounts/AntigravityChatSignInRow', () => ({

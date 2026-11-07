@@ -89,7 +89,7 @@ export function SessionSearchAdvancedSection({
   }
 
   return (
-    <div className="border-t border-border">
+    <div data-settings-row="" className="py-2">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
           <Button type="button" variant="ghost" size="xs">

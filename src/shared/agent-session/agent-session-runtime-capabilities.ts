@@ -20,6 +20,9 @@ export const AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY =
   'agent-session.create-options.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
 export const AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY = 'agent-session.keyboard.v1' as const
+// Strict older launch schemas cannot accept a section's transient trust owner.
+export const AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY =
+  'agent-session.trust-worktree.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Gate journal/lifecycle/destructive tab mutations by client capability. Mobile may receive metadata-only placeholders for these non-PTY sessions.
@@ -127,6 +130,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY,
     AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
     AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
     STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
     AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
     STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,

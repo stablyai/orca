@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
+import { runAutomationLaunch } from './automation-launch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type * as PrecheckRunner from './precheck-runner'
@@ -167,16 +167,19 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher
+      terminalLauncher: { launch: headlessDispatcher, available: () => true }
     })
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
 
-    await runHeadlessAutomationDispatch({
+    await runAutomationLaunch({
       automation,
       run,
       target: { ok: true, cwd: '/repo', repo: store.getRepo('r1')! },
       dispatcher: headlessDispatcher,
-      runs: createAutomationRunWriter(store, null),
+      transition: (result) => ({
+        applied: true,
+        run: createAutomationRunWriter(store, null).updateRun({ runId: run.id, ...result })
+      }),
       runPrecheck: () => service.runPrecheck(automation.id, run.id),
       markDispatchResult: (result) => service.markDispatchResult(result),
       watchRun: () => {}
@@ -189,7 +192,7 @@ describe('AutomationService prechecks', () => {
     })
   })
 
-  it('holds a Run Now behind a scheduled headless run that is still in its precheck', async () => {
+  it('answers Run Now at once and launches it once after a scheduled run still in its precheck', async () => {
     vi.setSystemTime(new Date('2026-05-12T08:59:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -228,9 +231,12 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher: async ({ run }) => {
-        dispatched.push(run.trigger)
-        return { workspaceId: 'wt-1', terminalSessionId: null }
+      terminalLauncher: {
+        launch: async ({ run }) => {
+          dispatched.push(run.trigger)
+          return { workspaceId: 'wt-1', terminalSessionId: null }
+        },
+        available: () => true
       }
     })
     vi.setSystemTime(automation.nextRunAt + 30_000)
@@ -238,13 +244,17 @@ describe('AutomationService prechecks', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(runAutomationPrecheckMock).toHaveBeenCalledTimes(1)
 
-    const manual = service.runNow(automation.id)
-    await vi.advanceTimersByTimeAsync(0)
+    // The saved row answers at once; the launch waits its turn in the lane.
+    const manual = await service.runNow(automation.id)
+    expect(manual.status).toBe('pending')
     expect(dispatched).toEqual([])
 
     passPrecheck()
-    await manual
+    await service.runInAutomationLane(automation.id, async () => undefined)
     expect(dispatched).toEqual(['scheduled', 'manual'])
+    expect(
+      store.listAutomationRuns(automation.id).find((run) => run.id === manual.id)?.status
+    ).toBe('dispatched')
     service.stop()
   })
 })

@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import './delete-worktree-flow'
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 import { getWorktreeDeleteErrorToShow } from './worktree-delete-error-display'

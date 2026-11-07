@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import {
   ProjectGroupSchema,

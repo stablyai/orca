@@ -12,6 +12,7 @@ import {
   type TaskProviderReadiness
 } from '../../tasks/task-source-setup-state'
 import { translate } from '@/i18n/i18n'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 /** The guide renders the skill row, so unlike other providers those facts are required. */
 export type LinearSetupReadiness = TaskProviderReadiness & {
@@ -121,22 +122,16 @@ export function LinearAgentSkillGuide({
   const { completed, total } = getTaskProviderCompletedSteps(readiness)
 
   return (
-    <section className="space-y-3 rounded-xl border border-border/60 bg-card/30 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="space-y-0.5">
-          <h3 className="text-sm font-semibold text-foreground">
-            {translate(
-              'auto.components.settings.LinearAgentSkillGuide.setupTitle',
-              'Setup checklist'
-            )}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.LinearAgentSkillGuide.setupBody',
-              'All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.'
-            )}
-          </p>
-        </div>
+    <SettingsGroup
+      title={translate(
+        'auto.components.settings.LinearAgentSkillGuide.setupTitle',
+        'Setup checklist'
+      )}
+      description={translate(
+        'auto.components.settings.LinearAgentSkillGuide.setupBody',
+        'All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.'
+      )}
+      action={
         <span className="inline-flex items-center gap-2">
           <IntegrationStatusPill tone={pill.tone}>{pill.label}</IntegrationStatusPill>
           {pill.showCount ? (
@@ -146,9 +141,9 @@ export function LinearAgentSkillGuide({
             </span>
           ) : null}
         </span>
-      </div>
-
-      <div className="divide-y divide-border/50">
+      }
+    >
+      <div className="divide-y divide-border">
         <div className="flex flex-wrap items-start gap-3 py-3">
           <div className="mt-0.5">
             <SetupStatusIcon done={readiness.connected} checking={readiness.checking} />
@@ -242,6 +237,6 @@ export function LinearAgentSkillGuide({
           </Button>
         </div>
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

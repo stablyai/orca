@@ -119,7 +119,7 @@ export function TerminalConfigImportModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm sm:max-w-sm">
+      <DialogContent className="flex max-h-[calc(100vh-3rem)] max-w-sm flex-col sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{copy.title}</DialogTitle>
           <DialogDescription>{copy.description}</DialogDescription>
@@ -143,91 +143,97 @@ export function TerminalConfigImportModal({
           </div>
         ) : null}
 
-        {loading ? (
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.GhosttyImportModal.023a52c1f7',
-              'Loading preview…'
-            )}
-          </p>
-        ) : preview == null ? null : preview.found ? (
-          <div className="space-y-3">
-            {configPaths.length > 0 && !applied && (
-              <p className="text-xs text-muted-foreground break-all">
-                {configPaths.length === 1
-                  ? translate('auto.components.settings.GhosttyImportModal.1f744a72f4', 'Config')
-                  : translate('auto.components.settings.GhosttyImportModal.273e7e81fe', 'Configs')}
-                : {configPaths.join(', ')}
-              </p>
-            )}
-            {applied ? (
-              <div>
-                <p className="text-xs font-medium text-green-600 mb-1">
+        {/* Long previews (many unsupported keys) scroll here so the header and actions stay on screen. */}
+        <div className="-mx-6 min-h-0 flex-1 overflow-y-auto px-6 scrollbar-sleek empty:hidden">
+          {loading ? (
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.GhosttyImportModal.023a52c1f7',
+                'Loading preview…'
+              )}
+            </p>
+          ) : preview == null ? null : preview.found ? (
+            <div className="space-y-3">
+              {configPaths.length > 0 && !applied && (
+                <p className="text-xs text-muted-foreground break-all">
+                  {configPaths.length === 1
+                    ? translate('auto.components.settings.GhosttyImportModal.1f744a72f4', 'Config')
+                    : translate(
+                        'auto.components.settings.GhosttyImportModal.273e7e81fe',
+                        'Configs'
+                      )}
+                  : {configPaths.join(', ')}
+                </p>
+              )}
+              {applied ? (
+                <div>
+                  <p className="text-xs font-medium text-green-600 mb-1">
+                    {translate(
+                      'auto.components.settings.GhosttyImportModal.4466f4cdaa',
+                      'Import complete'
+                    )}
+                  </p>
+                  <ul className="text-xs space-y-1">
+                    {Object.entries(preview.diff).map(([key, value]) => (
+                      <li key={key} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
+                        <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : hasChanges ? (
+                <div>
+                  <p className="text-xs font-medium mb-1">
+                    {translate(
+                      'auto.components.settings.GhosttyImportModal.a4c5dec640',
+                      'Settings to update'
+                    )}
+                  </p>
+                  <ul className="text-xs space-y-1">
+                    {Object.entries(preview.diff).map(([key, value]) => (
+                      <li key={key} className="flex justify-between gap-2">
+                        <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
+                        <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
                   {translate(
-                    'auto.components.settings.GhosttyImportModal.4466f4cdaa',
-                    'Import complete'
+                    'auto.components.settings.GhosttyImportModal.674b5ccd6b',
+                    'No new settings to import — your current settings already match.'
                   )}
                 </p>
-                <ul className="text-xs space-y-1">
-                  {Object.entries(preview.diff).map(([key, value]) => (
-                    <li key={key} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : hasChanges ? (
-              <div>
-                <p className="text-xs font-medium mb-1">
-                  {translate(
-                    'auto.components.settings.GhosttyImportModal.a4c5dec640',
-                    'Settings to update'
-                  )}
-                </p>
-                <ul className="text-xs space-y-1">
-                  {Object.entries(preview.diff).map(([key, value]) => (
-                    <li key={key} className="flex justify-between gap-2">
-                      <span className="text-muted-foreground">{SETTING_LABELS[key] ?? key}</span>
-                      <span className="font-mono">{formatPreviewEntry(preview, key, value)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.GhosttyImportModal.674b5ccd6b',
-                  'No new settings to import — your current settings already match.'
-                )}
-              </p>
-            )}
+              )}
 
-            {!applied && applyError && <p className="text-xs text-red-500">{applyError}</p>}
+              {!applied && applyError && <p className="text-xs text-red-500">{applyError}</p>}
 
-            {!applied && preview.unsupportedKeys.length > 0 && (
-              <div>
-                <p className="text-xs font-medium mb-1">
-                  {translate(
-                    'auto.components.settings.GhosttyImportModal.b58d4c9051',
-                    'Unsupported keys'
-                  )}
-                </p>
-                <ul className="text-xs space-y-1">
-                  {preview.unsupportedKeys.map((key) => (
-                    <li key={key} className="text-muted-foreground">
-                      {key}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        ) : preview.error ? (
-          <p className="text-xs text-red-500">{preview.error}</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">{copy.notFound}</p>
-        )}
+              {!applied && preview.unsupportedKeys.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium mb-1">
+                    {translate(
+                      'auto.components.settings.GhosttyImportModal.b58d4c9051',
+                      'Unsupported keys'
+                    )}
+                  </p>
+                  <ul className="text-xs space-y-1">
+                    {preview.unsupportedKeys.map((key) => (
+                      <li key={key} className="text-muted-foreground">
+                        {key}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : preview.error ? (
+            <p className="text-xs text-red-500">{preview.error}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">{copy.notFound}</p>
+          )}
+        </div>
 
         <DialogFooter>
           {applied ? (

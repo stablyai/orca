@@ -10,13 +10,14 @@ import { deriveGeneratedTabTitle } from '../../../shared/agent-status/presentati
 import { getDefaultSettings } from '../../../shared/constants'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import type { AppState } from '../store/types'
-import { createTestStore, makeWorktree, seedStore } from '../store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resetRendererOwnedAgentStatusPanesForTests,
   resolveRendererOwnedAgentStatusTiming
-} from '../components/terminal-pane/renderer-owned-agent-status-registry'
+} from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { shouldApplyWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking-decisions'

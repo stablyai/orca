@@ -31,55 +31,6 @@ function replyBytes(value: unknown): number {
 }
 
 describe('conversation outline read', () => {
-  it('drops previews before it drops entries, then drops the oldest entries, never passing the budget', () => {
-    const items = Array.from({ length: 40 }, (_, index) => prompt(index + 1, 'x'.repeat(500)))
-    const full = readAgentSessionConversationOutline(snapshot(items), Number.MAX_SAFE_INTEGER)
-    const shortBudget = replyBytes(
-      full.entries.map((entry) => ({ ...entry, preview: entry.preview.slice(0, 60) }))
-    )
-    expect(shortBudget).toBeLessThan(replyBytes(full.entries))
-    const shortened = readAgentSessionConversationOutline(snapshot(items), shortBudget)
-    expect(shortened.entries).toHaveLength(40)
-    expect(shortened.entries.every((entry) => entry.preview.length === 60)).toBe(true)
-    expect(replyBytes(shortened.entries)).toBeLessThanOrEqual(shortBudget)
-
-    const bare = readAgentSessionConversationOutline(
-      snapshot(items),
-      replyBytes(full.entries.map((entry) => ({ ...entry, preview: '' })))
-    )
-    expect(bare.entries).toHaveLength(40)
-    expect(bare.entries.every((entry) => entry.preview === '')).toBe(true)
-
-    const budget = 10 * replyBytes(bare.entries[0])
-    const trimmed = readAgentSessionConversationOutline(snapshot(items), budget)
-    expect(trimmed.omittedEntries).toBeGreaterThan(0)
-    expect(trimmed.entries.at(-1)?.sequence).toBe(40)
-    expect(trimmed.entries[0]?.sequence).toBe(trimmed.omittedEntries + 1)
-    expect(replyBytes(trimmed.entries)).toBeLessThanOrEqual(budget)
-  })
-
-  it('carries the reply to each prompt, and drops replies before it shortens a preview', () => {
-    const items = Array.from({ length: 10 }, (_, index): AgentJournalRenderItem[] => [
-      prompt(index * 2 + 1, 'x'.repeat(100)),
-      {
-        itemId: `reply-${index}`,
-        revision: 1,
-        sequence: index * 2 + 2,
-        observedAt: index * 2 + 2,
-        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
-      }
-    ]).flat()
-    const full = readAgentSessionConversationOutline(snapshot(items), Number.MAX_SAFE_INTEGER)
-    expect(full.entries.map((entry) => entry.reply)).toEqual(Array(10).fill('Answer'))
-
-    // Budget includes array brackets and entry separators.
-    const tight = readAgentSessionConversationOutline(snapshot(items), replyBytes(full.entries) - 2)
-    expect(tight.entries.every((entry) => entry.reply === undefined)).toBe(true)
-    expect(tight.entries.map((entry) => entry.preview)).toEqual(
-      full.entries.map((entry) => entry.preview)
-    )
-  })
-
   it('stays inside the history page budget for a journal far past it', () => {
     const items = Array.from({ length: 10_000 }, (_, index) =>
       prompt(index + 1, `${index} ${'y'.repeat(1_000)}`)

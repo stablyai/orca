@@ -112,7 +112,8 @@
       "pastePairingCode": "Ou coller le code d'appairage",
       "scanCodeStep": "Scannez le QR code",
       "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer"
+      "tryAgain": "Réessayer",
+      "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
     },
     "terminalSettings": {
       "defaultText": "Par défaut (100 %)",
@@ -190,6 +191,7 @@
       "sendMessage": "Envoyer le message",
       "sendQueue": "Mettre en file d’attente",
       "sendSteer": "Envoyer maintenant",
+      "sendSteerQueued": "Envoyer le suivant",
       "sendQueueHint": "S’exécute après le tour en cours",
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
@@ -223,7 +225,9 @@
       "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée."
     },
     "message": {
-      "copyMessage": "Copier le message"
+      "copyMessage": "Copier le message",
+      "forkFromResponse": "Créer une branche à partir de cette réponse",
+      "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
@@ -305,7 +309,8 @@
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
-      "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat"
+      "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
+      "forkedFrom": "Branche créée à partir de"
     },
     "orcaStop": {
       "canContinue": "Vous pouvez continuer dans cette conversation.",
@@ -660,6 +665,12 @@
       "outcomeUnknownReturned": "Orca n'a pas pu confirmer si la conversation est revenue à ce message. Votre message est de retour dans le composer, et Orca vérifie la conversation avant l'envoi de votre prochain message.",
       "timeout": "Le chat ne s'est pas actualisé après le retour à ce message. Rouvrez-le pour voir les derniers échanges.",
       "pending": "Attendez que la conversation revienne au message antérieur."
+    },
+    "fork": {
+      "busy": "Une autre conversation ou un terminal s’ouvre. Patientez, puis créez à nouveau une branche de la conversation {{agent}}.",
+      "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
+      "failed": "{{agent}} n’a pas pu créer de branche de cette conversation. {{detail}}",
+      "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez."
     }
   },
   "common": {
@@ -1111,6 +1122,12 @@
     "mermaidDiagram": {
       "expand": "Agrandir le diagramme",
       "label": "Diagramme Mermaid"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "Planifier",
+        "exitPlanMode": "Quitter le mode plan"
+      }
     }
   },
   "connection": {
@@ -1301,14 +1318,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone.",
+      "alreadyActive": "La dictée est déjà utilisée sur l'ordinateur ou un autre téléphone. Mettez à jour Orca sur l'ordinateur pour dicter depuis plusieurs appareils à la fois.",
       "cloudModelNeedsKey": "Nécessite une clé OpenAI",
       "deleteFailed": "Impossible de supprimer le modèle",
       "desktopUpdateRequired": "Mettez à jour l'application Orca sur l'ordinateur appairé pour utiliser les paramètres vocaux du mobile.",
       "downloadFailed": "Impossible de démarrer le téléchargement",
       "loadFailed": "Impossible de charger les modèles de dictée",
+      "modelBusy": "Un autre appareil dicte avec un modèle vocal différent. Réessayez quand il aura terminé.",
       "repairRequired": "Appairez à nouveau ce téléphone avec l'ordinateur pour utiliser la dictée.",
       "serverUpdateRequired": "Mettez à jour Orca sur ce serveur pour utiliser la dictée vocale.",
+      "sessionLimit": "Trop d'appareils dictent sur cet ordinateur. Réessayez quand l'un d'eux aura terminé.",
       "sessionLost": "La dictée a perdu sa connexion à l'ordinateur. Réessayez.",
       "updateFailed": "Impossible de mettre à jour les paramètres de dictée"
     }
@@ -1320,7 +1339,6 @@
       "connecting": "Connexion à l'ordinateur…",
       "emptyState": "Aucun fichier trouvé",
       "loadFailed": "Impossible de charger les fichiers",
-      "loadInterrupted": "Chargement du dossier interrompu",
       "title": "Fichiers",
       "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
       "waiting": "En attente de l'ordinateur…"
@@ -1492,7 +1510,10 @@
       "microphoneInitFailed": "Impossible d'initialiser le microphone",
       "microphoneInterrupted": "La dictée vocale s'est arrêtée car l'accès au microphone a été interrompu. Réessayez.",
       "microphonePermissionDenied": "Accès au microphone refusé",
-      "noSpeech": "Aucune parole détectée."
+      "noSpeech": "Aucune parole détectée.",
+      "phoneUnavailable": "La dictée sur ce téléphone n’est pas prête. Téléchargez-la dans les réglages Voix ou choisissez Automatique.",
+      "phoneFailed": "La dictée sur ce téléphone a cessé de fonctionner. Réessayez.",
+      "phoneBusy": "La dictée sur ce téléphone démarre encore. Réessayez dans un instant."
     }
   },
   "host": {
@@ -1540,7 +1561,8 @@
       "removeHost": "Supprimer l'hôte",
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
-      "unpin": "Désépingler"
+      "unpin": "Désépingler",
+      "rename": "Renommer"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -1622,6 +1644,12 @@
       "thisComputer": "Cet ordinateur",
       "waitingForDesktop": "Toujours en attente de l'ordinateur",
       "workspaceOptions": "Options des espaces de travail"
+    },
+    "workspaceRenameSheet": {
+      "title": "Renommer l’espace de travail",
+      "emptyUsesBranch": "Laissez vide pour utiliser le nom de la branche.",
+      "emptyUsesFolder": "Laissez vide pour utiliser le nom du dossier.",
+      "failed": "Impossible de renommer l’espace de travail. {{reason}}"
     }
   },
   "navigation": {
@@ -2023,13 +2051,11 @@
       "saveNote": "Enregistrer la note"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "Impossible de charger les modifications",
       "committedChangesFailed": "Échec du chargement des modifications committées",
       "committedChangesUnavailable": "Modifications committées indisponibles",
       "committedDiffUnavailable": "Le diff des modifications committées est indisponible",
       "desktopUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour examiner les modifications sur mobile.",
       "diffLoadFailed": "Impossible de charger le diff",
-      "invalidSourceControlResponse": "La réponse du contrôle de code source est invalide",
       "reviewNotesLoadFailed": "Impossible de charger les notes de revue"
     },
     "diffReviewQueue": {
@@ -2398,7 +2424,8 @@
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
       "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
-      "allowAutoClose": "Autoriser la fermeture automatique"
+      "allowAutoClose": "Autoriser la fermeture automatique",
+      "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
@@ -2874,6 +2901,20 @@
     },
     "agents": {
       "permissionOwnAll": "Paramètres propres aux agents"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIRE SUR",
+      "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
+      "automatic": "Automatique",
+      "phone": "Ce téléphone",
+      "computer": "Ordinateur",
+      "phoneReady": "Prêt sur ce téléphone",
+      "phoneNeedsDownload": "Téléchargement de la langue requis",
+      "phoneDownloading": "Téléchargement… {{progress}} %",
+      "phoneUnsupported": "Indisponible sur ce téléphone",
+      "download": "Télécharger pour ce téléphone",
+      "downloadSize": "Environ {{size}} Mo",
+      "phoneChecking": "Vérification…"
     }
   },
   "sourceControl": {
@@ -4084,6 +4125,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Le panneau d’origine de l’agent est indisponible. La sortie enregistrée reste ici.",
       "openAgent": "Ouvrir l’agent",
       "retryHistory": "Réessayer l’historique",
+      "fullOutputUnavailable": "Impossible de charger la sortie complète.",
+      "retryFullOutput": "Réessayer",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Aucune exécution correspondante dans l’historique chargé. Chargez-en davantage pour continuer.",
       "noMatchingRunsYet": "Aucune exécution correspondante pour le moment.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
@@ -4125,7 +4168,11 @@
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
       "task": "Tâche",
-      "review": "Vérifier"
+      "review": "Vérifier",
+      "discardChangesTitle": "Abandonner les modifications ?",
+      "discardChangesMessage": "Les modifications non enregistrées de cette automatisation seront perdues.",
+      "discard": "Abandonner",
+      "keepEditing": "Continuer la modification"
     },
     "orphanIssues": {
       "hostReselection": "Modifiez cette automatisation et sélectionnez à nouveau son hôte avant de l’exécuter.",
@@ -4143,6 +4190,7 @@
       "noRunnableHost": "Cette automatisation n’a pas d’hôte sur lequel s’exécuter.",
       "wslMoveInProgress": "Le projet de cette automatisation est en cours de déplacement vers son hôte WSL. Orca a donc ignoré cette exécution. Les exécutions reprendront à la fin du déplacement.",
       "wslMoveOwnedByHost": "Le projet de cette automatisation s’exécute désormais sur son hôte WSL, qui y exécute cette automatisation. Orca n’exécute plus cette copie locale.",
+      "managedHostServer": "Migration vers {{host}} requise",
       "missedGraceWindow": "Lors de la vérification suivante par Orca, la marge de rattrapage de cette exécution manquée était déjà dépassée.",
       "targetMissing": "L’hôte de l’automatisation n’est plus enregistré. Cette automatisation n’a donc plus d’hôte sur lequel s’exécuter.",
       "targetReplaced": "L’hôte de l’automatisation a été supprimé puis réenregistré. Cette automatisation doit donc être rattachée à nouveau avant de pouvoir s’exécuter.",

@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
   type RuntimeHostConnectionState as RuntimeServerConnectionState
@@ -7,7 +7,7 @@ import {
 import type {
   RemoteServerUpdateEntry,
   RemoteServerUpdatePhase
-} from '@/runtime/remote-server-update-coordinator'
+} from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'

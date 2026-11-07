@@ -35,10 +35,12 @@ export function structuredStatusSummariesEqual(
     a.effort === b.effort &&
     a.fastMode === b.fastMode &&
     a.serviceTier === b.serviceTier &&
+    a.interactionMode === b.interactionMode &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.launchDirectory === b.launchDirectory &&
+    a.hostProgram === b.hostProgram &&
     a.conversationName === b.conversationName &&
     a.sleptAt === b.sleptAt &&
     a.namingError?.message === b.namingError?.message &&

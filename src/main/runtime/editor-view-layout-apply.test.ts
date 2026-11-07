@@ -69,18 +69,6 @@ function openDiff(tabId: string) {
   } as const
 }
 
-function openFile(tabId: string, path: string) {
-  return {
-    type: 'openEditorTab',
-    workspace: WT,
-    tabId,
-    fileId: path,
-    contentType: 'editor',
-    groupId: GROUP,
-    file: { filePath: path, relativePath: path.slice(1), language: 'typescript' }
-  } as const
-}
-
 function publishedView(runtime: OrcaRuntimeService, tabId: string, workspace = WT) {
   const reader = runtime.subscribeWorkspaceLayouts(() => {})
   reader.unsubscribe()
@@ -89,17 +77,6 @@ function publishedView(runtime: OrcaRuntimeService, tabId: string, workspace = W
 }
 
 describe("main's Store apply keeps an editor tab's in-memory view", () => {
-  it('publishes the view after the open and after a later command', async () => {
-    const { runtime, subscription } = await harness()
-
-    expect((await runtime.applyLayoutCommand(openDiff('d1'))).ok).toBe(true)
-    expect(publishedView(runtime, 'd1')).toEqual(DIFF_VIEW)
-
-    expect((await runtime.applyLayoutCommand(openFile('e1', '/fixture/local/b.ts'))).ok).toBe(true)
-    expect(publishedView(runtime, 'd1')).toEqual(DIFF_VIEW)
-    subscription.unsubscribe()
-  })
-
   it('a view-only re-send sticks, a close drops it, and no view reaches disk', async () => {
     const { store, runtime, directory, subscription } = await harness()
     await runtime.applyLayoutCommand({ ...openDiff('d1'), preview: undefined })

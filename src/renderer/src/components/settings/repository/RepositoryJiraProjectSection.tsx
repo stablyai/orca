@@ -68,7 +68,7 @@ export function RepositoryJiraProjectSection({
       )}
       keywords={['jira', 'project', repo.displayName]}
       forceVisible={forceVisible}
-      className="space-y-2"
+      className="space-y-2 py-3"
     >
       <p className="text-sm font-semibold">{label}</p>
       <JiraProjectPicker

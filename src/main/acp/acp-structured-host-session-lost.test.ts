@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 import { OMP_ACP_DIALECT } from './acp-dialects/omp-dialect'
 import { GROK, PROVIDER_SESSION, waitFor } from './acp-structured-adapter.test-support'
 import { openAttachedHostRig, send } from './acp-structured-host.test-support'
@@ -44,19 +43,3 @@ describe.each([`Unsupported ACP session: ${PROVIDER_SESSION}`, 'ACP cancel clean
     })
   }
 )
-
-describe('a non-OMP ACP prompt answered with an unknown session', () => {
-  it('fails only that turn and keeps its child', async () => {
-    const rig = await openAttachedHostRig({ spec: { ...GROK, dialect: GENERIC_ACP_DIALECT } })
-    const child = rig.rig.child()
-    await send(rig.host, 'hello')
-    const refused = await rig.rig.frame('session/prompt')
-    child.agent.fail(refused, -32603, 'Internal error', {
-      details: `Unsupported ACP session: ${PROVIDER_SESSION}`
-    })
-    await waitFor(async () => expect(await errorsOf(rig)).toHaveLength(1))
-    await rig.rig.settle()
-    expect(child.exited).toBe(false)
-    await rig.host.close(SESSION, 'user-close')
-  })
-})

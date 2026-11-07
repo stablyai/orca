@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore, type AppState } from '@/store'
-import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
@@ -11,7 +12,7 @@ import {
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
 import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
-import { selectWorkspaceRuntimeEnvironmentId } from '../../../terminal-pane/remote-server-outage'
+import { selectWorkspaceRuntimeEnvironmentId } from '../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** The Start card's rule: a pane with no server yet, or on the stopped one, ended with its distro. */

@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifecycle'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { assertEditorBufferInvariant } from './editor-buffer-record-lifecycle'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import type { OpenFile } from '../types/open-file'
 
 function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {

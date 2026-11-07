@@ -108,13 +108,13 @@ vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOrigina
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
-vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
+vi.mock('@/components/terminal-pane/input/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
-vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
+vi.mock('@/hooks/theme/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
 vi.mock('@/lib/shortcut-platform', () => ({

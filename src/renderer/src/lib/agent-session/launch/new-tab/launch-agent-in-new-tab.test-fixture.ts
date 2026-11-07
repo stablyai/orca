@@ -1,7 +1,7 @@
 import { beforeEach, type Mock, vi } from 'vitest'
 import type { Project } from '../../../../../../shared/project-types'
-import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
 
 const mockCreateTab: Mock = vi.fn()
@@ -145,7 +145,7 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
 const mockCreateWebRuntimeSessionTerminal: Mock = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
-vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: async (
     args: Parameters<typeof createWebRuntimeSessionTerminal>[0]
   ) => {
@@ -160,8 +160,10 @@ vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
     }
   }
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({

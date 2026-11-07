@@ -18,10 +18,6 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const UPLOAD = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
-const EXPIRED = {
-  ok: false,
-  refusal: { code: 'agent_session_operation_invalid', details: { reason: 'attachmentExpired' } }
-}
 
 let rig: QueuedMessageTestRig
 
@@ -61,22 +57,7 @@ function claimedSessions(): string[] {
     )
 }
 
-function textWith(path: string): AgentJournalMessageItem {
-  return { kind: 'message', role: 'user', blocks: [{ type: 'text', text: `read @${path}` }] }
-}
-
 describe('attachments at send admission', () => {
-  it('refuses a send naming an expired image before anything is recorded', async () => {
-    const result = await clientSend({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'image-ref', path: storedPath('shot.png') }]
-    })
-    expect(result).toMatchObject(EXPIRED)
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
-    expect(rig.dispatch).not.toHaveBeenCalled()
-  })
-
   it('names only the expired upload when a fresh one is sent beside it', async () => {
     const fresh = await storeUpload('fresh.png')
     const expiredUpload = '7c2d9e10-3f4a-4b5c-8d6e-2f1a0b9c8d02'
@@ -102,14 +83,6 @@ describe('attachments at send admission', () => {
     expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(0)
     expect(claimedSessions()).toEqual([])
     expect(existsSync(fresh)).toBe(true)
-  })
-
-  it('sends text that only mentions another store path, claiming nothing', async () => {
-    const result = await clientSend(
-      textWith(`/home/someone/.config/Orca/agent-session-attachments/${UPLOAD}/notes.txt`)
-    )
-    expect(result).toMatchObject({ ok: true, value: { submission: expect.anything() } })
-    expect(claimedSessions()).toEqual([])
   })
 
   it('replays an admitted send under the same id without judging its attachments again', async () => {

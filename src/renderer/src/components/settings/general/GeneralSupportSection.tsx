@@ -4,9 +4,8 @@ import { ExternalLink, Loader2, Star } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
-import { Separator } from '../../ui/separator'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
@@ -96,7 +95,7 @@ function SupportSection({
   hasPrecedingSections,
   onStarClick
 }: SupportSectionProps): React.JSX.Element {
-  // Collapse the leading separator too when gh is unavailable or the repo was already starred.
+  // Collapse the leading gap too when gh is unavailable or the repo was already starred.
   const collapsed = state === 'hidden'
 
   return (
@@ -107,20 +106,18 @@ function SupportSection({
       aria-hidden={collapsed}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className="space-y-8">
-          {hasPrecedingSections ? <Separator /> : null}
-          <div className="space-y-4">
-            <SettingsSubsectionHeader
-              title={translate(
-                'auto.components.settings.GeneralSupportSection.55a87e5fd1',
-                'Support Orca'
-              )}
-            />
+        <div className={hasPrecedingSections ? 'pt-2' : undefined}>
+          <SettingsGroup
+            title={translate(
+              'auto.components.settings.GeneralSupportSection.55a87e5fd1',
+              'Support Orca'
+            )}
+          >
             {state === 'loading' ? <SupportRowSkeleton /> : null}
             {state !== 'loading' && state !== 'hidden' ? (
               <SupportRow state={state} onStarClick={onStarClick} />
             ) : null}
-          </div>
+          </SettingsGroup>
         </div>
       </div>
     </section>

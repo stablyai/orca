@@ -5,7 +5,7 @@ import {
   type PublicKnownRuntimeEnvironment
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
 import { translate } from '@/i18n/i18n'
 import { duplicatePairedServerNames } from '@/lib/duplicate-paired-servers'

@@ -15,7 +15,7 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
 }))
 
-vi.mock('@/runtime/runtime-file-search-client', () => ({
+vi.mock('@/runtime/files/search/runtime-file-search-client', () => ({
   searchRuntimeFiles: mocks.searchRuntimeFiles
 }))
 

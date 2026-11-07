@@ -1,3 +1,7 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../shared/worktree/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import {
@@ -74,6 +78,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision,
+    ...pickApprovedSetupHashes(confirmed),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -81,4 +86,11 @@ export async function prepareWorktreeCreationHooks(
     phase: getInitialWorktreeCreationPhase(prepared)
   })
   return prepared
+}
+
+/** Setup fields for the create call; the approved hash lets the host check the created branch. */
+export function setupCreateArgs(
+  request: Pick<WorktreeCreationRequest, 'setupOnly' | keyof ApprovedSetupHashes>
+): { setupOnly?: boolean } & ApprovedSetupHashes {
+  return { setupOnly: request.setupOnly, ...pickApprovedSetupHashes(request) }
 }

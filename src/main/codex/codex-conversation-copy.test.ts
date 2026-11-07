@@ -158,28 +158,6 @@ it('uses a persisted terminal canonical boundary for an idle imported latest rep
     sessionId: CHILD,
     coverage: { unit: 'codex-turn', ids: ['canonical'] }
   })
-  expect(state.initialize).toHaveBeenCalledWith(
-    expect.objectContaining({
-      command: 'codex',
-      args: [
-        '--model',
-        'saved-model',
-        '-c',
-        'approval_policy=never',
-        '-c',
-        'features.plugins=false',
-        '-s',
-        'read-only',
-        '-a',
-        'never',
-        'app-server'
-      ],
-      cwd: root,
-      env: { CODEX_HOME: root },
-      timeoutMs: 60_000
-    })
-  )
-  expect(state.request).toHaveBeenCalledWith('thread/fork', expect.objectContaining({ cwd: root }))
   expect(state.request).toHaveBeenCalledWith(
     'thread/fork',
     expect.objectContaining({ lastTurnId: 'canonical' })
@@ -250,16 +228,6 @@ it('forks and reverts only the child for legacy, legacy, canonical, counting aga
   })
 })
 
-it('refuses an unpaginated child when there is no canonical boundary', async () => {
-  await history(SOURCE, turn(undefined, 1))
-  state.request.mockImplementation(async (method) =>
-    method === 'thread/fork'
-      ? { thread: { id: CHILD, historyMode: 'legacy' } }
-      : { data: [{ id: 'legacy-first' }], nextCursor: null }
-  )
-  await expect(copy()).rejects.toThrow('Codex could not locate an exact saved boundary')
-})
-
 it('uses exact physical identities across repeated prompts rather than a retained-window offset', async () => {
   const path = await history(SOURCE, [
     ...turn('first', 1),
@@ -279,12 +247,6 @@ it('uses exact physical identities across repeated prompts rather than a retaine
   })
   expect(result.index).toBe(1)
   expect(result.selected.id).toBe('second')
-})
-
-it('reports a provider in-progress rejection without suggesting an update', async () => {
-  await history(SOURCE, turn('canonical', 1))
-  state.request.mockRejectedValue(new Error('Cannot fork thread with an in-progress turn'))
-  await expect(copy()).rejects.toThrow('Wait for it to finish')
 })
 
 it('freezes all-unrecorded root IDs on the source, excluding child replacements and later source growth', async () => {

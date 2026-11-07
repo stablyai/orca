@@ -29,7 +29,7 @@ const feeds = vi.hoisted(() => ({
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: feeds.subscribe
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 

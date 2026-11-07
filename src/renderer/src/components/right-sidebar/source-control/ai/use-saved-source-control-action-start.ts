@@ -63,10 +63,6 @@ export function useSavedSourceControlActionStart() {
         onFallback()
         return
       }
-      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
-        basePrompt: args.basePrompt,
-        settings: args.settings
-      })
       const workspace = { worktreeId, kind: workspaceKindForWorktreeId(worktreeId) }
       const [choices, agentLaunchPreferences] = await Promise.all([
         acquireAgentLaunchChoices(
@@ -77,6 +73,11 @@ export function useSavedSourceControlActionStart() {
         ensureAgentLaunchPreferences(store, workspace, signal)
       ])
       signal?.throwIfAborted()
+      const settings = useAppStore.getState().settings
+      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
+        basePrompt: args.basePrompt,
+        settings: settings
+      })
       const route = isTuiAgent(agent)
         ? buildAgentLaunchRouteInput(store, {
             agent,
@@ -103,7 +104,7 @@ export function useSavedSourceControlActionStart() {
             projection.preferredSurface ? agent : undefined
           )
       const plan = buildSourceControlAgentDeliveryPlan({
-        settings: args.settings,
+        settings,
         agentLaunchPreferences,
         selectedAgent: agent,
         commandInput: projection.commandInput,

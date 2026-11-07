@@ -6,7 +6,12 @@ import { abbreviateOrchestrationTasks } from '../../../../../../shared/orchestra
 import { parseOrchestrationTaskDepsFlag } from '../../../../orchestration/coordinator/dispatch/task-deps-flag'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
-import { InboxParams, TaskCreateParams, TaskListParams, TaskUpdateParams } from '../schemas'
+import {
+  InboxParams,
+  TaskCreateParams,
+  TaskListParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
+import { TaskUpdateParams } from './task-update-params'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,

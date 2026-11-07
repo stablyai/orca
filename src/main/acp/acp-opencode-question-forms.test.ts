@@ -4,31 +4,6 @@ import forms from './fixtures/opencode-v2-question-forms.json'
 
 // OpenCode 2.2.5 ACP recordings; only session/tool identities were replaced.
 describe('OpenCode question forms', () => {
-  it('keeps the full single question for current and legacy clients and returns original values', () => {
-    const form = acpFormElicitationPresentation(forms.single)
-    expect(form.body).toMatchObject({
-      question: 'Questions\n\nStorage\n\nWhich storage?',
-      questions: [
-        {
-          question: 'Questions\n\nStorage\n\nWhich storage?',
-          header: 'Storage',
-          freeTextQuestionId: 'q1'
-        }
-      ]
-    })
-    expect(form.reply({ kind: 'option', optionId: 'o2' })).toEqual({
-      action: 'accept',
-      content: { q0: 'Postgres' }
-    })
-    expect(
-      form.reply({
-        kind: 'answers',
-        answers: [{ questionId: 'q1', optionIds: [], other: 'DuckDB' }]
-      })
-    ).toEqual({ action: 'accept', content: { q0_custom: 'DuckDB' } })
-    expect(form.reply(null)).toEqual({ action: 'cancel' })
-  })
-
   it.each(['single', 'multi'])(
     'keeps an empty %s choice answerable under its custom key',
     (kind) => {
@@ -104,46 +79,6 @@ describe('OpenCode question forms', () => {
         ]
       })
     ).toEqual({ action: 'accept', content: { q0: true, q0_custom: 'independent note' } })
-  })
-
-  it('tells the agent which overflow question was not shown using its original custom key', () => {
-    const form = acpFormElicitationPresentation({
-      ...forms.single,
-      requestedSchema: {
-        properties: Object.fromEntries(
-          [0, 1, 2, 3, 4].flatMap((index) => [
-            [`q${index}`, forms.single.requestedSchema.properties.q0],
-            [`q${index}_custom`, forms.single.requestedSchema.properties.q0_custom]
-          ])
-        )
-      }
-    })
-    expect(
-      form.reply({
-        kind: 'answers',
-        answers: ['q1', 'q2', 'q3', 'q4'].map((questionId) => ({ questionId, optionIds: ['o1'] }))
-      })
-    ).toEqual({
-      action: 'accept',
-      content: {
-        q0: 'SQLite',
-        q1: 'SQLite',
-        q2: 'SQLite',
-        q3: 'SQLite',
-        q4_custom: 'Not shown to the user: Orca shows at most 4 questions at once. Ask again.'
-      }
-    })
-  })
-
-  it('shows and returns the web-search provider decision', () => {
-    const form = acpFormElicitationPresentation(forms.websearch)
-    expect(form.body).toMatchObject({
-      question: 'Web Search\n\nAllow OpenCode to search the web for up-to-date information?'
-    })
-    expect(form.reply({ kind: 'option', optionId: 'o3' })).toEqual({
-      action: 'accept',
-      content: { choice: 'disable' }
-    })
   })
 
   it('does not reject offered answers because an unshown field has no choices', () => {

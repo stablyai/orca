@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'

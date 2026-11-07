@@ -7,7 +7,6 @@ import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repo-kind'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { Label } from '../../ui/label'
-import { Separator } from '../../ui/separator'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './execution/RepositoryHooksSection'
 import { McpConfigSection } from './mcp/McpConfigSection'
@@ -15,6 +14,7 @@ import { WorktreeSymlinksSection } from './execution/WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './execution/SparsePresetSettingsSection'
 import { RepositorySourceControlAiSection } from './source-control/RepositorySourceControlAiSection'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { RepositoryRemoveProjectButton } from './RepositoryRemoveProjectButton'
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -25,6 +25,10 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './execution/RepositoryForkSyncSection'
+import {
+  getRepositoryAgentTrustSearchEntry,
+  RepositoryAgentTrustSection
+} from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
@@ -32,7 +36,7 @@ import { matchesRepositoryIdentitySearch } from './identity/repository-identity-
 import { RepositoryWorktreeDefaultsSection } from './execution/RepositoryWorktreeDefaultsSection'
 import { RepositoryJiraProjectSection } from './RepositoryJiraProjectSection'
 import { getProjectRuntimeSessionSummary } from './execution/repository-runtime-session-summary'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
@@ -179,6 +183,7 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
     translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     translate('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    getRepositoryAgentTrustSearchEntry().title,
     translate(
       'auto.components.settings.repository.search.keepForkUpToDate',
       'Keep Fork Up to Date'
@@ -227,39 +232,38 @@ export function RepositoryPane({
   // Lead with identity, then frequently edited setup commands, before secondary repository controls.
   const visibleSections = [
     forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
-      <section key="identity" className="relative space-y-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1 pr-12">
-            <h3 className="text-sm font-semibold">
-              {translate('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.RepositoryPane.b0a0c14a1c',
-                'Project-specific display details for the sidebar and tabs.'
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground">
+      <SettingsGroup
+        key="identity"
+        title={translate('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
+        description={
+          <>
+            {translate(
+              'auto.components.settings.RepositoryPane.b0a0c14a1c',
+              'Project-specific display details for the sidebar and tabs.'
+            )}
+            <span className="block">
               {translate('auto.components.settings.RepositoryPane.323debba71', 'Type:')}{' '}
               <span className="text-foreground">{getRepoKindLabel(repo)}</span>
-            </p>
+            </span>
             {isFolder ? (
-              <p className="text-xs text-muted-foreground">
+              <span className="block">
                 {translate(
                   'auto.components.settings.RepositoryPane.ee5a290616',
                   'Opened as folder. Git features are unavailable for this workspace.'
                 )}
-              </p>
+              </span>
             ) : null}
-          </div>
+          </>
+        }
+        action={
           <RepositoryRemoveProjectButton
             repo={repo}
             removalScope={removalScope}
             forceVisible={forceFullPaneForRepoMatch}
             removeProject={removeProject}
           />
-        </div>
-
+        }
+      >
         <SearchableSetting
           title={translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
           description={translate(
@@ -267,7 +271,7 @@ export function RepositoryPane({
             'Project-specific display details for the sidebar and tabs.'
           )}
           keywords={[repo.displayName, repo.path, 'project name', 'repository name']}
-          className="space-y-2"
+          className="space-y-2 py-3"
           forceVisible={forceFullPaneForRepoMatch}
         >
           <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
@@ -298,7 +302,7 @@ export function RepositoryPane({
             'emoji',
             'favicon'
           ]}
-          className="space-y-2"
+          className="space-y-2 py-3"
           id={getRepositoryIconSectionId(repo.id)}
           forceVisible={forceFullPaneForRepoMatch}
         >
@@ -307,6 +311,12 @@ export function RepositoryPane({
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryAgentTrustSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
@@ -366,7 +376,7 @@ export function RepositoryPane({
             />
           </>
         ) : null}
-      </section>
+      </SettingsGroup>
     ) : null,
     hooksSection,
     forceFullPaneForRepoMatch ||
@@ -403,12 +413,7 @@ export function RepositoryPane({
 
   return (
     <div ref={setRepositoryPaneRootRef} className="space-y-8">
-      {visibleSections.map((section, index) => (
-        <div key={index} className="space-y-8">
-          {index > 0 ? <Separator /> : null}
-          {section}
-        </div>
-      ))}
+      {visibleSections}
     </div>
   )
 }

@@ -4,6 +4,7 @@ Thanks for contributing to Orca.
 
 ## Before You Start
 
+- Found a security vulnerability? Do not open a public issue or PR; report it privately as described in [`SECURITY.md`](./SECURITY.md).
 - Keep changes scoped to a clear user-facing improvement, bug fix, or refactor.
 - Orca targets macOS, Linux, and Windows. Every change must stay compatible with all three platforms unless the code is explicitly guarded by a runtime platform check.
 - For keyboard shortcuts, use runtime platform checks in renderer code and `CmdOrCtrl` in Electron menu accelerators.
@@ -119,6 +120,12 @@ When Git reports no changed files at all, the launcher exits before starting Vit
 Affected tests use Vitest's static import graph. Run suites explicitly for computed
 dynamic imports, fixture files, subprocess inputs, or other dependencies outside that
 graph. Local affected tests do not replace CI.
+
+Run tests through `pnpm test`, not `vitest` or `npx vitest` directly. The launcher keeps a
+transform cache in `node_modules/.cache/orca-vitest-modules`, so repeat runs skip most
+startup work. For example, a filtered `src/main/runtime/orca-runtime.test.ts` run drops
+from about 25s to about 5s after the first run. `-t` filters which tests run but not what
+loads: a test that imports `OrcaRuntimeService` still loads most of the main process.
 
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:

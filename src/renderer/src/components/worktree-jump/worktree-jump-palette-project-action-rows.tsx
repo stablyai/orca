@@ -97,6 +97,7 @@ export function WorktreeJumpPaletteActionRow({
   return (
     <CommandItem
       value={renderKey}
+      disabled={entry.type === 'quick-action' && entry.result.disabled}
       onSelect={() => controller.handleSelectItem(entry)}
       className={cn(
         'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',

@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import {
@@ -72,6 +73,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     // Invalid limits must fail before spawning an unowned child.
     const peer = resolveAcpPeerOptions({ ...options.peer, closeOnInputEnd: false })
     const { signIn } = options
+    const lifecycle: AcpConnectionLifecycle = { closing: false }
+    let answerAuth = (_signedIn: boolean): void => {}
     let signedOut = (): void => {}
     let unreadable = (): void => {}
     // Never retain sign-in links in diagnostics.
@@ -102,7 +105,6 @@ export class AcpAgentConnection extends AcpSessionRuntime {
           }
         : {})
     })
-    const lifecycle: AcpConnectionLifecycle = { closing: false }
     const diagnose = (message: string): void => {
       try {
         options.onDiagnostic?.(message)
@@ -114,7 +116,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       ...options,
       peer,
       onOtherLine: (line, cut) => signInLine(line, 'stdout', cut),
-      onAuthAnswered: (signedIn) => signIn?.answered?.(signedIn),
+      onAuthAnswered: (signedIn) => answerAuth(signedIn),
       // A closed stdin usually means the agent is exiting; its exit settles calls once its output
       // drained, so the bound only covers an agent that stopped reading without exiting.
       onOutputEnd: (_error, finish) => {
@@ -145,6 +147,11 @@ export class AcpAgentConnection extends AcpSessionRuntime {
         options.onClose?.(error)
       }
     })
+    answerAuth = (signedIn) => {
+      if (!lifecycle.closing && !this.closed) {
+        signIn?.answered?.(signedIn)
+      }
+    }
     this.managed = managed
     this.lifecycle = lifecycle
     this.diagnoseLifecycle = diagnose
@@ -167,7 +174,7 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       super.close(error)
     })
     signedOut = () => {
-      signIn?.answered?.(false)
+      answerAuth(false)
       super.close(new AcpSignInPromptError('The agent asked to sign in in a browser'))
     }
     // A malformed protocol-stream link closes the connection without reporting signed-out status.
@@ -234,6 +241,31 @@ export class AcpAgentConnection extends AcpSessionRuntime {
 
   stderrTail(): string {
     return this.managed.stderrTail().trim()
+  }
+
+  /** Requires advertised session listing support. */
+  listSessions(cwd: string): Promise<unknown> {
+    return this.call('session/list', { cwd }, z.unknown())
+  }
+
+  /** The stderr tail once an exited process's stderr ends, bounded for a descendant holding it. */
+  async stderrTailAfterExit(): Promise<string> {
+    const stderr = this.managed.child.stderr
+    if (this.exited && !stderr.readableEnded && !stderr.destroyed) {
+      await new Promise<void>((resolve) => {
+        const finish = (): void => {
+          clearTimeout(timer)
+          stderr.removeListener('end', finish)
+          stderr.removeListener('close', finish)
+          resolve()
+        }
+        const timer = setTimeout(finish, PROVIDER_EXIT_OUTPUT_DRAIN_MS)
+        timer.unref?.()
+        stderr.once('end', finish)
+        stderr.once('close', finish)
+      })
+    }
+    return this.stderrTail()
   }
 
   /** First managed exit observation, including processless spawn failure. */

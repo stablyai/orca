@@ -18,7 +18,7 @@ import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/re
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
   readWorktreeDeleteIdentities,
   resolveWorktreeBatchDeleteTargets

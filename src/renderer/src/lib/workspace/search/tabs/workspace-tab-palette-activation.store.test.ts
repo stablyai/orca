@@ -8,7 +8,9 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 vi.mock('../../activation/worktree-activation', () => ({
   activateAndRevealWorkspace: () => true
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn(async () => undefined) }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn(async () => undefined)
+}))
 
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
 import {

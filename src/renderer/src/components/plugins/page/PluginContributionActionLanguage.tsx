@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
-import { languageDisplayName } from '../presentation/plugin-contributions'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 
 // Why module state: settings have no "language before plugin" field, and the page may unmount
 // between switching and switching back. Falls back to following the system language.

@@ -2,7 +2,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
 import { armFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
-import { selectFloatingVisibleTabCount } from '@/store/selectors'
+import { selectFloatingVisibleTabCount } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 
 /** Capture panel ownership before prompts/removal blur it; run the captured reaction only after the close lands. */
 export function captureWorkspaceEmptiedReaction(

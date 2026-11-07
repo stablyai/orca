@@ -1,31 +1,24 @@
 import { getLinearGuideNotes } from './linear-agent-skill-guide-content'
 import { translate } from '@/i18n/i18n'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 export function LinearAgentSkillNotes(): React.JSX.Element {
   const notes = getLinearGuideNotes()
 
   return (
-    <section className="space-y-3 border-t border-border/60 pt-6">
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold text-foreground">
-          {translate('auto.components.settings.LinearAgentSkillGuide.notesTitle', 'Good to know')}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.LinearAgentSkillGuide.notesIntro',
-            'Quick reminders once Linear is connected and the skill is installed.'
-          )}
-        </p>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
+    <SettingsGroup
+      title={translate('auto.components.settings.LinearAgentSkillGuide.notesTitle', 'Good to know')}
+      description={translate(
+        'auto.components.settings.LinearAgentSkillGuide.notesIntro',
+        'Quick reminders once Linear is connected and the skill is installed.'
+      )}
+      bodyClassName="py-4"
+    >
+      <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
         {notes.map((note) => {
           const Icon = note.icon
           return (
-            <div
-              key={note.id}
-              className="flex gap-3 rounded-xl border border-border/50 bg-muted/10 px-3.5 py-3"
-            >
+            <div key={note.id} className="flex gap-3">
               <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground">
                 <Icon className="size-3.5" />
               </div>
@@ -37,6 +30,6 @@ export function LinearAgentSkillNotes(): React.JSX.Element {
           )
         })}
       </div>
-    </section>
+    </SettingsGroup>
   )
 }

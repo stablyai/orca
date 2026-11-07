@@ -1,4 +1,4 @@
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
 import type { AppState } from '../../store/types'
 import { titleHasAgentName } from '../../../../shared/agent-status/title/agent-name-token-match'
 import type {
