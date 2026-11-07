@@ -33,10 +33,13 @@ file of at most 16 KiB, or 64 KiB for an icon theme.
   `--primary`/`--primary-foreground`) must be opaque with at least 4.5:1 contrast; a pair that
   fails is dropped and keeps Orca's built-in colors. A pair you set only half of is checked
   against what the other half falls back to. Some checks drop only your token: `--text-link`
-  needs 4.5:1 on `--editor-surface`, each `--git-decoration-*` 3:1 on `--sidebar`, and
-  `--worktree-sidebar-active`, `--chat-user-message` and the diff line and character tints
-  4.5:1 with the text drawn on them. Those surfaces and `--host-badge` may be translucent; they
-  are checked as painted over the surface beneath.
+  needs 4.5:1 on `--editor-surface`, each `--git-decoration-*` 3:1 on `--sidebar`,
+  `--chat-bold-foreground` and `--chat-muted-foreground` 4.5:1 on the chat background (muted
+  text on code blocks too), and
+  `--worktree-sidebar-active`, `--chat-user-message`, `--chat-inline-code` (against the chat link
+  color), `--chat-code-block` and the diff line and character tints 4.5:1 with the text drawn on
+  them. Those surfaces, `--chat-inline-code`, `--chat-selection` and
+  `--host-badge` may be translucent; they are checked as painted over the surface beneath.
 - An omitted surface token paints exactly what Orca paints without a theme. The code editor's
   diff view and links keep Monaco's own colors unless the theme sets a diff token or
   `--text-link`. Setting only `--diff-added` and `--diff-removed` is enough; the line, gutter and
