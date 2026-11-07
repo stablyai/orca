@@ -1,6 +1,6 @@
 import { SubagentExpansionProvider } from './ai-vault-subagent-expansion'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useMemo, useRef, useState, type Ref } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type {
   AiVaultScope,
@@ -8,6 +8,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
@@ -45,6 +46,8 @@ export function AiVaultSessionVirtualList({
   groups,
   collapsedGroups,
   loading,
+  stale = false,
+  resultsKey,
   scopePending = false,
   scanProgressShown = false,
   sessionsCount,
@@ -83,6 +86,10 @@ export function AiVaultSessionVirtualList({
   groups: readonly AiVaultSessionListGroup[]
   collapsedGroups: ReadonlySet<string>
   loading: boolean
+  /** Rows answer an older search while a newer one runs. */
+  stale?: boolean
+  /** Changes when a different result set lands, which returns the list to its top match. */
+  resultsKey?: string
   scopePending?: boolean
   /** The progress strip above names the scan, so the list does not repeat it. */
   scanProgressShown?: boolean
@@ -127,6 +134,9 @@ export function AiVaultSessionVirtualList({
   const stickyRangeStartIndexRef = useRef(0)
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(() => new Set())
+  useLayoutEffect(() => {
+    listScrollRef.current?.scrollTo({ top: 0 })
+  }, [resultsKey])
 
   const vaultRows = useMemo(() => {
     const rows: AiVaultListRow[] = []
@@ -145,7 +155,11 @@ export function AiVaultSessionVirtualList({
   }, [collapsedGroups, groups])
 
   const stickyHeaderIndexes = useMemo(() => getVaultStickyHeaderIndexes(vaultRows), [vaultRows])
-  const selection = useAiVaultSessionSelection(vaultRows, keyboardRef !== undefined, query)
+  const selection = useAiVaultSessionSelection(
+    vaultRows,
+    keyboardRef !== undefined,
+    JSON.stringify([query, resultsKey ?? null])
+  )
   const { selectedIndex } = selection
 
   const virtualizer = useVirtualizer({
@@ -228,6 +242,10 @@ export function AiVaultSessionVirtualList({
   }
   // Enter resumes the row in the chat; a row that can't shows its details instead.
   const activateSession = (session: AiVaultSession, index: number): void => {
+    // A stale row answers an older query, so Enter waits for the current one.
+    if (stale) {
+      return
+    }
     if (!pickHere(session)) {
       setExpandedSessionIds((current) => new Set(current).add(session.id))
       virtualizer.scrollToIndex(index)
@@ -285,7 +303,11 @@ export function AiVaultSessionVirtualList({
         ) : null}
 
         {vaultRows.length > 0 ? (
-          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+          <div
+            className={cn('relative w-full', stale && 'opacity-60')}
+            aria-busy={stale || undefined}
+            style={{ height: virtualizer.getTotalSize() }}
+          >
             {virtualItems.map((virtualRow) => (
               <AiVaultVirtualRow
                 key={virtualRow.key}

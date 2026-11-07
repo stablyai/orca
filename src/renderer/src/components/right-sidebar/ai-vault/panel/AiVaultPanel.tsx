@@ -171,7 +171,10 @@ export default function AiVaultPanel({
     () => withAiVaultHistoryPreviews(search.sessions, history),
     [history, search.sessions]
   )
-  const sessions = searching ? searchSessions : history
+  // Until this query's first reply, older hits stay dimmed or, with none, title matches fill the wait.
+  const waitingForHits = searching && search.loading && !search.answered
+  const searchTitles = waitingForHits && search.hits.length === 0
+  const sessions = searching && !searchTitles ? searchSessions : history
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
     includeAntigravityIdeSessions: true,
@@ -218,7 +221,8 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
-  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, searching, group, {
+  const listMode = searching ? (searchTitles ? 'search-titles' : 'search-hits') : 'browse'
+  const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
     query,
     agents,
     scope,
@@ -321,7 +325,9 @@ export default function AiVaultPanel({
             )}
         {(!searching || sessions.length > 0 || search.loading) && (
           <AiVaultSessionVirtualList
-            key={searching ? search.resetKey : 'history'}
+            key={searching ? 'search' : 'history'}
+            resultsKey={searching ? search.resultsKey : undefined}
+            stale={waitingForHits && search.hits.length > 0}
             searchHits={searching ? searchHits : undefined}
             searchHitHostLabels={searchHitHostLabels}
             groups={groups}
@@ -329,7 +335,7 @@ export default function AiVaultPanel({
             loading={searching ? search.loading : loading}
             scopePending={!searching && scopePending}
             scanProgressShown={stripProgress !== null}
-            sessionsCount={sessions.length}
+            sessionsCount={searching ? filteredSessions.length : sessions.length}
             filteredSessionsCount={filteredSessions.length}
             noAgentsSelected={agents.length === 0}
             error={error}
