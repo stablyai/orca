@@ -111,15 +111,20 @@ it.skipIf(process.platform === 'win32')(
     const stateDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-state-test-'))
     folders.push(stateDirectory)
     const shellEnv = { PATH: await fakeAgy(HOST_INITIALIZE), HOME: '/home/user' }
-    const select = (antigravityChatAuth: unknown) =>
-      selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, shellEnv, stateDirectory, {
-        antigravityChatAuth
-      } as AcpHostBackendSettings)
-    await expect(select({ method: 'oauth-personal' })).resolves.not.toBeNull()
+    const select = (settings: AcpHostBackendSettings) =>
+      selectAcpHostAccountHome(ANTIGRAVITY_LAUNCH_SPEC, shellEnv, stateDirectory, settings)
     await expect(
-      select({ method: 'oauth-business', gcpProject: 'acme', gcpLocation: 'us-central1' })
+      select({ antigravityChatAuth: { method: 'oauth-personal' } })
+    ).resolves.not.toBeNull()
+    await expect(
+      select({
+        antigravityChatAuth: { method: 'oauth-business', gcpProject: 'acme', gcpLocation: 'us' }
+      })
     ).resolves.toBeNull()
-    await expect(select({ method: 'oauth-business' })).resolves.toBeNull()
+    // A saved file can hold an incomplete choice the types rule out.
+    await expect(
+      select(JSON.parse('{"antigravityChatAuth":{"method":"oauth-business"}}'))
+    ).resolves.toBeNull()
   }
 )
 
