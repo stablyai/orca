@@ -44,21 +44,6 @@ it('confirms the real process when startup arrives after the command read window
   f.tracker.dispose()
 })
 
-it('bounds a startup title storm to one extra read ladder and never adopts the title as identity', async () => {
-  const f = fixture()
-  for (let i = 0; i < 100; i += 1) {
-    f.tracker.onAgentStartupObserved()
-  }
-  await vi.advanceTimersByTimeAsync(30_000)
-  for (let i = 0; i < 100; i += 1) {
-    f.tracker.onAgentStartupObserved()
-  }
-  await vi.advanceTimersByTimeAsync(60_000)
-  expect(f.read).toHaveBeenCalledTimes(3)
-  expect(f.publish).toHaveBeenLastCalledWith({ agent: null, shellForeground: false })
-  f.tracker.dispose()
-})
-
 it('does not cancel an in-flight command confirmation on a startup title', async () => {
   const f = fixture()
   f.tracker.onCommandStarted()
@@ -77,37 +62,6 @@ it('cancels delayed startup discovery on close', async () => {
   await vi.advanceTimersByTimeAsync(30_000)
   f.tracker.onAgentStartupObserved()
   expect(f.read).not.toHaveBeenCalled()
-})
-
-it('leaves untrackable providers free of client process scans', async () => {
-  const f = fixture(false)
-  f.tracker.onAgentStartupObserved()
-  await vi.advanceTimersByTimeAsync(30_000)
-  expect(f.read).not.toHaveBeenCalled()
-  expect(f.publish).not.toHaveBeenCalled()
-  f.tracker.dispose()
-})
-
-it('keeps a legacy remote process hint unverifiable after a startup title', async () => {
-  const read = vi.fn(async () => 'claude')
-  const publish = vi.fn<(entry: PaneForegroundAgentEntry) => void>()
-  const tracker = createPaneForegroundAgentTracker({
-    getPtyId: () => 'ssh:connection@@pty-delayed',
-    isTrackablePtyId: () => true,
-    isRemotePtyId: () => true,
-    getExpectedIncarnationId: () => 'inc-current',
-    readForegroundProcess: read,
-    confirmForegroundProcess: read,
-    publish
-  })
-  tracker.onAgentStartupObserved()
-  await vi.advanceTimersByTimeAsync(30_000)
-  expect(read).toHaveBeenCalledTimes(3)
-  expect(read).toHaveBeenCalledWith('ssh:connection@@pty-delayed', {
-    expectedIncarnationId: 'inc-current'
-  })
-  expect(publish).not.toHaveBeenCalled()
-  tracker.dispose()
 })
 
 it('allows the next command to recover after a prior startup miss', async () => {

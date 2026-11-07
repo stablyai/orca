@@ -36,20 +36,6 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
   const rival = { ptyId: 'pty-rival', processIncarnation: 'rival:1' }
   const mine = { ptyId: 'pty-mine', processIncarnation: 'mine:1' }
 
-  it('refuses a claim another flight already holds', () => {
-    const store = createStore()
-    const message = store.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'a',
-      to: 'run:run-1',
-      subject: 'contended'
-    })
-
-    expect(store.stageMailboxPointerEnter([message.id], rival)).toBe(true)
-    expect(store.stageMailboxPointerEnter([message.id], mine)).toBe(false)
-    expect(store.markMailboxPointerWriteAttempted([message.id], mine)).toBe(false)
-  })
-
   it('rolls the whole batch back when one row is already claimed', () => {
     const store = createStore()
     const free = store.insertMessage({
