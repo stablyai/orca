@@ -4,7 +4,7 @@ import {
   pickNextActiveTab,
   pushRecentTabId,
   sanitizeRecentTabIds
-} from '../store/slices/tab-group-state'
+} from '../store/slices/tabs/tab-selection-history'
 
 /** A snapshot tab the client has not placed yet, plus the group it should join. */
 export type ClientOwnedAdoptedTab = {

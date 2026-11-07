@@ -26,7 +26,7 @@ const LEAKED_NATIVE_GLOBALS = [
 ]
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
 
-// The two test bodies are the roots of the node test config, so no second list names them.
+// The test bodies are the roots of the node test config, so no second list names them.
 export function readNodeTestRoots(root = repoRoot) {
   const config = JSON.parse(fs.readFileSync(path.join(root, NODE_TEST_PROJECT), 'utf8'))
   return config.files.filter((file) => /\.test\.tsx?$/.test(file)).sort()
@@ -42,7 +42,7 @@ export function parseCompilerPass(output, code) {
   return { ok: code === 0 && diagnostics.length === 0, code, diagnostics, files }
 }
 
-// Membership is the proof: both bodies, nothing else repository-owned that is not a declaration,
+// Membership is the proof: all test bodies, nothing else repository-owned that is not a declaration,
 // and no RN/Expo global file. Returns the problems; an empty list is a clean program.
 export function checkNodeTestProgram(files, { realRoot, expected }) {
   const prefix = `${toPosix(realRoot).replace(/\/$/, '')}/`

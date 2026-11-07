@@ -12,7 +12,7 @@ import {
   resolveNativeChatAttachmentHost,
   nativeChatWorktreeNotReadyNotice
 } from './native-chat-attachment-upload'
-import { findTerminalTabWorktreeId } from './native-chat-file-link'
+import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../lib/structured-chat-tab-index'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   nativeChatAttachmentOwnerUnchanged,

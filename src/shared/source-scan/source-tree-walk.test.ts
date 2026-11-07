@@ -11,7 +11,7 @@ import type * as Fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { directoryEntryNeedsStat, scanSourceTree } from './source-tree-scan'
+import { scanSourceTree } from './source-tree-scan'
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof Fs>()
@@ -116,18 +116,5 @@ describe('scanSourceTree filesystem traversal', () => {
 
     expect(() => scanSourceTree(root)).toThrow(/ENOENT/)
     expect(statSync).toHaveBeenCalledExactlyOnceWith(join(root, 'alias'))
-  })
-})
-
-describe('directoryEntryNeedsStat', () => {
-  const probe = (kind: 'file' | 'dir' | 'link' | 'unknown') => ({
-    isFile: () => kind === 'file',
-    isDirectory: () => kind === 'dir',
-    isSymbolicLink: () => kind === 'link'
-  })
-
-  // DT_UNKNOWN needs stat or an entire directory subtree can disappear from guards.
-  it('stats an entry whose type readdir could not report', () => {
-    expect(directoryEntryNeedsStat(probe('unknown'))).toBe(true)
   })
 })

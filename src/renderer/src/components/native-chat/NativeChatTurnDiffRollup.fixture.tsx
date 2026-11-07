@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import { nativeChatTurnDiffs } from '../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 
@@ -67,6 +67,15 @@ export const opened = defineFixture({
   render: () => <NativeChatTurnDiffRollup diff={diff} />,
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('button')?.click()
+  }
+})
+export const hideShown = defineFixture({
+  width: 560,
+  render: () => <NativeChatTurnDiffRollup diff={diff} />,
+  // Keyboard focus shows the Hide button, as card hover does, without a pointer in the headless shot.
+  interact: (frame) => {
+    frame.ownerDocument.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    frame.querySelector<HTMLButtonElement>('button[aria-label="Hide"]')?.focus()
   }
 })
 

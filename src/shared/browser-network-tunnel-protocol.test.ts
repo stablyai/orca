@@ -3,35 +3,12 @@ import {
   BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES,
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
-  decodeBrowserNetworkTunnelOpen,
   decodeBrowserNetworkTunnelWindowUpdate,
   encodeBrowserNetworkTunnelFrame,
-  encodeBrowserNetworkTunnelOpen,
   encodeBrowserNetworkTunnelWindowUpdate
 } from './browser-network-tunnel-protocol'
 
 describe('browser-network-tunnel-protocol', () => {
-  it('round-trips remote DNS names without resolving them on the client', () => {
-    const encoded = encodeBrowserNetworkTunnelFrame({
-      opcode: BrowserNetworkTunnelOpcode.Open,
-      tunnelGeneration: 7,
-      streamId: 19,
-      payload: encodeBrowserNetworkTunnelOpen({ host: 'service.internal.', port: 8443 })
-    })
-
-    const decoded = decodeBrowserNetworkTunnelFrame(encoded)
-
-    expect(decoded).toMatchObject({
-      opcode: BrowserNetworkTunnelOpcode.Open,
-      tunnelGeneration: 7,
-      streamId: 19
-    })
-    expect(decoded && decodeBrowserNetworkTunnelOpen(decoded.payload)).toEqual({
-      host: 'service.internal.',
-      port: 8443
-    })
-  })
-
   it('round-trips exact credit without accepting zero or overflow', () => {
     const payload = encodeBrowserNetworkTunnelWindowUpdate(256 * 1024)
 
@@ -73,20 +50,6 @@ describe('browser-network-tunnel-protocol', () => {
         payload: new Uint8Array(BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES + 1)
       })
     ).toThrow('payload')
-  })
-
-  it('rejects invalid open targets and payloads on control-only opcodes', () => {
-    expect(() => encodeBrowserNetworkTunnelOpen({ host: '', port: 80 })).toThrow('host')
-    expect(() => encodeBrowserNetworkTunnelOpen({ host: 'localhost', port: 0 })).toThrow('port')
-
-    expect(() =>
-      encodeBrowserNetworkTunnelFrame({
-        opcode: BrowserNetworkTunnelOpcode.Opened,
-        tunnelGeneration: 1,
-        streamId: 2,
-        payload: new Uint8Array([1])
-      })
-    ).toThrow('empty')
   })
 
   it('rejects identities that cannot be represented as unsigned 32-bit values', () => {

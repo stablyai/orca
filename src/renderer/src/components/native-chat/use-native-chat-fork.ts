@@ -22,8 +22,8 @@ import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-cha
 /** What an offered row's button needs; the same object while support and pending hold. */
 export type NativeChatForkRowAction = {
   support: Exclude<NativeChatForkSupport, { kind: 'none' }>
-  /** A fork is opening; every fork action in the chat waits for it. */
-  pending: boolean
+  /** The row whose fork is opening; every fork action in the chat waits for it. */
+  pendingItemId: string | null
   request: (throughItemId: string) => void
 }
 
@@ -59,14 +59,14 @@ export function useNativeChatFork(input: {
   })
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
-  const [pending, setPending] = useState(false)
+  const [pendingItemId, setPendingItemId] = useState<string | null>(null)
   const request = useCallback((throughItemId: string) => {
     const { agent, sessionId, tabId, target, worktreeId } = latest.current
     if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
       return
     }
     inFlight.current = true
-    setPending(true)
+    setPendingItemId(throughItemId)
     void launchNativeChatFork({
       agent,
       worktreeId,
@@ -75,7 +75,7 @@ export function useNativeChatFork(input: {
       surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId)
     }).finally(() => {
       inFlight.current = false
-      setPending(false)
+      setPendingItemId(null)
     })
   }, [])
   const contextFloorSequence = Math.max(
@@ -100,10 +100,10 @@ export function useNativeChatFork(input: {
   const rowAction = useMemo<NativeChatForkRowAction>(
     () => ({
       support: fork ? { kind: 'known', fork } : { kind: 'unknown' },
-      pending,
+      pendingItemId,
       request
     }),
-    [fork, pending, request]
+    [fork, pendingItemId, request]
   )
   return useMemo(
     () =>

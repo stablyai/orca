@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
-import { NativeChatCodeBlock } from './NativeChatCodeBlock'
-import { NativeChatMarkdown } from './NativeChatMarkdown'
+import { NativeChatCodeBlock } from './markdown/code/NativeChatCodeBlock'
+import { NativeChatMarkdown } from './markdown/NativeChatMarkdown'
 
 /** Bound reasoning height so expanded streaming output cannot grow the transcript indefinitely. */
 export function NativeChatReasoningBody({

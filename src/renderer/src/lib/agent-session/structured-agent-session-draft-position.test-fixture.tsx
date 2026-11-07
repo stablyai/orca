@@ -17,7 +17,7 @@ import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import {
   clearNativeChatComposerDraftsForTests,
   hydrateNativeChatComposerDrafts
@@ -32,7 +32,7 @@ const rpcMock = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>()
 }))
 export const rpc = rpcMock
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

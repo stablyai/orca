@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../../types'
-import { createTestStore } from '../../worktrees-slice-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
+import { createTestStore } from '../worktrees-slice-test-harness'
+import { makeWorktree } from '../worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
 import { resolveWorktreeCreateParent } from './worktree-create-parent-pick'
 
 describe('worktree creation parent resolution', () => {

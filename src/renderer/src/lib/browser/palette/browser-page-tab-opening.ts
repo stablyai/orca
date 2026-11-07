@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { findPage, findWorkspace } from '@/store/slices/browser-page-records'
+import { findPage, findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'
 import { resolveBrowserSourceUnifiedTab } from '../workspace/browser-workspace-source-resolution'
 import type { BrowserLinkPlacement } from '../navigation/visible-browser-link-target'

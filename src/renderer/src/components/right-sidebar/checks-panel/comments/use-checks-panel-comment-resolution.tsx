@@ -18,7 +18,7 @@ import { checksPanelReviewStableKey, clearPendingPRCommentAiAck } from './pr-com
 import type { PRComment } from '../../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { isReviewThreadResolutionInFlight } from '@/store/github/review-thread-resolution-in-flight'
+import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/error-message'

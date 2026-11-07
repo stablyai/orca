@@ -62,7 +62,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
 // The host starts an AI button's agent in the tab's pane and answers; the window then pastes.
@@ -73,14 +73,17 @@ const callRuntimeRpc = vi.hoisted(() =>
     receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'x' }
   }))
 )
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
 
 /** What the window's own launch command carries; a launch started by the host queues none. */
 function commandCarries(text: string): boolean {
   return queuedStartupCommand(store)?.includes(text) ?? false
 }
 
+const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 const PROMPT = 'Explain the failing check and propose a fix.'
 
 // Cover each injection mode: argv embeds text, paste waits for TUI readiness, and env keeps text off command lines.
@@ -160,8 +163,6 @@ describe('agent launch caller prompt transport', () => {
       (row) => [`${row.agent} (${row.mode}) on ${row.promptDelivery}`, row] as const
     )
   )('delivers a prompt to %s the way its agent supports', async (_label, row) => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
     const result = launchAgentInNewTab({
       requestId: 'request-3',
       agent: row.agent,
@@ -193,7 +194,6 @@ describe('agent launch caller prompt transport', () => {
   it('reports an undelivered submit-after-ready prompt without throwing at the caller', async () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(false)
     const onPromptDelivered = vi.fn()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
       requestId: 'request-6',

@@ -1,8 +1,8 @@
 import { useCallback, useRef, type RefObject, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { ReadState } from './native-chat-live-session-contract'
-import type { NativeChatSessionTransport } from './native-chat-session-transport'
-import type { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
+import type { ReadState } from './session/terminal/read/native-chat-live-session-contract'
+import type { NativeChatSessionTransport } from './session/terminal/read/native-chat-session-transport'
+import type { useNativeChatTranscriptLifecycle } from './session/terminal/read/use-native-chat-transcript-lifecycle'
 import {
   hasMoreNativeChatHistory,
   nextNativeChatLimit,

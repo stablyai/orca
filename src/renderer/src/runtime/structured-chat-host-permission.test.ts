@@ -9,8 +9,10 @@ const mocks = vi.hoisted(() => {
   return { supportsCapability: vi.fn(), callRuntimeRpc: vi.fn(), contactListeners, settings }
 })
 
-vi.mock('./runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: mocks.supportsCapability,
+vi.mock('./rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: mocks.supportsCapability
+}))
+vi.mock('./rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
 }))
 vi.mock('@/store/index', () => {
@@ -19,7 +21,7 @@ vi.mock('@/store/index', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('./runtime-host-contact-regained', () => ({
+vi.mock('./hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_id: string, listener: () => void) => {
     mocks.contactListeners.push(listener)
     return () => undefined

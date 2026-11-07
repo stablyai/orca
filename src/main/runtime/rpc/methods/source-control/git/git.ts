@@ -1,5 +1,6 @@
 import { defineMethod } from '../../../core'
 import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-generation-methods'
+import { GIT_BRANCH_METHODS } from './git-branch-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
@@ -7,13 +8,13 @@ import {
   GitBulkStage,
   GitCheckIgnored,
   GitCheckout,
-  GitSwitchBranch,
   GitCommit,
   GitCommitCompare,
   GitFilePath,
   GitResolveConflict,
   GitForkSync,
   GitHistory,
+  GitRefs,
   GitPush,
   GitRebaseFromBase,
   GitRemoteCommitUrl,
@@ -76,6 +77,12 @@ export const GIT_METHODS = [
       runtime.getRuntimeGitSubmoduleStatus(params.worktree, params.submodulePath, params.area)
   }),
   defineMethod({
+    name: 'git.refs',
+    permission: 'workspace',
+    params: GitRefs,
+    handler: async (params, { runtime }) => runtime.getRuntimeGitRefs(params.worktree, params.query)
+  }),
+  defineMethod({
     name: 'git.history',
     permission: 'workspace',
     params: GitHistory,
@@ -84,6 +91,8 @@ export const GIT_METHODS = [
         limit: params.limit,
         baseRef: params.baseRef,
         branchOnly: params.branchOnly,
+        refs: params.refs,
+        historyToken: params.historyToken,
         skip: params.skip
       })
   }),
@@ -118,13 +127,6 @@ export const GIT_METHODS = [
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
   }),
   defineMethod({
-    name: 'git.switchBranch',
-    permission: 'workspace',
-    params: GitSwitchBranch,
-    handler: async (params, { runtime }) =>
-      runtime.switchRuntimeGitBranch(params.worktree, params.target)
-  }),
-  defineMethod({
     name: 'git.checkout',
     permission: 'workspace',
     params: GitCheckout,
@@ -137,6 +139,7 @@ export const GIT_METHODS = [
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
+  ...GIT_BRANCH_METHODS,
   ...GIT_DIFF_METHODS,
   defineMethod({
     name: 'git.branchCompare',

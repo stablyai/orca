@@ -22,6 +22,8 @@ Use **Settings → Agents → Agent Permissions** when you want to switch all un
 
 To restore prompts for one agent only, edit that agent's default arguments or environment in Settings. Orca treats a non-empty custom value as an explicit override and opts that agent out of future permission-mode migrations.
 
+If an agent's CLI is installed outside `PATH`, expand its row in **Settings → Agents** and enter the executable's full path in **Command**. Orca lists the agent as installed once that path exists on the host that runs the workspace.
+
 | Agent              | Notes                                                                                                                      | Docs                                                                                              |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Claude Code        | Deep integration: usage, hot-swap, hooks                                                                                   | [Anthropic](https://docs.anthropic.com/claude/docs/claude-code)                                   |
@@ -34,7 +36,7 @@ To restore prompts for one agent only, edit that agent's default arguments or en
 | OMP                | Auto-setup, hooks, status                                                                                                  | [OMP](https://omp.sh)                                                                             |
 | Prime Agent        | Auto-setup, hooks, status, session history                                                                                 | [Prime Intellect](https://github.com/PrimeIntellect-ai/prime-agent)                               |
 | Gemini             | Auto-setup                                                                                                                 | [Google](https://github.com/google-gemini/gemini-cli)                                             |
-| Antigravity        | Auto-setup, hooks, status, usage, [account switching](/docs/agents/antigravity-accounts)                                   | [Google](https://antigravity.google/docs/cli-overview)                                            |
+| Antigravity        | [Setup](/docs/agents/antigravity), hooks, status, usage, [account switching](/docs/agents/antigravity-accounts)            | [Google](https://antigravity.google/docs/cli-overview)                                            |
 | Ante               | Auto-setup, status                                                                                                         | [Ante](https://github.com/AntigmaLabs/ante-preview)                                               |
 | Aider              | Auto-setup                                                                                                                 | [Aider](https://aider.chat/docs/)                                                                 |
 | Goose              | Auto-setup                                                                                                                 | [Block](https://goose-docs.ai/docs/quickstart/)                                                   |

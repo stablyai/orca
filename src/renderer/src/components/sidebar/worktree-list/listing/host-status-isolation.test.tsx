@@ -1,3 +1,4 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -19,7 +20,7 @@ import { useVisibleSidebarWorktrees } from './use-visible-worktrees'
 import { useSidebarSectionRows } from './use-section-rows'
 
 import type * as FolderStatus from '@/store/folder-workspaces/folder-path-status'
-import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+
 import { useSidebarHostVisibleScope } from './use-host-visible-scope'
 import { makeFolderWorkspace } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 
@@ -32,8 +33,8 @@ import type * as HeaderContext from '../rows/project-header-host-context'
 import { collapsedSameNameProjectHeaders } from '../grouping/worktree-list-groups-test-fixtures'
 
 const runtimeRpc = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
-  ...(await original<typeof RuntimeRpcClient>()),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
+  ...(await original<typeof RuntimeRpcCallModule>()),
   callRuntimeRpc: runtimeRpc.callRuntimeRpc
 }))
 const counts = vi.hoisted(() => ({

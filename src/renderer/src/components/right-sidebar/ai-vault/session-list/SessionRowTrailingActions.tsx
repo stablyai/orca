@@ -60,6 +60,7 @@ export function SessionRowTrailingActions({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   deleteBlockedReason,
   onRequestDelete,
   actionsHidden = false
@@ -87,6 +88,7 @@ export function SessionRowTrailingActions({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   deleteBlockedReason: string | null
   onRequestDelete?: () => void
   /** Only the details toggle shows. */
@@ -297,6 +299,7 @@ export function SessionRowTrailingActions({
               onOpenLog={onOpenLog}
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
+              onRevealArtifacts={onRevealArtifacts}
               deleteBlockedReason={deleteBlockedReason}
               onDelete={onRequestDelete}
             />

@@ -13,7 +13,7 @@ const unusedChatLeaves = vi.hoisted(() => ({
     throw new Error('Unexpected sender navigation in transcript fixture')
   })
 }))
-vi.mock('./NativeChatInlineVisual', () => ({
+vi.mock('./media/visuals/NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: unusedChatLeaves.inlineVisual
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({
@@ -24,8 +24,8 @@ afterEach(() => {
   expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
 })
 // Pacing is not this test's subject.
-vi.mock('./use-native-chat-paced-text', async (importOriginal) =>
-  (await import('./native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
+vi.mock('./markdown/use-native-chat-paced-text', async (importOriginal) =>
+  (await import('./markdown/native-chat-unpaced-text-fixture')).unpacedTextModule(importOriginal)
 )
 
 afterEach(cleanup)

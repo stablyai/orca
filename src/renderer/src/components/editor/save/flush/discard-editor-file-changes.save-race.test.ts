@@ -9,7 +9,7 @@ import {
 import { registerPendingEditorFlush } from './editor-pending-flush'
 
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
-import type * as MutationClient from '@/runtime/runtime-file-mutation-client'
+import type * as MutationClient from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   createEditorStore,
   createFakeEditorDisk,
@@ -25,7 +25,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.curren
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 // Hold the remote capability/status round trip before bytes are sent.
 const hostCheck = vi.hoisted((): { wait: Promise<void> | null } => ({ wait: null }))
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => {
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => {
   const actual = await importOriginal<typeof MutationClient>()
   return {
     ...actual,

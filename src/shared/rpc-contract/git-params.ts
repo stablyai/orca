@@ -1,3 +1,4 @@
+import { isGitHistoryRefName } from '../git/history/git-history-revisions'
 import { normalizeSourceControlAiActionDefaults } from '../source-control/ai/recipes/source-control-ai-actions'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-params'
@@ -81,10 +82,19 @@ export const GitCommitCompare = WorktreeSelector.extend({
     .pipe(FullGitObjectId)
 })
 
+export const GitHistoryRefName = z
+  .string()
+  .refine(isGitHistoryRefName, 'Expected full branch or tag ref names')
+export const GitRefs = WorktreeSelector.extend({ query: z.string().max(1000).optional() })
+
 export const GitHistory = WorktreeSelector.extend({
   limit: z.number().int().min(1).max(200).optional(),
   baseRef: z.string().nullable().optional(),
   branchOnly: z.boolean().optional(),
+  refs: z
+    .union([z.literal('head'), z.literal('all'), z.array(GitHistoryRefName).max(1000)])
+    .optional(),
+  historyToken: z.string().max(100).optional(),
   skip: z.number().int().min(0).optional()
 })
 

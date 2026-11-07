@@ -14,7 +14,10 @@ import {
   reportPluginPanelFailure,
   useReportFramePanelDraw
 } from './health/use-plugin-panel-draw-report'
-import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
+import {
+  usePluginPanels,
+  usePluginPanelsStore
+} from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 

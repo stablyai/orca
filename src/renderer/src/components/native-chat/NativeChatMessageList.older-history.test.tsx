@@ -23,7 +23,7 @@ const unusedChatLeaves = vi.hoisted(() => ({
     throw new Error('Unexpected sender navigation in transcript fixture')
   })
 }))
-vi.mock('./NativeChatInlineVisual', () => ({
+vi.mock('./media/visuals/NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: unusedChatLeaves.inlineVisual
 }))
 vi.mock('@/lib/open-agent-message-sender', () => ({
@@ -35,12 +35,12 @@ afterEach(() => {
 })
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { createReadOwner } from './structured-agent-session-read-owner-create'
+import { createReadOwner } from './session/structured/read/structured-agent-session-read-owner-create'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session/agent-session-wire'
 import { useAppStore } from '@/store'
 import { transcriptWindowTop } from './native-chat-window-test-layout'
 import type { NativeChatOlderPageResult } from './native-chat-pagination'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 import {
   layout,

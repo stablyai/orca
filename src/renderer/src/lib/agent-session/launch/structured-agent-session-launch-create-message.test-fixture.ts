@@ -14,9 +14,9 @@ import { useAppStore } from '../../../store/index'
 import { registerStructuredSelectionCatalogStore } from '../options/structured-agent-session-selection-controller'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentSessionSendsForTests } from '../../../components/native-chat/structured-agent-session-message-sender'
-import '../../../components/native-chat/structured-agent-session-read-owner'
-import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/structured-agent-session-read-owner-registry'
+import { resetStructuredAgentSessionSendsForTests } from '../../../components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
@@ -66,7 +66,9 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 // This machine's host closes the chat's tab when asked.
-vi.mock('../../../runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.rpc
+}))
 vi.mock('../../../runtime/structured-agent-session-status-feed', () => {
   const idle = { status: 'idle', hostExecutionPhase: 'idle' }
   const working = { status: 'working', hostExecutionPhase: 'idle' }

@@ -1,4 +1,4 @@
-import { NativeChatHighlightedCode } from '@/components/native-chat/NativeChatHighlightedCode'
+import { NativeChatHighlightedCode } from '@/components/native-chat/markdown/code/NativeChatHighlightedCode'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { translate } from '@/i18n/i18n'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'

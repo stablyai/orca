@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat/native-chat-types'
-import { useNativeChatLinkClick } from './native-chat-link-click-context'
+import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 import {
   type NativeChatMcpIdentity,
   formatToolDuration,

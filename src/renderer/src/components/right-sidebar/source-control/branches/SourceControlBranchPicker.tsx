@@ -73,9 +73,7 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
           )
         }
       }
-      if (activeWorktreeId) {
-        recordBranchSwitchOutcome(activeWorktreeId, refreshActiveGitStatusAfterMutation)
-      }
+      recordBranchSwitchOutcome(refreshActiveGitStatusAfterMutation)
     },
     [
       activeWorktreeId,

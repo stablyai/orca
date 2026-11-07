@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
@@ -21,7 +23,7 @@ import {
   sendStructuredAgentSessionMessage,
   settleStructuredAgentSessionSendsFromJournal,
   stopStructuredAgentSessionSends
-} from '@/components/native-chat/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
@@ -34,13 +36,13 @@ import {
   getStructuredAgentSessionPendingSends,
   getStructuredAgentSessionSendNotice,
   subscribeToStructuredAgentSessionPendingSends
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import {
   captureNativeChatStagedInput,
   releaseNativeChatStagedFiles,
   stageNativeChatDraftFile
 } from '@/components/native-chat/native-chat-draft-attachment-staging'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   discardStructuredLaunchPrompts,

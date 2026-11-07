@@ -156,7 +156,8 @@ export function applyLayout(
           ? commitWindowPaneDetach(
               hostIds,
               { ...command, windowDetach: command.windowDetach },
-              context
+              context,
+              run
             )
           : commitLayoutCommand(hostIds, command, context, run)
     ),

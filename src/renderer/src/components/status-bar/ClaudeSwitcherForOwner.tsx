@@ -5,11 +5,11 @@ import { providerChatAccountControl } from './ProviderAccountChatButton'
 import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { AccountOwner } from '@/lib/wsl-host-account-owner'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   selectClaudeProviderAccount,
   emptyClaudeAccountsState
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../settings/accounts/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'

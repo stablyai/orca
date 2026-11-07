@@ -12,7 +12,7 @@ import {
   MAX_ID_LENGTH,
   SessionId
 } from './structured-agent-session-identifiers'
-import { z } from 'zod'
+import * as z from 'zod'
 import { CREATE_TAB_FIELDS } from './structured-agent-session-create-tab-params'
 import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { normalizeExecutionHostId } from '../execution-host'

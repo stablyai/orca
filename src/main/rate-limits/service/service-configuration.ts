@@ -17,6 +17,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type InactiveCodexAccountInfo,
@@ -88,6 +89,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setAntigravityAccountUsageRecorder(recorder: AntigravityAccountUsageRecorder): void {
     this.antigravityAccountUsageRecorder = recorder
+  }
+
+  setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {
+    this.museUsageEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {

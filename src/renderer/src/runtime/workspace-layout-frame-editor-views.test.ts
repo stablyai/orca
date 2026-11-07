@@ -12,8 +12,8 @@ import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layou
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { openFileOfLayoutEditorView } from '../store/slices/editor/tabs/open-file-layout-view'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { endLayoutFramePositions } from './layout-frame-position'
 import {
   loadMainLayoutModel,

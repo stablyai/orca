@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 function hasTranscriptSelection(root: HTMLElement | null): boolean {
   const selection = root?.ownerDocument.getSelection()
@@ -34,7 +34,9 @@ export function useNativeChatSelectedHistory({
       return false
     }
     setSelectedSource(sourceKey)
-    release.current ??= retainHistory?.() ?? null
+    if (release.current == null) {
+      release.current = retainHistory?.() ?? null
+    }
     return true
   }, [root, retainHistory, sourceKey])
   const deferTrim = useCallback(() => {

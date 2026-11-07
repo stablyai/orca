@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store/index'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import {
   getRemoteServerManualUpdateHelp,

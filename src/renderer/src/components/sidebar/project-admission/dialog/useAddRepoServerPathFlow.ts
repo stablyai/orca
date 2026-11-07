@@ -9,7 +9,7 @@ import {
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import {

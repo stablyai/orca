@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
@@ -39,12 +40,19 @@ vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
 }))
-vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
-  pruneParkedTerminalWatchers: vi.fn(),
-  terminalWatcherLiveWorkspaceIds: () => new Set(),
-  syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
-  disposeAllParkedTerminalWatchers: vi.fn()
+vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
+  syncParkedTerminalTabWatchersForWorkspaces: vi.fn()
 }))
+
+vi.mock(
+  '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    pruneParkedTerminalWatchers: vi.fn(),
+    terminalWatcherLiveWorkspaceIds: () => new Set(),
+    disposeAllParkedTerminalWatchers: vi.fn()
+  })
+)
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport'
@@ -59,7 +67,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 // Main answers the window's chat-tab open (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -71,11 +79,12 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'

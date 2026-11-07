@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'

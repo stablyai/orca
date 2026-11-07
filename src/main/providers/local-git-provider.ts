@@ -2,7 +2,7 @@ import { gitSyncForkDefaultBranch } from '../git/fork-sync'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { checkIgnoredPaths } from '../git/source-control/check-ignored-paths'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
-import { getHistory } from '../git/history'
+import { getHistory, getHistoryRefs } from '../git/history'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { getRemoteCommitUrl, getRemoteFileUrl, isGitRepo } from '../git/repo'
 import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/runner'
@@ -71,6 +71,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       }),
     checkIgnoredPaths: (worktreePath, relativePaths) =>
       checkIgnoredPaths(worktreePath, relativePaths, interactive),
+    getHistoryRefs: (worktreePath, query) => getHistoryRefs(worktreePath, query, interactive),
     getHistory: (worktreePath, historyOptions = {}) =>
       getHistory(worktreePath, { ...historyOptions, ...interactive }),
     commit: (worktreePath, message) => commitChanges(worktreePath, message, interactive),

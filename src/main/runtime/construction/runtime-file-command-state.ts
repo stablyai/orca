@@ -295,6 +295,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
   })
 
   protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
+    resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })

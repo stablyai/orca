@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import {
   makeFolderWorkspace,
   makeProjectGroup
@@ -13,7 +13,7 @@ import { createEditorSaveQueue } from '../queue/editor-save-queue'
 import type { EditorSaveQueue } from '../queue/editor-save-queue-contract'
 import type { FileWriteResult } from '../../../../../../shared/file-write-disk-precondition'
 import type { readEditorCsvFileContent } from '../../csv/csv-file-content'
-import type { writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import type { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
 
@@ -22,7 +22,9 @@ const io = vi.hoisted(() => ({
   write: vi.fn<typeof writeRuntimeFile>()
 }))
 vi.mock('../../csv/csv-file-content', () => ({ readEditorCsvFileContent: io.read }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({ writeRuntimeFile: io.write }))
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
+  writeRuntimeFile: io.write
+}))
 
 const workspaceId = 'folder:mixed'
 const filePath = '/root/local/file.ts'

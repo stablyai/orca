@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
-import type { ManagedRuntimeInstallSnapshot } from '@/runtime/managed-runtime-install-status'
+import type { ManagedRuntimeInstallSnapshot } from '@/runtime/hosts/installation/managed-runtime-install-status'
 
 export type ManagedRuntimeInstallAction =
   | { kind: 'install'; label: string }

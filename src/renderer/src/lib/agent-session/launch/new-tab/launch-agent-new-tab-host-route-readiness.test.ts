@@ -36,13 +36,13 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/lib/agent-session/launch/pane/agent-launch-through-host', () => ({
   launchAgentThroughHost: testState.launchAgentThroughHost
 }))
-vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions', () => ({
   subscribeToPtyData: (ptyId: string, watcher: (data: string) => void) => {
     testState.ptyWatchers.set(ptyId, watcher)
     return () => testState.ptyWatchers.delete(ptyId)
   }
 }))
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn(async () => null)
 }))
 vi.mock(
@@ -52,13 +52,15 @@ vi.mock(
     isRemoteRuntimePtyId: () => false
   })
 )
-vi.mock('@/runtime/runtime-terminal-verified-input', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () => ({
   sendRuntimePtyInputVerified: async (ptyId: string, data: string) => {
     testState.writes.push({ at: Date.now(), ...(ptyId === 'pty-1' ? {} : { ptyId }), data })
     return true
   }
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({ subscribeToRuntimeTerminalData: vi.fn() }))
+vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
+  subscribeToRuntimeTerminalData: vi.fn()
+}))
 vi.mock('../../../agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: false }))
 }))
@@ -73,7 +75,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 const { launchNewTabPromptThroughHost } = await import('./launch-agent-new-tab-host-route')
 const { bufferPreHandlerPtyData, drainPreHandlerPtyData, clearPreHandlerPtyState } =
-  await import('@/components/terminal-pane/pty-pre-handler-buffer')
+  await import('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer')
 
 function attachHostPty(ptyId: string): void {
   testState.appState.ptyIdsByTabId = { [TAB]: [ptyId] }
@@ -234,5 +236,26 @@ describe('an AI button whose agent is ready before the host answers', () => {
     await expect(promptDeliveryResult).resolves.toEqual({ delivered: true, failureNotified: false })
     expect(new Set(testState.writes.map(({ ptyId }) => ptyId))).toEqual(new Set(['launch-agent']))
     expect(testState.writes.filter(({ data }) => data.includes('task'))).toHaveLength(1)
+  })
+  it('does not paste into a cancelled hosted launch after its composer becomes ready', async () => {
+    const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
+    let cancelled = false
+    const delivery = pasteDraftWhenAgentReady({
+      tabId: TAB,
+      agent: 'codex',
+      content: 'cancelled task',
+      submit: true,
+      forcePaste: true,
+      launchPty: Promise.resolve('launch-agent'),
+      beforePaste: () => !cancelled
+    })
+    await vi.advanceTimersByTimeAsync(10)
+    cancelled = true
+    testState.ptyWatchers.get('launch-agent')?.(
+      '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}\x1b[?2004h'
+    )
+    await vi.advanceTimersByTimeAsync(25_000)
+    await expect(delivery).resolves.toBe(false)
+    expect(testState.writes).toEqual([])
   })
 })

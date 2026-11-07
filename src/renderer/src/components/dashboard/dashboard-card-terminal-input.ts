@@ -7,11 +7,11 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { shouldDisableKittyKeyboardForTerminal } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { isLocalNativeWindowsConpty } from '@/lib/pane-manager/windows-pty-compatibility'
-import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/terminal-input-host-platform'
-import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/terminal-windows-shift-enter'
-import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/terminal-ctrl-enter'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
-import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/terminal-agent-paste-bracketing'
+import { resolveTerminalInputHostPlatform } from '@/components/terminal-pane/input/terminal-input-host-platform'
+import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-pane/input/keyboard/terminal-windows-shift-enter'
+import { hasCtrlEnterCsiUAuthorityForPane } from '@/components/terminal-pane/input/keyboard/terminal-ctrl-enter'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
+import { resolveProtectedMultilinePasteOptionsForAgentEvidence } from '@/components/terminal-pane/input/paste/terminal-agent-paste-bracketing'
 
 export type DashboardCardTerminalInputState = Pick<
   AppState,

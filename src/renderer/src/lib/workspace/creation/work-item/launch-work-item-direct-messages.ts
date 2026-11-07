@@ -63,3 +63,11 @@ export function validateActionTerminalArgs(
   }
   return false
 }
+
+export function directWorkItemFailureReporter(onFailureNotified?: () => void) {
+  return (message: string): false => {
+    toast.error(message)
+    onFailureNotified?.()
+    return false
+  }
+}

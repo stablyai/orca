@@ -14,7 +14,7 @@ import {
   structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
+import { handBackStructuredAgentSessionMessage } from './session/structured/delivery/structured-agent-session-message-hand-back'
 
 import { fileReferenceContent } from './native-chat-prompt-document'
 
