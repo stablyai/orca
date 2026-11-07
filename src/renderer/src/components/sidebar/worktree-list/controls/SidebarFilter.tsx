@@ -29,7 +29,14 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { FilterToggleRow } from './FilterToggleRow'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { searchRepos } from '@/lib/repo-search'
+import {
+  addSidebarProjectGroup,
+  getSidebarProjectFilterGroups,
+  isSidebarProjectGroupSelected,
+  removeSidebarProjectGroup,
+  searchSidebarProjectGroups,
+  type SidebarProjectFilterGroup
+} from './sidebar-project-filter-groups'
 import { clearSidebarFilters, selectSidebarFilterState } from './sidebar-filter-actions'
 import { useWorkspaceOptionsFilterBadge } from './workspace-options-menu-items'
 import { translate } from '@/i18n/i18n'
@@ -87,18 +94,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
     [onMenuOpenChange]
   )
 
-  const handleToggleRepo = useCallback(
-    (repoId: string) => {
-      setFilterRepoIds(
-        filterRepoIds.includes(repoId)
-          ? filterRepoIds.filter((id) => id !== repoId)
-          : [...filterRepoIds, repoId]
-      )
-    },
-    [filterRepoIds, setFilterRepoIds]
-  )
-
-  const canFilterRepos = repos.length > 1
+  const projectGroups = useMemo(() => getSidebarProjectFilterGroups(repos), [repos])
+  const canFilterRepos = projectGroups.length > 1
   // Ignore removed repo IDs so they cannot inflate counts or imply an active filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
@@ -109,16 +106,36 @@ const SidebarFilter = React.memo(function SidebarFilter({
     }
     return set
   }, [repos, filterRepoIds])
-  const selectedCount = selectedRepoIdSet.size
+  const selectedCount = useMemo(
+    () =>
+      projectGroups.filter((group) => isSidebarProjectGroupSelected(group, selectedRepoIdSet))
+        .length,
+    [projectGroups, selectedRepoIdSet]
+  )
   const hasRepoFilter = selectedCount > 0
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
 
-  const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
+  const handleToggleProject = useCallback(
+    (group: SidebarProjectFilterGroup) => {
+      setFilterRepoIds(
+        isSidebarProjectGroupSelected(group, selectedRepoIdSet)
+          ? removeSidebarProjectGroup(filterRepoIds, group)
+          : addSidebarProjectGroup(filterRepoIds, group)
+      )
+    },
+    [filterRepoIds, selectedRepoIdSet, setFilterRepoIds]
+  )
+
+  const filteredGroups = useMemo(
+    () => searchSidebarProjectGroups(projectGroups, query),
+    [projectGroups, query]
+  )
   const commandValue =
-    commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
+    commandValueOverride &&
+    filteredGroups.some((group) => group.projectKey === commandValueOverride)
       ? commandValueOverride
-      : (filteredRepos[0]?.id ?? '')
-  const allSelected = canFilterRepos && selectedCount === repos.length
+      : (filteredGroups[0]?.projectKey ?? '')
+  const allSelected = canFilterRepos && selectedRepoIdSet.size === repos.length
 
   const clearAll = useCallback(() => {
     const store = useAppStore.getState()
@@ -302,13 +319,14 @@ const SidebarFilter = React.memo(function SidebarFilter({
                     'No projects match'
                   )}
                 </CommandEmpty>
-                {filteredRepos.map((r) => {
-                  const checked = selectedRepoIdSet.has(r.id)
+                {filteredGroups.map((group) => {
+                  const r = group.repo
+                  const checked = isSidebarProjectGroupSelected(group, selectedRepoIdSet)
                   return (
                     <CommandItem
-                      key={r.id}
-                      value={r.id}
-                      onSelect={() => handleToggleRepo(r.id)}
+                      key={group.projectKey}
+                      value={group.projectKey}
+                      onSelect={() => handleToggleProject(group)}
                       className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
                     >
                       <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
