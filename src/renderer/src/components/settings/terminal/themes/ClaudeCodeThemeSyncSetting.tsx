@@ -12,13 +12,15 @@ export function ClaudeCodeThemeSyncSetting({
 }): React.JSX.Element {
   const [entry] = getClaudeCodeThemeSyncSearchEntry()
   return (
-    <SearchableSetting {...entry} className="ml-4 border-y border-border/40">
-      <SettingsSwitchRow
-        label={entry.title}
-        description={entry.description}
-        checked={settings.claudeCodeThemeSync}
-        onChange={() => updateSettings({ claudeCodeThemeSync: !settings.claudeCodeThemeSync })}
-      />
-    </SearchableSetting>
+    <div className="ml-4">
+      <SearchableSetting {...entry} className="border-y border-border/40">
+        <SettingsSwitchRow
+          label={entry.title}
+          description={entry.description}
+          checked={settings.claudeCodeThemeSync}
+          onChange={() => updateSettings({ claudeCodeThemeSync: !settings.claudeCodeThemeSync })}
+        />
+      </SearchableSetting>
+    </div>
   )
 }
