@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect } from 'react'
-import { useAppStore, type AppState } from '@/store/index'
+import { useAppStore } from '@/store/index'
 import {
   recordPullRequestGenerationEdits,
   type PullRequestFieldRevisions,
@@ -23,8 +23,7 @@ export function useGenerateBeforeCreatePullRequest({
   fieldsAreSeedPlaceholders,
   generatePullRequestFields,
   generationKey,
-  repo,
-  settings
+  repo
 }: {
   aiGenerationEnabled: boolean
   canCreate: boolean
@@ -39,7 +38,6 @@ export function useGenerateBeforeCreatePullRequest({
   ) => Promise<PullRequestGenerationOutcome | void>
   generationKey: string | null
   repo: Pick<Repo, 'sourceControlAi'> | null
-  settings: AppState['settings']
 }) {
   useLayoutEffect(() => {
     if (generationKey && fieldsInitialized) {
@@ -70,7 +68,7 @@ export function useGenerateBeforeCreatePullRequest({
         status === 'canceled' ||
         !hasConfiguredSourceControlTextGenerationDefaults({
           actionId: 'pullRequest',
-          settings,
+          settings: useAppStore.getState().settings,
           repo
         })
       ) {
@@ -94,8 +92,7 @@ export function useGenerateBeforeCreatePullRequest({
       fieldsAreSeedPlaceholders,
       generatePullRequestFields,
       generationKey,
-      repo,
-      settings
+      repo
     ]
   )
 

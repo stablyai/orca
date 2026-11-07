@@ -13338,7 +13338,8 @@
             "clearNotesFromFile_other": "{{path}} から {{count}} 件のメモを削除しますか？",
             "markResolved": "解決済みとしてマーク",
             "keepFile": "ファイルを残す",
-            "keepDeletion": "削除を維持"
+            "keepDeletion": "削除を維持",
+            "refreshAll": "すべて更新"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -17638,6 +17639,10 @@
           "actionsUnavailable": "このクライアントではプラグイン操作を利用できません。",
           "messageTooLarge": "メッセージがサイズ制限を超えています。",
           "tooManyRequests": "リクエストが多すぎます。"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "このワークツリーを開く",
+          "reconnect": "再接続して、このワークツリーの変更を表示してください。"
         }
       },
       "link": {
@@ -20771,6 +20776,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "{{value0}} で開始しました",
     "actionSaveFailed": "このアクションを保存できませんでした。設定でもう一度保存してください。",
     "unlinkedPr": {
       "status": "PR #{{number}} のリンクが解除されました"

@@ -31,6 +31,7 @@ export type TerminalCreateOptions = {
   resumeOrigin?: 'saved'
   launchToken?: string
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   startupAgent?: TuiAgent
   /** Offer initial text only to compatible startupAgent launch commands; otherwise refuse instead of silently dropping it.
    * Typed-line carry gates delivery; onStartupPromptCarry reports clean launches whose later delivery belongs to the live PTY owner. */

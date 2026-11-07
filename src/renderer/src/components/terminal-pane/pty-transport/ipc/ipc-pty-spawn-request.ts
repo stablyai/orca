@@ -52,6 +52,9 @@ export async function spawnIpcPty(
           agentArgs: transportOptions.agentArgsOverride,
           launchPreferences: transportOptions.agentLaunchPreferences,
           startupCwd: transportOptions.cwd,
+          ...(transportOptions.trustWorktreeId
+            ? { trustWorktreeId: transportOptions.trustWorktreeId }
+            : {}),
           placement: { tabId, leafId },
           presentation: 'background',
           ...(transportOptions.terminalKittyKeyboardProtocol === true
@@ -135,6 +138,9 @@ export async function spawnIpcPty(
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
     ...(connectOptions.attachOnlyView ? { attachOnlyView: true } : {}),
     worktreeId,
+    ...(transportOptions.trustWorktreeId
+      ? { trustWorktreeId: transportOptions.trustWorktreeId }
+      : {}),
     ...(tabId ? { tabId } : {}),
     ...(leafId ? { leafId } : {}),
     ...(placement && !admittedSessionId ? { placement } : {}),

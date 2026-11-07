@@ -13881,7 +13881,8 @@
             "clearNotesFromFile_many": "Effacer {{count}} notes de {{path}} ?",
             "markResolved": "Marquer comme résolu",
             "keepFile": "Conserver le fichier",
-            "keepDeletion": "Conserver la suppression"
+            "keepDeletion": "Conserver la suppression",
+            "refreshAll": "Tout actualiser"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -18305,6 +18306,10 @@
           "actionsUnavailable": "Les actions de plugin ne sont pas disponibles dans ce client.",
           "messageTooLarge": "Le message dépasse la taille limite.",
           "tooManyRequests": "Trop de requêtes."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Ouvrir ce worktree",
+          "reconnect": "Reconnectez-vous pour voir les modifications de ce worktree."
         }
       },
       "link": {
@@ -21404,6 +21409,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Démarré dans {{value0}}",
     "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
       "status": "PR #{{number}} non lié"

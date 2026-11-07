@@ -14335,7 +14335,8 @@
             "clearNotesFromFile_other": "Clear {{count}} notes from {{path}}?",
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
-            "keepDeletion": "Keep deletion"
+            "keepDeletion": "Keep deletion",
+            "refreshAll": "Refresh all"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -18736,6 +18737,10 @@
           "loadFailedKeptLastGood": "{{value0}} failed to load. Showing the last version that loaded.",
           "pluginMessage": "Message from {{value0}}: {{value1}}",
           "reloaded": "Reloaded"
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Open this worktree",
+          "reconnect": "Reconnect to see this worktree’s changes."
         }
       },
       "link": {
@@ -21702,6 +21707,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Started in {{value0}}",
     "actionSaveFailed": "Could not save this action. Try saving it again in Settings.",
     "discard": {
       "deleteUntrackedFileDescription": "This will permanently delete this untracked file. This cannot be undone.",

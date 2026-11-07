@@ -21,7 +21,7 @@ const DIFF_VIEW_FIELDS = [
 function editorTabViewOf(file: OpenFile): EditorTabView | null {
   switch (file.mode) {
     case 'edit':
-      return file.conflict ? { mode: 'edit', conflict: file.conflict } : null
+      return { mode: 'edit', ...(file.conflict ? { conflict: file.conflict } : {}) }
     case 'diff':
       return { mode: 'diff', ...pickStoredFields(file, DIFF_VIEW_FIELDS) }
     case 'markdown-preview':
@@ -37,7 +37,13 @@ function editorTabViewOf(file: OpenFile): EditorTabView | null {
 }
 
 /** Null for a plain edit-mode file: its saved file record already rebuilds it. */
-export function layoutEditorViewOfOpenFile(file: OpenFile): LayoutEditorView | null {
+export function layoutEditorViewOfOpenFile(
+  file: OpenFile,
+  placementWorkspaceId = file.worktreeId
+): LayoutEditorView | null {
+  if (file.mode === 'edit' && !file.conflict && placementWorkspaceId === file.worktreeId) {
+    return null
+  }
   const view = editorTabViewOf(file)
   if (!view) {
     return null
@@ -45,6 +51,7 @@ export function layoutEditorViewOfOpenFile(file: OpenFile): LayoutEditorView | n
   return {
     view,
     file: {
+      worktreeId: file.worktreeId,
       filePath: file.filePath,
       relativePath: file.relativePath,
       language: file.language,

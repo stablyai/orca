@@ -120,7 +120,7 @@ ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
-`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; folder workspaces have no Git worktrees or source control. With `--environment`, pass an absolute path on that server.
+`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
 

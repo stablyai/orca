@@ -21,7 +21,10 @@ import {
   agentTabLaunchStore,
   resolveAgentLaunchExecutionContext
 } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
-import { launchStructuredAgentFromNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
+import {
+  launchStructuredAgentFromNewTab,
+  reopenStructuredLaunchAsTerminal
+} from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
 import { claudeLaunchAccountId, relaunchWithClaudeAccount } from '@/lib/claude-launch-account'
@@ -73,6 +76,7 @@ function openAgentInNewTab(
     agentArgs,
     sessionOptions,
     initialCwd,
+    trustWorktreeId,
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
@@ -134,18 +138,9 @@ function openAgentInNewTab(
       ...(groupId ? { groupId } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
-      // The host's "no" opens this same launch as a terminal, with the caller's arguments.
-      openTerminal: (terminalPlan, terminalActivate) =>
-        launchAgentInNewTabWithOutcome(
-          {
-            ...args,
-            beforeSurfaceOpen: undefined,
-            ...(terminalActivate === false ? { prompt: undefined, activate: false } : {}),
-            requestId: undefined,
-            agentSessionLaunchPlan: terminalPlan
-          },
-          notifyFailure
-        )
+      openTerminal: reopenStructuredLaunchAsTerminal(args, (terminalArgs) =>
+        launchAgentInNewTabWithOutcome(terminalArgs, notifyFailure)
+      )
     })
     if (!structured) {
       args.focusIntent?.cancel()
@@ -190,6 +185,7 @@ function openAgentInNewTab(
       workspaceExecutionHostId: args.workspaceExecutionHostId,
       groupId,
       cwd: initialCwd,
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       buildStartup,
       sessionOptions,
       prompt: trimmedPrompt,
@@ -238,6 +234,7 @@ function openAgentInNewTab(
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(sessionOptions ? { sessionOptions } : {}),
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
       ...(activate === false ? { activate: false } : {}),
@@ -257,9 +254,11 @@ function openAgentInNewTab(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
+    ...(initialCwd?.trim() ? { startupCwd: initialCwd } : {}),
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
     ...(activate === false ? { activate: false } : {}),
     pendingStartup: {
+      ...(trustWorktreeId ? { trustWorktreeId } : {}),
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
@@ -278,10 +277,6 @@ function openAgentInNewTab(
       }
     }
   })
-  if (initialCwd?.trim()) {
-    // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
-    store.queueTabInitialCwd(tab.id, initialCwd)
-  }
   // Safe for native-prefill agents: delivery skips paste when their draft already arrived at launch.
   if (hasPrompt && promptDelivery === 'draft' && pasteDraftAfterLaunch === null) {
     // Native argv prefill skips the paste callback, so seed the chat composer here.

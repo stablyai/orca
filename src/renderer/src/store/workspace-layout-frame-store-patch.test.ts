@@ -11,9 +11,11 @@ import {
 import { GIT_KEY } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from './slices/store-session-test-harness'
-import { createTestStore } from './slices/store-test-helpers'
+import { createTestStore, makeUnifiedTab } from './slices/store-test-helpers'
 import type { AppState } from './types'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
+import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { editorContentIsReferenced } from './slices/editor/tabs/workspace-editor-files'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
@@ -152,4 +154,84 @@ describe('laying frame slices over the store', () => {
     expect(dropped.browserPagesByWorkspace).not.toHaveProperty('browser-1')
     expect(dropped.remoteBrowserPageHandlesByPageId).not.toHaveProperty(page.id)
   })
+})
+
+it('bounds frame retention and shared-content reference work linearly at N and 10N', async () => {
+  const { state, session, frame } = await restored()
+  const { facts, desktopView } = loadWorkspaceLayoutWithoutReport(
+    'local',
+    session,
+    nameBasedLoadContext()
+  )
+  const built = buildLayoutFrameSlices({
+    layouts: { [GIT_KEY]: { ...frame, tabs: [], groups: [], editorFiles: [], browserTabs: [] } },
+    facts,
+    view: desktopView
+  })
+  for (const size of [30, 300]) {
+    let entityReads = 0
+    const files: AppState['openFiles'] = []
+    const local: AppState['unifiedTabsByWorktree'][string] = []
+    const other: AppState['unifiedTabsByWorktree'][string] = []
+    const settle: (() => void)[] = []
+    for (let index = 0; index < size; index++) {
+      const entityId = `diff-${index}`
+      files.push({
+        id: entityId,
+        filePath: `/repo/${index}.ts`,
+        relativePath: `${index}.ts`,
+        language: 'typescript',
+        worktreeId: GIT_KEY,
+        isDirty: false,
+        mode: 'diff'
+      })
+      local.push(
+        makeUnifiedTab({
+          id: `local-${index}`,
+          entityId,
+          worktreeId: GIT_KEY,
+          groupId: 'local-group',
+          contentType: 'diff'
+        })
+      )
+      const tab = makeUnifiedTab({
+        id: `other-${index}`,
+        entityId,
+        worktreeId: 'folder:other',
+        groupId: 'other-group',
+        contentType: 'diff'
+      })
+      Object.defineProperty(tab, 'entityId', {
+        get() {
+          entityReads++
+          return entityId
+        },
+        enumerable: true
+      })
+      if (index % 3 === 0) {
+        other.push(tab)
+      }
+      if (index % 3 === 1) {
+        const finish = beginPendingTab(`pending-${index}`, 'folder:pending', entityId, {
+          kind: 'open'
+        })
+        settle.push(() => finish(null))
+      }
+    }
+    const tabs = { [GIT_KEY]: local, 'folder:other': other }
+    const input = { ...state, openFiles: files, unifiedTabsByWorktree: tabs }
+    try {
+      const patch = buildLayoutFrameStorePatch(input, built, [GIT_KEY])
+      expect((patch.openFiles ?? input.openFiles).length).toBe((size * 2) / 3)
+      const references = { unifiedTabsByWorktree: { 'folder:other': other } }
+      for (let index = 0; index < size; index++) {
+        expect(editorContentIsReferenced(references, `diff-${index}`)).toBe(index % 3 !== 2)
+      }
+      expect(entityReads).toBeLessThanOrEqual(size * 4)
+    } finally {
+      for (const finish of settle) {
+        finish()
+      }
+    }
+  }
 })

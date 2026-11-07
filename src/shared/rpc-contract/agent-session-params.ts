@@ -193,6 +193,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     launchPreferences: LaunchPreferences.optional(),
     claudeAccountId: launchConfigClaudeAccountIdSchema,
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
+    trustWorktreeId: WorktreeSelector.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
     viewMode: z.enum(['terminal', 'chat']).optional(),

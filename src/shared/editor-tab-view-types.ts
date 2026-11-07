@@ -86,7 +86,7 @@ export type OpenCheckRunDetailsState = {
 
 /** An editor tab's view, keyed by its mode, with exactly the open-file fields that mode uses today. The view is not saved. */
 export type EditorTabView =
-  | { mode: 'edit'; conflict: OpenConflictMetadata }
+  | { mode: 'edit'; conflict?: OpenConflictMetadata }
   | {
       mode: 'diff'
       diffSource?: DiffSource

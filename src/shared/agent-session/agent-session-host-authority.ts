@@ -142,6 +142,7 @@ export type RuntimeCreateAgentSessionRequest = {
   /** A pinnable Claude account id or ACTIVE_CLAUDE_ACCOUNT, as recorded in the launch config. */
   claudeAccountId?: string
   startupCwd?: string
+  trustWorktreeId?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
   viewMode?: 'terminal' | 'chat'

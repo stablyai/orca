@@ -13666,7 +13666,8 @@
             "clearNotesFromFile_many": "¿Borrar {{count}} notas de {{path}}?",
             "markResolved": "Marcar como resuelto",
             "keepFile": "Conservar archivo",
-            "keepDeletion": "Mantener eliminación"
+            "keepDeletion": "Mantener eliminación",
+            "refreshAll": "Actualizar todo"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -18090,6 +18091,10 @@
           "actionsUnavailable": "Las acciones de plugins no están disponibles en este cliente.",
           "messageTooLarge": "El mensaje supera el límite de tamaño.",
           "tooManyRequests": "Demasiadas solicitudes."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Abrir este worktree",
+          "reconnect": "Vuelve a conectarte para ver los cambios de este worktree."
         }
       },
       "link": {
@@ -21866,6 +21871,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Iniciado en {{value0}}",
     "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {
       "deleteUntrackedFileDescription": "Esto eliminará permanentemente este archivo sin seguimiento. No se puede deshacer.",

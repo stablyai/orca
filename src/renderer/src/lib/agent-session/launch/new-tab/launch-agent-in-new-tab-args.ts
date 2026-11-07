@@ -30,6 +30,8 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   /** On terminals, a flag `agentArgs` sets itself wins over the inherited saved choice. */
   sessionOptionsYieldToAgentArgs?: true
   initialCwd?: string | null
+  /** Unsaved section root whose trust is prepared without changing placement. */
+  trustWorktreeId?: string
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */

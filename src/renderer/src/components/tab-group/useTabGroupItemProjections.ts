@@ -106,9 +106,9 @@ export function useTabGroupItemProjections({
     () =>
       groupTabs
         .filter((item) => isEditorTabContentType(item.contentType))
-        .map((item) => {
+        .map((item): GroupEditorItem | null => {
           const file = openFileById.get(item.entityId)
-          return file ? { ...file, tabId: item.id } : null
+          return file ? { ...file, isPreview: item.isPreview, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
     [groupTabs, openFileById]

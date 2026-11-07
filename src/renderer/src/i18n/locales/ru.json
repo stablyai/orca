@@ -14325,7 +14325,8 @@
             "clearNotesFromFile_other": "Удалить {{count}} заметки из {{path}}?",
             "markResolved": "Отметить как решённый",
             "keepFile": "Сохранить файл",
-            "keepDeletion": "Сохранить удаление"
+            "keepDeletion": "Сохранить удаление",
+            "refreshAll": "Обновить всё"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -18846,6 +18847,10 @@
           "actionsUnavailable": "Действия плагина недоступны в этом клиенте.",
           "messageTooLarge": "Сообщение превышает допустимый размер.",
           "tooManyRequests": "Слишком много запросов."
+        },
+        "FolderWorkspaceSourceControl": {
+          "openWorktree": "Открыть это рабочее дерево",
+          "reconnect": "Подключитесь снова, чтобы увидеть изменения в этом рабочем дереве."
         }
       },
       "link": {
@@ -21705,6 +21710,7 @@
     }
   },
   "sourceControl": {
+    "sectionAgentStarted": "Запущено в {{value0}}",
     "actionSaveFailed": "Не удалось сохранить действие. Повторите сохранение в настройках.",
     "discard": {
       "deleteUntrackedFileDescription": "Этот неотслеживаемый файл будет безвозвратно удалён. Это действие нельзя отменить.",

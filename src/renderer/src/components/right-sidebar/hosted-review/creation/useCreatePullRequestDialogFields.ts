@@ -232,7 +232,6 @@ export function useCreatePullRequestDialogFields({
     draft,
     worktreeId,
     worktreePath,
-    settings,
     target,
     eligibility,
     resolvedPrDefaults,
