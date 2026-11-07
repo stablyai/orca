@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   removeClaudeProviderAccount,
   removeCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Button } from '../../ui/button'
 import {
   Dialog,

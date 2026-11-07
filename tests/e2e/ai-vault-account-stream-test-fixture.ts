@@ -10,7 +10,7 @@ import {
 import { RuntimeSubscriptionRegistry } from '../../src/main/runtime/runtime-subscription-registry'
 import { RateLimitService } from '../../src/main/rate-limits/service'
 import { getManagedDataAccountService } from '../../src/main/managed-data-accounts/service'
-import { ACCOUNT_METHODS } from '../../src/main/runtime/rpc/methods/accounts'
+import { ACCOUNT_METHODS } from '../../src/main/runtime/rpc/methods/accounts/accounts'
 import {
   eraseRpcMethods,
   isStreamingMethod,
@@ -24,7 +24,7 @@ import type {
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 
 type StreamServicePorts = {
   claudeAccounts: Pick<RuntimeAccountServices['claudeAccounts'], 'listAccounts'>

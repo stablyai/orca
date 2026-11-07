@@ -10,7 +10,7 @@ import {
   takeDueWebSessionCloseReplays
 } from './web-session-close-replay'
 import { appPairedTerminalTabCloseIntentStore as INTENTS } from './paired-terminal-tab-close-intent-store'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { createPairedTerminalTabCloseIntentTestStore } from '../store/terminals/paired-terminal-tab-close-intent.test-fixture'
 import { resetWebSessionFocusIntentForTests } from './web-session-focus-intent'
 import {
@@ -19,8 +19,12 @@ import {
 } from './web-session-close-intent'
 import './web-session-tab-rpc-timeout'
 import '../../../shared/workspace-layout/terminal-surface-id'
-import { ENVIRONMENT_ID, WORKTREE_ID, makeSnapshot } from './web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import {
+  ENVIRONMENT_ID,
+  WORKTREE_ID,
+  makeSnapshot
+} from './hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
@@ -44,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.revealWorktree,
   activateAndRevealFolderWorkspace: mocks.revealWorktree
 }))
@@ -82,7 +86,7 @@ vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
 
-vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
+vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))

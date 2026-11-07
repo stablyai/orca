@@ -20,7 +20,7 @@ import {
 } from './editor-external-watch-event-reconciliation'
 import { verifyLatchedMoveDestinations } from './useEditorExternalWatch'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createTestStore } from '@/store/slices/store-test-helpers'
 import { getOpenFilesForExternalFileChange } from '@/components/editor/autosave/editor-autosave'
 import { __clearSelfWriteRegistryForTests } from '@/components/editor/external-changes/editor-self-write-registry'

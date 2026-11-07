@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionMarkdownTab } from '../../../shared/runtime-ty
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'node:path'
 
-import type { OpenFile } from '../store/slices/editor'
+import type { OpenFile } from '../store/slices/editor/types/open-file'
 import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import './web-session-focus-intent'
@@ -15,7 +15,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 // Why: a server's file is named by its owned id from the first open, as restore names it.
 const README_ID = buildOwnedEditorFileId('/repo/README.md', WT, ENV)

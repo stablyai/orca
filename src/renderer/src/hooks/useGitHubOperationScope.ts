@@ -7,7 +7,7 @@ import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { resolveGitHubRepoOperationOwner } from '@/lib/github-source-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
 
 export function useGitHubOperationOwner(args: {

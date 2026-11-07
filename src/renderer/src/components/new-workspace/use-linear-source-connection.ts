@@ -3,7 +3,7 @@ import type {
   LinearIssueView
 } from '@/store/slices/linear/linear-issue-publication'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { linearStatus } from '@/runtime/runtime-linear-client'
+import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import { useAppStore } from '@/store'
 import { getLinearStatusReadGeneration } from '@/store/slices/linear/linear-slice-request-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'

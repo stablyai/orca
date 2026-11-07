@@ -8,7 +8,7 @@ import type { HtmlDocPreviewProps } from './html-doc-preview-props'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
+} from '@/lib/browser/history/browser-page-conversion-history'
 import { BrowserGuestAnnotateOverlays } from '@/components/browser-pane/annotate/browser-guest-annotate-overlays'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 import {

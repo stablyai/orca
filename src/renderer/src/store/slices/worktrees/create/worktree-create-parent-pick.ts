@@ -22,7 +22,13 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import {
+  findFolderWorkspaceRecord,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspace-record-selectors'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 export type CreateAttemptOutcome = {
   result: CreatedWorktreeResult
@@ -37,6 +43,8 @@ export type WorktreeCreateParentPick = {
   pickedParentWorktreeId?: string
   /** A picked parent on another machine (by host identity); its own store names it before create. */
   crossStoreParentRow?: Worktree
+  /** The parent is the active folder workspace, not a pick: a host that can't nest across machines creates unnested. */
+  crossStoreParentIsActiveFolder?: true
   /** Label for the drop warning; null when the parent record is already gone, '' when it has no name. */
   pickedDisplayName: string | null
   /** The pick no longer qualifies, so the create runs unattached. */
@@ -112,6 +120,32 @@ export function resolveWorktreeCreateParent(
     }
   }
   const activeScope = parseWorkspaceKey(state.activeWorkspaceKey ?? '')
+  const activeFolder =
+    activeScope?.type === 'folder'
+      ? findFolderWorkspaceRecord(
+          selectFolderWorkspaces(state) ?? [],
+          activeScope.folderWorkspaceId,
+          state.activeWorkspaceExecutionHostId ?? undefined
+        )
+      : undefined
+  const activeFolderRow = activeFolder ? getFolderWorkspaceWorktree(activeFolder) : undefined
+  const childStore = lineageStoreKeyOfRow({ id: '', hostId: executionHostId })
+  const folderStore = activeFolderRow ? lineageStoreKeyOfRow(activeFolderRow) : undefined
+  if (
+    activeFolder &&
+    activeFolderRow &&
+    !requestedParentWorktreeId &&
+    childStore !== undefined &&
+    folderStore !== undefined &&
+    childStore !== folderStore
+  ) {
+    return {
+      crossStoreParentRow: activeFolderRow,
+      crossStoreParentIsActiveFolder: true,
+      pickedDisplayName: activeFolder.name.trim(),
+      staleBeforeCreate: false
+    }
+  }
   return {
     parentWorkspace:
       activeScope?.type === 'folder'

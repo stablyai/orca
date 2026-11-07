@@ -2,8 +2,8 @@ import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ITheme, Terminal } from '@xterm/xterm'
 import { useShallow } from 'zustand/react/shallow'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
@@ -18,6 +18,7 @@ import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailabl
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { usePluginFontReady } from '@/store/plugin-fonts'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import {
@@ -69,6 +70,7 @@ export function AgentTerminalPreview({
   const linkSourceRef = useRef(linkSource)
   const browserForegroundRef = useRef(onBrowserForeground)
   const settings = useAppStore((state) => state.settings)
+  const terminalFontReady = usePluginFontReady(settings?.terminalFontFamily)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   // Read live settings without terminal remount, PTY reconnect or snapshot repaint.
@@ -358,7 +360,7 @@ export function AgentTerminalPreview({
       buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')
     )
     syncPreviewTerminalLigatures(terminal, settings)
-  }, [settings, macOptionAsAlt])
+  }, [settings, terminalFontReady, macOptionAsAlt])
 
   return (
     // Fix the box to the viewport so snapshot geometry cannot resize the dialog; fit/clip the true PTY frame at its cursor end.

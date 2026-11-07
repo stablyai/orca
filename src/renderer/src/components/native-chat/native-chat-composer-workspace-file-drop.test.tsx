@@ -40,7 +40,7 @@ vi.mock('@/store', () => {
   useAppStore.getState = () => testState.store
   return { useAppStore }
 })
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.executionHostId
 }))
 // Retain production notices and exports so mocks cannot hide stale wording or new behavior.

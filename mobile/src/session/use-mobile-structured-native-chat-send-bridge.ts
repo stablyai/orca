@@ -13,6 +13,8 @@ import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
 } from './native-chat/composer/mobile-native-chat-draft-store'
+import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
   agent: StructuredAgentId | undefined
@@ -28,6 +30,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   onSendError: (message: string) => void
 }): {
   send: (text: string, images?: string[]) => Promise<boolean>
@@ -44,6 +47,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     agent,
     captureSendOrigin,
     clearDraftForSend,
+    holdUnconfirmed,
     onSendError,
     restoreRejectedDraft,
     sendStructured,
@@ -65,13 +69,27 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const skills = readMobileNativeChatPickedSkills(origin.draftKey)
       clearDraftForSend(origin, text)
-      const outcome = await (intent
-        ? sendStructured(text, images, deadline, attachments, skills, intent)
-        : sendStructured(text, images, deadline, attachments, skills))
-      // Only a definite refusal returns input; uncertainty remains ordinary transcript content.
-      if (outcome === 'rejected') {
+      const created: { clientMessageId?: string } = {}
+      const outcome = await sendStructured(text, images, deadline, attachments, skills, {
+        ...intent,
+        onCreated: (id) => {
+          created.clientMessageId = id
+          intent?.onCreated?.(id)
+        }
+      })
+      const handBack = () => {
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
+      }
+      if (outcome === 'rejected') {
+        handBack()
+      } else if (outcome === 'unknown' && created.clientMessageId) {
+        // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
+        holdUnconfirmed(created.clientMessageId, () => {
+          handBack()
+          intent?.onHandBack?.()
+          onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+        })
       }
       return outcome
     },
@@ -79,6 +97,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       agent,
       captureSendOrigin,
       clearDraftForSend,
+      holdUnconfirmed,
       onSendError,
       restoreRejectedDraft,
       sendStructured,

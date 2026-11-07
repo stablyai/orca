@@ -1,0 +1,242 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import type { IDisposable } from '@xterm/xterm'
+import { useAppStore } from '../../../store/index'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { PtyTransport } from '../pty-transport/pty-transport-types'
+import type { SearchState } from '../input/keyboard/terminal-keyboard-shortcut-matching'
+import type { CloseTerminalDialogCopyKind } from '../layout/close/CloseTerminalDialog'
+
+import type { TerminalLinkActionRequest } from '../links/terminal-link-action-request'
+import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
+import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { useDaemonActions } from '@/components/shared/useDaemonActions'
+import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'
+import type { TerminalPaneProps } from './terminal-pane-types'
+import { useVisibleTerminalTabClaim } from '../viewport/visibility/use-visible-terminal-tab-claim'
+import type { VisiblePtyRecoveryState } from '../pty-transport/remote-runtime/recovery/terminal-remote-runtime-recovery-ui-state'
+import type { PaneProcessExit } from '../process-exit/pane-process-exit'
+import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
+import type { TerminalErrorsByPaneId } from '../errors/terminal-error-accumulation'
+import { selectTerminalPaneHostState } from '../host-state/terminal-pane-host-state'
+
+export function useTerminalPaneFoundation(props: TerminalPaneProps) {
+  const {
+    tabId,
+    worktreeId,
+    cwd,
+    isActive,
+    isVisible = true,
+    isWorktreeActive = isVisible,
+    isolatedPaneKey = null,
+    showSplitButton = true,
+    onPtyExit,
+    onCloseTab
+  } = props
+  const containerRef = useRef<HTMLDivElement>(null)
+  const managerRef = useRef<PaneManager | null>(null)
+  const expandedPaneIdRef = useRef<number | null>(null)
+  const expandedStyleSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
+    new Map()
+  )
+  const pendingPaneSizeRefreshFrameIdsRef = useRef<number[]>([])
+  const activityIsolationSnapshotRef = useRef<Map<HTMLElement, { display: string; flex: string }>>(
+    new Map()
+  )
+  const paneTransportsRef = useRef<Map<number, PtyTransport>>(new Map())
+  const paneCwdRef = useRef<PaneCwdMap>(new Map())
+  const paneMode2031Ref = useRef<Map<number, boolean>>(new Map())
+  const paneKittyKeyboardModesRef = useRef<Map<number, TerminalKittyKeyboardModeTracker>>(new Map())
+  const paneLastThemeModeRef = useRef<Map<number, 'dark' | 'light'>>(new Map())
+  const panePtyBindingsRef = useRef<Map<number, IDisposable>>(new Map())
+  const replayingPanesRef = useRef<Map<number, number>>(new Map())
+  const isActiveRef = useRef(isActive)
+  // Event/PTY callbacks need current visibility before passive effects run.
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  isActiveRef.current = isActive
+  const isRendererVisible = isVisible && isWorktreeActive
+  const isVisibleRef = useRef(isRendererVisible)
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  isVisibleRef.current = isRendererVisible
+  const {
+    nativeChatTranscriptIsLocalReadable,
+    sshReconnectEnvironmentId,
+    sshReconnectError,
+    sshReconnectStatus,
+    sshReconnectTargetId,
+    sshReconnectTargetLabel,
+    sshReconnectTargetRemoved
+  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
+  const sshReconnectOwnsTerminalErrors = Boolean(
+    sshReconnectTargetId && sshReconnectStatus && sshReconnectStatus !== 'connected'
+  )
+  const sshReconnectOwnsTerminalErrorsRef = useRef(sshReconnectOwnsTerminalErrors)
+  useLayoutEffect(() => {
+    sshReconnectOwnsTerminalErrorsRef.current = sshReconnectOwnsTerminalErrors
+  }, [sshReconnectOwnsTerminalErrors])
+  useEffect(() => {
+    if (!sshReconnectEnvironmentId) {
+      return
+    }
+    void hydrateRuntimeEnvironmentSshState(sshReconnectEnvironmentId).catch(() => {})
+  }, [sshReconnectEnvironmentId])
+
+  useVisibleTerminalTabClaim({ isVisible, tabId })
+  const [expandedPaneId, setExpandedPaneId] = useState<number | null>(null)
+  const [paneCount, setPaneCount] = useState<number>(0)
+  const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
+  const [terminalLinkActionRequest, setTerminalLinkActionRequest] =
+    useState<TerminalLinkActionRequest | null>(null)
+  const requestTerminalLinkAction = useCallback((request: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest(request)
+  }, [])
+  const closeTerminalLinkActions = useCallback((dismissed?: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest((current) => closeTerminalLinkActionRequest(current, dismissed))
+  }, [])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchOpenRef = useRef(false)
+  // Keyboard callbacks must observe current search state immediately.
+  // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
+  searchOpenRef.current = searchOpen
+  const searchStateRef = useRef<SearchState>({
+    query: '',
+    caseSensitive: false,
+    regex: false
+  })
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const focusSearchInput = useCallback((): void => {
+    searchInputRef.current?.focus()
+    searchInputRef.current?.select()
+  }, [])
+  const [pendingCloseConfirmation, setPendingCloseConfirmation] = useState<{
+    paneId: number
+    copyKind: CloseTerminalDialogCopyKind
+  } | null>(null)
+  const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
+  const [quickCommandEditorHostId, setQuickCommandEditorHostId] =
+    useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
+  const [chatLeafId, setChatLeafId] = useState<string | null>(
+    () => useAppStore.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null
+  )
+  const onAgentExitedRef = useRef<(leafId: string) => void>(() => {})
+  const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
+    undefined
+  )
+  const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
+  const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
+  const [agentSessionContinuation, setAgentSessionContinuation] =
+    useState<AgentSessionContinuationRequest | null>(null)
+  const [terminalError, setTerminalError] = useState<string | null>(null)
+  const [terminalErrorsByPaneId, setTerminalErrorsByPaneId] = useState<TerminalErrorsByPaneId>({})
+  const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<
+    Record<number, PaneProcessExit>
+  >({})
+  const handlePaneProcessDied = useCallback((processExit: PaneProcessExit) => {
+    setPaneProcessExitsByPaneId((current) => ({
+      ...current,
+      [processExit.paneId]: processExit
+    }))
+  }, [])
+  const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
+    Record<number, VisiblePtyRecoveryState>
+  >({})
+  const [sessionStateSaveFailureMessage, setSessionStateSaveFailureMessage] = useState<
+    string | null
+  >(null)
+  const daemonActions = useDaemonActions()
+  const { refreshMobileOverlays } = useMobileOverlayTicks({
+    managerRef,
+    paneTransportsRef
+  })
+
+  return {
+    ...props,
+    tabId,
+    worktreeId,
+    cwd,
+    isActive,
+    isVisible,
+    isWorktreeActive,
+    isolatedPaneKey,
+    showSplitButton,
+    onPtyExit,
+    onCloseTab,
+    containerRef,
+    managerRef,
+    expandedPaneIdRef,
+    expandedStyleSnapshotRef,
+    pendingPaneSizeRefreshFrameIdsRef,
+    activityIsolationSnapshotRef,
+    paneTransportsRef,
+    paneCwdRef,
+    paneMode2031Ref,
+    paneKittyKeyboardModesRef,
+    paneLastThemeModeRef,
+    panePtyBindingsRef,
+    replayingPanesRef,
+    isActiveRef,
+    isRendererVisible,
+    isVisibleRef,
+    sshReconnectTargetId,
+    nativeChatTranscriptIsLocalReadable,
+    sshReconnectEnvironmentId,
+    sshReconnectError,
+    sshReconnectStatus,
+    sshReconnectTargetLabel,
+    sshReconnectTargetRemoved,
+    sshReconnectOwnsTerminalErrors,
+    sshReconnectOwnsTerminalErrorsRef,
+    expandedPaneId,
+    setExpandedPaneId,
+    paneCount,
+    setPaneCount,
+    paneLayoutRevision,
+    setPaneLayoutRevision,
+    terminalLinkActionRequest,
+    requestTerminalLinkAction,
+    closeTerminalLinkActions,
+    searchOpen,
+    setSearchOpen,
+    searchOpenRef,
+    searchStateRef,
+    searchInputRef,
+    focusSearchInput,
+    pendingCloseConfirmation,
+    setPendingCloseConfirmation,
+    quickCommandEditorOpen,
+    setQuickCommandEditorOpen,
+    quickCommandEditorHostId,
+    setQuickCommandEditorHostId,
+    chatLeafId,
+    setChatLeafId,
+    onAgentExitedRef,
+    tabWideAgentHintLeafId,
+    setTabWideAgentHintLeafId,
+    quickCommandDraft,
+    setQuickCommandDraft,
+    agentSessionFork,
+    setAgentSessionFork,
+    agentSessionContinuation,
+    setAgentSessionContinuation,
+    terminalError,
+    terminalErrorsByPaneId,
+    setTerminalErrorsByPaneId,
+    paneProcessExitsByPaneId,
+    setPaneProcessExitsByPaneId,
+    handlePaneProcessDied,
+    setTerminalError,
+    ptyRecoveryStatesByPaneId,
+    setPtyRecoveryStatesByPaneId,
+    sessionStateSaveFailureMessage,
+    setSessionStateSaveFailureMessage,
+    daemonActions,
+    refreshMobileOverlays
+  }
+}
+
+export type TerminalPaneFoundation = ReturnType<typeof useTerminalPaneFoundation>

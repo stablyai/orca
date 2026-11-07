@@ -2,25 +2,54 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
 } from '../../../../../../shared/antigravity-account-types'
 import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Badge } from '../../../ui/badge'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'
-import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
+import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import {
   AntigravityChatSignInRow,
   antigravityChatSignInBlocked,
   useAntigravityChatSignIn
 } from '../../../provider-accounts/AntigravityChatSignInRow'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
+import { formatTimeAgo } from '../../../status-bar/tooltip'
+import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
+import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/structured-chat-platform-support'
+
+function formatUsageReading(usage: ProviderRateLimits): string {
+  return translate(
+    'accounts.antigravity.usageReading',
+    'Session: {{session}} · Weekly: {{weekly}}',
+    {
+      session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
+      weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
+    }
+  )
+}
+
+function usageMatchesTarget(provenance: string, target: AntigravityAccountTarget): boolean {
+  if (target.runtime === 'host' || target.wslDistro) {
+    return (
+      provenance ===
+      localAccountRuntimeTargetKey({
+        runtime: target.runtime,
+        wslDistro: target.wslDistro ?? null
+      })
+    )
+  }
+  // The host names the default distro; this client does not know it.
+  return provenance.startsWith('wsl:')
+}
 
 export function AntigravityAccountsSection({
   owner,
@@ -111,8 +140,16 @@ export function AntigravityAccountsSection({
         ) {
           throw new Error('The native account changed while reading usage. Refresh usage again.')
         }
+        const usage = snapshot.rateLimits.antigravity
+        const provenance = usage?.usageMetadata?.authProvenance
+        // Usage follows the Accounts location; a reading from another runtime is another login's.
+        if (provenance && !usageMatchesTarget(provenance, target)) {
+          throw new Error(
+            'Antigravity usage was read from a different location. Refresh usage again.'
+          )
+        }
         if (mounted.current) {
-          setUsage(snapshot.rateLimits.antigravity)
+          setUsage(usage)
         }
       } else {
         const next = await callAntigravityAccounts(owner, target, action, accountId)
@@ -217,7 +254,7 @@ export function AntigravityAccountsSection({
             <Button
               variant="ghost"
               size="sm"
-              disabled={busy || !state.currentAccount || target.runtime === 'wsl'}
+              disabled={busy || !state.currentAccount}
               onClick={() => void run('Usage')}
             >
               {translate('accounts.antigravity.usage', 'Refresh usage')}
@@ -231,15 +268,7 @@ export function AntigravityAccountsSection({
           </div>
           {usage && (
             <p className="text-xs text-muted-foreground">
-              {usage.error ??
-                translate(
-                  'accounts.antigravity.usageReading',
-                  'Session: {{session}} · Weekly: {{weekly}}',
-                  {
-                    session: usage.session ? `${Math.round(usage.session.usedPercent)}%` : '—',
-                    weekly: usage.weekly ? `${Math.round(usage.weekly.usedPercent)}%` : '—'
-                  }
-                )}
+              {usage.error ?? formatUsageReading(usage)}
             </p>
           )}
           {state.accounts.map((account) => (
@@ -251,6 +280,20 @@ export function AntigravityAccountsSection({
                 <p className="text-xs font-medium">
                   {account.email ?? translate('accounts.antigravity.saved', 'Saved Google account')}
                 </p>
+                {account.usage !== undefined && (
+                  <p className="text-xs text-muted-foreground">
+                    {account.usage
+                      ? translate(
+                          'accounts.antigravity.lastReading',
+                          '{{reading}} · Read {{time}}',
+                          {
+                            reading: formatUsageReading(account.usage),
+                            time: formatTimeAgo(account.usage.updatedAt)
+                          }
+                        )
+                      : translate('accounts.antigravity.noReading', 'Usage unknown: not read yet')}
+                  </p>
+                )}
                 {state.activeAccountId === account.id && (
                   <Badge variant="secondary">
                     {translate('accounts.antigravity.nativeActive', 'Native account')}
@@ -328,6 +371,10 @@ export function AntigravityAccountsSection({
             disabled={antigravityChatSignInBlocked(chatRuntime)}
           />
         </div>
+      ) : chats && structuredChatUnavailableOnPlatform('antigravity', ownerPlatform) ? (
+        <ChatUnavailableOnWindowsNote
+          label={translate('accounts.antigravity.title', 'Antigravity')}
+        />
       ) : null}
     </section>
   )

@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/update-status-types'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')

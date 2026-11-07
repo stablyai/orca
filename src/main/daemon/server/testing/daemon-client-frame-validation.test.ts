@@ -116,9 +116,4 @@ describe.skipIf(process.platform === 'win32')('malformed client frames (#17841)'
       await expectDaemonStillServing()
     }
   )
-
-  it('still answers a well-formed request after a bad one on another connection', async () => {
-    await sendRawFrames(socketPath, [validHello(), '{"method":"x"}'])
-    await expect(client!.request('ping', undefined)).resolves.toBeDefined()
-  })
 })

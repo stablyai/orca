@@ -1,8 +1,9 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
-import type * as WorktreeRuntimeOwnerModule from '@/lib/worktree-runtime-owner'
-import type * as RuntimeRpcClientModule from './runtime-rpc-client'
+import type * as WorktreeRuntimeOwnerModule from '@/lib/workspace/ownership/worktree-runtime-owner'
+
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
@@ -52,7 +53,7 @@ import { installLayoutFrameApplyCheck } from './workspace-layout-frame-apply-che
 import './workspace-layout-frame-sync'
 import { resetFrameDrawnServerWorkspacesForTests } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 type Sent = { method: string; params: unknown }
@@ -82,7 +83,7 @@ vi.mock('@/lib/resolve-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof ResolveOwnerModule>()),
   runtimeEnvironmentIdUnlessTwin: (_state: unknown, key: string) => hoisted.owners.get(key) ?? null
 }))
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwnerModule>()),
   runtimeEnvironmentIdOrLocalUnlessTwin: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null
@@ -92,8 +93,8 @@ vi.mock('./web-session-tabs-sync/frame-drawn-server-workspaces', async (importOr
   resyncMirroredServerWorkspace: hoisted.resync
 }))
 // Every RPC this window sends, whichever client sends it.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   return {
     ...actual,
     callRuntimeRpc: (_target: RuntimeClientTarget, method: string, params?: unknown) => {

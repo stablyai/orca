@@ -1,4 +1,4 @@
-import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp-config-inspection'
+import type { LoadedMcpConfigInspection } from '../../../../runtime/mcp/configuration/mcp-config-inspection'
 import { AlertCircle, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '../../../ui/button'

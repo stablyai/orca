@@ -9,6 +9,7 @@ import { useMobileTasksTaskListLoading } from './use-mobile-tasks-task-list-load
 import { useMobileTasksMutation } from './use-mobile-tasks-workspace-and-project-state'
 import { useMobileTasksItemSelectionEffects } from './use-mobile-tasks-list-and-detail-effects'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import React, { useState, useRef } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -456,7 +457,7 @@ it.each(['comment', 'status'] as const)(
     expect(f.read()).toMatchObject({
       mutatingStatus: false,
       actionItem: f.a,
-      itemCommentDraft: 'origin comment'
+      itemCommentDraft: kind === 'comment' ? '' : 'origin comment'
     })
     let fresh!: Promise<void>
     await act(async () => {
@@ -468,6 +469,63 @@ it.each(['comment', 'status'] as const)(
     expect(f.read()).toMatchObject({ mutatingStatus: false, actionItem: null })
   }
 )
+
+it('keeps an unconfirmed comment with a notice until the reloaded thread shows the viewer posted it', async () => {
+  const f = await mount()
+  await act(async () => f.read().setItemCommentDraft('Ship it'))
+  let pending!: Promise<void>
+  await act(async () => {
+    pending = f.read().addHostedItemComment(f.a)
+  })
+  await act(async () => {
+    f.client.pushState('reconnecting')
+    f.client.requests[0].reject(markRpcDeliveryUnknown(new Error('Connection closed')))
+    f.client.pushState('connected')
+  })
+  await pending
+  expect(f.read()).toMatchObject({
+    itemCommentDraft: 'Ship it',
+    commentSendNotice: {
+      slot: 'comment',
+      text: 'Not confirmed. Check the thread before sending again.'
+    }
+  })
+  const theirs = { id: 40, body: 'Ship it', createdAt: '', author: 'alice' }
+  await act(async () => f.read().setDetailPayload({ ...details(f.a), comments: [theirs] }))
+  expect(f.read()).toMatchObject({
+    itemCommentDraft: 'Ship it',
+    commentSendNotice: { slot: 'comment' }
+  })
+  await act(async () =>
+    f.read().setDetailPayload({
+      ...details(f.a),
+      comments: [
+        theirs,
+        { id: 41, body: 'Ship it', createdAt: '', author: 'me', viewerDidAuthor: true }
+      ]
+    })
+  )
+  expect(f.read()).toMatchObject({ itemCommentDraft: '', commentSendNotice: null })
+})
+
+it('says a comment the host refused across a reconnect was not sent', async () => {
+  const f = await mount()
+  await act(async () => f.read().setItemCommentDraft('Ship it'))
+  let pending!: Promise<void>
+  await act(async () => {
+    pending = f.read().addHostedItemComment(f.a)
+  })
+  await act(async () => {
+    f.client.pushState('reconnecting')
+    f.client.pushState('connected')
+  })
+  await f.answer({ ok: false, error: 'Validation failed' })
+  await pending
+  expect(f.read()).toMatchObject({
+    itemCommentDraft: 'Ship it',
+    commentSendNotice: { slot: 'comment', text: 'Not sent. Try sending it again.' }
+  })
+})
 
 it('all eighteen production mutation admissions share the synchronous serial owner from one retained render snapshot', async () => {
   const f = await mount()

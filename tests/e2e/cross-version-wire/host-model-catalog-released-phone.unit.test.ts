@@ -4,10 +4,11 @@ import { stripTypeScriptTypes } from 'node:module'
 import { beforeAll, expect, it, vi } from 'vitest'
 import {
   call,
-  hostStub,
-  STRUCTURED_CLIENT
-} from '../../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+  hostStub
+} from '../../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import { STRUCTURED_CLIENT } from '../../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { createAgentModelCatalogService } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -113,9 +114,16 @@ it.each(['success', 'budget'] as const)(
         })
     )
     const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/qa-account' }
+    // A command line relative to each folder lists per folder, so five folders saturate admission.
     const scoped = Object.assign(probe, {
-      resolve: async (_home: unknown, cwd: string) => ({
-        identity: { command: 'qa-modern', cwd },
+      resolve: async (
+        _home: unknown,
+        _cwd: string,
+        _lookup: unknown,
+        _operation: unknown,
+        launchDirectory?: string
+      ) => ({
+        identity: { command: 'qa-modern', cwd: launchDirectory },
         run: modern
       })
     })

@@ -1,3 +1,4 @@
+import { useNativeChatOlderHistory } from './use-native-chat-older-history'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
@@ -6,16 +7,12 @@ import {
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   applyAppend,
+  boundNativeChatWindow,
   createNativeChatMerger,
   replaceList
 } from '../../../../shared/native-chat/native-chat-merge'
 import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
-import {
-  hasMoreNativeChatHistory,
-  NATIVE_CHAT_INITIAL_LIMIT,
-  nextNativeChatLimit,
-  type NativeChatOlderPageResult
-} from './native-chat-pagination'
+import { hasMoreNativeChatHistory, NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 import type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 import { getNativeChatSessionTransport } from './native-chat-session-transport'
 import { useNativeChatTranscriptLifecycle } from './use-native-chat-transcript-lifecycle'
@@ -40,9 +37,6 @@ export type UseNativeChatLiveSessionArgs = {
   /** False suspends transcript IO while retaining the last committed session. */
   enabled?: boolean
 }
-
-// Paging is the user's own click, so it may start a stopped WSL distro.
-const USER_PAGING = { wakeWslDistro: true } as const
 
 // Keep the base axis stable through non-ready reads.
 const EMPTY_MESSAGES: readonly NativeChatMessage[] = []
@@ -77,7 +71,9 @@ export function useNativeChatLiveSession(
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
   // Cache the id index so each frame costs O(incoming), not O(existing).
   const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
-  appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
+  if (appendMergerRef.current == null) {
+    appendMergerRef.current = createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
+  }
 
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 
@@ -174,7 +170,7 @@ export function useNativeChatLiveSession(
             setRead({ phase: 'error', error: result.error })
             return
           }
-          const messages = result?.messages ?? []
+          const messages = boundNativeChatWindow(result?.messages ?? [], limitRef.current)
           transcriptLifecycleControl.replace(result?.lifecycle)
           setRead({ phase: 'ready', messages })
           setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
@@ -223,10 +219,11 @@ export function useNativeChatLiveSession(
           }
           frameArrived = true
           transcriptLifecycleControl.replace(frame.lifecycle)
-          replaceList(appendMergerRef.current, frame.messages)
+          const messages = boundNativeChatWindow(frame.messages, limitRef.current)
+          replaceList(appendMergerRef.current, messages)
           setAppended([])
           setRead({ phase: 'ready', messages: appendMergerRef.current.list })
-          setHasMore(frame.hasMore)
+          setHasMore(frame.hasMore || messages !== frame.messages)
           return
         }
         transcriptLifecycleControl.append(frame.lifecycle)
@@ -242,63 +239,61 @@ export function useNativeChatLiveSession(
     }
   }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
 
-  // Concurrent callers share the current epoch’s page.
-  const olderPageRef = useRef<{
-    epoch: number
-    promise: Promise<NativeChatOlderPageResult>
-  } | null>(null)
-  const loadEarlier = useCallback((): Promise<NativeChatOlderPageResult> => {
-    const inFlight = olderPageRef.current
-    if (inFlight?.epoch === transcriptEpochRef.current) {
-      return inFlight.promise
+  const loadEarlier = useNativeChatOlderHistory({
+    agent,
+    sessionId,
+    transcriptPath,
+    transport,
+    hasMore,
+    read,
+    transcriptLifecycleControl,
+    limitRef,
+    latestEnabled,
+    latestSessionId,
+    latestTransport,
+    transcriptEpochRef,
+    setLoadingEarlier,
+    setRead,
+    setHasMore
+  })
+
+  const trimHistory = useCallback(() => {
+    if (
+      !latestEnabled.current ||
+      latestSessionId.current !== sessionId ||
+      latestTransport.current !== transport
+    ) {
+      return
     }
-    if (!hasMore) {
-      return Promise.resolve('exhausted')
+    limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
+    // Retire pagination without closing the independently owned live stream.
+    transcriptEpochRef.current += 1
+    setOlderHistoryGeneration(transcriptEpochRef.current)
+    setLoadingEarlier(false)
+    const merger = appendMergerRef.current
+    const bounded = boundNativeChatWindow(merger.list, NATIVE_CHAT_INITIAL_LIMIT)
+    const trimmedAppend = bounded !== merger.list
+    setRead((current) => {
+      if (current.phase !== 'ready') {
+        return current
+      }
+      // Evict the base too when the append prefix is gone, keeping one contiguous suffix.
+      const messages = trimmedAppend
+        ? []
+        : boundNativeChatWindow(current.messages, NATIVE_CHAT_INITIAL_LIMIT)
+      return messages === current.messages ? current : { ...current, messages }
+    })
+    if (trimmedAppend) {
+      replaceList(merger, bounded)
+      setAppended(merger.list)
     }
-    if (!latestEnabled.current || !sessionId || read.phase !== 'ready') {
-      return Promise.resolve('unchanged')
+    if (
+      (read.phase === 'ready' && read.messages.length > NATIVE_CHAT_INITIAL_LIMIT) ||
+      trimmedAppend
+    ) {
+      setHasMore(true)
     }
-    const nextLimit = nextNativeChatLimit(limitRef.current)
-    const requestEpoch = transcriptEpochRef.current
-    const lifecycleRevision = transcriptLifecycleControl.revision()
-    const loadedCount = read.messages.length
-    setLoadingEarlier(true)
-    const promise = transport
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, USER_PAGING)
-      .then((result): NativeChatOlderPageResult => {
-        if (
-          !latestEnabled.current ||
-          latestSessionId.current !== sessionId ||
-          latestTransport.current !== transport ||
-          transcriptEpochRef.current !== requestEpoch
-        ) {
-          return 'superseded'
-        }
-        if (!result || 'error' in result) {
-          return 'failed'
-        }
-        limitRef.current = nextLimit
-        // Replace the ordered base tail to prepend history; preserve separate live appends.
-        setRead({ phase: 'ready', messages: result.messages })
-        transcriptLifecycleControl.replaceFromPagination(result.lifecycle, lifecycleRevision)
-        const more = hasMoreNativeChatHistory(result.messages.length, nextLimit)
-        setHasMore(more)
-        return result.messages.length > loadedCount ? 'applied' : more ? 'unchanged' : 'exhausted'
-      })
-      // Keep loaded history when pagination rejects.
-      .catch((): NativeChatOlderPageResult => 'failed')
-      .finally(() => {
-        if (olderPageRef.current?.promise === promise) {
-          olderPageRef.current = null
-        }
-        // Discarded results must still clear loading within the current epoch.
-        if (latestEnabled.current && transcriptEpochRef.current === requestEpoch) {
-          setLoadingEarlier(false)
-        }
-      })
-    olderPageRef.current = { epoch: requestEpoch, promise }
-    return promise
-  }, [agent, sessionId, transcriptPath, transport, hasMore, read, transcriptLifecycleControl])
+  }, [read, sessionId, transport])
 
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
@@ -329,6 +324,7 @@ export function useNativeChatLiveSession(
       loadingEarlier,
       olderHistoryGeneration,
       loadEarlier,
+      trimHistory,
       readPhase: read.phase
     }
   }, [
@@ -345,6 +341,7 @@ export function useNativeChatLiveSession(
     loadingEarlier,
     olderHistoryGeneration,
     loadEarlier,
+    trimHistory,
     appended
   ])
 }

@@ -6,7 +6,10 @@ import { useAppStore } from '@/store'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import { NativeChatVisualOwnerProvider, useNativeChatVisualOwner } from './native-chat-visual-owner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { seedBrowserLinkTestStore, WORKSPACE } from '@/lib/browser-link-open.test-fixture'
+import {
+  seedBrowserLinkTestStore,
+  WORKSPACE
+} from '@/lib/browser/navigation/browser-link-open.test-fixture'
 import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
 
 vi.mock('./use-native-chat-visual-document', () => ({

@@ -17,6 +17,7 @@ import { useMobilePairingGeneration } from './use-mobile-pairing-generation'
 import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalidation'
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
+import { usePairingOfferExpiry } from './use-pairing-offer-expiry'
 import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import {
   type MobilePairingAddressChange,
@@ -31,6 +32,7 @@ export default function MobilePage(): React.JSX.Element {
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
   const [pairQrSize, setPairQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
+  const [pairExpiresAt, setPairExpiresAt] = useState<number | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
@@ -91,6 +93,7 @@ export default function MobilePage(): React.JSX.Element {
     setPairQrDataUrl,
     setPairQrSize,
     setPairingUrl,
+    setPairExpiresAt,
     setPairingQrError,
     setPairLoading,
     setRelayMintFailure,
@@ -267,6 +270,10 @@ export default function MobilePage(): React.JSX.Element {
     }
     void generatePairing(false)
   }, [stage, stepIdx, canGenerate, generatePairing, pairingAddressSettled])
+
+  // Refresh only a code on screen; the old one stays valid for a phone mid-scan.
+  const pairingCodeShown = stage === 'flow' && stepIdx === 1 && pairingUrl != null
+  usePairingOfferExpiry(pairingCodeShown ? pairExpiresAt : null, () => void generatePairing(false))
 
   // Clear prior QR state on entry so expired codes cannot flash during the fresh visit.
   const beginPairingVisit = (): void => {

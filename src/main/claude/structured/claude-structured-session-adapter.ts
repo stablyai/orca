@@ -1,12 +1,12 @@
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
-import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { claudeAcquireFailure } from '../claude-startup-failure'
 import { claudeStartPublication, openClaudeStart } from './claude-structured-start-ending'
-import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure'
+import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
-} from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from '../claude-command-lifecycle'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
@@ -45,6 +45,7 @@ import {
 } from './journal/claude-structured-prompt-ownership'
 import { claudePromptCancelRoute } from './journal/claude-structured-prompt-replies'
 import { claudeForkForRewind } from '../claude-rewind-fork'
+import { copyClaudeConversation } from '../claude-conversation-copy'
 import { ClaudeConversationNaming } from '../claude-conversation-naming'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
@@ -146,6 +147,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   forkForRewind = claudeForkForRewind
+  copyConversation = copyClaudeConversation
   stopProviderNaming = (): void => this.naming?.stop()
   nameProviderConversation: StructuredAgentSessionAdapter['nameProviderConversation'] = (input) =>
     this.naming?.accept(input)
@@ -184,9 +186,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     const state = session?.backgroundTasks.state
     return session && (state ? { ...state, supportsTaskStop: true } : null)
   }
-  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
-    sessionId
-  ) =>
+  backgroundTaskStops = (sessionId: string) =>
     this.sessions.has(sessionId) ? { supportsTaskStop: true, supportsStopAll: true } : undefined
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.commands.commands

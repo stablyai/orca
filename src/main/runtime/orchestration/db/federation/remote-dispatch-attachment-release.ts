@@ -4,7 +4,7 @@ import {
   WORKER_TERMINAL_RELEASABLE_ROW_SQL,
   type WorkerTerminalResourceRow,
   type WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 

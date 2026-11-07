@@ -5,7 +5,7 @@ import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 type CallParams = {
   envelope?: { expectedRuntimeFence?: number | null }
@@ -108,7 +108,7 @@ import {
   registerStructuredSelectionCatalogStore,
   structuredSessionSelectionController,
   forgetStructuredSessionSelection
-} from '../../structured-agent-session-selection-controller'
+} from '../options/structured-agent-session-selection-controller'
 
 import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {

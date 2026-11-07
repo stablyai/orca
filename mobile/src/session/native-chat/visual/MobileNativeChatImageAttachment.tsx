@@ -11,10 +11,12 @@ import { styles, TEXT_SIZE } from '../transcript/mobile-native-chat-message-styl
 export function MobileNativeChatImageAttachment({
   block,
   fontScale,
+  compact = false,
   onLongPress
 }: {
   block: NativeChatImageRefBlock
   fontScale: number
+  compact?: boolean
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -92,8 +94,8 @@ export function MobileNativeChatImageAttachment({
         <Image
           key={`${round}:${usableDirectUri ? 'direct' : 'stored'}`}
           source={{ uri }}
-          style={styles.imageThumb}
-          resizeMode="contain"
+          style={[styles.imageThumb, compact && styles.imageCompactThumb]}
+          resizeMode={compact ? 'cover' : 'contain'}
           onError={() => {
             if (activeOwner.current !== owner || (client?.getGeneration?.() ?? 0) !== generation) {
               return
@@ -111,7 +113,7 @@ export function MobileNativeChatImageAttachment({
   if (readable && !current && !usableDirectUri) {
     return (
       <View
-        style={[styles.imageThumb, styles.imageLoading]}
+        style={[styles.imageThumb, compact && styles.imageCompactThumb, styles.imageLoading]}
         accessibilityLabel={t('chat.nativeChatProse.loadingImage', 'Loading image')}
       >
         {showSpinner ? <ActivityIndicator /> : null}

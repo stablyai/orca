@@ -14,7 +14,7 @@ import {
 import {
   AtRestCommandCatalog,
   type AtRestCommandScan
-} from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+} from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import {
   runCodexAppServerSession,
   type CodexAppServerRpc

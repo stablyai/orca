@@ -16,7 +16,10 @@ export async function planQueuedPaneAgentLaunch(
     tabId: 'tab-1',
     leafId: '11111111-1111-4111-8111-111111111111'
   },
-  pane: Pick<PtySpawnIpcArgs, 'connectionId' | 'commandDelivery' | 'startupCommandDelivery'> = {}
+  pane: Pick<
+    PtySpawnIpcArgs,
+    'connectionId' | 'commandDelivery' | 'startupCommandDelivery' | 'trustWorktreeId' | 'cwd'
+  > = {}
 ): Promise<PtySpawnIpcArgs> {
   const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))
   const discovery = vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({

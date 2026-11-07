@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -262,6 +262,7 @@ export const TerminalCreateParams = z.object({
   // Older hosts drop it and resume as before.
   resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),

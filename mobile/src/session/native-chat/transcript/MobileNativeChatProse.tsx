@@ -84,12 +84,13 @@ export function Prose({
       return image ? (
         <MobileNativeChatImageAttachment
           block={image}
+          compact={userMessage}
           fontScale={fontScale}
           onLongPress={onLongPress}
         />
       ) : null
     },
-    [fontScale, onLongPress]
+    [fontScale, onLongPress, userMessage]
   )
   if (isTextBlock(block)) {
     if (isAgentSessionHostStatusPresentation(block.presentation)) {
@@ -137,6 +138,7 @@ export function Prose({
     return (
       <MobileNativeChatImageAttachment
         block={block}
+        compact={userMessage}
         fontScale={fontScale}
         onLongPress={onLongPress}
       />

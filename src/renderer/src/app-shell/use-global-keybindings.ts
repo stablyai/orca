@@ -199,14 +199,15 @@ export function useGlobalKeybindings(args: {
       const matchAppShortcut = (actionId: KeybindingActionId): boolean =>
         matchShortcut(actionId) && !targetYields(actionId)
 
-      // Reviewed plugin chords beat built-in defaults only in app focus; terminal/editor/browser retain their own authority.
-      if (context === 'app' && !targetYields()) {
+      // Reviewed plugin chords beat built-in defaults; in a terminal they follow the terminal shortcut policy like built-ins.
+      if (!targetYields()) {
         const pluginCommand = findPluginCommandForKeybinding(
           pluginCommands,
           input,
           shortcutPlatform,
           keybindings,
-          Boolean(activeWorktreeId)
+          Boolean(activeWorktreeId),
+          matchOptions
         )
         if (pluginCommand) {
           input.preventDefault()

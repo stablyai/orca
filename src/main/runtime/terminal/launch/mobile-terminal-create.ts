@@ -36,6 +36,7 @@ export type MobileTerminalCreateOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   clientNavigationId?: string
@@ -56,6 +57,7 @@ export type OwnedMobileTerminalCreateOptions = {
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
   afterDesktopTabId?: string
@@ -109,6 +111,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'
       activate?: boolean

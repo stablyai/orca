@@ -27,6 +27,7 @@ function deps(overrides: Partial<WorkspaceSleepDeps> = {}) {
   const log: string[] = []
   const all: WorkspaceSleepDeps = {
     notify: (notice) => log.push(`${notice.phase} ${notice.worktreeId}`),
+    vmWakeSettled: async () => {},
     sleepOwnTerminals: async (worktreeId) => {
       log.push(`terminals ${worktreeId}`)
       return slept([`pty-${worktreeId}`])
@@ -107,6 +108,19 @@ describe('sleepWorkspaces', () => {
         receipts: [{ executionHostId: 'local', stoppedSessionIds: ['chat-wt-1'] }]
       }
     ])
+  })
+
+  // #36923: a Sleep asked for while the VM wakes keeps its place in the queue and stops what the
+  // woken server runs once the wake is done.
+  it('starts a sleep only once a wake of its VM under way has finished', async () => {
+    const waking = Promise.withResolvers<void>()
+    const { log, deps: d } = deps({ vmWakeSettled: () => waking.promise })
+    const sleeping = sleepWorkspaces(d, queued(), { targets: [local('wt')] })
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(log).toEqual([])
+    waking.resolve()
+    await sleeping
+    expect(log[0]).toBe('started wt')
   })
 
   it('suspends no VM until every workspace in the batch has stopped its chats', async () => {

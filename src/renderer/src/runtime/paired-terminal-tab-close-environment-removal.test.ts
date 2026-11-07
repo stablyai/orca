@@ -4,7 +4,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runti
 
 import { useAppStore, type AppState } from '@/store'
 import { resetDeferredPeerChecksForTests } from '@/store/slices/runtime-environment-peer-replacement'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
 import { appPairedTerminalTabCloseIntentStore as STORE } from './paired-terminal-tab-close-intent-store'
 import {
   holdWebSessionCloseForReplay,
@@ -12,7 +12,7 @@ import {
   takeDueWebSessionCloseReplays
 } from './web-session-close-replay'
 import { isWebSessionCloseIntentPending } from './web-session-close-intent'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()

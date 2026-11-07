@@ -19,6 +19,8 @@ export function createAgentBrowserProcessEnvironment(options: {
   userDataPath: string
 }): AgentBrowserProcessEnvironment {
   const env = { ...options.inheritedEnv }
+  // Commands get Orca's tokened proxy URL per spawn; an inherited target must not reach `close`.
+  delete env.AGENT_BROWSER_CDP
   if (!env.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim()) {
     env.AGENT_BROWSER_IDLE_TIMEOUT_MS = String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
   }

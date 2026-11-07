@@ -6,7 +6,7 @@ import {
   AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY,
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY
 } from '../../../../shared/automation-runtime-capabilities'
-import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
+import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,

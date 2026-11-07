@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
@@ -29,6 +29,7 @@ function Rail({
   scroller?: HTMLDivElement
 }): React.JSX.Element {
   const [scrollRef] = useState(() => ({ current: scroller ?? railScroller() }))
+  const railRef = useRef<HTMLDivElement>(null)
   const [outline] = useState(() =>
     Array.from({ length: count }, (_, index) => ({
       id: `prompt-${index}`,
@@ -53,7 +54,13 @@ function Rail({
   return (
     <>
       <input aria-label="Composer" />
-      <NativeChatMessageRail rail={rail} scrollRef={scrollRef} onSelect={vi.fn()} {...rest} />
+      <NativeChatMessageRail
+        rail={rail}
+        railRef={railRef}
+        scrollRef={scrollRef}
+        onSelect={vi.fn()}
+        {...rest}
+      />
     </>
   )
 }

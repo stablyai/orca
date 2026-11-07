@@ -27,12 +27,12 @@ vi.mock('./web-session-tabs-sync/mirrored-workspace-owner', () => ({
 
 import { useAppStore } from '@/store'
 
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { clearHostLiveTerminalProbesForTests } from './host-live-terminal-probe'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { clearHostLiveTerminalProbesForTests } from './hosted-terminals/inventory/host-live-terminal-probe'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs-sync/tracking-lifecycle'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
-import { publicRuntimeEnvironment } from './paired-runtime-environment-test-fixture'
+import { publicRuntimeEnvironment } from './rpc/testing/paired-runtime-environment-test-fixture'
 
 const ENV_A = 'env-a'
 const WORKTREE = 'repo-a::worktree-a'

@@ -7,7 +7,7 @@ import {
   RemoteBrowserPageSession,
   type RemoteBrowserPageSessionDeps
 } from '@/components/browser-pane/stream-remote/remote-browser-page-session'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { resetRestoredBrowserClientHostAttachForTests } from '@/runtime/restored-client-hosted-browser-host-attach'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import { createStoreSessionMockApi, makeBrowserTab } from './store-session-test-harness'

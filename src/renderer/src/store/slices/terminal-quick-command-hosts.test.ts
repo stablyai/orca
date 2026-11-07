@@ -7,8 +7,8 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { stubRuntimeEnvironmentBridge } from '../../runtime/runtime-environment-bridge-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { stubRuntimeEnvironmentBridge } from '../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

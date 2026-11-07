@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -9,6 +9,25 @@ import { structuredAgentSessionDeliveryNotices } from './structured-agent-sessio
 import { agentSessionVisibleFailureFacts } from '../../../../shared/agent-session/failures/agent-session-visible-failures'
 
 afterEach(cleanup)
+
+it('offers the host sign-in action before an authenticated turn can start', () => {
+  const signIn = vi.fn()
+  const { result, rerender } = renderHook(
+    ({ signingIn }) =>
+      useNativeChatAvailabilityNotice({
+        agent: 'omp',
+        unavailable: { reason: 'notSignedIn' },
+        launchFailure: null,
+        journalItems: [],
+        signIn: { signingIn, signIn }
+      }),
+    { initialProps: { signingIn: false } }
+  )
+  result.current?.action?.onClick()
+  expect(signIn).toHaveBeenCalledOnce()
+  rerender({ signingIn: true })
+  expect(result.current?.action?.disabled).toBe(true)
+})
 
 it('keeps one auth explanation while an unechoed message still reads as unsent', () => {
   const failure = {

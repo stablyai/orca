@@ -6,7 +6,7 @@ import { act, cleanup, render, renderHook, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import type { PtyTransport } from '../terminal-pane/pty-transport-types'
+import type { PtyTransport } from '../terminal-pane/pty-transport/pty-transport-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
@@ -20,8 +20,8 @@ import {
   clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { captureTerminalDropTarget } from '../terminal-pane/terminal-drop-target'
-import { insertTerminalCrewMention } from '../terminal-pane/terminal-crew-mention'
+import { captureTerminalDropTarget } from '../terminal-pane/input/file-drop/terminal-drop-target'
+import { insertTerminalCrewMention } from '../terminal-pane/input/paste/terminal-crew-mention'
 import { clearStructuredAgentSessionPendingSends } from './structured-agent-session-pending-sends'
 
 const crewRows = vi.hoisted(() => new Array<OrchestrationCrewRow>())
@@ -43,7 +43,9 @@ vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatTypedCommand: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
+  emitNativeChatMessageSent: vi.fn()
+}))
 afterEach(() => {
   cleanup()
   crewRows.length = 0

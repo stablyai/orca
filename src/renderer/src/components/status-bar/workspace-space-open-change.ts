@@ -6,9 +6,9 @@ import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-spa
 import { useAppStore } from '@/store'
 import { getWorktreeOnHostFromState } from '@/store/selectors'
 import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { openUncommittedEntry } from '../right-sidebar/source-control/listing/open-uncommitted-entry'
 import { translate } from '@/i18n/i18n'
 

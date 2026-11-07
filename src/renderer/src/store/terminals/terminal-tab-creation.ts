@@ -1,5 +1,5 @@
 import { resolveTerminalCreatedShell } from './terminal-created-shell'
-import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/zcode-missing-tui-notice'
+import { warnIfZCodeCannotOpenSession } from '@/components/terminal-pane/provider-notices/zcode-capability/zcode-missing-tui-notice'
 import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
@@ -21,7 +21,7 @@ import {
   updateGroup
 } from '../slices/tab-group-state'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../global-selection-owner'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'

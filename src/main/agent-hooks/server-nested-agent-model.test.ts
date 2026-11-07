@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
-import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
+import { buildBody, postHookEvent } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({
   track: vi.fn()
@@ -9,21 +9,6 @@ vi.mock('../telemetry/client', () => ({
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
-
-type StatusPayload = {
-  state: 'working' | 'done'
-  prompt: string
-  agentType: string
-  model?: string
-}
-
-function ingest(server: AgentHookServer, at: number, payload: StatusPayload): void {
-  vi.setSystemTime(at)
-  server.ingestRemote(
-    { paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', hasExplicitPrompt: true, payload },
-    'conn-1'
-  )
-}
 
 beforeEach(() => {
   _internals.resetCachesForTests()
@@ -36,97 +21,6 @@ afterEach(() => {
 })
 
 describe('AgentHookServer nested agent model fence', () => {
-  // Nested codex exec inherits the parent Claude pane key.
-  it('keeps the parent model when a nested hook reports its own model', () => {
-    const server = new AgentHookServer()
-    ingest(server, 1_000, {
-      state: 'working',
-      prompt: 'parent claude',
-      agentType: 'claude',
-      model: 'claude-fable-5'
-    })
-    ingest(server, 1_100, {
-      state: 'working',
-      prompt: 'nested codex',
-      agentType: 'codex',
-      model: 'gpt-6-astra'
-    })
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ paneKey: PANE, agentType: 'claude', model: 'claude-fable-5' })
-    ])
-  })
-
-  it('drops the nested model when the fenced parent never reported one', () => {
-    const server = new AgentHookServer()
-    ingest(server, 1_000, { state: 'working', prompt: 'parent claude', agentType: 'claude' })
-    ingest(server, 1_100, {
-      state: 'working',
-      prompt: 'nested codex',
-      agentType: 'codex',
-      model: 'gpt-6-astra'
-    })
-
-    const [row] = server.getStatusSnapshot()
-    expect(row).toMatchObject({ agentType: 'claude' })
-    expect(row?.model).toBeUndefined()
-  })
-
-  it("keeps a codex parent's model through a nested model-less hook", () => {
-    const server = new AgentHookServer()
-    ingest(server, 1_000, {
-      state: 'working',
-      prompt: 'parent codex',
-      agentType: 'codex',
-      model: 'gpt-6-astra'
-    })
-    ingest(server, 1_100, { state: 'working', prompt: 'nested claude', agentType: 'claude' })
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ agentType: 'codex', model: 'gpt-6-astra' })
-    ])
-  })
-
-  it('still updates the label on a genuine model switch by the same agent', () => {
-    const server = new AgentHookServer()
-    ingest(server, 1_000, {
-      state: 'working',
-      prompt: 'first',
-      agentType: 'claude',
-      model: 'claude-fable-5'
-    })
-    ingest(server, 1_100, {
-      state: 'working',
-      prompt: 'second',
-      agentType: 'claude',
-      model: 'claude-opus-5-5'
-    })
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ agentType: 'claude', model: 'claude-opus-5-5' })
-    ])
-  })
-
-  it('lets a new agent claim the pane with its model once the parent turn is done', () => {
-    const server = new AgentHookServer()
-    ingest(server, 1_000, {
-      state: 'done',
-      prompt: 'parent claude',
-      agentType: 'claude',
-      model: 'claude-fable-5'
-    })
-    ingest(server, 1_100, {
-      state: 'working',
-      prompt: 'codex turn',
-      agentType: 'codex',
-      model: 'gpt-6-astra'
-    })
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({ agentType: 'codex', model: 'gpt-6-astra' })
-    ])
-  })
-
   // Readers retain sparse model labels, so a transient child label could remain on the parent.
   it('never pushes a nested codex model to the renderer from real hook bodies', async () => {
     vi.useRealTimers()

@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState } from 'react'
+import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -10,6 +11,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import { translate } from '@/i18n/i18n'
 
 export function ConversationTabDescription({
+  imageUploadAddress,
   item,
   authorLabel,
   canEditBody,
@@ -25,6 +27,7 @@ export function ConversationTabDescription({
   setBodyEditing,
   onSaveBody
 }: {
+  imageUploadAddress?: () => GitHubImageUploadAddress
   item: GitHubWorkItem
   authorLabel: string
   canEditBody: boolean
@@ -40,6 +43,12 @@ export function ConversationTabDescription({
   setBodyEditing: (value: boolean) => void
   onSaveBody: () => void
 }): React.JSX.Element {
+  const [uploading, setUploading] = useState(false)
+  const save = () => {
+    if (!uploading) {
+      onSaveBody()
+    }
+  }
   return (
     <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
@@ -70,8 +79,8 @@ export function ConversationTabDescription({
                 type="button"
                 size="xs"
                 className="gap-1.5"
-                disabled={bodySaving || !bodyChanged}
-                onClick={() => void onSaveBody()}
+                disabled={bodySaving || !bodyChanged || uploading}
+                onClick={save}
               >
                 {bodySaving ? (
                   <LoaderCircle className="size-3.5 animate-spin" />
@@ -115,13 +124,15 @@ export function ConversationTabDescription({
           </div>
         ) : bodyEditing ? (
           <GitHubMarkdownComposer
+            imageUploadAddress={imageUploadAddress}
+            onImageUploadPendingChange={setUploading}
             value={resolvedBodyDraft}
             onChange={setBodyDraft}
             placeholder={translate('auto.components.GitHubItemDialog.52b20b56f7', 'Description')}
             disabled={bodySaving}
             autoFocus
             minHeightClassName="min-h-64"
-            onSubmitShortcut={() => void onSaveBody()}
+            onSubmitShortcut={save}
           />
         ) : body.trim() ? (
           <CommentMarkdown
