@@ -3968,6 +3968,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Activer"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionné pour une autre fenêtre",
+            "fitHere": "Ajuster ici"
           }
         }
       },

@@ -3675,6 +3675,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "开启"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已按其他窗口调整大小",
+            "fitHere": "在此适配"
           }
         }
       },

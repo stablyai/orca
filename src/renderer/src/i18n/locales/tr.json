@@ -4186,6 +4186,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aç"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Başka bir pencereye göre boyutlandı",
+            "fitHere": "Buraya sığdır"
           }
         }
       },
