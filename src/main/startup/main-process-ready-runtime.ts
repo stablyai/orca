@@ -46,6 +46,7 @@ import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-reke
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync'
+import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
