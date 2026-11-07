@@ -85,9 +85,7 @@ export class PiRpcSession {
     readonly generation: string,
     launch: ProviderProcessLaunch,
     private readonly deps: PiRpcSessionDeps,
-    private readonly resolvedLaunch: PiRpcResolvedLaunch,
-    /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
-    readonly resolvesConfig = false
+    private readonly resolvedLaunch: PiRpcResolvedLaunch
   ) {
     const sink = input.events && providerTimelineSink(input.events)
     if (!sink) {
@@ -156,11 +154,12 @@ export class PiRpcSession {
           .finally(() => this.releaseAfterExit?.())
       }
     })
+    this.optionObservations.adoptLaunchIntent(resolvedLaunch.launchIntent)
     this.startup = new PiRpcSessionStartup(
       input,
       this.connection,
       deps,
-      resolvesConfig,
+      !resolvedLaunch.sessionFile && !resolvedLaunch.forkFile,
       (state) => {
         this.lane.apply(this.turns.context.setModel(state.model ?? undefined, Date.now()))
         this.optionObservations.seed(state)

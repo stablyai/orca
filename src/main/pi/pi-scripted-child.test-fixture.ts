@@ -58,6 +58,11 @@ class ScriptedPiConnection implements PiRpcConnection {
     private readonly inputs: { command: string; params: Record<string, unknown> }[] = []
   ) {
     this.model = options.model ?? this.model
+    // As Pi does, start on the launch's --thinking; `options.model` stays what `get_state` reports.
+    const thinking = launch.args[launch.args.indexOf('--thinking') + 1]
+    if (launch.args.includes('--thinking') && thinking) {
+      this.effort = thinking
+    }
     this.pid = 42_000 + number
     const sessionIndex = launch.args.indexOf('--session')
     this.file =

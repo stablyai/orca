@@ -81,8 +81,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
         throw new provider.AgentSessionPreSpawnError(new Error('Pi closed while starting'))
       }
       const spec = buildPiRpcLaunch(launch)
-      const fresh = !launch.sessionFile && !launch.forkFile
-      session = new PiRpcSession(input, randomUUID(), spec, this.deps, launch, fresh)
+      session = new PiRpcSession(input, randomUUID(), spec, this.deps, launch)
       this.sessions.set(id, session)
       watchPiStartExit(session, input, this.endings)
       this.starts.track(attempt, session.connection)
