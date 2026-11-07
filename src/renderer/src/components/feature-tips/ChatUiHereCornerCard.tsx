@@ -71,17 +71,17 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
   }
 
   const handleStayInTerminal = (): void => {
-    trackChatUiFeatureTipAction('chat-ui-off', 'stay_in_terminal', settings)
+    trackChatUiFeatureTipAction('chat-ui-off', 'stay_in_terminal')
     onClose()
   }
 
   const handleDismiss = (): void => {
-    trackChatUiFeatureTipAction('chat-ui-off', 'dismissed', settings)
+    trackChatUiFeatureTipAction('chat-ui-off', 'dismissed')
     onClose()
   }
 
   const handleOpenSettings = (): void => {
-    trackChatUiFeatureTipAction('chat-ui-off', 'open_settings', settings)
+    trackChatUiFeatureTipAction('chat-ui-off', 'open_settings')
     onClose()
     openChatUiFeatureTipSettings()
   }
