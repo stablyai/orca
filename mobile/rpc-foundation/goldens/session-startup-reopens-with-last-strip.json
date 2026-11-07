@@ -9,12 +9,10 @@
       "ordinal": 22,
       "value": {}
     },
-    "0e0b6dec03c3": {
-      "name": "fetch-terminals",
-      "ordinal": 36,
-      "value": {
-        "allowEmptyLoaded": false
-      }
+    "0c745b7b3cbc": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 35,
+      "value": {}
     },
     "169deb3ae6af": {
       "actionSheetRequestSeq": 1,
@@ -32,26 +30,10 @@
       "sessionTabs": ["tab-a", "tab-b", "tab-x"],
       "terminalsLoaded": false
     },
-    "1b346c40a5ab": {
-      "name": "clear-terminal-cache",
+    "1e3a1c95aa65": {
+      "name": "clear-pending-live-input-commit",
       "ordinal": 31,
       "value": {}
-    },
-    "1e78234b0cd3": {
-      "actionSheetRequestSeq": 7,
-      "activeHandle": {
-        "$rpc": "null"
-      },
-      "appliedSnapshotMarker": {
-        "epoch": {
-          "$rpc": "null"
-        },
-        "version": -1
-      },
-      "closedTabTombstones": 0,
-      "initializedHandles": [],
-      "sessionTabs": ["tab-a"],
-      "terminalsLoaded": false
     },
     "1eb7c62d5c7f": {
       "actionSheetRequestSeq": 3,
@@ -90,29 +72,24 @@
       "ordinal": 24,
       "value": {}
     },
+    "234a43e6bd65": {
+      "name": "ensure-session-tabs",
+      "ordinal": 41,
+      "value": {}
+    },
+    "2532b032374f": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 28,
+      "value": {}
+    },
     "30f5e556f9c1": {
       "name": "ensure-session-tabs",
       "ordinal": 15,
       "value": {}
     },
-    "346a4cf8eb25": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 40,
-      "value": {}
-    },
     "38b377793c34": {
       "name": "ensure-session-tabs",
       "ordinal": 5,
-      "value": {}
-    },
-    "3e5cb43abaee": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 34,
-      "value": {}
-    },
-    "3f7154ad9d19": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 45,
       "value": {}
     },
     "40d47c7b9e56": {
@@ -125,9 +102,9 @@
       "ordinal": 12,
       "value": {}
     },
-    "445d40c10e59": {
-      "name": "clear-terminal-cache",
-      "ordinal": 47,
+    "42f2550e7540": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 40,
       "value": {}
     },
     "4669e4d646e8": {
@@ -137,24 +114,34 @@
         "allowEmptyLoaded": false
       }
     },
-    "495256f47fb0": {
+    "48aab64376df": {
       "name": "clear-delayed-action-timers",
+      "ordinal": 32,
+      "value": {}
+    },
+    "4ab868ee910c": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 30,
+      "value": {}
+    },
+    "4e668f2777e4": {
+      "name": "diagnostics-reset-route",
       "ordinal": 38,
       "value": {}
     },
-    "4e66fef44cdc": {
+    "4fb364aab7f9": {
       "name": "clear-terminal-cache",
-      "ordinal": 39,
+      "ordinal": 29,
       "value": {}
     },
-    "51f134842e51": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 42,
+    "51245db218dd": {
+      "name": "clear-terminal-cache",
+      "ordinal": 37,
       "value": {}
     },
-    "5679b5d6bb9c": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 32,
+    "5543ee241dbb": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 27,
       "value": {}
     },
     "5bd54a356841": {
@@ -181,43 +168,14 @@
         "allowEmptyLoaded": false
       }
     },
-    "5ee6d05701c9": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 37,
-      "value": {}
-    },
-    "60e8299a4505": {
-      "name": "fetch-terminals",
-      "ordinal": 44,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
     "6419a011f13b": {
       "name": "clear-terminal-cache",
       "ordinal": 1,
       "value": {}
     },
-    "729c907eb9dc": {
-      "name": "ensure-session-tabs",
-      "ordinal": 27,
-      "value": {}
-    },
     "7cf846aa3529": {
       "name": "clear-terminal-cache",
       "ordinal": 21,
-      "value": {}
-    },
-    "806ea56feee9": {
-      "name": "fetch-terminals",
-      "ordinal": 52,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "8b58d2fde834": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 50,
       "value": {}
     },
     "95c8385db422": {
@@ -237,14 +195,9 @@
         "allowEmptyLoaded": false
       }
     },
-    "9d5e570fc8fb": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 41,
-      "value": {}
-    },
-    "a3d5008d86b7": {
+    "9c976031a154": {
       "name": "ensure-session-tabs",
-      "ordinal": 43,
+      "ordinal": 33,
       "value": {}
     },
     "a80c93135833": {
@@ -252,8 +205,13 @@
       "ordinal": 20,
       "value": {}
     },
-    "a9b0071ba36e": {
-      "actionSheetRequestSeq": 11,
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "b2e323ccc369": {
+      "actionSheetRequestSeq": 7,
       "activeHandle": {
         "$rpc": "null"
       },
@@ -268,27 +226,17 @@
       "sessionTabs": [],
       "terminalsLoaded": false
     },
-    "aab012c297bd": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 2,
-      "value": {}
-    },
-    "ad7ccfd9f108": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 48,
-      "value": {}
+    "b6770e9b4df2": {
+      "name": "fetch-terminals",
+      "ordinal": 34,
+      "value": {
+        "allowEmptyLoaded": false
+      }
     },
     "bc94d6f00eeb": {
       "name": "clear-pending-live-input-commit",
       "ordinal": 9,
       "value": {}
-    },
-    "c4b96136baf3": {
-      "name": "fetch-terminals",
-      "ordinal": 28,
-      "value": {
-        "allowEmptyLoaded": false
-      }
     },
     "c5b498aff2c9": {
       "name": "clear-terminal-cache",
@@ -311,9 +259,26 @@
       "sessionTabs": ["tab-a", "tab-b"],
       "terminalsLoaded": false
     },
+    "cc01cec0da32": {
+      "name": "fetch-terminals",
+      "ordinal": 42,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "cc93e616e745": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 36,
+      "value": {}
+    },
     "d000b4c837b7": {
       "name": "clear-pending-live-input-commit",
       "ordinal": 13,
+      "value": {}
+    },
+    "d0f2ffb3342b": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 39,
       "value": {}
     },
     "d42d15a1b559": {
@@ -327,26 +292,6 @@
       "value": {
         "allowEmptyLoaded": false
       }
-    },
-    "dee3bde8cf30": {
-      "name": "ensure-session-tabs",
-      "ordinal": 51,
-      "value": {}
-    },
-    "e12355481483": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 29,
-      "value": {}
-    },
-    "e29681dcc759": {
-      "name": "ensure-session-tabs",
-      "ordinal": 35,
-      "value": {}
-    },
-    "e34b9d376fd7": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 49,
-      "value": {}
     },
     "e6ba1c0e09a4": {
       "actionSheetRequestSeq": 3,
@@ -377,24 +322,9 @@
         "$rpc": "undefined"
       }
     },
-    "ec2c3f2cba15": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 46,
-      "value": {}
-    },
-    "efdf9c369c20": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 30,
-      "value": {}
-    },
     "f0f3f352c679": {
       "name": "ensure-session-tabs",
       "ordinal": 17,
-      "value": {}
-    },
-    "fbe91a8d827c": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 33,
       "value": {}
     },
     "fde92e0a066b": {
@@ -541,7 +471,7 @@
         }
       },
       {
-        "id": "phone-closed-tab-stays-gone",
+        "id": "next-worktree-starts-empty",
         "observation": {
           "sender": [],
           "payloads": [],
@@ -553,11 +483,9 @@
             "host-closed-x": "eb79a9b3682a",
             "leave-again": "eb79a9b3682a",
             "reopen-again": "eb79a9b3682a",
-            "phone-closes-b-before-snapshot": "eb79a9b3682a",
-            "leave-after-phone-close": "eb79a9b3682a",
-            "reopen-after-phone-close": "eb79a9b3682a"
+            "switch-to-wt-2": "eb79a9b3682a"
           },
-          "state": "1e78234b0cd3",
+          "state": "b2e323ccc369",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
@@ -585,21 +513,19 @@
             "2196d8ddca7b",
             "40d47c7b9e56",
             "5dbd71a7b565",
-            "729c907eb9dc",
-            "c4b96136baf3",
-            "e12355481483",
-            "efdf9c369c20",
-            "1b346c40a5ab",
-            "5679b5d6bb9c",
-            "fbe91a8d827c",
-            "3e5cb43abaee",
-            "e29681dcc759",
-            "0e0b6dec03c3"
+            "5543ee241dbb",
+            "2532b032374f",
+            "4fb364aab7f9",
+            "4ab868ee910c",
+            "1e3a1c95aa65",
+            "48aab64376df",
+            "9c976031a154",
+            "b6770e9b4df2"
           ]
         }
       },
       {
-        "id": "next-worktree-starts-empty",
+        "id": "next-worktree-never-took-the-last-strip",
         "observation": {
           "sender": [],
           "payloads": [],
@@ -611,10 +537,9 @@
             "host-closed-x": "eb79a9b3682a",
             "leave-again": "eb79a9b3682a",
             "reopen-again": "eb79a9b3682a",
-            "phone-closes-b-before-snapshot": "eb79a9b3682a",
-            "leave-after-phone-close": "eb79a9b3682a",
-            "reopen-after-phone-close": "eb79a9b3682a",
-            "switch-to-wt-2": "eb79a9b3682a"
+            "switch-to-wt-2": "eb79a9b3682a",
+            "leave-wt-2": "eb79a9b3682a",
+            "reopen-wt-2": "eb79a9b3682a"
           },
           "state": "2071fa4023ba",
           "effects": [
@@ -644,101 +569,22 @@
             "2196d8ddca7b",
             "40d47c7b9e56",
             "5dbd71a7b565",
-            "729c907eb9dc",
-            "c4b96136baf3",
-            "e12355481483",
-            "efdf9c369c20",
-            "1b346c40a5ab",
-            "5679b5d6bb9c",
-            "fbe91a8d827c",
-            "3e5cb43abaee",
-            "e29681dcc759",
-            "0e0b6dec03c3",
-            "5ee6d05701c9",
-            "495256f47fb0",
-            "4e66fef44cdc",
-            "346a4cf8eb25",
-            "9d5e570fc8fb",
-            "51f134842e51",
-            "a3d5008d86b7",
-            "60e8299a4505"
-          ]
-        }
-      },
-      {
-        "id": "next-worktree-never-took-the-last-strip",
-        "observation": {
-          "sender": [],
-          "payloads": [],
-          "settlements": {
-            "mount": "eb79a9b3682a",
-            "host-lists-three": "eb79a9b3682a",
-            "leave": "eb79a9b3682a",
-            "reopen": "eb79a9b3682a",
-            "host-closed-x": "eb79a9b3682a",
-            "leave-again": "eb79a9b3682a",
-            "reopen-again": "eb79a9b3682a",
-            "phone-closes-b-before-snapshot": "eb79a9b3682a",
-            "leave-after-phone-close": "eb79a9b3682a",
-            "reopen-after-phone-close": "eb79a9b3682a",
-            "switch-to-wt-2": "eb79a9b3682a",
-            "leave-wt-2": "eb79a9b3682a",
-            "reopen-wt-2": "eb79a9b3682a"
-          },
-          "state": "a9b0071ba36e",
-          "effects": [
-            "6419a011f13b",
-            "aab012c297bd",
-            "e927128e41fc",
-            "95c8385db422",
-            "38b377793c34",
-            "4669e4d646e8",
-            "5c6699f9b431",
-            "5bd54a356841",
-            "bc94d6f00eeb",
-            "968d084a5a35",
-            "c5b498aff2c9",
-            "414746be507d",
-            "d000b4c837b7",
-            "fde92e0a066b",
-            "30f5e556f9c1",
-            "dc4910b3e253",
-            "f0f3f352c679",
-            "98136c40e776",
-            "5d381bbc8fd2",
-            "a80c93135833",
-            "7cf846aa3529",
-            "0808af971d7f",
-            "d42d15a1b559",
-            "2196d8ddca7b",
-            "40d47c7b9e56",
-            "5dbd71a7b565",
-            "729c907eb9dc",
-            "c4b96136baf3",
-            "e12355481483",
-            "efdf9c369c20",
-            "1b346c40a5ab",
-            "5679b5d6bb9c",
-            "fbe91a8d827c",
-            "3e5cb43abaee",
-            "e29681dcc759",
-            "0e0b6dec03c3",
-            "5ee6d05701c9",
-            "495256f47fb0",
-            "4e66fef44cdc",
-            "346a4cf8eb25",
-            "9d5e570fc8fb",
-            "51f134842e51",
-            "a3d5008d86b7",
-            "60e8299a4505",
-            "3f7154ad9d19",
-            "ec2c3f2cba15",
-            "445d40c10e59",
-            "ad7ccfd9f108",
-            "e34b9d376fd7",
-            "8b58d2fde834",
-            "dee3bde8cf30",
-            "806ea56feee9"
+            "5543ee241dbb",
+            "2532b032374f",
+            "4fb364aab7f9",
+            "4ab868ee910c",
+            "1e3a1c95aa65",
+            "48aab64376df",
+            "9c976031a154",
+            "b6770e9b4df2",
+            "0c745b7b3cbc",
+            "cc93e616e745",
+            "51245db218dd",
+            "4e668f2777e4",
+            "d0f2ffb3342b",
+            "42f2550e7540",
+            "234a43e6bd65",
+            "cc01cec0da32"
           ]
         }
       }
