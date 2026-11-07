@@ -47,8 +47,9 @@ export function useDraftRenameSheet({
     }
   }
 
-  const error = attempt?.error ?? null
-  const busy = attempt !== null && error === null
+  // Offline wins over an older refusal: Save is off, and the notice says why.
+  const error = blockedOffline ? null : (attempt?.error ?? null)
+  const busy = attempt !== null && attempt.error === null
   const unconfirmed = attempt?.phase === 'unconfirmed'
   const notice = unconfirmed
     ? {
@@ -72,14 +73,15 @@ export function useDraftRenameSheet({
 
   // The slot is written when the target closes or the sheet unmounts, however the drawer was dismissed.
   const unsaved = notice !== null && value.trim() !== currentName ? value : null
-  const unsavedRef = useRef(unsaved)
+  // Keyed, so a late success for one target never clears another target's text.
+  const unsavedRef = useRef({ key: shownKey, text: unsaved })
   useEffect(() => {
-    unsavedRef.current = unsaved
+    unsavedRef.current = { key: shownKey, text: unsaved }
   })
   useEffect(
     () => () => {
-      if (shownKey) {
-        setHostMutationDraft(shownKey, unsavedRef.current)
+      if (shownKey && unsavedRef.current.key === shownKey) {
+        setHostMutationDraft(shownKey, unsavedRef.current.text)
       }
     },
     [shownKey]
@@ -105,8 +107,8 @@ export function useDraftRenameSheet({
           latest?.token === token && phase !== 'idle' ? { ...latest, phase } : latest
         )
       )
-      if (key === shownKey) {
-        unsavedRef.current = null
+      if (unsavedRef.current.key === key) {
+        unsavedRef.current = { key, text: null }
       }
       setHostMutationDraft(key, null)
       setAttempt((latest) => (latest?.token === token ? null : latest))
