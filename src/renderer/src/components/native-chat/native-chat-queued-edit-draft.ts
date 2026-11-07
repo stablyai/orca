@@ -1,3 +1,4 @@
+import type { NativeChatPastedTextOperation } from './native-chat-pasted-text-reference'
 import {
   moveNativeChatStagedFiles,
   reconcileNativeChatStagedDraft
@@ -187,7 +188,7 @@ export function handBackNativeChatQueuedEdit(
     undefined,
     incoming
   )
-  const pastes: object[] = []
+  const pastes: NativeChatPastedTextOperation[] = []
   for (const token of draft.text.split(NATIVE_CHAT_PASTED_TEXT_TOKEN)) {
     const id = nativeChatPastedTextId(token)
     const operation = id ? nativeChatPastedTextOperations.get(id) : undefined

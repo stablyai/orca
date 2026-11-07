@@ -3,7 +3,7 @@ import type { StructuredAgentSessionHostRuntimeState } from './host/structured-a
 import type { StructuredAgentSessionTaskQueue } from './host/structured-agent-session-task-queue'
 import type { StructuredAgentSessionConversations } from './host/structured-agent-session-conversations'
 import type { StructuredConversationCommandController } from './operations/structured-conversation-command-controller'
-import type { StructuredAgentSessionConversationLifetime } from './termination/structured-agent-session-conversation-lifetime'
+import type { StructuredAgentSessionConversationLifetime } from './host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationClosable } from './termination/structured-agent-session-host-lifetime'
 import {
   agentSessionExecutionLocationsEqual,

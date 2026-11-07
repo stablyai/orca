@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import {
   currentFiles,
   pendingResources,
@@ -10,7 +11,7 @@ import {
 /** Resolve grants by their actual owner before any selected record is cleared. */
 export function collectNativeChatStagedRemovals(
   captures: readonly { captured: NativeChatStagedRemoval; selected: boolean }[],
-  sources: Iterable<object>
+  sources: Iterable<NativeChatDraftReturnSource>
 ) {
   const owners = new Map<StagedFiles, NativeChatStagedRemoval>()
   const include = (files: StagedFiles) => {

@@ -1,3 +1,5 @@
+import type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
+import type { NativeChatPastedTextOperation } from './native-chat-pasted-text-reference'
 import {
   staged,
   currentFiles,
@@ -27,7 +29,10 @@ export type NativeChatStagedInput = {
   attachments?: readonly { path: string }[]
 }
 
-export function captureNativeChatStagedRemoval(scope: string, chips: readonly object[] = []) {
+export function captureNativeChatStagedRemoval(
+  scope: string,
+  chips: readonly NativeChatComposerImageAttachment[] = []
+) {
   const files = staged.get(scope)
   return {
     files,
@@ -54,7 +59,11 @@ export function hasNativeChatStagedFiles(scope: string): boolean {
   return (staged.get(scope)?.paths.size ?? 0) > 0
 }
 
-export function stageNativeChatDraftFile(scope: string, path: string, source?: object): void {
+export function stageNativeChatDraftFile(
+  scope: string,
+  path: string,
+  source?: NativeChatComposerImageAttachment | NativeChatPastedTextOperation
+): void {
   let files = staged.get(scope)
   if (!files) {
     files = {
@@ -108,7 +117,9 @@ export function moveNativeChatStagedFiles(
 }
 
 export function pruneFiles(files: StagedFiles, selected?: ReadonlyMap<string, object>): void {
-  const liveChips = new Set<object>(nativeChatPendingAttachmentSnapshot(files.scope))
+  const liveChips = new Set<NativeChatComposerImageAttachment>(
+    nativeChatPendingAttachmentSnapshot(files.scope)
+  )
   const pendingPaths: string[] = []
   for (const [chip, path] of files.pending) {
     if (liveChips.has(chip)) {

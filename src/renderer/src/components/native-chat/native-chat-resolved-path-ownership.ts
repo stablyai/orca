@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -9,13 +10,15 @@ export type NativeChatAttachmentFocusOptions = { focus?: boolean }
 
 export type NativeChatResolvedPathOperation = {
   apply: (
-    insertReferences: ((paths: string[], sources?: readonly object[]) => void) | null
+    insertReferences:
+      | ((paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => void)
+      | null
   ) => boolean
   cancel: () => void
 }
 
 export type NativeChatResolvedPathOptions = NativeChatAttachmentFocusOptions & {
-  returnSources?: readonly object[]
+  returnSources?: readonly NativeChatDraftReturnSource[]
   operation?: NativeChatResolvedPathOperation
   /** Revalidates the destination without granting workspace-file provenance. */
   destinationIsCurrent?: () => boolean

@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
@@ -34,7 +35,7 @@ type Args = {
   setCaret: (caret: number) => void
   setDraft: (
     updater: (previous: string) => string,
-    options?: { sources?: readonly object[] }
+    options?: { sources?: readonly NativeChatDraftReturnSource[] }
   ) => void
   setNotice: (notice: string | null) => void
   textareaRef: RefObject<NativeChatComposerInput | null>
@@ -77,7 +78,7 @@ export function useNativeChatResolvedPathAttachments({
   }, [disabled])
 
   const insertFileReferences = useCallback(
-    (paths: string[], sources?: readonly object[]) => {
+    (paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => {
       if (paths.length === 0) {
         return
       }
@@ -143,7 +144,7 @@ export function useNativeChatResolvedPathAttachments({
           paths.some(({ targetOwnerIsCurrent }) => !targetOwnerIsCurrent) &&
           attachmentTargetBlocked(false)
         const filePaths: string[] = []
-        const fileSources: object[] = []
+        const fileSources: NativeChatDraftReturnSource[] = []
         let attached = false
         for (const batch of current) {
           const attachable = batch.paths.filter(({ targetOwnerIsCurrent }) =>

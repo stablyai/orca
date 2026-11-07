@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { trimSettled } from './native-chat-image-row'
 import {
   currentDraftScope,
@@ -62,7 +63,10 @@ export function nativeChatPendingAttachmentSource(scope: string, id: string) {
     : undefined
 }
 
-export function isNativeChatPendingAttachmentSource(scope: string, chip: object): boolean {
+export function isNativeChatPendingAttachmentSource(
+  scope: string,
+  chip: NativeChatComposerImageAttachment
+): boolean {
   const id = 'id' in chip && typeof chip.id === 'string' ? chip.id : undefined
   const indexed = id ? chipScopes.get(id) : undefined
   return indexed?.scope === scope && indexed.chip === chip
@@ -252,12 +256,12 @@ export function appendNativeChatAttachmentsAfterPending(
 export function settleNativeChatPendingAttachmentReferences(
   scopeKey: string,
   references: { id: string; path: string }[],
-  insertAtCaret?: (paths: string[], sources?: readonly object[]) => void
+  insertAtCaret?: (paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => void
 ): boolean {
   const originalScope = currentDraftScope(scopeKey)
   scopeKey = references.length ? pendingDestination(scopeKey, references[0].id) : scopeKey
   const owner = pendingOwners.get(scopeKey)
-  const sources: object[] = []
+  const sources: NativeChatComposerImageAttachment[] = []
   const paths = references.flatMap(({ id, path }) => {
     const source = takeNativeChatPendingAttachment(scopeKey, id)
     if (!source) {

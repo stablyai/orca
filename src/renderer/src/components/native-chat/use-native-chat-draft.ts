@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { withNativeChatComposerDraftAddition } from './native-chat-composer-draft-addition'
 import type { NativeChatDraftAppend } from './native-chat-composer-draft-memory'
@@ -26,7 +27,7 @@ export function useNativeChatDraft(
   draft: string
   setDraft: (
     next: string | ((previous: string) => string),
-    options?: { unsaved?: boolean; sources?: readonly object[] }
+    options?: { unsaved?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
   ) => void
   /** Shows text appended during an IME composition, which owns the field until it settles. */
   flushDraftAppends: () => void
@@ -70,7 +71,7 @@ export function useNativeChatDraft(
   const setDraft = useCallback(
     (
       next: string | ((previous: string) => string),
-      options?: { unsaved?: boolean; sources?: readonly object[] }
+      options?: { unsaved?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
     ) => {
       const held = holdRef.current?.scopeKey === scopeKey ? holdRef.current : null
       const previous = held ? held.shown : readNativeChatDraftCache(scopeKey)

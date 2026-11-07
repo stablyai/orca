@@ -6,13 +6,16 @@ const operations = new Map<string, Set<UnconfirmedDraftChange | AppendBeforeLoad
 export function nativeChatComposerDraftOperations(scope: string) {
   return operations.get(scope) ?? new Set<UnconfirmedDraftChange | AppendBeforeLoad>()
 }
-export const foreignReads = new Map<string, object>()
-export function nativeChatComposerDraftForeignRead(scope: string): object | undefined {
+export type NativeChatDraftForeignRead = Readonly<Record<string, never>>
+export const foreignReads = new Map<string, NativeChatDraftForeignRead>()
+export function nativeChatComposerDraftForeignRead(
+  scope: string
+): NativeChatDraftForeignRead | undefined {
   return foreignReads.get(scope)
 }
 export function supersedeNativeChatComposerDraftRead(
   scope: string,
-  read: object | undefined
+  read: NativeChatDraftForeignRead | undefined
 ): void {
   if (read && foreignReads.get(scope) === read) {
     foreignReads.delete(scope)

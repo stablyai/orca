@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import type { Tab } from '../../../../shared/tab-types'
 import { retireNativeChatDraftPosition } from './native-chat-composer-draft-memory'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
@@ -25,7 +26,7 @@ export function readNativeChatDraftCache(scopeKey: string): string {
 export function writeNativeChatDraftCache(
   scopeKey: string,
   draft: string,
-  options?: { unsaved?: boolean; sources?: readonly object[] }
+  options?: { unsaved?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
 ): void {
   if (readNativeChatComposerDraft(scopeKey).text === draft) {
     return
@@ -78,7 +79,7 @@ export function writeNativeChatDraftDocument(
   text: string,
   document: JSONContent,
   pastedTextFiles?: Readonly<Record<string, string>>,
-  sources?: readonly object[]
+  sources?: readonly NativeChatDraftReturnSource[]
 ): void {
   if (!text) {
     writeNativeChatDraftCache(scopeKey, '')

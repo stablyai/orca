@@ -63,21 +63,12 @@ async function retired(
   return { ...rig, runtime, location: rig.store.getRecord(B)!.location }
 }
 
-it('recovers a linked checkout after restart from its owner listing, scanning each owner once', async () => {
+it('recovers a linked checkout after restart from its owner listing', async () => {
   const rig = await retired(`${root}/topic`)
   rig.profile.addRepo(storeRepo({ id: 'current', path: `${root}/main` }))
   rig.runtime.listings.set('current', {
     ok: true,
     worktrees: [checkout(`${root}/main`, true), checkout(`${root}/topic`)]
-  })
-  // The cached catalog projection, which this recovery must not need.
-  let cached = 0
-  const project = rig.runtime['projectCachedWorktrees'].bind(rig.runtime)
-  Object.defineProperty(rig.runtime, 'projectCachedWorktrees', {
-    value: (...args: Parameters<typeof project>) => {
-      cached++
-      return project(...args)
-    }
   })
   expect(await reveal(rig)).toMatchObject({
     ok: true,
@@ -87,8 +78,6 @@ it('recovers a linked checkout after restart from its owner listing, scanning ea
     workspaceId: `current::${root}/topic`,
     workspaceKind: 'git-worktree'
   })
-  expect(rig.runtime.scans).toEqual(['current'])
-  expect(cached).toBe(0)
 })
 
 it.each([

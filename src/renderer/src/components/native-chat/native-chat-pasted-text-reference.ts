@@ -2,7 +2,8 @@
 import { translate } from '@/i18n/i18n'
 
 /** Only live I/O holds source bytes; failure and renderer exit leave an unavailable token. */
-export const nativeChatPastedTextOperations = new Map<string, { scopeKey: string; text: string }>()
+export type NativeChatPastedTextOperation = { scopeKey: string; text: string }
+export const nativeChatPastedTextOperations = new Map<string, NativeChatPastedTextOperation>()
 
 export function nativeChatPastedTextLabel(): string {
   return translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')

@@ -1,36 +1,55 @@
 import type {
   DraftRecord,
   AppendBeforeLoad,
+  NativeChatEditDraftDestination,
+  DraftSubmission,
   UnconfirmedDraftChange
 } from './native-chat-composer-draft-memory'
+
+import type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
+import type { NativeChatPastedTextOperation } from './native-chat-pasted-text-reference'
+
+export type NativeChatDraftIndependentContributor = Readonly<Record<string, never>>
+export type NativeChatDraftReturnSource =
+  | DraftSubmission
+  | NonNullable<NativeChatEditDraftDestination['returning']>
+  | NativeChatComposerImageAttachment
+  | NativeChatPastedTextOperation
+  | NativeChatDraftIndependentContributor
 
 export type NativeChatDraftReturnProduct = {
   scope: string
   before: DraftRecord | undefined
   after?: DraftRecord
-  sources: readonly object[]
+  sources: readonly NativeChatDraftReturnSource[]
   sourceRecord?: DraftRecord
   sourceScope?: string
   operations: (AppendBeforeLoad | UnconfirmedDraftChange)[]
   journal: unknown[]
 }
 export type NativeChatDraftReturnTransfer = {
-  permission: object
+  permission: NonNullable<NativeChatEditDraftDestination['returning']>
   from: string
   to: string
-  chips: readonly object[]
-  pastes: readonly object[]
+  chips: readonly NativeChatComposerImageAttachment[]
+  pastes: readonly NativeChatPastedTextOperation[]
 }
 export type NativeChatDraftReturnEvent =
   | NativeChatDraftReturnProduct
   | NativeChatDraftReturnTransfer
 type Observer = (event: NativeChatDraftReturnEvent) => void
-const observers = new WeakMap<object, Set<Observer>>()
-const operationProducts = new WeakMap<object, NativeChatDraftReturnProduct>()
+const observers = new WeakMap<NativeChatDraftReturnSource, Set<Observer>>()
+const operationProducts = new WeakMap<
+  AppendBeforeLoad | UnconfirmedDraftChange,
+  NativeChatDraftReturnProduct
+>()
 const recordProducts = new WeakMap<DraftRecord, NativeChatDraftReturnProduct>()
 
 /** Observe only handles frozen by a live removal; ordinary editing creates no provenance. */
-export function observeNativeChatDraftReturn(source: object, observe: Observer): () => void {
+export function observeNativeChatDraftReturn(
+  source: NativeChatDraftReturnSource,
+  observe: Observer
+): () => void {
   const held = observers.get(source) ?? new Set<Observer>()
   observers.set(source, held)
   held.add(observe)
@@ -42,7 +61,10 @@ export function observeNativeChatDraftReturn(source: object, observe: Observer):
   }
 }
 
-function publish(sources: readonly object[], event: NativeChatDraftReturnEvent): void {
+function publish(
+  sources: readonly NativeChatDraftReturnSource[],
+  event: NativeChatDraftReturnEvent
+): void {
   const targets = new Set<Observer>()
   for (const source of sources) {
     observers.get(source)?.forEach((observe) => targets.add(observe))
@@ -51,7 +73,7 @@ function publish(sources: readonly object[], event: NativeChatDraftReturnEvent):
 }
 
 export function beginNativeChatDraftReturn(
-  source: object | readonly object[] | undefined,
+  source: NativeChatDraftReturnSource | readonly NativeChatDraftReturnSource[] | undefined,
   scope: string,
   before: DraftRecord | undefined,
   sourceRecord?: DraftRecord,
@@ -98,7 +120,10 @@ export function recordNativeChatDraftReturnOperation(
   operationProducts.set(operation, product)
 }
 
-export function journalNativeChatDraftReturnOperation(operation: object, entry: unknown): void {
+export function journalNativeChatDraftReturnOperation(
+  operation: UnconfirmedDraftChange,
+  entry: unknown
+): void {
   operationProducts.get(operation)?.journal.push(entry)
 }
 

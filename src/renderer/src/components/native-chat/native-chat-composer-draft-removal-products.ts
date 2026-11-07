@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { ephemeralDrafts, records, type DraftRecord } from './native-chat-composer-draft-memory'
 import { parseStoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import {
@@ -13,7 +14,7 @@ import { nativeChatDraftRemovalDependencies } from './native-chat-draft-removal-
 export function selectNativeChatDraftRemovalProducts(
   scopes: readonly NativeChatDraftRemovalScope[],
   events: readonly NativeChatDraftReturnEvent[],
-  sources: ReadonlyMap<object, string>
+  sources: ReadonlyMap<NativeChatDraftReturnSource, string>
 ) {
   const byScope = new Map(
     scopes

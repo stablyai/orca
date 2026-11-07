@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { nativeChatComposerScopeDestination } from './native-chat-composer-destination'
 import {
   readNativeChatComposerDraft,
@@ -19,7 +20,7 @@ export function insertNativeChatComposerDraftText(
     paste?: boolean
     owner?: NativeChatComposerDraftOwner
     draftOnly?: boolean
-    sources?: readonly object[]
+    sources?: readonly NativeChatDraftReturnSource[]
     dictated?: boolean
   }
 ): void {

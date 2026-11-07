@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { collectNativeChatStagedRemovals } from './native-chat-staged-removal'
 import { dropCapturedNativeChatPendingAttachments } from './native-chat-pending-attachment-cache'
 import type { NativeChatDraftReturnEvent } from './native-chat-draft-return-products'
@@ -126,7 +127,10 @@ export function persistNativeChatDraftRemovalScope(captured: NativeChatDraftRemo
 export function consumeNativeChatDraftRemovalCandidate(
   scopes: readonly NativeChatDraftRemovalScope[],
   stream:
-    | { events: readonly NativeChatDraftReturnEvent[]; sources: ReadonlyMap<object, string> }
+    | {
+        events: readonly NativeChatDraftReturnEvent[]
+        sources: ReadonlyMap<NativeChatDraftReturnSource, string>
+      }
     | undefined,
   exclusions: { values: Map<string, ReadonlySet<string>>; journal: Set<string> },
   submissionsOnly: boolean

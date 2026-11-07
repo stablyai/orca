@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import type { RefObject } from 'react'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
@@ -19,7 +20,7 @@ export type UseNativeChatComposerAttachmentsArgs = {
   setCaret: (caret: number) => void
   setDraft: (
     updater: (previous: string) => string,
-    options?: { sources?: readonly object[] }
+    options?: { sources?: readonly NativeChatDraftReturnSource[] }
   ) => void
   setNotice: (notice: string | null) => void
 }

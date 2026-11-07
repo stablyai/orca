@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import {
   insertNativeChatPastedText,
   writeNativeChatComposerText,
@@ -17,7 +18,7 @@ export function useNativeChatTypedInsertion(args: {
 }): {
   insertTypedText: (
     text: string,
-    options?: { dictated?: boolean; sources?: readonly object[] }
+    options?: { dictated?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
   ) => boolean
   appendText: (text: string) => void
   acceptsText: () => boolean
@@ -47,7 +48,10 @@ export function useNativeChatTypedInsertion(args: {
   )
 
   const insertTypedText = useCallback(
-    (text: string, options?: { dictated?: boolean; sources?: readonly object[] }): boolean => {
+    (
+      text: string,
+      options?: { dictated?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
+    ): boolean => {
       const sources = options?.sources
       const textarea = usableInput()
       if (!textarea) {

@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 export {
   deleteNativeChatComposerDraftsWhere,
@@ -154,7 +155,7 @@ export function updateNativeChatComposerDraft(
   append?: DraftAppend,
   position?: NativeChatDraftPosition,
   product?: NativeChatDraftReturnProduct,
-  sources?: readonly object[]
+  sources?: readonly NativeChatDraftReturnSource[]
 ): void {
   const scopeKey = currentDraftScope(reference)
   if (isNativeChatEditDraft(scopeKey) && !ephemeralDrafts.has(scopeKey)) {
@@ -232,7 +233,7 @@ export function appendToNativeChatComposerDraft(
   owner?: NativeChatComposerDraftOwner,
   position?: (draft: NativeChatComposerDraft) => NativeChatDraftPosition,
   independent = false,
-  source?: object,
+  source?: NativeChatDraftReturnSource,
   sourceRecord?: DraftRecord,
   sourceScope?: string
 ): boolean {

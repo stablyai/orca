@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   records,
@@ -199,8 +200,8 @@ export function observeNativeChatDraftRemovalReturns(
     string,
     {
       events: NativeChatDraftReturnEvent[]
-      sources: Map<object, string>
-      watch: (source: object, scope: string) => void
+      sources: Map<NativeChatDraftReturnSource, string>
+      watch: (source: NativeChatDraftReturnSource, scope: string) => void
       stop: () => void
       release: () => void
     }
@@ -210,7 +211,7 @@ export function observeNativeChatDraftRemovalReturns(
     if (!stream) {
       const dispose: (() => void)[] = []
       const events: NativeChatDraftReturnEvent[] = []
-      const sources = new Map<object, string>()
+      const sources = new Map<NativeChatDraftReturnSource, string>()
       const observe = (event: NativeChatDraftReturnEvent) => events.push(event)
       stream = {
         events,

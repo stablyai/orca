@@ -1,3 +1,5 @@
+import type { NativeChatComposerImageAttachment } from './native-chat-composer-types'
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
 
@@ -5,7 +7,7 @@ export type StagedFiles = {
   scope: string
   paths: Set<string>
   resources: Map<string, object>
-  pending: Map<object, string>
+  pending: Map<NativeChatComposerImageAttachment, string>
   draftPaths: Set<string>
   heldInputs: Set<Set<string>>
   leases: Set<Set<string>>
@@ -18,7 +20,7 @@ export type StagedFiles = {
 }
 export const staged = new Map<string, StagedFiles>()
 export const pendingResources = new WeakMap<
-  object,
+  NativeChatDraftReturnSource,
   Map<string, { resource: object; files: StagedFiles }>
 >()
 

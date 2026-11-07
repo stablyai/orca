@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { basename } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { describeDropSkipReason } from '@/lib/drop-skip-reason-copy'
@@ -12,7 +13,9 @@ import {
 } from './native-chat-attachment-upload'
 
 export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOptions & {
-  insertReferences?: ((paths: string[], sources?: readonly object[]) => void) | null
+  insertReferences?:
+    | ((paths: string[], sources?: readonly NativeChatDraftReturnSource[]) => void)
+    | null
 }
 
 export type NativeChatPendingAttachmentChips = {

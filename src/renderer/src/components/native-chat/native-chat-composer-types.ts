@@ -1,3 +1,4 @@
+import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
@@ -188,7 +189,7 @@ export type NativeChatComposerHandle = {
   /** Dictated text is spaced from the text around the caret. */
   insertTypedText: (
     text: string,
-    options?: { dictated?: boolean; sources?: readonly object[] }
+    options?: { dictated?: boolean; sources?: readonly NativeChatDraftReturnSource[] }
   ) => boolean
   insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
