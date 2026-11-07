@@ -294,7 +294,7 @@ export async function performAttach(
     ok: true,
     replayed,
     fence,
-    cursor: attached.journal.cursor(),
+    cursor: await attached.journal.reads.cursor(),
     value: {
       sessionId,
       fence,

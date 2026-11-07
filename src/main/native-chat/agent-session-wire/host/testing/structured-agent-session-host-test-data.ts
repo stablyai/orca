@@ -173,14 +173,16 @@ export function hostTestRestingOptionsJournal(
   wroteBeforeOpen = false
 ) {
   return {
-    threadGoal: () => null,
+    reads: {
+      threadGoalSource: async () => ({ goal: null, row: null }),
+      contextUsage: async () => null,
+      contextFloor: async () => null
+    },
     inputOrder: { hasInputs: () => false },
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) =>
       items.forEach((body, index) => visit(`item-${index}`, index + 1, body)),
     wroteBeforeOpen: () => wroteBeforeOpen,
-    submissions: () => [],
-    contextUsage: () => null,
-    context: { floor: () => null }
+    submissions: () => []
   }
 }
 
