@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { signInToClaudeAccount } from '@/lib/claude-account-sign-in'
 import { agentSessionRemoteSignInCommand } from '../../../../../shared/agent-session/lifecycle/agent-session-sign-in'
@@ -39,10 +40,10 @@ export function useNativeChatSignInView(): NativeChatSignIn | null {
   return useContext(NativeChatSignInContext)
 }
 
-export function nativeChatSignInLabel(signIn: NativeChatSignIn): string {
+export function nativeChatSignInLabel(signIn: NativeChatSignIn, t: Translate = translate): string {
   return signIn.signingIn
-    ? translate('components.native-chat.claudeSignIn.signingIn', 'Signing in…')
-    : translate('accounts.claude.signIn', 'Sign in')
+    ? t('components.native-chat.claudeSignIn.signingIn', 'Signing in…')
+    : t('accounts.claude.signIn', 'Sign in')
 }
 
 /** Offer local selected-account sign-in until successful, then suppress it until the failure or failure-row count changes. */

@@ -8,7 +8,7 @@ import {
   useState
 } from 'react'
 import { Paperclip } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { toast } from 'sonner'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/native-file-drop-rejection-message'
@@ -174,6 +174,7 @@ export function NativeChatPaneFileDropOverlay({
 }: {
   queuedMessage?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       data-native-chat-drop-overlay="true"
@@ -185,14 +186,11 @@ export function NativeChatPaneFileDropOverlay({
         </span>
         <span className="text-sm font-medium">
           {queuedMessage
-            ? translate(
-                'components.native-chat.drop.messageTitle',
-                'Drop to attach to this message'
-              )
-            : translate('components.native-chat.drop.title', 'Drop to attach to this chat')}
+            ? t('components.native-chat.drop.messageTitle', 'Drop to attach to this message')
+            : t('components.native-chat.drop.title', 'Drop to attach to this chat')}
         </span>
         <span className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'components.native-chat.drop.subtitle',
             'Files are added to your message as paths the agent can read.'
           )}

@@ -11,17 +11,22 @@ import type { NativeChatPaneFork } from '@/components/native-chat/messages/actio
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
-function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
+function nativeChatSessionAttachmentNotReadyNotice(
+  agent: AgentType,
+  starting: boolean,
+  t: Translate = translate
+): string {
   const label = structuredAgentLabel(agent)
   return starting
-    ? translate(
+    ? t(
         'components.native-chat.composer.sessionAttachmentsStarting',
         '{{agent}} chat is still opening. Wait for it to open, then attach the files again.',
         { agent: label }
       )
-    : translate(
+    : t(
         'components.native-chat.composer.sessionAttachmentsFailed',
         '{{agent}} chat could not open. Use Retry in the chat, then attach the files again.',
         { agent: label }

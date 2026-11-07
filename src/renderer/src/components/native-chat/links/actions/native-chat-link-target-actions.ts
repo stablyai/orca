@@ -20,6 +20,7 @@ import {
 } from './native-chat-http-link-source-owner'
 import { openNativeChatWebLink } from './native-chat-web-link-actions'
 import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import type { Translate } from '@/i18n/use-translate'
 
 export function resolveNativeChatHttpLinkRouting(
   state: AppState,
@@ -53,20 +54,23 @@ export function nativeChatFileOpenDeps(
 
 export function nativeChatFileLinkActions(
   target: NativeChatResolvedFileLink,
-  context: NativeChatFileLinkContext
+  context: NativeChatFileLinkContext,
+  t?: Translate
 ): FileLinkActions {
   return buildFileLinkActions(
     target.absolutePath,
     target.line,
     target.column,
     nativeChatFileOpenDeps(target, context),
-    resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId)
+    resolveNativeChatHttpLinkSourceOwner(useAppStore.getState(), context.worktreeId),
+    t
   )
 }
 
 export function nativeChatLinkActions(
   href: string,
-  context: NativeChatFileLinkContext | null
+  context: NativeChatFileLinkContext | null,
+  t?: Translate
 ): FileLinkActions | null {
   if (!context) {
     return null
@@ -74,7 +78,7 @@ export function nativeChatLinkActions(
   const route = routeNativeChatHref(href)
   if (route.kind === 'file') {
     const target = resolveNativeChatFileLink(href, context)
-    return target ? nativeChatFileLinkActions(target, context) : null
+    return target ? nativeChatFileLinkActions(target, context, t) : null
   }
   if (route.kind !== 'web' || !/^https?:/i.test(route.url)) {
     return null
@@ -111,7 +115,8 @@ export function nativeChatLinkActions(
             'orca',
             true
           )
-      }
+      },
+      t
     )
   }
 }

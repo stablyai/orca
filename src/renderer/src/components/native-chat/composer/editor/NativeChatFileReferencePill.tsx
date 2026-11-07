@@ -7,7 +7,7 @@ import {
 } from './native-chat-pasted-text-state'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { FileX, Hourglass } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
@@ -20,6 +20,7 @@ import {
 } from '../../paste/native-chat-pasted-text-reference'
 
 export function NativeChatFileReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
+  const t = useTranslate()
   const state = useNativeChatPastedTextState(String(node.attrs.token))
   const path = state && state !== 'saving' && state !== 'unsaved' ? state : String(node.attrs.path)
   const pasteId = nativeChatPastedTextId(String(node.attrs.token))
@@ -34,13 +35,13 @@ export function NativeChatFileReferencePill({ node, selected }: NodeViewProps): 
       icon={unsaved ? FileX : state === 'saving' ? Hourglass : getFileTypeIcon(path)}
       label={
         unsaved
-          ? translate('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
+          ? t('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
           : pasteId || isNativeChatPastedTextPath(path)
-            ? nativeChatPastedTextLabel()
+            ? nativeChatPastedTextLabel(t)
             : basename(path)
       }
       selected={selected}
-      title={unsaved ? nativeChatPasteNotSavedNotice() : path || undefined}
+      title={unsaved ? nativeChatPasteNotSavedNotice(t) : path || undefined}
       data-native-chat-file-reference={path}
     />
   )

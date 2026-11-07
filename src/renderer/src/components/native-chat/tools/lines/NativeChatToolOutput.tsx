@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   readStructuredAgentSessionItem,
   supportsStructuredAgentSessionItemDetail
@@ -23,6 +23,7 @@ export function NativeChatToolOutput({
 }: {
   body: NativeChatToolResultBlock
 }): React.JSX.Element {
+  const t = useTranslate()
   const owner = useNativeChatVisualOwner()
   const [expanded, setExpanded] = useState(false)
   const [detail, setDetail] = useState<{
@@ -85,7 +86,7 @@ export function NativeChatToolOutput({
       </pre>
       {partial ? (
         <p className="text-xs text-chat-foreground-faint">
-          {translate(
+          {t(
             'components.native-chat.tool.fullOutputPartial',
             NATIVE_CHAT_TOOL_OUTPUT_COPY.partial,
             partial
@@ -101,14 +102,11 @@ export function NativeChatToolOutput({
             disabled={loading}
             onClick={() => void showFull()}
           >
-            {translate('components.native-chat.tool.showFullOutput', 'Show full output')}
+            {t('components.native-chat.tool.showFullOutput', 'Show full output')}
           </Button>
           {failed ? (
             <span className="text-xs text-chat-foreground-faint">
-              {translate(
-                'components.native-chat.tool.fullOutputFailed',
-                "Couldn't load the full output."
-              )}
+              {t('components.native-chat.tool.fullOutputFailed', "Couldn't load the full output.")}
             </span>
           ) : null}
         </div>

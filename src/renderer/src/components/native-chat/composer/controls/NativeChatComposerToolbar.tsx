@@ -2,7 +2,7 @@ import { useEffectEvent, useLayoutEffect, useRef, useState, type ReactNode } fro
 import { Ellipsis } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatPickerFocusReturn } from '../focus/native-chat-picker-focus-return'
 
 export type NativeChatComposerControl = {
@@ -26,6 +26,7 @@ export function NativeChatComposerToolbar({
   primary: ReactNode
   focusComposer?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const root = useRef<HTMLDivElement>(null)
   const primaryRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -204,10 +205,7 @@ export function NativeChatComposerToolbar({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate(
-                  'components.native-chat.composer.moreControls',
-                  'More chat controls'
-                )}
+                aria-label={t('components.native-chat.composer.moreControls', 'More chat controls')}
               >
                 <Ellipsis className="size-4" />
               </Button>

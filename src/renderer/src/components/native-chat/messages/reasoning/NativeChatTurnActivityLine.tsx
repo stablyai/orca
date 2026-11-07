@@ -1,6 +1,7 @@
 import { useId } from 'react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { NativeChatLiveLine } from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../shared/native-chat/transcript/native-chat-reasoning-row'
 import {
@@ -15,14 +16,17 @@ import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-st
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 
 // Literal keys with literal fallbacks: a dynamic key registers no catalog reference.
-function statusLabel(key: Extract<NativeChatActiveTurnLabel, { source: 'status' }>['key']): string {
+function statusLabel(
+  key: Extract<NativeChatActiveTurnLabel, { source: 'status' }>['key'],
+  t: Translate = translate
+): string {
   switch (key) {
     case 'thinking':
-      return translate('components.native-chat.status.thinking', 'Thinking')
+      return t('components.native-chat.status.thinking', 'Thinking')
     case 'stopping':
-      return translate('components.native-chat.status.stopping', 'Stopping…')
+      return t('components.native-chat.status.stopping', 'Stopping…')
     case 'working':
-      return translate('components.native-chat.status.working', 'Working…')
+      return t('components.native-chat.status.working', 'Working…')
   }
 }
 
@@ -32,8 +36,9 @@ export function NativeChatTurnActivityLine({
 }: {
   line: NativeChatLiveLine
 }): React.JSX.Element {
+  const t = useTranslate()
   const resolved = describeNativeChatActiveTurnLabel(line)
-  const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key)
+  const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key, t)
   const { reasoning } = line
   // The finished row reads this key too, so a block opened here lands open once it ends.
   const disclosureKey = reasoning

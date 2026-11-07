@@ -1,7 +1,7 @@
 // Keep mounted for fading; hidden state is inert and excluded from assistive technology.
 
 import { ArrowDown } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Keeps focus where the reader was typing: a pointer press never moves it here. */
 function keepFocus(event: React.MouseEvent): void {
@@ -15,7 +15,8 @@ export function NativeChatJumpToLatest({
   visible: boolean
   onJump: () => void
 }): React.JSX.Element {
-  const label = translate('components.native-chat.jumpToLatest', 'Jump to latest')
+  const t = useTranslate()
+  const label = t('components.native-chat.jumpToLatest', 'Jump to latest')
   return (
     <button
       type="button"

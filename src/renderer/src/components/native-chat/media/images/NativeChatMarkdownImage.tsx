@@ -21,7 +21,7 @@ import {
 import { chatImageAccess } from '@/lib/local-file-access'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { basename } from '@/lib/path'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
 import { jiraImageReference } from '../../../../../../shared/jira/jira-attachment-image'
 import { filesystemPathToFileUri } from '../../../../../../shared/file-links/file-uri-path'
@@ -76,6 +76,7 @@ export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.El
 }
 
 function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React.JSX.Element {
+  const t = useTranslate()
   const onLinkClick = useNativeChatLinkClick()
   const owner = useContext(NativeChatMarkdownImageOwnerContext)
   const linkedHref = useContext(NativeChatMarkdownImageLinkContext)
@@ -153,19 +154,19 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
   const title =
     alt?.trim() ||
     (target ? basename(target.absolutePath) : '') ||
-    translate('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
+    t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
   if (!visible && (open || menuOpen)) {
     setOpen(false)
     setMenuOpen(false)
   }
   const actions =
     menuOpen && fileLinkContext && imageHref
-      ? nativeChatLinkActions(imageHref, fileLinkContext)
+      ? nativeChatLinkActions(imageHref, fileLinkContext, t)
       : null
   const canOfferActions = Boolean(fileLinkContext && (target || /^https?:/i.test(src ?? '')))
   const actionsLabel = target
-    ? translate('components.native-chat.imagePreview.fileActions', 'File actions')
-    : translate('components.native-chat.imagePreview.linkActions', 'Link actions')
+    ? t('components.native-chat.imagePreview.fileActions', 'File actions')
+    : t('components.native-chat.imagePreview.linkActions', 'Link actions')
   const runAction = (action: LinkAction): void => {
     handingOff.current = true
     flushSync(() => {
@@ -176,7 +177,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
   }
   const fallback = (
     <span role="status" className="text-sm text-muted-foreground">
-      {translate('components.native-chat.composer.imageUnavailable', 'Preview unavailable')}
+      {t('components.native-chat.composer.imageUnavailable', 'Preview unavailable')}
     </span>
   )
   const copyAttributes = {
@@ -198,7 +199,7 @@ function NativeChatMarkdownImagePreview({ src, alt }: MarkdownImageProps): React
           setMenuOpen(false)
         }
       }}
-      triggerLabel={`${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${title}`}
+      triggerLabel={`${t('components.native-chat.composer.viewAttachment', 'View image')}: ${title}`}
       className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-border/70"
       onError={() => setFailedSrc(imageSrc)}
       onLoad={() => {

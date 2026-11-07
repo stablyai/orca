@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
@@ -13,8 +14,8 @@ let cached: {
   full: Intl.DateTimeFormat
 } | null = null
 
-function getTimestampFormatters(): NonNullable<typeof cached> {
-  const locale = getIntlLocale()
+function getTimestampFormatters(intlLocale: string = getIntlLocale()): NonNullable<typeof cached> {
+  const locale = intlLocale
   if (!cached || cached.locale !== locale) {
     cached = {
       locale,
@@ -34,6 +35,7 @@ export function NativeChatMessageTimestamp({
   focusable?: boolean
   className?: string
 }): React.JSX.Element | null {
+  const intlLocale = useIntlLocale()
   useTranslation()
   if (timestamp === null) {
     return null
@@ -42,7 +44,7 @@ export function NativeChatMessageTimestamp({
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  const formatters = getTimestampFormatters()
+  const formatters = getTimestampFormatters(intlLocale)
   const fullLabel = formatters.full.format(date)
 
   return (
