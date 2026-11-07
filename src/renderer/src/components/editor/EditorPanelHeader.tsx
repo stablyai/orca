@@ -41,7 +41,7 @@ type EditorPanelHeaderProps = {
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
-  canOpenPreviewToSide: boolean
+  canOpenPreview: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
@@ -54,7 +54,7 @@ type EditorPanelHeaderProps = {
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
-  onOpenPreviewToSide: () => void
+  onOpenPreview: () => void
   onOpenMarkdownPreview: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
@@ -77,7 +77,7 @@ export function EditorPanelHeader({
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
-  canOpenPreviewToSide,
+  canOpenPreview,
   canShowMarkdownPreview,
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
@@ -90,7 +90,7 @@ export function EditorPanelHeader({
   openFileState,
   onCopyPath,
   onOpenDiffTargetFile,
-  onOpenPreviewToSide,
+  onOpenPreview,
   onOpenMarkdownPreview,
   onToggleSideBySide,
   onEditorToggleChange,
@@ -147,27 +147,24 @@ export function EditorPanelHeader({
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
-      {canOpenPreviewToSide && (
+      {canOpenPreview && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                onClick={onOpenPreviewToSide}
+                onClick={onOpenPreview}
                 aria-label={translate(
-                  'auto.components.editor.EditorPanelHeader.fb8331694e',
-                  'Open Preview to the Side'
+                  'auto.components.editor.EditorViewToggle.0d193dc03c',
+                  'Preview'
                 )}
               >
                 <Eye size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.editor.EditorPanelHeader.fb8331694e',
-                'Open Preview to the Side'
-              )}
+              {translate('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
