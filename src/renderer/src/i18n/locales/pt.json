@@ -22058,11 +22058,9 @@
       "personal": "Conta Google",
       "gcpProject": "Projeto do Google Cloud",
       "gcpLocation": "Local do Google Cloud",
-      "signInAgainWith": "Entre novamente para usar {{method}}.",
       "settingsIncomplete": "Escolha um tipo de conta Antigravity e informe seu projeto e local do Google Cloud.",
       "settingsLoadFailed": "O Orca não conseguiu carregar suas configurações de login do Antigravity. Tente novamente.",
       "settingsSaveFailed": "O Orca não conseguiu salvar suas configurações de login do Antigravity. Tente novamente.",
-      "signInWith": "Entra com {{method}} em {{host}}.",
       "lastReading": "{{reading}} · Lido {{time}}",
       "noReading": "Uso desconhecido: ainda não consultado"
     },

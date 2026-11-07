@@ -22411,11 +22411,9 @@
       "personal": "Аккаунт Google",
       "gcpProject": "Проект Google Cloud",
       "gcpLocation": "Регион Google Cloud",
-      "signInAgainWith": "Войдите снова, чтобы использовать {{method}}.",
       "settingsIncomplete": "Выберите тип аккаунта Antigravity и укажите проект и регион Google Cloud.",
       "settingsLoadFailed": "Orca не удалось загрузить настройки входа в Antigravity. Попробуйте ещё раз.",
       "settingsSaveFailed": "Orca не удалось сохранить настройки входа в Antigravity. Попробуйте ещё раз.",
-      "signInWith": "Вход через {{method}} на {{host}}.",
       "lastReading": "{{reading}} · Считано {{time}}",
       "noReading": "Использование неизвестно: данные ещё не считаны"
     },

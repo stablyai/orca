@@ -21376,11 +21376,9 @@
       "personal": "Google 帳戶",
       "gcpProject": "Google Cloud 專案",
       "gcpLocation": "Google Cloud 位置",
-      "signInAgainWith": "請重新登入以使用 {{method}}。",
       "settingsIncomplete": "請選擇 Antigravity 帳戶類型並輸入其 Google Cloud 專案和位置。",
       "settingsLoadFailed": "Orca 無法載入 Antigravity 登入設定。請再試一次。",
       "settingsSaveFailed": "Orca 無法儲存 Antigravity 登入設定。請再試一次。",
-      "signInWith": "在 {{host}} 上使用 {{method}} 登入。",
       "lastReading": "{{reading}} · 讀取於 {{time}}",
       "noReading": "用量未知：尚未讀取"
     },
