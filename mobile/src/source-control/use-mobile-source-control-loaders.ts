@@ -121,12 +121,14 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   ).current
   // Reset on identity change during render so retained ready state cannot expose another host/worktree for a frame.
   const lastResetIdentityRef = useRef(statusIdentityKey)
-  // The status read the compare last ran for; Review's reads wait until Changes is back on top.
+  // The status read whose compare landed or is out; Review's reads wait until Changes is back on top.
   const comparedReadRef = useRef<string | null>(null)
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
     // Retire before fresh status arrives; otherwise the old compare can publish into the new worktree.
     branchCompare.reset()
+    // A quick switch back finds its status read still fresh, and its compare state was just cleared.
+    comparedReadRef.current = null
     setBranchCompareState({ kind: 'idle' })
     setRebaseBaseRef(null)
   }
@@ -146,7 +148,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
 
   const loadBranchCompare = useCallback(
     // The compare base can be the branch's upstream, so it follows the status read that triggered it.
-    async (options: { preserveReadyOnFailure: boolean; upstreamName: string | undefined }) => {
+    // Resolves true once a reply that a retry would not change has published.
+    async (upstreamName: string | undefined): Promise<boolean> => {
       // Each compare refresh owns a fresh reply; retire first so only the newest attempt can publish.
       branchCompare.reset()
       if (!worktreeId || !client || connState !== 'connected') {
@@ -162,7 +165,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const loaded = await branchCompare.load(scope, WHOLE_WORKTREE, (currency) =>
         readBranchCompareOutcome(client, worktreeId, currency, {
           compareAgainstUpstream,
-          upstreamName: options.upstreamName
+          upstreamName
         })
       )
       // Mount liveness belongs to the view; a current reply still cannot publish after detach.
@@ -174,10 +177,8 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       }
       const outcome = loaded.value
       setRebaseBaseRef(outcome.effectiveBaseRef)
-      setBranchCompareState((prev) =>
-        nextBranchCompareState(outcome, prev, options.preserveReadyOnFailure)
-      )
-      return outcome.kind === 'ready'
+      setBranchCompareState((prev) => nextBranchCompareState(outcome, prev))
+      return outcome.kind !== 'failed'
     },
     [branchCompare, client, compareAgainstUpstream, connState, statusIdentityKey, worktreeId]
   )
@@ -195,9 +196,11 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       statusQuery.status === 'success'
     ) {
       comparedReadRef.current = read
-      void loadBranchCompare({
-        preserveReadyOnFailure: true,
-        upstreamName: statusRead.status.upstreamStatus?.upstreamName
+      void loadBranchCompare(statusRead.status.upstreamStatus?.upstreamName).then((landed) => {
+        // Forget a compare that didn't land so coming back to Changes retries it before status is stale.
+        if (!landed && comparedReadRef.current === read) {
+          comparedReadRef.current = null
+        }
       })
     }
   })
