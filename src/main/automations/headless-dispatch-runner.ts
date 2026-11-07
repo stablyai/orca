@@ -95,7 +95,7 @@ export async function runHeadlessAutomationDispatch(
       console.warn('[automations] failed to record the opened run terminal:', error)
     })
     const { error } = await launch.delivery
-    if (error) {
+    if (error !== null) {
       return ctx.transition({ status: 'dispatch_failed', ...launchRunTarget, error }).run
     }
   }
