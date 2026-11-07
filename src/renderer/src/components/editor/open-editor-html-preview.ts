@@ -6,7 +6,7 @@ import {
 } from '@/store/slices/editor/tabs/editor-view-placement'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
-import { beginLinkOpenRequest } from '@/lib/link-open-request'
+import { beginLinkOpenRequest, subscribeLinkOpenRequests } from '@/lib/link-open-request'
 import { captureLinkOpenIntent } from '@/lib/link-open-intent'
 import { flushEditorFrames } from './save/flush/editor-pending-flush'
 
@@ -28,23 +28,41 @@ export async function openEditorHtmlPreview(
   }
   initial.focusGroup(source.worktreeId, source.groupId)
   const isCurrentRequest = beginLinkOpenRequest()
+  let checkedState: typeof initial | null = null
+  let sourceIsSelected = false
   const reveal = captureBrowserLinkReveal(useAppStore.getState, useAppStore.subscribe, () => {
+    if (!isCurrentRequest()) {
+      return false
+    }
     const state = useAppStore.getState()
-    const tab = state.unifiedTabsByWorktree[source.worktreeId]?.find(
-      (candidate) => candidate.id === source.id
-    )
+    const tabs = state.unifiedTabsByWorktree[source.worktreeId]
+    const groups = state.groupsByWorktree[source.worktreeId]
     const groupId = state.activeGroupIdByWorktree[source.worktreeId]
-    return (
+    if (
+      checkedState &&
+      tabs === checkedState.unifiedTabsByWorktree[source.worktreeId] &&
+      groups === checkedState.groupsByWorktree[source.worktreeId] &&
+      groupId === checkedState.activeGroupIdByWorktree[source.worktreeId]
+    ) {
+      return sourceIsSelected
+    }
+    checkedState = state
+    const tab = tabs?.find((candidate) => candidate.id === source.id)
+    sourceIsSelected =
       tab?.entityId === file.id &&
       tab.contentType === source.contentType &&
       tab.executionHostId === source.executionHostId &&
       groupId === tab.groupId &&
-      state.groupsByWorktree[source.worktreeId]?.find((group) => group.id === tab.groupId)
-        ?.activeTabId === source.id
-    )
+      groups?.find((group) => group.id === tab.groupId)?.activeTabId === source.id
+    return sourceIsSelected
+  })
+  const unsubscribeRequests = subscribeLinkOpenRequests(() => {
+    reveal.dispose()
+    unsubscribeRequests()
   })
   try {
     if (
+      !reveal.canReveal() ||
       !(await flushEditorFrames(initial, file.id)) ||
       !isCurrentRequest() ||
       !reveal.canReveal()
@@ -78,5 +96,6 @@ export async function openEditorHtmlPreview(
     })
   } finally {
     reveal.dispose()
+    unsubscribeRequests()
   }
 }
