@@ -175,10 +175,9 @@ export function forwardGuestShortcutInput(
     keybindingMatchesAction('sidebar.projects.toggleCollapse', input, process.platform, keybindings)
   ) {
     renderer.send('ui:toggleProjectsCollapse')
-  } else if (!page && action?.type === 'toggleLeftSidebar') {
-    // Why: a browser page keeps Mod+B for the page and Mod+L for its address bar.
+  } else if (action?.type === 'toggleLeftSidebar') {
     renderer.send('ui:toggleLeftSidebar')
-  } else if (!page && action?.type === 'toggleRightSidebar') {
+  } else if (action?.type === 'toggleRightSidebar') {
     renderer.send('ui:toggleRightSidebar')
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')
