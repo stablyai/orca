@@ -84,7 +84,11 @@ export async function stopSttDictation(
   stopPromise = waitForSttWorkerStop({
     worker,
     capturedSink,
-    timeoutMs: options.discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    // A model still loading answers after its load; killing it would strand the pending start.
+    timeoutMs:
+      options.discard && state.startingOwner !== owner
+        ? DISCARD_DICTATION_TIMEOUT_MS
+        : STOP_DICTATION_TIMEOUT_MS,
     discard: options.discard === true,
     finish: (outcome) => finishSttWorkerStop(state, worker, outcome)
   }).finally(() => {

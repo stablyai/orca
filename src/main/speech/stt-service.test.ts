@@ -497,6 +497,39 @@ describe('SttService', () => {
     expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
   })
 
+  it('lets a model that is still loading finish when its dictation is canceled', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new SttService(
+        {
+          getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+          getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+        } as never,
+        spawnMockWorker
+      )
+
+      MockWorker.emitReadyOnInit = false
+      const startPromise = service.startDictation('model-a', vi.fn(), undefined, 'mobile:1')
+      const startOutcome = startPromise.catch((error: Error) => error.message)
+      await vi.advanceTimersByTimeAsync(0)
+      const worker = getLastWorker()!
+      // The worker answers the cancel only after its model load.
+      worker.answerDiscard = false
+      const cancel = service.stopDictation('mobile:1', { discard: true })
+      await vi.advanceTimersByTimeAsync(5_000)
+      worker.answerDiscard = true
+      worker.emit('message', { type: 'ready' })
+      worker.emit('message', { type: 'stopped' })
+      await cancel
+
+      expect(await startOutcome).toBe('dictation_canceled')
+      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+      expect(getCreatedWorkerCount()).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {
     const service = new SttService(
       {
