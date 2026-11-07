@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { resolveTerminalPalette } from '../../../shared/terminal-themes/terminal-theme-selection'
 import { claudeCodeThemeFromTerminal } from './claude-code-theme'
+import { withClaudeThemeFileLock } from './claude-code-theme-ownership'
 import {
   replaceFile,
   syncClaudeCodeThemeConfigDirs,
@@ -86,7 +87,9 @@ export function startClaudeCodeThemeSync(host: {
       path,
       RELOAD_RETRY_DELAYS_MS.map((delay, attempt) =>
         setTimeout(() => {
-          queue = queue.then(() => republishThemeFile(path, attempt)).catch(warnSyncFailed)
+          queue = queue
+            .then(() => withClaudeThemeFileLock(() => republishThemeFile(path, attempt)))
+            .catch(warnSyncFailed)
         }, delay)
       )
     )

@@ -86,3 +86,8 @@ export async function withClaudeThemeOwnership<T>(
     })
   })
 }
+
+/** Holds the same lock as record edits, so a reload retry never republishes a file another Orca just replaced. */
+export async function withClaudeThemeFileLock<T>(run: () => Promise<T>): Promise<T> {
+  return await withManagedHookInstallLock(homedir(), undefined, run)
+}
