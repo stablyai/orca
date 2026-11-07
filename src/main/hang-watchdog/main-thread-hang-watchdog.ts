@@ -1,7 +1,11 @@
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { app } from 'electron'
-import { hangDetectionMarkerPath } from './hang-detection-marker'
+import {
+  hangDetectionMarkerPath,
+  previousHangDetectionMarkerPath,
+  readHangDetectionMarker
+} from './hang-detection-marker'
 import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 import { resolveObservabilityConsent } from '../observability'
 import {
@@ -20,6 +24,20 @@ export type MainThreadHangWatchdogHandle = {
 function positiveTiming(value: string | undefined, fallback: number): number {
   const parsed = Number(value)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const RELAUNCH_LOOP_WINDOW_MS = 10 * 60_000
+
+function sceneDeadlockRelaunchBundlePath(userDataPath: string): string | null {
+  if (!app.isPackaged || process.env.ORCA_HANG_WATCHDOG_RELAUNCH === '0') {
+    return null
+  }
+  // A launch that deadlocks again right after a recovery relaunch stays observation-only instead of looping.
+  const previous = readHangDetectionMarker(previousHangDetectionMarkerPath(userDataPath))
+  if (previous?.relaunched && Date.now() - previous.detectedAt < RELAUNCH_LOOP_WINDOW_MS) {
+    return null
+  }
+  return /^(.+\.app)\/Contents\/MacOS\/[^/]+$/.exec(app.getPath('exe'))?.[1] ?? null
 }
 
 export function installMainThreadHangWatchdog(options: {
@@ -43,7 +61,8 @@ export function installMainThreadHangWatchdog(options: {
     checkIntervalMs: positiveTiming(
       process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
-    )
+    ),
+    relaunchBundlePath: sceneDeadlockRelaunchBundlePath(options.userDataPath)
   }
   let worker: Worker
   try {

@@ -7,10 +7,16 @@ export type HangDetectionMarker = {
   parentPid: number
   unresponsiveMs: number
   selfRecovered: boolean
+  /** The watchdog proved an AppKit scene self-deadlock and relaunched Orca. */
+  relaunched?: true
 }
 
 export function hangDetectionMarkerPath(userDataPath: string): string {
   return join(userDataPath, 'main-thread-hang.json')
+}
+
+export function previousHangDetectionMarkerPath(userDataPath: string): string {
+  return `${hangDetectionMarkerPath(userDataPath)}.previous`
 }
 
 export function writeHangDetectionMarker(markerPath: string, marker: HangDetectionMarker): void {
@@ -53,11 +59,16 @@ function readAvailableHangDetectionMarker(
       parentPid: parsed.parentPid,
       unresponsiveMs: parsed.unresponsiveMs,
       // Missing recovery evidence leaves the stall unresolved.
-      selfRecovered: 'selfRecovered' in parsed && parsed.selfRecovered === true
+      selfRecovered: 'selfRecovered' in parsed && parsed.selfRecovered === true,
+      ...('relaunched' in parsed && parsed.relaunched === true ? { relaunched: true as const } : {})
     }
   } catch {
     return null
   }
+}
+
+export function readHangDetectionMarker(markerPath: string): HangDetectionMarker | null {
+  return readAvailableHangDetectionMarker(markerPath) ?? null
 }
 
 export function consumeHangDetectionMarker(markerPath: string): HangDetectionMarker | null {

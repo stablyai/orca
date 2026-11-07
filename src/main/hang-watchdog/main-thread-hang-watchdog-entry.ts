@@ -1,9 +1,11 @@
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
+import { relaunchIfAppKitSceneDeadlocked } from './appkit-scene-deadlock-relaunch'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
 import { writeHangDetectionMarker } from './hang-detection-marker'
-import type {
-  HangWatchdogWorkerData,
-  MainToHangWatchdogWorkerMessage
+import {
+  HANG_WATCHDOG_DEADLOCK_CONFIRM_DELAY_MS,
+  type HangWatchdogWorkerData,
+  type MainToHangWatchdogWorkerMessage
 } from './hang-watchdog-worker-protocol'
 
 type HangWatchdogPort = {
@@ -17,6 +19,7 @@ export function recordHangObservation(options: {
   markerPath: string
   unresponsiveMs: number
   selfRecovered: boolean
+  relaunched?: true
 }): void {
   if (!options.markerPath) {
     return
@@ -26,7 +29,8 @@ export function recordHangObservation(options: {
       detectedAt: Date.now(),
       parentPid: options.parentPid,
       unresponsiveMs: options.unresponsiveMs,
-      selfRecovered: options.selfRecovered
+      selfRecovered: options.selfRecovered,
+      ...(options.relaunched ? { relaunched: options.relaunched } : {})
     })
   } catch {
     // Diagnostic write failures must not terminate the watchdog.
@@ -40,25 +44,48 @@ export function runWatchdog(
   if (!port) {
     return
   }
+  let resolvedStalls = 0
   const loop = createHangWatchdogDetectionLoop({
     timeoutMs: config.timeoutMs,
     checkIntervalMs: config.checkIntervalMs,
     now: () => Date.now(),
-    onHangDetected: (unresponsiveMs) =>
+    onHangDetected: (unresponsiveMs) => {
       recordHangObservation({
         parentPid: config.parentPid,
         markerPath: config.markerPath,
         unresponsiveMs,
         selfRecovered: false
-      }),
+      })
+      if (!config.relaunchBundlePath) {
+        return
+      }
+      const stall = resolvedStalls
+      const stallStartedAt = Date.now() - unresponsiveMs
+      void relaunchIfAppKitSceneDeadlocked({
+        parentPid: config.parentPid,
+        bundlePath: config.relaunchBundlePath,
+        confirmDelayMs: HANG_WATCHDOG_DEADLOCK_CONFIRM_DELAY_MS,
+        isStillHung: () => resolvedStalls === stall,
+        onConfirmed: () =>
+          recordHangObservation({
+            parentPid: config.parentPid,
+            markerPath: config.markerPath,
+            unresponsiveMs: Date.now() - stallStartedAt,
+            selfRecovered: false,
+            relaunched: true
+          })
+      })
+    },
     // Update one marker per stall so resolution does not require reconciling a second record.
-    onHangResolved: (unresponsiveMs) =>
+    onHangResolved: (unresponsiveMs) => {
+      resolvedStalls++
       recordHangObservation({
         parentPid: config.parentPid,
         markerPath: config.markerPath,
         unresponsiveMs,
         selfRecovered: true
       })
+    }
   })
 
   let checkTimer: ReturnType<typeof setInterval> | null = setInterval(
@@ -88,7 +115,8 @@ export function isHangWatchdogWorkerData(value: unknown): value is HangWatchdogW
     Number.isFinite(data.timeoutMs) &&
     (data.timeoutMs ?? 0) > 0 &&
     Number.isFinite(data.checkIntervalMs) &&
-    (data.checkIntervalMs ?? 0) > 0
+    (data.checkIntervalMs ?? 0) > 0 &&
+    (data.relaunchBundlePath === null || typeof data.relaunchBundlePath === 'string')
   )
 }
 
