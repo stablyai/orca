@@ -38,6 +38,8 @@ export type OrchestrationEnvironmentTransport = {
     expectedEnvironmentPairingRevision?: number,
     send?: OrchestrationEnvironmentSendOptions
   ): Promise<RuntimeRpcResponse<unknown>>
+  /** Fires when a server's status turns verified, so backed-off relays retry at once. */
+  onEnvironmentVerified?(listener: (environmentId: string) => void): () => void
 }
 
 export function fingerprintOrchestrationPeer(publicKeyB64: string): string {
