@@ -67,7 +67,12 @@ function PopoutSettingsSync(): null {
 
   useEffect(() => {
     let disposed = false
-    // Preview-terminal copy/paste overrides live in a separate keybinding file.
+    const offKeybindingsChanged = window.api.keybindings?.onChanged((snapshot) => {
+      if (!disposed) {
+        useAppStore.getState().setKeybindingSnapshot(snapshot)
+      }
+    })
+    // Shortcut overrides live in a separate keybinding file.
     void useAppStore.getState().fetchKeybindings()
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
@@ -87,6 +92,7 @@ function PopoutSettingsSync(): null {
     return () => {
       disposed = true
       offChanged()
+      offKeybindingsChanged?.()
     }
   }, [])
 
