@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
 import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
 import { useTabGroupCloseScopeCommands } from './useTabGroupCloseScopeCommands'
 

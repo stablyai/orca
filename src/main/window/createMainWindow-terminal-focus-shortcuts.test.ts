@@ -220,7 +220,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
-  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
+  it('forwards the search shortcut to the worktree palette toggle event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -259,8 +259,8 @@ describe('createMainWindow', () => {
     for (const input of [
       {
         type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
+        code: isDarwin ? 'KeyK' : 'KeyJ',
+        key: isDarwin ? 'k' : 'j',
         meta: isDarwin,
         control: !isDarwin,
         alt: false,
@@ -268,7 +268,7 @@ describe('createMainWindow', () => {
       },
       {
         type: 'keyDown',
-        code: 'KeyJ',
+        code: isDarwin ? 'KeyK' : 'KeyJ',
         key: '',
         meta: isDarwin,
         control: !isDarwin,
@@ -456,18 +456,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
@@ -599,18 +596,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {

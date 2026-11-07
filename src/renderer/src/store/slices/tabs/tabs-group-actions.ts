@@ -1,4 +1,4 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
 import type { TabGroup } from '../../../../../shared/tab-types'
@@ -10,7 +10,7 @@ import {
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
-import { ownsGlobalSelection } from '../../global-selection-owner'
+import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
 
 type SplitGroupState = Pick<
   TabsSlice,

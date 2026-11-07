@@ -54,7 +54,7 @@ import {
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
+import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
 
 const WORKTREE = 'wt-1'
 const EXIT_REASON = 'claude stream-json exited (code 1): stderr tail'

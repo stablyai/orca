@@ -1,4 +1,4 @@
-import type { ActivePluginNewFile } from '@/store/plugin-new-files'
+import type { ActivePluginNewFile } from '@/store/plugins/file-creation/plugin-new-files'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'

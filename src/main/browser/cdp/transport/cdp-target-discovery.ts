@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws'
-import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from '../commands/cdp-synthetic-session-registry'
@@ -9,11 +9,11 @@ export class CdpTargetDiscovery {
     private readonly webContents: WebContents,
     private readonly responder: CdpClientResponseWriter,
     private readonly sessions: CdpSyntheticSessionRegistry,
-    private readonly getPort: () => number
+    private readonly getEndpoint: () => string
   ) {}
 
-  handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
-    const url = req.url ?? ''
+  /** `url` has the proxy token prefix already removed. */
+  handleHttpRequest(url: string, res: ServerResponse): void {
     if (url === '/json/version' || url === '/json/version/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       // Report the bundled Chrome version without exposing Orca’s automation identity.
@@ -22,7 +22,7 @@ export class CdpTargetDiscovery {
         JSON.stringify({
           Browser: `Chrome/${chromeVersion}`,
           'Protocol-Version': '1.3',
-          webSocketDebuggerUrl: `ws://127.0.0.1:${this.getPort()}`
+          webSocketDebuggerUrl: this.getEndpoint()
         })
       )
       return
@@ -34,7 +34,7 @@ export class CdpTargetDiscovery {
           {
             ...this.buildTargetInfo(),
             id: 'orca-proxy-target',
-            webSocketDebuggerUrl: `ws://127.0.0.1:${this.getPort()}`
+            webSocketDebuggerUrl: this.getEndpoint()
           }
         ])
       )

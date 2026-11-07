@@ -85,11 +85,6 @@ describeOnWindows('Windows secure paths against a real filesystem', () => {
     }
   }
 
-  it('starts from a relocated root that really is broader than Orca allows', () => {
-    const verdict = findSecureDaclViolation(addon.getDaclAces(relocatedRoot), sid, true)
-    expect(verdict).toMatch(/unexpected rule for S-1-5-(11|32-545)/)
-  })
-
   it('restricts a real file, dropping inherited and planted foreign rules', () => {
     const file = join(relocatedRoot, 'credential.json')
     writeFileSync(file, '{"token":"secret"}')

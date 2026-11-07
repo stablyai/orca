@@ -1,5 +1,6 @@
-import { beginEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import type { WorktreePurgeTarget, WorktreeSlice } from '../../worktree-helpers'
+import { beginEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -9,13 +10,13 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   dropRuntimeHostedCatalogRows,
-  dropWorktreeRowsForRemovedRuntimeEnvironments,
   isRemovedRuntimeHostId
-} from '../../stale-runtime-host-rows'
+} from '../../../host-catalog/removed-runtime-host-rows'
+import { dropWorktreeRowsForRemovedRuntimeEnvironments } from './stale-runtime-worktree-rows'
 import { buildFullWorktreePurgeState } from './worktree-purge-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'

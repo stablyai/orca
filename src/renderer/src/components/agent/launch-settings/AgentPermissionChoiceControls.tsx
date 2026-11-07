@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { nativeChatPermissionModeLabel } from '../../native-chat/native-chat-permission-mode-labels'
+import { nativeChatPermissionModeLabel } from '../../native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { AgentPermissionChoiceItems, AgentPermissionChoiceName } from './AgentPermissionChoiceItems'
 
 /** Use chat-mode wording; own names the agent when available. */

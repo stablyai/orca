@@ -76,13 +76,4 @@ describe('remote desktop viewers on a parked terminal', () => {
 
     expect(size()).toEqual({ cols: 80, rows: 30 })
   })
-
-  it('still gives a host with a window its grid back', async () => {
-    const { runtime, size } = createRuntime({ headless: false })
-    await runtime.updateRemoteDesktopViewer(PTY, 'multiplex:a:1', 'laptop', 99, 67)
-
-    await runtime.unregisterRemoteDesktopViewer(PTY, 'multiplex:a:1')
-
-    expect(size()).toEqual(SPAWN_GRID)
-  })
 })

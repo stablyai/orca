@@ -10,6 +10,7 @@ import { useAppStore } from '@/store/index'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { translate } from '@/i18n/i18n'
 
 type PermissionDefinition = {
@@ -290,10 +291,10 @@ export function ComputerUsePane(): React.JSX.Element {
   const isMac = platform === null || platform === 'darwin'
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {isMac ? (
-        <>
-          <div className="flex flex-wrap items-start justify-between gap-4 rounded-lg border border-border/60 bg-muted/25 px-4 py-3">
+        <SettingsGroup>
+          <div className="flex flex-wrap items-start justify-between gap-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <ShieldCheck className="size-4" />
@@ -321,76 +322,77 @@ export function ComputerUsePane(): React.JSX.Element {
             </Button>
           </div>
 
-          <div className="space-y-2">
-            <div className="divide-y divide-border/60 rounded-lg border border-border/60">
-              {PERMISSIONS.map((permission) => {
-                const status = stateById.get(permission.id)
-                const pending = pendingId === permission.id
+          {PERMISSIONS.map((permission) => {
+            const status = stateById.get(permission.id)
+            const pending = pendingId === permission.id
 
-                return (
-                  <div
-                    key={permission.id}
-                    className="flex items-center justify-between gap-4 px-4 py-3"
-                  >
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {translate(permission.labelKey, permission.labelDefault)}
-                          </span>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
-                              status
-                            )}`}
-                          >
-                            {statusLabel(status)}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {translate(permission.descriptionKey, permission.descriptionDefault)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex w-28 shrink-0 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={
-                          resetting ||
-                          pending ||
-                          status === 'unsupported' ||
-                          helperUnavailableReason !== null
-                        }
-                        onClick={() => void openPermission(permission.id)}
-                        className="gap-1.5"
+            return (
+              <div
+                key={permission.id}
+                data-settings-row=""
+                className="flex items-center justify-between gap-4 py-3"
+              >
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium">
+                        {translate(permission.labelKey, permission.labelDefault)}
+                      </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusClass(
+                          status
+                        )}`}
                       >
-                        <ExternalLink className="size-3.5" />
-                        {translate('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
-                      </Button>
+                        {statusLabel(status)}
+                      </span>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      {translate(permission.descriptionKey, permission.descriptionDefault)}
+                    </p>
                   </div>
+                </div>
+                <div className="flex w-28 shrink-0 justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      resetting ||
+                      pending ||
+                      status === 'unsupported' ||
+                      helperUnavailableReason !== null
+                    }
+                    onClick={() => void openPermission(permission.id)}
+                    className="gap-1.5"
+                  >
+                    <ExternalLink className="size-3.5" />
+                    {translate('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+          <button
+            type="button"
+            disabled={resetAccessDisabled}
+            onClick={() => void resetAccess()}
+            className="mb-3 ml-auto block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            {resetting
+              ? translate(
+                  'auto.components.settings.ComputerUsePane.506f2acf7a',
+                  'Resetting access...'
                 )
-              })}
-            </div>
-            <button
-              type="button"
-              disabled={resetAccessDisabled}
-              onClick={() => void resetAccess()}
-              className="ml-auto mr-4 block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            >
-              {resetting
-                ? translate(
-                    'auto.components.settings.ComputerUsePane.506f2acf7a',
-                    'Resetting access...'
-                  )
-                : translate('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
-            </button>
-          </div>
-        </>
+              : translate('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
+          </button>
+        </SettingsGroup>
       ) : null}
 
-      <ComputerUseSkillSetupPanel />
+      <SettingsGroup>
+        <div className="py-4">
+          <ComputerUseSkillSetupPanel />
+        </div>
+      </SettingsGroup>
     </div>
   )
 }

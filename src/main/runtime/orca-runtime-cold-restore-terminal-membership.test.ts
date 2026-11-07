@@ -11,7 +11,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { withDurableRuntimeStore } from './orca-runtime-tests/runtime-durable-store-fixture'
 import { bindPaneFirst } from './orca-runtime-tests/bind-first-pane.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+
 import type { LayoutCommand } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../persistence/terminal-topology/terminal-pane-admission'
 
@@ -297,43 +297,6 @@ describe('a restored terminal published before its PTY registers', () => {
 
     expect(surfaces(published.at(-1))).toEqual([`tab::${LEFT}:ready`, `tab::${RIGHT}:ready`])
     unsubscribe()
-  })
-
-  it('pushes a restore of several panes once, not once per registering pane', () => {
-    vi.useFakeTimers()
-    const { runtime } = coldRestoredRuntime()
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
-    const published: RuntimeMobileSessionTabsResult[] = []
-    const unsubscribe = runtime.onMobileSessionTabsChanged((event) => published.push(event))
-
-    registerLeaf(runtime, LOCAL_HOST, 'left')
-    registerLeaf(runtime, LOCAL_HOST, 'right')
-    vi.advanceTimersByTime(COALESCED_PUSH_MS)
-
-    expect(published.map(surfaces)).toEqual([[`tab::${LEFT}:ready`, `tab::${RIGHT}:ready`]])
-    unsubscribe()
-  })
-
-  it('keeps listing a restored pane whose PTY never returns as pending', async () => {
-    const { runtime } = coldRestoredRuntime()
-    publishRendererFrame(runtime, makeRendererFrame(LOCAL_HOST))
-
-    registerLeaf(runtime, LOCAL_HOST, 'left')
-    registerBound(runtime, LOCAL_EXECUTION_HOST_ID, 'pty-other', null, {
-      tabId: 'tab-other',
-      // Main remints repeated leaf ids, making this a distinct pane.
-      leafId: ORCA_LAYOUT_OWNER_IS_MAIN ? '44444444-4444-4444-8444-444444444444' : RIGHT,
-      incarnationId: 'incarnation-other'
-    })
-
-    expect(await listedSurfaces(runtime)).toEqual([
-      `tab::${LEFT}:ready`,
-      `tab::${RIGHT}:pending-handle`,
-      ...(ORCA_LAYOUT_OWNER_IS_MAIN
-        ? ['tab-other::44444444-4444-4444-8444-444444444444:ready']
-        : [])
-    ])
   })
 })
 

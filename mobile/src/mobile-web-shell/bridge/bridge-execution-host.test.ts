@@ -51,7 +51,7 @@ describe('a server workspace call across the shell bridge', () => {
         'terminal.subscribe',
         { terminal: 't1' },
         expect.any(Function),
-        { envelope: { executionHost: SERVER } }
+        { envelope: { executionHost: SERVER }, holdReplay: expect.any(Function) }
       ]
     ])
     pair.client.close()

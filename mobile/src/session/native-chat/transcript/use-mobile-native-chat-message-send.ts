@@ -6,6 +6,7 @@ import {
   readMobileNativeChatInputClear,
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome,
+  type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
 } from '../mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
@@ -18,7 +19,10 @@ import {
   releaseMobileNativeChatTerminalWrite
 } from '../mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
-import { UNCONFIRMED_SEND_MESSAGE } from '../use-mobile-native-chat-unconfirmed-sends'
+import {
+  UNCONFIRMED_SEND_MESSAGE,
+  UNCONFIRMED_SEND_RESTORED_MESSAGE
+} from '../use-mobile-native-chat-unconfirmed-sends'
 import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 
@@ -31,7 +35,8 @@ export type MobileNativeChatMessageSend = {
     deadline?: number,
     // Only a structured send carries them; a terminal chat's images were pasted before this.
     _attachments?: readonly unknown[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   dispatchCommand: (
     text: string,
@@ -86,7 +91,8 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      sentAt?: number
+      sentAt?: number,
+      onHandBack?: () => void
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
@@ -174,8 +180,17 @@ export function useMobileNativeChatMessageSend(args: {
           })
       if (outcome === 'unknown') {
         if (classification === 'chat') {
-          // Lost acknowledgement proves no failure; verify delivery by transcript rather than reporting not sent.
-          holdUnconfirmedSend(origin, text, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
+          // Lost acknowledgement proves no failure; wait for the transcript, then hand back text it never showed.
+          holdUnconfirmedSend(origin, text, () => {
+            // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
+            if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
+              onSendError(UNCONFIRMED_SEND_MESSAGE)
+              return
+            }
+            restoreRejectedDraft(origin, draftText)
+            onHandBack?.()
+            onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+          })
         } else {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })
@@ -223,8 +238,9 @@ export function useMobileNativeChatMessageSend(args: {
       images?: string[],
       deadline?: number,
       _attachments?: readonly unknown[],
-      sentAt?: number
-    ) => sendMessage(text, images, true, true, deadline, sentAt),
+      sentAt?: number,
+      intent?: MobileNativeChatSendIntent
+    ) => sendMessage(text, images, true, true, deadline, sentAt, intent?.onHandBack),
     [sendMessage]
   )
 

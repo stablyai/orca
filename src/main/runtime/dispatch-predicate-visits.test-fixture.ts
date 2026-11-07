@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { vi } from 'vitest'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SqliteBindings } from '../sqlite/sqlite-statement'
-import type { OrchestrationDb } from './orchestration/db'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 
 // SQL predicate visits complement range plans/probe counts; they are not total SQLite VM steps.
 export function installSqlVisitCounters(counters: Record<string, () => number>) {

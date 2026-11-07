@@ -96,7 +96,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
         'How Linear works in Orca: browse issues, start linked workspaces, and let agents update tickets with /orca-linear.'
       )}
       keywords={getLinearAgentSkillPaneSearchEntries()[0].keywords}
-      className="space-y-6 py-2"
+      className="space-y-8"
     >
       <LinearAgentSkillGuide
         readiness={{
@@ -130,7 +130,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
 
       <LinearAgentSkillNotes />
 
-      <p className="text-xs text-muted-foreground">
+      <p className="px-1 text-xs text-muted-foreground">
         {translate(
           'auto.components.settings.LinearAgentSkillPane.manageConnectionHint',
           'Review connected Linear workspaces and API keys in'

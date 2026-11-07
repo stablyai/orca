@@ -13,6 +13,7 @@ import {
 } from '../native-chat/agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 import { providerExitStatusText } from '../provider-process/provider-process-exit-status'
 import type { AcpLaunchSpec } from './acp-launch-specs'
+import type { AgentChatPermissionMode } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpChildStops } from './acp-dialects/acp-dialect'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import type { AcpSessionEvent } from './acp-session-runtime'
@@ -31,6 +32,8 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  /** Session modes this launch reports as Orca's permission modes. */
+  permissionModes: Readonly<Partial<Record<AgentChatPermissionMode, string>>> | undefined
   childStops?: AcpChildStops
   connection: AcpStructuredConnection
   lane: AcpStructuredLane
@@ -55,7 +58,10 @@ export function routeAcpSessionEvent(
   at: number,
   reattaching = false
 ): void {
-  if (event.kind === 'known') {
+  if (
+    event.kind === 'known' &&
+    event.notification.sessionId === session.lane.translator.providerSessionId
+  ) {
     const { update } = event.notification
     if (update.sessionUpdate === 'available_commands_update') {
       session.options.adoptCommands(update.availableCommands)

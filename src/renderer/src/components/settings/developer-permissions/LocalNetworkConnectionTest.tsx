@@ -98,7 +98,7 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
   }
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="mr-4 mb-3 ml-11">
+    <Collapsible open={open} onOpenChange={setOpen} className="mb-3 ml-7">
       <CollapsibleTrigger asChild>
         <Button
           type="button"

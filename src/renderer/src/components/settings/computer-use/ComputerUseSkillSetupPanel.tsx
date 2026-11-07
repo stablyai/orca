@@ -23,6 +23,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
 
   return (
     <AgentSkillSetupPanel
+      variant="inline"
       title={translate(
         'auto.components.settings.ComputerUsePane.93255aaf18',
         'Orca Computer Use skill'

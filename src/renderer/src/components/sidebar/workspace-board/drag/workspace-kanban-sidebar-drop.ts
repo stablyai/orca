@@ -18,7 +18,7 @@ import {
   shouldWriteManualOrderForGroupDrop,
   type WorktreeDragGroup
 } from '../../worktree-list/drag/worktree-manual-order'
-import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from '../../../../store/slices/worktrees/metadata/worktree-meta-update-options'
 import {
   CARD_SELECTOR,
   getCardDropTarget,

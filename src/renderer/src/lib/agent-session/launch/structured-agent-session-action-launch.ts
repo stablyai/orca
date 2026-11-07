@@ -7,11 +7,11 @@ import {
 } from './structured-agent-session-launch-registry'
 import { focusTerminalTabSurface } from '../../focus-terminal-tab-surface'
 import type { Tab } from '../../../../../shared/tab-types'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
 import { insertUnifiedTabAfterAnchor } from '../../unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'
-import type { OpenedAgentSessionTab } from '../../structured-agent-session-tab-open-through-layout-owner'
+import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
 import {
@@ -22,8 +22,8 @@ import {
 import { notifyHostDeclined } from '@/lib/agent-session/launch/structured-agent-session-launch-admission-notices'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
-import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 
 export function openDeclinedTerminal(

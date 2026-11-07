@@ -4,13 +4,13 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import * as launchRoute from '@/lib/agent-launch-route-input'
+import * as launchRoute from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AUTOMATION_RUNTIME_CAPABILITIES } from '../../../../shared/automation-runtime-capabilities'
 import { applyAutomationLaunchSetupPatch } from '../../../../shared/automation-launch-setup'
 import { assertAutomationExtraAgentArgs } from '../../../../shared/automation-extra-agent-args-record'
-import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
 import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
@@ -142,8 +142,6 @@ function renderSidebar(
           draft={draft}
           visibleAgents={AGENT_CATALOG}
           pickerTriggerClassName=""
-          segmentedGroupClassName=""
-          segmentedItemClassName=""
           onProjectChange={vi.fn()}
           onDraftChange={(updater) => {
             onDraftChange(updater)

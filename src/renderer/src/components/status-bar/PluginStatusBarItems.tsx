@@ -8,7 +8,7 @@ import { pluginCommandUnavailableReason } from '@/components/plugins/page/plugin
 import {
   usePluginStatusBarItems,
   type ActivePluginStatusBarItem
-} from '@/store/plugin-status-bar-items'
+} from '@/store/plugins/status-bar/plugin-status-bar-items'
 
 const ITEM_CLASS =
   'inline-flex items-center gap-1 rounded px-1 py-0.5 text-muted-foreground data-[pressable=true]:cursor-pointer data-[pressable=true]:hover:bg-accent/70 data-[pressable=true]:hover:text-foreground data-[tone=accent]:text-primary data-[tone=danger]:text-destructive data-[tone=success]:text-status-success data-[tone=warning]:text-status-warning-text'

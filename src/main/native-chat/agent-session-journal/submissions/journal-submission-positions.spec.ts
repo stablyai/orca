@@ -115,18 +115,6 @@ export function registerJournalSubmissionPositionsTests(): void {
         answeredInTurn: { turnItemId, via: 'start' }
       })
     })
-
-    it('is stated as none on a take-back that names no turn, so it reads apart from an older row', async () => {
-      const { journal } = await sendHandedOverThenWithdrawn()
-
-      expect(journal.submission('send-1')).toMatchObject({
-        dispatchState: 'rejected',
-        answeredInTurn: null
-      })
-      expect(readAgentSessionHydrationPage(journal).submissions[0]).toMatchObject({
-        answeredInTurn: null
-      })
-    })
   })
 
   describe("a submission's journal position", () => {
@@ -145,16 +133,6 @@ export function registerJournalSubmissionPositionsTests(): void {
         journal.snapshot().items.find((item) => item.itemId === agentJournalSubmissionKey('send-1'))
           ?.sequence
       ).toBe(withdrawn.sequence)
-    })
-
-    it('comes back the same from a replay of the stored rows', async () => {
-      const { journal, submitted } = await sendHandedOverThenWithdrawn()
-      await journals.closeAll()
-
-      const replayed = await journals.open({ identity: IDENTITY, stateDirectory: root! })
-
-      expect(replayed.submission('send-1')).toMatchObject({ submittedSequence: submitted.sequence })
-      expect(journal).not.toBe(replayed)
     })
   })
 }

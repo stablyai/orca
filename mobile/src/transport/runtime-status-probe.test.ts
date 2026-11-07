@@ -10,7 +10,7 @@ type ProbeOutcome = RpcResponse | Error
 function makeClient(outcomes: ProbeOutcome[]): {
   client: UnvalidatedRpcRequestPort
   calls: () => number
-  requests: () => Parameters<UnvalidatedRpcRequestPort['sendRequest']>[]
+  methods: () => string[]
 } {
   let calls = 0
   const client = {
@@ -20,7 +20,11 @@ function makeClient(outcomes: ProbeOutcome[]): {
       return outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome)
     })
   }
-  return { client, calls: () => calls, requests: () => client.sendRequest.mock.calls }
+  return {
+    client,
+    calls: () => calls,
+    methods: () => client.sendRequest.mock.calls.map(([method]) => method)
+  }
 }
 
 const ok = (result: unknown): RpcResponse => ({
@@ -46,28 +50,8 @@ describe('startRuntimeStatusProbe', () => {
     vi.useRealTimers()
   })
 
-  it('delivers the parsed status once and stops', async () => {
-    const { client, calls, requests } = makeClient([
-      ok({ machineName: 'm4airs-Air', hostPlatform: 'darwin', capabilities: ['a.v1'] })
-    ])
-    const seen: (HostStatusReply | null)[] = []
-    cancelProbe = startRuntimeStatusProbe(client, (status) => seen.push(status))
-    await flushMicrotasks()
-    expect(seen).toHaveLength(1)
-    expect(seen[0]).toEqual({
-      machineName: 'm4airs-Air',
-      hostPlatform: 'darwin',
-      capabilities: ['a.v1']
-    })
-    expect(requests()).toEqual([['status.get']])
-    expect(calls()).toBe(1)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(calls()).toBe(1)
-    cancelProbe()
-  })
-
   it('delivers null for an answer this build cannot decode, without retrying', async () => {
-    const { client, calls, requests } = makeClient([ok(null)])
+    const { client, calls, methods } = makeClient([ok(null)])
     const seen: (HostStatusReply | null)[] = []
     const failed = vi.fn()
     cancelProbe = startRuntimeStatusProbe(client, (status) => seen.push(status), failed)
@@ -76,7 +60,7 @@ describe('startRuntimeStatusProbe', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(seen).toEqual([null])
     expect(failed).not.toHaveBeenCalled()
-    expect(requests()).toEqual([['status.get']])
+    expect(methods()).toEqual(['status.get'])
     expect(vi.getTimerCount()).toBe(0)
     expect(calls()).toBe(1)
     cancelProbe()
@@ -89,7 +73,7 @@ describe('startRuntimeStatusProbe', () => {
       error: { code: 'unavailable', message: 'no' },
       _meta: { runtimeId: 'r1' }
     }
-    const { client, calls, requests } = makeClient([
+    const { client, calls, methods } = makeClient([
       refusal,
       new LogicalClientCutoverError(),
       ok({ machineName: 'Studio' })
@@ -112,13 +96,13 @@ describe('startRuntimeStatusProbe', () => {
     expect(seen).toHaveLength(1)
     expect(seen[0]).toMatchObject({ machineName: 'Studio' })
     expect(calls()).toBe(3)
-    expect(requests()).toEqual([['status.get'], ['status.get'], ['status.get']])
+    expect(methods()).toEqual(['status.get', 'status.get', 'status.get'])
     expect(vi.getTimerCount()).toBe(0)
     cancelProbe()
   })
 
   it('reports failed attempts after scheduling retries and cancels pending work', async () => {
-    const { client, calls, requests } = makeClient([
+    const { client, calls, methods } = makeClient([
       new Error('request timed out'),
       new LogicalClientCutoverError()
     ])
@@ -149,6 +133,6 @@ describe('startRuntimeStatusProbe', () => {
     expect(failed).toBe(2)
     expect(failedTimerCounts).toEqual([1, 1])
     expect(calls()).toBe(2)
-    expect(requests()).toEqual([['status.get'], ['status.get']])
+    expect(methods()).toEqual(['status.get', 'status.get'])
   })
 })

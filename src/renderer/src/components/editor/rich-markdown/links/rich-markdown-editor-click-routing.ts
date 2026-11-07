@@ -2,27 +2,28 @@ import type { MutableRefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { httpLinkActionDestinationsFor, openRoutedHttpLink } from '@/lib/http-link-destinations'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import {
+  httpLinkActionDestinationsFor,
+  openRoutedHttpLink
+} from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store/index'
-import '@/lib/workspace-browser-tab-open'
+import '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/workspace-browser-route-eligibility'
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import {
   absolutePathToFileUri as toFileUrlForOsEscape,
   resolveMarkdownLinkTarget
 } from '../../markdown/link-routing/markdown-internal-links'
+import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import { scrollToAnchorInEditor } from '../../markdown/navigation/markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from '../review/rich-markdown-review-annotations'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import {
   classifyHtmlSuperscriptLinkAction,
@@ -131,6 +132,7 @@ export function handleRichMarkdownEditorClick({
   }
   if (event.shiftKey) {
     openShiftModifiedMarkdownLink({
+      activateMarkdownLink,
       href,
       filePath,
       runtimeEnvironmentId,
@@ -203,6 +205,7 @@ function getClickedLinkHref(view: EditorView, event: MouseEvent): string {
 }
 
 function openShiftModifiedMarkdownLink({
+  activateMarkdownLink,
   href,
   filePath,
   worktreeRoot,
@@ -210,6 +213,7 @@ function openShiftModifiedMarkdownLink({
   sourceOwner,
   worktreeId
 }: {
+  activateMarkdownLink: ActivateMarkdownLink
   href: string
   filePath: string
   worktreeRoot: string | null
@@ -257,6 +261,15 @@ function openShiftModifiedMarkdownLink({
     showLocalPathOpenBlockedToast()
     return
   }
+  // Scripts main declines to launch open in a tab, like a plain click.
+  const openInEditor = (): void =>
+    void activateMarkdownLink(href, {
+      sourceFilePath: filePath,
+      worktreeId,
+      worktreeRoot,
+      runtimeEnvironmentId,
+      sourceOwner
+    })
   if (classified.kind === 'markdown') {
     // A click is a user act: it may start the link's stopped WSL distro.
     void window.api.shell
@@ -272,12 +285,12 @@ function openShiftModifiedMarkdownLink({
           )
           return
         }
-        void window.api.shell.openFileUri(
+        void openMarkdownFileLinkWithSystemDefault(
           toFileUrlForOsEscape(classified.absolutePath),
-          LOCAL_EXECUTION_HOST_ID
+          openInEditor
         )
       })
     return
   }
-  void window.api.shell.openFileUri(classified.uri, LOCAL_EXECUTION_HOST_ID)
+  void openMarkdownFileLinkWithSystemDefault(classified.uri, openInEditor)
 }

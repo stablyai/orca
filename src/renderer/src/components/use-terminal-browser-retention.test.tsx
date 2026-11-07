@@ -24,7 +24,7 @@ vi.mock('../store', () => ({
     })
   }
 }))
-vi.mock('../store/slices/browser-webview-cleanup', () => ({
+vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({
   destroyWorktreeBrowserGuests: (_tabs: unknown, _pages: unknown, worktreeId: string) =>
     mocks.destroyWorktreeBrowserGuests(worktreeId)
 }))

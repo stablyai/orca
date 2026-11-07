@@ -1,0 +1,316 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { DeviceRegistry } from './device-registry'
+import { devicePrincipalOf, fingerprintAuthenticatedPairingCredential } from './device-principal'
+import { PairingTicketExchangeError, usesOlderPairingMethod } from './pairing-ticket-exchange'
+import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
+
+const REPLACEMENT = 'a'.repeat(48)
+const RETRY = 'b'.repeat(48)
+let dir: string
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'orca-ticket-exchange-'))
+})
+
+afterEach(() => {
+  rmSync(dir, { recursive: true, force: true })
+})
+
+function pairedOffer(registry: DeviceRegistry) {
+  const offer = registry.getOrCreatePendingDevice('Phone', 'mobile')
+  registry.updateLastSeen(offer.deviceId)
+  return offer
+}
+
+function expectExchangeError(run: () => void, code: PairingTicketExchangeError['code']): void {
+  let thrown: unknown = null
+  try {
+    run()
+  } catch (error) {
+    thrown = error
+  }
+  expect(thrown instanceof PairingTicketExchangeError ? thrown.code : thrown).toBe(code)
+}
+
+describe('pairing ticket exchange', () => {
+  it('mints every new offer as a ticket', () => {
+    const registry = new DeviceRegistry(dir)
+    expect(registry.getOrCreatePendingDevice('Phone', 'mobile').ticket).toBe(true)
+    expect(registry.addDevice('CLI', 'runtime').ticket).toBe(true)
+  })
+
+  it('keeps the pairing token until the replacement is first used, then retires it', () => {
+    const registry = new DeviceRegistry(dir)
+    const offer = pairedOffer(registry)
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    // Lost reply: the client still has only the pairing token, which still works.
+    expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+
+    const signedIn = registry.validateToken(REPLACEMENT)
+    expect(signedIn).toMatchObject({ deviceId: offer.deviceId, token: REPLACEMENT })
+    expect(signedIn?.ticket).toBeUndefined()
+    expect(signedIn?.exchangeToken).toBeUndefined()
+    expect(registry.validateToken(offer.token)).toBeNull()
+
+    // Same pairing for orchestration ownership; sockets still on the pairing token are cut.
+    const principal = devicePrincipalOf(signedIn!)
+    expect(principal.callerFingerprint).toBe(fingerprintAuthenticatedPairingCredential(offer.token))
+    expect(principal.credentialRevision).toBe(1)
+    expect(
+      registry.resolveAuthenticatedPrincipal({
+        deviceId: offer.deviceId,
+        credentialRevision: 0,
+        deviceToken: offer.token
+      })
+    ).toBeNull()
+
+    const reloaded = new DeviceRegistry(dir)
+    expect(reloaded.validateToken(REPLACEMENT)?.deviceId).toBe(offer.deviceId)
+    expect(reloaded.validateToken(offer.token)).toBeNull()
+  })
+
+  it('persists the proposal before replying; a resend is idempotent and a second client cannot take over', () => {
+    const registry = new DeviceRegistry(dir)
+    const offer = pairedOffer(registry)
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    // Another client holding the same code keeps using it; the first proposal is never displaced.
+    expectExchangeError(
+      () => registry.exchangePairingTicket(offer.deviceId, offer.token, RETRY),
+      'ticket_exchange_pending'
+    )
+
+    const reloaded = new DeviceRegistry(dir)
+    expect(reloaded.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+    expect(reloaded.validateToken(RETRY)).toBeNull()
+    expect(reloaded.validateToken(REPLACEMENT)?.token).toBe(REPLACEMENT)
+    expect(reloaded.validateToken(offer.token)).toBeNull()
+  })
+
+  it('never retires a code that has already served as a plain token for a while', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(1_000_000)
+      const registry = new DeviceRegistry(dir)
+      const offer = pairedOffer(registry)
+      vi.setSystemTime(1_000_000 + 10 * 60_000 + 1)
+      expectExchangeError(
+        () => registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT),
+        'ticket_window_closed'
+      )
+      expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses rows that are not exchangeable tickets', () => {
+    const registry = new DeviceRegistry(dir)
+    const offer = pairedOffer(registry)
+    expectExchangeError(
+      () => registry.exchangePairingTicket('missing', offer.token, REPLACEMENT),
+      'device_not_found'
+    )
+    // Only the pairing token itself may propose.
+    expectExchangeError(
+      () => registry.exchangePairingTicket(offer.deviceId, 'f'.repeat(48), REPLACEMENT),
+      'ticket_already_exchanged'
+    )
+    expectExchangeError(
+      () => registry.exchangePairingTicket(offer.deviceId, offer.token, offer.token),
+      'device_token_in_use'
+    )
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    registry.validateToken(REPLACEMENT)
+    expectExchangeError(
+      () => registry.exchangePairingTicket(offer.deviceId, REPLACEMENT, RETRY),
+      'not_a_ticket'
+    )
+  })
+
+  it('leaves pairings made before tickets, and phones paired through a desktop, as they are', () => {
+    const row = { name: 'Phone', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
+    writeFileSync(
+      join(dir, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([
+        { ...row, deviceId: 'legacy', token: 'legacy-token' },
+        { ...row, deviceId: 'desktop', token: 'desktop-token', scope: 'runtime' },
+        {
+          ...row,
+          deviceId: 'child',
+          token: 'child-token',
+          parentDeviceId: 'desktop',
+          ticket: true
+        }
+      ])
+    )
+    const registry = new DeviceRegistry(dir)
+    expectExchangeError(
+      () => registry.exchangePairingTicket('legacy', 'legacy-token', REPLACEMENT),
+      'not_a_ticket'
+    )
+    expectExchangeError(
+      () => registry.exchangePairingTicket('child', 'child-token', REPLACEMENT),
+      'delegated_device'
+    )
+    expect(registry.validateToken('legacy-token')?.deviceId).toBe('legacy')
+  })
+
+  it('keeps both tokens working when retiring the pairing token cannot be saved', () => {
+    const registry = new DeviceRegistry(dir)
+    const offer = pairedOffer(registry)
+    registry.exchangePairingTicket(offer.deviceId, offer.token, REPLACEMENT)
+    const save = registry['save'].bind(registry)
+    registry['save'] = vi.fn(() => {
+      throw new Error('disk full')
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const signedIn = registry.validateToken(REPLACEMENT)
+    expect(signedIn).toMatchObject({ deviceId: offer.deviceId, token: REPLACEMENT })
+    // The replacement socket stays authenticated on later requests.
+    expect(
+      registry.resolveAuthenticatedPrincipal({
+        deviceId: offer.deviceId,
+        credentialRevision: devicePrincipalOf(signedIn!).credentialRevision,
+        deviceToken: REPLACEMENT
+      })
+    ).not.toBeNull()
+    expect(registry.validateToken(offer.token)?.deviceId).toBe(offer.deviceId)
+
+    registry['save'] = save
+    registry.validateToken(REPLACEMENT)
+    expect(registry.validateToken(offer.token)).toBeNull()
+  })
+
+  it('retires a runtime link once a browser signs in with its saved key, but not a session-only key', () => {
+    const registry = new DeviceRegistry(dir)
+    const link = registry.getOrCreatePendingDevice('Runtime', 'runtime')
+    registry.updateLastSeen(link.deviceId)
+    const sessionOnly = registry.forkDeviceKey(
+      link.deviceId,
+      Buffer.alloc(32, 1).toString('base64'),
+      'Tab',
+      {
+        ephemeral: true
+      }
+    )
+    registry.retireForkedTicket(sessionOnly.deviceId)
+    expect(registry.validateToken(link.token)?.deviceId).toBe(link.deviceId)
+
+    const saved = registry.forkDeviceKey(
+      link.deviceId,
+      Buffer.alloc(32, 2).toString('base64'),
+      'Chrome'
+    )
+    // Registration alone does not retire it: a lost reply is retried with the link.
+    expect(registry.validateToken(link.token)?.deviceId).toBe(link.deviceId)
+    registry.retireForkedTicket(saved.deviceId)
+
+    expect(registry.validateToken(link.token)).toBeNull()
+    expect(registry.lookupDeviceKey(saved.deviceId).kind).toBe('found')
+    expect(registry.lookupDeviceKey(sessionOnly.deviceId).kind).toBe('found')
+    expect(devicePrincipalOf(registry.getDevice(link.deviceId)!).callerFingerprint).toBe(
+      fingerprintAuthenticatedPairingCredential(link.token)
+    )
+    expect(new DeviceRegistry(dir).validateToken(link.token)).toBeNull()
+  })
+
+  it('leaves pre-ticket rows usable after a browser key sign-in', () => {
+    writeFileSync(
+      join(dir, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([
+        {
+          deviceId: 'old',
+          name: 'Link',
+          token: 'old-token',
+          scope: 'runtime',
+          pairedAt: 1,
+          lastSeenAt: 2
+        }
+      ])
+    )
+    const registry = new DeviceRegistry(dir)
+    const saved = registry.forkDeviceKey('old', Buffer.alloc(32, 3).toString('base64'), 'Chrome')
+    registry.retireForkedTicket(saved.deviceId)
+    expect(registry.validateToken('old-token')?.deviceId).toBe('old')
+  })
+
+  it('a browser key does not retire a link another client already claimed or that served for a while', () => {
+    const registry = new DeviceRegistry(dir)
+    const claimed = registry.getOrCreatePendingDevice('Runtime', 'runtime')
+    registry.updateLastSeen(claimed.deviceId)
+    registry.exchangePairingTicket(claimed.deviceId, claimed.token, REPLACEMENT)
+    const browser = registry.forkDeviceKey(
+      claimed.deviceId,
+      Buffer.alloc(32, 5).toString('base64'),
+      'Chrome'
+    )
+    registry.retireForkedTicket(browser.deviceId)
+    // The desktop that proposed first can still sign in with its own token.
+    expect(registry.validateToken(REPLACEMENT)?.deviceId).toBe(claimed.deviceId)
+    expect(registry.lookupDeviceKey(browser.deviceId).kind).toBe('found')
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(2_000_000)
+      const shared = registry.addDevice('Shared link', 'runtime')
+      registry.updateLastSeen(shared.deviceId)
+      vi.setSystemTime(2_000_000 + 10 * 60_000 + 1)
+      const late = registry.forkDeviceKey(
+        shared.deviceId,
+        Buffer.alloc(32, 6).toString('base64'),
+        'Firefox'
+      )
+      registry.retireForkedTicket(late.deviceId)
+      expect(registry.validateToken(shared.token)?.deviceId).toBe(shared.deviceId)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('flags only devices that signed in with a code and never moved off it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(3_000_000)
+      const registry = new DeviceRegistry(dir)
+      const older = pairedOffer(registry)
+      const exchanged = pairedOffer(registry)
+      registry.exchangePairingTicket(exchanged.deviceId, exchanged.token, REPLACEMENT)
+      const unscanned = registry.addDevice('Unscanned', 'mobile')
+      const link = registry.addDevice('Runtime', 'runtime')
+      registry.updateLastSeen(link.deviceId)
+      registry.forkDeviceKey(link.deviceId, Buffer.alloc(32, 4).toString('base64'), 'Chrome')
+      const httpLink = registry.addDevice('Plain http', 'runtime')
+      registry.updateLastSeen(httpLink.deviceId)
+      const tab = registry.forkDeviceKey(
+        httpLink.deviceId,
+        Buffer.alloc(32, 7).toString('base64'),
+        'Tab',
+        { ephemeral: true }
+      )
+
+      const flagged = (deviceId: string, reg = registry) =>
+        usesOlderPairingMethod(reg.getDevice(deviceId)!, reg.listDevices())
+      // Still pairing: an updated client is about to exchange.
+      expect(flagged(older.deviceId)).toBe(false)
+      vi.setSystemTime(3_000_000 + 10 * 60_000 + 1)
+      expect(flagged(older.deviceId)).toBe(true)
+      expect(flagged(unscanned.deviceId)).toBe(false)
+      expect(flagged(exchanged.deviceId)).toBe(false)
+      registry.validateToken(REPLACEMENT)
+      expect(flagged(exchanged.deviceId)).toBe(false)
+      expect(flagged(link.deviceId)).toBe(false)
+      expect(flagged(httpLink.deviceId)).toBe(false)
+      // A host restart drops session-only keys; the link is still not reported.
+      const restarted = new DeviceRegistry(dir)
+      expect(restarted.getDevice(tab.deviceId)).toBeNull()
+      expect(flagged(httpLink.deviceId, restarted)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

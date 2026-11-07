@@ -1,6 +1,9 @@
 import { useRef, type JSX, type MouseEvent } from 'react'
 import { ArrowUpRight, ChevronDown } from 'lucide-react'
-import type { MacosUpgradeSupport } from '../../../../shared/macos-upgrade-support'
+import {
+  isVenturaRequirement,
+  type MacosUpgradeSupport
+} from '../../../../shared/macos-upgrade-support'
 import type { UnsupportedSystemUpdate } from '../../../../shared/update-status-types'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -41,7 +44,7 @@ export function MacosUpdateRequirementDialog({
     ? MACOS_UPDATE_GUIDE_URL
     : cannotUpgrade
       ? MACOS_SUPPORT_DISCUSSION_URL
-      : macos === '13'
+      : isVenturaRequirement(macos)
         ? VENTURA_COMPATIBILITY_URL
         : MACOS_UPDATE_GUIDE_URL
 
@@ -57,7 +60,7 @@ export function MacosUpdateRequirementDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle size="display">
+          <DialogTitle size="display" className="mr-6">
             {translate('macosUpdateRequirement.title', 'Orca updates now need macOS {{macos}}', {
               macos
             })}
@@ -109,7 +112,7 @@ export function MacosUpdateRequirementDialog({
               <p>
                 {translate(
                   'macosUpdateRequirement.whyIntro',
-                  'We updated Electron, the foundation Orca runs on, to bring:'
+                  'We updated parts of Orca’s foundation, like Electron and the on-device speech engine, to bring:'
                 )}
               </p>
               <ul className="list-disc space-y-2 pl-4">

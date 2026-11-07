@@ -22,6 +22,16 @@ export function mainAgentState(row: {
   return row.mainAgent?.state ?? row.state
 }
 
+/** When the main agent's current done state began, naming the turn it finished; undefined unless done. */
+export function mainAgentDoneAt(row: {
+  state: AgentStatusState
+  stateStartedAt: number
+  mainAgent?: AgentMainAgentStatus
+}): number | undefined {
+  const lead = row.mainAgent ?? row
+  return lead.state === 'done' ? lead.stateStartedAt : undefined
+}
+
 export function mainAgentStatusEqual(
   a: AgentMainAgentStatus | undefined,
   b: AgentMainAgentStatus | undefined

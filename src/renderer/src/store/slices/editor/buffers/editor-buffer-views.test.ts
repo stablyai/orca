@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import 'zustand'
 import { useAppStore } from '@/store'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import '../../../editor-buffer-record-lifecycle'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import './editor-buffer-record-lifecycle'
 
-import '../actions/editor-draft-state'
+import './editor-draft-state'
 
 import './editor-buffer-record'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())

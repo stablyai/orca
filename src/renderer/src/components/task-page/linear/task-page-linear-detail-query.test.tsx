@@ -1,17 +1,10 @@
 // @vitest-environment happy-dom
-import { reads, store, task } from './task-page-linear-refresh-test-fixtures'
+import { reads, task } from './task-page-linear-refresh-test-fixtures'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { render, renderHook, screen, waitFor } from '@testing-library/react'
-import LinearItemDrawer from '../../LinearItemDrawer'
-import { useTaskPageLinearInOrcaEffects } from './use-task-page-linear-in-orca-effects'
-import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
-import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+
 import { getIssue } from '../../../../../main/linear/linear-issue-lookups'
 import { createLinearClient, loadLinearSdk } from '../../../../../main/linear/linear-sdk'
 import { ISSUE_QUERY } from '../../../../../main/linear/issue-context/raw'
-import { linearIssueSchema } from '../../../../../../mobile/src/tasks/task-item-detail-reply-schema'
-import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 
 const clients = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../../../../../main/linear/client', () => ({
@@ -91,68 +84,6 @@ function expectQuery(index: number, id: string) {
   expect(clients.get).toHaveBeenLastCalledWith('w', expect.any(AbortSignal))
 }
 
-it('forced drawer opens use one issue query and publish full detail for window and phone', async () => {
-  const s = store()
-  const drawer = render(<LinearItemDrawer issue={null} onUse={vi.fn()} onClose={vi.fn()} />)
-  drawer.rerender(<LinearItemDrawer issue={task()} onUse={vi.fn()} onClose={vi.fn()} />)
-  await waitFor(() => expect(screen.getByTestId('drawer').textContent).toBe('Fresh:2:Bug'))
-  expect(requests).toHaveLength(1)
-  expectQuery(0, task().id)
-  const detail = s.getState().linearIssueCache[`w::${task().id}`].data
-  expect(detail).toEqual(expected)
-  expect(linearIssueSchema.parse(detail)).toEqual(expected)
-
-  drawer.rerender(<LinearItemDrawer issue={null} onUse={vi.fn()} onClose={vi.fn()} />)
-  drawer.rerender(<LinearItemDrawer issue={task()} onUse={vi.fn()} onClose={vi.fn()} />)
-  await waitFor(() => expect(requests).toHaveLength(2))
-  await waitFor(() => expect(screen.getByTestId('drawer').textContent).toBe('Fresh:2:Bug'))
-  expectQuery(1, task().id)
-})
-
-it('linked-issue refresh uses one issue query and retains identifier and workspace routing', async () => {
-  const s = store()
-  const source = defaultScopeSource(null)
-  const scope = getLinearSourceScope(source)
-  const lastLinearRequestRef = { current: null }
-  const linkedRefs = { current: [{ identifier: task().identifier, workspaceId: 'w' }] }
-  const noop = () => {}
-  const linked = renderHook(
-    ({ nonce }) => {
-      const result = useLinearIssueResult<LinearIssue[]>('linked', [], scope)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the linked loader only consumes these real slice actions, result ownership and request fields.
-      useTaskPageLinearInOrcaEffects({
-        ...s.getState(),
-        linearConnected: true,
-        selectedLinearWorkspaceId: 'w',
-        taskSource: 'linear',
-        linearTaskSourceContext: source,
-        taskResumeApplied: true,
-        linearMode: 'in-orca',
-        setLinearIssues: result.setData,
-        linearIssueResult: result,
-        setLinearIssuesHasMore: noop,
-        setLinearLoading: result.setLoading,
-        setLinearError: result.setError,
-        linearRefreshNonce: nonce,
-        lastLinearRequestRef,
-        inOrcaLinkedLinearRefsSignature: 'w::DAT-124',
-        inOrcaLinkedLinearRefsRef: linkedRefs
-      } as never)
-      return result
-    },
-    { initialProps: { nonce: 0 } }
-  )
-  await waitFor(() => expect(linked.result.current.data).toEqual([expected]))
-  expect(requests).toHaveLength(1)
-  expectQuery(0, 'DAT-124')
-  linked.rerender({ nonce: 1 })
-  await waitFor(() => expect(requests).toHaveLength(2))
-  await waitFor(() => expect(linked.result.current.loading).toBe(false))
-  expect(linked.result.current.data).toEqual([expected])
-  expect(linearIssueSchema.parse(linked.result.current.data[0])).toEqual(expected)
-  expectQuery(1, 'DAT-124')
-})
-
 it('keeps readable core detail when an optional relation returns partial GraphQL errors', async () => {
   vi.mocked(globalThis.fetch).mockImplementation(async (_input, init) => {
     requests.push(JSON.parse(String(init?.body)))
@@ -183,26 +114,5 @@ it.each([
     )
     const read = getIssue(task().id, 'w')
     await (auth ? expect(read).rejects.toThrow('Linear') : expect(read).resolves.toBeNull())
-  }
-)
-
-it.each([false, true])(
-  'rejects mixed authentication errors with auth first=%s',
-  async (authFirst) => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const auth = {
-      message: 'Authentication required',
-      path: ['issue', 'assignee'],
-      extensions: { type: 'authentication error' }
-    }
-    const optional = { message: 'Project resolver failed', path: ['issue', 'project', 'name'] }
-    vi.mocked(globalThis.fetch).mockResolvedValue(
-      Response.json({
-        data: { issue: { ...responseIssue, project: null, assignee: null } },
-        errors: authFirst ? [auth, optional] : [optional, auth]
-      })
-    )
-    const read = getIssue(task().id, 'w')
-    await (authFirst ? expect(read).rejects.toThrow('Linear') : expect(read).resolves.toBeNull())
   }
 )

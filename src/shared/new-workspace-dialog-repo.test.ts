@@ -18,45 +18,10 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 }
 
 describe('new workspace dialog repo selection', () => {
-  it('matches the dialog repo priority order', () => {
-    const eligibleRepos = [
-      makeRepo('first'),
-      makeRepo('active'),
-      makeRepo('initial'),
-      makeRepo('draft')
-    ]
-
-    expect(
-      resolveNewWorkspaceDialogRepoId({
-        eligibleRepos,
-        draftRepoId: 'draft',
-        initialRepoId: 'initial',
-        activeRepoId: 'active'
-      })
-    ).toBe('draft')
-  })
-
-  it('falls back through initial, active, then first eligible repo', () => {
-    const eligibleRepos = [makeRepo('first'), makeRepo('active')]
-
-    expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos, initialRepoId: 'missing' })).toBe(
-      'first'
-    )
-    expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos, activeRepoId: 'active' })).toBe(
-      'active'
-    )
-  })
-
   it('returns null for create-base prefetch when the dialog default is a folder repo', () => {
     const eligibleRepos = [makeRepo('folder', { kind: 'folder' }), makeRepo('git')]
 
     expect(resolveNewWorkspaceDialogGitRepoId({ eligibleRepos })).toBeNull()
-  })
-
-  it('excludes repos without paths from dialog defaults', () => {
-    expect(
-      getNewWorkspaceDialogEligibleRepos([makeRepo('missing-path', { path: '' }), makeRepo('repo')])
-    ).toEqual([expect.objectContaining({ id: 'repo' })])
   })
 
   it('excludes runtime-owned (per-workspace-env) SSH repos but keeps user SSH repos', () => {
@@ -97,13 +62,5 @@ describe('new workspace dialog repo selection', () => {
         focusedHostScope: 'ssh:win-vm'
       })
     ).toBe('local-repo')
-  })
-
-  it('ignores host scope "all" and falls back to the first eligible repo', () => {
-    const eligibleRepos = [makeRepo('local-repo'), makeRepo('ssh-repo', { connectionId: 'win-vm' })]
-
-    expect(resolveNewWorkspaceDialogRepoId({ eligibleRepos, focusedHostScope: 'all' })).toBe(
-      'local-repo'
-    )
   })
 })

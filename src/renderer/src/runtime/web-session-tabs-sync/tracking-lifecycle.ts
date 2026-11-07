@@ -23,11 +23,11 @@ import {
 import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
   clearAllWebRuntimeWakeTerminalRespawn
-} from '../web-runtime-wake-terminal-respawn'
+} from '../hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 import {
   endWebRuntimeInitialTerminalBootstrap,
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment
-} from '../web-runtime-initial-terminal-bootstrap'
+} from './initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
 import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
 import {
@@ -50,7 +50,7 @@ import {
 import {
   clearWebSessionTerminalPlacementsForWorktree,
   clearWebSessionTerminalPlacementsForEnvironment
-} from '../web-session-terminal-placement'
+} from '../hosted-terminals/placement/web-session-terminal-placement'
 import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydration'
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'

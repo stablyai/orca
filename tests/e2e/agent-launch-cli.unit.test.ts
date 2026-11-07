@@ -16,17 +16,21 @@ import {
   rpcContext,
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
 
 const chatCreate = vi.hoisted(() => vi.fn())
 const terminalPrompt = vi.hoisted(() => vi.fn(async () => true))
-vi.mock('../../src/main/runtime/rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: chatCreate
-}))
-vi.mock('../../src/main/runtime/rpc/methods/agent-launch-terminal-prompt', () => ({
+vi.mock(
+  '../../src/main/runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: chatCreate
+  })
+)
+vi.mock('../../src/main/runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt', () => ({
   deliverTerminalAgentLaunchPrompt: terminalPrompt
 }))
-const { AGENT_LAUNCH_METHODS } = await import('../../src/main/runtime/rpc/methods/agent-launch')
+const { AGENT_LAUNCH_METHODS } =
+  await import('../../src/main/runtime/rpc/methods/agent-launch/agent-launch')
 
 let directory: string
 beforeEach(async () => {

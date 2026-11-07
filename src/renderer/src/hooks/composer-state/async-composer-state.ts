@@ -24,7 +24,7 @@ type ComposerAsyncStateInput = Pick<
 
 import { useState, useRef, useEffect } from 'react'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
-import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
+import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'

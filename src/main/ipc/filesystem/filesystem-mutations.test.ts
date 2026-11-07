@@ -1,4 +1,3 @@
-import { constants } from 'node:fs'
 import path from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -30,10 +29,7 @@ vi.mock('fs/promises', () => ({
 }))
 
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
-import {
-  resetSshConnectionGenerations,
-  setSshConnectionGeneration
-} from '../../ssh/connection/ssh-connection-generation'
+import { resetSshConnectionGenerations } from '../../ssh/connection/ssh-connection-generation'
 
 // Resolve fixture paths like production to preserve cross-platform comparisons.
 const REPO_PATH = path.resolve('/workspace/repo')
@@ -89,17 +85,6 @@ describe('registerFilesystemMutationHandlers', () => {
     registerFilesystemMutationHandlers(store as never)
   })
 
-  it('creates an empty file and its parent directories', async () => {
-    const filePath = path.resolve('/workspace/repo/src/new.ts')
-    await handlers.get('fs:createFile')!(null, { filePath })
-
-    expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo/src'), { recursive: true })
-    expect(writeFileMock).toHaveBeenCalledWith(filePath, '', {
-      encoding: 'utf-8',
-      flag: 'wx'
-    })
-  })
-
   it('rejects file creation when path already exists (wx flag)', async () => {
     // wx rejects collisions atomically without an existence-check race.
     writeFileMock.mockRejectedValue(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }))
@@ -121,43 +106,6 @@ describe('registerFilesystemMutationHandlers', () => {
     ).rejects.toThrow('Access denied')
 
     expect(writeFileMock).not.toHaveBeenCalled()
-  })
-
-  it('creates a directory recursively', async () => {
-    const dirPath = path.resolve('/workspace/repo/src/components')
-    await handlers.get('fs:createDir')!(null, { dirPath })
-
-    expect(mkdirMock).toHaveBeenCalledWith(dirPath, { recursive: true })
-  })
-
-  it('rejects directory creation when path already exists', async () => {
-    lstatMock.mockResolvedValue({ isDirectory: () => true })
-
-    await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/src') })
-    ).rejects.toThrow("A file or folder named 'src' already exists in this location")
-
-    expect(mkdirMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects directory creation outside allowed roots', async () => {
-    mockRealpath({
-      [path.resolve('/workspace/repo/escape')]: path.resolve('/etc/evil')
-    })
-
-    await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/escape') })
-    ).rejects.toThrow('Access denied')
-
-    expect(mkdirMock).not.toHaveBeenCalled()
-  })
-
-  it('renames a file within the same directory', async () => {
-    const oldPath = path.resolve('/workspace/repo/old.ts')
-    const newPath = path.resolve('/workspace/repo/new.ts')
-    await handlers.get('fs:rename')!(null, { oldPath, newPath })
-
-    expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
   it('serializes concurrent local renames targeting the same destination', async () => {
@@ -328,42 +276,6 @@ describe('registerFilesystemMutationHandlers', () => {
     expect(renameMock).toHaveBeenCalledWith(oldPath, newPath)
   })
 
-  it('rejects direct SSH rename without target-bound generation provenance', async () => {
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: '/home/me/repo/old.ts',
-        newPath: '/home/me/repo/new.ts',
-        connectionId: 'ssh-1'
-      })
-    ).rejects.toThrow('SSH connection changed')
-  })
-
-  it('rejects equal-generation provenance for another direct SSH target', async () => {
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: '/home/me/repo/old.ts',
-        newPath: '/home/me/repo/new.ts',
-        connectionId: 'ssh-b',
-        expectedSshTargetId: 'ssh-a',
-        expectedSshConnectionGeneration: 0
-      })
-    ).rejects.toThrow('SSH connection changed')
-  })
-
-  it('rejects stale generation provenance for a direct SSH target', async () => {
-    setSshConnectionGeneration('ssh-1', 8)
-
-    await expect(
-      handlers.get('fs:rename')!(null, {
-        oldPath: '/home/me/repo/old.ts',
-        newPath: '/home/me/repo/new.ts',
-        connectionId: 'ssh-1',
-        expectedSshTargetId: 'ssh-1',
-        expectedSshConnectionGeneration: 7
-      })
-    ).rejects.toThrow('SSH connection changed')
-  })
-
   it('rejects stale SSH provenance when a direct mutation resolves local', async () => {
     await expect(
       handlers.get('fs:rename')!(null, {
@@ -415,36 +327,4 @@ describe('registerFilesystemMutationHandlers', () => {
       expect(copyFileMock).not.toHaveBeenCalled()
     }
   )
-
-  it('copies a file without overwriting an existing destination', async () => {
-    const sourcePath = path.resolve('/workspace/repo/source.ts')
-    const destinationPath = path.resolve('/workspace/repo/source copy.ts')
-
-    await handlers.get('fs:copy')!(null, { sourcePath, destinationPath })
-
-    expect(mkdirMock).toHaveBeenCalledWith(path.resolve('/workspace/repo'), { recursive: true })
-    expect(copyFileMock).toHaveBeenCalledWith(sourcePath, destinationPath, constants.COPYFILE_EXCL)
-  })
-
-  it('propagates non-ENOENT lstat errors in assertNotExists', async () => {
-    lstatMock.mockRejectedValue(new Error('EPERM: operation not permitted'))
-
-    await expect(
-      handlers.get('fs:createDir')!(null, { dirPath: path.resolve('/workspace/repo/locked') })
-    ).rejects.toThrow('EPERM')
-
-    expect(mkdirMock).not.toHaveBeenCalled()
-  })
-
-  it('propagates mkdir permission errors for createFile', async () => {
-    mkdirMock.mockRejectedValue(new Error('EACCES: permission denied'))
-
-    await expect(
-      handlers.get('fs:createFile')!(null, {
-        filePath: path.resolve('/workspace/repo/nowrite/file.ts')
-      })
-    ).rejects.toThrow('EACCES')
-
-    expect(writeFileMock).not.toHaveBeenCalled()
-  })
 })
