@@ -14083,6 +14083,7 @@
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
             "openWorkingDirectory": "作業ディレクトリを開く",
+            "revealArtifactsFolder": "成果物フォルダを表示",
             "copySessionId": "セッション ID をコピー",
             "copyLogPath": "ログパスをコピー",
             "messageCount": "{{value0}} 件のメッセージ",

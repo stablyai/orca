@@ -14083,6 +14083,7 @@
             "openLog": "로그 열기",
             "revealLog": "로그 위치 열기",
             "openWorkingDirectory": "작업 디렉터리 열기",
+            "revealArtifactsFolder": "아티팩트 폴더 열기",
             "copySessionId": "세션 ID 복사",
             "copyLogPath": "로그 경로 복사",
             "messageCount": "메시지 {{value0}}개",

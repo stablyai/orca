@@ -14723,6 +14723,7 @@
             "openLog": "Logu Aç",
             "revealLog": "Logu Göster",
             "openWorkingDirectory": "Çalışma Dizinini Aç",
+            "revealArtifactsFolder": "Yapıt Klasörünü Göster",
             "copySessionId": "Oturum Kimliğini Kopyala",
             "copyLogPath": "Log Yolunu Kopyala",
             "messageCount": "{{value0}} mesaj",

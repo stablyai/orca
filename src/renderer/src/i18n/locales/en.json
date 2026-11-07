@@ -15105,6 +15105,7 @@
             "openLog": "Open Log",
             "revealLog": "Reveal Log",
             "openWorkingDirectory": "Open Working Directory",
+            "revealArtifactsFolder": "Reveal Artifacts Folder",
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
