@@ -40,7 +40,7 @@ import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-stat
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     gitGraphFiltersByWorktree: {},
-    sidebarBody: 'workspaces',
+    sidebarBody: 'conversations',
     setSidebarBody: (body) => set({ sidebarBody: body }),
 
     groupBy: 'repo',
