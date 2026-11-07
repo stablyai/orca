@@ -55,7 +55,7 @@ export async function requiresSystemSshForSecurityKey(
   const resolvedPaths = resolveIdentityFilePaths(target, resolved)
   // Use ssh -G identity candidates, including built-in defaults; guess defaults only when config resolution failed.
   const identityPaths =
-    resolvedPaths.length === 0 && !resolved && !target.identityFile
+    resolvedPaths.length === 0 && !resolved && !target.identityFile && !target.identityFiles?.length
       ? listDefaultIdentityFilePaths()
       : resolvedPaths
   for (const keyPath of identityPaths) {

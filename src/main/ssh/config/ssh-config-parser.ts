@@ -11,6 +11,7 @@ export type SshConfigHost = {
   port?: number
   user?: string
   identityFile?: string
+  identityFiles?: string[]
   identityAgent?: string
   identitiesOnly?: boolean
   gssapiAuthentication?: boolean
@@ -88,7 +89,9 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'identityfile':
         for (const host of current) {
-          host.identityFile = resolveSshConfigHomePath(value)
+          const identityFile = resolveSshConfigHomePath(value)
+          host.identityFile ??= identityFile
+          host.identityFiles = [...(host.identityFiles ?? []), identityFile]
         }
         break
       case 'identityagent':
@@ -266,6 +269,7 @@ export function sshConfigHostsToTargets(
   existingTargetHosts: Set<string>
 ): SshTarget[] {
   const targets: SshTarget[] = []
+  const targetsByLabel = new Map<string, SshTarget>()
   const seenLabels = new Set(existingTargetHosts)
 
   for (const entry of hosts) {
@@ -273,11 +277,20 @@ export function sshConfigHostsToTargets(
     const label = entry.host
 
     if (seenLabels.has(label)) {
+      // OpenSSH keeps every IdentityFile from later blocks. Other fields stay on the first block.
+      const laterFiles = entry.identityFiles ?? (entry.identityFile ? [entry.identityFile] : [])
+      const existing = laterFiles.length > 0 ? targetsByLabel.get(label) : undefined
+      if (existing) {
+        const kept =
+          existing.identityFiles ?? (existing.identityFile ? [existing.identityFile] : [])
+        existing.identityFiles = [...kept, ...laterFiles]
+        existing.identityFile ??= existing.identityFiles[0]
+      }
       continue
     }
     seenLabels.add(label)
 
-    targets.push({
+    const target: SshTarget = {
       id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       label,
       configHost: entry.host,
@@ -285,12 +298,15 @@ export function sshConfigHostsToTargets(
       port: entry.port ?? 22,
       username: entry.user ?? '',
       identityFile: entry.identityFile,
+      identityFiles: entry.identityFiles,
       identityAgent: entry.identityAgent,
       identitiesOnly: entry.identitiesOnly,
       gssapiAuthentication: entry.gssapiAuthentication,
       proxyCommand: entry.proxyCommand,
       jumpHost: entry.proxyJump
-    })
+    }
+    targets.push(target)
+    targetsByLabel.set(label, target)
   }
 
   return targets

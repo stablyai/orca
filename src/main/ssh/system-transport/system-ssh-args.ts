@@ -92,8 +92,11 @@ export function appendSshTargetDestinationArgs(
     args.push('-p', String(target.port))
   }
 
-  if (!useConfigHost && target.identityFile) {
-    args.push('-i', target.identityFile)
+  const identityFiles = target.identityFiles ?? (target.identityFile ? [target.identityFile] : [])
+  if (!useConfigHost) {
+    for (const identityFile of identityFiles) {
+      args.push('-i', identityFile)
+    }
   }
 
   if (!useConfigHost && target.identityAgent) {
