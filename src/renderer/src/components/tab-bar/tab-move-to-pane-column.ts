@@ -6,7 +6,10 @@ import {
   serverTabCount
 } from '@/lib/frame-drawn-desktop-created-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { dropTabThroughLayoutOwner } from '../tab-group/tab-group-layout-owner-commands'
+import {
+  dropTabThroughLayoutOwner,
+  type TabDropCompletion
+} from '../tab-group/tab-group-layout-owner-commands'
 
 type TabMovePaneColumnState = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -52,6 +55,7 @@ export function moveTabToNewPaneColumn(args: {
   unifiedTabId: string
   groupId: string
   direction: TabSplitDirection
+  completion?: TabDropCompletion
 }): 'owner' | 'moved' | false {
   const state = useAppStore.getState()
   const worktreeId =
@@ -69,12 +73,16 @@ export function moveTabToNewPaneColumn(args: {
   }
   if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&
-    dropTabThroughLayoutOwner(worktreeId, {
-      kind: 'split',
-      tabId: args.unifiedTabId,
-      groupId: args.groupId,
-      direction: args.direction
-    })
+    dropTabThroughLayoutOwner(
+      worktreeId,
+      {
+        kind: 'split',
+        tabId: args.unifiedTabId,
+        groupId: args.groupId,
+        direction: args.direction
+      },
+      args.completion
+    )
   ) {
     return 'owner'
   }
@@ -98,13 +106,18 @@ export function moveTabToNewPaneColumn(args: {
  *  moves it and tells a paired host ('moved'); false when nothing moved. */
 export function moveTabToGroup(
   args: { worktreeId: string; unifiedTabId: string; groupId: string; index?: number },
-  dropUnifiedTab = useAppStore.getState().dropUnifiedTab
+  dropUnifiedTab = useAppStore.getState().dropUnifiedTab,
+  completion?: TabDropCompletion
 ): 'owner' | 'moved' | false {
   const { worktreeId, unifiedTabId, groupId, index } = args
   const at = index === undefined ? {} : { index }
   if (
     ORCA_LAYOUT_OWNER_IS_MAIN &&
-    dropTabThroughLayoutOwner(worktreeId, { kind: 'move', tabId: unifiedTabId, groupId, ...at })
+    dropTabThroughLayoutOwner(
+      worktreeId,
+      { kind: 'move', tabId: unifiedTabId, groupId, ...at },
+      completion
+    )
   ) {
     return 'owner'
   }

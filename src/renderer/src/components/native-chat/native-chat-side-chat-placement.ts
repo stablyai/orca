@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
-import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { requestNativeChatComposerFocus } from './native-chat-composer-focus-intent'
 import { moveTabToGroup, moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
+import type { TabDropCompletion } from '../tab-group/tab-group-layout-owner-commands'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 // Moving a late tab would yank a pane the user may already be reading.
@@ -13,6 +13,7 @@ const SIDE_CHAT_MOVE_MS = 5_000
 const SIDE_CHAT_WATCH_MS = 60_000
 
 type SideChat = { sessionId: string; executionHostId: ExecutionHostId }
+type SelectionState = Pick<AppState, 'activeGroupIdByWorktree' | 'groupsByWorktree'>
 
 /** One `/btw` request's claim on the screen, from Send until its side chat is placed. */
 export type NativeChatSideChatPlacement = {
@@ -21,18 +22,22 @@ export type NativeChatSideChatPlacement = {
 }
 
 /** Starts at Send: any other selection in the workspace, or leaving it, retires the claim for good,
- *  and the side chat then stays in the background. Once drawn, it is selected and moved beside its
- *  source as dragging it there would; a refused move leaves it selected where Fork puts it. */
+ *  and the side chat then stays in the background. Once drawn, it is moved beside its source as
+ *  dragging it there would, then selected and focused where the move lands; a refused move leaves it
+ *  selected where Fork puts it. The claim holds until then, however long main takes to draw the move. */
 export function beginNativeChatSideChatPlacement(
   worktreeId: string,
   sourceTabId: string
 ): NativeChatSideChatPlacement {
   const initial = useAppStore.getState()
-  const selection = tabSelectionKey(initial, worktreeId)
+  const before = selectionOf(initial, worktreeId, undefined, undefined)
   const activeWorktreeId = initial.activeWorktreeId
   let chat: SideChat | undefined
   let settledAt = 0
   let lookingUp = false
+  // The side chat's tab once found, and, while main draws its move, the pane it is leaving.
+  let forkTabId: string | undefined
+  let movingFrom: string | undefined
   let retired = false
 
   const retire = (): void => {
@@ -42,42 +47,67 @@ export function beginNativeChatSideChatPlacement(
       clearTimeout(expiry)
     }
   }
+  /** Select and focus the side chat where it is now, if the claim and the tab still exist. */
+  const finish = (): void => {
+    if (retired || !forkTabId) {
+      return
+    }
+    const tabId = forkTabId
+    // Our own selection below is not the user's.
+    retire()
+    const state = useAppStore.getState()
+    if (!state.unifiedTabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)) {
+      return
+    }
+    state.activateTab(tabId, { worktreeId })
+    // Typing goes to the side chat once its composer shows.
+    requestNativeChatComposerFocus(tabId)
+  }
+  const completion: TabDropCompletion = {
+    refused: finish,
+    moveHere: (move) => {
+      if (!retired) {
+        move()
+        finish()
+      }
+    }
+  }
   const place = (tabId: string): void => {
     if (retired) {
       return
     }
-    // Our own selection and move below are not the user's.
-    retire()
-    const state = useAppStore.getState()
-    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+    forkTabId = tabId
+    const tabs = useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []
     const fork = tabs.find((tab) => tab.id === tabId)
     const sourceGroupId = tabs.find((tab) => tab.id === sourceTabId)?.groupId
     // Already in another pane, or the source is gone: where it is now is beside enough.
-    const moved =
-      fork &&
-      sourceGroupId &&
-      fork.groupId === sourceGroupId &&
-      Date.now() - settledAt <= SIDE_CHAT_MOVE_MS
-        ? moveBeside(tabId, sourceGroupId)
-        : false
-    // Main selects a tab it moved once its frame shows it there; selecting it first would draw
-    // it, and claim its composer's focus, in the source pane.
-    if (moved !== 'owner') {
-      state.activateTab(tabId, { worktreeId })
+    if (
+      !fork ||
+      !sourceGroupId ||
+      fork.groupId !== sourceGroupId ||
+      Date.now() - settledAt > SIDE_CHAT_MOVE_MS
+    ) {
+      finish()
+      return
     }
-    // Typing goes to the side chat once its composer shows.
-    requestNativeChatComposerFocus(tabId)
+    if (moveBeside(tabId, sourceGroupId) === 'owner') {
+      // Finished once main's frame draws it elsewhere, or when main refuses.
+      movingFrom = sourceGroupId
+      return
+    }
+    finish()
   }
   const moveBeside = (tabId: string, sourceGroupId: string): 'owner' | 'moved' | false => {
     const layout = useAppStore.getState().layoutByWorktree[worktreeId]
     const sibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
     return sibling
-      ? moveTabToGroup({ worktreeId, unifiedTabId: tabId, groupId: sibling })
+      ? moveTabToGroup({ worktreeId, unifiedTabId: tabId, groupId: sibling }, undefined, completion)
       : moveTabToNewPaneColumn({
           worktreeId,
           unifiedTabId: tabId,
           groupId: sourceGroupId,
-          direction: 'right'
+          direction: 'right',
+          completion
         })
   }
   const lookUp = (): void => {
@@ -95,14 +125,22 @@ export function beginNativeChatSideChatPlacement(
       ((state.groupsByWorktree[worktreeId] !== previous.groupsByWorktree[worktreeId] ||
         state.activeGroupIdByWorktree[worktreeId] !==
           previous.activeGroupIdByWorktree[worktreeId]) &&
-        tabSelectionKey(state, worktreeId) !== selection)
+        selectionOf(state, worktreeId, forkTabId, before).key !== before.key)
     ) {
       retire()
-    } else if (
-      lookingUp &&
-      state.unifiedTabsByWorktree[worktreeId] !== previous.unifiedTabsByWorktree[worktreeId]
-    ) {
+      return
+    }
+    const tabs = state.unifiedTabsByWorktree[worktreeId]
+    if (tabs === previous.unifiedTabsByWorktree[worktreeId]) {
+      return
+    }
+    if (lookingUp) {
       lookUp()
+    } else if (
+      movingFrom &&
+      tabs?.some((tab) => tab.id === forkTabId && tab.groupId !== movingFrom)
+    ) {
+      finish()
     }
   }
   const unsubscribe = useAppStore.subscribe(onChange)
@@ -115,10 +153,47 @@ export function beginNativeChatSideChatPlacement(
       }
       chat = next
       settledAt = Date.now()
-      // However long the fork took to open, its tab gets the same time to be drawn.
+      // However long the fork took to open, its tab gets the same time to be drawn and moved.
       expiry = setTimeout(retire, SIDE_CHAT_WATCH_MS)
       lookingUp = true
       lookUp()
     }
   }
+}
+
+type Selection = {
+  key: string
+  activeGroupId: string | undefined
+  activeTabByGroup: ReadonlyMap<string, string | null>
+}
+
+/** The workspace's selection (its active pane and each pane's active tab), with what moving the side
+ *  chat itself changes read as it was at Send: a new pane holding only it, or a pane showing it. */
+function selectionOf(
+  state: SelectionState,
+  worktreeId: string,
+  forkTabId: string | undefined,
+  before: Selection | undefined
+): Selection {
+  // A pane that opened since Send to hold only the side chat is the side chat's own split.
+  const groups = (state.groupsByWorktree[worktreeId] ?? []).filter(
+    (group) =>
+      before?.activeTabByGroup.has(group.id) !== false ||
+      !(group.tabOrder.length === 1 && group.tabOrder[0] === forkTabId)
+  )
+  const activeTabByGroup = new Map(
+    groups.map((group) => [
+      group.id,
+      forkTabId !== undefined && group.activeTabId === forkTabId
+        ? (before?.activeTabByGroup.get(group.id) ?? null)
+        : (group.activeTabId ?? null)
+    ])
+  )
+  const active = state.activeGroupIdByWorktree[worktreeId]
+  const activeGroup = groups.find((group) => group.id === active)
+  const showsFork =
+    forkTabId !== undefined && (!activeGroup || activeGroup.activeTabId === forkTabId)
+  const activeGroupId = showsFork ? before?.activeGroupId : active
+  const tabs = [...activeTabByGroup].map(([id, tab]) => `${id}:${tab ?? ''}`)
+  return { key: `${activeGroupId ?? ''}|${tabs.join(',')}`, activeGroupId, activeTabByGroup }
 }
