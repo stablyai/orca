@@ -90,7 +90,7 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
       console.warn('[automations] failed to record the opened run terminal:', error)
     })
     const { error } = await launch.delivery
-    if (error) {
+    if (error !== null) {
       return ctx.transition({ status: 'dispatch_failed', ...launchRunTarget, error }).run
     }
   }
@@ -100,6 +100,7 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
     ...launchRunTarget,
     // Watched completions omit the precheck result.
     ...(precheckResult ? { precheckResult } : {}),
+    ...(launch.setupSkippedReason ? { setupSkippedReason: launch.setupSkippedReason } : {}),
     error: null
   })
   if (!updated.applied) {

@@ -24,6 +24,7 @@ import {
 import { IDLE_WORKSPACE_ACTIVITY } from './workspace-activity-facts'
 import { composeWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import { buildWorkspaceRows } from './workspace-rows'
+import { folderWorkspaceRepoId } from '../folder-workspaces/folder-workspace-worktree'
 
 function worktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -407,5 +408,92 @@ describe('buildSidebarFeedRows reads a row’s own registration of a repo two ho
     expect(outline(built.sectionRows)).toEqual(['|r::/w/a@0'])
     const header = built.sectionRows.find((row) => row.type === 'header')
     expect(header).toMatchObject({ hostWorktreeIds: new Map([['local', ['r::/w/a']]]) })
+  })
+})
+
+describe('buildSidebarFeedRows reads an older server’s edge without instance ids', () => {
+  const rows = [
+    { worktreeId: 'r::/r/p' },
+    { worktreeId: 'r::/r/c', parentWorktreeId: 'r::/r/p' }
+  ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
+  const feed = domains({
+    pairedServerHosts: new Map([['runtime:a', { freshness: 'live', host: null }]]),
+    pairedServerRows: new Map(rows.map((row) => [row.key, row]))
+  })
+  const repos = [repo('r', { executionHostId: 'runtime:a' })]
+
+  it('nests by it for the phone, which always has', () => {
+    expect(
+      outline(
+        buildSidebarFeedRows(feed, catalog(repos), view(), { acceptLegacyLineage: true })
+          .sectionRows
+      )
+    ).toEqual(['runtime:a|r::/r/p@0', 'runtime:a|r::/r/c@1'])
+  })
+
+  it('lists both standalone for desktop, which never has', () => {
+    expect(outline(buildSidebarFeedRows(feed, catalog(repos), view()).sectionRows)).toEqual([
+      'runtime:a|r::/r/c@0',
+      'runtime:a|r::/r/p@0'
+    ])
+  })
+
+  it('keeps an older server’s loop for the phone, as its direct list does', () => {
+    const loop = [
+      { worktreeId: 'r::/r/a', parentWorktreeId: 'r::/r/b' },
+      { worktreeId: 'r::/r/b', parentWorktreeId: 'r::/r/a' }
+    ].flatMap((row) => normalizePairedServerRow('runtime:a', { repoId: 'r', ...row }) ?? [])
+    const looped = domains({
+      pairedServerHosts: feed.pairedServerHosts,
+      pairedServerRows: new Map(loop.map((row) => [row.key, row]))
+    })
+    expect(
+      outline(
+        buildSidebarFeedRows(looped, catalog(repos), view(), { acceptLegacyLineage: true })
+          .sectionRows
+      )
+    ).toEqual(['runtime:a|r::/r/b@0', 'runtime:a|r::/r/a@1'])
+  })
+})
+
+describe('buildSidebarFeedRows nests a server’s workspace under its folder workspace', () => {
+  const group = { ...projectGroup('g', null), parentPath: '/r' }
+  const rows = [
+    {
+      worktreeId: 'folder:f-1',
+      repoId: folderWorkspaceRepoId('g'),
+      workspaceKind: 'folder-workspace'
+    },
+    {
+      worktreeId: 'r::/r/c',
+      repoId: 'r',
+      worktreeInstanceId: 'c-instance',
+      workspaceLineage: {
+        parentWorkspaceKey: 'folder:f-1',
+        parentInstanceId: 'f-1',
+        childInstanceId: 'c-instance'
+      }
+    }
+  ].flatMap((row) => normalizePairedServerRow('runtime:a', row) ?? [])
+  const feed = domains({
+    pairedServerHosts: new Map([['runtime:a', { freshness: 'live', host: null }]]),
+    pairedServerRows: new Map(rows.map((row) => [row.key, row]))
+  })
+
+  it('places the workspace under the folder in the folder’s project group', () => {
+    const built = buildSidebarFeedRows(
+      feed,
+      catalog([repo('r', { executionHostId: 'runtime:a', projectGroupId: 'g' })], [group]),
+      view({ groupBy: 'repo' })
+    )
+    expect(
+      built.sectionRows.flatMap((row) =>
+        row.type === 'folder-workspace'
+          ? [`folder ${row.folderWorkspace.id}@${row.depth} children=${row.lineageChildCount}`]
+          : row.type === 'item'
+            ? [`${row.worktree.id}@${row.depth}`]
+            : []
+      )
+    ).toEqual(['folder f-1@0 children=1', 'r::/r/c@1'])
   })
 })

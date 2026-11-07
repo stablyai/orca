@@ -90,6 +90,9 @@ describe('headless dispatch prompt delivery', () => {
     async (hold) => {
       const { store, service, run, row, reached, settle } = await heldLaunch(hold)
       await reached
+      if (hold === 'delivery') {
+        await vi.waitFor(() => expect(row()?.terminalPaneKey).toBe(OPENED.terminalPaneKey))
+      }
       store.updateAutomationRun({ runId: run.id, status: 'dispatch_failed', error: 'Stranded.' })
 
       await settle(null)

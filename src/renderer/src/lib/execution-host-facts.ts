@@ -1,7 +1,8 @@
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
-  type ParsedExecutionHost
+  type ParsedExecutionHost,
+  type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -9,7 +10,10 @@ import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import {
+  getConnectionIdForWorktreeCopy,
+  getConnectionIdFromState
+} from './connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { CLIENT_PLATFORM } from './new-workspace'
 import {
@@ -143,14 +147,19 @@ export function resolveRepoExecutionHostPlatform(
 export function resolveWorktreeExecutionHostPlatform(
   state: WorktreeHostFactsState,
   worktreeId: string,
-  workspacePath: string | null | undefined
+  workspacePath: string | null | undefined,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
   // Why the routing default: an owner-less row launches where routing sends it, so read that host.
   const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
   return resolveHostPlatform(state, {
     host,
     nestedSshTargetId:
-      host?.kind === 'runtime' ? (getConnectionIdFromState(state, worktreeId) ?? null) : null,
+      host?.kind === 'runtime'
+        ? ((executionHostId
+            ? getConnectionIdForWorktreeCopy(state, worktreeId, executionHostId)
+            : getConnectionIdFromState(state, worktreeId)) ?? null)
+        : null,
     sshOwnerEnvironmentId:
       host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null,
     workspacePath,

@@ -51,4 +51,21 @@ describe('a worker for a registered native-chat agent', () => {
       reason: 'chat_runtime_not_installed'
     })
   })
+
+  it('says the agent has no chat on Windows when the host refuses it for that reason', async () => {
+    const mode = decideWorkerStartMode({
+      params: { agent: 'antigravity' },
+      settings: STRUCTURED_PREFERENCE
+    })
+    const host = {
+      getStructuredAgentSessionCreateSupport: async () => ({
+        supported: false,
+        reason: 'windows' as const
+      })
+    }
+    expect(await resolveWorkerStartModeOnHost(host, mode, 'wt-1', 'antigravity')).toMatchObject({
+      mode: 'terminal',
+      reason: 'chat_unavailable_on_windows'
+    })
+  })
 })

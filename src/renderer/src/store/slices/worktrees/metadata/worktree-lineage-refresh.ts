@@ -9,7 +9,6 @@ import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { getRuntimeTargetHostId, type HostRoute } from '../../../../runtime/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 import {
   lineageStoreKeyOfTarget,
@@ -25,6 +24,10 @@ import {
   worktreeMatchesHost
 } from '../listing/worktree-host-ownership'
 import { mergeLineageForHost, mergeWorkspaceLineageForHost } from './worktree-lineage-host-merge'
+import {
+  projectWorktreeLineageToWorkspaceLineage,
+  withWorkspaceLineage
+} from './workspace-lineage-update-projection'
 import { beginWorktreeLineageRefresh } from './worktree-lineage-readiness'
 import type {
   BackgroundRuntimeRefreshOptions,
@@ -87,35 +90,6 @@ export async function listWorktreeLineageForRuntime(
   )
 }
 
-export function projectWorktreeLineageToWorkspaceLineage(
-  worktreeId: string,
-  lineage: WorktreeLineage | null,
-  current: Record<string, WorkspaceLineage>
-): Record<string, WorkspaceLineage> {
-  const childWorkspaceKey = worktreeWorkspaceKey(worktreeId)
-  const next = { ...current }
-  if (!lineage) {
-    delete next[childWorkspaceKey]
-    return next
-  }
-  next[childWorkspaceKey] = {
-    childWorkspaceKey,
-    childInstanceId: lineage.worktreeInstanceId,
-    parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
-    parentInstanceId: lineage.parentWorktreeInstanceId,
-    origin: lineage.origin,
-    capture: lineage.capture,
-    ...(lineage.taskId ? { taskId: lineage.taskId } : {}),
-    ...(lineage.orchestrationRunId ? { orchestrationRunId: lineage.orchestrationRunId } : {}),
-    ...(lineage.coordinatorHandle ? { coordinatorHandle: lineage.coordinatorHandle } : {}),
-    ...(lineage.createdByTerminalHandle
-      ? { createdByTerminalHandle: lineage.createdByTerminalHandle }
-      : {}),
-    createdAt: lineage.createdAt
-  }
-  return next
-}
-
 export async function setWorktreeLineageForRuntime(
   route: HostRoute,
   worktreeId: string,
@@ -126,7 +100,7 @@ export async function setWorktreeLineageForRuntime(
     return {
       target,
       hostId: route.at,
-      lineage: await window.api.worktrees.updateLineage({ worktreeId, ...args })
+      ...(await window.api.worktrees.updateLineage({ worktreeId, ...args }))
     }
   }
   const result = await callRuntimeRpc<{ worktree: WorktreeWithLineage }>(
@@ -145,6 +119,9 @@ export async function setWorktreeLineageForRuntime(
     target,
     hostId: getRuntimeTargetHostId(target),
     lineage: result.worktree.lineage ?? null,
+    ...(result.worktree.workspaceLineage !== undefined
+      ? { workspaceLineage: result.worktree.workspaceLineage }
+      : {}),
     updatedRemoteWorktree: result.worktree
   }
 }
@@ -228,11 +205,15 @@ export function applyWorktreeLineageUpdate(
       // The host clears a child's cross-store parent on every same-store set or remove.
       crossStoreLineageByStoreKey: withoutChildCrossStoreLineage(s, result.target, worktreeId),
       worktreeLineageById: next,
-      workspaceLineageByChildKey: projectWorktreeLineageToWorkspaceLineage(
-        worktreeId,
-        result.lineage,
-        s.workspaceLineageByChildKey
-      ),
+      // Older hosts report only the worktree lineage, which is the workspace record's projection.
+      workspaceLineageByChildKey:
+        result.workspaceLineage !== undefined
+          ? withWorkspaceLineage(s.workspaceLineageByChildKey, worktreeId, result.workspaceLineage)
+          : projectWorktreeLineageToWorkspaceLineage(
+              worktreeId,
+              result.lineage,
+              s.workspaceLineageByChildKey
+            ),
       worktreesByRepo,
       sortEpoch: s.sortEpoch + 1
     }

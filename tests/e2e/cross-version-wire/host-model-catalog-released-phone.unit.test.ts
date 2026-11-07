@@ -114,9 +114,16 @@ it.each(['success', 'budget'] as const)(
         })
     )
     const home = { variable: 'CLAUDE_CONFIG_DIR', path: '/qa-account' }
+    // A command line relative to each folder lists per folder, so five folders saturate admission.
     const scoped = Object.assign(probe, {
-      resolve: async (_home: unknown, cwd: string) => ({
-        identity: { command: 'qa-modern', cwd },
+      resolve: async (
+        _home: unknown,
+        _cwd: string,
+        _lookup: unknown,
+        _operation: unknown,
+        launchDirectory?: string
+      ) => ({
+        identity: { command: 'qa-modern', cwd: launchDirectory },
         run: modern
       })
     })

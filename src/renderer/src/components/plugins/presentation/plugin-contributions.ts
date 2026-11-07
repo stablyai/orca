@@ -6,7 +6,8 @@ import {
   type PluginContributionPoint
 } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
@@ -79,14 +80,6 @@ export function nameFromContributionPath(path: string): string {
     .replace(/[-_.]+/g, ' ')
     .trim()
   return words ? words.charAt(0).toUpperCase() + words.slice(1) : path
-}
-
-export function languageDisplayName(locale: string): string {
-  try {
-    return new Intl.DisplayNames(getIntlLocale(), { type: 'language' }).of(locale) ?? locale
-  } catch {
-    return locale
-  }
 }
 
 export function manifestContributionSource(manifest: PluginManifest): PluginContributionSource {

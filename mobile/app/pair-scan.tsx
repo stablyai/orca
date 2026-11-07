@@ -41,6 +41,7 @@ import {
   waitForBeat
 } from '../src/pairing/pairing-visuals'
 import { triggerSuccess } from '../src/platform/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
@@ -203,15 +204,13 @@ export default function PairScanScreen() {
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairScan.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', {
-              error: err instanceof Error ? err.message : String(err)
-            })
+        getPairingFailureMessage({
+          screen: 'scan',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t
+        })
       )
       processingRef.current = false
     }

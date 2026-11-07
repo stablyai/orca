@@ -51,6 +51,7 @@ export const CLI_COMMAND_NAMES = [
   'open',
   'open-url',
   'orchestration',
+  'pair',
   'pdf',
   'plugin',
   'ports',

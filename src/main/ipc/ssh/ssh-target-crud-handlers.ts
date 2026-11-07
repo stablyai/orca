@@ -28,7 +28,11 @@ import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
 import { notifyReposChanged } from '../repos/repos-changed-notification'
-import { requestDesktopBrowserBridgeReconcile } from '../browser/desktop-browser-bridge-reconcile'
+import {
+  requestDesktopBrowserBridgeReconcile,
+  setDesktopBrowserBridgeHostStopped
+} from '../browser/desktop-browser-bridge-reconcile'
+import { isRemoteCliControlAllowed } from '../../../shared/ssh-remote-cli-control'
 
 // Add/import can re-adopt orphaned workspaces; report them so the renderer refreshes repo ownership.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -130,6 +134,9 @@ function updateSshTarget(id: string, updates: SshTargetUpdateInput): SshTarget |
   )
   // Revoke desktop-browser control immediately when permission is disabled.
   requestDesktopBrowserBridgeReconcile()
+  if (isRemoteCliControlAllowed(updated)) {
+    setDesktopBrowserBridgeHostStopped(id, false)
+  }
   const environmentId = getManagedOrcadFenceEnvironmentId(updated ?? undefined)
   if (environmentId && updated) {
     // Edited managed hosts need fresh tunnels and transports; unserved hosts have no managed route to redial.

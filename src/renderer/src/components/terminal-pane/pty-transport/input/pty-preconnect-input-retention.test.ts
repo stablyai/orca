@@ -1,7 +1,7 @@
 import { getEventListeners } from 'node:events'
 import { describe, expect, it } from 'vitest'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
-import { createDeferred } from '../../pty-connection-test-async'
+import { createDeferred } from '../../pty-connection/test-fixtures/pty-connection-test-async'
 
 describe('preconnect input lifetime', () => {
   it('releases abort listeners after repeated successful flushes', async () => {

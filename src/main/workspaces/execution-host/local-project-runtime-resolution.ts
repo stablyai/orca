@@ -36,7 +36,10 @@ export type ProjectRuntimeResolutionStore = {
   getProjects?: Store['getProjects']
   getRepo?: Store['getRepo']
   getSettings?: () => Partial<
-    Pick<GlobalSettings, 'localWindowsRuntimeDefault' | 'experimentalWslHosts'>
+    Pick<
+      GlobalSettings,
+      'localWindowsRuntimeDefault' | 'experimentalWslHosts' | 'agentCmdOverrides'
+    >
   >
 }
 
