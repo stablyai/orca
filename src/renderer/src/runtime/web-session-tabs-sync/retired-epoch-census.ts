@@ -12,7 +12,8 @@ import {
   nextReceivedSessionTabsFrame,
   sessionTabsPublicationEpochHistoryByWorktree
 } from './state'
-import { isSessionTabsListAllResult, sessionTabsFreshnessKey } from './tracking'
+import { isSessionTabsListAllResult } from './tracking'
+import { sessionTabsFreshnessKey } from './state'
 
 // Why no generation fence here: each census re-checks its own subscription before applying.
 const pairedRepairLane = createSessionTabsAuthorityRepairLane({

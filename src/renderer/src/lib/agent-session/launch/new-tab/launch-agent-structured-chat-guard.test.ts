@@ -21,8 +21,8 @@ import { createGlobalSettingsFixture } from '../../../../../../shared/global-set
 import type { launchAgentInNewTab } from './launch-agent-in-new-tab'
 import '@/store/testing/app-store-test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import {
   resetStructuredAgentLaunchRegistryForTests,
   getStructuredLaunchStateBySessionId,

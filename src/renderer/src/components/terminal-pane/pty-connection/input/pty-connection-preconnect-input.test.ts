@@ -45,7 +45,7 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
   ORCA_LAYOUT_OWNER_IS_MAIN: false
 }))
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/store/index', () => ({
   useAppStore: {

@@ -2,7 +2,7 @@
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
-import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import type { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 
 const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
@@ -17,7 +17,7 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
     return mocks.layoutOwnerIsMain
   }
 }))
-vi.mock('@/runtime/layout-owner-command', () => ({
+vi.mock('@/runtime/workspace-layout/commands/layout-owner-command', () => ({
   sendLayoutCommandToOwner: mocks.sendLayoutCommandToOwner
 }))
 vi.mock('../../../../store/index', () => ({

@@ -9,7 +9,7 @@ import type {
   WebSessionTabsSnapshotApplyOptions,
   WebSessionTabsSyncState
 } from './state'
-import { suppressE2eWebRuntimeBrowserSnapshot } from '../web-runtime-browser-creation-e2e-fault'
+import { suppressE2eWebRuntimeBrowserSnapshot } from '../browser/creation/testing/web-runtime-browser-creation-e2e-fault'
 import { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import { prepareWebSessionTabsSnapshotBrowser } from './apply-preparation-browser'
 import { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
@@ -19,7 +19,7 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 

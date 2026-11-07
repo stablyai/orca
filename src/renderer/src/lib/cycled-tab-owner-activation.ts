@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { TypeCyclableTab } from '@/components/terminal/tab-type-cycle'
 import { activateStructuredAgentSessionTabOnOwner } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   activateBrowserTabOnOwner,

@@ -375,7 +375,7 @@ it('holds an actual clipboard-image paste until its save settles before launchin
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
-import * as webEnvironment from '@/runtime/web-runtime-session-environment'
+import * as webEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/workspace/ownership/worktree-runtime-owner'
 import * as terminalCreate from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import * as runtimeRpc from '@/runtime/rpc/compatibility/runtime-capability-proof'

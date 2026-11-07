@@ -7,29 +7,32 @@ import { localDesktopSession } from '../../../../shared/workspace-layout/workspa
 import { GIT_KEY } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
 import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
-import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
-import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
+import { endLayoutFramePositions } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Simulate main’s layout-command answers and frames.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 // The test opens its own stream: boot's document-long one would outlive the test's transport.
-vi.mock('@/runtime/workspace-layout-frame-sync', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  showStartupLayoutFrames: () => {}
-}))
+vi.mock(
+  '@/runtime/workspace-layout/frames/workspace-layout-frame-sync',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    showStartupLayoutFrames: () => {}
+  })
+)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()

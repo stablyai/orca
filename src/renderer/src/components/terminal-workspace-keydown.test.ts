@@ -98,7 +98,7 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch', () => ({
 vi.mock('@/runtime/rpc/targets/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
-vi.mock('@/runtime/browser-workspace-tab-close', () => ({
+vi.mock('@/runtime/browser/closing/browser-workspace-tab-close', () => ({
   closeBrowserWorkspaceTabOnHosts: () => ({ closesLocally: true, removesVisibleTab: true })
 }))
 vi.mock('../store/slices/browser/cleanup/browser-webview-cleanup', () => ({

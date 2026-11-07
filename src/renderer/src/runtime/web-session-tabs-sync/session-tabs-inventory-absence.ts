@@ -9,7 +9,7 @@ import {
   sessionTabsInventoryOmissionsByWorktree,
   type TrackedWebSessionTabsWorktree
 } from './state'
-import { sessionTabsFreshnessKey } from './tracking'
+import { sessionTabsFreshnessKey } from './state'
 
 function omissionKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}:${worktreeId}`

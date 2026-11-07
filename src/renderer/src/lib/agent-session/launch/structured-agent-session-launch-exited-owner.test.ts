@@ -27,7 +27,7 @@ vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', (
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
 }))
-vi.mock('@/runtime/web-session-focus-intent', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent', () => ({
   clearWebSessionFocusIntentIfMatches: vi.fn(),
   recordWebSessionFocusIntent: vi.fn(),
   resolveWebSessionVisibleTabId: vi.fn(() => null)

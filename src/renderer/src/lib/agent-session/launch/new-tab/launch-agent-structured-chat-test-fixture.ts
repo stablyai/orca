@@ -17,7 +17,7 @@ import type { createStructuredAgentSessionLaunchIntent as create } from '../../.
 import type { launchStructuredAgentSession as launch } from '../structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import type { toast } from 'sonner'
-import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type * as TerminalSurface from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
@@ -85,12 +85,12 @@ vi.mock('@/store/index', async () =>
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
@@ -109,10 +109,13 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
 
-vi.mock('@/runtime/web-runtime-session-environment', async (original) => ({
-  ...(await original<typeof WebEnvironment>()),
-  isWebRuntimeSessionActive: vi.fn(() => false)
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (original) => ({
+    ...(await original<typeof WebEnvironment>()),
+    isWebRuntimeSessionActive: vi.fn(() => false)
+  })
+)
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', async (original) => ({
   ...(await original<typeof TerminalSurface>()),
   isWebTerminalSurfaceTabId: vi.fn(() => false)

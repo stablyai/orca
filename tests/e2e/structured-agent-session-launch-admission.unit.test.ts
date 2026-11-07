@@ -59,12 +59,12 @@ vi.mock(
 // Switch-on, main opens this machine's chats and its frames draw them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -74,7 +74,7 @@ import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer
 import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
-import { peekWebSessionFocusIntent } from '@/runtime/web-session-focus-intent'
+import { peekWebSessionFocusIntent } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { LOCAL_ADMISSION_WAIT_MS } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-host-admission'
 import { launchStructuredAgentFromNewTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-structured-route'
 import { structuredAgentSessionFocusOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'

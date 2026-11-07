@@ -8,15 +8,15 @@ import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-run
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
-import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 import { setRuntimeEnvironmentCatalogRefresher } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
-vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({
+vi.mock('@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach', () => ({
   ensureBrowserClientHostsForRestoredPages: vi.fn(),
   ensureBrowserClientHostOnRuntimeContact: vi.fn()
 }))
-vi.mock('@/runtime/client-hosted-browser-close-intent-replay', () => ({
+vi.mock('@/runtime/browser/closing/client-hosted-browser-close-intent-replay', () => ({
   replayClientHostedBrowserCloseIntents: vi.fn()
 }))
 

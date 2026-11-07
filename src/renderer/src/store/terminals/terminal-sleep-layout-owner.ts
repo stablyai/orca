@@ -2,7 +2,7 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
+import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { AppState } from '../types'
 
 type SleepingRecords = Readonly<Record<string, SleepingAgentSessionRecord>>

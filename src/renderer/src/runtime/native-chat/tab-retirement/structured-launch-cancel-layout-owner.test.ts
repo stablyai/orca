@@ -30,7 +30,7 @@ vi.mock('../requests/structured-agent-session-close', () => ({
 vi.mock('../../rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntime
 }))
-vi.mock('../../local-session-tab-close-owner', () => ({
+vi.mock('../../web-session-tabs-sync/closing/local-session-tab-close-owner', () => ({
   withLocalSessionTabCloseOwner: async (_w: string, _t: string, close: () => Promise<unknown>) =>
     close()
 }))

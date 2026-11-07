@@ -53,7 +53,7 @@ vi.mock('../requests/structured-agent-session-close', () => ({
 vi.mock('../../rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntime
 }))
-vi.mock('../../local-session-tab-close-owner', () => ({
+vi.mock('../../web-session-tabs-sync/closing/local-session-tab-close-owner', () => ({
   withLocalSessionTabCloseOwner: async (
     _worktreeId: string,
     _tabId: string,
@@ -63,7 +63,7 @@ vi.mock('../../local-session-tab-close-owner', () => ({
 vi.mock('../../local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionWorktreeTabs: mocks.reacceptLocal
 }))
-vi.mock('../../web-runtime-session-snapshot', () => ({
+vi.mock('../../web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: mocks.refreshPaired
 }))
 vi.mock('../../rpc/targets/runtime-worktree-selector', () => ({
@@ -83,7 +83,7 @@ import {
   isWebSessionCloseIntentPending,
   reconcileWebSessionCloseIntents,
   resetWebSessionCloseIntentForTests
-} from '../../web-session-close-intent'
+} from '../../web-session-tabs-sync/closing/web-session-close-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-sessions/local-structured-session-owner'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 

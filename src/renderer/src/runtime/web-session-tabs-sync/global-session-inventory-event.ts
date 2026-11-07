@@ -13,7 +13,7 @@ import {
   decideWebSessionTabsSnapshot,
   WEB_SESSION_TABS_FRAME_OUTRANKED
 } from './tracking-decisions'
-import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+import { acceptReplayedWebSessionTabsSnapshot } from './state'
 import { applyReceivedAgentSenderPublications } from './received-agent-sender-publications'
 import { applyWebSessionTabsSnapshots } from './snapshot-api'
 import {

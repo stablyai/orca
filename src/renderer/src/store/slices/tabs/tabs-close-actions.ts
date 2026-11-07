@@ -18,7 +18,7 @@ import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   shouldRetainStructuredAgentSessionLaunchTab
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
+import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
 import {
   structuredAgentSessionFocusOwner,

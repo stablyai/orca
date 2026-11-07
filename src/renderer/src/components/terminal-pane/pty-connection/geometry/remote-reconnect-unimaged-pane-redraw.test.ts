@@ -27,7 +27,7 @@ const scheduleRuntimeGraphSync = vi.fn()
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))

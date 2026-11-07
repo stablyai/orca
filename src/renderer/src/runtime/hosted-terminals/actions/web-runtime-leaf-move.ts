@@ -11,8 +11,8 @@ import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-se
 import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 /** The runtime that commits this worktree's pane moves itself; null keeps the move in this window. */
 export async function resolvePaneMoveHost(worktreeId: string): Promise<string | null> {

@@ -10,7 +10,7 @@ import {
 import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 
 // Push color/pin to the authoritative host for persistence; undefined means unchanged.
 export function setWebRuntimeTabProps(args: {

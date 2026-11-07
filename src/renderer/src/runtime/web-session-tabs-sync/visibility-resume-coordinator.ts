@@ -1,15 +1,15 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
   advancesSessionTabsFreshness,
-  shouldApplyRecoveredWebSessionTabsSnapshot,
-  sessionTabsFreshnessKey
+  shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
+import { sessionTabsFreshnessKey } from './state'
 import { latestSessionTabsSnapshotByWorktree, sessionTabsEnvironmentsByWorktree } from './state'
 import {
   isCurrentSessionTabsRuntimeId,
   isRetiredSessionTabsRuntimeId
 } from './publisher-identity-fences'
-import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+import { acceptReplayedWebSessionTabsSnapshot } from './state'
 import type { WebSessionTabsSnapshotOperation } from './snapshot-api'
 import { applyVisibilityResumeRepairs } from './visibility-resume-repair'
 import {

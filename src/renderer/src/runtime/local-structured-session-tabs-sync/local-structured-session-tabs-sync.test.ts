@@ -16,7 +16,7 @@ import './subscription'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../web-session-tabs-sync/tracking-lifecycle'
 import type { WebSessionTabsSyncState } from '../web-session-tabs-sync/state'
-import { resetWebSessionFocusIntentForTests } from '../web-session-focus-intent'
+import { resetWebSessionFocusIntentForTests } from '../web-session-tabs-sync/navigation/web-session-focus-intent'
 
 const mocks = vi.hoisted(() => ({ recheckUnconfirmedLaunches: vi.fn() }))
 

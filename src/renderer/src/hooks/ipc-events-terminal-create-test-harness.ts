@@ -177,17 +177,17 @@ export async function setupTerminalCreateSurfacing(
     createFloatingWorkspaceTerminalTab,
     isFloatingWorkspacePanelFocused: () => isFloatingPanelFocused()
   }))
-  vi.doMock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  vi.doMock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
     closeWebRuntimeSessionTab: vi.fn()
   }))
-  vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
+  vi.doMock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
     createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
   }))
   vi.doMock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
     createWebRuntimeSessionTerminal
   }))
-  vi.doMock('@/runtime/web-runtime-session-environment', () => ({
+  vi.doMock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({

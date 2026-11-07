@@ -72,16 +72,16 @@ vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
 // Switch-on, main opens the chat's tab and its frame draws it.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 }))
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -117,7 +117,7 @@ import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activatio
 import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent
-} from '@/runtime/web-session-focus-intent'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { structuredAgentSessionFocusOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-bridge'
 import {

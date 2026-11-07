@@ -1,5 +1,5 @@
-import { buildWebSessionExistingTabIndex } from '../web-session-existing-tab-index'
-import { resolveWebSessionVisibleTabId } from '../web-session-focus-intent'
+import { buildWebSessionExistingTabIndex } from './placement/web-session-existing-tab-index'
+import { resolveWebSessionVisibleTabId } from './navigation/web-session-focus-intent'
 import { chooseTargetGroupId, buildHostGroupIdByTabId } from './tab-group-layout-tree'
 import {
   buildMirroredBrowserTabs,
@@ -12,7 +12,7 @@ import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsClientHostedPages,
   hostSnapshotAffirmsWorktreeContents
-} from '../host-session-snapshot-authority'
+} from './hydration/host-session-snapshot-authority'
 import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import {

@@ -46,7 +46,7 @@ vi.mock(
     isNativeChatTranscriptLocalReadable: () => true
   })
 )
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({

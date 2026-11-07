@@ -7,7 +7,7 @@ import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/laun
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { closeStructuredAgentSession } from '../requests/structured-agent-session-close'
-import { withLocalSessionTabCloseOwner } from '../../local-session-tab-close-owner'
+import { withLocalSessionTabCloseOwner } from '../../web-session-tabs-sync/closing/local-session-tab-close-owner'
 import {
   executionHostIdForStructuredTarget,
   structuredAgentSessionFocusOwner
@@ -15,9 +15,9 @@ import {
 import {
   clearWebSessionCloseIntent,
   recordWebSessionCloseIntent
-} from '../../web-session-close-intent'
-import type { WebSessionIntentOwner } from '../../web-session-intent-owner'
-import { captureWebSessionIntentOwner } from '../../web-runtime-session-environment'
+} from '../../web-session-tabs-sync/closing/web-session-close-intent'
+import type { WebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-session-intent-owner'
+import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -89,7 +89,7 @@ function reacceptHostSessionTabs(
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
     target.kind === 'environment'
-      ? import('../../web-runtime-session-snapshot').then(
+      ? import('../../web-session-tabs-sync/inventory/web-runtime-session-snapshot').then(
           ({ refreshWebRuntimeSessionTabsSnapshot }) =>
             refreshWebRuntimeSessionTabsSnapshot(target.environmentId, worktreeId, {
               acceptCurrentSnapshot: true,

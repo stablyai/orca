@@ -5,12 +5,12 @@ import type { BrowserTab } from '../../../../../../shared/browser-workspace-type
 
 import '../../../../i18n/i18n'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
-import '@/runtime/layout-apply-test-transport.test-fixture'
+import '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import '../../../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 

@@ -13,17 +13,19 @@ import {
   beginLayoutFramePositions,
   endLayoutFramePositions,
   layoutFramesFlowing
-} from '@/runtime/layout-frame-position'
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 const sendLayoutApply = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/layout-apply-send', () => ({
+vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', () => ({
   sendLayoutApply,
   recordLayoutApply: sendLayoutApply
 }))
 const storeState = vi.hoisted(() => ({ recordFeatureInteraction: () => {} }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeState } }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 
 const SOURCE = '11111111-1111-4111-8111-111111111111'
 const NEW = '22222222-2222-4222-8222-222222222222'

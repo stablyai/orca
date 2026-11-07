@@ -12,8 +12,8 @@ import {
   noteSessionTabsPublicationEpoch,
   sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
+import { sessionTabsFreshnessKey } from './state'
 import {
-  sessionTabsFreshnessKey,
   rememberHostTerminalTabCount,
   trackWebSessionTabsWorktree,
   recordAcceptedWebSessionTabsEnvironment
@@ -21,7 +21,7 @@ import {
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from './terminal-handles/web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {

@@ -28,7 +28,7 @@ import { clearQueuedInitialCwdAfterFirstPane } from './queued-initial-cwd'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { installTerminalPaneInputHandling } from '../input/terminal-pane-pane-input'
 import { installTerminalPaneLinkHandling } from '../links/terminal-pane-pane-links'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 
 export function createTerminalPaneCreatedHandler(
   context: TerminalPaneManagerOptionsContext

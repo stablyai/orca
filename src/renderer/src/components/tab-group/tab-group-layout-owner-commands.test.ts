@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import type { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
-import { beginLayoutFramePositions, endLayoutFramePositions } from '@/runtime/layout-frame-position'
+import {
+  beginLayoutFramePositions,
+  endLayoutFramePositions
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
-import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 
 const mocks = vi.hoisted(
   (): {
@@ -16,7 +19,9 @@ const mocks = vi.hoisted(
 
 // The store's split takes main's group id only in a layout-owner build.
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/layout-owner-command', () => ({ sendLayoutCommandToOwner: mocks.send }))
+vi.mock('@/runtime/workspace-layout/commands/layout-owner-command', () => ({
+  sendLayoutCommandToOwner: mocks.send
+}))
 vi.mock('@/store', () => ({
   get useAppStore() {
     return mocks.store

@@ -1,7 +1,7 @@
 // Resolve seeding by the create’s host when repo/path has a twin; desktop must not duplicate the paired server’s default tabs (ledger L277).
 import { describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as WebRuntimeSessionModule from '@/runtime/web-runtime-session-environment'
+import type * as WebRuntimeSessionModule from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
@@ -11,7 +11,7 @@ import { applyCreatedWorktree } from '@/store/slices/worktrees/create/created-wo
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -19,11 +19,15 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
-vi.mock('@/runtime/web-runtime-session-environment', async (importOriginal) => ({
-  ...(await importOriginal<typeof WebRuntimeSessionModule>()),
-  // The paired server's session is up.
-  isWebRuntimeSessionActive: (environmentId: string | null | undefined) => environmentId === 'env-1'
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WebRuntimeSessionModule>()),
+    // The paired server's session is up.
+    isWebRuntimeSessionActive: (environmentId: string | null | undefined) =>
+      environmentId === 'env-1'
+  })
+)
 
 const SERVER: ExecutionHostId = 'runtime:env-1'
 const REPO_ID = 'repoP'

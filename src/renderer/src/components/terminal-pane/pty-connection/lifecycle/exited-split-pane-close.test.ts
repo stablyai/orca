@@ -1,16 +1,17 @@
+import { _resetLayoutOwnerPaneTreeHoldsForTests } from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import type { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import {
   _resetLayoutOwnerPaneIntentsForTests,
   takePaneCloseIntent
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'
 
 const mocks = vi.hoisted(() => {
   const owner: { pairedServer: string | null } = { pairedServer: null }
   return { sendLayoutCommandToOwner: vi.fn<typeof sendLayoutCommandToOwner>(), owner }
 })
-vi.mock('@/runtime/layout-owner-command', () => ({
+vi.mock('@/runtime/workspace-layout/commands/layout-owner-command', () => ({
   sendLayoutCommandToOwner: mocks.sendLayoutCommandToOwner
 }))
 vi.mock('@/lib/resolve-owner', () => ({
@@ -23,6 +24,7 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 describe('expectExitedSplitPaneClose', () => {
   beforeEach(() => {
     _resetLayoutOwnerPaneIntentsForTests()
+    _resetLayoutOwnerPaneTreeHoldsForTests()
     mocks.sendLayoutCommandToOwner.mockReset()
     mocks.owner.pairedServer = null
   })

@@ -28,7 +28,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host'
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => true
 }))
 vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({

@@ -36,7 +36,7 @@ import {
   clearWebSessionFocusIntentIfMatches,
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '@/runtime/web-session-focus-intent'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type LaunchSurface = {

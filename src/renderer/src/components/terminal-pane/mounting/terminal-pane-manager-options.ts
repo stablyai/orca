@@ -19,7 +19,7 @@ import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../../shared/execution-host'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { acquireWebviewsDragPassthrough } from '../../browser-pane/host-guest/webview-drag-passthrough'
 import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-click'
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'

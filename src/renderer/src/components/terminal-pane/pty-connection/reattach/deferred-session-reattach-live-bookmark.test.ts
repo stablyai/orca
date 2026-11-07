@@ -19,7 +19,9 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('../../pty-transport/delivery/pty-dispatcher', () => ({
   getEagerPtyBufferHandle: () => null
 }))

@@ -16,7 +16,7 @@ import {
   clearWebSessionFocusIntentIfMatches,
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
-} from '@/runtime/web-session-focus-intent'
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionFocusOwner,

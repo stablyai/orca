@@ -24,7 +24,7 @@ import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import {
   hostSnapshotAffirmsAgentSessions,
   hostSnapshotAffirmsWorktreeContents
-} from '../host-session-snapshot-authority'
+} from '../web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
@@ -36,7 +36,7 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/lo
 import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
-import { framesDrawWorkspace } from '../workspace-layout-frame-drawn-workspaces'
+import { framesDrawWorkspace } from '../workspace-layout/frames/workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'
 
 /** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
