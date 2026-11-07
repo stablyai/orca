@@ -34,20 +34,18 @@ export function FolderWorkspaceEmptyState({
     : null
   const folderRepos = getFolderSourceRepos(repos, projectGroups, projectGroup)
 
-  const create = async (repo: Repo): Promise<void> => {
+  const create = (repo: Repo): void => {
     if (!folderWorkspace) {
       return
     }
     setCreatingRepoIds((current) => new Set(current).add(repo.id))
-    try {
-      await createFolderRepoWorktree(folderWorkspace, repo)
-    } finally {
+    void createFolderRepoWorktree(folderWorkspace, repo).finally(() =>
       setCreatingRepoIds((current) => {
         const next = new Set(current)
         next.delete(repo.id)
         return next
       })
-    }
+    )
   }
 
   return (
@@ -76,7 +74,7 @@ export function FolderWorkspaceEmptyState({
                   variant="outline"
                   size="xs"
                   disabled={creating}
-                  onClick={() => void create(repo)}
+                  onClick={() => create(repo)}
                 >
                   {creating ? <LoaderCircle className="animate-spin" /> : null}
                   {translate(

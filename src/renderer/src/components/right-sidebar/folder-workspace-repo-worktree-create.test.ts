@@ -2,16 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeFolderWorkspace } from '../sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
 
-const { storeState, searchRefs, toastSuccess, toastError } = vi.hoisted(() => ({
-  storeState: {
-    activeWorkspaceKey: 'folder:folder-workspace-1' as string | null,
+const { storeState, searchRefs, toastSuccess, toastError } = vi.hoisted(() => {
+  const storeState: {
+    activeWorkspaceKey: string | null
+    createWorktree: ReturnType<typeof vi.fn>
+    openModal: ReturnType<typeof vi.fn>
+  } = {
+    activeWorkspaceKey: 'folder:folder-workspace-1',
     createWorktree: vi.fn(),
     openModal: vi.fn()
-  },
-  searchRefs: vi.fn<() => Promise<string[]>>(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn()
-}))
+  }
+  return {
+    storeState,
+    searchRefs: vi.fn<() => Promise<string[]>>(),
+    toastSuccess: vi.fn(),
+    toastError: vi.fn()
+  }
+})
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
 vi.mock('@/runtime/runtime-repo-client', () => ({ searchRuntimeRepoBaseRefs: searchRefs }))
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: toastError } }))
