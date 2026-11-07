@@ -89,13 +89,26 @@ describe('screencast frame credit', () => {
     subscription.session.stop()
   })
 
-  it('does not charge credit for frames too large to send', async () => {
-    const { subscription, onFrame, sent } = await subscribe(true)
-    onFrame(frame(0, new Uint8Array(9 * 1024 * 1024)))
-    onFrame(frame(1, new Uint8Array(9 * 1024 * 1024)))
+  it('drops frames too large to send without charging credit, whether sent or held', async () => {
+    const { subscription, onFrame, sent, ack } = await subscribe(true)
+    const oversize = new Uint8Array(9 * 1024 * 1024)
+    onFrame(frame(0, oversize))
+    onFrame(frame(1, oversize))
     onFrame(frame(2))
     onFrame(frame(3))
     expect(sent).toEqual([2, 3])
+
+    // Held for credit, then dropped when the ack opens credit: the next held frame still goes on its ack.
+    onFrame(frame(4, oversize))
+    ack(3)
+    onFrame(frame(5))
+    onFrame(frame(6))
+    // Past the queue-delay allowance, without running timers.
+    vi.setSystemTime(Date.now() + 1_000)
+    onFrame(frame(7))
+    expect(sent).toEqual([2, 3, 5, 6])
+    ack(6)
+    expect(sent).toEqual([2, 3, 5, 6, 7])
     subscription.session.stop()
   })
 })
