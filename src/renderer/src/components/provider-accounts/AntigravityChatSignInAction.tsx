@@ -41,8 +41,12 @@ export function AntigravityChatSignInBadge({
   return null
 }
 
+// A cancelled or failed switch leaves the host signed in, so it still offers a change, not a first sign-in.
+const changingAccount = (signIn: AntigravityChatSignInControls, auth: AntigravityChatAuthAction) =>
+  signIn.auth === 'signedIn' && !auth.reauth
+
 function actionLabel(signIn: AntigravityChatSignInControls, auth: AntigravityChatAuthAction) {
-  if (signIn.action === 'changeAccount' && !auth.reauth) {
+  if (changingAccount(signIn, auth)) {
     return translate('accounts.antigravity.chatChangeAccount', 'Change account')
   }
   if (auth.method && !auth.recovering) {
@@ -65,7 +69,6 @@ export function AntigravityChatSignInAction({
   auth: AntigravityChatAuthAction
   size: 'default' | 'sm'
 }): React.JSX.Element {
-  const [pasteOpen, setPasteOpen] = useState(false)
   const alert = auth.alert ? (
     <span role="alert" className="flex items-center gap-1.5 text-destructive">
       <AlertCircle className="size-3.5 shrink-0" />
@@ -73,39 +76,7 @@ export function AntigravityChatSignInAction({
     </span>
   ) : null
   if (signIn.ownFlow) {
-    const { copy, url } = signIn
-    return (
-      <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div role="status" className="flex min-w-0 items-center gap-2 text-xs">
-            <LoadingSpinner className="size-3 shrink-0" />
-            <span className="min-w-0 break-words">{signIn.line}</span>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {url && (
-              <Button size="sm" variant="outline" onClick={() => void copy.copyText()}>
-                {copy.status === 'copied' ? <Check /> : <Copy />}
-                {signIn.copyLabel}
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
-              {translate('accounts.antigravity.chatCancel', 'Cancel')}
-            </Button>
-          </div>
-        </div>
-        {alert && <p className="text-xs">{alert}</p>}
-        {url &&
-          (pasteOpen ? (
-            <PastedAddressForm pending={signIn.pending} send={signIn.send} />
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              <ManagedRuntimeLinkButton onClick={() => setPasteOpen(true)}>
-                {translate('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
-              </ManagedRuntimeLinkButton>
-            </p>
-          ))}
-      </div>
-    )
+    return <SignInFlowPanel signIn={signIn} alert={alert} />
   }
   const message =
     signIn.line ??
@@ -124,11 +95,18 @@ export function AntigravityChatSignInAction({
           }
         )
       : null)
-  const secondary = signIn.action === 'changeAccount' && !auth.reauth
+  const secondary = changingAccount(signIn, auth)
+  // The badge is not announced, so the live region carries the settled result too.
+  const settled =
+    signIn.auth === 'signedIn'
+      ? translate('accounts.antigravity.chatBadgeSignedIn', 'Signed in')
+      : signIn.auth === 'signedOut'
+        ? translate('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')
+        : null
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <div role="status" className="min-w-0 flex-1 basis-40 text-xs text-muted-foreground">
-        {alert ?? message}
+        {alert ?? message ?? (settled && <span className="sr-only">{settled}</span>)}
       </div>
       <Button
         size={size}
@@ -140,6 +118,50 @@ export function AntigravityChatSignInAction({
       >
         {actionLabel(signIn, auth)}
       </Button>
+    </div>
+  )
+}
+
+/** Mounted only while this client's sign-in runs, so the paste form starts closed for each flow. */
+function SignInFlowPanel({
+  signIn,
+  alert
+}: {
+  signIn: AntigravityChatSignInControls
+  alert: React.ReactNode
+}): React.JSX.Element {
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const { copy, url } = signIn
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div role="status" className="flex min-w-0 items-center gap-2 text-xs">
+          <LoadingSpinner className="size-3 shrink-0" />
+          <span className="min-w-0 break-words">{signIn.line}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {url && (
+            <Button size="sm" variant="outline" onClick={() => void copy.copyText()}>
+              {copy.status === 'copied' ? <Check /> : <Copy />}
+              {signIn.copyLabel}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
+            {translate('accounts.antigravity.chatCancel', 'Cancel')}
+          </Button>
+        </div>
+      </div>
+      {alert && <p className="text-xs">{alert}</p>}
+      {url &&
+        (pasteOpen ? (
+          <PastedAddressForm pending={signIn.pending} send={signIn.send} />
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            <ManagedRuntimeLinkButton onClick={() => setPasteOpen(true)}>
+              {translate('accounts.antigravity.chatPasteOpen', "Browser page didn't load?")}
+            </ManagedRuntimeLinkButton>
+          </p>
+        ))}
     </div>
   )
 }

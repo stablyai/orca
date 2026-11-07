@@ -341,7 +341,13 @@ it.each(['accounts', 'provider'] as const)(
     const user = userEvent.setup()
     renderSurface(surface, target)
     await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-    expect(screen.getByText('Signed in')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Signed in')
+    expect(screen.getByRole('button', { name: 'Change account' })).toBeEnabled()
+    await act(async () => {
+      streams.handlers
+        .get(key(target))
+        ?.onEvent({ revision: 1, auth: 'signedIn', flow: { phase: 'cancelled', flowId: null } })
+    })
     expect(screen.getByRole('button', { name: 'Change account' })).toBeEnabled()
     await user.click(screen.getByRole('combobox'))
     await user.click(screen.getByRole('option', { name: 'Gemini Enterprise' }))
@@ -353,7 +359,7 @@ it.each(['accounts', 'provider'] as const)(
     await user.type(screen.getByLabelText('Google Cloud location'), enterprise.gcpLocation)
     await user.tab()
     await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({ revision: 1, auth: 'unknown', flow: null })
+      streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
     })
     expect(screen.getByRole('status')).toHaveTextContent(
       'Sign in again to switch to Gemini Enterprise.'
