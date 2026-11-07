@@ -11,6 +11,8 @@ const HELPER_TIMEOUT_MS = 1000
 const MAX_HELPER_OUTPUT_BYTES = 64 * 1024
 
 let cachedHelperPath: string | null | undefined
+let cachedSnapshot: KeyboardLayoutSnapshot | null = null
+let snapshotEpoch = 0
 let readInFlight: Promise<KeyboardLayoutSnapshot | null> | null = null
 
 function resolveHelperPath(): string | null {
@@ -62,17 +64,34 @@ export function parseKeyboardLayoutSnapshot(stdout: string): KeyboardLayoutSnaps
   }
 }
 
+export function invalidateMacKeyboardLayoutSnapshot(): void {
+  cachedSnapshot = null
+  snapshotEpoch += 1
+}
+
 export function readMacKeyboardLayoutSnapshot(): Promise<KeyboardLayoutSnapshot | null> {
   const helperPath = resolveHelperPath()
   if (!helperPath) {
     return Promise.resolve(null)
   }
+  if (cachedSnapshot) {
+    return Promise.resolve(cachedSnapshot)
+  }
   if (readInFlight) {
     return readInFlight
   }
-  readInFlight = runHelper(helperPath).finally(() => {
-    readInFlight = null
-  })
+  const epoch = snapshotEpoch
+  readInFlight = runHelper(helperPath)
+    .then((snapshot) => {
+      // A read spanning an input-source change carries the old layout; never cache it.
+      if (snapshot !== null && epoch === snapshotEpoch) {
+        cachedSnapshot = snapshot
+      }
+      return snapshot
+    })
+    .finally(() => {
+      readInFlight = null
+    })
   return readInFlight
 }
 
