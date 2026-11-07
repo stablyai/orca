@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { SubscriptionEndReason } from '../../../runtime-subscription-registry'
 
 type RegistrationRuntime = Pick<
   OrcaRuntimeService,
@@ -50,12 +51,13 @@ export function registerTerminalSubscription({
   let stopWatchingExit = (): void => {}
   let presence: { ptyId: string; clientId: string } | null = null
 
-  const end = (): void => {
+  const end = (reason?: SubscriptionEndReason): void => {
     if (ended) {
       return
     }
     ended = true
-    emit({ type: 'end' })
+    // A same-client subscribe took this slot; say so, or two pages of one phone rearm against each other.
+    emit(reason ? { type: 'end', reason } : { type: 'end' })
   }
   const releaseOnce = (): void => {
     // Registry records in-flight cleanup after calling it; latch first against reentrant release.
@@ -83,11 +85,11 @@ export function registerTerminalSubscription({
     ? null
     : runtime.registerOwnedSubscriptionCleanup(
         subscriptionId,
-        () => {
+        (reason) => {
           try {
             releaseOnce()
           } finally {
-            end()
+            end(reason)
           }
         },
         connectionId,
