@@ -74,6 +74,11 @@ export function returnMobileNativeChatOfflineSend(
   ])
 }
 
+/** A closed tab's queue goes with it, as its draft does. */
+export function dropMobileNativeChatOfflineSends(scope: string): void {
+  write(scope, () => NO_SENDS)
+}
+
 export function resumeMobileNativeChatOfflineSends(scope: string): void {
   write(scope, (current) =>
     current.some((send) => send.paused)
