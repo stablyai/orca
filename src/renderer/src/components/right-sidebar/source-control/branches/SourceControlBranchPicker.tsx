@@ -4,6 +4,8 @@ import { basename } from '@/lib/path'
 import { isWorkspaceSelected } from '@/lib/active-workspace-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getExecutionHostLabel } from '../../../../../../shared/execution-host'
 import { selectWorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { BranchWorkspace } from './branch-picker-rows'
@@ -21,7 +23,6 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
     entries,
     conflictOperation,
     statusReadError,
-    worktreeMap,
     recordBranchSwitchOutcome,
     refreshActiveGitStatusAfterMutation
   } = model
@@ -33,6 +34,8 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
       ? state.runtimeEnvironments.find((host) => host.id === activeRepoTarget.environmentId)?.name
       : undefined
   )
+  // The panel's map holds only the owner inside a folder section; workspace rows need every worktree.
+  const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const agentWorking = useAppStore((state) =>
     activeWorktreeId
       ? selectWorktreeAgentActivitySummary(state, activeWorktreeId).hasLiveWorking
