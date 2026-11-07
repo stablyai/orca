@@ -1279,14 +1279,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Dikte şu anda bilgisayarda veya başka bir telefonda kullanılıyor.",
+      "alreadyActive": "Dikte şu anda bilgisayarda veya başka bir telefonda kullanılıyor. Aynı anda birden fazla cihazdan dikte etmek için bilgisayardaki Orca'yı güncelleyin.",
       "cloudModelNeedsKey": "OpenAI anahtarı gerekli",
       "deleteFailed": "Model silinemedi",
       "desktopUpdateRequired": "Mobil ses ayarlarını kullanmak için eşleştirilmiş bilgisayardaki Orca uygulamasını güncelleyin.",
       "downloadFailed": "İndirme başlatılamadı",
       "loadFailed": "Dikte modelleri yüklenemedi",
+      "modelBusy": "Başka bir cihaz farklı bir ses modeliyle dikte ediyor. O bitince tekrar deneyin.",
       "repairRequired": "Dikteyi kullanmak için bu telefonu bilgisayarla yeniden eşleştirin.",
       "serverUpdateRequired": "Sesli dikteyi kullanmak için bu sunucudaki Orca'yı güncelleyin.",
+      "sessionLimit": "Bu bilgisayarda çok fazla cihaz dikte ediyor. Biri bitince tekrar deneyin.",
       "sessionLost": "Diktenin bilgisayarla bağlantısı kesildi. Yeniden deneyin.",
       "updateFailed": "Dikte ayarları güncellenemedi"
     }

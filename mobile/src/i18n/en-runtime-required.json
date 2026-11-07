@@ -171,8 +171,10 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Dictation is already in use on the computer or another phone.",
+      "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
+      "modelBusy": "Another device is dictating with a different voice model. Try again when it finishes.",
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
+      "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
       "sessionLost": "Dictation lost its connection to the computer. Try again."
     }
   },

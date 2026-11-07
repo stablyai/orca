@@ -1279,14 +1279,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert.",
+      "alreadyActive": "Auf dem Computer oder einem anderen Smartphone wird bereits diktiert. Orca auf dem Computer aktualisieren, um auf mehreren Geräten gleichzeitig zu diktieren.",
       "cloudModelNeedsKey": "OpenAI-Schlüssel erforderlich",
       "deleteFailed": "Modell konnte nicht gelöscht werden",
       "desktopUpdateRequired": "Die gekoppelte Orca-Desktop-App aktualisieren, um die Spracheingabeeinstellungen auf dem Smartphone zu nutzen.",
       "downloadFailed": "Download konnte nicht gestartet werden",
       "loadFailed": "Diktatmodelle konnten nicht geladen werden",
+      "modelBusy": "Ein anderes Gerät diktiert mit einem anderen Sprachmodell. Erneut versuchen, sobald es fertig ist.",
       "repairRequired": "Dieses Smartphone erneut mit dem Computer koppeln, um das Diktat zu nutzen.",
       "serverUpdateRequired": "Orca auf diesem Server aktualisieren, um das Diktat zu nutzen.",
+      "sessionLimit": "Auf diesem Computer diktieren zu viele Geräte. Erneut versuchen, sobald eines fertig ist.",
       "sessionLost": "Die Verbindung zum Computer wurde beim Diktat unterbrochen. Erneut versuchen.",
       "updateFailed": "Diktateinstellungen konnten nicht aktualisiert werden"
     }

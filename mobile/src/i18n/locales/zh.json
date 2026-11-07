@@ -1275,14 +1275,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "电脑或另一部手机正在使用听写。",
+      "alreadyActive": "电脑或另一部手机正在使用听写。请更新电脑上的 Orca，以便在多台设备上同时听写。",
       "cloudModelNeedsKey": "需要 OpenAI 密钥",
       "deleteFailed": "删除模型失败",
       "desktopUpdateRequired": "请更新已配对的 Orca 桌面应用，以使用移动端语音设置。",
       "downloadFailed": "启动下载失败",
       "loadFailed": "加载听写模型失败",
+      "modelBusy": "另一台设备正在使用不同的语音模型听写。请等它结束后再试。",
       "repairRequired": "请将此手机与电脑重新配对，以使用听写。",
       "serverUpdateRequired": "请更新此服务器上的 Orca，以使用语音听写。",
+      "sessionLimit": "这台电脑上正在听写的设备过多。请等其中一台结束后再试。",
       "sessionLost": "听写与电脑的连接已断开。请重试。",
       "updateFailed": "更新听写设置失败"
     }

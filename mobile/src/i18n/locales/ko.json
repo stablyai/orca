@@ -1275,14 +1275,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "컴퓨터나 다른 휴대폰에서 이미 받아쓰기를 사용 중입니다.",
+      "alreadyActive": "컴퓨터나 다른 휴대폰에서 이미 받아쓰기를 사용 중입니다. 여러 기기에서 동시에 받아쓰려면 컴퓨터의 Orca를 업데이트하세요.",
       "cloudModelNeedsKey": "OpenAI 키 필요",
       "deleteFailed": "모델을 삭제하지 못했습니다.",
       "desktopUpdateRequired": "모바일 음성 설정을 사용하려면 페어링된 데스크톱의 Orca 앱을 업데이트하세요.",
       "downloadFailed": "다운로드를 시작하지 못했습니다.",
       "loadFailed": "받아쓰기 모델을 로드하지 못했습니다.",
+      "modelBusy": "다른 기기가 다른 음성 모델로 받아쓰기 중입니다. 끝나면 다시 시도하세요.",
       "repairRequired": "받아쓰기를 사용하려면 이 휴대폰을 컴퓨터와 다시 페어링하세요.",
       "serverUpdateRequired": "음성 받아쓰기를 사용하려면 이 서버의 Orca를 업데이트하세요.",
+      "sessionLimit": "이 컴퓨터에서 받아쓰기 중인 기기가 너무 많습니다. 하나가 끝나면 다시 시도하세요.",
       "sessionLost": "받아쓰기 중 컴퓨터와의 연결이 끊어졌습니다. 다시 시도하세요.",
       "updateFailed": "받아쓰기 설정을 업데이트하지 못했습니다."
     }
