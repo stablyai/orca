@@ -246,30 +246,30 @@ describe('picker window launch contract', () => {
         return createElement(
           TooltipProvider,
           null,
-          omnibox
-            ? createElement(EntryActionRow, {
-                id: 'setup-result',
-                selected: true,
-                option: { kind: 'agent', option },
-                onClick: () => runLaunch(option.row!, option.setup, entry),
-                onUseAgent: (draft) => {
-                  const configured = configuredAgentPickerLaunchOption(option, draft)
-                  runLaunch(configured.row!, configured.setup, entry)
-                }
-              })
-            : createElement(
-                DropdownMenu,
-                { defaultOpen: true, modal: false },
-                createElement(DropdownMenuTrigger, null, 'New tab'),
-                createElement(
-                  DropdownMenuContent,
-                  null,
-                  createElement(AgentLaunchPickerMenu, {
+          createElement(
+            DropdownMenu,
+            { defaultOpen: true, modal: false },
+            createElement(DropdownMenuTrigger, null, 'New tab'),
+            createElement(
+              DropdownMenuContent,
+              null,
+              omnibox
+                ? createElement(EntryActionRow, {
+                    id: 'setup-result',
+                    selected: true,
+                    option: { kind: 'agent', option },
+                    onClick: () => runLaunch(option.row!, option.setup, entry),
+                    onUseAgent: (draft) => {
+                      const configured = configuredAgentPickerLaunchOption(option, draft)
+                      runLaunch(configured.row!, configured.setup, entry)
+                    }
+                  })
+                : createElement(AgentLaunchPickerMenu, {
                     entries: [entry],
                     runLaunch
                   })
-                )
-              )
+            )
+          )
         )
       }
       const perform = async (inputs = {}, menu?: 'ordinary' | 'searched' | 'omnibox') => {

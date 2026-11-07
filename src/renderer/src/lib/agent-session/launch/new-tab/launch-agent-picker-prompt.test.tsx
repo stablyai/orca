@@ -88,25 +88,25 @@ function Menu({
   })
   return (
     <TooltipProvider>
-      {route === 'search' ? (
-        <TabBarCreateEntry
-          worktreeId="wt-1"
-          groupId="group-1"
-          menuOpen
-          agentPickerEntries={[selected]}
-          onOpenEntry={async () => {}}
-          onLaunchAgentOption={(option) =>
-            option.row ? launch(option.row, option.setup, option.pickerEntry) : false
-          }
-        />
-      ) : (
-        <DropdownMenu defaultOpen modal={false}>
-          <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-          <DropdownMenuContent>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          {route === 'search' ? (
+            <TabBarCreateEntry
+              worktreeId="wt-1"
+              groupId="group-1"
+              menuOpen
+              agentPickerEntries={[selected]}
+              onOpenEntry={async () => {}}
+              onLaunchAgentOption={(option) =>
+                option.row ? launch(option.row, option.setup, option.pickerEntry) : false
+              }
+            />
+          ) : (
             <AgentLaunchPickerMenu entries={[selected]} runLaunch={launch} />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </TooltipProvider>
   )
 }
@@ -136,9 +136,9 @@ it.each(
     const dispatch = vi
       .spyOn(launcher, 'launchAgentInNewTab')
       .mockImplementation((args) => actualLaunch({ ...args, launchPlatform: 'win32' }))
-    const view = render(<Menu route={route} selected={selected} />)
+    render(<Menu route={route} selected={selected} />)
     if (route === 'search') {
-      fireEvent.change(view.container.querySelector('input')!, {
+      fireEvent.change(screen.getByRole('combobox'), {
         target: { value: 'launch-model' }
       })
     }
@@ -441,7 +441,7 @@ it.each([
     liveStore().setState({ setActiveWorktree: vi.fn() })
     const view = render(<Menu route={route} selected={selected} />)
     if (route === 'search') {
-      fireEvent.change(view.container.querySelector('input')!, {
+      fireEvent.change(screen.getByRole('combobox'), {
         target: { value: 'launch-model' }
       })
     }
@@ -497,9 +497,9 @@ it.each([
     })
     create.mockResolvedValue({ outcome: { status: 'created' }, hostTabId: 'accepted' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
-    const retry = render(<Menu route={route} selected={selected} />)
+    render(<Menu route={route} selected={selected} />)
     if (route === 'search') {
-      fireEvent.change(retry.container.querySelector('input')!, {
+      fireEvent.change(screen.getByRole('combobox'), {
         target: { value: 'launch-model' }
       })
     }

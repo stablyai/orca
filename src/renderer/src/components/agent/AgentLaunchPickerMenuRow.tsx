@@ -127,7 +127,6 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   }
   return (
     <AgentLaunchSetupButton
-      submenu
       draftScope={draftScope}
       draftId={draftId}
       preset={preset}
@@ -137,7 +136,6 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       surface={selected?.surface}
       mode={mode}
       open={openSetup === setupId}
-      replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
       disabled={disabled || setupDisabled || !entry.surfaces.length}
       onOpenChange={(next) => {
         if (next || openSetup === setupId) {

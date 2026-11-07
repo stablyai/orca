@@ -112,6 +112,8 @@ export function AgentLaunchSetupSubmenu({
           <Button
             variant="menu-segment"
             size="icon-sm"
+            // Why: stretch to the row so compact omnibox rows keep their height.
+            className="h-auto min-h-6 self-stretch"
             type="button"
             aria-label={label}
             aria-haspopup="menu"

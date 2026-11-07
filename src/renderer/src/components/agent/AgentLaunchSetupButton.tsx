@@ -1,10 +1,5 @@
-import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
-import { flushSync } from 'react-dom'
-import { ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type {
@@ -32,24 +27,6 @@ export type AgentLaunchSetupPanelProps = {
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }
 
-function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-  if (event.key === 'Enter' || event.key === ' ') {
-    event.preventDefault()
-    event.stopPropagation()
-    event.currentTarget.click()
-  } else if (['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
-    const row = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
-    if (row) {
-      event.preventDefault()
-      event.stopPropagation()
-      row.focus()
-      if (event.key !== 'ArrowLeft') {
-        row.dispatchEvent(new window.KeyboardEvent('keydown', { key: event.key, bubbles: true }))
-      }
-    }
-  }
-}
-
 export function AgentLaunchSetupButton({
   entry,
   draftScope,
@@ -61,9 +38,7 @@ export function AgentLaunchSetupButton({
   mode = 'launch',
   renderAnchor,
   disabled,
-  submenu = false,
   open: controlledOpen,
-  replacedByAnotherSetup = false,
   onOpenChange,
   onUse
 }: {
@@ -75,11 +50,9 @@ export function AgentLaunchSetupButton({
   seed?: AgentPickerDraft
   surface?: AgentPickerDraft['surface']
   mode?: 'launch' | 'select'
-  renderAnchor?: (trigger: ReactElement) => ReactElement
+  renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
-  submenu?: boolean
   open?: boolean
-  replacedByAnotherSetup?: boolean
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
@@ -96,56 +69,9 @@ export function AgentLaunchSetupButton({
     mode,
     open
   })
-  const closeFocus = useRef({ open, restore: true })
-  useLayoutEffect(() => {
-    if (closeFocus.current.open && !open) {
-      // Preserve the close cause until Radix's deferred unmount autofocus runs.
-      closeFocus.current.restore = !replacedByAnotherSetup
-    }
-    closeFocus.current.open = open
-  }, [open, replacedByAnotherSetup])
-  const [placement, setPlacement] = useState<'right' | 'bottom'>('right')
-  const content = useRef<HTMLDivElement>(null)
-  const anchor = useRef<HTMLDivElement>(null)
-  useLayoutEffect(() => {
-    if (!open || submenu) {
-      return
-    }
-    let frame = 0
-    const measure = () => {
-      cancelAnimationFrame(frame)
-      // Let Radix publish collision space after the external resize and horizontal placement.
-      frame = requestAnimationFrame(() => {
-        flushSync(() => setPlacement('right'))
-        frame = requestAnimationFrame(() => {
-          if (!content.current) {
-            return
-          }
-          const style = window.getComputedStyle(content.current)
-          const available = Number.parseFloat(
-            style.getPropertyValue('--radix-popover-content-available-width')
-          )
-          if (available < 416) {
-            setPlacement('bottom')
-          }
-        })
-      })
-    }
-    const observer = new ResizeObserver(measure)
-    observer.observe(document.documentElement)
-    if (anchor.current) {
-      observer.observe(anchor.current)
-    }
-    measure()
-    return () => {
-      observer.disconnect()
-      cancelAnimationFrame(frame)
-    }
-  }, [open, submenu])
   const changeOpen = (next: boolean) => {
     if (next) {
       setup.activate()
-      setPlacement('right')
     }
     if (controlledOpen === undefined) {
       setOpen(next)
@@ -178,78 +104,15 @@ export function AgentLaunchSetupButton({
       ) : null}
     </div>
   )
-  const label = translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })
-  if (submenu && renderAnchor) {
-    return (
-      <AgentLaunchSetupSubmenu
-        open={open}
-        onOpenChange={changeOpen}
-        renderAnchor={renderAnchor}
-        disabled={disabled}
-        label={label}
-      >
-        {panel}
-      </AgentLaunchSetupSubmenu>
-    )
-  }
-
-  const trigger = (
-    <div className="flex shrink-0 items-center gap-1">
-      <Separator orientation="vertical" className="data-[orientation=vertical]:h-4" />
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          disabled={disabled}
-          aria-label={translate('agentPicker.configure', 'Configure {{agent}}', {
-            agent: entry.label
-          })}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={setupKeyDown}
-        >
-          <ChevronRight className="text-muted-foreground" />
-        </Button>
-      </PopoverTrigger>
-    </div>
-  )
   return (
-    <Popover open={open} onOpenChange={changeOpen}>
-      {renderAnchor ? (
-        <PopoverAnchor asChild ref={anchor}>
-          {renderAnchor(trigger)}
-        </PopoverAnchor>
-      ) : (
-        trigger
-      )}
-      <PopoverContent
-        ref={content}
-        side={placement}
-        sticky="always"
-        align="start"
-        sideOffset={6}
-        aria-label={translate('agentPicker.configure', 'Configure {{agent}}', {
-          agent: entry.label
-        })}
-        // Why: base popovers sit below menus (z-60), so this menu-launched panel would render under the menu's shadow; sharing the menu layer stacks it by open order, like a submenu.
-        className="z-[70] flex w-104 min-w-64 max-w-(--radix-popover-content-available-width) max-h-(--radix-popover-content-available-height) flex-col"
-        onClick={(event) => event.stopPropagation()}
-        // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
-        onFocusOutside={(event) => event.preventDefault()}
-        // The prompt's open / or @ menu takes Escape first.
-        onEscapeKeyDown={(event) => {
-          if (content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
-            event.preventDefault()
-          }
-        }}
-        onCloseAutoFocus={(event) => {
-          if (!closeFocus.current.restore) {
-            event.preventDefault()
-          }
-        }}
-      >
-        {panel}
-      </PopoverContent>
-    </Popover>
+    <AgentLaunchSetupSubmenu
+      open={open}
+      onOpenChange={changeOpen}
+      renderAnchor={renderAnchor}
+      disabled={disabled}
+      label={translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })}
+    >
+      {panel}
+    </AgentLaunchSetupSubmenu>
   )
 }

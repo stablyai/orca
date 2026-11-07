@@ -40,20 +40,22 @@ export async function verifyOmniboxPresetIdentity(
   function Entries({ search }: { search: boolean }) {
     const model = useNewTabAgentMenuRows(worktree.id, true, { kind: 'local', contextKey: 'host' })
     const entries = useAgentLaunchPickerInventory(worktree.id, model, true)
-    return search ? (
-      <TabBarCreateEntry
-        worktreeId={worktree.id}
-        groupId="g"
-        menuOpen
-        onOpenEntry={async () => {}}
-        agentPickerEntries={entries}
-        onLaunchAgentOption={launch}
-      />
-    ) : (
+    return (
       <DropdownMenu defaultOpen modal={false}>
         <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
         <DropdownMenuContent>
-          <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
+          {search ? (
+            <TabBarCreateEntry
+              worktreeId={worktree.id}
+              groupId="g"
+              menuOpen
+              onOpenEntry={async () => {}}
+              agentPickerEntries={entries}
+              onLaunchAgentOption={launch}
+            />
+          ) : (
+            <AgentLaunchPickerMenu entries={entries} runLaunch={launch} />
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     )
