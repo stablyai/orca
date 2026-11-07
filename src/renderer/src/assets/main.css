@@ -2548,6 +2548,20 @@ html.native-shell .app-layout {
   --muted-foreground: var(--code-editor-muted-foreground);
 }
 
+/* Why: a new or deleted file keeps one line tint. The character tint would stack on it, and the empty
+   side's lone blank line is not a real removal or addition. */
+.orca-diff-whole-file-added
+  .monaco-diff-editor
+  .monaco-editor
+  :is(.char-insert, .char-delete, .line-delete, .gutter-delete, .inline-deleted-margin-view-zone),
+.orca-diff-whole-file-deleted
+  .monaco-diff-editor
+  .monaco-editor
+  :is(.char-delete, .char-insert, .line-insert, .gutter-insert, .inline-added-margin-view-zone) {
+  background-color: transparent;
+  border-color: transparent;
+}
+
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
 .ipynb-code-surface .monaco-editor,
 .ipynb-code-surface .monaco-editor-background,
