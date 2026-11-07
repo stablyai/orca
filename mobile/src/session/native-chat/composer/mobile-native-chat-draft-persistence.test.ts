@@ -323,7 +323,7 @@ describe('mobile native-chat draft persistence', () => {
       clientMessageId?: string
     ): string {
       drafts?.clearDraftForSend(origin, text)
-      const id = beginMobileNativeChatInFlightSend(origin, kind, text, clientMessageId)
+      const id = beginMobileNativeChatInFlightSend(origin, kind, text, { clientMessageId })
       if (!id) {
         throw new Error('the send was not saved')
       }

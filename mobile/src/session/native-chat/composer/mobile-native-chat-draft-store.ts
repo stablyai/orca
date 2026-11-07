@@ -184,7 +184,7 @@ export function returnMobileNativeChatInFlightSend(id: string): void {
   const destination = mobileNativeChatDraftDestination(entry.scope)
   const { send } = entry
   setMobileNativeChatDraftText(destination, (current) =>
-    appendReturnedDraftText(current, send.text)
+    appendReturnedDraftText(current, send.text, { preserveConversationCommands: send.command })
   )
   restoreMobileNativeChatPickedSkills(destination, send.skills)
   returnMobileNativeChatDraftAttachments(

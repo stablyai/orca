@@ -13,7 +13,7 @@ import {
 // the rest came back with the page and wait for their chat to open.
 type InFlightEntry = { scope: string; send: MobileNativeChatInFlightSend; held: boolean }
 const inFlightSends = new Map<string, InFlightEntry>()
-// Bumped when a load brings saved sends back, so the holds can claim them.
+// Bumped when saved sends become claimable (a load brought them back or a hold let go).
 let savedInFlightVersion = 0
 const savedInFlightListeners = new Set<() => void>()
 
@@ -22,6 +22,11 @@ function subscribeSavedInFlight(listener: () => void): () => void {
   return () => {
     savedInFlightListeners.delete(listener)
   }
+}
+
+function notifyClaimable(): void {
+  savedInFlightVersion += 1
+  savedInFlightListeners.forEach((listener) => listener())
 }
 
 export function useMobileNativeChatSavedInFlightVersion(): number {
@@ -34,7 +39,8 @@ export function beginMobileNativeChatInFlightSend(
   origin: MobileNativeChatSendOrigin,
   kind: MobileNativeChatInFlightSend['kind'],
   text: string,
-  clientMessageId?: string
+  // A command's restore keeps a lone /clear or /compact and warns instead of saying it is back.
+  extra: { clientMessageId?: string; command?: boolean } = {}
 ): string | null {
   const destination = origin.draftDestination
   if (!destination.active) {
@@ -55,7 +61,8 @@ export function beginMobileNativeChatInFlightSend(
       // A terminal chat sends no file chips; they stay in the box.
       files: kind === 'structured' ? savedMobileNativeChatFiles(inputs.files) : [],
       sessionId: origin.pendingKey?.slice(origin.draftKey.length + 1) ?? null,
-      ...(clientMessageId === undefined ? {} : { clientMessageId }),
+      ...(extra.clientMessageId === undefined ? {} : { clientMessageId: extra.clientMessageId }),
+      ...(extra.command ? { command: true } : {}),
       normalizedText: origin.normalizedText,
       baselineTailMessageId: origin.boundary.afterMessageId ?? null,
       ...(origin.queuedDuringWorkingEpoch !== undefined ? { queuedDuringWork: true } : {})
@@ -89,11 +96,17 @@ export function claimMobileNativeChatInFlightSends(
 }
 
 export function releaseMobileNativeChatInFlightSends(ids: Iterable<string>): void {
+  let released = false
   for (const id of ids) {
     const entry = inFlightSends.get(id)
-    if (entry) {
+    if (entry?.held) {
       entry.held = false
+      released = true
     }
+  }
+  // An open chat claims it now rather than at its next mount.
+  if (released) {
+    notifyClaimable()
   }
 }
 
@@ -141,8 +154,7 @@ export function registerSavedMobileNativeChatInFlightSends(
     inFlightSends.set(send.id, { scope, send, held: false })
   }
   if (returned.length > 0) {
-    savedInFlightVersion += 1
-    savedInFlightListeners.forEach((listener) => listener())
+    notifyClaimable()
   }
 }
 

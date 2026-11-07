@@ -148,7 +148,9 @@ export function useMobileNativeChatUnconfirmedSends(args: {
           ? () => onSendError(UNCONFIRMED_SEND_MESSAGE)
           : () => {
               returnMobileNativeChatInFlightSend(send.id)
-              onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+              onSendError(
+                send.command ? UNCONFIRMED_SEND_MESSAGE : UNCONFIRMED_SEND_RESTORED_MESSAGE
+              )
             }
       })
     }

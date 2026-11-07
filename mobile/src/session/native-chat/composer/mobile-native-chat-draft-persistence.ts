@@ -41,6 +41,7 @@ export type MobileNativeChatInFlightSend = {
   normalizedText: string
   baselineTailMessageId: string | null
   queuedDuringWork?: boolean
+  command?: boolean
 }
 
 export type MobileNativeChatSavedDraft = {
@@ -126,7 +127,8 @@ function parseInFlight(send: Record<string, unknown>): MobileNativeChatInFlightS
     normalizedText: send.normalizedText,
     baselineTailMessageId:
       typeof send.baselineTailMessageId === 'string' ? send.baselineTailMessageId : null,
-    ...(send.queuedDuringWork === true ? { queuedDuringWork: true } : {})
+    ...(send.queuedDuringWork === true ? { queuedDuringWork: true } : {}),
+    ...(send.command === true ? { command: true } : {})
   }
 }
 
