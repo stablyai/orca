@@ -806,7 +806,6 @@
 7 test-no-wall-clock:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-drain.test.ts
 1 test-no-wall-clock:src/shared/agent-hook-listener/transport/agent-hook-spool-read.test.ts
-2 test-no-wall-clock:src/shared/crash-reporting.test.ts
 2 test-no-wall-clock:src/shared/fish-query-reply-child-stdin.node-pty.test.ts
 1 test-no-wall-clock:src/shared/mobile-push-contract.test.ts
 2 test-no-wall-clock:src/shared/startup-command-staging.node-pty.test.ts
