@@ -97,4 +97,23 @@ describe('fresh target foreground regressions', () => {
     expect(judgeTerminalForeground(blank, 90400, 'claude')).toBe('unknown')
     expect(resolvePtyForegroundMembers(blank, 90401).verdict).toBe('unverifiable')
   })
+
+  it('filters out processes from a different session ID sharing the same pts (docker pts clash)', async () => {
+    // 90500 is root shell (sid 90500, tpgid 90501).
+    // 90501 is claude agent in foreground (sid 90500, tpgid 90501).
+    // 99000 is an independent docker container process on the same pts (sid 99000, tpgid 99000).
+    const psOutput = [
+      '90500 1 90500 90501 90500 Ss -zsh',
+      '90501 90500 90501 90501 90500 S+ claude',
+      '99000 1 99000 99000 99000 S+ python'
+    ].join('\n')
+    mocks.runProcess
+      .mockResolvedValueOnce(result('pts/0'))
+      .mockResolvedValueOnce(result(psOutput))
+      .mockResolvedValueOnce(result('pts/0'))
+    const captured = (await readTerminalProcessRows(90500)) ?? []
+    expect(captured).toHaveLength(2)
+    expect(captured.map((c) => c.pid)).toEqual([90500, 90501])
+    expect(judgeTerminalForeground(captured, 90500, 'claude')).toBe('agent')
+  })
 })

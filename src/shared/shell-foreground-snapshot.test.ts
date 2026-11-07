@@ -184,3 +184,11 @@ it.each([
     PS_ARGS[1].replace('tty=', 'tdev=')
   ])
 })
+
+it('parses rows when sid column is included in output', () => {
+  const stdout = '100 1 100 200 100 Ss -zsh\n201 100 200 200 100 S+ claude\n'
+  expect(parseShellForegroundRows(stdout)).toEqual([
+    { pid: 100, ppid: 1, pgid: 100, tpgid: 200, sid: 100, stat: 'Ss', command: '-zsh' },
+    { pid: 201, ppid: 100, pgid: 200, tpgid: 200, sid: 100, stat: 'S+', command: 'claude' }
+  ])
+})

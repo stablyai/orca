@@ -163,10 +163,16 @@ export async function observePtyForeground(
     if (before !== after) {
       continue
     }
-    if (rows.some((row) => row.tpgid !== before)) {
+    const sessionSid =
+      root?.sid ?? rows.find((row) => row.pgid === before && row.sid !== undefined)?.sid
+    const sessionRows =
+      sessionSid !== undefined
+        ? rows.filter((row) => row.sid === undefined || row.sid === sessionSid)
+        : rows
+    if (sessionRows.some((row) => row.tpgid !== before)) {
       continue
     }
-    const sample = resolvePtyForegroundMembers(rows, before)
+    const sample = resolvePtyForegroundMembers(sessionRows, before)
     return {
       ...sample,
       source: group === undefined ? 'posix-process-table' : 'pty-master',

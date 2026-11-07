@@ -1,3 +1,4 @@
+import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
 import type * as ForegroundModule from './terminal-process-rows'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { observePtyForeground, readPtyForegroundGroup } from './pty-master-foreground-observation'
@@ -8,13 +9,14 @@ vi.mock('./terminal-process-rows', async (importOriginal) => ({
   readTerminalTty: mocks.tty,
   readTerminalPs: mocks.ps
 }))
-const row = (command: string, pid = 201, pgid = 200) => ({
+const row = (command: string, pid = 201, pgid = 200, extra?: Partial<ProcessTableRow>) => ({
   pid,
   ppid: 100,
   pgid,
   tpgid: 200,
   stat: 'S+',
-  command
+  command,
+  ...extra
 })
 const proc = () => ({
   pid: 100,
@@ -65,5 +67,20 @@ describe('physical PTY observations', () => {
     })
     mocks.tty.mockResolvedValue('pts/6')
     expect(await observePtyForeground(owner, () => true)).toMatchObject({ verdict: 'unverifiable' })
+  })
+
+  it('ignores processes with a different session ID sharing the same pts (e.g. docker container)', async () => {
+    const owner = proc()
+    mocks.rows.mockResolvedValue([
+      row('zsh', 100, 100, { sid: 100, tpgid: 200 }),
+      row('claude', 201, 200, { sid: 100, tpgid: 200 }),
+      row('docker-agent', 500, 500, { sid: 500, tpgid: 500 })
+    ])
+    const result = await observePtyForeground(owner, () => true)
+    expect(result).toMatchObject({
+      verdict: 'observed',
+      processName: 'claude',
+      foregroundPgid: 200
+    })
   })
 })

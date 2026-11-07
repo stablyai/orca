@@ -5,6 +5,8 @@ export type ProcessTableRow = {
   pgid?: number
   /** Terminal foreground process group id (`0`/`-1` means no controlling tty). */
   tpgid?: number
+  /** Session id when provided by the ps output format. */
+  sid?: number
   /** Controlling terminal name, when the host process table provides it. */
   tty?: string
   /** Opaque host process start marker (Linux /proc ticks or host ps marker). */
@@ -52,19 +54,59 @@ export function parseShellForegroundRows(
 ): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
+    const trimmed = rawLine.trim()
+    if (!trimmed) {
+      continue
+    }
+    const matchWithSid = trimmed.match(
+      options?.strict
+        ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+))?$/
+        : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/
+    )
+    if (matchWithSid && !/^-?\d+$/.test(matchWithSid[6])) {
+      const pid = Number(matchWithSid[1])
+      const ppid = Number(matchWithSid[2])
+      const pgid = Number(matchWithSid[3])
+      const tpgid = Number(matchWithSid[4])
+      const sid = Number(matchWithSid[5])
+      if (
+        options?.strict &&
+        (!Number.isSafeInteger(pid) ||
+          pid <= 0 ||
+          !Number.isSafeInteger(ppid) ||
+          ppid < 0 ||
+          !Number.isSafeInteger(pgid) ||
+          pgid < 0 ||
+          !Number.isSafeInteger(tpgid) ||
+          tpgid < -1 ||
+          !Number.isSafeInteger(sid) ||
+          sid < -1)
+      ) {
+        throw new ProcessTableCaptureError('malformed_row')
+      }
+      if (Number.isSafeInteger(pid) && pid > 0) {
+        rows.push({
+          pid,
+          ppid,
+          pgid,
+          tpgid,
+          sid,
+          stat: matchWithSid[6],
+          command: matchWithSid[7] ?? ''
+        })
+        continue
+      }
+    }
     // Strict keeps a blank-argv row: one process outside the foreground cannot void the capture, and readers
     // treat a blank foreground member as unreadable.
-    const match = rawLine
-      .trim()
-      .match(
-        options?.strict
-          ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+))?$/
-          : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/
-      )
+    const match = trimmed.match(
+      options?.strict
+        ? /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+))?$/
+        : /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/
+    )
     const pid = match ? Number(match[1]) : 0
     if (
       options?.strict &&
-      rawLine.trim() &&
       (!match ||
         !Number.isSafeInteger(pid) ||
         pid <= 0 ||

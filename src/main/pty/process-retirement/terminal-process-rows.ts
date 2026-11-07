@@ -92,7 +92,7 @@ export async function readPtyTerminalRows(
     return null
   }
   const stdout = await readTerminalPs(
-    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,stat=,command=', '-t', normalized],
+    ['-ww', '-o', 'pid=,ppid=,pgid=,tpgid=,sid=,stat=,command=', '-t', normalized],
     timeoutMs
   )
   try {
@@ -107,8 +107,14 @@ export async function readTerminalProcessRows(rootPid: number): Promise<ProcessT
   const deadline = Date.now() + PS_TIMEOUT_MS
   const tty = await readTerminalTty(rootPid, deadline - Date.now())
   const rows = tty ? await readPtyTerminalRows(tty, deadline - Date.now()) : null
-  if (!rows?.some((row) => row.pid === rootPid) || Date.now() >= deadline) {
+  const root = rows?.find((row) => row.pid === rootPid)
+  if (!root || Date.now() >= deadline) {
     return null
   }
-  return (await readTerminalTty(rootPid, deadline - Date.now())) === tty ? rows : null
+  if ((await readTerminalTty(rootPid, deadline - Date.now())) !== tty) {
+    return null
+  }
+  return root.sid !== undefined
+    ? rows!.filter((row) => row.sid === undefined || row.sid === root.sid)
+    : rows
 }

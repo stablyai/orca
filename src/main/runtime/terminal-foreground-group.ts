@@ -16,11 +16,18 @@ export function judgeTerminalForeground(
   agent: TuiAgent
 ): 'agent' | 'shell' | 'unknown' {
   const root = rows.find((row) => row.pid === rootPid)
-  const foregroundGroup = root?.tpgid
+  if (!root) {
+    return 'unknown'
+  }
+  const foregroundGroup = root.tpgid
   if (foregroundGroup === undefined || foregroundGroup <= 0) {
     return 'unknown'
   }
-  const front = rows.filter((row) => row.pgid === foregroundGroup)
+  const sessionRows =
+    root.sid !== undefined
+      ? rows.filter((row) => row.sid === undefined || row.sid === root.sid)
+      : rows
+  const front = sessionRows.filter((row) => row.pgid === foregroundGroup)
   // An unrecovered root shell (`su`) prints `(bash)`; typing into it could run the text. Our own exiting `(git)` is no risk.
   const unreadableShell = (row: ProcessTableRow): boolean => {
     const name = unreadableArgvName(row.command)
