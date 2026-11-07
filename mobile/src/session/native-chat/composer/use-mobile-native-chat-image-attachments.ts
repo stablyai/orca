@@ -186,6 +186,7 @@ export function useMobileNativeChatImageAttachments({
         const sendIntent = destination
           ? {
               ...intent,
+              carried: { images: pendingImages, files: sentFiles },
               onHandBack: () =>
                 returnMobileNativeChatDraftAttachments(destination, pendingImages, sentFiles)
             }

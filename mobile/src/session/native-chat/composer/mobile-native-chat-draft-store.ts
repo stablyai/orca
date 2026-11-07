@@ -7,6 +7,7 @@ import {
   returnMobileNativeChatDraftAttachments,
   closeMobileNativeChatEditInputs,
   mobileNativeChatDraftDestination,
+  mobileNativeChatDraftInputScopes,
   pruneMobileNativeChatTabInputs,
   pruneMobileNativeChatDraftSkills,
   readMobileNativeChatDraftInputs,
@@ -30,12 +31,14 @@ import {
   resetMobileNativeChatDraftPersistenceForTests,
   retainSavedMobileNativeChatDrafts,
   saveMobileNativeChatDraft,
-  setMobileNativeChatDraftSource,
+  setMobileNativeChatDraftSource
+} from './mobile-native-chat-draft-persistence'
+import {
   isSavedDraftKept,
   type MobileNativeChatSavedDraft,
   type MobileNativeChatSavedFile,
   type MobileNativeChatSavedImage
-} from './mobile-native-chat-draft-persistence'
+} from './mobile-native-chat-saved-drafts'
 
 // Text and its edit revision outlive the screen while its tab remains open.
 // Picks behave like desktop chips: user edits drop skills the text stops naming and an origin that stops leading.
@@ -243,7 +246,12 @@ setMobileNativeChatDraftSource({
   saved: () => {
     const saved = new Map<string, MobileNativeChatSavedDraft>()
     const inFlightByScope = readMobileNativeChatInFlightSendsByScope()
-    for (const scope of new Set([...drafts.keys(), ...inFlightByScope.keys()])) {
+    const scopes = [
+      ...drafts.keys(),
+      ...mobileNativeChatDraftInputScopes(),
+      ...inFlightByScope.keys()
+    ]
+    for (const scope of new Set(scopes)) {
       const inFlight = inFlightByScope.get(scope) ?? []
       // Chips riding a send are saved with it, not twice.
       const sending = new Set(

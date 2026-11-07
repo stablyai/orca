@@ -49,6 +49,8 @@ export function useMobileNativeChatUnconfirmedSends(args: {
   messages: readonly NativeChatMessage[]
   // The deadline runs only while connected: the transcript cannot confirm anything while the host is out.
   connected: boolean
+  // Saved sends are checked only against this chat's own settled transcript.
+  transcriptReady: boolean
   onSendError: (message: string) => void
 }): {
   holdUnconfirmedSend: (
@@ -58,7 +60,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
     inFlightId?: string | null
   ) => void
 } {
-  const { draftKey, pendingKey, messages, connected, onSendError } = args
+  const { draftKey, pendingKey, messages, connected, transcriptReady, onSendError } = args
   const messagesRef = useRef(messages)
   const activeDraftKeyRef = useRef(draftKey)
   const activePendingKeyRef = useRef(pendingKey)
@@ -82,7 +84,16 @@ export function useMobileNativeChatUnconfirmedSends(args: {
       const isActiveTranscript =
         activeDraftKeyRef.current === entry.draftKey &&
         (entry.pendingKey === null || activePendingKeyRef.current === entry.pendingKey)
-      if (isActiveTranscript && landedHolds(messagesRef.current, [entry]).size > 0) {
+      // Matched after the sends already held, so one echo confirms at most one send.
+      if (
+        isActiveTranscript &&
+        landedHolds(messagesRef.current, [
+          ...unconfirmedRef.current.filter(
+            (held) => held.draftKey === entry.draftKey && held.pendingKey === entry.pendingKey
+          ),
+          entry
+        ]).has(entry)
+      ) {
         settleMobileNativeChatInFlightSend(entry.inFlightId)
         return
       }
@@ -124,7 +135,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
 
   // Sends saved before the page last closed wait here like live ones once their chat opens.
   useEffect(() => {
-    if (!draftKey) {
+    if (!draftKey || !transcriptReady) {
       return
     }
     for (const send of claimMobileNativeChatInFlightSends(
@@ -150,7 +161,7 @@ export function useMobileNativeChatUnconfirmedSends(args: {
             }
       })
     }
-  }, [draftKey, hold, onSendError, savedInFlightVersion])
+  }, [draftKey, hold, onSendError, savedInFlightVersion, transcriptReady])
 
   useEffect(() => {
     if (!draftKey || unconfirmedRef.current.length === 0) {

@@ -1,11 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   PAGE_STORAGE_MAX_VALUE_CHARS,
   workspaceScopedKey
 } from '../../../mobile-web-shell/page-storage-keys'
 import { readPageDeviceStore } from '../../../mobile-web-shell/bridge/page-device-store'
+import {
+  DEVICE_STORE_MAX_VALUE_LENGTH,
+  encodeDeviceStoreValue
+} from '../../../device-store/device-store-value-codec'
 import { persistMirroredReadBack } from '../../../storage/mirrored-storage-keys'
+import {
+  fitSavedDrafts,
+  parseSavedDrafts,
+  savedDraftsValue,
+  type MobileNativeChatSavedDraft
+} from './mobile-native-chat-saved-drafts'
 import {
   deviceStoreDraftBackend,
   durableDraftRow,
@@ -18,40 +27,6 @@ import {
 // Why this slot: every shell since 0.0.59 lets session pages keep it, and #37900 retired the terminal drafts it held.
 // It is the store for shells without the device store, and older documents may still write it.
 const LEGACY_PREFIX = 'orca:terminalDrafts:'
-
-// Host paths only: a phone preview (data: or blob:) never outlives the page.
-export type MobileNativeChatSavedImage = { path: string }
-export type MobileNativeChatSavedFile = {
-  name: string
-  mime: string
-  byteLength: number
-  path: string
-}
-
-// A send whose clear was saved before its outcome was known; reopening keeps it or hands it back.
-export type MobileNativeChatInFlightSend = {
-  id: string
-  kind: 'terminal' | 'structured'
-  text: string
-  skills: readonly AgentJournalSkillRef[]
-  images: readonly MobileNativeChatSavedImage[]
-  files: readonly MobileNativeChatSavedFile[]
-  sessionId: string | null
-  clientMessageId?: string
-  normalizedText: string
-  baselineTailMessageId: string | null
-  queuedDuringWork?: boolean
-  command?: boolean
-}
-
-export type MobileNativeChatSavedDraft = {
-  text: string
-  skills: readonly AgentJournalSkillRef[]
-  skillOrigin?: string
-  images: readonly MobileNativeChatSavedImage[]
-  files: readonly MobileNativeChatSavedFile[]
-  inFlight: readonly MobileNativeChatInFlightSend[]
-}
 
 export type MobileNativeChatDraftSource = {
   // Every scope's saveable draft; only tab scopes are kept.
@@ -77,117 +52,8 @@ export function setMobileNativeChatDraftSource(next: MobileNativeChatDraftSource
   source = next
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function parseList<T>(value: unknown, parse: (item: Record<string, unknown>) => T | null): T[] {
-  return Array.isArray(value)
-    ? value.flatMap((item) => {
-        const parsed = isRecord(item) ? parse(item) : null
-        return parsed === null ? [] : [parsed]
-      })
-    : []
-}
-
-const parseSkill = (skill: Record<string, unknown>): AgentJournalSkillRef | null =>
-  typeof skill.name === 'string' && typeof skill.path === 'string'
-    ? { name: skill.name, path: skill.path }
-    : null
-
-const parseImage = (image: Record<string, unknown>): MobileNativeChatSavedImage | null =>
-  typeof image.path === 'string' && image.path !== '' ? { path: image.path } : null
-
-const parseFile = (file: Record<string, unknown>): MobileNativeChatSavedFile | null =>
-  typeof file.path === 'string' &&
-  typeof file.name === 'string' &&
-  typeof file.mime === 'string' &&
-  typeof file.byteLength === 'number'
-    ? { name: file.name, mime: file.mime, byteLength: file.byteLength, path: file.path }
-    : null
-
-function parseInFlight(send: Record<string, unknown>): MobileNativeChatInFlightSend | null {
-  if (
-    typeof send.id !== 'string' ||
-    (send.kind !== 'terminal' && send.kind !== 'structured') ||
-    typeof send.text !== 'string' ||
-    typeof send.normalizedText !== 'string'
-  ) {
-    return null
-  }
-  return {
-    id: send.id,
-    kind: send.kind,
-    text: send.text,
-    skills: parseList(send.skills, parseSkill),
-    images: parseList(send.images, parseImage),
-    files: parseList(send.files, parseFile),
-    sessionId: typeof send.sessionId === 'string' ? send.sessionId : null,
-    ...(typeof send.clientMessageId === 'string' ? { clientMessageId: send.clientMessageId } : {}),
-    normalizedText: send.normalizedText,
-    baselineTailMessageId:
-      typeof send.baselineTailMessageId === 'string' ? send.baselineTailMessageId : null,
-    ...(send.queuedDuringWork === true ? { queuedDuringWork: true } : {}),
-    ...(send.command === true ? { command: true } : {})
-  }
-}
-
-// Anything else, including an older build's terminal drafts, reads as no drafts.
-function parseSavedDrafts(value: unknown): Map<string, MobileNativeChatSavedDraft> {
-  const saved = new Map<string, MobileNativeChatSavedDraft>()
-  if (!isRecord(value) || !isRecord(value.chatDrafts)) {
-    return saved
-  }
-  for (const [tabId, draft] of Object.entries(value.chatDrafts)) {
-    if (!isRecord(draft) || typeof draft.text !== 'string') {
-      continue
-    }
-    const parsed: MobileNativeChatSavedDraft = {
-      text: draft.text,
-      skills: parseList(draft.skills, parseSkill),
-      skillOrigin: typeof draft.skillOrigin === 'string' ? draft.skillOrigin : undefined,
-      images: parseList(draft.images, parseImage),
-      files: parseList(draft.files, parseFile),
-      inFlight: parseList(draft.inFlight, parseInFlight)
-    }
-    if (isSavedDraftKept(parsed)) {
-      saved.set(tabId, parsed)
-    }
-  }
-  return saved
-}
-
-export function isSavedDraftKept(draft: MobileNativeChatSavedDraft): boolean {
-  return (
-    draft.text !== '' ||
-    draft.images.length > 0 ||
-    draft.files.length > 0 ||
-    draft.inFlight.length > 0
-  )
-}
-
-function savedDraftsValue(drafts: ReadonlyMap<string, MobileNativeChatSavedDraft>): unknown {
-  return drafts.size === 0 ? null : { chatDrafts: Object.fromEntries(drafts) }
-}
-
-// Drafts that would push the slot past the shell's cap stay in memory, so a refused write never leaves sent text stored.
-function fitLegacySlot(drafts: ReadonlyMap<string, MobileNativeChatSavedDraft>): string | null {
-  if (drafts.size === 0) {
-    return null
-  }
-  const whole = JSON.stringify(savedDraftsValue(drafts))
-  if (whole.length <= PAGE_STORAGE_MAX_VALUE_CHARS) {
-    return whole
-  }
-  const kept: Record<string, MobileNativeChatSavedDraft> = {}
-  for (const [tabId, draft] of drafts) {
-    kept[tabId] = draft
-    if (JSON.stringify({ chatDrafts: kept }).length > PAGE_STORAGE_MAX_VALUE_CHARS) {
-      delete kept[tabId]
-    }
-  }
-  return Object.keys(kept).length === 0 ? null : JSON.stringify({ chatDrafts: kept })
-}
+const encodeLegacySlot = (value: unknown): string | null =>
+  value === null ? null : JSON.stringify(value)
 
 async function readLegacySlot(key: string): Promise<Map<string, MobileNativeChatSavedDraft>> {
   const raw = await AsyncStorage.getItem(key)
@@ -208,7 +74,11 @@ function legacyBackend(key: string): DurableDraftRowBackend {
       }
     },
     write: async (value) => {
-      const fitted = fitLegacySlot(parseSavedDrafts(value))
+      const fitted = fitSavedDrafts(
+        value,
+        encodeLegacySlot,
+        (encoded) => (encoded?.length ?? 0) <= PAGE_STORAGE_MAX_VALUE_CHARS
+      )
       // Page stores can resolve a dropped write; reading back what stuck makes the next save retry it.
       return (await persistMirroredReadBack(key, fitted)) === fitted
     }
@@ -238,7 +108,14 @@ function deviceStoreBackend(workspace: Workspace, legacyKey: string): DurableDra
       }
       return { ok: true, value }
     },
-    write: row.write
+    write: (value) =>
+      row.write(
+        fitSavedDrafts(
+          value,
+          (fitted) => fitted,
+          (fitted) => encodeDeviceStoreValue(fitted).length <= DEVICE_STORE_MAX_VALUE_LENGTH
+        )
+      )
   }
 }
 

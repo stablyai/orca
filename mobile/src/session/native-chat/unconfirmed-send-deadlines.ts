@@ -1,7 +1,7 @@
 // How long a send whose acknowledgement was lost waits for the transcript or journal to confirm it.
 export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
-/** Deadlines that run only while connected: nothing can confirm a send while the host is out. */
+/** Deadlines that count only connected time: nothing can confirm a send while the host is out. */
 export type UnconfirmedSendDeadlines<Key> = {
   hold: (key: Key, fire: () => void) => void
   cancel: (key: Key) => void
@@ -10,46 +10,69 @@ export type UnconfirmedSendDeadlines<Key> = {
   clear: () => void
 }
 
+type Deadline = {
+  timer: ReturnType<typeof setTimeout> | null
+  fire: () => void
+  remainingMs: number
+  startedAt: number
+}
+
 export function createUnconfirmedSendDeadlines<Key>(): UnconfirmedSendDeadlines<Key> {
-  const held = new Map<Key, { timer: ReturnType<typeof setTimeout> | null; fire: () => void }>()
+  const held = new Map<Key, Deadline>()
   let connected = true
-  const start = (key: Key): void => {
-    const entry = held.get(key)
-    if (entry && entry.timer === null) {
-      entry.timer = setTimeout(() => {
-        held.delete(key)
-        entry.fire()
-      }, UNCONFIRMED_SEND_DEADLINE_MS)
+  const start = (key: Key, entry: Deadline): void => {
+    entry.startedAt = Date.now()
+    entry.timer = setTimeout(() => {
+      held.delete(key)
+      entry.fire()
+    }, entry.remainingMs)
+  }
+  const pause = (entry: Deadline): void => {
+    if (entry.timer !== null) {
+      clearTimeout(entry.timer)
+      entry.timer = null
+      entry.remainingMs = Math.max(0, entry.remainingMs - (Date.now() - entry.startedAt))
     }
   }
   return {
     // Holding a key again replaces its deadline, so a later owner's hand-back wins.
     hold: (key, fire) => {
-      clearTimeout(held.get(key)?.timer ?? undefined)
-      held.set(key, { timer: null, fire })
+      const previous = held.get(key)
+      if (previous) {
+        pause(previous)
+      }
+      const entry: Deadline = {
+        timer: null,
+        fire,
+        remainingMs: UNCONFIRMED_SEND_DEADLINE_MS,
+        startedAt: 0
+      }
+      held.set(key, entry)
       if (connected) {
-        start(key)
+        start(key, entry)
       }
     },
     cancel: (key) => {
-      clearTimeout(held.get(key)?.timer ?? undefined)
-      held.delete(key)
+      const entry = held.get(key)
+      if (entry) {
+        pause(entry)
+        held.delete(key)
+      }
     },
     keys: () => [...held.keys()],
     setConnected: (next) => {
       connected = next
       for (const [key, entry] of held) {
-        if (next) {
-          start(key)
-        } else {
-          clearTimeout(entry.timer ?? undefined)
-          entry.timer = null
+        if (!next) {
+          pause(entry)
+        } else if (entry.timer === null) {
+          start(key, entry)
         }
       }
     },
     clear: () => {
       for (const entry of held.values()) {
-        clearTimeout(entry.timer ?? undefined)
+        pause(entry)
       }
       held.clear()
     }

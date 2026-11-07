@@ -225,6 +225,7 @@ export function useMobileNativeChatDrafts(args: {
     pendingKey,
     messages,
     connected,
+    transcriptReady: chatActive && transcriptSettled,
     onSendError
   })
 
