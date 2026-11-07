@@ -7,7 +7,7 @@ import { isPresenceConfirmed } from './agent-auto-ack-presence'
 import {
   selectFloatingWorkspacePanelVisible,
   type FloatingWorkspacePanelVisibilityState
-} from '@/store/floating-workspace-panel-selector'
+} from '@/store/workspaces/floating/floating-workspace-panel-selector'
 
 export type AutoAckTabTarget = {
   tabId: string

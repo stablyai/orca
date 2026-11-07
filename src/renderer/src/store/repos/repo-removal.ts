@@ -1,4 +1,4 @@
-import { runEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
+import { runEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'

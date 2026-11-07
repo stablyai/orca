@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { confirmUnsavedDiscard } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeOpenFile } from '../slices/editor/types/open-file.test-fixture'
 import { makeTab } from '../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'

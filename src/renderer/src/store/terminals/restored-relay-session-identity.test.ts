@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import './terminal-orphan-cleanup'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 

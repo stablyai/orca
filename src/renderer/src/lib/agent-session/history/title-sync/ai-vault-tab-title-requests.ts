@@ -14,8 +14,9 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import type { AppState } from '@/store/types'
 import type { AgentPaneConversationIdentity } from '@/store/slices/agent-status/agent-pane-conversation'
 import { collectLeafIdsInOrder } from '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type AgentPaneConversation<Agent extends AgentType> = {
   agent: Agent

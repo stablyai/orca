@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'

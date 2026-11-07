@@ -31,10 +31,10 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import type { PullRequestGenerationRecord } from '../../hosted-review/generation/pull-request-generation-state'
-import type { CommitMessageGenerationRecord } from '../../commit-message-generation'
+import type { CommitMessageGenerationRecord } from '../../hosted-review/generation/commit-message-generation'
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt1'

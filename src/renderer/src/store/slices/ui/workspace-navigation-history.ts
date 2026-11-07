@@ -10,7 +10,10 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../workspaces/catalog/workspace-record-fields'
 
 // Why: bound per-session history growth; 50 keeps goBack/goForward's linear scans cheap yet is never hit in normal use.
 const MAX_HISTORY = 50

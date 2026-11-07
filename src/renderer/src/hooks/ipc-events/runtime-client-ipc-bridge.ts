@@ -23,7 +23,10 @@ import type { RuntimeClientEvent } from '../../../../shared/runtime-client-event
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import { useAppStore } from '../../store'
 import { invalidateRemoteWorktreeLineage } from '../../store/slices/worktrees/metadata/worktree-lineage-readiness'
-import { adoptFromEndpoint, type OwnedWorktreeEvent } from '../../store/adopt-from-endpoint'
+import {
+  adoptFromEndpoint,
+  type OwnedWorktreeEvent
+} from '../../store/host-catalog/endpoint-catalog-adoption'
 import { createRuntimeClientEventsSync } from '../runtime-client-events-sync'
 import {
   createRuntimeProjectRefreshScheduler,

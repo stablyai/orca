@@ -1,7 +1,7 @@
 import { vi, type Mock } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 

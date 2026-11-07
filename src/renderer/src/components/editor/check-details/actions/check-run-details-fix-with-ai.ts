@@ -26,7 +26,7 @@ import type {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export async function startCheckRunDetailsFixWithAI(args: {
   worktreeId: string

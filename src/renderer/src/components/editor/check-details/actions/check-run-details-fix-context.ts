@@ -14,7 +14,7 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveCheckRunDetailsFixCheck(
   check: PRCheckDetail,

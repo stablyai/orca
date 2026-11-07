@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
 import { acknowledgeViewedAutoAckTarget } from './agent-auto-ack-surfaces'
-import { createTestStore } from '../store/app-store-test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'

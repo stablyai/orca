@@ -27,7 +27,7 @@ import { getIpynbCellKey } from './ipynb-source-drafts'
 import { useIpynbCellExecution } from '../kernel/useIpynbCellExecution'
 import { resolveNotebookExecutionHost } from '../kernel/ipynb-execution-host'
 import { useIpynbScrollRestoration } from './useIpynbScrollRestoration'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type IpynbViewerProps = {
   content: string

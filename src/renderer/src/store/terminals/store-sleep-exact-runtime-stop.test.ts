@@ -3,12 +3,12 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeRuntimeOwnedWorktree } from '../slices/worktrees/worktree-owner.test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import { applySleepRuntimeRpcDefault } from './terminal-sleep-rpc.test-fixture'
-import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())

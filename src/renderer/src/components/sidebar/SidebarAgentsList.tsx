@@ -17,7 +17,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Select threads by revealing their existing panes; threads whose panes are gone remain listed but inert. */
 export type SidebarAgentsListProps = {

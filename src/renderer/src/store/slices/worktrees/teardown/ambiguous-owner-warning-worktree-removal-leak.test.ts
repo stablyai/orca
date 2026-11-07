@@ -35,7 +35,7 @@ import {
   ambiguousOwnerWarnedWorktreeIds,
   warnAmbiguousOwnerOnce
 } from '@/lib/ambiguous-owner-warning'
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 
 const WT1 = 'repo1::/path/wt1'

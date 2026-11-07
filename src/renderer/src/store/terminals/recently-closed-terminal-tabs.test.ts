@@ -31,7 +31,7 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 import { remapClosedTerminalTabSnapshotCwds } from './recently-closed-terminal-tabs'

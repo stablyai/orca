@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const NOW = Date.UTC(2026, 9, 25, 12)

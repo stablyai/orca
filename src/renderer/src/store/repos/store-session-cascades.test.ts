@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { makeTab, makeLayout } from '../terminals/terminal-tab.test-fixture'
-import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 

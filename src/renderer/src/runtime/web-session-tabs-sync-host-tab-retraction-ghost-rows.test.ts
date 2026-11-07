@@ -8,7 +8,7 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { AppState } from '../store/types'
-import { createTestStore, seedStore } from '../store/app-store-test-fixture'
+import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import {
   markRendererOwnedAgentStatusWrite,

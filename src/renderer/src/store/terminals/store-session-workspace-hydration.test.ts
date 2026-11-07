@@ -3,9 +3,9 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeTab, makeLayout } from './terminal-tab.test-fixture'
-import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
 import { makeBrowserTab } from '../slices/browser/browser-tab.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

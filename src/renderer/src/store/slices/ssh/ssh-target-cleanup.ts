@@ -5,7 +5,7 @@ import { unbindTerminalTabPtys } from '../tabs/worktree-layout-lifecycle'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../workspace-record-selectors'
+} from '../../workspaces/catalog/workspace-record-fields'
 
 function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<string> {
   const targetWorktreeIds = resolveDirectSshTargetWorktreeIds({

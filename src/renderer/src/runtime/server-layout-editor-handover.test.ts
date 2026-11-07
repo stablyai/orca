@@ -16,7 +16,7 @@ import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signatur
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
-import { createStoreSessionMockApi } from '../store/app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import {
   CAPABLE,

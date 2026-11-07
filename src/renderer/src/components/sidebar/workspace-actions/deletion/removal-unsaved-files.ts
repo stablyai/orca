@@ -1,7 +1,7 @@
 // @protected-copy
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

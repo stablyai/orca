@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { createSessionWriteSubscriber } from './workspace/persistence/session-write-subscriber'
 import { SESSION_RELEVANT_FIELDS } from './workspace/persistence/workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace/persistence/workspace-session-patch'

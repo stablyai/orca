@@ -5,9 +5,9 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 import { drawTabsFromMain, type TabsDrawnFromMain } from './tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted((): { store: unknown } => ({ store: null }))

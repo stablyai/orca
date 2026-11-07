@@ -12,12 +12,15 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'
-import { arrayElementsUnchanged } from '../catalog-identity'
+import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
   awaitLatestLocalRepoCatalogFetch,
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
-import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent
+} from '../host-catalog/host-catalog-fence'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,

@@ -3,9 +3,9 @@ import type { CreateWorktreeResult } from '../../../../../shared/worktree/create
 import { applyCreatedWorktree } from './create/created-worktree-state-merge'
 import { applyWorktreeLineageUpdate } from './metadata/worktree-lineage-refresh'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
-import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from './worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

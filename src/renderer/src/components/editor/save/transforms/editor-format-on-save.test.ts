@@ -12,7 +12,7 @@ import {
 } from '../../autosave/editor-autosave-controller-test-fixture'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { registerPendingEditorFlush } from '../flush/editor-pending-flush'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 
 import { bumpEditorDiscardEpoch, EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'

@@ -15,7 +15,7 @@ import {
   captureHostIdentityFence,
   isHostIdentityFenceCurrent,
   type HostIdentityFence
-} from '@/store/host-catalog-fencing'
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 import type { HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'

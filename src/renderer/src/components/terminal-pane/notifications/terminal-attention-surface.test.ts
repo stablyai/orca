@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
-import { createTestStore } from '@/store/app-store-test-fixture'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

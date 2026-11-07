@@ -6,7 +6,7 @@ import type { Tab } from '../../../../../../shared/tab-types'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 
 import { createTabsSliceMockApi } from '../../tabs/tabs-slice-test-harness'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import {
   drawTabsFromMain,

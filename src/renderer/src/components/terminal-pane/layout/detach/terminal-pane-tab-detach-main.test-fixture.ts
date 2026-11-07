@@ -6,7 +6,7 @@ import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { createTestStore, seedStore } from '../../../../store/app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'

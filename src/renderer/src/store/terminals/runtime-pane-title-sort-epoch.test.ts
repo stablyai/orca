@@ -19,7 +19,7 @@ vi.mock('@/components/terminal-pane/snapshots/shutdown-buffer-captures', () => (
 // @ts-expect-error -- minimal preload API stub for the slice's IPC writes
 globalThis.window = { api: {} }
 
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 

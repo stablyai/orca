@@ -5,7 +5,7 @@ import {
   resetAgentPaneAuthorityAliasesForTests,
   resolveAgentPaneAuthorityKey
 } from '../slices/agent-status/agent-pane-authority'
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'

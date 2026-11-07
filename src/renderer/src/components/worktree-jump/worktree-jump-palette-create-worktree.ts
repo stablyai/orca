@@ -14,7 +14,7 @@ import type { WorktreeJumpPaletteCreateWorktreeInput } from './worktree-jump-pal
 import { lookupGitHubWorkItemForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
-import { getRepoMapFromState } from '@/store/selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
@@ -214,7 +214,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       }
       const repo =
         (state.activeRepoId ? (repoMap.get(state.activeRepoId) ?? null) : null) ||
-        [...getRepoMapFromState(state).values()].find((candidate) => isGitRepoKind(candidate))
+        [...getIndexedRepoMap(state.repos).values()].find((candidate) => isGitRepoKind(candidate))
       if (!repo || !isGitRepoKind(repo)) {
         openComposer({ prefilledName: trimmed })
         return

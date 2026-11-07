@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'

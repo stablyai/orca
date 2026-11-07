@@ -4,10 +4,10 @@ import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

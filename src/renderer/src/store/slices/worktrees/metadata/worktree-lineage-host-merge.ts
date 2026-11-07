@@ -11,11 +11,11 @@ import {
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
-import { reuseEqualRecordMap } from '../../../catalog-record-reconciliation'
+import { reuseEqualRecordMap } from '../../../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function getWorktreeHostId(
   state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,

@@ -117,6 +117,6 @@
 5 src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts
 2 src/renderer/src/store/terminals/workspace-terminal-hydration.ts
 2 src/renderer/src/store/terminals/workspace-terminal-reconnect.ts
-7 src/renderer/src/store/workspace-layout-frame-held-tabs.ts
-4 src/renderer/src/store/workspace-layout-frame-slices.ts
-12 src/renderer/src/store/workspace-layout-frame-store-patch.ts
+7 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-held-tabs.ts
+4 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-slices.ts
+12 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-store-patch.ts

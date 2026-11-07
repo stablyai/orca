@@ -8,7 +8,7 @@ import {
   seedLegacyAgentStatusForTests
 } from '../../../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { createTestStore } from '../store/app-store-test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
 import { buildRunningAgentChildRowModels } from '../../../shared/running-agent-child-rows'
 import { worktreeAgentChildRows } from '../../../../mobile/src/worktree/worktree-agent-child-rows'

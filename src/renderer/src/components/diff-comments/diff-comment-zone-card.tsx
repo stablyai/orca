@@ -1,5 +1,5 @@
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
 import { formatDiffComments } from '../../../../shared/diff-comments-format'

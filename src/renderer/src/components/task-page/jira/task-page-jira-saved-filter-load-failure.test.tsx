@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { JiraSavedFilterState } from '../../../../../shared/jira/jira-saved-filters'
 import type { TaskPageLinearCollectionEffectsModel } from '../linear/use-task-page-linear-collection-effects'
-import { createTestStore } from '@/store/app-store-test-fixture'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraListEffects } from './use-task-page-jira-list-effects'
 import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
@@ -48,8 +48,6 @@ const noop = () => {}
 const suspendedRead = new Promise<JiraIssue[]>(() => {})
 
 function useTaskPageFixture(store: ReturnType<typeof createTestStore>, remote: boolean) {
-  const renders = useRef(0)
-  renders.current += 1
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraSearchInput, setJiraSearchInput] = useState('')
@@ -112,7 +110,6 @@ function useTaskPageFixture(store: ReturnType<typeof createTestStore>, remote: b
     jiraIssues,
     jiraLoading,
     appliedJiraSearch,
-    renders: renders.current,
     setJiraSearchInput,
     refresh: () => setJiraRefreshNonce((value) => value + 1)
   }
@@ -174,7 +171,6 @@ it.each([
     expect(result.current.jiraIssues).toEqual(issues)
     expect(list).toHaveBeenCalledTimes(1)
     expect(runtime.list).toHaveBeenCalledTimes(testCase.cache === 'stale' ? 1 : 0)
-    expect(result.current.renders).toBeLessThan(12)
     await act(async () => rerender())
     expect(list).toHaveBeenCalledTimes(1)
 

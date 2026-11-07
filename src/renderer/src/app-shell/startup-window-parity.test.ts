@@ -8,8 +8,8 @@ import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layo
 import { loadWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-load'
 import { WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-save'
-import { createStoreSessionMockApi } from '../store/app-store-session-api.test-fixture'
-import { createTestStore } from '../store/app-store-test-fixture'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { GIT, sweptAtStartup } from './startup-window-parity-differences.test-fixture'
 import {
   bootWindowFromPartitions,

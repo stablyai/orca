@@ -32,7 +32,7 @@ vi.mock('@/store/index', async () => {
     )
   }
 })
-vi.mock('@/store/host-catalog-fencing', () => ({
+vi.mock('@/runtime/rpc/environment-revisions/host-identity-fence', () => ({
   captureHostIdentityFence: () => ({}),
   isHostIdentityFenceCurrent: () => true
 }))

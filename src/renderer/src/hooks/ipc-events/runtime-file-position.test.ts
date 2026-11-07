@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { createTestStore, seedStore } from '../../store/app-store-test-fixture'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
-import { createStoreSessionMockApi } from '../../store/app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

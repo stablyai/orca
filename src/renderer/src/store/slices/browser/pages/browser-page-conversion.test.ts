@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../../types'
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import {
   DEFAULT_AGENT_HIBERNATION_IDLE_MS,

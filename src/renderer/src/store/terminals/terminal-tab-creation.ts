@@ -15,7 +15,7 @@ import { pushRecentTabId, sanitizeRecentTabIds } from '../slices/tabs/tab-select
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { emptySplitGroup, insertSplitGroup } from '../slices/tabs/tabs-group-actions'
-import { ownsGlobalSelection } from '../global-selection-owner'
+import { ownsGlobalSelection } from '../workspaces/selection/global-selection-owner'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {

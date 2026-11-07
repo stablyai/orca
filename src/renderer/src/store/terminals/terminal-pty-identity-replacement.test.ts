@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 
 {

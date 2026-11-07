@@ -1,4 +1,4 @@
-import { createTestStore, seedStore } from '@/store/app-store-test-fixture'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { BrowserLinkDestination } from './browser-link-destination'

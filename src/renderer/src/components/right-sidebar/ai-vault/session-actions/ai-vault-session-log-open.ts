@@ -8,7 +8,10 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultSessionLogFilePath } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { canUseLocalAiVaultSessionPathActions } from './ai-vault-session-path-actions'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type AiVaultLogSession = Pick<AiVaultSession, 'agent' | 'filePath' | 'executionHostId'>
 

@@ -1,4 +1,4 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'

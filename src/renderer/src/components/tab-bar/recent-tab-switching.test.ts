@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTestStore } from '@/store/app-store-test-fixture'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import type { AppState } from '../../store/types'
 import type { Tab } from '../../../../shared/tab-types'
 import { buildRecentTabSwitcherModel } from './recent-tab-switching'

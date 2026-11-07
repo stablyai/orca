@@ -34,7 +34,7 @@ import {
   PluginPageMissing
 } from './PluginListEmptyStates'
 import { sortByAttention } from '../presentation/plugin-status-presentation'
-import { usePluginAutoUpdatesStore } from '@/store/plugin-auto-updates'
+import { usePluginAutoUpdatesStore } from '@/store/plugins/updates/plugin-auto-updates'
 import { PluginUpdateAllDialog } from '../dialogs/PluginUpdateAllDialog'
 import {
   matchesPluginFilter,

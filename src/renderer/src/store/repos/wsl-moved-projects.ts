@@ -19,7 +19,10 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../../shared/worktree/id'
 import { findFirstIndexedWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner-index'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 type MovedCatalog = Pick<AppState, 'wslMovedProjects' | 'worktreesByRepo' | 'folderWorkspaces'>
 

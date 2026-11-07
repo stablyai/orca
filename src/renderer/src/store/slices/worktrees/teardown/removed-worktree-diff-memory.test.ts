@@ -9,7 +9,7 @@ import {
   rememberCombinedDiffView,
   type CombinedDiffViewLease
 } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { buildWorktreePurgeState } from './worktree-purge-state'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'

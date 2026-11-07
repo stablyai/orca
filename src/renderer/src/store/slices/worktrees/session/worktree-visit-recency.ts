@@ -1,4 +1,4 @@
-import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { AppState } from '../../../types'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -13,7 +13,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createMarkWorktreeVisited(
   set: WorktreeSliceSet,

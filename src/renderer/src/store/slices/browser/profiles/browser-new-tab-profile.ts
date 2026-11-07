@@ -3,7 +3,10 @@ import type { AppState } from '../../../types'
 import type { NewBrowserTabProfile } from '../browser-slice-contract'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import { getDefaultBrowserProfileForHost } from '../hosts/browser-host-state'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import {

@@ -19,7 +19,7 @@ import {
 } from '@/lib/folder-workspace-runtime-owner'
 import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,

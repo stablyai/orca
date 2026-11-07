@@ -1,4 +1,4 @@
-import { selectDiffCommentView, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'

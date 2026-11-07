@@ -3,7 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import { useAppStore } from '@/store/index'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
-import { createStoreSessionMockApi } from '../../../store/app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 
 const initialAppStoreState = useAppStore.getState()
 

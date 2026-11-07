@@ -21,7 +21,7 @@ import { prCacheKey } from '../cache/cache-identity'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
 import type { GitHubPRFallbackSource } from '../cache/cache-model'
-import { selectWorktreesByRepo } from '../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export function findWorktreeById(
   state: AppState,

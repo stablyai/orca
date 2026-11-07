@@ -11,7 +11,7 @@ import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-row
 import type { FetchedRepoCatalog } from './repo-catalog-merge'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'
-import { arrayElementsUnchanged } from '../catalog-identity'
+import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
   latestAllHostRepoCatalogGenerationByStore,
   startLocalRepoCatalogFetch
@@ -21,7 +21,7 @@ import {
   isHostCatalogFenceCurrent,
   loadRuntimeHostCatalogs,
   type HostCatalogFence
-} from '../host-catalog-fencing'
+} from '../host-catalog/host-catalog-fence'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,

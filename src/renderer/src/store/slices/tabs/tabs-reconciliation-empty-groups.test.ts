@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { captureEditorOpenLinkIntent } from '../editor/tabs/editor-open-target-group'

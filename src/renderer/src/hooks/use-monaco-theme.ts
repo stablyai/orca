@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { useCodeEditorThemeStore } from '@/store/code-editor-theme'
+import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 
 const definedThemes = new Set<string>()
 

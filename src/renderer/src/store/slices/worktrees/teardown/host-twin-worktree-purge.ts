@@ -30,7 +30,7 @@ import {
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
-import { selectFolderWorkspaces } from '../../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
 import {
   worktreePurgePublishers,

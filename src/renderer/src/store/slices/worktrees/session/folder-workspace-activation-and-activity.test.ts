@@ -9,7 +9,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesList = vi.fn()

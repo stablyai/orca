@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../types'
 import './agent-status'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 describe('captureAllSleepingAgentSessions', () => {

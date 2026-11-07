@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/app-store-test-fixture')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const useAppStore = createTestStore()
   mocks.store = useAppStore
   return { useAppStore }

@@ -18,7 +18,7 @@ import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,

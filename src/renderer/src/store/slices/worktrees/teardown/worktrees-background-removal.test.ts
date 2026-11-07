@@ -6,9 +6,9 @@ import { captureNativeChatComposerSubmission } from '@/components/native-chat/na
 import { nativeChatLaunchPromptDraftScopeKey } from '@/components/native-chat/native-chat-launch-draft-source'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import 'sonner'
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { _resetHostWorktreeRemovalsForTests } from './host-worktree-removal-state'
 import {

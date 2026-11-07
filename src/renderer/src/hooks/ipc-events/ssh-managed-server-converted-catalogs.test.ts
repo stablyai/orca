@@ -7,7 +7,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../../store/app-store-test-fixture'
+import { createTestStore } from '../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { buildBrowserPage } from '../../store/slices/browser/pages/browser-page-records'
 

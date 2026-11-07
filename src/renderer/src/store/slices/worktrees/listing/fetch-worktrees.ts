@@ -22,7 +22,7 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,

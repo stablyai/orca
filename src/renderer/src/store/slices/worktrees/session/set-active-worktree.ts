@@ -1,4 +1,4 @@
-import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
+import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'

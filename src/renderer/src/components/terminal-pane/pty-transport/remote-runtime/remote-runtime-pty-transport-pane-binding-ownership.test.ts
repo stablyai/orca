@@ -85,7 +85,7 @@ describe('remote runtime pane binding ownership', () => {
       vi.doMock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
         notifyCodexPaneBoundForStaleSweep: vi.fn()
       }))
-      const { createTestStore, seedStore } = await import('@/store/app-store-test-fixture'),
+      const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
         { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture')
       const { installActivePanePtyBinding } =
         await import('../../pty-connection/lifecycle/active-pane-pty-binding')

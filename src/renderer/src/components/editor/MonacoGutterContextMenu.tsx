@@ -16,7 +16,7 @@ import { formatPathLineReference } from './line-copy-path'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { translate } from '@/i18n/i18n'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getRemoteUrlLineRange } from './selection-copy'
 
 type MonacoGutterContextMenuProps = {

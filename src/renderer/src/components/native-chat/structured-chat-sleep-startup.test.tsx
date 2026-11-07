@@ -14,7 +14,7 @@ import {
 } from './native-chat-workspace-test-fixtures'
 const mocks = vi.hoisted(() => ({ subscribeStatus: vi.fn(), supportsCapability: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/app-store-test-fixture')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({

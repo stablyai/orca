@@ -11,7 +11,7 @@ import {
   codexProviderHandle,
   encodePersistedAgentSessionProviderHandle
 } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { createTestStore } from '../../../src/renderer/src/store/app-store-test-fixture'
+import { createTestStore } from '../../../src/renderer/src/store/testing/app-store-test-fixture'
 import { makeUnifiedTab } from '../../../src/renderer/src/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
 import { makeFolderWorkspace } from '../../../src/renderer/src/store/folder-workspaces/folder-workspace.test-fixture'

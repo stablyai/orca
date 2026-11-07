@@ -27,7 +27,7 @@ import { useAppStore } from '@/store'
 import { installLegacyChatRenameMigration } from './legacy-chat-rename-migration'
 import { uploadLegacyStructuredChatRename } from './structured-chat-rename'
 import { readStructuredChatTabName } from './structured-chat-tab-name'
-import '@/store/pinned-tab-close-guard'
+import '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
@@ -62,7 +62,7 @@ vi.mock('@/components/native-chat/structured-agent-session-message-sender', () =
   sendStructuredAgentSessionMessage: mock.send
 }))
 vi.mock('@/store', async () => ({
-  useAppStore: (await import('@/store/app-store-test-fixture')).createTestStore()
+  useAppStore: (await import('@/store/testing/app-store-test-fixture')).createTestStore()
 }))
 vi.mock('./rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mock.rpc

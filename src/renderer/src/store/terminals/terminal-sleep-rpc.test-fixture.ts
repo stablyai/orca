@@ -1,4 +1,4 @@
-import type { StoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
+import type { StoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
 
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 

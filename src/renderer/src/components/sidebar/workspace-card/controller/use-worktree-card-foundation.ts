@@ -11,7 +11,7 @@ import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-sett
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
-import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
+import { useRuntimeHostDisconnected } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,

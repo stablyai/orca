@@ -1,3 +1,4 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { SshTarget } from '../../../../../shared/ssh-types'
@@ -35,7 +36,7 @@ import {
 } from './targets/SshManagedHostRemoveDialog'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { resolveSshHostRemoval } from '../../sidebar/ssh-host-remove-resolution'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'
@@ -183,7 +184,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     const resolution = resolveSshHostRemoval({
       targetId: target.id,
       repos: useAppStore.getState().repos,
-      worktrees: getAllWorktreesFromState(useAppStore.getState())
+      worktrees: getIndexedAllWorktrees(selectWorktreesByRepo(useAppStore.getState()))
     })
     if (resolution.workspaceCount > 0) {
       setHostRemoveTarget({ targetId: target.id, label: target.label })

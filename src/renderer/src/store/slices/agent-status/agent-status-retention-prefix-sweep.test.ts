@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppState } from '../../types'
 
-import { createTestStore } from '../../app-store-test-fixture'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import '../../../i18n/i18n'
 
 describe('agent status retention + prefix sweep', () => {

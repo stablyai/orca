@@ -11,7 +11,7 @@ import * as historyRequest from '../right-sidebar/ai-vault/scanning/ai-vault-pan
 
 const mocks = vi.hoisted(() => ({ launch: vi.fn(), resume: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/app-store-test-fixture')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({

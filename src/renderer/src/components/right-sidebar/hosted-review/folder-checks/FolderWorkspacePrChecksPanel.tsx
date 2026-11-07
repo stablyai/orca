@@ -1,7 +1,7 @@
 import {
   selectSidebarLineageParentIdentities,
   selectCrossStoreFolderChildrenById
-} from '@/store/cross-store-lineage-parents'
+} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -18,7 +18,10 @@ import {
   runLimitedParentPrChecksRefreshes
 } from './parent-pr-checks-refresh'
 import { createParentPrChecksProjectionSelector } from './parent-pr-checks-projection-selector'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type FolderWorkspacePrChecksPanelProps = {
   isVisible?: boolean

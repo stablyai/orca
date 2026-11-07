@@ -22,7 +22,7 @@ import { runtimeStatuses } from '@/store/slices/browser/browser-slice-test-harne
 import type { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 
 import { getDefaultSettings } from '../../../../shared/constants'
-import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,

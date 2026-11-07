@@ -19,7 +19,7 @@ import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 
 const mocks = vi.hoisted(() => ({ prepare: vi.fn(), launch: vi.fn(), close: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/app-store-test-fixture')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 vi.mock('./NativeChatView', async () => {

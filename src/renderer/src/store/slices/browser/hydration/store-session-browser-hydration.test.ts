@@ -9,9 +9,9 @@ import {
 } from '@/components/browser-pane/stream-remote/remote-browser-page-session'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { resetRestoredBrowserClientHostAttachForTests } from '@/runtime/restored-client-hosted-browser-host-attach'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
-import { createStoreSessionMockApi } from '../../../app-store-session-api.test-fixture'
+import { createStoreSessionMockApi } from '../../../testing/app-store-session-api.test-fixture'
 import { makeBrowserTab } from '../browser-tab.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

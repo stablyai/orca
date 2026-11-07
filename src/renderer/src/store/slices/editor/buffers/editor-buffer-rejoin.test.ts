@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifecycle'
+import { assertEditorBufferInvariant } from './editor-buffer-record-lifecycle'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import type { OpenFile } from '../types/open-file'
 import { isDetachedEditorBufferId } from './editor-buffer-views'

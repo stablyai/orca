@@ -15,7 +15,7 @@ import type {
   TerminalRecoveryRemountResult
 } from '../../../terminals/terminal-tab-recovery-ledger'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 
 export function createSetRenamingWorktreeId(

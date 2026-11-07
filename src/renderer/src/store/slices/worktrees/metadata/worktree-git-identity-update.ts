@@ -31,9 +31,9 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   selectWorkspaceByHostTarget,
-  selectWorktreesByRepo,
   type WorkspaceRecordState
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/selection/workspace-host-target'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 type GitIdentityTargets = {
   rows: Set<Worktree>

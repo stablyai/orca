@@ -93,7 +93,7 @@ globalThis.window = { api: mockApi }
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import '../../../../shared/constants'
 import '../../../../shared/workspace-scope'
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeLayout, makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 

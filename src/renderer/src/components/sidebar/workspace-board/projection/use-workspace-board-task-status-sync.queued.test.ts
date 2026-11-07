@@ -6,7 +6,7 @@ import { linearGetIssue, linearUpdateIssue } from '@/runtime/linear/runtime-line
 import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
 import type { LinearMutationResult } from '@/runtime/linear/runtime-linear-client'
 import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import type { WorkspaceRecordState } from '@/store/workspace-record-selectors'
+import type { WorkspaceRecordState } from '@/store/workspaces/selection/workspace-host-target'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

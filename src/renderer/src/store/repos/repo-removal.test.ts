@@ -8,7 +8,7 @@ afterEach(() => {
   pending.clearNativeChatPendingAttachmentsForTests()
 })
 
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from './repo.test-fixture'
 import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'

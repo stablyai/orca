@@ -1,11 +1,14 @@
 /**
  * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
  */
+/**
+ * The owner of a workspace as a {@link HostAuthority}, decided from the rows alone.
+ */
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   getRepoSshConnectionId,
   parseExecutionHostId,

@@ -1,7 +1,7 @@
 /** Project removal must invoke canonical worktree purge like single removal; partial hand-deletion leaves dozens of editor/layout/git/browser maps. Removed repos never run fetchWorktrees again, so no background sweep can reclaim them. */
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 

@@ -22,11 +22,13 @@ import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-u
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
-  resolveQualifiedIndexedFolderWorkspace,
+  selectWorkspaceByHostTarget
+} from '../../../workspaces/selection/workspace-host-target'
+import { resolveQualifiedIndexedFolderWorkspace } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
   selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the

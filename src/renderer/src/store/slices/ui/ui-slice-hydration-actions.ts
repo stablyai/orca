@@ -1,6 +1,6 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
-import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
+import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder

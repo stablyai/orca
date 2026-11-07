@@ -3,7 +3,7 @@ import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { applyWorktreeUpdates } from './worktree-meta-update-application'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'

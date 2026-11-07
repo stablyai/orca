@@ -17,8 +17,11 @@ import {
 } from '../presentation/plugin-name-disambiguation'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
-import { usePluginIconThemeStore } from '@/store/plugin-icon-themes'
-import { usePluginThemeStore, usePluginTerminalThemeStore } from '@/store/plugin-themes'
+import { usePluginIconThemeStore } from '@/store/plugins/appearance/plugin-icon-themes'
+import {
+  usePluginThemeStore,
+  usePluginTerminalThemeStore
+} from '@/store/plugins/appearance/plugin-themes'
 
 export function isPluginAppThemeSelected(
   settings: Pick<GlobalSettings, 'pluginAppThemeDark' | 'pluginAppThemeLight'>,

@@ -29,11 +29,11 @@ import {
   bootWindowFromPartitions,
   type StoredPartition
 } from '../../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../app-store-session-api.test-fixture'
-import { createTestStore } from '../app-store-test-fixture'
+import { createStoreSessionMockApi } from '../testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { getOrphanTerminalIds } from './terminal-orphan-cleanup'
-import { buildLayoutFrameSlices } from '../workspace-layout-frame-slices'
-import { buildLayoutFrameStorePatch } from '../workspace-layout-frame-store-patch'
+import { buildLayoutFrameSlices } from '../workspace-layout/frames/workspace-layout-frame-slices'
+import { buildLayoutFrameStorePatch } from '../workspace-layout/frames/workspace-layout-frame-store-patch'
 import type { AppState } from '../types'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))

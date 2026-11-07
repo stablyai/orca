@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { createTestStore, seedStore } from '@/store/app-store-test-fixture'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const WORKTREE_ID = 'repo1::/wt-1'

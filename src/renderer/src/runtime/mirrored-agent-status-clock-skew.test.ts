@@ -7,7 +7,7 @@ import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/term
 import { getDefaultSettings } from '../../../shared/constants'
 import { isExplicitAgentStatusFresh } from '../lib/pane-agent-evidence'
 import type { AppState } from '../store/types'
-import { createTestStore, seedStore } from '../store/app-store-test-fixture'
+import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { resetRendererOwnedAgentStatusPanesForTests } from '../components/terminal-pane/agent-status/renderer-owned-agent-status-registry'
 import { applyFreshWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'

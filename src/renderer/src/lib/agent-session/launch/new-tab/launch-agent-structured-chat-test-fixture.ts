@@ -1,6 +1,6 @@
 import type { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { createTestStore, seedStore } from '@/store/app-store-test-fixture'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'

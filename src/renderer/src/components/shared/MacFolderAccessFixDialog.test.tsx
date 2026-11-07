@@ -25,7 +25,7 @@ import { MacFolderAccessFixDialog } from './MacFolderAccessFixDialog'
 import {
   useMacFolderAccessFixStore,
   type FolderAccessNoticePhase
-} from '@/store/mac-folder-access-fix'
+} from '@/store/terminals/folder-access/mac-folder-access-fix'
 
 const SCOPE = 'aaaa111122223333'
 

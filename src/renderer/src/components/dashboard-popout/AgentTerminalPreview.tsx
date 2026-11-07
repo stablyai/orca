@@ -18,7 +18,7 @@ import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailabl
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { usePluginFontReady } from '@/store/plugin-fonts'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 import { createPreviewGridClaim } from './preview-grid-claim'
 import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import {

@@ -24,7 +24,7 @@ import { dropNativeChatPendingAttachmentsForTab } from '@/components/native-chat
 import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
-import { runAsAutomaticDeselection } from '../active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '../workspaces/selection/active-worktree-deselection-intent'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,

@@ -13,7 +13,7 @@ import type {
   RetainedAgentEntry
 } from '../slices/agent-status/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { copyOnWriteRecord } from '../copy-on-write-record'
+import { copyOnWriteRecord } from './terminal-shutdown-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 

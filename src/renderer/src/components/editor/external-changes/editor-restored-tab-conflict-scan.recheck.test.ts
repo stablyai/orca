@@ -20,7 +20,7 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
   }
 })
 
-import { createTestStore } from '@/store/app-store-test-fixture'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
 

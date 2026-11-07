@@ -8,9 +8,9 @@ import {
   applyLayoutFrame,
   EMPTY_WORKSPACE_LAYOUT_CACHE,
   type WorkspaceLayoutCache
-} from '@/store/workspace-layout-cache'
+} from '@/store/workspace-layout/workspace-layout-cache'
 
-import { terminalLayoutsPatch } from '@/store/workspace-layout-frame-store-patch'
+import { terminalLayoutsPatch } from '@/store/workspace-layout/frames/workspace-layout-frame-store-patch'
 import {
   layoutHoldsBoundPane,
   onWorkspaceStartsDrawing
@@ -25,7 +25,7 @@ import {
   type LayoutFrameBuildHolds,
   type LayoutFrameBuildPatch
 } from './workspace-layout-frame-builds'
-import { eitherHeld } from '@/store/workspace-layout-frame-held-tabs'
+import { eitherHeld } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import { heldTabGroupFocus } from './held-tab-group-follow'
 import { shownContentRekeyPatch } from './layout-owner-content-rekeys'
 import { provideLayoutFrameWorkspaces } from './layout-frame-workspaces'

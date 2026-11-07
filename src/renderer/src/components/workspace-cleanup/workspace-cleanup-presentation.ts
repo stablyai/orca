@@ -12,7 +12,7 @@ import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cle
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import './workspace-cleanup-host-identity'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type WorkspaceCleanupSortKey = 'activity' | 'name' | 'repo' | 'review' | 'git'
 export type WorkspaceCleanupSortDirection = 'asc' | 'desc'

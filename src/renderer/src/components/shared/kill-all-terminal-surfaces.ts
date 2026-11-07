@@ -1,4 +1,5 @@
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   closeTerminalTab,
   type PrecomputedTerminalCloseState

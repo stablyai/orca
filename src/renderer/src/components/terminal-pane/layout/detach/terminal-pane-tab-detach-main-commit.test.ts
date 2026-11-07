@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
 import { layoutApplyTestTransport as main } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createStoreCascadesMockApi } from '../../../../store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 import { LEAF_1, LEAF_2, splitLayout } from './terminal-pane-tab-detach-fixture'
 import {
   detachFrom,

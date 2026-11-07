@@ -9,7 +9,7 @@ const openDialog = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
-vi.mock('@/store/workspace-record-selectors', () => ({
+vi.mock('@/store/workspaces/catalog/workspace-record-fields', () => ({
   selectFolderWorkspaces: (current: typeof state) => current.folders
 }))
 vi.mock('../wsl-move/wsl-move-entry', () => ({ openWslMoveDialogFor: openDialog }))

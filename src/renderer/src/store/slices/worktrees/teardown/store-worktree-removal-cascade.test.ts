@@ -4,11 +4,11 @@ import { getDefaultSettings } from '../../../../../../shared/constants'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import 'sonner'
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeLayout, makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { saveSessionCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
-import { createStoreCascadesMockApi } from '../../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import '../../../../../../shared/worktree/host-qualified-identity'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))

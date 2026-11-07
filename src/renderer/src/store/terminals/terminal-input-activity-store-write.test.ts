@@ -32,7 +32,7 @@ import {
   readLastTerminalInputAt,
   resetTerminalInputActivityCoalescingForTests
 } from '@/lib/terminal-input-activity-coalescing'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const PANE = 'tab-1:leaf-a'
 

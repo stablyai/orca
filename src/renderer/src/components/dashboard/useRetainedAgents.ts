@@ -20,7 +20,10 @@ import {
   createWorktreeTabBucketProjection,
   type WorktreeTabBucketProjection
 } from '@/lib/worktree-tab-bucket-projection'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Keep finished snapshots after live status cleanup so closed terminals’ rows remain until user dismissal.
 

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../app-store-test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeLayout, makeTab } from './terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import './terminal-orphan-cleanup'
-import { createStoreCascadesMockApi } from '../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())

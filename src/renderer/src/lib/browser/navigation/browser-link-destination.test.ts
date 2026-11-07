@@ -16,7 +16,7 @@ import {
   type BrowserLinkTestStore
 } from './browser-link-open.test-fixture'
 import { captureLinkOpenIntent } from '../../link-open-intent'
-import '@/store/app-store-test-fixture'
+import '@/store/testing/app-store-test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'

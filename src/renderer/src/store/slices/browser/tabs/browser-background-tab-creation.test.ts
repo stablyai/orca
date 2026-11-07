@@ -1,9 +1,9 @@
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../../worktrees/worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

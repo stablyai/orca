@@ -21,7 +21,7 @@ import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-stor
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { addRuntimeSshRepo } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Only the paired server can add folder projects on its own SSH host.
 async function addSshFolderProject(args: {

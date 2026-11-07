@@ -7,7 +7,7 @@ import {
   onWorktreeSleepIntentCleared,
   forgetWorktreeSleepIntent
 } from '@/lib/worktree-sleep-intent'
-import { createTestStore } from '../../../app-store-test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'

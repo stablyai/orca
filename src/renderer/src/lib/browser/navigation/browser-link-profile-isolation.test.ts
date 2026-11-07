@@ -1,6 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import { openFileInBrowserTab } from '../../file-preview'

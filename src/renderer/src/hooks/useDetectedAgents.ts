@@ -1,4 +1,4 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'

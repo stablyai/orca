@@ -1,9 +1,9 @@
 // With main layout ownership, each split and tab must reach main together; drawn frames must preserve group parity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { createTestStore, seedStore } from '../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
-import { createStoreCascadesMockApi } from '../../app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 import '@/runtime/layout-owner-new-group-split'
 import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
 import { contentTabOpenPlacement } from './content-tab-open-placement'

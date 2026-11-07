@@ -6,7 +6,10 @@ import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded, usePluginFontReady } from '@/store/plugin-fonts'
+import {
+  pluginFontFamilyWhenLoaded,
+  usePluginFontReady
+} from '@/store/plugins/appearance/plugin-fonts'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../../shared/terminal-themes/terminal-contrast-correction'

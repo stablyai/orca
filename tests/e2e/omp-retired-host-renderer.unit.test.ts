@@ -5,7 +5,7 @@ import { toAgentStatusIpcPayload } from '../../src/main/agent-hooks/server/serve
 import type { AgentStatusIpcPayload } from '../../src/shared/agent-status/contracts/agent-status-ipc-payload'
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { isAgentStatusForRecentlyClosedTab } from '../../src/renderer/src/hooks/ipc-events/agent-status-routing'
-import { createTestStore } from '../../src/renderer/src/store/app-store-test-fixture'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
 
 vi.mock('../../src/main/telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../src/main/telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))

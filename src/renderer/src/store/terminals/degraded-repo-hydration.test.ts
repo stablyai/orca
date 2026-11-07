@@ -17,7 +17,7 @@ import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
 } from '@/lib/workspace/persistence/workspace-session'
-import { createTestStore } from '../app-store-test-fixture'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 

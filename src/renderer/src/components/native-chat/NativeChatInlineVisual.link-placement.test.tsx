@@ -10,7 +10,7 @@ import {
   seedBrowserLinkTestStore,
   WORKSPACE
 } from '@/lib/browser/navigation/browser-link-open.test-fixture'
-import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 
 vi.mock('./use-native-chat-visual-document', () => ({
   useNativeChatVisualDocument: () => ({

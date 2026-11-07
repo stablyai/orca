@@ -10,8 +10,8 @@ import {
   mutateDiffComments,
   normalizeDiffComment
 } from './diff-comment-persistence'
-import { selectWorktreeDiffCommentsOrEmpty } from '../../worktree-diff-comments-selector'
-import { readOwnedDiffComments, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
+import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]

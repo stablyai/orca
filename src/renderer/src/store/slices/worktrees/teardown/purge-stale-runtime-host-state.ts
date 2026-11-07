@@ -1,4 +1,4 @@
-import { beginEnclosingWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
+import { beginEnclosingWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import type { WorktreePurgeTarget } from './worktree-purge-target'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'

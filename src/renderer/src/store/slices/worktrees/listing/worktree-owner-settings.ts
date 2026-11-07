@@ -9,7 +9,7 @@ import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { isRuntimeSelectorNotFoundError } from './runtime-worktree-rpc-errors'
 import { persistWorktreeMeta } from '../metadata/worktree-meta-persist'
 import type { WorktreeSliceGet } from './worktree-slice-types'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 /** Replaces only the copy on `hostId`; a same-id twin on another host is a different worktree. */
 export function replaceWorktreeInRepoLists(

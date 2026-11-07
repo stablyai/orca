@@ -14,7 +14,7 @@ import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getIndexedWorktreesById } from '../../../worktree-repo-index'
+import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
 
 function getKnownOwnerHostIds(
   state: ReturnType<WorktreeSliceGet>,

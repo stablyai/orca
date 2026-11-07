@@ -1,7 +1,7 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
-import '../store/app-store-test-fixture'
+import '../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import '../../../shared/session-tabs-runtime-capabilities'
 import '../../../shared/protocol-version'

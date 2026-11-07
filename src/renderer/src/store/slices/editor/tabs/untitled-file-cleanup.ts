@@ -9,7 +9,7 @@ import {
   deleteRuntimeRelativePath
 } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 export function deleteUntouchedUntitledFile(getState: () => AppState, file: OpenFile): void {
   const hasRetainedView = () =>

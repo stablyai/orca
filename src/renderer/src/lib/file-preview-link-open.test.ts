@@ -1,6 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { ShellIcon } from './shell-icons'
 import { useAppStore } from '@/store'
-import { usePluginNewFiles } from '@/store/plugin-new-files'
+import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
 import {

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '../lib/agent-status'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
-import { createTestStore } from '../store/app-store-test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,

@@ -2,7 +2,7 @@ import { Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { useFileCustomEditors } from '@/store/plugin-custom-editors'
+import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom-editors'
 
 function detail(title: string): string {
   return isWebClientLocation()

@@ -7,7 +7,7 @@ import {
   isUnresolvedOwnerHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { adoptFromEndpoint } from '../../../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {

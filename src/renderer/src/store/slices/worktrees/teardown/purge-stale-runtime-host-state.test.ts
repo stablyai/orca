@@ -19,7 +19,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: {} }
 
-import { createTestStore, seedStore } from '../../../app-store-test-fixture'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { TEST_REPO } from '../../../repos/repo.test-fixture'

@@ -1,4 +1,4 @@
-import type { AppState } from '../../store'
+import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
 import type {
   RuntimeMobileSessionAgentTab,

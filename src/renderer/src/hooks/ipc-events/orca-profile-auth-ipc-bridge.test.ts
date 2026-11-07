@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudSignInProgress } from '../../../../shared/orca-profiles'
-import { createTestStore } from '../../store/app-store-test-fixture'
+import { createTestStore } from '../../store/testing/app-store-test-fixture'
 
 type TestStore = ReturnType<typeof createTestStore>
 

@@ -3,7 +3,7 @@ import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 
 import { createEditorSlice } from '@/store/slices/editor/create-editor-slice'
-import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
+import { withEditorBufferRecords } from '@/store/slices/editor/buffers/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store/types'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { emptyTabLayoutState } from '@/store/slices/editor/editor-slice-test-harness'

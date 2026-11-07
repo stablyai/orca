@@ -1,4 +1,4 @@
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { translate } from '@/i18n/i18n'
 
 /** A clear confirmation on the copy shown when it opened; `count` stands in once that copy is gone. */

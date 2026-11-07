@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-removal-successor'
-import { createTestStore, seedStore } from '../store/app-store-test-fixture'
+import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
-import { createStoreCascadesMockApi } from '../store/app-store-cascade-api.test-fixture'
+import { createStoreCascadesMockApi } from '../store/testing/app-store-cascade-api.test-fixture'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
 import {
   drawTabsFromMain,

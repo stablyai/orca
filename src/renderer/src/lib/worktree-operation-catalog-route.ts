@@ -8,7 +8,7 @@ import {
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
 import {
