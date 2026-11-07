@@ -6,25 +6,26 @@ import type { RuntimeCompatVerdict } from '../../../shared/protocol-compat'
 
 export function getExecutionHostHealthLabel(
   health: ExecutionHostHealth,
-  blockedReason?: RuntimeHostBlockedReason
+  blockedReason?: RuntimeHostBlockedReason,
+  t: Translate = translate
 ): string {
   switch (health) {
     case 'local':
-      return translate('runtime.health.local', 'Local')
+      return t('runtime.health.local', 'Local')
     case 'available':
-      return translate('runtime.health.available', 'Connected')
+      return t('runtime.health.available', 'Connected')
     case 'connecting':
-      return translate('runtime.health.connecting', 'Connecting')
+      return t('runtime.health.connecting', 'Connecting')
     case 'disconnected':
-      return translate('runtime.health.disconnected', 'Disconnected')
+      return t('runtime.health.disconnected', 'Disconnected')
     case 'error':
-      return translate('runtime.health.error', 'Needs attention')
+      return t('runtime.health.error', 'Needs attention')
     case 'blocked':
       return blockedReason === 'access-revoked'
-        ? translate('runtime.health.repair', 'Re-pair needed')
+        ? t('runtime.health.repair', 'Re-pair needed')
         : blockedReason === 'server-replaced'
-          ? translate('runtime.health.serverReplaced', 'Different server')
-          : translate('runtime.health.update', 'Update needed')
+          ? t('runtime.health.serverReplaced', 'Different server')
+          : t('runtime.health.update', 'Update needed')
   }
 }
 
