@@ -1,6 +1,6 @@
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID } from '../../../settings/chat/native-chat-turn-diff-setting-target'
 import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
@@ -70,6 +70,7 @@ export function NativeChatTurnDiffRollup({
 }: {
   diff: NativeChatTurnDiff
 }): React.JSX.Element {
+  const t = useTranslate()
   const { open: showAll, setOpen: setShowAll } = useNativeChatDisclosure(
     `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
     false
@@ -82,19 +83,19 @@ export function NativeChatTurnDiffRollup({
     >
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1">
         <span className="min-w-0 truncate">
-          {translate('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
+          {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
             count: diff.files.length,
             defaultValue_one: '{{count}} changed file'
           })}
         </span>
         <DiffLineCounts added={diff.added} removed={diff.removed} />
         {diff.truncated ? (
-          <span>{translate('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
+          <span>{t('components.native-chat.turnDiff.partial', 'Partial diff')}</span>
         ) : null}
         <NativeChatCardHideButton
           updates={{ nativeChatTurnDiffSummary: false }}
           settingSectionId={NATIVE_CHAT_TURN_DIFF_SETTING_SECTION_ID}
-          hiddenMessage={translate(
+          hiddenMessage={t(
             'components.native-chat.turnDiff.hidden',
             "Orca won't show turn diffs anymore"
           )}
@@ -106,7 +107,7 @@ export function NativeChatTurnDiffRollup({
         ))}
         {remaining > 0 ? (
           <Button variant="ghost" size="xs" onClick={() => setShowAll(true)}>
-            {translate('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
               count: remaining
             })}
           </Button>

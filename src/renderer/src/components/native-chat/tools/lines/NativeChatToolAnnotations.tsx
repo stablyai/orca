@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { NativeChatToolCallBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
@@ -33,8 +33,9 @@ export function NativeChatCommandMetadata({
 }: {
   block: NativeChatToolCallBlock
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const duration = formatToolDuration(block.durationMs, (value0) =>
-    translate('components.native-chat.tool.milliseconds', '{{value0}}ms', { value0 })
+    t('components.native-chat.tool.milliseconds', '{{value0}}ms', { value0 })
   )
   const exitCode = Number.isSafeInteger(block.exitCode) ? block.exitCode : undefined
   if (exitCode === undefined && duration === null) {
@@ -44,7 +45,7 @@ export function NativeChatCommandMetadata({
     <span className="ml-auto flex shrink-0 gap-1.5 font-sans text-xs tabular-nums text-chat-foreground-faint">
       {exitCode !== undefined ? (
         <span className={cn(exitCode !== 0 && 'text-destructive')}>
-          {translate('components.native-chat.tool.exitCode', 'exit {{value0}}', {
+          {t('components.native-chat.tool.exitCode', 'exit {{value0}}', {
             value0: exitCode
           })}
         </span>

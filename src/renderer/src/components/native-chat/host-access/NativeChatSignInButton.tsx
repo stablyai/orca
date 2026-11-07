@@ -4,6 +4,7 @@ import {
   nativeChatSignInLabel,
   useNativeChatSignInView
 } from './native-chat-sign-in'
+import { useTranslate } from '../../../i18n/use-translate'
 
 export function NativeChatSignInButton({
   failureKind
@@ -20,10 +21,11 @@ function EligibleNativeChatSignInButton({
 }: {
   failureKind: string | undefined
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const signIn = useNativeChatSignInView()
   return signIn && isNativeChatSignInFailureKind(failureKind, signIn) ? (
     <NativeChatActionButton primary disabled={signIn.signingIn} onClick={signIn.signIn}>
-      {nativeChatSignInLabel(signIn)}
+      {nativeChatSignInLabel(signIn, t)}
     </NativeChatActionButton>
   ) : null
 }

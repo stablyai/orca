@@ -1,15 +1,16 @@
 // Pending paste tokens track draft position through edits and never reach the agent.
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Only live I/O holds source bytes; failure and renderer exit leave an unavailable token. */
 export const nativeChatPastedTextOperations = new Map<string, { scopeKey: string; text: string }>()
 
-export function nativeChatPastedTextLabel(): string {
-  return translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+export function nativeChatPastedTextLabel(t: Translate = translate): string {
+  return t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
 }
 
-export function nativeChatPasteNotSavedNotice(): string {
-  return translate(
+export function nativeChatPasteNotSavedNotice(t: Translate = translate): string {
+  return t(
     'components.native-chat.composer.pasteNotSaved',
     'This paste was not saved. Paste it again or remove it.'
   )

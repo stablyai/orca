@@ -1,5 +1,5 @@
 import { NativeChatQuestionText } from './NativeChatQuestionText'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
 import {
@@ -22,6 +22,7 @@ export function NativeChatResolutionReceipt({
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
   const subject = nativeChatReceiptSubject(body)
   if (body.resolution.state === 'pending') {
@@ -35,9 +36,9 @@ export function NativeChatResolutionReceipt({
   }
   const { resolution } = body
   const device = nativeChatReceiptDevice(resolution, {
-    current: translate('components.native-chat.receipt.thisComputer', 'this computer'),
-    computer: translate('components.native-chat.receipt.computer', 'the computer'),
-    unknown: translate('components.native-chat.receipt.otherDevice', 'another device')
+    current: t('components.native-chat.receipt.thisComputer', 'this computer'),
+    computer: t('components.native-chat.receipt.computer', 'the computer'),
+    unknown: t('components.native-chat.receipt.otherDevice', 'another device')
   })
   const title = body.kind === 'approval' ? (body.displayName ?? body.title) : body.question
   // Non-empty only once resolved, and then each question is listed with its answer.
@@ -69,12 +70,12 @@ export function NativeChatResolutionReceipt({
             {heading ? <NativeChatQuestionText content={heading} /> : null}
             <p className="line-clamp-3 whitespace-pre-wrap break-words">
               {answer.answer === ''
-                ? translate(
+                ? t(
                     'components.native-chat.receipt.emptyAnswer',
                     NATIVE_CHAT_RECEIPT_COPY.emptyAnswer
                   )
                 : (answer.answer ??
-                  translate(
+                  t(
                     'components.native-chat.receipt.unavailable',
                     NATIVE_CHAT_RECEIPT_COPY.unavailable
                   ))}
@@ -85,28 +86,20 @@ export function NativeChatResolutionReceipt({
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span>
           {resolution.state === 'cancelled'
-            ? translate(
-                'components.native-chat.receipt.cancelled',
-                NATIVE_CHAT_RECEIPT_COPY.cancelled
-              )
-            : translate(
-                'components.native-chat.receipt.resolved',
-                NATIVE_CHAT_RECEIPT_COPY.resolved
-              )}
+            ? t('components.native-chat.receipt.cancelled', NATIVE_CHAT_RECEIPT_COPY.cancelled)
+            : t('components.native-chat.receipt.resolved', NATIVE_CHAT_RECEIPT_COPY.resolved)}
         </span>
         {resolution.resolvedBy ? (
           <span>
             {resolution.state === 'cancelled'
-              ? translate(
+              ? t(
                   'components.native-chat.receipt.cancelledBy',
                   NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
                   { device }
                 )
-              : translate(
-                  'components.native-chat.receipt.resolver',
-                  NATIVE_CHAT_RECEIPT_COPY.resolver,
-                  { device }
-                )}
+              : t('components.native-chat.receipt.resolver', NATIVE_CHAT_RECEIPT_COPY.resolver, {
+                  device
+                })}
           </span>
         ) : null}
         <NativeChatMessageTimestamp timestamp={resolution.resolvedAt} />

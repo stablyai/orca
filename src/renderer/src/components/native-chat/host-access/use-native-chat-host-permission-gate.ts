@@ -1,5 +1,5 @@
 import { newChatPermissionModeForSettings } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { useAppStore } from '@/store'
@@ -20,6 +20,7 @@ export function useNativeChatHostPermissionGate(
   agent: string,
   agentLabel: string
 ): NativeChatHostPermissionGate {
+  const t = useTranslate()
   const verdict = useStructuredChatHostPermissionVerdict(target, agent)
   const requested = useAppStore((state) => newChatPermissionModeForSettings(agent, state.settings))
   if (verdict.kind === 'allowed') {
@@ -27,14 +28,14 @@ export function useNativeChatHostPermissionGate(
   }
   if (verdict.kind === 'checking') {
     return {
-      sendBlockedReason: translate(
+      sendBlockedReason: t(
         'components.native-chat.hostPermission.checking',
         "Checking this host's chat permissions…"
       ),
       notice: null
     }
   }
-  const text = hostPermissionRefusedText(agentLabel, verdict.kind, requested)
+  const text = hostPermissionRefusedText(agentLabel, verdict.kind, requested, t)
   return {
     sendBlockedReason: text,
     notice: {
@@ -45,7 +46,7 @@ export function useNativeChatHostPermissionGate(
       ...(verdict.kind === 'unverified'
         ? {
             action: {
-              label: translate('components.native-chat.hostPermission.checkAgain', 'Check again'),
+              label: t('components.native-chat.hostPermission.checkAgain', 'Check again'),
               onClick: verdict.checkAgain
             }
           }

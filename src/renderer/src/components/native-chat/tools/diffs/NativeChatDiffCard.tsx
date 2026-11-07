@@ -3,7 +3,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatToolFileTarget } from '../lines/NativeChatToolFileTarget'
@@ -30,10 +30,11 @@ function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.J
 
 /** Mark omitted file regions so gutter line jumps do not resemble missing rendered content. */
 function DiffGapRow(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       role="separator"
-      aria-label={translate('components.native-chat.tool.diffGap', 'Lines not shown')}
+      aria-label={t('components.native-chat.tool.diffGap', 'Lines not shown')}
       className="select-none border-y border-chat-code-border bg-chat-code-surface py-0.5 text-center text-chat-foreground-faint"
     >
       ⋯
@@ -126,6 +127,7 @@ export function NativeChatDiffCard({
   disclosureKey?: string
   initialOpen?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
     disclosureKey,
     initialOpen
@@ -158,7 +160,7 @@ export function NativeChatDiffCard({
             <VerbIcon kind={file.changeKind} />
           </span>
           <span className="shrink-0 text-chat-foreground-faint">
-            {nativeChatToolRowVerb(file.changeKind)}
+            {nativeChatToolRowVerb(file.changeKind, t)}
           </span>
           {file.oldPath ? (
             <>
@@ -183,7 +185,7 @@ export function NativeChatDiffCard({
           <DiffLineCounts added={file.added} removed={file.removed} size="sm" />
           {file.truncated ? (
             <span className="shrink-0 text-xs text-chat-foreground-faint">
-              {translate('components.native-chat.tool.diffTruncated', 'Diff truncated')}
+              {t('components.native-chat.tool.diffTruncated', 'Diff truncated')}
             </span>
           ) : null}
           {hasBody ? (
@@ -197,7 +199,7 @@ export function NativeChatDiffCard({
         </button>
         <NativeChatCopyButton
           text={copyText}
-          label={translate('components.native-chat.tool.copyDiff', 'Copy diff')}
+          label={t('components.native-chat.tool.copyDiff', 'Copy diff')}
           className="ml-auto shrink-0"
         />
       </div>

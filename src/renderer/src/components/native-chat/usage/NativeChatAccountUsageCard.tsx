@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type {
@@ -42,18 +43,15 @@ function resetOutcomeNotice(outcome: CodexRateLimitResetOutcome): string {
   }
 }
 
-function chatAccountLabel(account: AgentSessionUsageAccount): string {
+function chatAccountLabel(account: AgentSessionUsageAccount, t: Translate = translate): string {
   switch (account.kind) {
     case 'system':
-      return translate('auto.components.status.bar.StatusBar.c676918adc', 'System default')
+      return t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
     case 'managed':
-      return (
-        account.email || translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
-      )
+      return account.email || t('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
     case 'shared':
       return (
-        account.email ||
-        translate('components.native-chat.usage.sharedAccount', 'Current shared account')
+        account.email || t('components.native-chat.usage.sharedAccount', 'Current shared account')
       )
   }
 }
@@ -69,29 +67,27 @@ export function NativeChatAccountUsageCard({
   target: RuntimeClientTarget
   onRetry: (notice?: string | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const display = normalizeUsagePercentageDisplay(useAppStore((s) => s.usagePercentageDisplay))
   const message =
     result === null
       ? null
       : result.status === 'failed'
-        ? translate(
-            'components.native-chat.usage.failed',
-            'Codex usage couldn’t be loaded. Try again.'
-          )
+        ? t('components.native-chat.usage.failed', 'Codex usage couldn’t be loaded. Try again.')
         : result.status === 'unsupported'
           ? result.reason === 'codexVersion'
-            ? translate(
+            ? t(
                 'components.native-chat.usage.codexVersion',
                 'This Codex version doesn’t report usage. Update Codex.'
               )
-            : translate(
+            : t(
                 'components.native-chat.usage.apiKeyAuth',
                 'Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.'
               )
           : null
   const accountHeading = (
     <div className="mb-2 text-xs text-muted-foreground">
-      {translate('components.native-chat.usage.account', 'Account used by this chat')}
+      {t('components.native-chat.usage.account', 'Account used by this chat')}
     </div>
   )
   return (
@@ -106,7 +102,7 @@ export function NativeChatAccountUsageCard({
           {accountHeading}
           <ProviderIdentityCard
             p={result.rateLimits}
-            accountLabel={chatAccountLabel(result.account)}
+            accountLabel={chatAccountLabel(result.account, t)}
             usagePercentageDisplay={display}
             footer={<ChatUsageReset result={result} target={target} onRefresh={onRetry} />}
           />
@@ -116,7 +112,7 @@ export function NativeChatAccountUsageCard({
           {message}
           {result?.status === 'failed' ? (
             <Button variant="outline" size="xs" onClick={() => onRetry(notice)}>
-              {translate('components.native-chat.usage.retry', 'Retry')}
+              {t('components.native-chat.usage.retry', 'Retry')}
             </Button>
           ) : null}
         </div>
@@ -129,6 +125,7 @@ export function NativeChatAccountUsageCard({
 
 /** The loaded card's layout with one usage window, so loading shows roughly the loaded size. */
 function LoadingUsageCard(): React.JSX.Element {
+  const t = useTranslate()
   const line = 'block rounded bg-foreground/10'
   return (
     <div className="w-full space-y-2 text-xs" aria-busy="true">
@@ -139,7 +136,7 @@ function LoadingUsageCard(): React.JSX.Element {
         </div>
         <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
-          {translate('components.native-chat.usage.loading', 'Loading Codex usage…')}
+          {t('components.native-chat.usage.loading', 'Loading Codex usage…')}
         </span>
       </div>
       <Card size="sm">
@@ -168,6 +165,7 @@ function ChatUsageReset({
   target: RuntimeClientTarget
   onRefresh: (notice: string | null) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [confirm, setConfirm] = useState(false)
   const [skip, setSkip] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -216,7 +214,8 @@ function ChatUsageReset({
         resetCreditCount={count}
         resetCreditExpiry={formatResetCreditExpiry(
           result.reset?.expiresAt ?? credits?.nextExpiresAt,
-          count
+          count,
+          t
         )}
         canRedeemReset={result.reset !== undefined}
         isRedeemingReset={busy}
@@ -231,19 +230,19 @@ function ChatUsageReset({
       />
       {failed ? (
         <div className="mt-2 flex items-center gap-2 text-xs">
-          {translate(
+          {t(
             'components.native-chat.usage.resetFailed',
             'Codex limits couldn’t be reset. Try again.'
           )}
           <Button variant="outline" size="xs" onClick={() => void redeem()} disabled={busy}>
-            {translate('components.native-chat.usage.retry', 'Retry')}
+            {t('components.native-chat.usage.retry', 'Retry')}
           </Button>
         </div>
       ) : null}
       <CodexResetConfirmation
         open={confirm}
         onOpenChange={setConfirm}
-        accountLabel={chatAccountLabel(result.account)}
+        accountLabel={chatAccountLabel(result.account, t)}
         skipFutureResetConfirm={skip}
         onSkipChange={setSkip}
         isRedeemingReset={busy}

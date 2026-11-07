@@ -1,5 +1,6 @@
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { agentSessionSignInFor } from '../../../../../shared/agent-session/lifecycle/agent-session-sign-in'
 import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
@@ -8,7 +9,8 @@ import { NativeChatActionButton } from '../composer/controls/NativeChatActionBut
 export function nativeChatAntigravitySignInContent(
   failureKind: string | undefined,
   agentName: string | undefined,
-  account?: string
+  account?: string,
+  t: Translate = translate
 ): React.JSX.Element | undefined {
   if (
     failureKind !== 'notSignedIn' ||
@@ -20,7 +22,7 @@ export function nativeChatAntigravitySignInContent(
   return (
     <Trans
       i18n={i18n}
-      defaults={translate(
+      defaults={t(
         'components.native-chat.antigravitySignIn.sentence',
         "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
       )}
