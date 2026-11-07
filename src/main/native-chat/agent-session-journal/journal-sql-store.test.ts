@@ -61,7 +61,7 @@ async function fixture() {
   return { root, database, journal }
 }
 
-function receipt(adopt: (committed: boolean) => void): JournalOperationReceipt {
+function receipt(adopt: (committed: boolean) => void, draft = 'retained'): JournalOperationReceipt {
   return {
     write: () => {
       throw new Error('the host must never write a SQL receipt')
@@ -71,6 +71,19 @@ function receipt(adopt: (committed: boolean) => void): JournalOperationReceipt {
     },
     stage: async () => ({
       effects: [
+        {
+          kind: 'store',
+          insertOperationsIfAbsent: false,
+          writes: {
+            records: {
+              upsert: [['session', JSON.stringify({ schemaVersion: 999, draft })]],
+              remove: []
+            },
+            operations: { upsert: [], remove: [] },
+            retiredClaimKeys: null,
+            sessionTabs: null
+          }
+        },
         {
           kind: 'receipt',
           scope: { kind: 'global' },
@@ -131,7 +144,7 @@ it('discards staged adoption and the row together when a receipt conflicts', asy
     journal.write(item('must roll back'), () => ({
       receipt: receipt((committed) => {
         adopted = committed
-      })
+      }, 'must roll back')
     }))
   ).rejects.toBeInstanceOf(CommandReceiptExistsError)
   expect(adopted).toBe(false)
@@ -142,6 +155,10 @@ it('discards staged adoption and the row together when a receipt conflicts', asy
   expect(await database.readCommandReceipt({ kind: 'global' }, 'operation')).toMatchObject({
     verdict: 'readable',
     receipt: { result: { sequence: 2 } }
+  })
+  expect((await database.loadRecords()).unreadableRecords.get('session')).toEqual({
+    reason: 'unsupported_schema',
+    raw: { schemaVersion: 999, draft: 'retained' }
   })
 })
 
