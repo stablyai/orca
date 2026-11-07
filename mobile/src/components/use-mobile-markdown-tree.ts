@@ -2,6 +2,7 @@ import type { Root } from 'mdast'
 import { useMemo, useRef } from 'react'
 import {
   linkGitHubReferences,
+  bareGitHubReferenceRepoForChat,
   type GitHubRepoReference
 } from '../../../src/shared/github/github-reference-links'
 import {
@@ -13,6 +14,7 @@ import {
   parseGrowingMobileMarkdownTree,
   type MobileMarkdownTreeCache
 } from './mobile-markdown-growing-tree'
+import { mobileMarkdownDrawnCodeLines } from './mobile-markdown-drawn-code-lines'
 import { protectMobileMarkdownVisualLines } from './mobile-markdown-visual-lines'
 
 const NO_DIRECTIVES: NativeChatVisualDirective[] = []
@@ -21,6 +23,7 @@ const NO_DIRECTIVES: NativeChatVisualDirective[] = []
 export type MobileMarkdownTreeLinks = {
   fileLinkExists: FileLinkExists | undefined
   githubRepo: GitHubRepoReference | null | undefined
+  chatGitHubReferences: boolean
 }
 
 /** The tree MobileMarkdown draws; with `visuals`, directive lines become placeholders. */
@@ -29,13 +32,20 @@ export function useMobileMarkdownTree(
   visuals: boolean,
   growing: boolean,
   chatMath: boolean,
-  { fileLinkExists, githubRepo }: MobileMarkdownTreeLinks
+  { fileLinkExists, githubRepo, chatGitHubReferences }: MobileMarkdownTreeLinks
 ): { root: Root; directives: NativeChatVisualDirective[] } {
   const visualLines = useMemo(
     () => (visuals ? protectMobileMarkdownVisualLines(text) : null),
     [text, visuals]
   )
   const source = visualLines?.text ?? text
+  const bareRepo = useMemo(
+    () =>
+      chatGitHubReferences
+        ? bareGitHubReferenceRepoForChat(source, githubRepo, mobileMarkdownDrawnCodeLines)
+        : (githubRepo ?? null),
+    [chatGitHubReferences, source, githubRepo]
+  )
   const link = useMemo(
     () => (tree: Root) => {
       // Same order as desktop: file links first, so a path's `#` never becomes an issue link.
@@ -43,10 +53,10 @@ export function useMobileMarkdownTree(
         linkNativeChatFilePaths(tree, fileLinkExists)
       }
       if (githubRepo) {
-        linkGitHubReferences(tree, githubRepo)
+        linkGitHubReferences(tree, bareRepo)
       }
     },
-    [fileLinkExists, githubRepo]
+    [fileLinkExists, githubRepo, bareRepo]
   )
   // Streaming text grows a little each frame; blocks it finished earlier are not parsed again.
   const cache = useRef<MobileMarkdownTreeCache | null>(null)

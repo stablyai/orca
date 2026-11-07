@@ -9,6 +9,8 @@ export type MobileMarkdownLinks = {
   fileLinks: NativeChatFileLinkExistence | null
   /** Where bare `#123` points; null leaves it text. */
   githubRepo: GitHubRepoReference | null
+  /** Chat text can discuss other repos: bare `#123` then yields to any repo the text names. */
+  chatGitHubReferences?: boolean
 }
 
 export const MobileMarkdownLinksContext = createContext<MobileMarkdownLinks | null>(null)

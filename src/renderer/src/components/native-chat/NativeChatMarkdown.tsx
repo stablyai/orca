@@ -154,6 +154,7 @@ export function NativeChatMarkdown({
         variant={variant}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
+        chatGitHubReferences
         onLinkClick={onLinkClick}
         allowFileUriLinks={onLinkClick !== undefined}
         content={

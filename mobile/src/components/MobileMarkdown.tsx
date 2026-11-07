@@ -77,7 +77,11 @@ function MobileMarkdownContent({
     renderVisual !== undefined,
     growing,
     chatMath,
-    { fileLinkExists, githubRepo: links?.githubRepo }
+    {
+      fileLinkExists,
+      githubRepo: links?.githubRepo,
+      chatGitHubReferences: links?.chatGitHubReferences ?? false
+    }
   )
   if (!text) {
     return fallback ? (

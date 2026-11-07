@@ -30,6 +30,7 @@ import {
 import { CommentMarkdownBlockLineContext } from './comment-markdown-code-renderers'
 import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-unknown-html-as-text'
 import { CommentMarkdownWords } from './CommentMarkdownWords'
+import { markdownCodeLines } from './markdown-top-level-blocks'
 import {
   MemoizedMarkdown,
   useMarkdownBlocks,
@@ -40,6 +41,7 @@ import { remarkGitHubCallouts } from '@/lib/remark-github-callouts'
 import { remarkAutolinkLiteralProseBoundary } from '@/lib/remark-autolink-literal-prose-boundary'
 import {
   linkGitHubReferences,
+  bareGitHubReferenceRepoForChat,
   type GitHubRepoReference
 } from '../../../../shared/github/github-reference-links'
 
@@ -79,7 +81,7 @@ function remarkNativeChatFileLinks(
 }
 
 export function remarkGitHubReferences(
-  defaultRepo: GitHubRepoReference
+  defaultRepo: GitHubRepoReference | null
 ): () => (tree: Parameters<typeof linkGitHubReferences>[0]) => void {
   return () => (tree) => linkGitHubReferences(tree, defaultRepo)
 }
@@ -154,6 +156,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   math?: boolean
   variant?: 'compact' | 'document'
   githubRepo?: GitHubRepoReference | null
+  /** Chat text can discuss other repos: bare `#123` then yields to any repo the text names. */
+  chatGitHubReferences?: boolean
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   /** Turns detected file paths into links, keeping only those this confirms exist. */
@@ -184,6 +188,7 @@ const CommentMarkdown = React.memo(
       className,
       variant = 'compact',
       githubRepo,
+      chatGitHubReferences = false,
       onLinkClick,
       allowFileUriLinks = false,
       fileLinkExists,
@@ -222,6 +227,13 @@ const CommentMarkdown = React.memo(
       () => (extension ? extensionRehypePlugins(extension) : rehypePlugins),
       [extension]
     )
+    const bareGithubRepo = React.useMemo(
+      () =>
+        chatGitHubReferences
+          ? bareGitHubReferenceRepoForChat(content, githubRepo, markdownCodeLines)
+          : (githubRepo ?? null),
+      [chatGitHubReferences, content, githubRepo]
+    )
     const activeRemarkPlugins = React.useMemo(() => {
       const basePlugins = unknownHtmlAsText ? unknownHtmlAsTextRemarkPlugins : remarkPlugins
       const plugins = fileLinkExists
@@ -229,8 +241,8 @@ const CommentMarkdown = React.memo(
         : basePlugins
       const withMath: RemarkPlugins = math ? [...plugins, remarkChatMath] : plugins
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
-      return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
-    }, [extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
+      return githubRepo ? [...withExtension, remarkGitHubReferences(bareGithubRepo)] : withExtension
+    }, [bareGithubRepo, extension, fileLinkExists, githubRepo, math, unknownHtmlAsText])
     const blocks = useMarkdownBlocks(
       content,
       growing,
