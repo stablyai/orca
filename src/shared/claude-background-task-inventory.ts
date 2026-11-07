@@ -34,6 +34,21 @@ export type ClaudeBackgroundAgentTask = {
   teammate: boolean
 }
 
+// Claude Code's live-updates watch on a published or watched claude.ai artifact; it stays running until the session exits.
+// Why: require the claude.ai artifact URL right after the label so a model-started Monitor that merely reuses the wording still holds the pane.
+const CLAUDE_ARTIFACT_WATCH_DESCRIPTION =
+  /^live updates for artifact https:\/\/claude\.ai\/(?:code\/)?artifact\/[\w-]+(?:\s|$)/
+
+/** Ambient watches never wake the lead or hold its turn; the Stop row omits Claude's ambient flag, so match the artifact watch's description too. */
+function isClaudeAmbientBackgroundTask(obj: Record<string, unknown>, taskType: string): boolean {
+  return (
+    obj.ambient === true ||
+    (taskType === 'monitor' &&
+      typeof obj.description === 'string' &&
+      CLAUDE_ARTIFACT_WATCH_DESCRIPTION.test(obj.description))
+  )
+}
+
 /** Absent/malformed inventory on older Claude builds means retain the tracked roster; never clear it. */
 export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unknown>): {
   present: boolean
@@ -75,6 +90,9 @@ export function readClaudeBackgroundAgentTasks(hookPayload: Record<string, unkno
     if (taskType.length === 0) {
       truncated = true
       hasRunningNonAgentTask ||= !isTerminal
+      continue
+    }
+    if (isClaudeAmbientBackgroundTask(obj, taskType)) {
       continue
     }
     const isAgentTask = isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(taskType))

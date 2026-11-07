@@ -51,6 +51,56 @@ describe('Claude background task status', () => {
     ).toBe('working')
   })
 
+  it('does not hold a finished turn for an artifact live-updates watch', () => {
+    const artifactWatch = {
+      id: 'sq1ebubjo',
+      type: 'monitor',
+      status: 'running',
+      description: 'live updates for artifact https://claude.ai/artifact/abc123 (watch requested)'
+    }
+    expect(readClaudeBackgroundAgentTasks({ background_tasks: [artifactWatch] })).toMatchObject({
+      hasRunningNonAgentTask: false,
+      runningNonAgentTaskIds: []
+    })
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [{ id: 'ws-1', type: 'monitor', status: 'running', ambient: true }]
+      }).hasRunningNonAgentTask
+    ).toBe(false)
+    expect(
+      readClaudeBackgroundAgentTasks({
+        background_tasks: [
+          {
+            ...artifactWatch,
+            description:
+              'live updates for artifact https://claude.ai/code/artifact/0f6c2d1e-4b7a-4c55-9d3e-2a1b3c4d5e6f (published)'
+          }
+        ]
+      }).hasRunningNonAgentTask
+    ).toBe(false)
+    // A model-started websocket Monitor is still live work, even when it reuses the label without a claude.ai artifact URL.
+    for (const description of [
+      'Watch deploy events',
+      'live updates for artifact build-42',
+      'live updates for artifact https://example.com/artifact/abc123'
+    ]) {
+      expect(
+        readClaudeBackgroundAgentTasks({
+          background_tasks: [{ id: 'ws-2', type: 'monitor', status: 'running', description }]
+        }).hasRunningNonAgentTask
+      ).toBe(true)
+    }
+
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'publish it' })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [artifactWatch]
+      })?.state
+    ).toBe('done')
+  })
+
   it('fails unknown, partial, or malformed task entries active but ignores terminal entries', () => {
     for (const status of ['queued', undefined]) {
       expect(
