@@ -3,7 +3,10 @@ import {
   structuredAgentSessionIdOfDraftScope,
   nativeChatDraftScopeTabId
 } from './native-chat-composer-draft-scope'
-import type { NativeChatComposerDraftOwner } from './native-chat-composer-draft-storage'
+import type {
+  NativeChatComposerDraftOwner,
+  StoredNativeChatComposerDraft
+} from './native-chat-composer-draft-storage'
 import {
   installNativeChatDraftRecord,
   notifyScope,
@@ -17,7 +20,6 @@ import {
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
 import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
-import type { StoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 
 export function deleteNativeChatComposerDraftsWhere(
   matches: (scope: string, draft: StoredNativeChatComposerDraft | undefined) => boolean

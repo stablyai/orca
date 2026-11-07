@@ -1,4 +1,3 @@
-import { isNativeChatEditorCaretOnVisualEdge } from './native-chat-mounted-editor-view'
 import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
 import { nativeChatDraftPositions } from './native-chat-composer-draft-memory'
 import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
@@ -36,7 +35,11 @@ import type {
   NativeChatPromptEditorProps
 } from './native-chat-composer-input'
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
-import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
+import {
+  focusMountedNativeChatEditor,
+  mountedEditorView,
+  isNativeChatEditorCaretOnVisualEdge
+} from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
 
 import { useNativeChatComposerMount } from './native-chat-composer-mount'

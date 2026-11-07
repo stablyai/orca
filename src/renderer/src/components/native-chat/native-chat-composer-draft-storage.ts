@@ -2,7 +2,11 @@
 
 import type { JSONContent } from '@tiptap/react'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { createIndexedDbNativeChatComposerDraftStorage } from './native-chat-composer-draft-indexeddb'
+import {
+  createIndexedDbNativeChatComposerDraftStorage,
+  KEEP_NATIVE_CHAT_DRAFT
+} from './native-chat-composer-draft-indexeddb'
+export { KEEP_NATIVE_CHAT_DRAFT }
 
 export type NativeChatComposerDraftImage = {
   id: string
@@ -44,8 +48,6 @@ export type NativeChatComposerDraftStorage = {
     apply: (stored: unknown) => StoredNativeChatComposerDraft | null | typeof KEEP_NATIVE_CHAT_DRAFT
   ): Promise<void>
 }
-
-export const KEEP_NATIVE_CHAT_DRAFT = Symbol('keep-native-chat-draft')
 
 /** Use run-local storage without IndexedDB and as the controllable test backend. */
 export function createMemoryNativeChatComposerDraftStorage(): NativeChatComposerDraftStorage & {

@@ -1,4 +1,3 @@
-import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 import {
   records,
@@ -24,6 +23,7 @@ import type { NativeChatDraftLoadAttempt } from './native-chat-composer-draft-lo
 import {
   observeNativeChatDraftReturn,
   releaseNativeChatDraftReturn,
+  type NativeChatDraftReturnSource,
   type NativeChatDraftReturnEvent
 } from './native-chat-draft-return-products'
 import { captureNativeChatStagedRemoval } from './native-chat-draft-attachment-staging'

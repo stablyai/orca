@@ -4,7 +4,7 @@ import type {
   NativeChatComposerDraftStorage,
   StoredNativeChatComposerDraft
 } from './native-chat-composer-draft-storage'
-import { KEEP_NATIVE_CHAT_DRAFT } from './native-chat-composer-draft-storage'
+export const KEEP_NATIVE_CHAT_DRAFT = Symbol('keep-native-chat-draft')
 
 const DATABASE_NAME = 'orca-native-chat-composer-drafts'
 const DATABASE_VERSION = 1

@@ -1,4 +1,3 @@
-import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { ephemeralDrafts, records, type DraftRecord } from './native-chat-composer-draft-memory'
 import { parseStoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
 import {
@@ -7,7 +6,10 @@ import {
 } from './native-chat-composer-draft-removal-capture'
 import { savedNativeChatComposerDraftForm } from './native-chat-composer-draft-saved-value'
 import { nativeChatComposerDraftJournalReplayKey } from './native-chat-composer-draft-journal'
-import type { NativeChatDraftReturnEvent } from './native-chat-draft-return-products'
+import type {
+  NativeChatDraftReturnEvent,
+  NativeChatDraftReturnSource
+} from './native-chat-draft-return-products'
 import { nativeChatDraftRemovalDependencies } from './native-chat-draft-removal-dependencies'
 
 /** Evaluate the completed prefix across editors and their conversation before retiring any carrier. */

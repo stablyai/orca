@@ -1,4 +1,3 @@
-import type { NativeChatDraftReturnSource } from './native-chat-draft-return-products'
 import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-launch-draft-source'
 export {
   deleteNativeChatComposerDraftsWhere,
@@ -28,6 +27,7 @@ import { journalNativeChatComposerDraftAddition } from './native-chat-composer-d
 import {
   beginNativeChatDraftReturn,
   commitNativeChatDraftReturn,
+  type NativeChatDraftReturnSource,
   type NativeChatDraftReturnProduct
 } from './native-chat-draft-return-products'
 import {

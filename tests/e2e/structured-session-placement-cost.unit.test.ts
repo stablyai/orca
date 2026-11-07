@@ -18,6 +18,7 @@ import { sessionCrewChanges } from '../../src/main/runtime/orchestration/crew/cr
 import { StructuredAgentSessionHostRuntimeState } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host-runtime-state'
 import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import type { Tab } from '../../src/shared/tab-types'
+import type { RuntimeMobileSessionTabGroup } from '../../src/shared/runtime-session-contracts'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import type { ProfileStateDomainReplacement } from '../../src/main/persistence/loading-store/profile-state-authority'
 import * as placement from '../../src/main/runtime/session-tabs/structured-session-placement'
@@ -179,7 +180,7 @@ it.each([20, 200])(
     })
     const order = tabMerge.appendChatTabOrder
     vi.spyOn(tabMerge, 'appendChatTabOrder').mockImplementation((groups, prior, tabs, active) => {
-      const orders = (list: typeof groups | undefined) =>
+      const orders = (list: readonly RuntimeMobileSessionTabGroup[] | undefined) =>
         (list ?? []).reduce((sum, group) => sum + group.tabOrder.length, 0)
       inherited.chatOrderMerges++
       inherited.chatOrderInput += orders(groups) + orders(prior) + tabs.length
