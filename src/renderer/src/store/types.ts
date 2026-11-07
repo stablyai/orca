@@ -45,6 +45,7 @@ import type { NewIssueDraftSlice } from './slices/new-issue-draft'
 import type { FeedbackDraftSlice } from './slices/feedback-draft'
 import type { TaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import type { RemoteServerUpdatesSlice } from './slices/remote-server-updates'
+import type { RelayedRuntimeHostsSlice } from './slices/relayed-runtime-hosts'
 import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import type { StructuredSessionLaunchDirectorySlice } from './slices/structured-session-launch-directories'
 import type { StructuredChatSleptAtSlice } from './slices/structured-chat-slept-at'
@@ -95,6 +96,7 @@ export type AppState = RepoSlice &
   FeedbackDraftSlice &
   TaskCreationDraftsSlice &
   RemoteServerUpdatesSlice &
+  RelayedRuntimeHostsSlice &
   TerminalQuickCommandHostsSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &

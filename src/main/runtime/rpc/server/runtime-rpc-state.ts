@@ -39,6 +39,7 @@ import { DeclaredDesktopClients } from '../../declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
 import type { WebSocketSourceGuard } from '../ws-network-source-guard'
+import { RelayedRuntimeClients } from './relayed-runtime-clients'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -84,6 +85,8 @@ export class RuntimeRpcState {
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   // Why nullable: launch sets both for every runtime process; in-process test servers may not.
   protected mobileDesktopRelay: MobileDesktopRelay | null = null
+  // Paired desktop/web clients get a device on a server only after relaying there, so pairing alone mints none.
+  protected readonly relayedRuntimeClients = new RelayedRuntimeClients()
   protected mobileRelayHostCatalog: MobileRelayHostCatalog | null = null
   protected detachPairedServerRows: (() => void) | null = null
   protected readonly declaredDesktopClients = new DeclaredDesktopClients()
