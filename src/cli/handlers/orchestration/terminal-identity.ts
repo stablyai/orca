@@ -51,6 +51,7 @@ export async function resolveOrchestrationTerminalHandle(
     return await resolveImplicitOrchestrationSender(cwd, client)
   }
   return await getTerminalHandle(callerScopeFlags(), cwd, client, {
+    requireUnambiguous: true,
     purpose: 'orchestration-caller'
   })
 }
