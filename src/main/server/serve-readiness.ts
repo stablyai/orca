@@ -26,6 +26,8 @@ export type ServeReadiness = {
   advertisedEndpoint: string | null
   managedWslCliReconciliation: 'pending' | 'settled' | 'failed'
   pairing: ServePairingReadiness
+  // Shown beside the pairing code when public clients would be refused.
+  networkNotice?: string | null
   /** Optional for older/Electron hosts: absence means unreported, never healthy. Carries build identity, Node ABI and terminal-daemon self-test. */
   health?: OrcadHealth
 }
@@ -115,6 +117,9 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
     }
     if (readiness.pairing.scope === 'mobile' && readiness.pairing.qr) {
       lines.push(`Mobile pairing QR:\n${readiness.pairing.qr}`)
+    }
+    if (readiness.networkNotice) {
+      lines.push(readiness.networkNotice)
     }
     lines.push(`Pairing URL: ${readiness.pairing.url}`)
   } else {

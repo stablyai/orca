@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeviceEntry } from './pairing/device-entry'
 import { readNetworkSourcePolicy } from './network-source-policy-store'
-import { createServeNetworkSourceGuard } from './serve-network-source-policy'
+import {
+  createServeNetworkSourceGuard,
+  publicSourceRefusalNotice,
+  resolveServeNetworkSourcePolicy
+} from './serve-network-source-policy'
 
 function device(deviceId: string, pairedAt: number, extra: Partial<DeviceEntry> = {}): DeviceEntry {
   return { deviceId, name: deviceId, scope: 'runtime', pairedAt, lastSeenAt: pairedAt, ...extra }
@@ -52,5 +56,41 @@ describe('createServeNetworkSourceGuard', () => {
     expect(enforcing?.admit('127.0.0.1')).toBe(true)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     expect(enforcing?.admit('203.0.113.9')).toBe(false)
+  })
+})
+
+describe('resolveServeNetworkSourcePolicy --bind', () => {
+  it.each([
+    ['203.0.113.9', 'public-allowed'],
+    ['0.0.0.0', 'local-only'],
+    ['::', 'local-only'],
+    ['192.168.1.5', 'local-only']
+  ])('treats --bind %s as %s', (bindHost, kind) => {
+    expect(
+      resolveServeNetworkSourcePolicy({
+        options: LOCAL,
+        record: { guardSince: 1_000 },
+        devices: [],
+        bindHost
+      }).kind
+    ).toBe(kind)
+  })
+})
+
+describe('publicSourceRefusalNotice', () => {
+  function nic(address: string, family: 'IPv4' | 'IPv6', internal = false) {
+    return { address, family, internal, netmask: '', mac: '', cidr: null, scopeid: 0 }
+  }
+
+  it('names a public IPv4 interface address but not LAN, loopback or global IPv6 ones', () => {
+    expect(
+      publicSourceRefusalNotice({
+        lo: [nic('127.0.0.1', 'IPv4', true)],
+        en0: [nic('192.168.1.5', 'IPv4'), nic('2001:db8::5', 'IPv6')]
+      })
+    ).toBeNull()
+    expect(
+      publicSourceRefusalNotice({ eth0: [nic('10.0.0.4', 'IPv4'), nic('203.0.113.9', 'IPv4')] })
+    ).toContain('203.0.113.9')
   })
 })

@@ -143,10 +143,10 @@ export async function stopNodeWebSocketTransport(args: {
   }
 }
 
-// Terminate soon after 1013: half-open phones may never ACK and retain WS capacity; the error listener handles closing resets.
-export function rejectNodeWebSocketOverCapacity(ws: WebSocket): void {
+// Terminate soon after the close: half-open phones may never ACK and retain WS capacity; the error listener handles closing resets.
+export function rejectNodeWebSocket(ws: WebSocket, code: number, reason: string): void {
   ws.on('error', () => {})
-  ws.close(1013, 'Maximum connections reached')
+  ws.close(code, reason)
   const terminateTimer = setTimeout(() => ws.terminate(), 1_000)
   terminateTimer.unref?.()
   ws.once('close', () => clearTimeout(terminateTimer))

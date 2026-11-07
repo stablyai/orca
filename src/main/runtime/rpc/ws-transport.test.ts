@@ -112,13 +112,26 @@ describe('WebSocketTransport', () => {
     liveClient.close()
   })
 
-  it('drops a source the guard refuses before any HTTP or upgrade handling', async () => {
+  it('tells a refused source how to get in without running any RPC for it', async () => {
     const admit = vi.fn(() => false)
     const transport = new WebSocketTransport({ host: '127.0.0.1', port: 0, sourceGuard: { admit } })
+    const onMessage = vi.fn()
+    transport.onMessage(onMessage)
     transports.push(transport)
     await transport.start()
 
-    await expect(connectWs(transport)).rejects.toThrow()
+    const ws = await connectWs(transport)
+    ws.send('hello')
+    const [code, reason] = await new Promise<[number, string]>((resolve) =>
+      ws.once('close', (closeCode, closeReason) => resolve([closeCode, closeReason.toString()]))
+    )
+    expect(code).toBe(1008)
+    expect(reason).toContain('--allow-public')
+    expect(onMessage).not.toHaveBeenCalled()
+
+    const page = await fetch(`http://127.0.0.1:${transport.resolvedPort}/web-index.html`)
+    expect(page.status).toBe(403)
+    expect(await page.text()).toContain('--allow-public')
     expect(admit).toHaveBeenCalledWith('127.0.0.1')
   })
 
