@@ -4,14 +4,14 @@ import { expect, it, vi } from 'vitest'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
 
-function sideChatCommand() {
+function sideChatCommand(notReadyReason: string | null = null) {
   const open = vi.fn().mockResolvedValue({ started: true })
   const completeItem = vi.fn()
   const transport = {
     sessionId: 'claude_source',
     onError: vi.fn(),
     capturePresentation: () => () => true,
-    sideChat: { notReadyReason: null, open, reportForkPoint: vi.fn() }
+    sideChat: { notReadyReason, open, reportForkPoint: vi.fn() }
   }
   const { result } = renderHook(() =>
     useNativeChatSideChatCommand({
@@ -42,6 +42,14 @@ it('completes the row on a pick, even when the command is already typed', () => 
   const { open, completeItem, pick } = sideChatCommand()
 
   expect(completeItem).toHaveBeenCalled()
+  expect(pick).not.toHaveBeenCalled()
+  expect(open).not.toHaveBeenCalled()
+})
+
+it('ignores a pick of the row while side chats are unavailable', () => {
+  const { open, completeItem, pick } = sideChatCommand('Available after the first reply.')
+
+  expect(completeItem).not.toHaveBeenCalled()
   expect(pick).not.toHaveBeenCalled()
   expect(open).not.toHaveBeenCalled()
 })

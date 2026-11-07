@@ -120,7 +120,10 @@ export function useNativeChatSideChatCommand(args: {
         const leading = autocomplete.mode === 'slash' && autocomplete.dispatchable === true
         const name = item.kind === 'command' && item.orcaOwned ? item.name : null
         if (leading && sideChat && isNativeChatSideChatCommand(name)) {
-          completeItem(item)
+          // An unavailable row says why; picking it does nothing, as the common pattern does.
+          if (sideChat.notReadyReason === null) {
+            completeItem(item)
+          }
         } else {
           pick(item)
         }
