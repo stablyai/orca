@@ -8,6 +8,8 @@ const SILENCE_PROBABILITY = 0.35
 export const VAD_PAUSE_SECONDS = 0.6
 // Silence kept ahead of detected speech so a soft first syllable isn't clipped.
 const SPEECH_PREROLL_SECONDS = 0.4
+// Silero's minimum speech: a click or cough alone doesn't end a phrase, so it is never decoded (and hallucinated) by itself.
+const MIN_PHRASE_SPEECH_SECONDS = 0.25
 
 export type VadStream = Pick<TranscribeCpp.VadSession, 'streamFeed' | 'streamFlush'>
 
@@ -18,20 +20,26 @@ export type VadStream = Pick<TranscribeCpp.VadSession, 'streamFeed' | 'streamFlu
 export class VadPauseSegmenter {
   private readonly phrase: OfflineAudioChunker
   private readonly pauseFrames: number
+  private readonly minSpeechFrames: number
   private readonly prerollSamples: number
   private unscored = new Float32Array(0)
   private preroll: Float32Array[] = []
   private prerollLength = 0
   private inSpeech = false
+  private speechFrames = 0
   private silentFrames = 0
+  private vadFailed = false
 
+  /** `cutsAtPauses` false: phrases end only at the decode bound and at stop, as without a detector. */
   constructor(
     private readonly vad: VadStream,
     sampleRate: number,
-    private readonly frameSamples: number
+    private readonly frameSamples: number,
+    private readonly cutsAtPauses: () => boolean = () => true
   ) {
     this.phrase = new OfflineAudioChunker(sampleRate)
     this.pauseFrames = Math.ceil((VAD_PAUSE_SECONDS * sampleRate) / frameSamples)
+    this.minSpeechFrames = Math.ceil((MIN_PHRASE_SPEECH_SECONDS * sampleRate) / frameSamples)
     this.prerollSamples = Math.round(SPEECH_PREROLL_SECONDS * sampleRate)
   }
 
@@ -42,21 +50,48 @@ export class VadPauseSegmenter {
 
   /** Return the phrases that ended (or reached the decode bound) within these samples. */
   async push(samples: Float32Array): Promise<Float32Array[]> {
+    if (this.vadFailed) {
+      return this.phrase.push(samples)
+    }
     this.unscored = concat(this.unscored, samples)
-    // The binding borrows the PCM until the call settles, so it gets its own copy.
-    const scored = await this.vad.streamFeed(new Float32Array(samples))
-    return this.route(scored.probs)
+    try {
+      // The binding borrows the PCM until the call settles, so it gets its own copy.
+      return this.route((await this.vad.streamFeed(new Float32Array(samples))).probs)
+    } catch (error) {
+      return this.stopSegmenting(error)
+    }
   }
 
   /** Return the rest of an open phrase; trailing silence is dropped. */
   async flush(): Promise<Float32Array[]> {
-    const scored = await this.vad.streamFlush()
-    const ready = this.route(scored.probs, true)
+    let ready: Float32Array[] = []
+    if (!this.vadFailed) {
+      try {
+        ready = this.route((await this.vad.streamFlush()).probs, true)
+      } catch (error) {
+        ready = this.stopSegmenting(error)
+      }
+    }
     const rest = this.inSpeech ? this.phrase.flush() : null
     this.inSpeech = false
     this.preroll = []
     this.prerollLength = 0
     return rest ? [...ready, rest] : ready
+  }
+
+  // A detector error must not cost the dictation: keep every held sample and finish as bounded chunks.
+  private stopSegmenting(error: unknown): Float32Array[] {
+    console.warn('[speech] Silero VAD failed mid-dictation; text arrives at stop:', error)
+    this.vadFailed = true
+    this.inSpeech = true
+    const ready: Float32Array[] = []
+    for (const held of [...this.preroll, this.unscored]) {
+      ready.push(...this.phrase.push(held))
+    }
+    this.preroll = []
+    this.prerollLength = 0
+    this.unscored = new Float32Array(0)
+    return ready
   }
 
   private route(probs: readonly number[], last = false): Float32Array[] {
@@ -69,6 +104,7 @@ export class VadPauseSegmenter {
       offset = end
       if (!this.inSpeech && probability >= SPEECH_PROBABILITY) {
         this.inSpeech = true
+        this.speechFrames = 0
         this.silentFrames = 0
         for (const held of this.preroll) {
           ready.push(...this.phrase.push(held))
@@ -81,8 +117,13 @@ export class VadPauseSegmenter {
         continue
       }
       ready.push(...this.phrase.push(frame))
+      this.speechFrames += probability >= SPEECH_PROBABILITY ? 1 : 0
       this.silentFrames = probability < SILENCE_PROBABILITY ? this.silentFrames + 1 : 0
-      if (this.silentFrames >= this.pauseFrames) {
+      if (
+        this.silentFrames >= this.pauseFrames &&
+        this.speechFrames >= this.minSpeechFrames &&
+        this.cutsAtPauses()
+      ) {
         this.inSpeech = false
         const rest = this.phrase.flush()
         if (rest) {
