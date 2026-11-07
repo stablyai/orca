@@ -1,3 +1,4 @@
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from './acp-dialects/acp-dialect'
@@ -30,6 +31,53 @@ export function acpSessionUpdate(
     messageKey?: string
     scope?: AgentJournalTurnScope
   }
+): ProviderTimelineEvent[] {
+  const update = notification.update
+  const child = context.dialect.childSession?.(update)
+  if (!child) {
+    return translateSessionUpdate(notification, turn, at, context)
+  }
+  // The first relayed frame is the earliest sign of a live subagent; its spawn call settles it.
+  const spawned = context.subagents.has(child.id)
+    ? []
+    : context.subagents.translate(
+        [{ id: child.id, state: 'working', ...(child.label ? { label: child.label } : {}) }],
+        { thread: notification.sessionId, ...(turn === undefined ? {} : { turn }) },
+        at
+      )
+  const producer: AgentJournalProducerLinkage = {
+    agentId: child.id,
+    producerKind: 'agent',
+    ...(child.parentId && child.parentId !== notification.sessionId
+      ? { parentAgentId: child.parentId }
+      : {})
+  }
+  return [
+    ...spawned,
+    ...translateSessionUpdate(notification, turn, at, context).map((event) =>
+      withProducer(event, producer)
+    )
+  ]
+}
+
+function withProducer(
+  event: ProviderTimelineEvent,
+  producer: AgentJournalProducerLinkage
+): ProviderTimelineEvent {
+  return event.type === 'item.open' ||
+    event.type === 'item.update' ||
+    event.type === 'item.close' ||
+    event.type === 'text.delta' ||
+    event.type === 'request.open'
+    ? { ...event, producer }
+    : event
+}
+
+function translateSessionUpdate(
+  notification: SessionNotification,
+  turn: string | undefined,
+  at: number,
+  context: Parameters<typeof acpSessionUpdate>[3]
 ): ProviderTimelineEvent[] {
   const update = notification.update
   const join = {

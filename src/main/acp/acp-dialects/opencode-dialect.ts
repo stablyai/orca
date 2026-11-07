@@ -3,6 +3,7 @@ import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent
 import type { AcpAgentError } from '../acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { openCodeChildSession, openCodeToolSubagents } from './opencode-subagents'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
@@ -105,5 +106,7 @@ export const OPENCODE_ACP_DIALECT: AcpDialect = {
   clientCapabilities: { elicitation: { form: {} } },
   effortChangesModel: true,
   normalizeToolUpdate,
-  promptFailure
+  promptFailure,
+  toolSubagents: openCodeToolSubagents,
+  childSession: openCodeChildSession
 }
