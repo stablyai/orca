@@ -19951,7 +19951,6 @@
       "visualLoading": "Görselleştirme yükleniyor",
       "visualOpenInNewTab": "Yeni sekmede aç",
       "queuedMessages": {
-        "behindReturnedHold": "Bekliyor — önceki bir mesajın ele alınması gerekiyor",
         "steer": "Yönlendir",
         "send": "Gönder",
         "steerHint": "Modeli kesintiye uğratmadan gönder",
