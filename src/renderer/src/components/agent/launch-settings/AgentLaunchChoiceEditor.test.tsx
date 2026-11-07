@@ -3,6 +3,7 @@ import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import {
+  forgetHostModelCatalogSnapshots,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from '@/runtime/host-model-catalog-snapshots'
@@ -119,6 +120,22 @@ describe('AgentLaunchChoiceEditor model list', () => {
     await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped']))
     await act(async () => answerOlder(LISTED))
     expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-wrapped'])
+  })
+
+  it('shows the new account models when the host drops its lists while the row stays open', async () => {
+    call.mockResolvedValueOnce(LISTED)
+    renderEditor()
+    await waitFor(() => expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-6-astra']))
+
+    call.mockResolvedValueOnce({
+      ...LISTED,
+      models: [{ id: 'gpt-other-account', label: 'GPT Other Account', efforts: [] }]
+    })
+    act(() => forgetHostModelCatalogSnapshots(HOST))
+
+    await waitFor(() =>
+      expect(menus.get('Model')).toEqual(['__agent_default__', 'gpt-other-account'])
+    )
   })
 
   it('does not read a listed default as the default model of every workspace', async () => {
