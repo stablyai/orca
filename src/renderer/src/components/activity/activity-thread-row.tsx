@@ -3,6 +3,7 @@ import { Bell, ExternalLink, X } from 'lucide-react'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -58,6 +59,8 @@ function ActivityThreadRowAction({
 // Stable thread/callback identities let memoized rows skip query, selection and grouping updates.
 export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   thread,
+  projectLabel,
+  projectGroupLabel,
   selected,
   multiSelected = false,
   onSelect,
@@ -72,6 +75,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   previewSuppressed = false
 }: {
   thread: AgentPaneThread
+  projectLabel?: string
+  projectGroupLabel?: string
   selected: boolean
   /** In the multi-selection and not the open row. */
   multiSelected?: boolean
@@ -91,6 +96,11 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
     activityThreadRowCopy(thread)
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
+  const projectPrefix = projectLabel?.trim()
+  const showProjectPrefix =
+    Boolean(projectPrefix) &&
+    projectPrefix?.toLowerCase() !== projectGroupLabel?.trim().toLowerCase()
+  const accessibleTitle = projectPrefix ? `${projectPrefix}: ${taskTitle}` : taskTitle
 
   return (
     <ActivityThreadHoverCard
@@ -106,7 +116,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
         data-worktree-card-selected={multiSelected || undefined}
         onClick={(event) => onSelect(thread, event)}
         role="listitem"
-        aria-label={taskTitle}
+        aria-label={accessibleTitle}
         aria-current={selected ? 'true' : undefined}
         className="group relative flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-transparent px-1.5 py-1.5 text-left transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none worktree-sidebar-card-hover focus-visible:ring-1 focus-visible:ring-ring"
       >
@@ -119,7 +129,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               {/* Keep the activation target separate from markdown links and row actions. */}
               <button
                 type="button"
-                aria-label={taskTitle}
+                aria-label={accessibleTitle}
                 aria-keyshortcuts="Enter Space"
                 onClick={(event) => {
                   event.stopPropagation()
@@ -131,6 +141,18 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                   thread.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
                 )}
               >
+                {showProjectPrefix ? (
+                  <>
+                    <Badge
+                      variant="outline"
+                      className="max-w-[40%] align-bottom"
+                      title={projectPrefix}
+                    >
+                      <span className="min-w-0 truncate">{projectPrefix}</span>
+                    </Badge>{' '}
+                    <span className="text-muted-foreground">·</span>{' '}
+                  </>
+                ) : null}
                 {taskTitle}
               </button>
               <EventTime

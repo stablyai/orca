@@ -1,5 +1,6 @@
 import type React from 'react'
 import { translate } from '@/i18n/i18n'
+import { getRepoHostIdentity, type HostScopedRepoKey } from '../../../../shared/repo-host-identity'
 import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadContextMenu } from './activity-thread-context-menu'
@@ -11,6 +12,7 @@ type ContextMenuProps = Parameters<typeof ActivityThreadContextMenu>[0]
 
 export function ActivityThreadVirtualRow({
   item,
+  projectLabelsByRepoHost,
   collapsed,
   onToggleGroup,
   selectedPaneKey,
@@ -29,6 +31,7 @@ export function ActivityThreadVirtualRow({
   showJumpAction
 }: {
   item: ActivityVirtualItemDescriptor
+  projectLabelsByRepoHost: ReadonlyMap<HostScopedRepoKey, string>
   collapsed: boolean
   onToggleGroup: (groupKey: string) => void
   selectedPaneKey: string | null
@@ -85,6 +88,17 @@ export function ActivityThreadVirtualRow({
         <div className="pb-0.5">
           <ActivityThreadRow
             thread={item.thread}
+            projectLabel={
+              item.thread.repo
+                ? (projectLabelsByRepoHost.get(getRepoHostIdentity(item.thread.repo)) ??
+                  item.thread.repo.displayName)
+                : undefined
+            }
+            projectGroupLabel={
+              item.thread.repo && item.groupKey === `project:${item.thread.repo.id}`
+                ? item.thread.repo.displayName
+                : undefined
+            }
             selected={isOpen}
             multiSelected={!isOpen && multiSelectedKeys.has(item.thread.paneKey)}
             onSelect={onSelectThread}
