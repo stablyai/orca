@@ -12,12 +12,12 @@ export const CHAT_SELECTION_MIX_TOKEN = '--chat-selection-mix'
 // Keep in sync with --chat-selection-mix in main.css: about as deep as the system highlight.
 export const CHAT_SELECTION_MIX = { light: 30, dark: 40 } as const
 
-// Why a floor: a theme whose text is under 4.5:1 even unselected still needs a visible selection.
+// Why a floor: a selection lighter than this is hard to see, which is worse than dim selected text.
 const MIN_VISIBLE_MIX = 15
 
 /**
  * How much link hue the chat selection mixes into the chat background: Orca's own depth, lowered
- * to the deepest mix that keeps selected text 4.5:1 (a dim theme can't take a deep highlight).
+ * (down to a visible floor) to the deepest mix that keeps selected text 4.5:1.
  */
 export function chatSelectionMixOver(
   text: Rgba,
@@ -29,7 +29,7 @@ export function chatSelectionMixOver(
   if (text[3] < 1 || canvas[3] < 1 || hue[3] < 1) {
     return deepest
   }
-  for (let percent = deepest; percent > 0; percent--) {
+  for (let percent = deepest; percent >= MIN_VISIBLE_MIX; percent--) {
     if (contrastRatio(mix(hue, canvas, percent), text) >= MIN_TEXT_CONTRAST) {
       return percent
     }

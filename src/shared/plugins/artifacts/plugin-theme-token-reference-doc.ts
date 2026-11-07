@@ -100,7 +100,7 @@ const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
   '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',
   '--chat-code-block': '`--foreground` mixed lightly into the chat background',
   '--chat-selection':
-    "`--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1",
+    "`--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%)",
   '--chat-selection-foreground': 'same as `--foreground`'
 }
 
