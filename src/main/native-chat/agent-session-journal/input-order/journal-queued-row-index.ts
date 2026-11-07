@@ -1,10 +1,11 @@
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 
-/** Queue order: position, then id, so two cards never compare equal. */
-function precedes(a: QueuedMessageRow, b: QueuedMessageRow): boolean {
-  return a.position < b.position || (a.position === b.position && a.messageId < b.messageId)
+export function compareQueuedRows(a: QueuedMessageRow, b: QueuedMessageRow): number {
+  return (
+    a.position - b.position || (a.messageId < b.messageId ? -1 : a.messageId > b.messageId ? 1 : 0)
+  )
 }
+const precedes = (a: QueuedMessageRow, b: QueuedMessageRow) => compareQueuedRows(a, b) < 0
 
 // A balanced tree, like the input place index: a write copies only the path it changes.
 type Node = { card: QueuedMessageRow; height: number; left?: Node; right?: Node }
@@ -65,50 +66,40 @@ function put(node: Node | undefined, card: QueuedMessageRow, remove: boolean): N
   return balance(node)
 }
 
-/** The live cards that could lead the queue (waiting and not held, or returned), kept in queue order as
- *  each one changes: what a pass over held mail walks, never the epoch's dispatched or withdrawn history. */
-export class JournalInputCandidates {
+/** All current rows share one ordered index; point writes reach only the changed tree path. */
+export class JournalQueuedRowIndex {
   private readonly byId = new Map<string, QueuedMessageRow>()
   private root: Node | undefined
-  private mailCount = 0
-  /** Changes with any candidate, so a walk's answer is reused only while none has. */
-  private revision = 0
-  private walked: { head: QueuedMessageRow; key: string; next: QueuedMessageRow | null }[] = []
 
-  set(card: QueuedMessageRow, candidate: boolean): void {
+  set(card: QueuedMessageRow, live: boolean): boolean {
     const prior = this.byId.get(card.messageId)
-    if ((prior === card && candidate) || (!prior && !candidate)) {
-      return
+    if ((prior === card && live) || (!prior && !live)) {
+      return false
     }
-    if (prior) {
-      this.mailCount -= orchestrationMailNotice(prior.body.from) ? 1 : 0
+    if (prior && (!live || compareQueuedRows(prior, card) !== 0)) {
       this.root = put(this.root, prior, true)
-      this.byId.delete(card.messageId)
     }
-    if (candidate) {
-      this.mailCount += orchestrationMailNotice(card.body.from) ? 1 : 0
+    if (live) {
       this.root = put(this.root, card, false)
       this.byId.set(card.messageId, card)
+    } else {
+      this.byId.delete(card.messageId)
     }
-    this.revision += 1
+    return true
   }
 
-  clear(): void {
-    this.byId.clear()
-    this.root = undefined
-    this.mailCount = 0
-    this.revision += 1
+  head(): QueuedMessageRow | undefined {
+    let node = this.root
+    while (node?.left) {
+      node = node.left
+    }
+    return node?.card
   }
 
-  hasMail(): boolean {
-    return this.mailCount > 0
-  }
-
-  /** Candidates behind `card` in queue order, one at a time: a walk stops at the first it needs. */
-  *after(card: QueuedMessageRow): Generator<QueuedMessageRow> {
+  *values(after?: QueuedMessageRow): Generator<QueuedMessageRow> {
     const path: Node[] = []
     for (let node = this.root; node;) {
-      if (node.card.position > card.position) {
+      if (!after || compareQueuedRows(node.card, after) > 0) {
         path.push(node)
         node = node.left
       } else {
@@ -122,23 +113,5 @@ export class JournalInputCandidates {
         path.push(next)
       }
     }
-  }
-
-  /** What the walk past `head` found, reused until a candidate or anything in `inputs` (the queue, its
-   *  pauses, its edit holds) changes. The head's own mail authority is the caller's to ask every time:
-   *  only structure is kept. */
-  pastHead(
-    head: QueuedMessageRow,
-    inputs: readonly unknown[],
-    walk: () => QueuedMessageRow | null
-  ): QueuedMessageRow | null {
-    const key = [this.revision, ...inputs].join(':')
-    const hit = this.walked.find((entry) => entry.head === head && entry.key === key)
-    if (hit) {
-      return hit.next
-    }
-    const next = walk()
-    this.walked = [...this.walked, { head, key, next }].slice(-3)
-    return next
   }
 }

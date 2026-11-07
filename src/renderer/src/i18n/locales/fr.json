@@ -19946,7 +19946,6 @@
       "queuedMessages": {
         "alreadySent": "Ce message a déjà été envoyé.",
         "listLabel": "Messages en file d'attente",
-        "behindReturnedHold": "En attente — un message précédent nécessite votre attention",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",
         "steerHint": "Envoyer sans interrompre le modèle",

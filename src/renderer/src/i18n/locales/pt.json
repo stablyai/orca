@@ -20910,7 +20910,6 @@
       "visualLoading": "Carregando visualização",
       "visualOpenInNewTab": "Abrir em nova aba",
       "queuedMessages": {
-        "behindReturnedHold": "Aguardando — uma mensagem anterior precisa de atenção",
         "steer": "Orientar",
         "send": "Enviar",
         "steerHint": "Enviar sem interromper o modelo",

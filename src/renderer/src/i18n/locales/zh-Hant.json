@@ -19647,7 +19647,6 @@
       "visualLoading": "正在載入視覺化",
       "visualOpenInNewTab": "在新分頁中開啟",
       "queuedMessages": {
-        "behindReturnedHold": "等待中 — 前面有一則訊息需要處理",
         "steer": "引導",
         "send": "傳送",
         "steerHint": "提交且不中斷模型",
