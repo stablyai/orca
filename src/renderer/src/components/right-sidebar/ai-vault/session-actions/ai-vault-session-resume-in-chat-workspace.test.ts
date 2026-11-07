@@ -21,7 +21,7 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.localCapabilities
 }))
 // The route's own feasibility is pinned elsewhere; this suite pins the host rule on top of it.
-vi.mock('@/lib/agent-session-launch-plan', () => ({
+vi.mock('@/lib/agent-session/launch/routing/agent-session-launch-plan', () => ({
   structuredAgentSessionLaunchFeasible: () => true
 }))
 

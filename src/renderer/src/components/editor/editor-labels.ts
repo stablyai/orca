@@ -42,6 +42,9 @@ export function getEditorDisplayLabel(
     return translate('auto.components.editor.editorLabels.conflictReview', 'Conflict Review')
   }
 
+  if (file.mode === 'git-graph') {
+    return translate('gitGraph.title', 'Git Graph')
+  }
   if (file.mode === 'check-details') {
     return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }

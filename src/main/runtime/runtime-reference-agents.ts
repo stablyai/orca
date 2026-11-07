@@ -15,14 +15,14 @@ import {
 } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../shared/orca-session-address'
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
-import type { OrchestrationDb } from './orchestration/db'
-import { structuredSessionMailReach } from './orchestration/structured-session-mail-address'
+import type { OrchestrationDb } from './orchestration/db/orchestration-db'
+import { structuredSessionMailReach } from './orchestration/mailbox/routing/structured-session-mail-address'
 import {
   clearedInto,
   conversationRecordReader,
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
-} from './orchestration/structured-session-lineage'
+} from './orchestration/addressing/session-lineage/structured-session-lineage'
 import { observeStructuredSession } from './orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { structuredWorkerHostScope } from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { ReferenceAgentCandidate, ReferenceAgentIndex } from './runtime-reference-find'

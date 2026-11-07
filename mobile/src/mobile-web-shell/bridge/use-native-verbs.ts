@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
   mediaNameResultSchema,

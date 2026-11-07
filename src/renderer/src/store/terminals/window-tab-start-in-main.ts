@@ -114,7 +114,8 @@ export function startWindowTabInMain(
       ? { resumeProviderSession: startup.resumeProviderSession }
       : {}),
     ...(startup?.launchToken ? { launchToken: startup.launchToken } : {}),
-    ...(startup?.launchAgent ? { launchAgent: startup.launchAgent } : {})
+    ...(startup?.launchAgent ? { launchAgent: startup.launchAgent } : {}),
+    ...(startup?.trustWorktreeId ? { trustWorktreeId: startup.trustWorktreeId } : {})
   }).then(
     (reply) => releaseOnceDrawn(store, tab.id, leafId, reply?.terminal?.ptyId ?? null, mark),
     (error: unknown) => {

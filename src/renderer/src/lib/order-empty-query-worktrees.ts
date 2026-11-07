@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
-import { isPaletteCurrentWorktree } from './palette-repo-resolution'
+import { isPaletteCurrentWorktree } from './workspace/search/palette-repo-resolution'
 import { compareWorktreeDisplayName } from './worktree-display-name-order'
 import { getWorktreeVisitTimestamp } from './worktree-visit-recency'
 

@@ -1,3 +1,4 @@
+import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import {
   getWorkspaceJiraIssueKey,
   prefixJiraReviewTitle
@@ -43,6 +44,7 @@ export function useCreatePullRequestDialogFields({
   generation
 }: UseCreatePullRequestDialogFieldsOptions) {
   // Key effects by host identity so fresh target objects cannot loop them.
+  const images = useGitHubImagePending()
   const hasTarget = targetInput !== null
   const targetEnvironmentId = targetInput?.kind === 'environment' ? targetInput.environmentId : null
   const target = useMemo(
@@ -230,7 +232,6 @@ export function useCreatePullRequestDialogFields({
     draft,
     worktreeId,
     worktreePath,
-    settings,
     target,
     eligibility,
     resolvedPrDefaults,
@@ -250,6 +251,9 @@ export function useCreatePullRequestDialogFields({
   })
 
   return {
+    imageUploadPending: images.pending,
+    imageUploadPendingRef: images.pendingRef,
+    onImageUploadPending: images.onPending,
     aiGenerationEnabled: sourceControlAiActionsVisible && resolvedPullRequestAi?.ok === true,
     initializedFromEligibility:
       currentEligibilityKey !== null && initializedEligibilityKey === currentEligibilityKey,

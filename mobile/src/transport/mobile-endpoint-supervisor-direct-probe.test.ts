@@ -59,4 +59,24 @@ describe('mobile endpoint supervisor direct probe', () => {
     expect(vi.getTimerCount()).toBe(0)
     logical.close()
   })
+  it('returns to the LAN 3 s after joining Wi-Fi, inside the dwell and past a pending timer probe', async () => {
+    const logical = createStableLogicalRpcClient(new FakeSession('connected'), 'relay')
+    const openDirect = vi.fn(() => new FakeSession('connected'))
+    let localNetwork: string | null = null
+    const deps = dependencies({ openDirect, readLocalNetwork: vi.fn(async () => localNetwork) })
+    const supervisor = new MobileEndpointSupervisor(logical, host.id, relay, deps)
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    localNetwork = 'WIFI:192.168.1'
+    supervisor.nudge('network-change')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openDirect).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(openDirect).toHaveBeenCalledTimes(2)
+    expect(logical.getActivePath()).toBe('lan')
+    supervisor.stop()
+    logical.close()
+  })
 })

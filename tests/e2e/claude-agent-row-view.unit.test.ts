@@ -21,14 +21,14 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
-import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import WorktreeCardAgents from '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 
 const mocks = vi.hoisted(() => ({ info: vi.fn(), transport: vi.fn(), owner: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: mocks.info } }))
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealWorkspace: vi.fn()
 }))
@@ -37,7 +37,7 @@ vi.mock('@/lib/terminal-tab-owner-activation', () => ({ activateTerminalTabOnOwn
 vi.mock('@/lib/agent-session/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionTab: vi.fn()
 }))
-vi.mock('@/components/terminal-pane/stale-agent-row', () => ({
+vi.mock('@/components/terminal-pane/agent-status/stale-agent-row', () => ({
   dismissStaleAgentRowByKey: vi.fn()
 }))
 vi.mock('@/hooks/use-now', () => ({ useNow: () => 1000 }))
@@ -45,7 +45,7 @@ vi.mock('@/store', async () => {
   const { create } = await import('zustand')
   return { useAppStore: create(() => ({})) }
 })
-vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof WorktreeRuntimeOwner>()),
   resolveOwnerOrLocal: mocks.owner
 }))
@@ -227,7 +227,7 @@ async function click(index: number) {
 }
 
 const actualOwner = await vi.importActual<typeof WorktreeRuntimeOwner>(
-  '@/lib/worktree-runtime-owner'
+  '@/lib/workspace/ownership/worktree-runtime-owner'
 )
 
 beforeEach(async () => {

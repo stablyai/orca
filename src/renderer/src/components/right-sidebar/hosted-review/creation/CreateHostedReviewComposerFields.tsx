@@ -1,3 +1,5 @@
+import { GitHubImageTextarea } from '@/components/github/GitHubImageTextarea'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { CornerDownRight, GitPullRequestArrow, Sparkles } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -16,6 +18,7 @@ import {
 import type { HostedReviewStackParent } from '../provider-actions/useHostedReviewStackParent'
 
 type CreateHostedReviewComposerFieldsProps = {
+  imageUpload?: GitHubImageIntake
   copy: LocalizedHostedReviewCopy
   base: string
   setBase: (value: string) => void
@@ -46,6 +49,7 @@ type CreateHostedReviewComposerFieldsProps = {
 }
 
 export function CreateHostedReviewComposerFields({
+  imageUpload,
   copy,
   base,
   setBase,
@@ -95,7 +99,8 @@ export function CreateHostedReviewComposerFields({
           className={cn(COMPOSER_FIELD_CLASS, 'px-2 font-medium')}
         />
 
-        <textarea
+        <GitHubImageTextarea
+          imageUpload={imageUpload}
           aria-label={translate(
             'auto.components.right.sidebar.SourceControl.a8873e1d62',
             '{{value0}} description',
@@ -104,7 +109,7 @@ export function CreateHostedReviewComposerFields({
           rows={6}
           value={body}
           disabled={fieldsLocked}
-          onChange={(event) => setBody(event.target.value)}
+          onValueChange={setBody}
           placeholder={translate(
             'auto.components.right.sidebar.SourceControl.a0dc20fc93',
             'Description (optional)'

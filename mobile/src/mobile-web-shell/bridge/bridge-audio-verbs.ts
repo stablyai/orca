@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech-params'
 
 // The shell owns microphone PCM and its wake lock; the page owns dictation state/RPCs. Pull from the ring through existing request/reply rather than adding a push frame.

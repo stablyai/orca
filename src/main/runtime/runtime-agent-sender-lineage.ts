@@ -1,5 +1,5 @@
-import type { DispatchContextRow } from './orchestration/types'
-import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import type { DispatchContextRow } from './orchestration/db/orchestration-records'
+import type { WorkerTerminalResourceRow } from './orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   resolveWorkerLineageFacts,
   type WorkerLineageFacts

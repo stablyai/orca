@@ -1,12 +1,10 @@
 // Per-device revocable tokens isolate compromises; persist with hardened metadata-style permissions.
-import { join } from 'node:path'
+import { withDeviceSighting, type DeviceSightingFraming } from './device-sighting'
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import { removeStaleDurableWriteTempFiles } from '../../../../filesystem/durable-file-write'
-import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
-import { planIdleEphemeralPrune, withoutEphemeralRows } from './ephemeral-device-rows'
-import { DeviceRegistryWriter } from './device-registry-disk-merge'
+import { planIdleEphemeralPrune } from './ephemeral-device-rows'
+import { DeviceRegistryStore } from './device-registry-store'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
@@ -18,51 +16,39 @@ import {
 import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
 import { validGrants } from './device-registry-row-validation'
 import {
-  isPendingTokenRow,
+  expiredPairingOffers,
+  pendingPairingOffers,
+  reusablePairingOffer,
+  withoutExpiredUnboundOffers
+} from './pairing-offer-expiry'
+import {
   mobilePairingConnectionModeOf,
   findPrincipalDevice,
   findTokenDevice,
   type AuthenticatedPrincipalBinding,
   lookupDeviceKeyRow,
-  sameGrants,
   type DeviceEntry,
   type DeviceKeyLookup,
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { NetworkSourceClass } from '../../network-source-class'
 
 // Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
 const LAST_SEEN_FLUSH_DELAY_MS = 250
-const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
-export class DeviceRegistry {
-  private readonly registryPath: string
-  private devices: DeviceEntry[] = []
-  /** Never overwrite an unreadable registry from the empty in-memory list. */
-  private registryUnreadable = false
-  /** Parse failures prevent authoritative absence/revocation verdicts. */
-  private registryDoubtful = false
-  private corruptFilePending = false
-  private pendingLastSeenFlush: NodeJS.Timeout | null = null
-  private readonly writer: DeviceRegistryWriter
-
-  constructor(userDataPath: string) {
-    this.registryPath = join(userDataPath, DEVICE_REGISTRY_FILENAME)
-    this.writer = new DeviceRegistryWriter(this.registryPath)
-    // #20497: reap temp files orphaned by a crash before rename.
-    void removeStaleDurableWriteTempFiles(this.registryPath, {
-      minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
-    })
-    this.load()
-  }
+export class DeviceRegistry extends DeviceRegistryStore {
+  /** First sightings this session, kept even when their persist failed. */
+  private readonly seenDeviceIds = new Set<string>()
 
   addDevice(
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
-    grants: readonly RuntimeDeviceGrant[] = []
+    grants: readonly RuntimeDeviceGrant[] = [],
+    offerTtlMs?: number
   ): TokenDeviceEntry {
-    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants)
+    return this.createAndPersistDevice(this.devices, name, scope, pairingReach, grants, offerTtlMs)
   }
 
   private createAndPersistDevice(
@@ -70,9 +56,10 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope,
     pairingReach: RuntimePairingReach,
-    grants: readonly RuntimeDeviceGrant[]
+    grants: readonly RuntimeDeviceGrant[],
+    offerTtlMs: number | undefined
   ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants)
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, offerTtlMs)
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
@@ -84,23 +71,26 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
-    grants: readonly RuntimeDeviceGrant[] = []
+    grants: readonly RuntimeDeviceGrant[] = [],
+    offerTtlMs?: number
   ): TokenDeviceEntry {
     // Never show a QR for an offer an admin removed on disk.
-    this.adoptExternalEdits()
+    this.adoptExternalEdits({ fresh: true })
+    // Relay-bound rows leave through the caller's discard, which queues the cloud revoke first.
+    const live = withoutExpiredUnboundOffers(this.devices, this.seenDeviceIds)
+    if (live !== this.devices) {
+      this.saveOrLog({}, 'prune expired pairing offers', this.devices, live)
+    }
     // Reuse only identical grants so re-advertisement cannot expand permissions.
-    const existing = this.devices.find(
-      (d): d is TokenDeviceEntry =>
-        isPendingTokenRow(d) && d.scope === scope && sameGrants(d, validGrants(grants, scope) ?? [])
-    )
+    const existing = this.getPendingDevice(scope, offerTtlMs, grants)
     if (existing) {
       // Widen advertised reach, never narrow it and break an off-host link already handed out.
       const widen = pairingReach === 'network' && existing.pairingReach === 'this-computer'
       // Removed on disk meanwhile: mint a fresh offer rather than hand out a revoked one.
       const offered = widen ? this.setPairingReach(existing, 'network') : existing
-      return offered ?? this.addDevice(name, scope, pairingReach, grants)
+      return offered ?? this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
     }
-    return this.addDevice(name, scope, pairingReach, grants)
+    return this.addDevice(name, scope, pairingReach, grants, offerTtlMs)
   }
 
   private setPairingReach(
@@ -116,11 +106,13 @@ export class DeviceRegistry {
     name: string,
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
-    grants: readonly RuntimeDeviceGrant[] = []
+    grants: readonly RuntimeDeviceGrant[] = [],
+    offerTtlMs?: number
   ): TokenDeviceEntry {
     // Authentication marks seen before child sync, so pending runtime offers cannot have children.
-    const retainedDevices = this.devices.filter((d) => !isPendingTokenRow(d) || d.scope !== scope)
-    return this.createAndPersistDevice(retainedDevices, name, scope, pairingReach, grants)
+    const pending = new Set<DeviceEntry>(this.listPendingDevices(scope))
+    const retained = this.devices.filter((d) => !pending.has(d))
+    return this.createAndPersistDevice(retained, name, scope, pairingReach, grants, offerTtlMs)
   }
 
   listDelegatedMobileDevices(parentDeviceId: string): DeviceEntry[] {
@@ -133,7 +125,7 @@ export class DeviceRegistry {
     phones: readonly DelegatedPhone[]
   ): DelegatedMobileDeviceEntry[] {
     // Plan over the file as it is: an unchanged child removed on disk would skip the save's merge.
-    this.adoptExternalEdits()
+    this.adoptExternalEdits({ fresh: true })
     const { nextDevices, entries } = planDelegatedMobileDevices(this.devices, parent, phones)
     if (nextDevices !== this.devices) {
       this.devices = this.save(nextDevices)
@@ -156,13 +148,23 @@ export class DeviceRegistry {
     return this.devices.find((d) => d.deviceId === deviceId) ?? null
   }
 
-  getPendingDevice(scope: DeviceScope = 'mobile'): TokenDeviceEntry | null {
-    this.adoptExternalEdits()
-    return (
-      this.devices.find(
-        (device): device is TokenDeviceEntry => isPendingTokenRow(device) && device.scope === scope
-      ) ?? null
-    )
+  /** The offer re-advertisement under `offerTtlMs` would reuse. */
+  getPendingDevice(
+    scope: DeviceScope = 'mobile',
+    offerTtlMs?: number,
+    grants: readonly RuntimeDeviceGrant[] = []
+  ): TokenDeviceEntry | null {
+    this.adoptExternalEdits({ fresh: true })
+    const offers = this.listPendingDevices(scope)
+    return reusablePairingOffer(offers, validGrants(grants, scope) ?? [], offerTtlMs)
+  }
+
+  listPendingDevices(scope: DeviceScope): TokenDeviceEntry[] {
+    return pendingPairingOffers(this.devices, scope, this.seenDeviceIds)
+  }
+
+  listExpiredPairingOffers(scope: DeviceScope): DeviceEntry[] {
+    return expiredPairingOffers(this.devices, this.seenDeviceIds).filter((d) => d.scope === scope)
   }
 
   setRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
@@ -199,7 +201,7 @@ export class DeviceRegistry {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findTokenDevice(this.devices, token)
+    return findTokenDevice(this.devices, token, this.seenDeviceIds)
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
@@ -245,22 +247,35 @@ export class DeviceRegistry {
     return findPrincipalDevice(this.devices, principal)
   }
 
-  updateLastSeen(deviceId: string): void {
+  updateLastSeen(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     // Persist first sighting inline or rotation could delete a paired row still pending on disk.
+    this.seenDeviceIds.add(deviceId)
     const seenAt = Date.now()
-    this.replaceRow(deviceId, (device) => ({ ...device, lastSeenAt: seenAt }))
+    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
+      withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
+    )
   }
 
   /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
    * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string): void {
+  updateLastSeenDeferred(
+    deviceId: string,
+    sourceClass?: NetworkSourceClass,
+    framing?: DeviceSightingFraming
+  ): void {
     const existing = this.getDevice(deviceId)
     if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId) : undefined
+      return existing ? this.updateLastSeen(deviceId, sourceClass, framing) : undefined
     }
     const seenAt = Date.now()
     this.devices = this.devices.map((device) =>
-      device === existing ? { ...device, lastSeenAt: seenAt } : device
+      device === existing
+        ? withDeviceSighting(seen(device, seenAt, sourceClass), seenAt, framing)
+        : device
     )
     if (this.pendingLastSeenFlush) {
       return
@@ -280,78 +295,8 @@ export class DeviceRegistry {
     // Failed bookkeeping must not terminate the runtime.
     this.saveOrLog({}, 'persist device lastSeen')
   }
+}
 
-  private saveOrLog(options: { durable?: boolean }, action: string, before = this.devices): void {
-    try {
-      this.devices = this.save(this.devices, options, before)
-    } catch (error) {
-      console.error(`[runtime] Failed to ${action}:`, error)
-    }
-  }
-
-  private cancelPendingLastSeenFlush(): void {
-    if (this.pendingLastSeenFlush) {
-      clearTimeout(this.pendingLastSeenFlush)
-      this.pendingLastSeenFlush = null
-    }
-  }
-
-  /** Auth checks see a removal made on disk (an admin revoke) without waiting for orcad's next save. */
-  private adoptExternalEdits(): void {
-    // An unreadable load refuses everything until restart; there is nothing to merge into.
-    if (!this.registryUnreadable) {
-      this.devices = this.writer.adoptExternalEdits(this.devices) ?? this.devices
-    }
-  }
-
-  private load(): void {
-    const read = this.writer.read()
-    this.registryUnreadable = read.unreadable
-    this.registryDoubtful = read.doubtful
-    this.corruptFilePending = read.corruptFilePending
-    this.devices = withoutEphemeralRows(read.devices)
-    // Session-only browser keys died with the prior host; remove their registry rows.
-    if (this.devices.length !== read.devices.length) {
-      this.saveOrLog({ durable: true }, 'drop session-only devices after restart', read.devices)
-    }
-  }
-
-  // Persist before memory swap so failed writes cannot diverge authorization state.
-  private replaceRow(deviceId: string, update: (device: DeviceEntry) => DeviceEntry): boolean {
-    const index = this.devices.findIndex((candidate) => candidate.deviceId === deviceId)
-    if (index === -1) {
-      return false
-    }
-    const nextDevices = this.devices.map((device, candidateIndex) =>
-      candidateIndex === index ? update(device) : device
-    )
-    this.devices = this.save(nextDevices)
-    // False when the file had already lost the row: the update did not apply.
-    return this.devices.some((candidate) => candidate.deviceId === deviceId)
-  }
-
-  private assertReadable(): void {
-    if (this.registryUnreadable) {
-      throw new Error(
-        `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
-      )
-    }
-    if (this.corruptFilePending) {
-      this.writer.quarantineCorrupt()
-      this.corruptFilePending = false
-    }
-  }
-
-  /** Writes `devices` merged over the file as it is now; memory takes the result. */
-  private save(
-    devices: readonly DeviceEntry[],
-    options: { durable?: boolean } = {},
-    before: readonly DeviceEntry[] = this.devices
-  ): DeviceEntry[] {
-    this.assertReadable()
-    const written = this.writer.write(before, devices, options)
-    // Every save includes current timestamps, making a pending refresh redundant.
-    this.cancelPendingLastSeenFlush()
-    return written
-  }
+function seen(device: DeviceEntry, seenAt: number, sourceClass?: NetworkSourceClass): DeviceEntry {
+  return { ...device, lastSeenAt: seenAt, ...(sourceClass ? { lastSourceClass: sourceClass } : {}) }
 }

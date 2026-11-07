@@ -305,14 +305,11 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
         if (tabOrder.length === 0) {
           return null
         }
-        const activeTabId =
-          group.activeTabId && tabOrder.includes(group.activeTabId)
-            ? group.activeTabId
-            : (tabOrder[0] ?? null)
         const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
         return {
           id: group.id,
-          activeTabId,
+          activeTabId:
+            group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null,
           tabOrder,
           ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
         }

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
-import type { MutationReceiptRow } from '../../types'
+import type { MutationReceiptRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {

@@ -3,16 +3,17 @@
  * runtime, where that terminal's Dispatch and Run records live.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  *
- * Gated per host by "Allow this host's orca CLI to control Orca" and read on every call. Calls run
+ * Gated per host by the browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL), read on every call. Calls run
  * through a dispatcher that registers only the orchestration methods below, as a paired caller with
  * no grants (the desktop browser bridge's shape), after legacy-relay-cli-caller.ts bound them.
  */
 import { createHash, randomUUID } from 'node:crypto'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../shared/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../runtime/rpc/methods'
+import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,
@@ -51,7 +52,7 @@ const COMMANDS: ReadonlySet<string> = new Set(
 
 export const LEGACY_RELAY_CLI_CONTROL_OFF =
   'This terminal was started by an older version of Orca. Its orca orchestration commands reach ' +
-  'this desktop only when "Allow this host\'s orca CLI to control Orca" is on for this host in ' +
+  `this desktop only when "${DESKTOP_BROWSER_BRIDGE_SETTING_LABEL}" is on for this host in ` +
   'Settings > SSH. Otherwise, run them in a new terminal on this host.'
 
 export const LEGACY_RELAY_CLI_UNSUPPORTED =

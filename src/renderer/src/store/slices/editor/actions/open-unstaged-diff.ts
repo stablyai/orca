@@ -1,9 +1,10 @@
+import { editorPlacementIntent } from '../tabs/editor-placement-intent'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
 import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids/editor-file-ids'
-import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
+import { editorOpenOwner, qualifyEditorContentId } from '../git/editor-open-owner'
 import {
   buildEditorActiveResult,
   resolveEditorOpenTargetGroupId
@@ -21,23 +22,27 @@ export function createOpenUnstagedDiff(
 ): Pick<EditorSlice, 'openDiff'> {
   return {
     openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
+      const placementId = options?.placementWorkspaceId ?? worktreeId
+      const intent = editorPlacementIntent(get, placementId)
       const isPreview = resolveEditorPreviewIntent(get(), options?.preview)
       const selection = options?.selection
       let editorItemTargetGroupId = options?.targetGroupId
       let editorItemFileId = ''
       set((s) => {
-        const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-          s,
-          worktreeId,
-          options?.runtimeEnvironmentId
-        )
+        const contentOwner = editorOpenOwner(s, worktreeId, options)
+        const { runtimeEnvironmentId } = contentOwner
         const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
-        const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
+        const id = qualifyEditorContentId(
+          buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId),
+          undefined,
+          contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+        )
+        intent.register(id)
         editorItemFileId = id
         const targetGroupId =
-          resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+          resolveEditorOpenTargetGroupId(s, placementId, options?.targetGroupId) ?? undefined
         editorItemTargetGroupId = targetGroupId
-        const activeResult = selection === 'none' ? {} : buildEditorActiveResult(s, worktreeId, id)
+        const activeResult = selection === 'none' ? {} : buildEditorActiveResult(s, placementId, id)
         const existing = s.openFiles.find((f) => f.id === id)
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
@@ -50,7 +55,7 @@ export function createOpenUnstagedDiff(
             skippedConflicts: undefined,
             conflictReview: undefined,
             isPreview: updatedPreview,
-            runtimeEnvironmentId
+            ...contentOwner
           })
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -71,10 +76,10 @@ export function createOpenUnstagedDiff(
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: isPreview || undefined,
-          runtimeEnvironmentId
+          ...contentOwner
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+          const replaceablePreviewId = getReplaceablePreviewFileId(s, placementId, targetGroupId)
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
@@ -93,15 +98,17 @@ export function createOpenUnstagedDiff(
           ...activeResult
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        editorItemFileId,
-        worktreeId,
-        relativePath,
-        'diff',
-        isPreview,
-        editorItemTargetGroupId,
-        selection
+      intent.finish(() =>
+        openWorkspaceEditorItem(
+          get(),
+          editorItemFileId,
+          placementId,
+          relativePath,
+          'diff',
+          isPreview,
+          editorItemTargetGroupId,
+          selection
+        )
       )
     }
   }

@@ -7,7 +7,7 @@ import {
   isPaletteFilterActive
 } from '@/components/cmd-j/palette-filter'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'

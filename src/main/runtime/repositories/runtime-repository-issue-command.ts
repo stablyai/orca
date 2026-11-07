@@ -33,7 +33,10 @@ export class RuntimeRepositoryIssueCommand {
     const connectionId = getRepoDialableSshTargetId(repo)
     if (!connectionId) {
       // A paired client's Settings render must not start this host's stopped distro (E9).
-      return readIssueCommandUnlessWslStopped(repo.path, options)
+      return readIssueCommandUnlessWslStopped(repo.path, {
+        ...options,
+        gitOptions: () => this.deps.getLocalGitArgs(repo)[0] ?? {}
+      })
     }
     // Why: an `ssh:` repo is not served here; it reads as having no command.
     return {

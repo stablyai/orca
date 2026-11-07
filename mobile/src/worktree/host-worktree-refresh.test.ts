@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const appState = vi.hoisted(() => ({
   currentState: 'active',
@@ -43,14 +44,12 @@ describe('startHostWorktreeRefresh', () => {
   function start(
     sidebarFeed: Parameters<typeof startHostWorktreeRefresh>[0]['sidebarFeed'] = null
   ): void {
-    const client = {
-      subscribe: vi.fn(
-        (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
-          eventListener = listener
-          return unsubscribe
-        }
-      )
-    } satisfies Parameters<typeof startHostWorktreeRefresh>[0]['client']
+    const client = stubRpcClient({
+      subscribe: (_method, _params, listener) => {
+        eventListener = listener
+        return unsubscribe
+      }
+    })
     stop = startHostWorktreeRefresh({
       client,
       fetchWorktrees,
@@ -174,6 +173,39 @@ describe('startHostWorktreeRefresh', () => {
     eventListener?.({ type: 'ready', subscriptionId: 'events-2' })
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+  })
+
+  it('reads nothing on change notices while hidden and catches up once on return', async () => {
+    start()
+    fetchWorktrees.mockClear()
+    fetchRepoMetadata.mockClear()
+    syncViewSettings.mockClear()
+
+    appState.currentState = 'background'
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    eventListener?.({ type: 'reposChanged' })
+    eventListener?.({ type: 'workspaceViewChanged' })
+    eventListener?.({
+      type: 'sshStateChanged',
+      targetId: 'ssh-1',
+      state: { targetId: 'ssh-1', status: 'connected' }
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(fetchRepoMetadata).not.toHaveBeenCalled()
+    expect(syncViewSettings).not.toHaveBeenCalled()
+
+    appState.currentState = 'active'
+    appState.listener?.('active')
+    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({
+      allowDuringModal: true,
+      queueIfInFlight: true
+    })
+    expect(fetchRepoMetadata).toHaveBeenCalledExactlyOnceWith({
+      force: true,
+      queueIfInFlight: true
+    })
+    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
   })
 
   describe('with the host’s sidebar feed', () => {

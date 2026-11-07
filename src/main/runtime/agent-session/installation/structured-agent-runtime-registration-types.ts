@@ -5,11 +5,11 @@ import type { StructuredAgentCliConversations } from '../../../native-chat/struc
 import type {
   StructuredAgentSessionAdapter,
   StructuredAgentSessionLifecycleEvent
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/structured-agent-command-resolution'
-import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/structured-agent-definition'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
+import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import type { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import type { AgentModelCatalogDiscovery } from '../../../native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import type { createStructuredAgentSessionDispatchFollowUps } from '../structured-agent-session-dispatch-followups'
@@ -58,6 +58,10 @@ export type StructuredAgentAccountHomeServices = {
   prepareCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   readCodexLaunchHome: StructuredCodexAccountHomeDeps['resolveLaunchHome']
   workspaceTrustSettings: () => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['settings']
+  /** The launching repo's pre-trust decision; undefined outside a repo or before one is made. */
+  workspaceTrustRepoDecision: (
+    location: AgentSessionExecutionLocation | null
+  ) => Parameters<typeof applyStructuredCodexWorkspaceTrust>[0]['repoDecision']
   /** Orca's data folder on this host, where an agent's chats may keep an account of their own. */
   stateDirectory: string
 }

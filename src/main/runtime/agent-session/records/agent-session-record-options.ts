@@ -59,7 +59,9 @@ export function recordAgentSessionRanOptions(
   if (saved.model !== undefined && saved.model !== model) {
     return record
   }
-  const added = Object.entries({ ...options, model }).filter(([key]) => saved[key] === undefined)
+  const added = Object.entries({ ...options, model }).filter(
+    ([key]) => key !== 'interactionMode' && saved[key] === undefined
+  )
   return added.length === 0
     ? record
     : replaceAgentSessionRecordOptions(record, {

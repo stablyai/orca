@@ -1,6 +1,6 @@
 import type { DispatchCreator } from './dispatch-depth'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
-import type { OrchestrationAdmission } from '../orchestration-admission'
+import type { DispatchContextRow, RemoteDispatchAttachmentRow } from './orchestration-records'
+import type { OrchestrationAdmission } from '../addressing/orchestration-admission'
 import { isEquivalentPaneKey } from './pane-key-match'
 import {
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,

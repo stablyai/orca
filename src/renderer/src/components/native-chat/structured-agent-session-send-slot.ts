@@ -5,7 +5,7 @@ import {
   type StructuredAgentSessionAttachment
 } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionSendOutcome } from './structured-agent-session-send-runtime'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,

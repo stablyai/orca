@@ -38,11 +38,11 @@ export default function OnboardingFlow({
     currentStep.id === 'agent' && flow.agentSurface === 'chat'
       ? stepCopy.agent_chat
       : stepCopy[currentStep.id]
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const shouldShowSetUpLater = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ??
-    (currentStep.id === 'notifications'
+    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -271,9 +271,9 @@ export default function OnboardingFlow({
             </div>
 
             <OnboardingFooter
-              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              shouldShowSetUpLater={shouldShowSetUpLater}
               busyLabel={busyLabel}
-              onSkipToRepo={() => void flow.skipToRepo()}
+              onSetUpLater={() => void flow.setUpLater()}
               stepIndex={stepIndex}
               onBack={flow.back}
               showPrimary

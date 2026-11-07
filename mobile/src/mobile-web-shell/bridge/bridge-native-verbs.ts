@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   audioReadParamsSchema,
   audioReadResultSchema,
@@ -18,6 +18,7 @@ import {
   mediaNameResultSchema
 } from './bridge-media-verbs'
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
+import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../files/mobile-file-media'
 
@@ -38,6 +39,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.storage.read',
   'native.pdf.view',
   'native.image.act',
+  BRIDGE_STORE_VERB,
   'native.browser.local',
   'native.browser.view'
 ] as const
@@ -219,6 +221,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.image.act': {
     params: imageParamsSchema,
     result: imageResultSchema
+  },
+  [BRIDGE_STORE_VERB]: {
+    params: storeParamsSchema,
+    result: storeResultSchema
   },
   'native.browser.local': {
     params: browserLocalParamsSchema,

@@ -23,7 +23,8 @@ const BUILD_SCRIPTS = [
   'config/scripts/test-runtime/dom/happy-dom-offscreen-canvas.ts',
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.ts',
   'config/scripts/test-runtime/environment/vitest-host-ports-setup.ts',
-  'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts'
+  'config/scripts/test-runtime/environment/vitest-real-agent-home-write-guard.ts',
+  'config/scripts/test-runtime/environment/vitest-real-agent-cli-guard.ts'
 ]
 const NODE_SERVER_POLICY_TESTS = new Set([
   'config/scripts/node-server/qualification/node-server-change-scope.test.mjs'

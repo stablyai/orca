@@ -21,6 +21,21 @@ describe('classifyE2EEAuth', () => {
     })
   })
 
+  it('carries runtime client capabilities on direct v2 token auth only', () => {
+    const withCapabilities = auth({
+      v: 2,
+      transcriptHashB64,
+      deviceToken: 't',
+      clientCapabilities: ['x']
+    })
+    expect(classifyE2EEAuth(withCapabilities, v2, true)).toEqual({
+      kind: 'token',
+      deviceToken: 't',
+      clientCapabilities: ['x']
+    })
+    expect(classifyE2EEAuth(withCapabilities, v2).kind).toBe('invalid')
+  })
+
   it('accepts key auth only inside the matching v2 transcript', () => {
     const keyAuth = { v: 2, transcriptHashB64, deviceId: 'd', deviceProofB64: proof }
     expect(classifyE2EEAuth(auth({ ...keyAuth, clientCapabilities: ['x'] }), v2)).toMatchObject({
@@ -45,7 +60,7 @@ describe('classifyE2EEAuth', () => {
       ).kind
     ).toBe('invalid')
     expect(
-      classifyE2EEAuth(auth({ ...base, deviceToken: 't', clientCapabilities: [] }), v2).kind
+      classifyE2EEAuth(auth({ ...base, deviceToken: 't', deviceProofB64: proof }), v2).kind
     ).toBe('invalid')
     expect(
       classifyE2EEAuth(auth({ ...base, deviceId: 'd', deviceProofB64: 'short' }), v2).kind
