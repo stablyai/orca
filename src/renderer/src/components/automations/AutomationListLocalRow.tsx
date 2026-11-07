@@ -3,7 +3,7 @@ import {
   type AutomationCapturedOwner,
   type AutomationRowAction
 } from './automation-captured-owner'
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 import React from 'react'
 import { MoreHorizontal, Pause, Pencil, Play, ShieldCheck, Trash2 } from 'lucide-react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'

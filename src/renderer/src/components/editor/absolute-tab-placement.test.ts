@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { placeAbsoluteTab } from './absolute-tab-placement'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {

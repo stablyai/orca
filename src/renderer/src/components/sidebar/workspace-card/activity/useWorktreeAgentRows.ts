@@ -1,4 +1,4 @@
-import { useAppStateView } from '@/store/app-state-view'
+import { useAppStateView } from '@/store/retained-views/app-state-view'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'

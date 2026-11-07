@@ -24,7 +24,7 @@ import {
   selectPaneForegroundAgentsForWorktree,
   selectRuntimePaneTitlesForWorktree
 } from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 type WorktreeAgentRowsCacheEntry = {
   /** Caller-provided invalidation token for time-based freshness (agentStatusEpoch). */

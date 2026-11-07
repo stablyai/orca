@@ -27,7 +27,10 @@ import { resolveSkillShareForInstall } from './skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function SkillInstallDialog({
   open,

@@ -1,4 +1,4 @@
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 // Mirrored handles arrive after tabs; unknown is not dead or recovery duplicates host agents (codex active-writer errors). Full inventory speaks for all worktrees by omission; scoped frames never answer for background workspaces.
 

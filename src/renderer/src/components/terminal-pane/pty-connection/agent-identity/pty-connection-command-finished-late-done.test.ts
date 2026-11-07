@@ -157,7 +157,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('../connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const transport = createMockTransport('pty-opencode-run')

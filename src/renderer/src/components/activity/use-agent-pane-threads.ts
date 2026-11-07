@@ -3,7 +3,8 @@ import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -29,7 +30,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
@@ -56,8 +57,8 @@ export type AgentPaneThreadsStoreData = Pick<
 > & {
   /** Current native-chat originals and terminal tabs with semantic identity reuse. */
   activityTabs: ActivityTabProjection
-  worktreeMap: ReturnType<typeof getWorktreeMapFromState>
-  repoMap: ReturnType<typeof getRepoMapFromState>
+  worktreeMap: ReturnType<typeof getIndexedWorktreeMap>
+  repoMap: ReturnType<typeof getIndexedRepoMap>
   generatedTitlesEnabled: boolean
   /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
   defaultHostId: ExecutionHostId
@@ -130,8 +131,8 @@ export function useAgentPaneThreads(args: {
       floatingWorkspacePath: s.floatingWorkspacePath,
       detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
       getKnownWorktreeById: s.getKnownWorktreeById,
-      worktreeMap: getWorktreeMapFromState(s),
-      repoMap: getRepoMapFromState(s),
+      worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(s)),
+      repoMap: getIndexedRepoMap(s.repos),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,

@@ -13,9 +13,10 @@ import type {
 import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import {
   CAPABLE,

@@ -22,7 +22,8 @@ import { CompactAgentRow } from '@/components/sidebar/workspace-card/activity/wo
 import FullAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { opensClaudeParentConversation, viewClaudeAgentFromRow } from '@/lib/claude-agent-row-view'
 import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import WorktreeCardAgents from '@/components/sidebar/workspace-card/activity/WorktreeCardAgents'
 import { i18n, translate } from '@/i18n/i18n'
 

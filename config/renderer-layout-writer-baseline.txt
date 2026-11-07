@@ -77,9 +77,9 @@
 7 src/renderer/src/store/slices/editor/opening/open-file-state.ts
 4 src/renderer/src/store/slices/editor/tabs/editor-open-target-group.ts
 1 src/renderer/src/store/slices/editor/tabs/workspace-editor-files.ts
-2 src/renderer/src/store/slices/tab-group-reference-repair.ts
-4 src/renderer/src/store/slices/tab-group-state.ts
-1 src/renderer/src/store/slices/tabs-hydration.ts
+2 src/renderer/src/store/slices/tabs/tab-group-reference-repair.ts
+4 src/renderer/src/store/slices/tabs/tab-group-state.ts
+1 src/renderer/src/store/slices/tabs/tabs-hydration.ts
 4 src/renderer/src/store/slices/tabs/create-tabs-slice.ts
 12 src/renderer/src/store/slices/tabs/rename-worktree-layout.ts
 9 src/renderer/src/store/slices/tabs/tabs-close-actions.ts
@@ -97,9 +97,9 @@
 1 src/renderer/src/store/slices/tabs/tabs-split-ratio-actions.ts
 5 src/renderer/src/store/slices/tabs/tabs-surface.ts
 24 src/renderer/src/store/slices/tabs/worktree-layout-lifecycle.ts
-6 src/renderer/src/store/slices/terminal-orphan-helpers.ts
-4 src/renderer/src/store/slices/terminal-tab-title-batch.ts
-6 src/renderer/src/store/slices/terminals.ts
+6 src/renderer/src/store/terminals/terminal-orphan-cleanup.ts
+4 src/renderer/src/store/terminals/terminal-tab-title-batch.ts
+6 src/renderer/src/store/terminals/create-terminal-slice.ts
 5 src/renderer/src/store/slices/worktrees/session/set-active-worktree.ts
 2 src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts
 5 src/renderer/src/store/terminals/terminal-layout-state.ts
@@ -117,6 +117,6 @@
 5 src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts
 2 src/renderer/src/store/terminals/workspace-terminal-hydration.ts
 2 src/renderer/src/store/terminals/workspace-terminal-reconnect.ts
-7 src/renderer/src/store/workspace-layout-frame-held-tabs.ts
-4 src/renderer/src/store/workspace-layout-frame-slices.ts
-12 src/renderer/src/store/workspace-layout-frame-store-patch.ts
+7 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-held-tabs.ts
+4 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-slices.ts
+12 src/renderer/src/store/workspace-layout/frames/workspace-layout-frame-store-patch.ts

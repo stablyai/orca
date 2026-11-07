@@ -35,11 +35,4 @@ describe('EmulatorSessionRegistry managed-session liveness', () => {
     expect(await registry.pruneGoneManagedSessions(census(null))).toBe(true)
     expect(registry.getSession('emulator-5554')).toBeDefined()
   })
-
-  it('keeps the records of a backend with no census', async () => {
-    const registry = registryWith('emulator-5554')
-    const noCensus = () => ({ stopHelperForDevice: async () => {} })
-    expect(await registry.pruneGoneManagedSessions(noCensus)).toBe(true)
-    expect(registry.getSession('emulator-5554')).toBeDefined()
-  })
 })

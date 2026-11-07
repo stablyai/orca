@@ -1,4 +1,4 @@
-import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import {

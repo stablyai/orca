@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { translate } from '@/i18n/i18n'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
@@ -28,7 +28,7 @@ import { removeWslHost } from './wsl-host-removal'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type HostRemoveDialogProps = {
   open: boolean
@@ -79,7 +79,7 @@ function HostRemoveDialogBody({
     return resolveSshHostRemoval({
       targetId: target.targetId,
       repos,
-      worktrees: getAllWorktreesFromState({ worktreesByRepo })
+      worktrees: getIndexedAllWorktrees(worktreesByRepo)
     })
   }, [target, repos, worktreesByRepo])
 

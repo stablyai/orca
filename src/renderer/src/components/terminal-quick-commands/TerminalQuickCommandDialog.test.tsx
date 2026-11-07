@@ -9,11 +9,9 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-com
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
 import { useAppStore } from '@/store'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const mountedRoots: Root[] = []
 

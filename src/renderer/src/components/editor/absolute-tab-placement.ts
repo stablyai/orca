@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {

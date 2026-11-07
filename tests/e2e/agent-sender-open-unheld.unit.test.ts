@@ -25,7 +25,7 @@ vi.mock('sonner', async (original) => ({
 }))
 
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'

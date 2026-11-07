@@ -9,7 +9,7 @@ import {
 import { RPC_PARAMS_BY_METHOD } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import { parseRpcRequestParams } from '../../../src/main/runtime/rpc/dispatcher-request-parsing'
 import type { RpcAnyMethodDeclaration, RpcRequest } from '../../../src/main/runtime/rpc/core'
-import { getRuntimeAgentInventoryKey } from '../../../src/renderer/src/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '../../../src/renderer/src/store/slices/agent-inventory/runtime-agent-inventory-key'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -76,7 +76,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
 globalThis.window = { api: {} }
 
 const { createTestStore } =
-  await import('../../../src/renderer/src/store/slices/store-test-helpers')
+  await import('../../../src/renderer/src/store/testing/app-store-test-fixture')
 
 function hostBuild(
   capabilities: readonly string[],

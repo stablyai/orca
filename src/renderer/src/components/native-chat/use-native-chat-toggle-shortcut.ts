@@ -1,4 +1,4 @@
-import { usePluginCommands } from '@/store/plugin-panels'
+import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { matchesRecentTabSwitcherChord } from '../../../../shared/window-shortcut-policy'
 import {

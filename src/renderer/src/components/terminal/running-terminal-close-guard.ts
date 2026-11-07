@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
-import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
+import type { TerminalTabCloseReason } from '@/store/terminals/terminal-tab-retirement'
 import type { TerminalTabCloseIntent } from './terminal-tab-close-intent'
 import type { AppState } from '@/store/types'
 import { resolveBusyPtyCloseCopyKind } from './terminal-close-copy-kind'

@@ -1,5 +1,5 @@
 # Renderer reads of `worktreesByRepo` / `folderWorkspaces` / `detectedWorktreesByRepo`
-# outside src/renderer/src/store/workspace-record-selectors.ts, as `<count> <file> # <why>`.
+# outside src/renderer/src/store/workspaces/catalog/workspace-record-fields.ts, as `<count> <file> # <why>`.
 # This is a RATCHET: counts may only go DOWN. Read through the selectors instead.
 # `P5b-2 must clear` rows read store state through a loosely typed or optional field: once the
 # fields leave the store they read undefined and silently fall back, so P5b-2 must move them.

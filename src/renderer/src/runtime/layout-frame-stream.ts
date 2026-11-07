@@ -1,7 +1,7 @@
 // Read local-main or paired-server frames under this window’s IDs; positions settle that source main’s apply replies.
 
 import type { AppState } from '@/store/types'
-import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
+import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import {

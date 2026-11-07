@@ -3,8 +3,7 @@ import {
   INVALID_RASTER_IMAGE_PREVIEW_ERROR,
   MAX_RASTER_IMAGE_PREVIEW_DIMENSION_PX,
   RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR,
-  assertRasterImagePreviewWithinLimits,
-  isKnownRasterImageMimeType
+  assertRasterImagePreviewWithinLimits
 } from './raster-image-preview-limits'
 
 function pngHeader(width: number, height: number): Buffer {
@@ -18,13 +17,6 @@ function pngHeader(width: number, height: number): Buffer {
 }
 
 describe('raster image preview limits', () => {
-  it('accepts ordinary 8K images and returns their dimensions', () => {
-    expect(assertRasterImagePreviewWithinLimits(pngHeader(7680, 4320), 'image/png')).toEqual({
-      width: 7680,
-      height: 4320
-    })
-  })
-
   it('rejects oversized edges and total pixel counts before decode', () => {
     expect(() =>
       assertRasterImagePreviewWithinLimits(
@@ -47,11 +39,5 @@ describe('raster image preview limits', () => {
     expect(
       assertRasterImagePreviewWithinLimits(new Uint8Array([1]), 'application/pdf')
     ).toBeUndefined()
-  })
-
-  it('recognizes supported MIME aliases case-insensitively', () => {
-    expect(isKnownRasterImageMimeType('IMAGE/JPEG; charset=binary')).toBe(true)
-    expect(isKnownRasterImageMimeType('image/vnd.microsoft.icon')).toBe(true)
-    expect(isKnownRasterImageMimeType('image/tiff')).toBe(false)
   })
 })

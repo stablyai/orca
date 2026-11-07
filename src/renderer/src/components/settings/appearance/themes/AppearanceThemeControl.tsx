@@ -15,7 +15,7 @@ import {
 } from '../../form-controls/SettingsSearchableSelect'
 import { SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import { PluginThemeSwatch, ThemeColorSwatch } from '../../../plugins/page/PluginThemeSwatch'
 import {
   isPluginTerminalThemeSelected,
@@ -23,7 +23,7 @@ import {
 } from '../../../plugins/state/plugin-theme-apply'
 import { findCodeEditorTheme } from '@/lib/code-editor-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { requestPluginBrowse } from '@/store/plugin-preview-request'
+import { requestPluginBrowse } from '@/store/plugins/navigation/plugin-preview-request'
 import { useCatalogAppThemes, type CatalogAppTheme } from './use-catalog-app-themes'
 import {
   disambiguatedContentPluginNames,

@@ -24,10 +24,10 @@ import type { PluginCatalogType } from '../../../../../shared/plugins/catalog/pl
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
-import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
+import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
+import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { Button } from '../../ui/button'
 import { revealPluginIconTheme } from '../state/plugin-try-action'
@@ -38,7 +38,7 @@ import { PluginContributionEventRow, usePluginWorkerEvents } from './PluginContr
 import { PluginContributionActionLanguage } from './PluginContributionActionLanguage'
 import { PluginContributionActionPanel } from './PluginContributionActionPanel'
 import { PluginContributionActionNewFile } from './PluginContributionActionNewFile'
-import { collectActivePluginNewFiles } from '@/store/plugin-new-files'
+import { collectActivePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { PluginContributionSyntaxHint } from './PluginContributionActionSyntax'
 import {
   isPluginContributionLive,

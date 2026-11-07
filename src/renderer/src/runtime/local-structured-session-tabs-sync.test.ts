@@ -8,7 +8,7 @@ import type { Tab } from '../../../shared/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import { buildPersistedUnifiedTabSessionData } from '../lib/workspace/persistence/workspace-session-unified-tabs'
-import { buildHydratedTabState } from '../store/slices/tabs-hydration'
+import { buildHydratedTabState } from '../store/slices/tabs/tabs-hydration'
 import './local-structured-session-tabs-sync/snapshot-apply'
 import { projectLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-projection'
 import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'

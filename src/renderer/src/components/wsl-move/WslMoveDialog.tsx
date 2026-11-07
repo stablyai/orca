@@ -35,7 +35,10 @@ import {
   type WslMoveCatalog
 } from './wsl-move-scope-rows'
 import type { WslMoveBlockerView } from './WslMoveBlockerList'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { adoptWslMoveProgress } from './wsl-move-run-adoption'
 import { closeWslMoveDialog, reloadAfterWslMove } from './wsl-move-dialog-close'
 import { RecoverableRenderErrorBoundary } from '../error-boundaries/RecoverableRenderErrorBoundary'

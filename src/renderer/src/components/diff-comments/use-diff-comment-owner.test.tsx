@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiffComment } from '../../../../shared/diff-comment-types'

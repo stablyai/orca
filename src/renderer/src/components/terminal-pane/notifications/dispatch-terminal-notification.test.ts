@@ -3,7 +3,7 @@ import { setPresenceGated } from '@/hooks/agent-auto-ack-presence'
 import { dispatchTerminalNotification } from './dispatch-terminal-notification'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { buildAgentNotificationId } from '../../../../../shared/agent-notification-id'
-import { makeTabGroup, makeUnifiedTab } from '../../../store/slices/store-session-test-harness'
+import { makeTabGroup, makeUnifiedTab } from '../../../store/slices/tabs/tab-group.test-fixture'
 import {
   LIVE_LEAF_ID,
   PANE_KEY,

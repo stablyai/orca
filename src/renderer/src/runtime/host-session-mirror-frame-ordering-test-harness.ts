@@ -5,9 +5,9 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import { useAppStore } from '@/store'
 import {
-  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
-} from '@/store/slices/runtime-status'
+} from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   BG_MIRROR_TAB_ID,
   BG_WT,

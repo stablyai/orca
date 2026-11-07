@@ -42,7 +42,9 @@ type Published = {
   appendOptimisticComment: (comment: PRComment) => void
 }
 const published = vi.hoisted(() => new Map<string, Published>())
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
 vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: () => null,
   findGithubIssueWorkspaceAttachment: () => null

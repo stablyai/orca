@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  TEST_REPO
-} from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import type { AppState } from '../store/types'
 import {
   buildStoreState,

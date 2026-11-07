@@ -6,8 +6,12 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../workspace-record-selectors'
+import { getIndexedRepoMap } from '../repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '../slices/worktrees/listing/worktree-catalog-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')

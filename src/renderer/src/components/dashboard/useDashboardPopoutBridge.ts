@@ -1,6 +1,7 @@
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect } from 'react'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
@@ -15,7 +16,7 @@ import { revealDashboardAgent } from './reveal-dashboard-agent'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
 const PUBLISH_THROTTLE_MS = 250

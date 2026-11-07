@@ -12,7 +12,7 @@ import {
   runtimeEnvironmentsList,
   sshRepo
 } from './repo-runtime-routing.test-fixture'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({
   toast: {

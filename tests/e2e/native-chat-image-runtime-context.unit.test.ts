@@ -26,7 +26,7 @@ import {
 } from '../../src/renderer/src/components/native-chat/native-chat-skill-discovery-context'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { adoptFromEndpoint } from '@/store/adopt-from-endpoint'
+import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
 import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/files/file-mutation-expectation'
 import {
   resetSshConnectionGenerations,

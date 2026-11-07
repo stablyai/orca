@@ -1,8 +1,8 @@
 // Removing a paired-server project while that server is unreachable (STA-9705).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
-import { createTestStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
