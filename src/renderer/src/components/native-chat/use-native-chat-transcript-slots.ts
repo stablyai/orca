@@ -6,9 +6,9 @@ import {
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscript,
-  type NativeChatMessageSlot,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
+import type { NativeChatSideChatForkPoint } from './native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
@@ -19,7 +19,7 @@ export function useNativeChatTranscriptSlots({
   line: { draws: boolean; thinking: boolean; stopping?: boolean; activityText?: string | null }
 }): {
   slots: NativeChatTranscriptSlot[]
-  responseGroups: NativeChatMessageSlot[][]
+  forkPoint: NativeChatSideChatForkPoint | null
   liveLine: NativeChatLiveLine | null
 } {
   const {
@@ -36,7 +36,8 @@ export function useNativeChatTranscriptSlots({
     isWorking,
     lifecycleWorking,
     subagentSections,
-    subagentChoices
+    subagentChoices,
+    forkOffer
   } = input
   const { draws, thinking, stopping = false, activityText } = line
   const liveLine = useMemo(
@@ -69,7 +70,7 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  const { slots, responseGroups } = useMemo(
+  const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
         messages,
@@ -86,10 +87,12 @@ export function useNativeChatTranscriptSlots({
         lifecycleWorking,
         subagentSections,
         subagentChoices,
-        liveReasoningId
+        liveReasoningId,
+        forkOffer
       }),
     [
       expandedTurnKeys,
+      forkOffer,
       isWorking,
       lifecycleWorking,
       liveReasoningId,
@@ -106,5 +109,5 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
-  return { slots, responseGroups, liveLine }
+  return { slots, forkPoint, liveLine }
 }

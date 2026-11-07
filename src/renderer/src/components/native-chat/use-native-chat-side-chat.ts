@@ -4,11 +4,10 @@ import {
   NativeChatForkContext,
   NativeChatSideChatForkPointContext
 } from './native-chat-fork-context'
-import {
-  nativeChatSideChatForkPoint,
-  type NativeChatSideChatForkPoint
+import type {
+  NativeChatSideChatForkOffer,
+  NativeChatSideChatForkPoint
 } from './native-chat-side-chat-fork-point'
-import type { NativeChatMessageSlot } from './native-chat-transcript-slots'
 import type { NativeChatForkSurface } from './use-native-chat-fork'
 
 /** `/btw`: fork the chat through its newest finished response and ask there, beside the chat. */
@@ -69,21 +68,33 @@ export function useNativeChatSideChat(
   }, [fork, pointKind, reportForkPoint])
 }
 
+/** What the transcript needs to find the response `/btw` forks through; undefined where nothing
+ *  listens, so it does no fork work at all. */
+export function useNativeChatSideChatForkOffer(
+  latestTurnKey: string | undefined
+): NativeChatSideChatForkOffer | undefined {
+  const fork = useContext(NativeChatForkContext)
+  const listening = useContext(NativeChatSideChatForkPointContext) !== undefined
+  const mode = fork?.support.kind === 'known' ? fork.support.fork : undefined
+  const forkableItemIds = fork?.forkableItemIds
+  const contextFloorSequence = fork?.contextFloorSequence
+  return useMemo(
+    () =>
+      listening && mode && forkableItemIds && contextFloorSequence !== undefined
+        ? {
+            chat: { support: { kind: 'known', fork: mode }, contextFloorSequence, forkableItemIds },
+            latestTurnKey
+          }
+        : undefined,
+    [contextFloorSequence, forkableItemIds, latestTurnKey, listening, mode]
+  )
+}
+
 /** Tells `/btw` where the drawn transcript offers Fork, each time that changes. */
 export function useNativeChatSideChatForkPointReport(
-  responseGroups: readonly (readonly NativeChatMessageSlot[])[],
-  latestTurnKey: string | undefined,
-  working: boolean
+  point: NativeChatSideChatForkPoint | null
 ): void {
-  const fork = useContext(NativeChatForkContext)
   const report = useContext(NativeChatSideChatForkPointContext)
-  const point = useMemo(
-    () =>
-      report && fork?.support.kind === 'known'
-        ? nativeChatSideChatForkPoint(responseGroups, latestTurnKey, working, fork)
-        : null,
-    [fork, latestTurnKey, report, responseGroups, working]
-  )
   const kind = point?.kind
   const throughItemId = point?.kind === 'ready' ? point.throughItemId : undefined
   useLayoutEffect(() => {

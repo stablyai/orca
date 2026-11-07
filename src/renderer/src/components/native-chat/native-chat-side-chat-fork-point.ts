@@ -7,49 +7,34 @@ export type NativeChatSideChatForkPoint =
   | { kind: 'reply-running' }
   | { kind: 'no-reply' }
 
-/** Read off the drawn transcript's root responses, newest turn first, with the rule each response
- *  row's Fork uses. A running turn, whose rows offer none, is stepped over whole. */
-export function nativeChatSideChatForkPoint(
-  responseGroups: readonly (readonly NativeChatMessageSlot[])[],
-  latestTurnKey: string | undefined,
-  working: boolean,
+/** What the transcript needs to find that response while it lays out its rows. */
+export type NativeChatSideChatForkOffer = {
   chat: Parameters<typeof nativeChatRowOffersFork>[1]
+  latestTurnKey: string | undefined
+}
+
+/** The rule each response row's Fork uses. */
+export function nativeChatSlotOffersFork(
+  slot: NativeChatMessageSlot,
+  offer: NativeChatSideChatForkOffer
+): boolean {
+  return nativeChatRowOffersFork(
+    {
+      message: slot.message,
+      inSubagentSection: slot.depth > 0,
+      turnWorking: slot.activeTurnIsWorking,
+      inLatestTurn: slot.turnKey !== undefined && slot.turnKey === offer.latestTurnKey
+    },
+    offer.chat
+  )
+}
+
+export function nativeChatSideChatForkPoint(
+  newestOffered: NativeChatMessageSlot | undefined,
+  working: boolean
 ): NativeChatSideChatForkPoint {
-  if (chat.forkableItemIds.size === 0) {
-    return working ? { kind: 'reply-running' } : { kind: 'no-reply' }
-  }
-  const tipOnly = chat.support.kind === 'known' && chat.support.fork === 'tip'
-  for (let turn = responseGroups.length - 1; turn >= 0; turn--) {
-    const group = responseGroups[turn]
-    const newest = group.at(-1)
-    if (!newest || newest.activeTurnIsWorking) {
-      continue
-    }
-    const sequence = newest.message.journalPosition?.sequence
-    // Older turns are above a /clear or, at a tip-only agent, before the newest turn: none can fork.
-    // A response outside any turn says nothing about the rows before it.
-    if (
-      (sequence !== undefined && sequence <= chat.contextFloorSequence) ||
-      (tipOnly && newest.turnKey !== undefined && newest.turnKey !== latestTurnKey)
-    ) {
-      break
-    }
-    for (let index = group.length - 1; index >= 0; index--) {
-      const slot = group[index]
-      if (
-        nativeChatRowOffersFork(
-          {
-            message: slot.message,
-            inSubagentSection: false,
-            turnWorking: slot.activeTurnIsWorking,
-            inLatestTurn: slot.turnKey !== undefined && slot.turnKey === latestTurnKey
-          },
-          chat
-        )
-      ) {
-        return { kind: 'ready', throughItemId: slot.message.id }
-      }
-    }
+  if (newestOffered) {
+    return { kind: 'ready', throughItemId: newestOffered.message.id }
   }
   return working ? { kind: 'reply-running' } : { kind: 'no-reply' }
 }

@@ -1,114 +1,135 @@
 import { describe, expect, it, vi } from 'vitest'
 import type * as ForkOffer from '../../../../shared/native-chat/native-chat-fork-offer'
-import { nativeChatSideChatForkPoint } from './native-chat-side-chat-fork-point'
-import type { NativeChatMessageSlot } from './native-chat-transcript-slots'
+import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
+import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import { buildNativeChatTranscript } from './native-chat-transcript-slots'
 
-const offers = vi.hoisted(() => ({ calls: 0 }))
+const offers = vi.hoisted(() => ({ checks: 0 }))
 vi.mock('../../../../shared/native-chat/native-chat-fork-offer', async (importOriginal) => {
   const actual = await importOriginal<typeof ForkOffer>()
   return {
     ...actual,
     nativeChatRowOffersFork: (...args: Parameters<typeof actual.nativeChatRowOffersFork>) => {
-      offers.calls++
+      offers.checks++
       return actual.nativeChatRowOffersFork(...args)
     }
   }
 })
 
-function reply(
-  id: string,
-  sequence: number,
-  turnKey: string | undefined,
-  working = false
-): NativeChatMessageSlot {
+function row(id: string, role: 'user' | 'assistant', sequence: number): NativeChatMessage {
   return {
-    kind: 'message',
-    message: {
-      id,
-      role: 'assistant',
-      blocks: [{ type: 'text', text: id }],
-      timestamp: sequence,
-      source: 'transcript',
-      journalPosition: { sequence, index: 0 }
-    },
-    turnKey,
-    activeTurnIsWorking: working,
-    trailingRun: false,
-    receipt: undefined,
-    status: undefined,
-    folded: false,
-    drawsMessage: true,
-    turnFolds: false,
-    turnDiff: undefined,
-    subagentRoster: undefined,
-    depth: 0,
-    estimatedHeight: 40
+    id,
+    role,
+    blocks: [{ type: 'text', text: id }],
+    timestamp: sequence,
+    source: 'transcript',
+    journalPosition: { sequence, index: 0 }
   }
 }
 
-const chat = (fork: 'checkpoint' | 'tip', floor = 0) =>
-  ({
-    support: { kind: 'known', fork },
-    contextFloorSequence: floor,
-    forkableItemIds: new Set(['reply-1', 'reply-2'])
-  }) as const
+function tool(id: string, sequence: number): NativeChatMessage {
+  return {
+    ...row(id, 'assistant', sequence),
+    blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'completed' }]
+  }
+}
 
-const responses = (working: boolean) => [
-  [reply('reply-1', 11, 'turn-1')],
-  [reply('reply-2', 21, 'turn-2', working)]
-]
+/** `turns` finished turns, then a running one, laid out as the transcript draws them. */
+function conversation(turns: { ask: string; replies: NativeChatMessage[] }[], working: boolean) {
+  const messages = turns.flatMap((turn, index) => [
+    row(turn.ask, 'user', index * 10_000),
+    ...turn.replies
+  ])
+  const turnKeys = turns.flatMap((turn) => [turn.ask, ...turn.replies.map(() => turn.ask)])
+  const latestTurnKey = turns.at(-1)?.ask
+  const input: NativeChatTranscriptSlotsInput = {
+    messages,
+    turnKeys,
+    liveTurnKey: working ? latestTurnKey : undefined,
+    receipts: new Map(),
+    turnStatuses: { active: null, completedByTurn: {} },
+    turnDiffs: new Map(),
+    expandedTurnKeys: new Set(turns.map((turn) => turn.ask)),
+    isWorking: working,
+    lifecycleWorking: false
+  }
+  return { input, latestTurnKey, rootRows: messages.length }
+}
 
-describe('nativeChatSideChatForkPoint', () => {
-  it('forks a running chat through its last finished response', () => {
+function offer(
+  fork: 'checkpoint' | 'tip',
+  forkableItemIds: ReadonlySet<string>,
+  latestTurnKey: string | undefined,
+  contextFloorSequence = 0
+) {
+  return {
+    chat: { support: { kind: 'known', fork }, contextFloorSequence, forkableItemIds },
+    latestTurnKey
+  } as const
+}
+
+describe('the side chat fork point the transcript finds while laying out', () => {
+  const finished = (index: number) => ({
+    ask: `ask-${index}`,
+    replies: [row(`reply-${index}`, 'assistant', index * 10_000 + 1)]
+  })
+
+  it('forks a running chat through its last finished response, or waits at a tip', () => {
+    const live = { ask: 'ask-live', replies: [row('reply-live', 'assistant', 99_001)] }
+    const forkable = new Set(['reply-1', 'reply-live'])
+    const { input, latestTurnKey } = conversation([finished(1), live], true)
+
     expect(
-      nativeChatSideChatForkPoint(responses(true), 'turn-2', true, chat('checkpoint'))
+      buildNativeChatTranscript({
+        ...input,
+        forkOffer: offer('checkpoint', forkable, latestTurnKey)
+      }).forkPoint
     ).toEqual({ kind: 'ready', throughItemId: 'reply-1' })
-  })
-
-  it('waits for the running reply where the agent forks only at its tip', () => {
-    expect(nativeChatSideChatForkPoint(responses(true), 'turn-2', true, chat('tip'))).toEqual({
-      kind: 'reply-running'
-    })
-    expect(nativeChatSideChatForkPoint(responses(false), 'turn-2', false, chat('tip'))).toEqual({
-      kind: 'ready',
-      throughItemId: 'reply-2'
-    })
-  })
-
-  it('has nothing to fork before the first reply or above a /clear', () => {
-    expect(nativeChatSideChatForkPoint([], 'turn-1', false, chat('checkpoint'))).toEqual({
-      kind: 'no-reply'
-    })
     expect(
-      nativeChatSideChatForkPoint(responses(false), 'turn-2', false, chat('checkpoint', 30))
+      buildNativeChatTranscript({ ...input, forkOffer: offer('tip', forkable, latestTurnKey) })
+        .forkPoint
+    ).toEqual({ kind: 'reply-running' })
+
+    const done = conversation([finished(1), live], false)
+    expect(
+      buildNativeChatTranscript({
+        ...done.input,
+        forkOffer: offer('tip', forkable, done.latestTurnKey)
+      }).forkPoint
+    ).toEqual({ kind: 'ready', throughItemId: 'reply-live' })
+  })
+
+  it('has nothing to fork above a /clear', () => {
+    const { input, latestTurnKey } = conversation([finished(1)], false)
+
+    expect(
+      buildNativeChatTranscript({
+        ...input,
+        forkOffer: offer('checkpoint', new Set(['reply-1']), latestTurnKey, 50_000)
+      }).forkPoint
     ).toEqual({ kind: 'no-reply' })
   })
 
-  it.each([100, 1000])('steps over a running turn of %i responses at once', (size) => {
-    const running = Array.from({ length: size }, (_, index) =>
-      reply(`live-${index}`, 100 + index, 'turn-3', true)
-    )
-    offers.calls = 0
+  it.each([100, 1000])(
+    'decides each of %i tool-only turns once per layout, and nothing without a listener',
+    (size) => {
+      const history = Array.from({ length: size }, (_, index) => ({
+        ask: `ask-${index}`,
+        replies: [tool(`tool-${index}`, index * 10_000 + 1)]
+      }))
+      const live = { ask: 'ask-live', replies: [row('streaming', 'assistant', 99_999_001)] }
+      const { input, latestTurnKey, rootRows } = conversation([...history, live], true)
+      // The live reply is forkable; the tool calls never are.
+      const forkOffer = offer('checkpoint', new Set(['streaming']), latestTurnKey)
 
-    const point = nativeChatSideChatForkPoint(
-      [...responses(false), running],
-      'turn-3',
-      true,
-      chat('checkpoint')
-    )
+      offers.checks = 0
+      const point = buildNativeChatTranscript({ ...input, forkOffer }).forkPoint
+      expect(point).toEqual({ kind: 'reply-running' })
+      expect(offers.checks).toBeLessThanOrEqual(rootRows)
 
-    expect(point).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
-    expect(offers.calls).toBe(1)
-  })
-
-  it('looks past a response outside any turn at a tip-only agent', () => {
-    expect(
-      nativeChatSideChatForkPoint(
-        [...responses(false), [reply('unowned', 30, undefined)]],
-        'turn-2',
-        false,
-        chat('tip')
-      )
-    ).toEqual({ kind: 'ready', throughItemId: 'reply-2' })
-  })
+      offers.checks = 0
+      expect(buildNativeChatTranscript(input).forkPoint).toBeNull()
+      expect(offers.checks).toBe(0)
+    }
+  )
 })

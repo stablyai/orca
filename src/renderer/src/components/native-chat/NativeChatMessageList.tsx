@@ -40,7 +40,10 @@ import { useNativeChatHistoryRetention } from './use-native-chat-history-retenti
 import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
 import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
-import { useNativeChatSideChatForkPointReport } from './use-native-chat-side-chat'
+import {
+  useNativeChatSideChatForkOffer,
+  useNativeChatSideChatForkPointReport
+} from './use-native-chat-side-chat'
 import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
 import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
@@ -191,9 +194,10 @@ export function NativeChatMessageList({
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
+  const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
   const {
     slots: allSlots,
-    responseGroups,
+    forkPoint,
     liveLine
   } = useNativeChatTranscriptSlots({
     typography,
@@ -210,6 +214,7 @@ export function NativeChatMessageList({
     lifecycleWorking,
     subagentSections,
     subagentChoices,
+    forkOffer,
     line: {
       draws: tailRow === 'activity',
       thinking: turnStatuses.active?.thinking === true,
@@ -217,7 +222,7 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
-  useNativeChatSideChatForkPointReport(responseGroups, latestTurnKey, isWorking || lifecycleWorking)
+  useNativeChatSideChatForkPointReport(forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
