@@ -2,7 +2,10 @@ import type { AgentSessionAccountKind } from '../../../../shared/agent-session/a
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
-import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
+import type {
+  CodexJournalTranslator,
+  CodexJournalTranslatorDeps
+} from '../journal/codex-structured-journal-contracts'
 import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import type {
   CodexAcquisitionAttempt,
@@ -18,6 +21,8 @@ export function createCodexSessionJournalTranslator(input: {
   primaryThreadId: () => string | null
   dispatchEchoes: CodexDispatchEchoes
   subagentExecutions: CodexSubagentExecutions
+  isCurrent: NonNullable<CodexJournalTranslatorDeps['isCurrent']>
+  onScheduledFailure: NonNullable<CodexJournalTranslatorDeps['onScheduledFailure']>
   prompts: CodexAcquisitionAttempt['window']['prompts']
 }): CodexJournalTranslator | null {
   const { sink, account, sessionId, acquisitionId, deps, dispatchEchoes, prompts } = input
@@ -27,6 +32,8 @@ export function createCodexSessionJournalTranslator(input: {
         account,
         sessionId,
         acquisitionId,
+        isCurrent: input.isCurrent,
+        onScheduledFailure: input.onScheduledFailure,
         ...(deps.now ? { now: deps.now } : {}),
         primaryThreadId: input.primaryThreadId,
         dispatchEchoes,

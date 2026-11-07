@@ -59,6 +59,8 @@ export type ProviderTimelineItemWrite = {
 }
 
 export type ProviderTimelineDecision = {
+  /** The existing frame classifier found no output or placement duty. */
+  suppressedFrame?: true
   dropped?: ProviderTimelineDropRule
   /** Apply state changes only after sink admission. */
   commit?: (state: ProviderTimelineState) => void

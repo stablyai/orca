@@ -1,5 +1,8 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type {
+  AgentSessionDeltaCoalescerDeps,
+  AgentSessionDeltaSnapshot
+} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { codexJournalItem } from './codex-structured-item-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
@@ -19,7 +22,12 @@ export type CodexItemStreamDeps = {
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
+  isCurrent?: AgentSessionDeltaCoalescerDeps['isCurrent']
+  onScheduledFailure?: AgentSessionDeltaCoalescerDeps['onScheduledFailure']
 }
+
+/** Buffered stream text; command previews read only its bounded head. */
+export type CodexStreamText = AgentSessionDeltaSnapshot
 
 export type CodexItemStreamState = {
   identity: AgentJournalItemIdentity
@@ -58,7 +66,7 @@ export type CodexStructuredItemStreams = {
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
   /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
-  flush: (threadId?: string) => boolean
+  flush: (threadId?: string) => CodexStructuredItemStreamAdmission
   dispose: () => void
   snapshot: (
     threadId: string,

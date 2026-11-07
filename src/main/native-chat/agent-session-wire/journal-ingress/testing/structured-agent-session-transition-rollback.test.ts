@@ -111,7 +111,7 @@ it('refuses, before writing anything, a settlement that names one item twice', a
 it('reports unwritten streams and owes nothing once the caller marks them written', () => {
   const emitted: string[] = []
   const coalescer = createAgentSessionDeltaCoalescer({
-    emit: (_key, text) => {
+    emit: (_key, { text }) => {
       emitted.push(text)
     },
     schedule: () => () => {}

@@ -10,7 +10,7 @@ describe('streamed output overflow prefix', () => {
     const delta = 'x'.repeat(64 * 1024)
     const emitted: string[] = []
     const instance = createAgentSessionDeltaCoalescer({
-      emit: (_key, text) => emitted.push(text),
+      emit: (_key, { text }) => emitted.push(text),
       schedule: () => () => {}
     })
     for (let index = 0; index < 256; index += 1) {
@@ -37,7 +37,7 @@ describe('streamed output overflow prefix', () => {
       observedBytes: 257 * delta.length,
       truncated: true
     })
-    expect(instance.flushAll()).toBe(true)
+    expect(instance.flushAll().accepted).toBe(true)
     expect(emitted).toEqual([text])
     instance.dispose()
   })

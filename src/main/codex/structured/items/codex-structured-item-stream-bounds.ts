@@ -1,7 +1,18 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { toolExecutionMetadata } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
-import type { CodexItemStreamState } from './codex-structured-item-stream-contracts'
+import type {
+  CodexItemStreamState,
+  CodexPendingItemPatch
+} from './codex-structured-item-stream-contracts'
 import type { CodexThreadItem } from './codex-thread-item-identity'
+import type { AgentSessionDeltaSnapshot } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import { JOURNAL_RUNNING_PREVIEW_LIMITS } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { codexItemRunState } from './codex-item-run-state'
+import {
+  codexRunningOutputItem,
+  codexStreamingJournalItem,
+  type CodexJournalItem
+} from './codex-structured-item-translation'
 
 export const MAX_CODEX_ITEM_STREAM_STATES = 256
 export const MAX_CODEX_ITEM_STREAM_PENDING_PATCHES = 128
@@ -51,4 +62,45 @@ export function codexItemStreamState(
     identity,
     ...(startedAt === undefined ? {} : { startedAt })
   }
+}
+
+export function codexOutputGrowthCheckpointDue(
+  checkpointLength: number,
+  textLength: number
+): boolean {
+  const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
+  return !(checkpointLength > 0 && textLength < nextLength)
+}
+
+export function trimCodexPendingPatches(patches: Map<string, CodexPendingItemPatch>): number {
+  let releasedBytes = 0
+  while (patches.size > MAX_CODEX_ITEM_STREAM_PENDING_PATCHES) {
+    const oldest = patches.keys().next().value
+    if (typeof oldest !== 'string') {
+      break
+    }
+    const pending = patches.get(oldest)
+    if (pending) {
+      releasedBytes += pendingPatchBytes(pending)
+    }
+    patches.delete(oldest)
+  }
+  return releasedBytes
+}
+
+/** Running output rows keep only a preview, so build it without reading all the output. */
+export function codexStreamingCheckpointItem(
+  item: CodexThreadItem,
+  stream: Pick<AgentSessionDeltaSnapshot, 'text' | 'bounded'>
+): CodexJournalItem {
+  const running =
+    codexKeepsRunningOutputPreview(item.type) && codexItemRunState(item) === 'running'
+      ? codexRunningOutputItem(item, stream.bounded(JOURNAL_RUNNING_PREVIEW_LIMITS.inlineHeadBytes))
+      : null
+  return running ?? codexStreamingJournalItem(item, stream.text)
+}
+
+/** Streams whose running rows store a bounded output preview keep a running digest. */
+export function codexKeepsRunningOutputPreview(type: string | undefined): boolean {
+  return type === 'commandExecution' || type === 'fileChange'
 }

@@ -20,7 +20,8 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionOptions
+  StructuredAgentSessionRevisionOptions,
+  StructuredAgentSessionSinkAdmission
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionRevisionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
@@ -188,7 +189,7 @@ export function writeAgentJournalTurnRow(
   target: AgentJournalTurnRowTarget,
   write: AgentJournalTurnRowWrite,
   { publish, options: delivery = {} }: AgentJournalTurnRowDelivery
-): void {
+): StructuredAgentSessionSinkAdmission {
   // Turn records are thread-scoped.
   const options = { ...delivery, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   const revise = publish ? sink.tryReviseResolvedItemAndPublish : sink.tryReviseResolvedItem
@@ -199,10 +200,10 @@ export function writeAgentJournalTurnRow(
         sink.publish()
       }
     }
-    return
+    return { accepted: true }
   }
   const reservedBytes = agentJournalTurnRowReservedBytes(target, write)
-  revise.call(
+  return revise.call(
     sink,
     reservedBytes,
     (journal) => resolveAgentJournalTurnRowWrite(journal, target, write, reservedBytes),

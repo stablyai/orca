@@ -108,12 +108,18 @@ export function createClaudeJournalTranslator(
     producer: subagents.linkage,
     persist: (identity, text, options, ended) => {
       const body = claudeStreamingMessageBody(text)
-      deps.sink.appendItem(identity, body, {
+      const appendOptions = {
         ...options,
         turnScope: turnScope(),
         ...(ended ? { lifecycle: true } : {})
-      })
-      deps.sink.publish()
+      }
+      const append = deps.sink.tryAppendItem
+        ? deps.sink.tryAppendItem(identity, body, appendOptions).accepted
+        : (deps.sink.appendItem(identity, body, appendOptions), true)
+      const publish = deps.sink.tryPublish
+        ? deps.sink.tryPublish().accepted
+        : (deps.sink.publish(), true)
+      return append && publish
     }
   })
   const streamedThinking = createClaudeStreamedThinking({

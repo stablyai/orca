@@ -5,6 +5,7 @@ import {
   messageText
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
+import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 
 afterEach(closeProviderTimelineRigs)
@@ -167,4 +168,63 @@ describe('recorded ACP traffic through the journal', () => {
       'completed'
     ])
   })
+})
+
+it('uses actual suppressed requests and metadata without forcing named tails, then preserves explicit Plan', async () => {
+  const fixture = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
+  const translator = fixture.lane()
+  fixture.apply(translator.openPrompt('prompt', 1).events)
+  const update = (sessionUpdate: string, text: string, messageId?: string) =>
+    translator.notification(
+      'session/update',
+      {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate,
+          content: { type: 'text', text },
+          ...(messageId ? { messageId } : {})
+        }
+      },
+      10
+    )
+  for (const channel of ['agent_message_chunk', 'agent_thought_chunk']) {
+    fixture.apply(update(channel, 'named', channel))
+    const request = translator.request('extension/delta', { sessionId: 'session-1' }, 7)
+    expect(request.presentation).toBeUndefined()
+    expect(request.events).toMatchObject([
+      { type: 'provider.frame', frameKind: 'request:extension/delta' }
+    ])
+    fixture.apply(request.events)
+    await fixture.rig.eventSink.written?.()
+    expect(
+      fixture.rig.journal.snapshot().items.filter((row) => row.body.kind === 'message')
+    ).toEqual([])
+  }
+  fixture.apply(
+    translator.notification(
+      'session/update',
+      {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'plan',
+          entries: [{ content: 'real plan', priority: 'medium', status: 'pending' }]
+        }
+      },
+      20
+    )
+  )
+  const before = await fixture.rig.rows()
+  expect(
+    before.filter((row) => row.body.kind === 'message').map((row) => messageText(row.body))
+  ).toEqual(['named', 'named'])
+  expect(before.at(-1)?.body).toMatchObject({
+    kind: 'status',
+    presentation: 'plan-document',
+    text: '- [ ] real plan'
+  })
+  fixture.apply(translator.promptResult('prompt', { stopReason: 'end_turn' }, 30))
+  const expected = structuredClone(await fixture.rig.rows())
+  const reopened = await fixture.rig.reopenJournal()
+  expect(reopened.snapshot().items).toEqual(expected)
+  expect(reopened.publicRead().snapshot.items).toEqual(expected)
 })

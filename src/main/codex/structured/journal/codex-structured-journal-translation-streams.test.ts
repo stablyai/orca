@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -229,6 +229,7 @@ describe('Codex streamed checkpoint admission', () => {
     delta('a'.repeat(128))
     window.fire()
     const rows = tap.rows.length
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 400)
     reject = true
     delta('b'.repeat(32))
     window.fire()
@@ -249,6 +250,47 @@ describe('Codex streamed checkpoint admission', () => {
     expect(tap.rows.at(-1)?.body).toMatchObject({
       blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
     })
+    clock.mockRestore()
     translator.dispose()
   })
 })
+
+it.each([false, true])(
+  'keeps an unpublished other-thread first row before a tool; missing start=%s',
+  (missingStart) => {
+    const { translator, tap } = translatorWith()
+    const child = (method: string, params: unknown) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: SESSION_ID,
+        threadId: 'child',
+        method,
+        params
+      })
+    if (!missingStart) {
+      child('item/started', { item: { type: 'agentMessage', id: 'child-reply', text: '' } })
+    }
+    child('item/agentMessage/delta', { itemId: 'child-reply', delta: 'B' })
+    translator.handle(
+      notification('item/started', {
+        item: { type: 'commandExecution', id: 'tool', command: 'pwd', status: 'inProgress' }
+      })
+    )
+    const relevant = () =>
+      tap.rows.filter(
+        (row) =>
+          (row.body.kind === 'message' && row.body.role === 'assistant') ||
+          row.body.kind === 'tool-call'
+      )
+    expect(relevant().map((row) => row.body.kind)).toEqual(['message', 'tool-call'])
+    for (let i = 0; i < 10; i++) {
+      translator.handle(
+        notification('item/started', {
+          item: { type: 'commandExecution', id: `tool-${i}`, command: 'pwd', status: 'inProgress' }
+        })
+      )
+    }
+    expect(relevant().filter((row) => row.body.kind === 'message')).toHaveLength(1)
+    translator.dispose()
+  }
+)

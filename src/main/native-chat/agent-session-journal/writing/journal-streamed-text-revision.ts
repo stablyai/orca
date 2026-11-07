@@ -3,7 +3,7 @@ import { agentJournalLinkageFields } from '../../../../shared/agent-session/jour
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 
-/** Only streamed assistant text may skip per-commit fsync; FULL turn settlement makes it durable. */
+/** Only same-role streamed text may skip per-commit fsync; FULL turn settlement makes it durable. */
 export function isJournalStreamedTextRevision(
   state: JournalReducerState,
   row: JournalRow
@@ -15,13 +15,13 @@ export function isJournalStreamedTextRevision(
   const previous = state.items.get(row.itemId)
   if (
     body.kind !== 'message' ||
-    body.role !== 'assistant' ||
+    (body.role !== 'assistant' && body.role !== 'reasoning') ||
     !body.blocks.every((block) => block.type === 'text') ||
     body.sentAs !== undefined ||
     body.command !== undefined ||
     body.from !== undefined ||
     previous?.body.kind !== 'message' ||
-    previous.body.role !== 'assistant' ||
+    previous.body.role !== body.role ||
     previous.body.sentAs !== undefined ||
     previous.body.command !== undefined ||
     previous.body.from !== undefined ||
@@ -29,7 +29,13 @@ export function isJournalStreamedTextRevision(
   ) {
     return false
   }
-  return sameRevisionPlacement(state, row, previous)
+  // Only text changes qualify; reasoning state changes keep FULL durability.
+  return (
+    isDeepStrictEqual(
+      { ...body, blocks: body.blocks.map((block) => ({ ...block, text: '' })) },
+      { ...previous.body, blocks: previous.body.blocks.map((block) => ({ ...block, text: '' })) }
+    ) && sameRevisionPlacement(state, row, previous)
+  )
 }
 
 /** Output revisions cannot change queue eligibility; lifecycle and unknown changes still wake it. */

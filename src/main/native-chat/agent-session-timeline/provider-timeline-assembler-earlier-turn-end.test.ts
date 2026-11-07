@@ -39,10 +39,13 @@ describe("an earlier turn's late end leaves the open turn alone", () => {
     rig.assembler.apply({ ...delta, text: 'Hello' })
     rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'completed' })
     rig.assembler.apply({ ...delta, text: ' world' })
+    expect(rig.assembler.openTurnId).toBe(providerTurnId('t2'))
+    rig.assembler.flush()
     const texts = (await rig.rows()).flatMap((row) =>
       row.body.kind === 'message' ? [[row.turnScope, messageText(row.body)]] : []
     )
     expect(texts).toEqual([[{ kind: 'turn', turnItemId: providerTurnItemId('t2') }, 'Hello world']])
+    expect(rig.assembler.openTurnId).toBe(providerTurnId('t2'))
   })
 
   it("leaves the open turn's running work to that turn's own end", async () => {
