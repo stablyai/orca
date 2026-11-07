@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { createHookListenerState } from './agent-hook-listener/listener-state'
+import { normalizeAndAccept } from './agent-hook-listener/normalization/agent-hook-listener-test-harness'
+import { resolveHookSource } from './agent-hook-listener/source-routing'
 import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
@@ -42,6 +45,20 @@ describe('OmO agent identity', () => {
       processName: 'omo'
     })
     expect(recognizeAgentProcessFromCommandLine(`${BUN_OMO} --mode rpc`)).toBeNull()
+  })
+
+  it('routes omo extension hooks to an omo row carrying the prompt', () => {
+    const source = resolveHookSource('/hook/omo')
+    expect(source).toBe('omo')
+    const state = createHookListenerState()
+    const send = (hook_event_name: string, extra = {}) =>
+      normalizeAndAccept(state, source!, { hook_event_name, ...extra })
+    expect(send('before_agent_start', { prompt: 'Fix the login bug' })?.payload).toMatchObject({
+      agentType: 'omo',
+      state: 'working',
+      prompt: 'Fix the login bug'
+    })
+    expect(send('agent_end')?.payload).toMatchObject({ agentType: 'omo', state: 'done' })
   })
 
   it('does not treat ordinary bun scripts as agents', () => {

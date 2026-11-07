@@ -25,7 +25,7 @@ function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string
 }
 
 function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
+  agentKind: 'pi' | 'omp' | 'prime-agent' | 'omo',
   toolName: string | undefined
 ): boolean {
   return agentKind === 'omp'
@@ -36,7 +36,7 @@ function isPiCompatibleAskTool(
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: 'pi' | 'omp' | 'prime-agent' | 'omo'
 ): ToolSnapshot {
   // Custom modals carry neither approvals nor structured questions.
   if (
