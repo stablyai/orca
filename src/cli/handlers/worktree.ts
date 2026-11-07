@@ -1,4 +1,5 @@
 import { withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { createWorktreeOnRecipe } from './worktree-create-recipe'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -27,8 +28,8 @@ import {
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../selectors'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
+import { readCliAgentLaunch } from '../agent-launch-request'
+import { getOptionalSetupDecision, getOptionalStartupAgent } from './worktree-create-startup-flags'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
@@ -54,36 +55,6 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../reference-input'
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
-
-function getOptionalSetupDecision(
-  flags: Map<string, string | boolean>
-): 'run' | 'skip' | 'inherit' | undefined {
-  const setup = getPresentStringFlag(flags, 'setup')
-  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
-    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
-  }
-  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-    )
-  }
-  return setup
-}
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
@@ -125,6 +96,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree create': async (context) => {
     const { flags, client, cwd, json, rawArgs } = context
+    const recipeId = flags.has('recipe') ? getRequiredStringFlag(flags, 'recipe') : undefined
     const referenceInputs = getCreateReferenceInputs(flags)
     assertWorktreeParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
@@ -205,6 +177,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       })),
       // Always request CLI provenance, including hand-typed creates without a terminal handle.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {}
+    }
+    if (recipeId) {
+      await createWorktreeOnRecipe({ client, flags, create, recipeId, launch: agentLaunch, json })
+      return
     }
     if (agentLaunch) {
       await createWorktreeWithAgent({ client, flags, create, launch: agentLaunch, json, rawArgs })

@@ -119,6 +119,9 @@ export const WORKTREE_METHODS = [
       // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
+        if (params.recipeId !== undefined) {
+          return runtime.createManagedRecipeWorkspace(params)
+        }
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
         const automationProvenance =
           resolveAutomationWorkspaceProvenance({

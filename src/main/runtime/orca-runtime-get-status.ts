@@ -25,7 +25,8 @@ import {
 
 import {
   MANAGED_SERVER_RUNTIME_CAPABILITY,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,
+  WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY
 } from '../../shared/host-runtime-capabilities'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../shared/session-tabs-runtime-capabilities'
 import {
@@ -61,6 +62,7 @@ import { supportsDurableTerminalPromptDelivery } from './durable-terminal-prompt
 import { RuntimeWorkspaceChangeEvents } from './workspaces/catalog/runtime-workspace-change-events'
 
 type RuntimeStatusHost = {
+  supportsRecipeWorkspaceCreation?(): boolean
   getAvailableAuthoritativeWindow(): unknown
   getUsageRateLimits(): unknown
   getRecordedTerminalSleepHandles(
@@ -108,6 +110,9 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY ||
           statusHost.getUsageRateLimits() !== null)
     )
+    if (statusHost.supportsRecipeWorkspaceCreation?.()) {
+      capabilities.push(WORKTREE_RECIPE_CREATE_RUNTIME_CAPABILITY)
+    }
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }

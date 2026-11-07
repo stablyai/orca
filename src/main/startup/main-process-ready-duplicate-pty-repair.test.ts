@@ -55,6 +55,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     setEmulatorBridge() {}
     setArtifactService() {}
     setSkillCloudService() {}
+    setRecipeWorkspaceCreator() {}
     setAccountServices() {}
     setCommitMessageAgentEnvironmentResolvers() {}
   }
