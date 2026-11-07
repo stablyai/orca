@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { NativeChatTextAttachmentOpener } from './NativeChatTextAttachments'
+import { NativeChatTextAttachmentOpener } from './media/text/NativeChatTextAttachments'
 import { isCommittedChatAttachmentCandidate } from '../../../../shared/native-chat-text-attachment-references'
 import {
   useNativeChatPastedTextScope,

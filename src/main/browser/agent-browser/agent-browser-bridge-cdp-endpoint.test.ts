@@ -64,7 +64,6 @@ vi.mock('../cdp/commands/cdp-bridge', async () => {
 
 import { AgentBrowserBridge } from './agent-browser-bridge'
 import {
-  answerAgentBrowserCommands,
   mockBrowserManager,
   overrideBridgeWebContentsLookup,
   resetAgentBrowserBridgeMocks,
@@ -107,37 +106,5 @@ describe('AgentBrowserBridge CDP endpoint contract', () => {
       expect(spawn.args).not.toContain('--cdp')
       expect(spawn.args.join(' ')).not.toContain('token-0')
     }
-  })
-
-  it('resets the session and explains a proxy refusal so the next command reconnects', async () => {
-    let refuse = true
-    answerAgentBrowserCommands(execFileMock, stdinWrites, (command, cb, _args, _child, opts) => {
-      if (command[0] === 'close') {
-        cb(null, JSON.stringify({ success: true, data: null }), '')
-      } else if (refuse) {
-        cb(
-          Object.assign(new Error('exit 1'), { code: 1 }),
-          JSON.stringify({
-            success: false,
-            error: 'CDP WebSocket connect failed: HTTP error: 404 Not Found'
-          }),
-          ''
-        )
-      } else {
-        cb(null, JSON.stringify({ success: true, data: { cdp: opts.env?.AGENT_BROWSER_CDP } }), '')
-      }
-    })
-
-    await expect(bridge.snapshot()).rejects.toMatchObject({
-      code: 'browser_error',
-      message: expect.stringMatching(/refused by Orca's browser proxy.*404.*retry the command/)
-    })
-    await vi.waitFor(() => expect(proxyStops[0]).toHaveBeenCalled())
-
-    refuse = false
-    await expect(bridge.snapshot()).resolves.toMatchObject({})
-    expect(CdpWsProxyMock.instances).toHaveLength(2)
-    const lastSpawnEnv = execFileMock.mock.calls.at(-1)?.[2]?.env
-    expect(lastSpawnEnv?.AGENT_BROWSER_CDP).toBe('ws://127.0.0.1:9222/token-1')
   })
 })

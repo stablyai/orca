@@ -1,6 +1,6 @@
 import { useNativeChatSelectedHistory } from './use-native-chat-selected-history'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { NativeChatLiveSession } from './native-chat-live-session-contract'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 
 /** Scroll intent holds the source's history, including while this mounted view is hidden. */
 export function useNativeChatHistoryRetention({
@@ -53,7 +53,9 @@ export function useNativeChatHistoryRetention({
   const leaveEnd = useCallback(() => {
     cancelTrim()
     transition('browsing')
-    release.current ??= retainHistory?.() ?? null
+    if (release.current == null) {
+      release.current = retainHistory?.() ?? null
+    }
   }, [retainHistory, cancelTrim, transition])
   const returnToEnd = useCallback(
     (reason?: 'send') => {

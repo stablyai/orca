@@ -5,7 +5,7 @@ import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
-import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   EMPTY_NARROWED_BY_KEY,
   EMPTY_WORKTREE_BROWSER_WORKSPACES,
@@ -27,7 +27,7 @@ import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
 } from './mobile-session-surfaces'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {

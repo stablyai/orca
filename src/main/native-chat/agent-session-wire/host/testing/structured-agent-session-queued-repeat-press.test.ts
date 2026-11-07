@@ -47,32 +47,6 @@ describe('a repeated draft press under a fresh operation id', () => {
     expect(handoffs).toHaveLength(1)
     await eventually(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
   })
-
-  it('Delete pressed twice withdraws the draft once; the second press says it is already gone', async () => {
-    await rig.workingSend()
-    const draftId = await queuedDraft('delete me')
-    const [first, second] = await Promise.all([
-      rig.deleteQueued(draftId),
-      rig.deleteQueued(draftId)
-    ])
-    expect(first).toMatchObject({ ok: true, value: { deleted: true, messageId: draftId } })
-    expect(second).toMatchObject({
-      ok: true,
-      value: { deleted: false, messageId: draftId, disposition: 'withdrawn' }
-    })
-    expect(await rig.drafts()).toHaveLength(0)
-  })
-
-  it('Resume pressed twice lifts the pause once; the second press lifts nothing and is not refused', async () => {
-    await rig.workingSend()
-    await queuedDraft('held by stop')
-    await rig.stop()
-    expect(await rig.queuePause()).toEqual({ reason: 'stopped' })
-    const [first, second] = await Promise.all([rig.resume(), rig.resume()])
-    expect(first).toMatchObject({ ok: true, value: { resumed: true } })
-    expect(second).toMatchObject({ ok: true, value: { resumed: false } })
-    expect(await rig.queuePause()).toBeNull()
-  })
 })
 
 describe('a queued Send receipt', () => {

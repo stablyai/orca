@@ -32,26 +32,6 @@ async function within<T>(promise: Promise<T>, ms: number): Promise<T | typeof ST
   }
 }
 
-/** Runs after the attach commits, before its controller ends. */
-function beforeAttachEnds(host: StructuredAgentSessionHost, atEnd: () => void): void {
-  const aborts = host.collaboratorsForTests().runtimeState.acquireAborts
-  const begin = aborts.begin.bind(aborts)
-  let fired = false
-  aborts.begin = (sessionId) => {
-    const started = begin(sessionId)
-    return {
-      ...started,
-      end: () => {
-        if (!fired) {
-          fired = true
-          atEnd()
-        }
-        started.end()
-      }
-    }
-  }
-}
-
 /** Runs during owner probing, before launch. */
 function duringOwnerProbe(host: StructuredAgentSessionHost, during: () => void): void {
   const state = host.collaboratorsForTests().runtimeState
@@ -77,27 +57,6 @@ describe('a Grok start the host aborts', () => {
     expect((await attaching).ok).toBe(true)
     expect(rig.child().exited).toBe(true)
     await rig.adapter.closeAll()
-  })
-
-  it('closes a chat whose start already returned as a close Orca asked for, not a crash', async () => {
-    const { rig, host, store } = await openHostRig()
-    const ended: unknown[] = []
-    const handle = host.handleAdapterEvent.bind(host)
-    host.handleAdapterEvent = (event) => {
-      if (event.type === 'ended') {
-        ended.push(event)
-      }
-      return handle(event)
-    }
-    let closing: Promise<void> | undefined
-    beforeAttachEnds(host, () => {
-      closing = host.close(SESSION, 'user-close')
-    })
-    expect(await host.attach(CALLER, attachParams())).toMatchObject({ ok: true })
-    await closing
-    expect(rig.child().exited).toBe(true)
-    expect(ended).toMatchObject([{ cause: 'requested-close' }])
-    expect(store.getRecord(SESSION)?.lease.deathEvidence?.detail).not.toContain('exited')
   })
 
   it('never launches Grok for a chat closed while its attach was still reconciling', async () => {

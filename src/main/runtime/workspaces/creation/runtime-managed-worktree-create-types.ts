@@ -62,6 +62,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   setupDecision?: 'run' | 'skip' | 'inherit'
   /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
   approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean

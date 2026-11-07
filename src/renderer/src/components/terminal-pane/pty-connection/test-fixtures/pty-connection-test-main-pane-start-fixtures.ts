@@ -49,7 +49,7 @@ type LayoutApplyTestTransport = typeof answeringFallback
 export async function mainLayoutApplyTransport(): Promise<LayoutApplyTestTransport> {
   const { ANSWERING_TRANSPORT, layoutApplyTestTransport } =
     await import('@/runtime/layout-apply-test-transport.test-fixture')
-  const client: object = await import('@/runtime/runtime-rpc-client')
+  const client: object = await import('@/runtime/rpc/calls/runtime-rpc-call')
   const answering = ANSWERING_TRANSPORT in client ? client[ANSWERING_TRANSPORT] : undefined
   return isLayoutApplyTestTransport(answering) ? answering : layoutApplyTestTransport
 }

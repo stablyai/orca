@@ -375,7 +375,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-old')
       expect(transport.isConnected()).toBe(false)
 
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       handleEvents.queueAcceptedWebSessionTerminalSnapshot(
         {
           worktree: 'wt-1',

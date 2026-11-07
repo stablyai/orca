@@ -4,7 +4,7 @@ import { runAgentHibernationTick } from './agent-hibernation-coordinator'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../../runtime/runtime-compatibility-test-fixture'
+} from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   deferred,
   entry,

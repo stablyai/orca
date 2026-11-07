@@ -3,7 +3,7 @@ import type { GitConflictOperation } from '../../../../../../shared/git/status/g
 import type { Repo } from '../../../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitConflictOperation } from '@/runtime/source-control/git/runtime-git-status-client'
 import {
   createCoalescedPollRunner,
   type SlowTaskBackoffOptions

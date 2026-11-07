@@ -39,7 +39,7 @@ vi.mock('../../store', () => {
   useAppStore.getState = () => state
   return { useAppStore }
 })
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-input-send', () => ({
   sendRuntimePtyInput: vi.fn()
 }))
 vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (importOriginal) => ({
@@ -56,7 +56,7 @@ vi.mock('./native-chat-runtime-send', () => ({
 vi.mock('./native-chat-runtime-image-send', () => ({
   sendNativeChatMessageWithImageAttachments: vi.fn()
 }))
-vi.mock('./claude-model-switch-confirmation', () => ({
+vi.mock('./session/options/terminal/claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn()
 }))
 vi.mock('../../../../shared/native-chat/native-chat-agent-profiles', async (importOriginal) => ({

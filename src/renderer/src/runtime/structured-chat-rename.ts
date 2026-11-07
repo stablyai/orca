@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../shared/tab-types'
 import { normalizeAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
-import { callRuntimeRpc } from './runtime-rpc-client'
+import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 import { supportsStructuredAgentSessionRename } from './structured-agent-session-client'
 import {
   structuredAgentSessionTargetForHost,

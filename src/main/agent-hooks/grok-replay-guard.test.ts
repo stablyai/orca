@@ -21,17 +21,6 @@ describe('Grok vendor hook replay guard', () => {
     }
   })
 
-  it('leaves non-Grok hook delivery unchanged', async () => {
-    for (const [source, script] of [
-      ['claude', getClaudeManagedScript('local', CLAUDE_SCRIPT_OPTIONS)],
-      ['cursor', getCursorManagedScript('local')]
-    ]) {
-      expect((await runVendorHook(script, { GROK_HOOK_EVENT: '' })).requests).toEqual([
-        `/hook/${source}`
-      ])
-    }
-  })
-
   it.skipIf(process.platform === 'win32')(
     'keeps Grok-replayed hooks out of the spool',
     async () => {

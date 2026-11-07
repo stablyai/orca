@@ -2,16 +2,16 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
   seedEditorPlacementConsumers,
   drawEditorPlacementConsumers
-} from '@/store/slices/editor-placement-consumers.test-fixture'
+} from '@/store/slices/editor/tabs/editor-placement-consumers.test-fixture'
 import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())

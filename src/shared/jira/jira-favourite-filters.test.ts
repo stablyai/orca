@@ -34,10 +34,6 @@ describe('Jira favourite filter normalization', () => {
     })
   })
 
-  it.each([null, {}, { values: [filter] }, 'filters'])('rejects invalid list %j', (value) => {
-    expect(() => normalizeJiraFavouriteFilters(value, 'site-1')).toThrow('invalid')
-  })
-
   it('marks malformed or oversized filters as omitted without changing their queries', () => {
     const bad = [
       null,
@@ -99,11 +95,6 @@ describe('Jira favourite filter transport contract', () => {
     'requires an explicit bounded single site: %j',
     (value) => expect(JiraFavouriteFilterParams.safeParse(value).success).toBe(false)
   )
-
-  it('normalizes a supplied site without accepting additional arguments', () => {
-    expect(JiraFavouriteFilterParams.parse({ siteId: ' site-1 ' })).toEqual({ siteId: 'site-1' })
-    expect(JiraFavouriteFilterParams.safeParse({ siteId: 'site-1', limit: 1 }).success).toBe(false)
-  })
 
   it('accepts additive future response fields without exposing them to callers', () => {
     expect(

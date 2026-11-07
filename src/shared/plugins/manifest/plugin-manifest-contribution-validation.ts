@@ -28,6 +28,7 @@ type ContributionValidationManifest = {
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
+    fonts: { family: string }[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
@@ -115,6 +116,13 @@ export function validatePluginManifestContributions(
     (entry) => (entry as { locale: string }).locale.toLowerCase(),
     'languagePacks',
     'language pack locale',
+    ctx
+  )
+  rejectDuplicateValues(
+    manifest.contributes.fonts.map((font) => font.family.toLowerCase()),
+    String,
+    'fonts',
+    'font family',
     ctx
   )
   rejectDuplicateValues(

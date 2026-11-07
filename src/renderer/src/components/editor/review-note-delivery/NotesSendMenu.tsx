@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { useAppStateValue } from '@/store/app-state-view'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
@@ -16,7 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
-import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
+import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {
   diffCommentSendKey,
   holdNotesForSend,
@@ -24,6 +24,7 @@ import {
   useNotesInFlightVersion
 } from '@/lib/notes-send-in-flight'
 import { translate } from '@/i18n/i18n'
+import { recomputeOn } from '@/lib/recompute-on'
 
 function enabledSendTooltip(): string {
   return translate(
@@ -99,15 +100,18 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
   const ownsTargetMode = useAppStateValue((s) => s.agentSendPopoverTargetMode?.id === targetModeId)
   const inFlightVersion = useNotesInFlightVersion()
-  const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(() => {
-    void inFlightVersion
-    return scopes.map(({ formatPrompt, ...scope }) => {
-      const notes = owner
-        ? scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
-        : []
-      return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
-    })
-  }, [inFlightVersion, owner, scopes])
+  const sendableScopes = useMemo<SendableNotesScope<TNote>[]>(
+    () =>
+      recomputeOn([inFlightVersion], () =>
+        scopes.map(({ formatPrompt, ...scope }) => {
+          const notes = owner
+            ? scope.notes.filter((note) => !isNoteInFlight(diffCommentSendKey(owner, note)))
+            : []
+          return { ...scope, notes, prompt: notes.length > 0 ? formatPrompt(notes) : '' }
+        })
+      ),
+    [inFlightVersion, owner, scopes]
+  )
   const enabledScopes = useMemo(
     () => sendableScopes.filter((scope) => scope.notes.length > 0),
     [sendableScopes]

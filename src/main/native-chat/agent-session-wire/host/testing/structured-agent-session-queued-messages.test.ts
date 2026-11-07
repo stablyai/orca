@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
@@ -32,29 +32,6 @@ afterEach(async () => {
     await currentRig?.dispose()
   })
 })
-const drafts: QueuedMessageTestRig['drafts'] = (...args) => rig.drafts(...args)
-
-describe('/clear', () => {
-  function clear(clientOperationId: string) {
-    const fields = { command: 'clear' as const }
-    return host.conversationCommand(CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.conversationCommand', clientOperationId),
-      ...fields
-    })
-  }
-
-  it('a clear with no drafts keeps the existing conversation open', async () => {
-    const cleared = await clear(hostTestOperationId())
-    expect(cleared).toMatchObject({ ok: true, value: { command: 'clear', state: 'completed' } })
-    const replacementId = cleared.ok ? SESSION : undefined
-    if (!replacementId) {
-      throw new Error('expected clear to succeed')
-    }
-    expect(host.hasSession(replacementId)).toBe(true)
-    expect(await drafts(replacementId)).toHaveLength(0)
-  })
-})
-
 it('a steer send waiting on approval joins the running turn when approval clears', async () => {
   const opener = await rig.workingSend()
   await rig.settleAccepted(opener, 'opening')

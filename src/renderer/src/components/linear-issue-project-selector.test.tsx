@@ -20,10 +20,10 @@ const storeMocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-linear-project-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearListProjects: runtimeMocks.linearListProjects
 }))
-vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', () => ({
   linearUpdateIssue: runtimeMocks.linearUpdateIssue
 }))
 vi.mock('@/store', () => ({

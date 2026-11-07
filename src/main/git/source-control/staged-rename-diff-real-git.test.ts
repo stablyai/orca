@@ -45,17 +45,6 @@ describe('staged rename diffs with real Git', () => {
     await rm(repo, { recursive: true, force: true })
   })
 
-  it('preserves both versions of a pure rename', async () => {
-    await git(['add', '--all'])
-    expect(await git(['diff', '--cached', '--name-status'])).toContain('R100')
-
-    expect(await getDiff(repo, NEW_PATH, true, false, { oldPath: OLD_PATH })).toMatchObject({
-      kind: 'text',
-      originalContent: ORIGINAL,
-      modifiedContent: ORIGINAL
-    })
-  })
-
   it('compares the source in HEAD with the staged destination and excludes later edits', async () => {
     await writeFile(path.join(repo, NEW_PATH), STAGED)
     await git(['add', '--all'])

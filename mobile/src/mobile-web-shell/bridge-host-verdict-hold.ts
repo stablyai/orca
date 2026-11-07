@@ -28,7 +28,8 @@ const PHONE_ONLY_NATIVE_VERBS: ReadonlySet<string> = new Set([
   'native.audio.read',
   'native.audio.stop',
   'native.storage.read',
-  'native.image.act'
+  'native.image.act',
+  'native.speech.act'
 ])
 
 export type BridgeVerdictHold = {

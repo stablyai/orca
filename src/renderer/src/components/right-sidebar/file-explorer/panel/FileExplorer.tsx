@@ -3,7 +3,8 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import {
   getExplorerDisplayRootOptions,
   resolveExplorerDisplayRootChoice,

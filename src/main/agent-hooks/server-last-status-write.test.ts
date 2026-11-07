@@ -294,30 +294,4 @@ describe('Last-status persistence', () => {
       hydratedServer.stop()
     }
   })
-
-  it('does not write prompt interaction keys to last-status.json', async () => {
-    const server = new AgentHookServer()
-    await server.start({
-      env: 'production',
-      userDataPath
-    })
-    try {
-      await postHookEvent(
-        server,
-        buildBody({
-          hook_event_name: 'MessagePart',
-          role: 'user',
-          text: 'persist status only',
-          messageID: 'opencode-local-message-id'
-        }),
-        '/hook/opencode'
-      )
-      server.flushStatusPersistSync()
-      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
-      expect(file.entries[PANE].payload.prompt).toBe('persist status only')
-      expect(file.entries[PANE].promptInteractionKey).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
 })

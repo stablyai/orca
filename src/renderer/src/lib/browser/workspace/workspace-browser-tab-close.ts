@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
+import { destroyWorkspaceWebviews } from '@/store/slices/browser/cleanup/browser-webview-cleanup'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '../../resolve-owner'
 import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'

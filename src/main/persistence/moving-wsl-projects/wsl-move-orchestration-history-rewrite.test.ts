@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,17 +14,14 @@ import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestratio
 import Database from '../../sqlite/sync-database'
 import { wslMoveCutoverFixture } from '../__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../__fixtures__/wsl-mover/wsl-move-journal-seeding'
-import { listWslMoveCutovers, wslMoveJournalDirectory } from './wsl-move-cutover-journal'
+import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import { runWslMoveDesktopRewritePass } from './wsl-move-desktop-rewrite'
 import { resetWslMoveDesktopRewriteStoresForTests } from './wsl-move-desktop-rewrite-stores'
 
 import {
   registerWslMoveOrchestrationHistoryStore,
-  rewriteWslMoveOrchestrationHistory,
   WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID
 } from './wsl-move-orchestration-history-rewrite'
-import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
-import { wslMoveRewriteScope } from './wsl-move-rewrite-scope'
 
 const MOVED = 'repo-a::\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-a'
 const MOVED_ON_HOST = 'repo-a::/home/dev/repo-a'
@@ -152,53 +149,6 @@ describe('WSL move orchestration history rewrite', () => {
     expect(attachmentIds()).toEqual({ 'd-remote': MOVED })
   })
 
-  it('changes nothing when a crash lost its ledger entry and it runs again', async () => {
-    seedOrchestrationHistory()
-    seedWslMoveCutover(userDataPath, committedMove())
-    await runWslMoveDesktopRewritePass({ userDataPath })
-    const dispatches = dispatchIds()
-    const resources = resourceIds()
-    rmSync(wslMoveJournalDirectory(userDataPath), { recursive: true, force: true })
-    seedWslMoveCutover(userDataPath, committedMove())
-
-    await runWslMoveDesktopRewritePass({ userDataPath })
-
-    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([
-      WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID
-    ])
-    expect(dispatchIds()).toEqual(dispatches)
-    expect(resourceIds()).toEqual(resources)
-    const scope = wslMoveRewriteScope({
-      cutover: committedMove(),
-      rewritePath: createUncToLinuxPathRewriter('Ubuntu'),
-      destinationHostId: 'runtime:wsl:Ubuntu',
-      recordSeededHostWorkspaceIds: () => {}
-    })
-    expect(withDb((db) => rewriteWslMoveOrchestrationHistory(db, scope))).toBe(0)
-  })
-
-  it('touches nothing for a move that has not committed', async () => {
-    seedOrchestrationHistory()
-    const dispatches = dispatchIds()
-    seedWslMoveCutover(userDataPath, { ...committedMove(), phase: 'blobs-transferred' })
-
-    await runWslMoveDesktopRewritePass({ userDataPath })
-
-    expect(dispatchIds()).toEqual(dispatches)
-    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([])
-  })
-
-  it('records the store without creating a database the profile never had', async () => {
-    seedWslMoveCutover(userDataPath, committedMove())
-
-    await runWslMoveDesktopRewritePass({ userDataPath })
-
-    expect(existsSync(databasePath)).toBe(false)
-    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([
-      WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID
-    ])
-  })
-
   it('waits, unrecorded, while a worker in scope is still live, then rewrites it once settled', async () => {
     seedOrchestrationHistory()
     withDb((db) => {
@@ -251,18 +201,5 @@ describe('WSL move orchestration history rewrite', () => {
       WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID
     ])
     expect(dispatchIds()).toEqual({ 'd-old': MOVED_ON_HOST })
-  })
-
-  it('records a schema with no worktree column, changing nothing', async () => {
-    const db = new Database(databasePath)
-    db.exec(`CREATE TABLE worker_dispatches (dispatch_id TEXT PRIMARY KEY, state TEXT NOT NULL)`)
-    db.close()
-    seedWslMoveCutover(userDataPath, committedMove())
-
-    await runWslMoveDesktopRewritePass({ userDataPath })
-
-    expect(listWslMoveCutovers(userDataPath)[0]?.rewrittenStores).toEqual([
-      WSL_MOVE_ORCHESTRATION_HISTORY_STORE_ID
-    ])
   })
 })

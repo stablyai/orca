@@ -1,13 +1,13 @@
 import { Check, SquareTerminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { selectTerminalTheme } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '@/store'
-import { usePluginThemes, usePluginTerminalThemes } from '@/store/plugin-themes'
+import { usePluginThemes, usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
 import { Button } from '../../ui/button'
 import {
   isPluginAppThemeSelected,

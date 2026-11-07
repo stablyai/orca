@@ -31,7 +31,7 @@ import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentPaneConversationIdentity } from '../agent-pane-conversation'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 

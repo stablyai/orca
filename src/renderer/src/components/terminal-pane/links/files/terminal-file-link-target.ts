@@ -7,7 +7,7 @@ import {
 } from '../../../../../../shared/terminal/links/terminal-links'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
-import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
+import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
 import {
   getTerminalFileContext,
   mapTerminalFilePath,

@@ -15,7 +15,7 @@ import {
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
 import { resolveSourceControlLaunchAgentScope } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { selectRepoByIdForActiveWorkspace } from '@/store/selectors'
+import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { renderSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

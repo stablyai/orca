@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
 import { createNativeChatFileHref } from '../../../../shared/native-chat/native-chat-href-routing'
-import { useNativeChatLinkClick } from './native-chat-link-click-context'
+import { useNativeChatLinkClick } from './links/actions/native-chat-link-click-context'
 
 /** Expose the full path accessibly; a link handler opens the file without toggling its row. */
 export function NativeChatToolFileTarget({

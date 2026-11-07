@@ -1,6 +1,6 @@
 import type { CurrentActionSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import React from 'react'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   Dialog,
   DialogContent,

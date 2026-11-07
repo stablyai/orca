@@ -10,7 +10,7 @@ import { createStructuredSessionSelectionController } from '../../../../shared/a
 import { createStructuredAgentSessionOptionState } from '../../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
-import type { QueuedMessageInlineEditor } from './use-structured-agent-session-queued-edit'
+import type { QueuedMessageInlineEditor } from './queue/editing/native-chat-queued-edit-session'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'

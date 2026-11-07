@@ -11,6 +11,7 @@ import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/workspace
 import { withOwnerRepos } from '../../../../shared/sidebar-list/workspace-rows'
 import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/runtime-worktree-contracts'
 import type { RuntimeStore } from '../../runtime-store-contract'
+import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 export function buildRuntimeWorktreePsSummaries(args: {
@@ -109,7 +110,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   const projectGroupById = new Map(
     (args.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
   )
-  for (const folderWorkspace of args.store?.getFolderWorkspaces?.() ?? []) {
+  for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
     if (!projectGroup?.parentPath) {
       continue

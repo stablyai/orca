@@ -33,11 +33,11 @@ import {
 } from './structured-agent-session-send-preparation'
 import {
   cancelPlan,
-  promptPlan,
   sendPlan,
   setOptionPlan,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
+import { promptPlan } from './structured-agent-session-prompt-plan'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'

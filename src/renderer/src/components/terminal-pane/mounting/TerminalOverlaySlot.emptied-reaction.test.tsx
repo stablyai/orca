@@ -28,7 +28,9 @@ vi.mock('../../../store/index', () => ({
 vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => panel.focused
 }))
-vi.mock('@/store/selectors', () => ({ selectFloatingVisibleTabCount: () => panel.remaining }))
+vi.mock('@/store/workspaces/floating/floating-workspace-panel-selector', () => ({
+  selectFloatingVisibleTabCount: () => panel.remaining
+}))
 
 // Why the close blurs before it lands: removing the focused pane drops focus to the body.
 const closeTerminalTab = vi.hoisted(() =>

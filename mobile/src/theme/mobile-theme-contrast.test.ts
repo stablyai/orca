@@ -49,6 +49,14 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
     expect(contrastRatio(colors.textMuted, colors.composerSurface)).toBeGreaterThanOrEqual(4.5)
   })
 
+  // WCAG 1.4.11: the create button is an icon-only disc, so its glyph and its edge each hold 3:1.
+  it('keeps the floating create button and its glyph visible on the page', () => {
+    expect(contrastRatio(colors.createActionFill, colors.bgBase)).toBeGreaterThanOrEqual(3)
+    expect(
+      contrastRatio(colors.onCreateActionFill, colors.createActionFill)
+    ).toBeGreaterThanOrEqual(3)
+  })
+
   it('keeps your own message readable on its bubble', () => {
     expect(
       contrastRatio(colors.chatForegroundStrong, colors.chatUserSurface)

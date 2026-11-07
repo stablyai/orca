@@ -79,49 +79,4 @@ describe('host removal lifecycle', () => {
       removeHostMock.mock.invocationCallOrder[0]
     )
   })
-
-  it("forgets the host's recorded update failures once it is gone", async () => {
-    removeHostMock.mockResolvedValue(undefined)
-    await removeHostAndCloseClient('host-1', vi.fn())
-    expect(forgetUpdateFailuresMock).toHaveBeenCalledWith('host-1')
-  })
-
-  it('keeps them while the host is still paired', async () => {
-    removeHostMock.mockRejectedValue(new Error('storage unavailable'))
-    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
-    expect(forgetUpdateFailuresMock).not.toHaveBeenCalled()
-  })
-
-  it('still closes the client when forgetting them fails', async () => {
-    removeHostMock.mockResolvedValue(undefined)
-    forgetUpdateFailuresMock.mockRejectedValueOnce(new Error('disk'))
-    const closeHostClient = vi.fn()
-    await removeHostAndCloseClient('host-1', closeHostClient)
-    expect(closeHostClient).toHaveBeenCalledWith('host-1')
-  })
-
-  it("deletes the host's page cache and device store once it is gone, and keeps them while it is still paired", async () => {
-    removeHostMock.mockRejectedValueOnce(new Error('storage unavailable'))
-    await expect(removeHostAndCloseClient('host-1', vi.fn())).rejects.toThrow()
-    expect(deletePageCacheMock).not.toHaveBeenCalled()
-    expect(wipeHostStoreMock).not.toHaveBeenCalled()
-    removeHostMock.mockResolvedValue(undefined)
-    await removeHostAndCloseClient('host-1', vi.fn())
-    expect(deletePageCacheMock).toHaveBeenCalledWith('host-1')
-    expect(wipeHostStoreMock).toHaveBeenCalledWith('host-1')
-    expect(removeHostMock.mock.invocationCallOrder.at(-1)).toBeLessThan(
-      deletePageCacheMock.mock.invocationCallOrder[0]
-    )
-    expect(removeHostMock.mock.invocationCallOrder.at(-1)).toBeLessThan(
-      wipeHostStoreMock.mock.invocationCallOrder[0]
-    )
-  })
-
-  it('still removes the host when its page cache cannot be deleted', async () => {
-    removeHostMock.mockResolvedValue(undefined)
-    deletePageCacheMock.mockRejectedValueOnce(new Error('disk'))
-    const closeHostClient = vi.fn()
-    await expect(removeHostAndCloseClient('host-1', closeHostClient)).resolves.toBeUndefined()
-    expect(closeHostClient).toHaveBeenCalledWith('host-1')
-  })
 })

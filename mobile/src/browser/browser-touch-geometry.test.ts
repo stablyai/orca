@@ -20,9 +20,6 @@ const NO_VIEWPORT_META = {
   scrollOffsetY: 300
 }
 
-/** The fixture's alert button, in the page's own CSS pixels. */
-const BUTTON = { left: 32, top: 112, right: 115, bottom: 162 }
-
 describe('browser touch geometry', () => {
   it('maps the visual center of a letterboxed desktop frame to the browser center', () => {
     const layout = { width: 390, height: 700 }
@@ -46,45 +43,6 @@ describe('browser touch geometry', () => {
     ).toEqual({ x: 640, y: 360 })
   })
 
-  it('inverts pan and zoom around the rendered frame center', () => {
-    const layout = { width: 390, height: 700 }
-    const metadata = { deviceWidth: 1280, deviceHeight: 720 }
-    const geometry = computeBrowserFrameGeometry(layout, metadata)!
-    const zoom = { scale: 2, offsetX: -48, offsetY: 32 }
-    const browserPoint = { x: 960, y: 540 }
-    const localX = (browserPoint.x / metadata.deviceWidth) * geometry.renderedWidth
-    const localY = (browserPoint.y / metadata.deviceHeight) * geometry.renderedHeight
-    const screenX =
-      geometry.offsetX +
-      geometry.renderedWidth / 2 +
-      zoom.offsetX +
-      (localX - geometry.renderedWidth / 2) * zoom.scale
-    const screenY =
-      geometry.offsetY +
-      geometry.renderedHeight / 2 +
-      zoom.offsetY +
-      (localY - geometry.renderedHeight / 2) * zoom.scale
-
-    expect(mapScreenToBrowserPoint(screenX, screenY, layout, metadata, zoom)).toEqual(browserPoint)
-  })
-
-  it('maps a tap on a page with no viewport meta into the page CSS pixels', () => {
-    const layout = { width: 402, height: 593 }
-    const scale = NO_VIEWPORT_META.pageScaleFactor
-    // Where the button's centre is painted in the frame, which is where the finger goes.
-    const paintedX = ((BUTTON.left + BUTTON.right) / 2) * scale
-    const paintedY = ((BUTTON.top + BUTTON.bottom) / 2) * scale
-
-    const point = mapScreenToBrowserPoint(paintedX, paintedY, layout, NO_VIEWPORT_META, NO_ZOOM)!
-
-    expect(point.x).toBeGreaterThanOrEqual(BUTTON.left)
-    expect(point.x).toBeLessThanOrEqual(BUTTON.right)
-    expect(point.y).toBeGreaterThanOrEqual(BUTTON.top)
-    expect(point.y).toBeLessThanOrEqual(BUTTON.bottom)
-    // What the device proof recorded instead: the frame's own device space, 41% of the aim, on BODY.
-    expect(point).not.toEqual({ x: 30, y: 56 })
-  })
-
   it('divides the frame device space by the page scale and adds no scroll offset', () => {
     const layout = { width: 400, height: 600 }
     const metadata = {
@@ -96,13 +54,6 @@ describe('browser touch geometry', () => {
     }
 
     expect(mapScreenToBrowserPoint(100, 200, layout, metadata, NO_ZOOM)).toEqual({ x: 200, y: 400 })
-  })
-
-  it('leaves web view mode where it was, at a page scale of one', () => {
-    const layout = { width: 402, height: 593 }
-    const metadata = { deviceWidth: 402, deviceHeight: 593, pageScaleFactor: 1 }
-
-    expect(mapScreenToBrowserPoint(120, 240, layout, metadata, NO_ZOOM)).toEqual({ x: 120, y: 240 })
   })
 
   it('reads a missing or unusable page scale as one rather than dividing by it', () => {

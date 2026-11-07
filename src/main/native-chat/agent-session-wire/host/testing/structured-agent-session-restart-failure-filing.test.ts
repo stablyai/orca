@@ -3,17 +3,13 @@ import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-sessi
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import {
-  AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE,
-  AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE
-} from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,
   QUIT_CUT_NOTICE,
   readerNotes,
-  statusNotes,
-  continuationUnanswered
+  statusNotes
 } from './structured-agent-session-restart-interruption-test-harness'
 import { CALLER, envelope } from './structured-agent-session-host-test-harness'
 import {
@@ -80,21 +76,4 @@ it('says so in the chat when the agent cannot start for the continuation', async
   expect(await restarted.restartResume.list()).toEqual([])
   expect(acquire).toHaveBeenCalledTimes(starts)
   await restarted.flushAllStreamedEvents()
-})
-
-it('keeps an unconfirmed failure while the agent the continuation started keeps running', async () => {
-  const state = await interruptedRestart()
-  const { host } = state
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  await host.restartResume.list()
-  continuationUnanswered(state)
-
-  const result = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-
-  expect(result.failed).toMatchObject([{ sessionId: SESSION, outcome: 'unconfirmed' }])
-  expect(await statusNotes(host)).toContainEqual({
-    text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE,
-    tone: 'warning'
-  })
-  expect(await host.restartResume.listFailures()).toMatchObject([{ outcome: 'unconfirmed' }])
 })

@@ -3,7 +3,7 @@ import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-e
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
 import { refusalActsAsToday } from '@/runtime/layout-apply-send'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { serverLayoutApplyRoute } from '@/runtime/server-layout-apply-routes'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { expectPaneToMountUnfocused } from '@/runtime/layout-owner-pane-intents'

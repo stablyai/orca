@@ -7,13 +7,13 @@ import { useAppStore } from '@/store/index'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields
-} from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolveSourceControlAiResult } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { SourceControlAiPrCreationDefaults } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
-import type { PullRequestFieldRevisions } from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+import type { PullRequestFieldRevisions } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type {
   GenerationSeed,

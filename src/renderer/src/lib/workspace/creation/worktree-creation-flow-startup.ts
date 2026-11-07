@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type {

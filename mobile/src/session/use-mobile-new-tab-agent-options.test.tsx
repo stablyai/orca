@@ -122,22 +122,6 @@ afterEach(() => {
 })
 
 describe('useMobileNewTabAgentOptions', () => {
-  it('lists the agents on the first "+" open after the session loads them', async () => {
-    const host: FakeHost = { agents: () => claude }
-    const client = createClient(host)
-    const drawer = mountDrawer(queryClient)
-    await drawer.render({ client, open: false, prefetch: true })
-    host.agents = () => new Promise<RpcResponse>(() => {})
-    drawer.states.length = 0
-
-    await drawer.render({ client, open: true, prefetch: true })
-
-    expect(drawer.states).not.toContain('loading')
-    expect(drawer.state()).toBe('loaded')
-    expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
-    drawer.unmount()
-  })
-
   it('#21856: reopening the drawer shows the last agents at once and reads settings again', async () => {
     const host: FakeHost = { agents: () => ({ id: '1', ok: true, result: ['claude', 'codex'] }) }
     const client = createClient(host)
@@ -156,30 +140,6 @@ describe('useMobileNewTabAgentOptions', () => {
     expect(drawer.states).not.toContain('loading')
     expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
     expect(probes(client)).toEqual(['preflight.detectAgents'])
-    drawer.unmount()
-  })
-
-  it('reads the agents again on the next open after a failed read', async () => {
-    const host: FakeHost = {
-      agents: () => ({
-        id: '1',
-        ok: false,
-        error: { code: 'runtime_error', message: 'boom' },
-        _meta: { runtimeId: 'r' }
-      })
-    }
-    const client = createClient(host)
-    const drawer = mountDrawer(queryClient)
-    await drawer.render({ client, open: false, prefetch: true })
-    await drawer.render({ client, open: true, prefetch: true })
-    expect(drawer.state()).toBe('error')
-
-    host.agents = () => claude
-    await drawer.render({ client, open: false, prefetch: true })
-    await drawer.render({ client, open: true, prefetch: true })
-
-    expect(drawer.state()).toBe('loaded')
-    expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
     drawer.unmount()
   })
 

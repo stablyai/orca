@@ -90,7 +90,7 @@ vi.mock(
     beginHostAdmittedStructuredLaunch: mockBeginHostAdmittedStructuredLaunch
   })
 )
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities(),
   awaitLocalRuntimeCapabilities: () => mockAwaitCapabilities()
 }))

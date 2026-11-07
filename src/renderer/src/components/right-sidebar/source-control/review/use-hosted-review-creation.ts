@@ -21,7 +21,7 @@ import type { SourceControlHostedReviewCreated } from './use-hosted-review-creat
 import type { HostedReviewCreatedContext } from './hosted-review-creation-state'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlPullRequestGeneration } from './use-pull-request-generation'
-import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationFields } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'

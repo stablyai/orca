@@ -26,7 +26,9 @@ export function useNativeChatRestartOffer(enabled: boolean, store = localNativeC
   const settingsLoaded = useAppStore((state) => state.settings !== null)
   useEffect(() => {
     if (enabled && settingsLoaded && store.target.kind === 'local') {
-      launch ??= loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+      if (launch == null) {
+        launch = loadLaunchOffer(store).finally(markNativeChatLaunchResumeDecided)
+      }
     }
   }, [enabled, settingsLoaded, store])
   return useSyncExternalStore(

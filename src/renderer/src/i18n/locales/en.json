@@ -1417,7 +1417,7 @@
         "insecureOrigin": "Orca refused to pair from this page: it is plain http on another machine, so anyone on the network path could replace it and take the pairing code. Open the web client over https, at localhost on this computer, or through an SSH tunnel. To allow it anyway, the server operator can restart Orca with ORCA_ALLOW_INSECURE_WEB_PAIRING=1.",
         "deviceDowngraded": "This Orca server no longer supports this browser’s sign-in key (it may have been downgraded). Update the server, or pair this browser again.",
         "unauthorized": "Unauthorized. Pair this web client again.",
-        "unauthorizedNewLink": "Unauthorized. Ask for a new pairing link."
+        "unauthorizedLinkUsedOrExpired": "Unauthorized. This pairing link may have expired or already been used. Create a new pairing link in Orca and open it."
       }
     },
     "store": {
@@ -2125,13 +2125,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "The target workspace is no longer available.",
-        "16a21d6413": "SSH reconnect requires interactive credentials.",
-        "386db94f3e": "The target project is no longer available.",
-        "3ad7d77f57": "The target workspace is on a different host than this automation run target.",
-        "workspaceHostUnresolved": "The target workspace spans more than one host, so this run has no single host to use."
-      },
       "useComposerState": {
         "b2ead86962": "Failed to resolve PR base.",
         "3db83fc58a": "No project path is available on this host for attachments.",
@@ -8645,7 +8638,8 @@
           "diagnosticsCopyFailed": "Failed to copy diagnostics",
           "5e2c7a1f84": "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore or Restore all on the banner to resize manually.",
           "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes.",
-          "legacyEncryption": "Uses older encryption. Update the Orca app on this device."
+          "legacyEncryption": "Uses older encryption. Update the Orca app on this device.",
+          "olderPairingMethod": "Uses an older pairing method. Update the Orca app on this phone."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -9054,6 +9048,7 @@
           "6f6d5188ed": "Revoke {{value0}}",
           "434e4a6af6": "Current link",
           "df142657a5": "Not used yet",
+          "olderPairingMethod": "Uses an older pairing method. Update Orca on the device that uses this link.",
           "b18d1764ef": "Last used {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Active links",
@@ -11601,7 +11596,11 @@
               "micDefault": "system default",
               "dictationLanguageTitle": "Dictation Language",
               "dictationLanguageDescription": "Tell the speech model which language you speak.",
-              "dictationLanguageKeyword": "language"
+              "dictationLanguageKeyword": "language",
+              "modelUnloadTitle": "Unload Speech Model",
+              "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
+              "modelUnloadKeyword": "unload",
+              "modelMemoryKeyword": "memory"
             }
           }
         },
@@ -12416,7 +12415,8 @@
           "installedManifestUnloadable": "This version can't load in this Orca. Update or reinstall it.",
           "invalidArtifact": "A worker or panel file is missing or unsafe. Fix it, then refresh.",
           "consentChanged": "This plugin changed while you were reviewing it. Review it again.",
-          "installGitMoved": "The repository changed after Orca checked it. Try again."
+          "installGitMoved": "The repository changed after Orca checked it. Try again.",
+          "installReservedIdentity": "This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change \"id\" in orca-plugin.json so it doesn’t start with \"orca-\", and set \"publisher\" to your own name."
         },
         "plugins": {
           "search": {
@@ -13572,7 +13572,8 @@
           "newFileMenu": "Adds to the + menu",
           "editorReplacesViewer": "Opens {{value0}} instead of Orca’s viewer",
           "editorMayReplaceViewer": "May open {{value0}} instead of Orca’s viewer",
-          "statusBar": "Status bar"
+          "statusBar": "Status bar",
+          "font": "Font for the terminal, editor or interface"
         },
         "PluginCardAction": {
           "installed": "Installed",
@@ -15105,6 +15106,7 @@
             "openLog": "Open Log",
             "revealLog": "Reveal Log",
             "openWorkingDirectory": "Open Working Directory",
+            "revealArtifactsFolder": "Reveal Artifacts Folder",
             "copySessionId": "Copy Session ID",
             "copyLogPath": "Copy Log Path",
             "messageCount": "{{value0}} msgs",
@@ -17951,7 +17953,10 @@
           "reuseLiveSession": "Reuse live session",
           "freshEachRun": "Fresh each run",
           "precheckEnabled": "Enabled, {{timeout}}",
-          "precheckNone": "None"
+          "precheckNone": "None",
+          "migrate": "Migrate",
+          "migrateNotice": "{{host}} was upgraded to a new remote host. Migrate this automation to keep it running.",
+          "needsMigration": "Needs migration"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -19736,6 +19741,7 @@
         "codexSystemNotSignedIn": "Codex isn't signed in. Run `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "This Codex account isn't signed in. Sign in again in Codex Accounts settings.",
         "antigravityNotSignedIn": "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+        "antigravitySystemNotSignedIn": "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
         "cliMissing": "{{agent}} wasn't found on the computer running this chat. Install it, or check its Command in Settings → Agents.",
         "cliMissingInWslDistro": "{{agent}} isn't installed in the WSL distro {{distro}}. Install it inside {{distro}}, or check its Command in Settings → Agents.",
         "signInFirst": "Sign in first.",
@@ -21230,6 +21236,13 @@
           "description": "The language you speak. Auto-detect lets the model work it out each time.",
           "title": "Dictation Language",
           "auto": "Auto-detect"
+        },
+        "modelUnload": {
+          "title": "Unload Speech Model",
+          "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
+          "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
+          "never": "Never",
+          "immediately": "Immediately"
         }
       }
     },
@@ -23768,6 +23781,7 @@
       "noRunnableHost": "This automation has no host to run on.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
       "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
@@ -23810,6 +23824,17 @@
         "effortRepeated": "Extra arguments set the effort more than once."
       },
       "hostUpdateRequired": "Update Orca on this host to use extra arguments."
+    },
+    "setupTrust": {
+      "reviewTitle": "Approve the new setup commands for this automation?",
+      "reviewBody": "A run skipped setup because its branch's <code>orca.yaml</code> setup commands changed. Approving lets later runs use these commands. Only approve if you trust <repo/>.",
+      "approve": "Approve",
+      "approved": "Setup approved. Later runs of this automation will run it.",
+      "skippedSinceApproved": "Setup didn't run for this run because its branch's orca.yaml setup commands changed. They've since been approved, so later runs run them.",
+      "skippedReview": "Setup didn't run: this run's branch has different orca.yaml setup commands than the ones approved for this automation. Review them to run setup in later runs.",
+      "reviewAction": "Review and approve setup",
+      "listSkipped": "Setup skipped",
+      "listSkippedTitle": "The last run skipped setup because its branch's orca.yaml setup commands changed. Review them from the actions menu."
     }
   },
   "codeHost": {
